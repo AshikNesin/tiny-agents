@@ -6,7 +6,7 @@ import { Form, FormField } from "@groot/ui/form";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { z } from "zod";
 import { toast } from "sonner";
-import { LayoutDashboard, ShieldCheck, Zap, ArrowRight } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-react";
 
 const isDev = import.meta.env.DEV;
 
@@ -33,6 +33,7 @@ const FEATURES = [
 
 export function Login() {
   const login = useAuthStore((state) => state.login);
+  const loginWithPasskey = useAuthStore((state) => state.loginWithPasskey);
   const navigate = useNavigate();
 
   const onSubmit = async (values: LoginValues) => {
@@ -43,6 +44,18 @@ export function Login() {
       console.error("Login failed:", error);
       toast.error("Login Failed", {
         description: error instanceof Error ? error.message : "Invalid credentials",
+      });
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    try {
+      await loginWithPasskey();
+      navigate("/");
+    } catch (error) {
+      console.error("Passkey sign-in failed:", error);
+      toast.error("Passkey Sign-In Failed", {
+        description: error instanceof Error ? error.message : "Passkey authentication failed",
       });
     }
   };
@@ -86,6 +99,23 @@ export function Login() {
               <ArrowRight className="size-4" />
             </Button>
           </Form>
+
+          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span>or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="w-full"
+            onClick={handlePasskeyLogin}
+          >
+            <KeyRound className="size-4" />
+            Sign in with passkey
+          </Button>
         </div>
       </div>
 

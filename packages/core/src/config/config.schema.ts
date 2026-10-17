@@ -83,6 +83,12 @@ export const configSchema = z.object({
   ),
   rateLimits: section(
     z.object({
+      auth: section(
+        z.object({
+          windowMs: z.coerce.number().int().positive().default(900000),
+          max: z.coerce.number().int().positive().default(20),
+        }),
+      ),
       storage: section(
         z.object({
           windowMs: z.coerce.number().int().positive().default(900000),

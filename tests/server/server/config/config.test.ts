@@ -11,6 +11,7 @@ describe("configSchema", () => {
     expect(result.app.isProduction).toBe(false);
     expect(result.jobs.enabled).toBe(true);
     expect(result.logging.level).toBe("info");
+    expect(result.rateLimits.auth).toEqual({ windowMs: 900000, max: 20 });
   });
 
   it("accepts valid full config", () => {

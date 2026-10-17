@@ -12,7 +12,9 @@
       "@groot/jobs/server": ["./packages/jobs/src/server/index.ts"],
       "@groot/jobs/server/*": ["./packages/jobs/src/server/*"],
       "@groot/jobs/client": ["./packages/jobs/src/client/index.ts"],
-      "@groot/jobs/client/*": ["./packages/jobs/src/client/*"]
+      "@groot/jobs/client/*": ["./packages/jobs/src/client/*"],
+      "@tiny-agents/agent": ["./packages/agent/src/index.ts"],
+      "@tiny-agents/agent/testing": ["./packages/agent/src/testing.ts"]
     }
   },
   "include": [
@@ -20,6 +22,7 @@
     "packages/ai/src/**/*",
     "packages/core/src/**/*",
     "packages/jobs/src/server/**/*",
+    "packages/agent/src/**/*",
     "env.d.ts"
   ],
   "exclude": ["node_modules", "dist"]

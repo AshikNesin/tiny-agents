@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import type { Extension } from "@codemirror/state";
+import { useTheme } from "@groot/shell/lib/theme";
 
 export interface CodeMirrorLinkRange {
   from: number;
@@ -43,6 +44,7 @@ export function CodeMirrorEditor({
   onLinkClick,
 }: CodeMirrorEditorProps) {
   const [mods, setMods] = useState<EditorModules | null>(null);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     editorPromise.then(setMods);
@@ -92,7 +94,7 @@ export function CodeMirrorEditor({
       extensions={extensions}
       onChange={onChange}
       editable={editable}
-      theme="light"
+      theme={resolvedTheme}
       basicSetup={basicSetup}
     />
   );

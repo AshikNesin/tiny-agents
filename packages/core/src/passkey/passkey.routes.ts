@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { createRouter } from "@groot/core/utils/router.utils";
 import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
+import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import { parseId, requireUser, parseBody } from "@groot/core/utils/controller.utils";
 import { setAuthCookie } from "@groot/core/utils/auth-cookie.utils";
 import * as passkeyService from "./passkey.service";
@@ -28,12 +29,12 @@ router.post("/register/verify", jwtAuthMiddleware, async (req: Request) => {
   });
 });
 
-router.post("/login/options", async (req: Request) => {
+router.post("/login/options", authRateLimiter, async (req: Request) => {
   const body = parseBody(req, generateAuthenticationOptionsSchema);
   return await passkeyService.generateAuthenticationOptions({ email: body?.email });
 });
 
-router.post("/login/verify", async (req: Request, res: Response) => {
+router.post("/login/verify", authRateLimiter, async (req: Request, res: Response) => {
   const body = parseBody(req, verifyAuthenticationSchema);
   const result = await passkeyService.verifyAuthentication({
     email: body.email,

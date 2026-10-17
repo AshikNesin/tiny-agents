@@ -84,6 +84,10 @@ bundle their own SQLite, so they need nothing.)
    ```
 
    > Without a volume the SQLite file is lost on every redeploy.
+   >
+   > **Coolify + SQLite:** set **Container naming** to **Consistent name (no
+   > rolling updates)**. Rolling updates briefly run two app processes against
+   > the same SQLite file.
 
 4. **Environment variables** (Environment tab). In production varlock
    requires real values (dev placeholders are rejected):

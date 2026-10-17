@@ -20,16 +20,31 @@ for await (const chunk of ai.stream("Write a short story...")) {
 
 API keys are read automatically from standard env vars (e.g. `OPENAI_API_KEY`), or pass `apiKey` in the config to override.
 
-## Custom OpenAI-compatible endpoints (gateways)
+## Cloudflare AI Gateway
 
-Set `baseUrl` to route through any OpenAI-compatible endpoint instead of the built-in provider catalog — e.g. Cloudflare AI Gateway:
+pi-ai includes Cloudflare AI Gateway as a built-in provider:
+
+```typescript
+import { getModel } from "@earendil-works/pi-ai/compat";
+
+const model = getModel("cloudflare-ai-gateway", "claude-sonnet-4-5");
+```
+
+`CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_GATEWAY_ID`
+are read automatically. The provider sends only `cf-aig-authorization`; keep
+provider keys in the gateway with BYOK.
+
+## Custom OpenAI-compatible endpoints
+
+For an endpoint that is not in pi-ai's provider catalog, set `baseUrl` and any
+required headers directly:
 
 ```typescript
 const ai = new AI({
-  provider: "cloudflare-gateway",
-  model: "google/gemini-3-flash-preview",
-  baseUrl: env.CF_AI_GATEWAY_BASE_URL,
-  headers: { "cf-aig-authorization": `Bearer ${env.CF_AI_GATEWAY_AUTH_KEY}` },
+  provider: "custom-gateway",
+  model: "my-model",
+  baseUrl: "https://gateway.example.com/v1",
+  headers: { Authorization: "Bearer your-gateway-token" },
 });
 ```
 

@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { describe, it, expect } from "vite-plus/test";
+import { sseSafeCompressionFilter } from "@groot/core/server";
 
 /**
  * Server body-parser regression tests.
@@ -56,5 +57,29 @@ describe("server body parsers", () => {
     const res = await request(buildApp()).post("/echo").send(big);
     expect(res.status).toBe(200);
     expect((res.body.body.blob as string).length).toBe(2 * 1024 * 1024);
+  });
+});
+
+describe("server compression", () => {
+  const buildFilterApp = (contentType: string) => {
+    const app = express();
+    app.get("/filter", (req, res) => {
+      res.setHeader("Content-Type", contentType);
+      const shouldCompress = sseSafeCompressionFilter(req, res);
+      res.json({ shouldCompress });
+    });
+    return app;
+  };
+
+  it("skips event streams, including content types with parameters", async () => {
+    const res = await request(buildFilterApp("text/event-stream; charset=utf-8")).get("/filter");
+
+    expect(JSON.parse(res.text).shouldCompress).toBe(false);
+  });
+
+  it("keeps compression's default filter for normal responses", async () => {
+    const res = await request(buildFilterApp("application/json")).get("/filter");
+
+    expect(res.body.shouldCompress).toBe(true);
   });
 });

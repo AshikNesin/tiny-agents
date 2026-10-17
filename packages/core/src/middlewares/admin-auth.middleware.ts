@@ -1,6 +1,13 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { Boom } from "@groot/core/errors";
 import { env } from "@groot/core/env";
+
+const adminAuthKeyHash = hashAdminAuthKey(env.ADMIN_AUTH_KEY);
+
+function hashAdminAuthKey(value: string): Buffer {
+  return createHash("sha256").update(value).digest();
+}
 
 /**
  * Admin authentication middleware
@@ -13,7 +20,10 @@ export function adminAuthMiddleware(req: Request, _res: Response, next: NextFunc
     throw Boom.unauthorized("Admin authentication required");
   }
 
-  if (adminAuthKey !== env.ADMIN_AUTH_KEY) {
+  if (
+    typeof adminAuthKey !== "string" ||
+    !timingSafeEqual(hashAdminAuthKey(adminAuthKey), adminAuthKeyHash)
+  ) {
     throw Boom.forbidden("Invalid admin auth key");
   }
 

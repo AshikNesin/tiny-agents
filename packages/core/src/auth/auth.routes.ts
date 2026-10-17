@@ -4,12 +4,13 @@ import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
 import { adminAuthMiddleware } from "@groot/core/middlewares/admin-auth.middleware";
 import { requireUser, parseBody } from "@groot/core/utils/controller.utils";
 import { setAuthCookie, clearAuthCookie } from "@groot/core/utils/auth-cookie.utils";
+import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import * as authService from "./auth.service";
 import { loginSchema, createUserSchema } from "./auth.schema";
 
 const router = createRouter();
 
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", authRateLimiter, async (req: Request, res: Response) => {
   const body = parseBody(req, loginSchema);
   const result = await authService.login(body);
   setAuthCookie(res, result.token);

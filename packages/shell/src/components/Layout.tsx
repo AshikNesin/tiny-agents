@@ -15,11 +15,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
+import { isTheme, type Theme, useTheme } from "@groot/shell/lib/theme";
 import {
   MoreHorizontal,
   LogOut,
@@ -28,6 +34,9 @@ import {
   Briefcase,
   PanelLeftClose,
   PanelLeft,
+  Moon,
+  Monitor,
+  Sun,
   type LucideIcon,
 } from "lucide-react";
 
@@ -182,6 +191,7 @@ export function Layout({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-52">
+        {userMenuItems === undefined && <ThemeMenu />}
         {resolvedUserMenu.map((item) => (
           <UserMenuRow key={item.id ?? item.label} item={item} navigate={navigate} />
         ))}
@@ -250,6 +260,43 @@ export function Layout({
         </main>
       </div>
     </div>
+  );
+}
+
+const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon }> = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+];
+
+function ThemeMenu() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Monitor className="size-4" />
+          <span>Theme</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuRadioGroup
+            value={theme}
+            onValueChange={(value) => {
+              if (isTheme(value)) setTheme(value);
+            }}
+          >
+            {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                <Icon className="size-4" />
+                <span>{label}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+    </>
   );
 }
 

@@ -1,5 +1,6 @@
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
+import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Settings as SettingsIcon, ShieldCheck } from "lucide-react";
@@ -24,7 +25,10 @@ export function Settings() {
         </TabsList>
 
         <TabsContent value="general" className="mt-6">
-          <AppSettings />
+          <div className="space-y-6">
+            <ThemeSettings />
+            <AppSettings />
+          </div>
         </TabsContent>
 
         <TabsContent value="security" className="mt-6">

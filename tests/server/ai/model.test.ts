@@ -13,6 +13,16 @@ describe("resolveModel", () => {
     expect(() => resolveModel({ provider: "openai", model: "nope-9000" })).toThrow(/Unknown model/);
   });
 
+  it("resolves Cloudflare AI Gateway catalog models", () => {
+    const model = resolveModel({
+      provider: "cloudflare-ai-gateway",
+      model: "claude-sonnet-4-5",
+    });
+
+    expect(model.id).toBe("claude-sonnet-4-5");
+    expect(model.provider).toBe("cloudflare-ai-gateway");
+  });
+
   it("builds an OpenAI-compatible model for custom endpoints", () => {
     const model = resolveModel({
       provider: "cloudflare-gateway",

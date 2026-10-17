@@ -24,6 +24,24 @@ model Todo {
   @@map("todos")
 }
 
+model Bot {
+  id                 String    @id @default(cuid())
+  name               String
+  description        String    @default("")
+  systemPrompt       String    @default("")
+  modelId            String
+  avatarEmoji        String?
+  avatarColor        String
+  conversationId     String    @unique
+  lastReadAt         DateTime?
+  lastActivityAt     DateTime  @default(now())
+  lastMessagePreview String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("bots")
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique

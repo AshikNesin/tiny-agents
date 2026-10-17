@@ -17,6 +17,13 @@ import { errorHandlerMiddleware, notFoundHandler } from "./middlewares/error-han
 export interface ServerOptions {
   distPath: string;
   clientRoot: string;
+  /**
+   * App readiness probe, consulted by /health and /ready. Apps whose boot
+   * work finishes after listen() (agent stores, queues, caches) return an
+   * optional reason string while not ready and undefined once they are.
+   * Omitted for apps that are ready the moment they listen.
+   */
+  readiness?: () => string | undefined;
 }
 
 export interface ServerInstance {
@@ -32,8 +39,22 @@ export interface StartServerOptions {
 
 let isShuttingDown = false;
 
+/**
+ * SSE responses must stay unbuffered so clients receive events as they are
+ * written. Keep compression's default eligibility checks for all other
+ * response types.
+ */
+export function sseSafeCompressionFilter(req: express.Request, res: express.Response): boolean {
+  const contentType = res.getHeader("Content-Type");
+  return (
+    (typeof contentType !== "string" || !contentType.startsWith("text/event-stream")) &&
+    compression.filter(req, res)
+  );
+}
+
 export async function createServer(options: ServerOptions): Promise<ServerInstance> {
   const { distPath, clientRoot } = options;
+  const readiness = options.readiness;
   const port = config.app.port;
   const isProd = env.NODE_ENV === "production";
 
@@ -44,7 +65,7 @@ export async function createServer(options: ServerOptions): Promise<ServerInstan
   app.use(corsMiddleware);
   // Only compress responses ≥ 1 KB — compressing tiny payloads wastes CPU
   // with no meaningful bandwidth saving.
-  app.use(compression({ threshold: 1024 }));
+  app.use(compression({ threshold: 1024, filter: sseSafeCompressionFilter }));
   // Body parsers. The JSON/URL-encoded limits cover typical API payloads.
   // For large binary uploads use the /storage multipart endpoint (multer).
   // express.text() is required for AWS SNS webhooks (SES inbound email,
@@ -117,16 +138,26 @@ export async function createServer(options: ServerOptions): Promise<ServerInstan
 
   // Health endpoints
   app.get("/health", (_req, res) => {
+    const reason = readiness?.();
     if (isShuttingDown) {
       res.status(503).json({ status: "shutting_down", timestamp: new Date().toISOString() });
+      return;
+    }
+    if (reason) {
+      res.status(503).json({ status: "not_ready", reason, timestamp: new Date().toISOString() });
       return;
     }
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   app.get("/ready", (_req, res) => {
+    const reason = readiness?.();
     if (isShuttingDown) {
       res.status(503).json({ ready: false, reason: "shutting_down" });
+      return;
+    }
+    if (reason) {
+      res.status(503).json({ ready: false, reason });
       return;
     }
     res.json({ ready: true });

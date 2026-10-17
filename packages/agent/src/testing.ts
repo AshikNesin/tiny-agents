@@ -10,6 +10,8 @@ import {
   fauxText,
   fauxThinking,
 } from "@earendil-works/pi-ai/providers/faux";
+
+export { fauxAssistantMessage, fauxText, fauxThinking };
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";
 
 export const TEST_PROVIDER = "faux";

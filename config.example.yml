@@ -46,6 +46,9 @@ default:
     dsn: ""
 
   rateLimits:
+    auth:
+      windowMs: 900000
+      max: 20
     storage:
       windowMs: 900000
       max: 100
