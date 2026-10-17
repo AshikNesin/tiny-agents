@@ -1,0 +1,22 @@
+/*
+ * tiny-agents app-level theme override (PRD §6.1).
+ *
+ * The shell's synced index.css stays untouched; this file re-points the
+ * primary/ring tokens to a Talorys-style teal in both themes. It loads after
+ * the shell stylesheet (see main.tsx import order).
+ */
+
+/* Talorys teal: calm, slightly desaturated cyan-green. */
+:root {
+  --primary: oklch(0.72 0.11 178);
+  --primary-foreground: oklch(0.16 0.02 200);
+  --ring: oklch(0.72 0.11 178);
+  --sidebar-ring: oklch(0.72 0.11 178);
+}
+
+.dark {
+  --primary: oklch(0.78 0.12 178);
+  --primary-foreground: oklch(0.16 0.03 200);
+  --ring: oklch(0.78 0.12 178);
+  --sidebar-ring: oklch(0.78 0.12 178);
+}

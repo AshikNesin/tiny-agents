@@ -5,6 +5,7 @@ import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
 import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
 import todoRoutes from "./api/todo/todo.routes";
+import botsRoutes from "./api/bots/bots.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
@@ -28,6 +29,9 @@ export function registerRoutes(app: Express): void {
 
   // Protected routes (JWT auth required)
   const protectedRouter = Router();
+  // Bots routes own /models, /events, and /bots — registered before the todo
+  // router so its /:id pattern cannot swallow them.
+  protectedRouter.use(botsRoutes);
   protectedRouter.use("/todos", todoRoutes);
   protectedRouter.use("/jobs", jobRoutes);
   protectedRouter.use("/storage", storageRoutes);

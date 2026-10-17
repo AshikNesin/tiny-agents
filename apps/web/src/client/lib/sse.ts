@@ -1,0 +1,77 @@
+/**
+ * Minimal EventSource-style client for the app's SSE endpoints with
+ * auto-reconnect and auth handling. `EventSource` cannot send the JWT cookie
+ * cross-origin reliably or be aborted per-connection in older browsers, but
+ * same-origin with `withCredentials` it is fine — we use fetch streaming for
+ * one reason: EventSource reconnects on its own schedule; we want explicit
+ * abort + resubscribe (fresh snapshot) control (PRD §7.5).
+ */
+export interface SseConnection {
+  close(): void;
+}
+
+export function subscribeSse(
+  path: string,
+  onEvent: (event: unknown) => void,
+  opts: { signal?: AbortSignal; onOpen?: () => void } = {},
+): SseConnection {
+  const controller = new AbortController();
+  const externalSignal = opts.signal;
+  const onAbort = () => controller.abort();
+  externalSignal?.addEventListener("abort", onAbort, { once: true });
+
+  void (async () => {
+    while (!controller.signal.aborted) {
+      try {
+        const response = await fetch(path, {
+          credentials: "include",
+          headers: { Accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          controller.abort();
+          onEvent({ type: "error", message: `SSE ${response.status}` });
+          return;
+        }
+        opts.onOpen?.();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let boundary: number;
+          while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            for (const line of frame.split("\n")) {
+              if (line.startsWith("data:")) {
+                const payload = line.slice(5).trim();
+                if (payload) {
+                  try {
+                    onEvent(JSON.parse(payload));
+                  } catch {
+                    // ignore malformed frames
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // aborted or network error
+      }
+      if (controller.signal.aborted) return;
+      // Reconnect with backoff; server resends a fresh snapshot.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  })();
+
+  return {
+    close() {
+      externalSignal?.removeEventListener("abort", onAbort);
+      controller.abort();
+    },
+  };
+}

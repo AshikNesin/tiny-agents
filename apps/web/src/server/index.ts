@@ -14,6 +14,25 @@ import { notificationService } from "@groot/core/notification/notification.servi
 import { initJobQueue, stopJobQueue } from "@groot/jobs/server/client";
 import { startWorkers } from "@groot/jobs/server/worker";
 import { filesPromise } from "@groot/core/storage";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import {
+  closeAgentRuntime,
+  openAgentRuntime,
+  openFauxAgentRuntime,
+  agentRuntimeReady,
+} from "./api/bots/bots.runtime";
+import { AgentRuntime } from "@tiny-agents/agent";
+
+/**
+ * The pi-durable agent store path. Plain path (not a file: URL) — the store
+ * owns the file itself. Default mirrors .env.schema.
+ */
+function agentDbPath(): string {
+  const raw = env.AGENT_DB_PATH?.trim();
+  if (!raw) return "./data/agent.db";
+  return raw.startsWith("file:") ? raw.slice(5) : raw;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +52,47 @@ async function main() {
   const { app, httpServer, viteServer } = await createServer({
     distPath,
     clientRoot,
+    // /health stays 503 until the agent store is open and resumed, so
+    // orchestrators never route traffic at a half-booted server (PRD §7.2).
+    readiness: () => (agentRuntimeReady() ? undefined : "agent-runtime-starting"),
+  });
+
+  // Open the agent runtime (exclusive store lock → Harness → resume)
+  // before the HTTP server accepts requests. StoreLockedError (another
+  // process owns agent.db, e.g. an overlapping deploy) must exit non-zero.
+  const agentDir = dirname(agentDbPath());
+  mkdirSync(agentDir, { recursive: true });
+  let agentRuntime: AgentRuntime;
+  try {
+    agentRuntime =
+      env.TINY_AGENTS_FAUX === "1"
+        ? // Dev/E2E escape hatch: a faux-provider runtime (no network, no
+          // keys) so streaming and durability can be exercised end-to-end
+          // anywhere. Never enabled implicitly — only when the env var is set.
+          await openFauxAgentRuntime(agentDbPath())
+        : await openAgentRuntime({
+            storePath: agentDbPath(),
+            onFatal: (error) => {
+              logger.error({ error }, "Agent runtime failed; shutting down");
+              process.exit(1);
+            },
+          });
+  } catch (error) {
+    logger.error({ error }, "Failed to open agent runtime");
+    process.exit(1);
+  }
+  // Fold finished replies into the bot list's denormalised fields.
+  const { recordReply } = await import("./api/bots/bots.service");
+  agentRuntime.onActivity(async (change) => {
+    if (change.busy) return;
+    try {
+      const last = await agentRuntime.lastMessage(change.conversation);
+      if (last?.role === "assistant") {
+        await recordReply(String(change.conversation), last);
+      }
+    } catch {
+      // A deleted bot's conversation is gone from app.db — nothing to update.
+    }
   });
 
   // Register feature job handlers before routes
@@ -82,6 +142,7 @@ async function main() {
       }
     },
     onShutdown: async () => {
+      await closeAgentRuntime();
       if (config.jobs.enabled) {
         await stopJobQueue();
       }
