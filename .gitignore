@@ -1,0 +1,53 @@
+node_modules/
+
+# Compiled output
+dist/
+
+# Environment variables
+.env
+.env.*
+!.env.schema
+
+# Auto-generated env types
+env.d.ts
+/.DS_Store
+pnpm-debug.log*
+
+/packages/core/generated
+packages/database/generated/prisma
+playwright-report/
+test-results/
+.pnpm-store/
+
+# Verification screenshots (agent-run proof captures, not repo assets)
+/.screenshots/
+
+# Local config overrides
+config.local.yml
+
+# Local storage (files-sdk fs adapter dev root)
+/local/
+# SQLite database files (dev/test data). Keep the dir tracked but ignore contents.
+/data/*.db
+/data/*.db-journal
+/data/*.db-wal
+/data/*.db-shm
+
+# Scratch / generated SQL from scripts (e.g. pnpm db:baseline)
+/tmp/
+
+# Sensitive files
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+service-account.json
+
+# Groot sync generated report
+.groot/sync-report.json
+
+settings.local.json
+.claude/settings.local.json
+packages/core/generated
+.auto/

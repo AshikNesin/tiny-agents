@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@groot/ui": ["../../packages/ui/src/index.ts"],
+      "@groot/ui/*": ["../../packages/ui/src/*"],
+      "@groot/shell/*": ["../../packages/shell/src/*"],
+      "@groot/core/*": ["../../packages/core/src/*"],
+      "@groot/jobs/client": ["../../packages/jobs/src/client/index.ts"],
+      "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"],
+      "@groot/jobs/server": ["../../packages/jobs/src/server/index.ts"],
+      "@groot/jobs/server/*": ["../../packages/jobs/src/server/*"],
+      "@groot/ai": ["../../packages/ai/src/index.ts"],
+      "@groot/ai/*": ["../../packages/ai/src/*"]
+    }
+  },
+  "include": [
+    "./consumer.tsx",
+    "../../env.d.ts",
+    "../../packages/core/src/types/express.d.ts",
+    "../../packages/core/src/ambient.d.ts"
+  ]
+}

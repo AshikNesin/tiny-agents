@@ -1,0 +1,285 @@
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "@groot/shell/store/auth";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
+import {
+  CommandPaletteTrigger,
+  CommandPaletteDialog,
+  type CommandGroupEntry,
+} from "./CommandPalette";
+import { SidebarNav, type NavItem, type SidebarBrand } from "./SidebarNav";
+
+export type { NavItem };
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
+import { Button } from "@groot/ui/button";
+import { cn } from "@groot/ui/lib/utils";
+import {
+  MoreHorizontal,
+  LogOut,
+  Settings as SettingsIcon,
+  HardDrive,
+  Briefcase,
+  PanelLeftClose,
+  PanelLeft,
+  type LucideIcon,
+} from "lucide-react";
+
+const SIDEBAR_COLLAPSED_KEY = "groot.sidebar.collapsed";
+
+const NAV_ITEMS: NavItem[] = [{ name: "Todos", href: "/todos", icon: "check-square" }];
+
+/** A single entry in the sidebar footer user dropdown. */
+export interface UserMenuItem {
+  label: string;
+  icon?: LucideIcon;
+  /** Internal route — navigated via react-router. */
+  to?: string;
+  /** External URL — opens in a new tab. */
+  href?: string;
+  /** Imperative handler (e.g. logout). Mutually exclusive with `to`/`href`. */
+  onSelect?: () => void;
+  /** Render a `DropdownMenuSeparator` above this item. */
+  separatorBefore?: boolean;
+  variant?: "default" | "destructive";
+  /** Stable React key. Defaults to `label`; set when labels may duplicate. */
+  id?: string;
+}
+
+export interface LayoutProps {
+  /**
+   * Custom header / nav. When omitted, the default shell sidebar renders
+   * (logo + command palette + user menu). Pass your own to brand the app shell
+   * without reimplementing the surrounding layout. When set, the sidebar
+   * offset and mobile top bar are disabled so a custom header owns the whole
+   * top of the page.
+   */
+  header?: ReactNode;
+  /** Sidebar nav items. Defaults to the groot Todos entry. Ignored when `header` is set. */
+  navItems?: NavItem[];
+  /** Brand block (logo + label). Defaults to the groot brand. Ignored when `header` is set. */
+  brand?: SidebarBrand;
+  /** Footer user-menu entries. Defaults to Storage/Jobs/Settings + Log out. Ignored when `header` is set. */
+  userMenuItems?: UserMenuItem[];
+  /** Command-palette groups. Defaults to the groot Navigation + Account groups. */
+  commandGroups?: CommandGroupEntry[];
+  /**
+   * Whether `<main>` gets the shell's default horizontal + vertical padding.
+   * Defaults to `true`. Set `false` when pages own their own padding (e.g. via
+   * `PageContainer`).
+   */
+  padded?: boolean;
+  /** Extra className merged onto `<main>` (e.g. `flex flex-col` for full-height pages). */
+  mainClassName?: string;
+  /** Extra className merged onto the outermost wrapper div. */
+  className?: string;
+}
+
+/**
+ * App shell: a dub.sh-style collapsible sidebar on the left, routed `<Outlet/>`
+ * on the right. The sidebar collapses (desktop) into an icon rail with a
+ * 300ms width animation; on mobile it slides in as an overlay drawer.
+ */
+export function Layout({
+  header,
+  navItems,
+  brand,
+  userMenuItems,
+  commandGroups,
+  padded = true,
+  mainClassName,
+  className,
+}: LayoutProps) {
+  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const toggleCommandPalette = useCommandPaletteStore((state) => state.toggle);
+
+  // When a custom header is supplied the default sidebar (and its offset /
+  // mobile bar) is disabled so the header owns the full top of the page.
+  // Uses a nullish check so both `undefined` (omitted) and `null` (explicitly
+  // cleared) render the default sidebar — matching the `{header ?? ...}` JSX.
+  const useDefaultSidebar = header == null;
+
+  // Mobile drawer state.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop collapse state, persisted across reloads.
+  // Lazy initializer reads localStorage synchronously to prevent hydration flash.
+  const [collapsed, setCollapsed] = useState(() => {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  });
+
+  const handleCollapsedChange = (next: boolean) => {
+    setCollapsed(next);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+  };
+
+  // Global ⌘K / Ctrl+K handler for the command palette.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        if (e.repeat) return;
+        e.preventDefault();
+        toggleCommandPalette();
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [toggleCommandPalette]);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  const resolvedUserMenu: UserMenuItem[] = userMenuItems ?? [
+    { label: "Storage", icon: HardDrive, to: "/storage" },
+    { label: "Jobs", icon: Briefcase, to: "/jobs" },
+    { label: "Settings", icon: SettingsIcon, to: "/settings" },
+    {
+      separatorBefore: true,
+      label: "Log out",
+      icon: LogOut,
+      onSelect: handleLogout,
+      variant: "destructive",
+    },
+  ];
+
+  const userMenuFooter = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title={collapsed ? (user?.name ?? user?.email ?? "Account") : undefined}
+          className={cn(
+            "flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent",
+            collapsed && "lg:justify-center lg:px-0",
+          )}
+        >
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+            {user?.name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "?"}
+          </span>
+          <span
+            className={cn(
+              "flex min-w-0 flex-1 items-center leading-tight",
+              collapsed && "lg:hidden",
+            )}
+          >
+            <span className="truncate text-sm font-medium">
+              {user?.name?.trim() || user?.email?.toLowerCase() || "Account"}
+            </span>
+          </span>
+          <MoreHorizontal
+            className={cn("size-4 shrink-0 text-muted-foreground", collapsed && "lg:hidden")}
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-52">
+        {resolvedUserMenu.map((item) => (
+          <UserMenuRow key={item.id ?? item.label} item={item} navigate={navigate} />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <div className={cn("min-h-screen bg-muted/40 text-foreground", className)}>
+      {/* Single shared command palette dialog — mounted once. */}
+      <CommandPaletteDialog groups={commandGroups} />
+
+      {header ?? (
+        <SidebarNav
+          items={navItems ?? NAV_ITEMS}
+          brand={brand}
+          pathname={location.pathname}
+          open={sidebarOpen}
+          onOpenChange={setSidebarOpen}
+          collapsed={collapsed}
+          onCollapsedChange={handleCollapsedChange}
+          footer={userMenuFooter}
+        />
+      )}
+
+      {/* Main column: sidebar offset on desktop (animated with the sidebar),
+          full-width on mobile. Only applies when the default sidebar renders. */}
+      <div
+        className={cn(
+          "transition-[padding] duration-300 ease-in-out",
+          useDefaultSidebar && (collapsed ? "lg:pl-16" : "lg:pl-56"),
+        )}
+      >
+        {/* Top bar — mobile (sidebar toggle + brand + search icon). */}
+        {useDefaultSidebar && (
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur lg:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen((o) => !o)}
+              aria-label="Toggle sidebar"
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose className="size-4" />
+              ) : (
+                <PanelLeft className="size-4" />
+              )}
+            </Button>
+            <Link to={brand?.to ?? "/"} className="text-sm font-semibold">
+              {brand?.label ?? "Groot"}
+            </Link>
+            <div className="ml-auto">
+              <CommandPaletteTrigger iconOnly />
+            </div>
+          </header>
+        )}
+
+        <main
+          className={cn(
+            "w-full min-h-[calc(100vh-3.5rem)]",
+            padded && "px-4 pb-10 pt-6 sm:px-6 lg:px-8",
+            mainClassName,
+          )}
+        >
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/** Renders one user-menu row, honoring `to` / `href` / `onSelect` + separators. */
+function UserMenuRow({ item, navigate }: { item: UserMenuItem; navigate: (to: string) => void }) {
+  const Icon = item.icon;
+  const handleClick = () => {
+    if (item.onSelect) item.onSelect();
+    else if (item.to) navigate(item.to);
+  };
+  const itemClassName = cn(
+    item.variant === "destructive" &&
+      "text-destructive focus:text-destructive focus:bg-destructive/10",
+  );
+  return (
+    <>
+      {item.separatorBefore && <DropdownMenuSeparator />}
+      {item.href ? (
+        <DropdownMenuItem asChild className={itemClassName}>
+          <a href={item.href} target="_blank" rel="noopener noreferrer">
+            {Icon ? <Icon className="size-4" /> : null}
+            <span>{item.label}</span>
+          </a>
+        </DropdownMenuItem>
+      ) : (
+        <DropdownMenuItem onClick={handleClick} className={itemClassName}>
+          {Icon ? <Icon className="size-4" /> : null}
+          <span>{item.label}</span>
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,56 @@
+import { z } from "zod";
+
+export const createJobSchema = z.object({
+  jobName: z.string().min(1),
+  data: z.any().optional(),
+  options: z.any().optional(),
+});
+
+export const scheduleJobSchema = z.object({
+  jobName: z.string().min(1),
+  cron: z.string().min(1),
+  data: z.any().optional(),
+  options: z.any().optional(),
+});
+
+export const editScheduledJobSchema = z.object({
+  key: z.string().optional(),
+  cron: z.string().min(1),
+  data: z.any().optional(),
+  options: z.any().optional(),
+});
+
+export const cancelScheduledJobSchema = z.object({
+  key: z.string().optional(),
+});
+
+export const bulkRerunSchema = z.object({
+  jobs: z.array(
+    z.object({
+      queueName: z.string().min(1),
+      jobId: z.string().min(1),
+    }),
+  ),
+});
+
+export const paginationQuerySchema = z.object({
+  limit: z.coerce.number().optional(),
+  offset: z.coerce.number().optional(),
+});
+
+export const getJobsSchema = z.object({
+  state: z.string().optional(),
+  name: z.string().optional(),
+  limit: z.coerce.number().optional(),
+  offset: z.coerce.number().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+});
+
+export const getLogsQuerySchema = z.object({
+  afterId: z.coerce.number().optional(),
+});
+
+export type CreateJobDTO = z.infer<typeof createJobSchema>;
+export type ScheduleJobDTO = z.infer<typeof scheduleJobSchema>;
+export type EditScheduledJobDTO = z.infer<typeof editScheduledJobSchema>;

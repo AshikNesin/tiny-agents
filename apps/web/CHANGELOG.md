@@ -1,0 +1,327 @@
+# @groot/web
+
+## 0.2.23
+
+### Patch Changes
+
+- Updated dependencies [[`297f957`](https://github.com/AshikNesin/groot/commit/297f957bc0fcda60dcb63deb770bda7860e92b7e), [`73677b0`](https://github.com/AshikNesin/groot/commit/73677b01da2163aca4d8c78c35f637b124a58b5e), [`09fea32`](https://github.com/AshikNesin/groot/commit/09fea322f9fa0c12397d8dccbc88638612dd99ca)]:
+  - @groot/jobs@0.9.3
+  - @groot/shell@0.10.3
+  - @groot/ui@0.7.1
+  - @groot/core@0.10.2
+
+## 0.2.22
+
+### Patch Changes
+
+- Updated dependencies [[`960a9c1`](https://github.com/AshikNesin/groot/commit/960a9c15e059e49b2edcfb837875c9efc399190d), [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112), [`81cfc6d`](https://github.com/AshikNesin/groot/commit/81cfc6d9797f3d51d6b79555ac933d1eebacb83a), [`bb4e94d`](https://github.com/AshikNesin/groot/commit/bb4e94d544ce23d4e8fe35411ff2fcc72bec4c3c), [`9477a61`](https://github.com/AshikNesin/groot/commit/9477a61b24c2f2d722ceb476cba652c34af96acb)]:
+  - @groot/ui@0.7.0
+  - @groot/shell@0.10.2
+  - @groot/jobs@0.9.2
+  - @groot/core@0.10.1
+
+## 0.2.21
+
+### Patch Changes
+
+- Updated dependencies [[`9e5602a`](https://github.com/AshikNesin/groot/commit/9e5602a68d11df36357165df982f71cb8d6c2a79)]:
+  - @groot/core@0.10.0
+  - @groot/jobs@0.9.1
+  - @groot/ui@0.6.0
+  - @groot/shell@0.10.1
+
+## 0.2.20
+
+### Patch Changes
+
+- Updated dependencies [[`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11), [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11), [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11), [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11), [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11)]:
+  - @groot/core@0.9.0
+  - @groot/jobs@0.9.0
+  - @groot/shell@0.10.0
+  - @groot/ui@0.5.0
+
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [[`cc632b9`](https://github.com/AshikNesin/groot/commit/cc632b982912b5d9261bfd268813ed25a30ef395), [`19a086c`](https://github.com/AshikNesin/groot/commit/19a086c832c9a009ecef2ff3eaf905f24d54f2a7), [`d03042b`](https://github.com/AshikNesin/groot/commit/d03042b6798461138fccb5d1881b2f9e80521153)]:
+  - @groot/core@0.8.1
+  - @groot/jobs@0.8.3
+  - @groot/shell@0.9.1
+
+## 0.2.18
+
+### Patch Changes
+
+- Updated dependencies [[`399ee35`](https://github.com/AshikNesin/groot/commit/399ee35d36a4bae5fcd3df68b481170d6f68da53), [`399ee35`](https://github.com/AshikNesin/groot/commit/399ee35d36a4bae5fcd3df68b481170d6f68da53), [`399ee35`](https://github.com/AshikNesin/groot/commit/399ee35d36a4bae5fcd3df68b481170d6f68da53)]:
+  - @groot/jobs@0.8.2
+  - @groot/shell@0.9.0
+  - @groot/ui@0.4.0
+
+## 0.2.17
+
+### Patch Changes
+
+- Updated dependencies [[`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc), [`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc), [`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc)]:
+  - @groot/core@0.8.0
+  - @groot/shell@0.8.0
+  - @groot/jobs@0.8.1
+
+## 0.2.16
+
+### Patch Changes
+
+- Updated dependencies [[`e64cc32`](https://github.com/AshikNesin/groot/commit/e64cc32d34a41936bba0b00f7758059eb2d83723), [`02a221b`](https://github.com/AshikNesin/groot/commit/02a221b8f8a83ba095a12dc986090fce897af10f)]:
+  - @groot/jobs@0.8.0
+
+## 0.2.15
+
+### Patch Changes
+
+- Updated dependencies [[`0051546`](https://github.com/AshikNesin/groot/commit/005154619ee39ca399a96bcea02ba0fbbcfd3e91), [`5efcd19`](https://github.com/AshikNesin/groot/commit/5efcd19c4d87de3afc47c32d8aae8fe2bd20e525)]:
+  - @groot/shell@0.7.0
+  - @groot/jobs@0.7.4
+
+## 0.2.14
+
+### Patch Changes
+
+- Updated dependencies [[`90c30e0`](https://github.com/AshikNesin/groot/commit/90c30e02b09c3e355bd8a0aa0f431006dd55431b)]:
+  - @groot/ui@0.3.0
+  - @groot/jobs@0.7.3
+  - @groot/shell@0.6.2
+
+## 0.2.13
+
+### Patch Changes
+
+- Updated dependencies [[`011c6d5`](https://github.com/AshikNesin/groot/commit/011c6d5595ea9e4fff8911f56e497e497aecb380)]:
+  - @groot/jobs@0.7.2
+  - @groot/ui@0.2.2
+  - @groot/shell@0.6.1
+
+## 0.2.12
+
+### Patch Changes
+
+- Updated dependencies [[`b9906ec`](https://github.com/AshikNesin/groot/commit/b9906ec95ba2702d5f7f3176333e65be30a2ff8f)]:
+  - @groot/shell@0.6.0
+  - @groot/jobs@0.7.1
+
+## 0.2.11
+
+### Patch Changes
+
+- [#92](https://github.com/AshikNesin/groot/pull/92) [`4b8c990`](https://github.com/AshikNesin/groot/commit/4b8c990b97d513981fd4950bf17ac09a5550eb78) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Model honker job-queue tables in the SQLite Prisma schema to prevent migration drift
+
+  The honker SQLite job queue (@russellthehippo/honker-node) creates its own
+  tables (`_honker_live`, `_honker_dead`, `_honker_locks`,
+  `_honker_notifications`, `_honker_rate_limits`, `_honker_results`,
+  `_honker_scheduler_tasks`, `_honker_stream`, `_honker_stream_consumers`) at
+  runtime inside the app's SQLite file. Because Prisma's migration history didn't
+  know about them, `prisma migrate dev` detected drift and wanted to drop all nine
+  tables — breaking migration creation against any database honker had touched.
+
+  This mirrors how the `keyv` table is already handled: the tables are declared in
+  a new migration (`20260316000000_honker_tables`, guarded with
+  `IF NOT EXISTS` so it's a no-op when honker already bootstrapped them) and
+  added as `@@ignore`-d models in `schema.sqlite.prisma` so Prisma neither owns
+  nor generates DDL for them. Defaults like `created_at DEFAULT (unixepoch())`
+  are expressed via `@default(dbgenerated(...))`, and index names are pinned with
+  `@@index(..., map: ...)` so drift detection stays quiet. The three partial
+  (`WHERE`-predicate) indexes honker uses on `_honker_live` aren't expressible in
+  Prisma syntax and live only in the migration SQL.
+
+  - Verified end-to-end: `prisma migrate dev --create-only` now emits an empty
+    migration (zero drift) after honker initializes its tables.
+  - No postgres migration needed: postgres uses pg-boss, which keeps its tables
+    in a separate schema and never drifts.
+  - Updated the schema-parity test to ignore `@@ignore`-d infrastructure models,
+    since honker's tables are SQLite-only and intentionally absent from the
+    postgres schema.
+
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [[`a9b3825`](https://github.com/AshikNesin/groot/commit/a9b3825a930988d6fcbe9e7f0e53cc8fce5b470e)]:
+  - @groot/jobs@0.7.0
+
+## 0.2.9
+
+### Patch Changes
+
+- [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rename `*.validation.ts` to `*.schema.ts`
+
+  These files contain only Zod schemas, not validation logic, so the
+  naming was misleading. Renamed `auth`, `passkey`, `app-settings`,
+  `storage`, and `todo` validation files to `*.schema.ts` and updated
+  all imports across `@groot/core`, `@groot/web`, the docs, and
+  `AGENTS.md`. This is a pure rename — no behavior change.
+
+- Updated dependencies [[`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1)]:
+  - @groot/ui@0.2.1
+  - @groot/jobs@0.6.2
+  - @groot/shell@0.5.0
+  - @groot/core@0.7.1
+
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [[`986c902`](https://github.com/AshikNesin/groot/commit/986c9024f0f5a106a4a8822b96605c8ef9eee225)]:
+  - @groot/jobs@0.6.1
+
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [[`e0d78f5`](https://github.com/AshikNesin/groot/commit/e0d78f5d17c27df512cd53ec20277ffdc9cf19bb)]:
+  - @groot/core@0.7.0
+  - @groot/jobs@0.6.0
+
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`40eb1ec`](https://github.com/AshikNesin/groot/commit/40eb1ece15b0b3c299b32f12763f2c7be4ff25d0), [`40eb1ec`](https://github.com/AshikNesin/groot/commit/40eb1ece15b0b3c299b32f12763f2c7be4ff25d0), [`1e85141`](https://github.com/AshikNesin/groot/commit/1e851410f1b5cdce9a6bcafd269da4f091c99245), [`225280b`](https://github.com/AshikNesin/groot/commit/225280b0899784e6fd92a363adb141dc7647bd24)]:
+  - @groot/core@0.6.1
+  - @groot/jobs@0.5.2
+  - @groot/shell@0.4.0
+
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [[`86c1657`](https://github.com/AshikNesin/groot/commit/86c165721799f81f001ea8f3c986ffc984551b4e)]:
+  - @groot/core@0.6.0
+  - @groot/jobs@0.5.1
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`0c47508`](https://github.com/AshikNesin/groot/commit/0c47508c31623b46f051257048c19f7c86c89e2b)]:
+  - @groot/core@0.5.0
+  - @groot/jobs@0.5.0
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`5f9eddd`](https://github.com/AshikNesin/groot/commit/5f9eddd7bba05222c378578a7d0900dac53d52a2)]:
+  - @groot/core@0.4.1
+  - @groot/shell@0.3.1
+  - @groot/jobs@0.4.1
+
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`83b3a6f`](https://github.com/AshikNesin/groot/commit/83b3a6f1ce34a28299b00f18645faabf3e9569a8)]:
+  - @groot/core@0.4.0
+  - @groot/ui@0.2.0
+  - @groot/shell@0.3.0
+  - @groot/jobs@0.4.0
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`ae54b49`](https://github.com/AshikNesin/groot/commit/ae54b4920f39b2dbd9432298855210cb4752cd57)]:
+  - @groot/core@0.3.0
+  - @groot/shell@0.2.0
+  - @groot/jobs@0.3.0
+  - @groot/ui@0.1.0
+
+## 0.2.0
+
+### Minor Changes
+
+- [`07de4af`](https://github.com/AshikNesin/groot/commit/07de4afce92948ac8a657284548d21fb7a670910) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract logger into a dedicated `@groot/core/logger` package
+
+  The Pino logger module moves out of `@groot/core/core/logger/` into its own
+  flat `@groot/core/logger` package (mirrors `@groot/core/database` as a leaf). This removes
+  the `@groot/jobs` → `@groot/core` reach-through for logger exports and gives
+  foundational infrastructure its own package boundary.
+
+  **Breaking — migration required for downstream repos:**
+
+  - All `@groot/core/core/logger` imports must move to `@groot/core/logger`. Affected
+    surfaces: server middlewares, kv store, shared services, the jobs backend,
+    the app bootstrap, and tests that `vi.mock` the logger.
+  - The logger no longer reads `env`/`config` eagerly. The server bootstrap must
+    call `configureLogger({ level, service, nodeEnv })` once before request
+    handling — `apps/web/src/server/index.ts` now does this as the first statement
+    in `main()`:
+    ```ts
+    import { configureLogger } from "@groot/core/logger";
+    configureLogger({
+      level: config.logging.level,
+      service: config.app.name,
+      nodeEnv: env.NODE_ENV,
+    });
+    ```
+    This preserves the `config.logging.level` / `config.app.name` YAML knobs.
+  - `loggerConfig` / `logLevel` are now live bindings updated by `configureLogger`
+    (read them at runtime, not import time). `isDevelopment` reads `process.env.NODE_ENV`
+    directly (equivalent to the previous `env.NODE_ENV`).
+
+  Notes:
+
+  - `@groot/core/logger` is a leaf (deps: `pino`, `pino-pretty`, `dayjs`; `@types/express`/`@types/node` dev). No `@groot/*` deps.
+  - `@groot/core`, `@groot/jobs`, and `apps/web` now declare `@groot/core/logger` as a workspace dependency.
+  - `@groot/core` no longer contains the logger module; the `packages/core/src/logger/` directory is removed.
+  - Configured via the esbuild/vitest/tsconfig `@groot/core/logger` alias.
+
+### Patch Changes
+
+- Updated dependencies [[`07de4af`](https://github.com/AshikNesin/groot/commit/07de4afce92948ac8a657284548d21fb7a670910)]:
+  - @groot/core@0.2.0
+  - @groot/jobs@0.2.0
+  - @groot/core/logger@0.1.0
+
+## 0.1.0
+
+### Minor Changes
+
+- [#60](https://github.com/AshikNesin/groot/pull/60) [`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract all jobs code into a dedicated `@groot/jobs` package
+
+  The entire jobs vertical — pg-boss backend infrastructure, HTTP admin API,
+  job logger, the dashboard UI, client types, and API methods — now lives in a
+  single `@groot/jobs` package with two flat entry points:
+
+  - `@groot/jobs/server/*` — pg-boss queue/worker/queries, routes, job logger
+  - `@groot/jobs/client/*` — dashboard UI, `jobsApi`, types
+
+  Business-specific handlers (`todo.jobs.ts`) and bootstrap wiring stay in
+  `apps/web/`. This consolidates jobs code that was previously spread across
+  `@groot/core` (`core/job`, `shared/jobs`, `core/logger`), `@groot/shell`
+  (`types/jobs`, apiClient methods), and `apps/web` (dashboard UI).
+
+  **Breaking — migration required for downstream repos:**
+
+  - `createJobLogger` / `JobLogStream` / `createJobLogStream` moved from
+    `@groot/core/core/logger` → `@groot/jobs/server/logger`. The
+    `@groot/core/core/logger` re-exports are removed.
+  - The 17 job methods were removed from `apiClient` (`@groot/shell/lib/api`).
+    Use `jobsApi` from `@groot/jobs/client` instead.
+  - `JobName` changed from an enum (with hardcoded `TODO_*` values) to
+    `type JobName = string`. App-specific job names live with their handlers.
+  - Server-side imports of job infra must move from
+    `@groot/core/core/job/*` and `@groot/core/shared/jobs/*` to
+    `@groot/jobs/server/*` (use explicit subpaths like `/worker`, `/logger`,
+    `/routes` for the server bundle).
+  - The jobs dashboard UI moved from `apps/web/src/client/pages/jobs/` to
+    `@groot/jobs/client`. Import pages via `@groot/jobs/client`.
+
+  The `database → logger → job-stream → database` module cycle is resolved as
+  a side effect (job-stream left `@groot/core/core/logger`). `pg-boss` is no
+  longer a dependency of `@groot/core` (it now lives in `@groot/jobs`).
+
+### Patch Changes
+
+- Updated dependencies [[`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a)]:
+  - @groot/core@0.1.0
+  - @groot/shell@0.1.0
+  - @groot/jobs@0.1.0

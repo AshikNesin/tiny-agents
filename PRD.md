@@ -5,15 +5,16 @@
 ## 1. Overview
 
 **tiny-agents** is a minimal, personal take on xAI's _Grok Bot_ ("your team of always-on agents"): a
-messenger-style app where every contact in the sidebar is an AI bot you chat with.
+messenger-style app where every contact in the bot list is an AI bot you chat with.
 
 - **Agent core:** [pi-durable](https://earendil.com/posts/pi-durable/) (`@earendil-works/pi-durable`) — every
   conversation is durable: it survives page refreshes, server crashes and redeploys.
 - **Foundation:** a child project of the [groot](https://github.com/AshikNesin/groot) boilerplate (Express 5 +
   React 19 + Prisma/SQLite + JWT/passkey auth), kept in sync with it via groot's sync tooling.
 - **Inference:** all LLM calls go through **Cloudflare AI Gateway**; provider keys live only in the gateway.
-- **UI:** React + shadcn/ui + shadcn [AI Elements](https://ui.shadcn.com/docs/ai-elements), with a dark,
-  Grok-inspired look (UX reference: [OpenMausBot](https://github.com/milind-soni/OpenMausBot)).
+- **UI:** React + shadcn/ui + shadcn [AI Elements](https://ui.shadcn.com/docs/ai-elements). Visual and layout
+  reference: [Talorys](https://rociiu.github.io/talorys/#demo) (calm three-column workspace, light + dark);
+  product/feature reference: [OpenMausBot](https://github.com/milind-soni/OpenMausBot) and Grok Bot.
 
 Phase 1 delivers the core only: **create bots and chat with them**. Tools and everything else come later.
 
@@ -69,12 +70,12 @@ Explicitly out of scope (see §15 Roadmap):
 
 ### 5.1 Bots
 
-| Story | Behaviour |
-| --- | --- |
-| Create bot | "New bot" opens a single-page dialog: name, description, system prompt, model, avatar (emoji/initials + colour). Model defaults to `DEFAULT_MODEL`. |
-| Edit bot | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept. |
-| Delete bot | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2). |
-| Reset conversation | Confirm dialog → bot gets a fresh, empty conversation. The old one is kept in `agent.db` but hidden. |
+| Story              | Behaviour                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model, avatar (emoji/initials + colour). Model defaults to `DEFAULT_MODEL`. |
+| Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                     |
+| Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                         |
+| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one is kept in `agent.db` but hidden.     |
 
 ### 5.2 Chat
 
@@ -84,7 +85,7 @@ Explicitly out of scope (see §15 Roadmap):
 - Collapsible **Reasoning** block when the model emits thinking.
 - **Copy** message action.
 - Replies keep generating server-side when you switch bots or close the tab.
-- Sidebar shows **"typing…"** for bots currently replying and an **unread badge** for bots with new replies.
+- The bot list shows **"typing…"** for bots currently replying and an **unread badge** for bots with new replies.
 - **Compaction:** pi-durable background compaction is on (library defaults). The transcript shows a subtle
   "earlier messages summarized" marker; full history remains scrollable.
 - Idempotent sends: every message carries a client-generated `requestId`; retries never duplicate a message.
@@ -99,16 +100,55 @@ Explicitly out of scope (see §15 Roadmap):
 
 ## 6. UX & screens
 
-Dark, Grok-inspired theme by default, with a light/dark toggle. Pages render inside groot's `shell` layout.
+Visual and layout reference: **[Talorys](https://rociiu.github.io/talorys/#demo)** (Chat, Memories, Automations
+screens). Pages render inside groot's `shell` layout.
 
-| Screen | Contents |
-| --- | --- |
-| Login | groot's login page: email/password + **"Sign in with passkey"** button. |
-| Main (desktop) | **Left sidebar:** bot list (avatar, name, last-message preview, typing/unread state) sorted by most recent activity, "New bot" button. **Right pane:** chat with header (avatar, name, model) + menu (Edit, Reset conversation, Delete), transcript, prompt input with Stop. |
-| Main (mobile) | Sidebar collapses into a drawer; chat is full-screen. |
-| Empty state | No bots yet → prompt to create the first bot. No bot selected → hint to pick one. |
-| Bot dialog | Single-page create/edit form (not OpenMausBot's multi-section wizard). |
-| Settings | groot's existing Settings page (passkey management via `PasskeyManager`). |
+### 6.1 Visual style (Talorys-like)
+
+- Calm, minimal workspace: neutral surfaces, thin borders, generous whitespace, **Inter** (already groot's font),
+  one accent colour used sparingly (primary buttons, send button, active state, toggles). Accent: Talorys-style
+  teal, set by an app-level CSS override of the shell's `--primary`/`--ring` tokens in `apps/web` (no edit to the
+  synced shell CSS).
+- **Light and dark themes**, dark by default, toggle in the user menu and Settings, choice persisted. (groot
+  ships dark tokens but no toggle → upstream change, §12.)
+- Bot avatars are rounded squares (emoji/initials on the bot's colour), like Talorys' "T." mark.
+
+### 6.2 Layout (desktop: three columns)
+
+| Column                           | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. App nav (groot shell sidebar) | Brand mark "tiny-agents", nav item **Chats** (Phase 1's only section; later phases add Memory, Routines, … like Talorys' Memory/Tasks/Automations), user menu at the bottom with Settings, theme toggle, Log out. Collapsible to an icon rail (shell behaviour).                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2. Bot list                      | **"+ New bot"** button, **"Search bots"** field (client-side filter by name), then bot rows: avatar, name, last-message preview, relative time ("just now"), "typing…" state, unread badge; sorted by most recent activity; selected row highlighted.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 3. Chat pane                     | **Header:** bot avatar + name, model name (muted), **"+ New chat"** button (= reset conversation, with confirm) and a ⋯ menu (Edit bot, Delete bot). **Transcript:** user messages as right-aligned muted bubbles; assistant messages left-aligned with the bot avatar and **no bubble** (full-width markdown), Reasoning collapsible above the text, copy action on hover; "earlier messages summarized" divider. **Composer:** full-width rounded input pinned to the bottom ("Message {bot}…", Enter to send, Shift+Enter newline) with an accent send button that turns into **Stop** while replying; muted footnote below ("{model} · AI can make mistakes — check important details."). |
+
+The chat route uses its own pathless layout route with `<Layout padded={false} mainClassName=…>` so the list and
+chat columns fill the viewport height and scroll independently.
+
+### 6.3 Routes & screens
+
+| Route / screen  | Contents                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                                    |
+| `/`             | Redirects to `/chats`.                                                                                                     |
+| `/chats`        | Desktop: bot list + empty chat pane ("Pick a bot or create one"). Mobile: the bot list full-screen.                        |
+| `/chats/:botId` | Desktop: list + open chat. Mobile: chat full-screen with a back arrow to the list (messenger pattern).                     |
+| Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                         |
+| Bot dialog      | Single-page create/edit dialog (name, description, avatar, model, system prompt) — not OpenMausBot's multi-section wizard. |
+| Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                                      |
+| Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                                    |
+
+### 6.4 Mobile
+
+- groot shell's mobile top bar (brand, menu drawer for app nav) stays as-is.
+- The bot list and the chat are **separate full-screen views** (list → chat → back), not a second drawer.
+- Composer stays pinned above the keyboard (`100dvh` layout).
+- A Talorys-style **bottom tab bar** is deferred until there are several sections (Phase 2+).
+
+### 6.5 Page pattern for non-chat pages (Settings now, Memory/Routines later)
+
+Following Talorys: centered content (~`5xl`, groot's `PageLayout`), H1 + one-line description, primary action
+button, optional search field, lists grouped under small uppercase section labels with counts, rows as bordered
+cards with a muted metadata line ("Added manually · just now").
 
 ## 7. Architecture
 
@@ -139,7 +179,8 @@ packages/agent  (only module that touches pi-durable)
   Exception: a clearly marked tiny-agents block at the end of `.env.schema` (§10).
 - **tiny-agents-owned code:**
   - `apps/web/src/server/api/bots/**`, SSE routes, `apps/web/src/server/routes.ts`
-  - `apps/web/src/client/pages/**` (+ app components)
+  - `apps/web/src/client/pages/**` (+ app components), `apps/web/src/client/App.tsx` (routes, nav items:
+    replace groot's demo `Todos` nav with `Chats`), app-level CSS (accent token overrides)
   - `apps/web/prisma/**` — `Bot` model added to **both** `schema.sqlite.prisma` and `schema.postgres.prisma`
     with migrations (groot convention)
   - `packages/agent/**` — new workspace package, child-only
@@ -169,7 +210,7 @@ packages/agent  (only module that touches pi-durable)
   - Stop → `abort()`.
 - **Compaction:** enabled with library defaults.
 - **Activity feed:** the module maintains per-bot activity (replying / idle) and updates the bot's
-  denormalised `lastActivityAt` and `lastMessagePreview` in `app.db` on commits, feeding the sidebar.
+  denormalised `lastActivityAt` and `lastMessagePreview` in `app.db` on commits, feeding the bot list.
 
 ### 7.3 Inference: Cloudflare AI Gateway
 
@@ -183,10 +224,10 @@ packages/agent  (only module that touches pi-durable)
 
 ### 7.4 Storage
 
-| File | Owner | Contents |
-| --- | --- | --- |
-| `app.db` (`DATABASE_URL`) | groot / Prisma (better-sqlite3) | users, passkeys, KV, jobs, **bots** |
-| `agent.db` (`AGENT_DB_PATH`) | pi-durable (Node SQLite storage, WAL) | conversations, transcripts, tasks |
+| File                         | Owner                                 | Contents                            |
+| ---------------------------- | ------------------------------------- | ----------------------------------- |
+| `app.db` (`DATABASE_URL`)    | groot / Prisma (better-sqlite3)       | users, passkeys, KV, jobs, **bots** |
+| `agent.db` (`AGENT_DB_PATH`) | pi-durable (Node SQLite storage, WAL) | conversations, transcripts, tasks   |
 
 Kept as separate files so the two drivers never contend for locks and Prisma migrations never see foreign
 tables. The link between them is `Bot.conversationId`.
@@ -195,7 +236,7 @@ tables. The link between them is `Bot.conversationId`.
 
 - **SSE** for server → browser, plain REST POST for actions. groot's `compression()` must skip
   `text/event-stream` (§12).
-- `GET /api/v1/events` — app-wide stream for the sidebar: per-bot typing state, last-message preview, unread
+- `GET /api/v1/events` — app-wide stream for the bot list: per-bot typing state, last-message preview, unread
   changes, bot created/updated/deleted.
 - `GET /api/v1/bots/:id/stream` — open-chat stream: **snapshot first, then deltas** (from pi-durable
   `watchEvents()`). On reconnect the client simply receives a fresh snapshot — no replay logic. Slow clients
@@ -230,22 +271,22 @@ Unread = latest assistant entry newer than `lastReadAt` (server-side, so it is c
 
 ## 9. API surface (`/api/v1`, groot `{ success, data }` envelope)
 
-| Method & path | Purpose |
-| --- | --- |
+| Method & path               | Purpose                                                        |
+| --------------------------- | -------------------------------------------------------------- |
 | groot `auth/*`, `passkey/*` | Login, logout, `me`, passkeys, admin user creation (unchanged) |
-| `GET /models` | Gateway catalog, `DEFAULT_MODEL`, `gatewayConfigured` flag |
-| `GET /bots` | List bots with sidebar fields (preview, activity, unread) |
-| `POST /bots` | Create bot (+ conversation) |
-| `GET /bots/:id` | Bot detail |
-| `PATCH /bots/:id` | Update bot (re-configures conversation) |
-| `DELETE /bots/:id` | Delete bot |
-| `POST /bots/:id/messages` | `{ requestId, text }` → submit; idempotent on `requestId` |
-| `POST /bots/:id/abort` | Stop the in-flight reply |
-| `POST /bots/:id/reset` | Fresh conversation |
-| `POST /bots/:id/read` | Mark read (sets `lastReadAt`) |
-| `GET /bots/:id/stream` | SSE: snapshot + deltas for the open chat |
-| `GET /events` | SSE: app-wide sidebar activity |
-| `GET /health` (no auth) | 200 only after Harness is open and `resume()` done; else 503 |
+| `GET /models`               | Gateway catalog, `DEFAULT_MODEL`, `gatewayConfigured` flag     |
+| `GET /bots`                 | List bots with bot-list fields (preview, activity, unread)     |
+| `POST /bots`                | Create bot (+ conversation)                                    |
+| `GET /bots/:id`             | Bot detail                                                     |
+| `PATCH /bots/:id`           | Update bot (re-configures conversation)                        |
+| `DELETE /bots/:id`          | Delete bot                                                     |
+| `POST /bots/:id/messages`   | `{ requestId, text }` → submit; idempotent on `requestId`      |
+| `POST /bots/:id/abort`      | Stop the in-flight reply                                       |
+| `POST /bots/:id/reset`      | Fresh conversation                                             |
+| `POST /bots/:id/read`       | Mark read (sets `lastReadAt`)                                  |
+| `GET /bots/:id/stream`      | SSE: snapshot + deltas for the open chat                       |
+| `GET /events`               | SSE: app-wide bot-list activity                                |
+| `GET /health` (no auth)     | 200 only after Harness is open and `resume()` done; else 503   |
 
 Request bodies validated with zod (groot `parseBody`).
 
@@ -253,12 +294,12 @@ Request bodies validated with zod (groot `parseBody`).
 
 All env vars are declared in `.env.schema` (varlock). No new keys in the synced `config.yml` schema.
 
-| Variable | Source | Notes |
-| --- | --- | --- |
-| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, `STORAGE_DRIVER`, … | groot | unchanged |
-| `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | groot (upstreamed, §12) | gateway auth |
-| `DEFAULT_MODEL` | groot (upstreamed, §12) | default model id for new bots |
-| `AGENT_DB_PATH` | tiny-agents block at end of `.env.schema` | default `./data/agent.db` |
+| Variable                                                                                            | Source                                    | Notes                         |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
+| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, `STORAGE_DRIVER`, … | groot                                     | unchanged                     |
+| `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`                 | groot (upstreamed, §12)                   | gateway auth                  |
+| `DEFAULT_MODEL`                                                                                     | groot (upstreamed, §12)                   | default model id for new bots |
+| `AGENT_DB_PATH`                                                                                     | tiny-agents block at end of `.env.schema` | default `./data/agent.db`     |
 
 ## 11. Deployment
 
@@ -291,6 +332,9 @@ These are generic improvements made in the groot repo, then pulled in with `pnpm
 5. **Passkey sign-in button** on `packages/shell` `Login.tsx` (backend/store already support it).
 6. **Deploy docs:** note in `docs/guides/deploy.md` that SQLite deployments on Coolify must disable rolling
    updates.
+7. **Theme toggle in `packages/shell`:** wire the existing `.dark` tokens — light/dark/system toggle in the
+   user menu, persisted in localStorage, applied before first paint (no flash); app-configurable default
+   (tiny-agents uses dark). Make shell-owned editors (e.g. `CodeMirrorEditor`) follow the theme.
 
 ## 13. Testing
 
@@ -307,22 +351,29 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 
 ## 14. Risks & mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| pi-durable is experimental; API changes without notice | Exact pins; all usage behind `packages/agent`; upgrade deliberately with tests. |
-| Two processes on one `agent.db` (rolling deploys, accidental second instance) | Rolling updates disabled; exclusive lock at boot; `/health` gated on resume. |
-| groot sync conflicts | Never edit synced files; child-only `packages/agent` excluded from sync; upstream generic fixes. |
-| Gateway catalog lacks Grok/Gemini | Accepted for Phase 1; custom models in Phase 2. |
-| pnpm `minimumReleaseAge` (24h) / `trustPolicy` blocks very fresh `@earendil-works/*` releases | Pin to versions older than 24h; upgrade deliberately. |
-| Orphaned conversations accumulate in `agent.db` on delete/reset | Accepted for Phase 1; cleanup in Phase 2. |
+| Risk                                                                                          | Mitigation                                                                                       |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| pi-durable is experimental; API changes without notice                                        | Exact pins; all usage behind `packages/agent`; upgrade deliberately with tests.                  |
+| Two processes on one `agent.db` (rolling deploys, accidental second instance)                 | Rolling updates disabled; exclusive lock at boot; `/health` gated on resume.                     |
+| groot sync conflicts                                                                          | Never edit synced files; child-only `packages/agent` excluded from sync; upstream generic fixes. |
+| Gateway catalog lacks Grok/Gemini                                                             | Accepted for Phase 1; custom models in Phase 2.                                                  |
+| pnpm `minimumReleaseAge` (24h) / `trustPolicy` blocks very fresh `@earendil-works/*` releases | Pin to versions older than 24h; upgrade deliberately.                                            |
+| Orphaned conversations accumulate in `agent.db` on delete/reset                               | Accepted for Phase 1; cleanup in Phase 2.                                                        |
 
 ## 15. Roadmap (Phase 2+)
 
 - **Tools** via pi-durable `defineTool` (durable tool calls, replay-safe tools), approvals UI
-  (AI Elements `Tool`, `Confirmation`)
-- Message edit / regenerate and conversation **fork**; multiple threads per bot
+  (AI Elements `Tool`, `Confirmation`). Tool activity shown inline as compact status chips above the reply
+  (Talorys: "✓ Adding task …").
+- Message edit / regenerate and conversation **fork**; multiple threads per bot (then a per-bot history list
+  with "Search history", as in Talorys' conversation column)
 - Custom gateway models (Grok, Gemini via `/compat` or Cloudflare REST API)
-- Memory, skills, routines / schedules (groot jobs), notifications
+- **Memory** page (Talorys "Memories"): what bots know about you, grouped by category (Preferences, Facts,
+  Goals, Habits) with counts, searchable, add/edit/delete, source line ("Added manually" / "From chat")
+- **Routines** page (Talorys "Automations"): reminders and AI routines on groot jobs — "Upcoming" cards,
+  "Active schedules" list with enable toggle + delete + next run, "Recent executions"
+- Skills; notifications (bell in the nav header, web push); mobile bottom tab bar once there are several
+  sections
 - Channels / group chats, bot-to-bot, chief-of-staff orchestration
 - Per-bot computers, connected apps / MCP
 - Attachments, avatar upload / generation, voice
@@ -335,7 +386,9 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 - pi-durable on Cloudflare: https://earendil.com/posts/pi-durable-on-cloudflare/
 - pi monorepo (pi-durable, pi-ai): https://github.com/earendil-works/pi
 - groot boilerplate: https://github.com/AshikNesin/groot (local: `~/Code/groot`)
-- UI reference: https://github.com/milind-soni/OpenMausBot
+- UI reference (visual/layout): Talorys — https://rociiu.github.io/talorys/#demo ·
+  https://github.com/rociiu/talorys
+- UI reference (product): https://github.com/milind-soni/OpenMausBot
 - Grok Bot (xAI): https://x.ai/news/introducing-grok-bot
 - shadcn AI Elements: https://ui.shadcn.com/docs/ai-elements
 - Cloudflare AI Gateway BYOK: https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/

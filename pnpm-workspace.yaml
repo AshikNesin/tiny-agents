@@ -1,0 +1,76 @@
+# Supply-chain hardening (react-doctor/require-pnpm-hardening).
+# minimumReleaseAge: 1440 = 1 day. Refuses versions published <24h ago, blocking
+#   same-day "publish-malware-then-unpublish" attacks (the highest-risk window).
+#   Intentionally shorter than the rule's 7-day default: groot tracks latest
+#   deps (e.g. tailwindcss platform binaries are often <7d old) and a 7-day gate
+#   blocks routine installs. Applies to *new* resolutions only; frozen-lockfile
+#   CI installs are unaffected.
+# trustPolicy: no-downgrade: refuses packages whose provenance/signature trust
+#   weakens between resolutions.
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+
+# prisma@7.10.0 (CLI only) was published without an npm provenance attestation
+# after a broken publish-token incident on Prisma's side (see the
+# 7.10.0-integration-fix-prisma-publish-token dist-tag), while every earlier
+# 7.x release has one — which trips trustPolicy: no-downgrade. Verified
+# benign: official `latest` dist-tag, published 2026-08-25, git tag + release
+# notes on github.com/prisma/orm match, registry signatures intact, no
+# advisories. Scoped to this exact version only; remove once a later release
+# restores provenance.
+trustPolicyExclude:
+  - prisma@7.10.0
+
+# Non-interactive CI builders (Heroku): when a restored node_modules is
+# incompatible with the current store/lockfile, pnpm wants to purge and
+# recreate it — but the purge confirmation requires a TTY and aborts with
+# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY (exit 1, killing the build).
+# Auto-confirm module-dir purges instead.
+confirmModulesPurge: false
+
+packages:
+  - "."
+  - "apps/*"
+  - "packages/*"
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.2
+  vite-plus: 0.2.2
+  vitest: 4.1.9
+
+onlyBuiltDependencies:
+  - "@biomejs/biome"
+  - "@prisma/client"
+  - "@prisma/engines"
+  - "@sentry-internal/node-cpu-profiler"
+  - bcrypt
+  - better-sqlite3
+  - esbuild
+  - prisma
+  - protobufjs
+  - sqlite3
+
+overrides:
+  # Force `pg` to a SINGLE version across the whole workspace. @prisma/adapter-pg
+  # declares `pg` as a regular (non-peer) dependency, so pnpm is otherwise free to
+  # resolve a different `pg` instance for the adapter than the one @groot/core
+  # builds pools with. PrismaPg's constructor recognises a passed-in pool via
+  # `pool instanceof pg.Pool` using ITS OWN `pg` — if the pool came from core's
+  # different `pg` copy, the check returns false, the whole Pool object is
+  # misread as a `pg.PoolConfig`, its `connectionString` resolves to undefined,
+  # and every query connects to `pg`'s default endpoint (socket / :5432) instead
+  # of DATABASE_URL — surfacing as `ECONNREFUSED` while a raw `pg.Pool` to the
+  # same URL works fine. A single pinned version guarantees one instance, so the
+  # instanceof check always holds regardless of lockfile drift. Bump this in lock
+  # step with `@groot/core`'s declared `pg` range.
+  pg: "8.22.0"
+  vite: "catalog:"
+  vitest: "catalog:"
+
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
