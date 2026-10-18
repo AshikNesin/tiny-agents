@@ -55,7 +55,22 @@ export function createGatewayModels(
  * authenticated with the gateway's own key (CLOUDFLARE_API_KEY) — the
  * provider's upstream key lives in the gateway, never here.
  */
-function gatewayBearerAuth() {
+/**
+ * Auth for custom gateway providers.
+ *
+ * Direct calls (gateway.ai.cloudflare.com) use the gateway's native scheme —
+ * `cf-aig-authorization: Bearer <CLOUDFLARE_API_KEY>` with `Authorization`
+ * explicitly nulled — matching pi-ai's built-in cloudflare-ai-gateway
+ * provider (which is what the gateway expects; a plain bearer in
+ * `Authorization` gets 401 code 2009).
+ *
+ * Behind an alternate front door (GATEWAY_BASE_URL, e.g. the exe.dev proxy
+ * that injects the real token) the placeholder bearer rides in
+ * `Authorization` instead: the model's static header set already carries
+ * `authorization: Bearer unused` to satisfy pi-ai's key check, and the proxy
+ * swaps it for the real gateway token in flight.
+ */
+function gatewayCustomAuth(useNativeHeader: boolean) {
   return {
     name: "Cloudflare AI Gateway token",
     resolve: async (input: {
@@ -64,7 +79,17 @@ function gatewayBearerAuth() {
     }) => {
       const key = await input.ctx.env("CLOUDFLARE_API_KEY", { signal: input.signal });
       if (!key) return undefined;
-      return { auth: { apiKey: key }, source: "CLOUDFLARE_API_KEY" };
+      if (!useNativeHeader) return { auth: { apiKey: key }, source: "CLOUDFLARE_API_KEY" };
+      return {
+        auth: {
+          headers: {
+            "cf-aig-authorization": `Bearer ${key}`,
+            Authorization: null,
+            "x-api-key": null,
+          },
+        },
+        source: "CLOUDFLARE_API_KEY",
+      };
     },
   };
 }
@@ -143,6 +168,10 @@ export function registerGatewayCustomProviders(
       );
       continue;
     }
+    // Direct-to-gateway calls speak the gateway's native cf-aig scheme; any
+    // GATEWAY_BASE_URL front door gets the placeholder bearer the proxy
+    // replaces with the real token.
+    const nativeGatewayAuth = frontDoor === "https://gateway.ai.cloudflare.com";
     interface CustomModelSpec {
       id: string;
       name: string;
@@ -167,10 +196,10 @@ export function registerGatewayCustomProviders(
         name: typeof m.name === "string" ? m.name : m.id,
         api: "openai-completions",
         baseUrl: prefix,
-        // A bearer placeholder the front-door proxy overwrites with the real
-        // gateway token; suppresses pi-ai's cf-aig-authorization header (the
-        // gateway would otherwise see the placeholder there and 401).
-        headers: { authorization: "Bearer unused" },
+        // Behind a front-door proxy: a bearer placeholder the proxy overwrites
+        // with the real gateway token. Direct-to-gateway: none — the native
+        // cf-aig-authorization header (from the auth resolver) carries the key.
+        ...(nativeGatewayAuth ? {} : { headers: { authorization: "Bearer unused" } }),
         contextWindow: typeof m.contextWindow === "number" ? m.contextWindow : 131_072,
         maxTokens: typeof m.maxTokens === "number" ? m.maxTokens : 16_384,
         reasoning: m.reasoning === true,
@@ -206,13 +235,7 @@ export function registerGatewayCustomProviders(
         name:
           typeof provider.name === "string" ? (unquote(provider.name) ?? providerId) : providerId,
         baseUrl: prefix,
-        // Same credential semantics as the gateway itself: the gateway key
-        // authorizes; upstream keys are injected by the gateway (BYOK).
-        // Plain bearer auth (standard Authorization header, no gateway-specific
-        // cf-aig-authorization): a front-door proxy (GATEWAY_BASE_URL) replaces
-        // the header with the real token; calling the gateway host directly
-        // uses CLOUDFLARE_API_KEY as the bearer.
-        auth: { apiKey: gatewayBearerAuth() },
+        auth: { apiKey: gatewayCustomAuth(nativeGatewayAuth) },
         models: list,
         api: openAICompletionsApi(),
       }),

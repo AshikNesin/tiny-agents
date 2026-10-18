@@ -91,3 +91,42 @@ describe("gateway env tolerance", () => {
     await runtime.close();
   });
 });
+
+describe("gateway auth scheme selection", () => {
+  const PROVIDERS = JSON.stringify([
+    {
+      id: "custom-zai-coding-plan",
+      basePath: "api/coding/paas/v4",
+      models: [{ id: "glm-5.3-flash" }],
+    },
+  ]);
+
+  it("direct-to-gateway: no placeholder header (native cf-aig auth applies)", () => {
+    const registry = createGatewayModels({
+      GATEWAY_CUSTOM_PROVIDERS: PROVIDERS,
+      CLOUDFLARE_ACCOUNT_ID: "acc",
+      CLOUDFLARE_GATEWAY_ID: "gw",
+    });
+    const model = registry
+      .getProviders()
+      .filter((p) => p.id === "custom-zai-coding-plan")
+      .flatMap((p) => registry.getModels(p.id))[0];
+    expect(model?.headers).toBeUndefined();
+    expect(model?.baseUrl).toMatch(/^https:\/\/gateway\.ai\.cloudflare\.com\//);
+  });
+
+  it("behind GATEWAY_BASE_URL: placeholder bearer header present (proxy swaps it)", () => {
+    const registry = createGatewayModels({
+      GATEWAY_CUSTOM_PROVIDERS: PROVIDERS,
+      GATEWAY_BASE_URL: "https://cf-proxy.example.com",
+      CLOUDFLARE_ACCOUNT_ID: "acc",
+      CLOUDFLARE_GATEWAY_ID: "gw",
+    });
+    const model = registry
+      .getProviders()
+      .filter((p) => p.id === "custom-zai-coding-plan")
+      .flatMap((p) => registry.getModels(p.id))[0];
+    expect(model?.headers).toEqual({ authorization: "Bearer unused" });
+    expect(model?.baseUrl).toMatch(/^https:\/\/cf-proxy\.example\.com\//);
+  });
+});
