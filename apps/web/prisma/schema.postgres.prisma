@@ -47,6 +47,12 @@ model Bot {
   toolPermissions    String    @default("{}")
   skills             BotSkill[]
   connections        BotConnection[]
+  /// Messages this bot sent (message_bot tool).
+  messagesFrom       BotMessage[] @relation("BotMessagesFrom")
+  /// Messages addressed to this bot.
+  messagesTo         BotMessage[] @relation("BotMessagesTo")
+  /// Conversations whose answer routes back to this bot.
+  answersFor         BotMessage[] @relation("BotMessagesReplyTo")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -70,6 +76,34 @@ model Skill {
   updatedAt   DateTime   @updatedAt
 
   @@map("skills")
+}
+
+model BotMessage {
+  id           String    @id @default(cuid())
+  /// Sender bot id; null when the owner tagged the target in another bot's chat (a mention).
+  fromBotId    String?
+  /// Receiving bot.
+  toBotId      String
+  /// Conversation that receives this message's answer (the host of a mention, or the sender). Null = only the owner.
+  replyToBotId String?
+  /// "send" (message_bot tool) | "mention" (owner @tag) | "relay" (relayed reply).
+  kind         String
+  /// Idempotency key of the durable submit (requestId of conversation.submit).
+  requestId    String    @unique
+  /// Durable tool-call id: exactly-once row create across pi-durable replays (same pattern as Task.sourceKey).
+  sourceKey    String?   @unique
+  text         String
+  /// ISO timestamp of the assistant reply that answered this delivery, once relayed.
+  answeredAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  bot          Bot?       @relation("BotMessagesFrom", fields: [fromBotId], references: [id], onDelete: Cascade)
+  to           Bot       @relation("BotMessagesTo", fields: [toBotId], references: [id], onDelete: Cascade)
+  replyTo      Bot?      @relation("BotMessagesReplyTo", fields: [replyToBotId], references: [id], onDelete: Cascade)
+
+  @@index([toBotId, answeredAt])
+  @@index([replyToBotId, answeredAt])
+  @@map("bot_messages")
 }
 
 model BotSkill {
