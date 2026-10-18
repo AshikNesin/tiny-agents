@@ -4,22 +4,20 @@ import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
 // Feature routes
 import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
-import todoRoutes from "./api/todo/todo.routes";
+import tasksRoutes from "./api/tasks/task.routes";
 import botsRoutes from "./api/bots/bots.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
 
 // Feature job registrations
-import { registerTodoJobs } from "./api/todo/todo.jobs";
 
 /**
  * Register all feature job handlers.
  * Call this before startWorkers() so every queue name is known upfront.
  */
 export function registerJobHandlers(): void {
-  registerTodoJobs();
-  // add future feature job registrations here: registerPostJobs(), etc.
+  // add feature job registrations here: registerPostJobs(), etc.
 }
 
 export function registerRoutes(app: Express): void {
@@ -32,7 +30,7 @@ export function registerRoutes(app: Express): void {
   // Bots routes own /models, /events, and /bots — registered before the todo
   // router so its /:id pattern cannot swallow them.
   protectedRouter.use(botsRoutes);
-  protectedRouter.use("/todos", todoRoutes);
+  protectedRouter.use(tasksRoutes);
   protectedRouter.use("/jobs", jobRoutes);
   protectedRouter.use("/storage", storageRoutes);
   protectedRouter.use("/settings", appSettingsRoutes);

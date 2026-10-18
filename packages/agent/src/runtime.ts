@@ -5,6 +5,7 @@ import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
   createRegistry,
   Harness,
+  type Extension,
   MemoryStorage,
   watchEvents,
   type AgentEvent,
@@ -64,6 +65,8 @@ export interface AgentRuntimeOptions {
   lockWaitMs?: number;
   /** pi-durable run policy overrides (compaction, retry, progress). */
   settings?: HarnessSettings;
+  /** Extra extensions to install (e.g. tasks tools) alongside the defaults. */
+  extensions?: readonly Extension[];
   /** Non-fatal errors pi-durable reports (hooks, listeners, …). */
   onReport?: (error: unknown) => void;
   /** The Harness failed (storage error) and closed itself. The host should exit/restart. */
@@ -136,11 +139,13 @@ export class AgentRuntime {
         ? new MemoryStorage()
         : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createGatewayModels();
+      const registry = createRegistry();
+      for (const extension of options.extensions ?? []) registry.install(extension);
       const harness = await Harness.open(
         storage,
         {
           models,
-          registry: createRegistry(),
+          registry,
           settings: { compaction: { enabled: true }, ...options.settings },
           onReport: options.onReport,
         },

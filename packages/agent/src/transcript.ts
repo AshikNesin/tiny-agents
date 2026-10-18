@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, ToolCall } from "@earendil-works/pi-ai";
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import type { ChatEvent, ChatMessage, ChatState } from "./types";
 
@@ -28,6 +28,23 @@ function textOf(content: unknown): string {
     .join("");
 }
 
+function toolCallsOf(message: AssistantMessage): { name: string; summary: string }[] {
+  return message.content
+    .filter((block): block is ToolCall => block.type === "toolCall")
+    .map((block) => ({
+      name: block.name,
+      summary: summarizeArgs(block.name, block.arguments as Record<string, unknown>),
+    }));
+}
+
+/** One short phrase per tool: "Ship the feature" for creates, the id otherwise. */
+function summarizeArgs(name: string, args: Record<string, unknown>): string {
+  if (typeof args?.title === "string") return args.title;
+  if (typeof args?.id === "string") return args.id;
+  if (typeof args?.status === "string") return `status: ${args.status}`;
+  return "";
+}
+
 function thinkingOf(message: AssistantMessage): string {
   return message.content
     .filter((block): block is { type: "thinking"; thinking: string } => block.type === "thinking")
@@ -52,11 +69,13 @@ export function assistantToChat(
       : message.stopReason === "error"
         ? "error"
         : "done";
+  const toolCalls = toolCallsOf(message);
   return {
     id,
     role: "assistant",
     text: textOf(message.content),
     ...(reasoning ? { reasoning } : {}),
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
     status,
     ...(status === "error"
       ? { error: message.errorMessage || "The model returned an error." }

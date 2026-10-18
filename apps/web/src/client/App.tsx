@@ -5,7 +5,7 @@ import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 import { Layout } from "@groot/shell/components/Layout";
 import type { NavItem } from "@groot/shell/components/Layout";
-import { Todos } from "./pages/todo/Todos";
+import { Tasks } from "./pages/tasks/Tasks";
 import { ChatWorkspace } from "./pages/chats/ChatsLayout";
 import { Storage } from "@groot/shell/pages/storage/Storage";
 import { Jobs, JobDetail } from "@groot/jobs/client";
@@ -13,14 +13,7 @@ import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Login } from "@groot/shell/pages/auth/Login";
 import { GrootUIProvider } from "@groot/ui";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
-import {
-  MessageSquare,
-  Bot,
-  BotMessageSquare,
-  MessagesSquare,
-  ShieldCheck,
-  History,
-} from "lucide-react";
+import { Bot, BotMessageSquare, History, ListTodo, MessageSquare, ShieldCheck } from "lucide-react";
 
 /** Shell instance for the chat workspace (unpadded, full-height main). */
 function ChatsShell() {
@@ -34,7 +27,10 @@ function ChatsShell() {
 }
 
 /** tiny-agents replaces groot's demo Todos nav with Chats (PRD §6.2). */
-const NAV_ITEMS: NavItem[] = [{ name: "Chats", href: "/chats", icon: MessageSquare }];
+const NAV_ITEMS: NavItem[] = [
+  { name: "Chats", href: "/chats", icon: MessageSquare },
+  { name: "Tasks", href: "/tasks", icon: ListTodo },
+];
 
 /** Brand + login copy for the whole app, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
@@ -86,7 +82,7 @@ function App() {
                 }
               >
                 <Route index element={<Navigate to="/chats" replace />} />
-                <Route path="todos" element={<Todos />} />
+                <Route path="tasks" element={<Tasks />} />
                 <Route path="storage" element={<Storage />} />
                 <Route path="jobs" element={<Jobs />} />
                 <Route path="jobs/:queueName/:jobId" element={<JobDetail />} />

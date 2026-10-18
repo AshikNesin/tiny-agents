@@ -7,7 +7,7 @@ test.describe("App settings (authenticated)", () => {
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await page.waitForURL(/\/(chats|todos|dashboard)/);
+    await page.waitForURL(/\/(chats|tasks)/);
   });
 
   test("create, edit, and persist a setting through the full round trip", async ({ page }) => {

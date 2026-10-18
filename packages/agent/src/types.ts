@@ -29,6 +29,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "marker";
   text: string;
+  /** Tool calls this assistant turn made (name + compact args for the chip). */
+  toolCalls?: { name: string; summary: string }[];
   /** Model thinking, when the model emitted any. */
   reasoning?: string;
   status: ChatMessageStatus;

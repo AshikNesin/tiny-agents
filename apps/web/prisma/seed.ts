@@ -31,23 +31,7 @@ async function main() {
   console.log(`   📧 Email:    ${SEED_USER.email}`);
   console.log(`   🔑 Password: ${SEED_USER.password}`);
 
-  const todos = [
-    { id: 1, title: "Learn Prisma", completed: true },
-    { id: 2, title: "Build an API", completed: false },
-    { id: 3, title: "Write tests", completed: false },
-  ];
-
-  await Promise.all(
-    todos.map((todo) =>
-      prisma.todo.upsert({
-        where: { id: todo.id },
-        update: {},
-        create: { title: todo.title, completed: todo.completed },
-      }),
-    ),
-  );
-
-  console.log(`   📝 Seeded ${todos.length} todos`);
+  console.log("   📝 Task list starts empty (tasks replace demo todos)");
 }
 
 main()

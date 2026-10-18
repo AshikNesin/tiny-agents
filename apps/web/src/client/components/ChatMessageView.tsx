@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, Copy, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Copy, Loader2, Wrench } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { cn } from "@groot/shell/lib/utils";
 import type { ChatMessage } from "../lib/chat-types";
@@ -51,6 +51,35 @@ interface ChatMessageViewProps {
   botColor: string;
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  create_task: "Added task",
+  list_tasks: "Listed tasks",
+  update_task: "Updated task",
+  complete_task: "Completed task",
+  delete_task: "Deleted task",
+};
+
+/** Compact status chips above the reply (PRD §15: "✓ Adding task …"). */
+function ToolChips({ calls }: { calls: { name: string; summary: string }[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {calls.map((call, i) => (
+        <span
+          key={i}
+          className="bg-muted text-muted-foreground inline-flex max-w-[16rem] items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+          title={`${call.name}${call.summary ? ` — ${call.summary}` : ""}`}
+        >
+          <Wrench className="size-3 shrink-0" />
+          <span className="truncate">
+            {TOOL_LABELS[call.name] ?? call.name}
+            {call.summary ? ` ${call.summary}` : ""}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * One transcript row. User messages are right-aligned muted bubbles;
  * assistant replies render full-width markdown with the bot avatar and no
@@ -98,6 +127,9 @@ export function ChatMessageView({ message, botName, botEmoji, botColor }: ChatMe
       />
       <div className="relative min-w-0 flex-1">
         <CopyButton text={message.text} />
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <ToolChips calls={message.toolCalls} />
+        )}
         {message.reasoning && <Reasoning text={message.reasoning} />}
         <div className="min-w-0 text-sm">
           <Streamdown>{message.text || (streaming ? "" : message.text)}</Streamdown>

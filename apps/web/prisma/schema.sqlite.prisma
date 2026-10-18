@@ -13,14 +13,21 @@ datasource db {
   provider = "sqlite"
 }
 
-model Todo {
-  id        Int      @id @default(autoincrement())
-  title     String
-  completed Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Task {
+  id           String    @id @default(cuid())
+  title        String // max 300
+  description  String    @default("") // notes, max 2000
+  status       String    @default("todo") // todo | in_progress | done
+  priority     String    @default("medium") // low | medium | high | urgent
+  dueAt        DateTime?
+  completedAt  DateTime?
+  /** Tool-call id that created this task: exactly-once across pi-durable replays. */
+  sourceKey    String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@map("todos")
+  @@index([status, dueAt])
+  @@map("tasks")
 }
 
 model Bot {

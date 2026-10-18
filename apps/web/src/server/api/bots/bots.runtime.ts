@@ -6,9 +6,10 @@
  * modules read the instance through `getAgentRuntime()`; tests substitute a
  * fake via `setAgentRuntimeForTests()` instead of touching pi-durable.
  */
-import { AgentRuntime } from "@tiny-agents/agent";
+import { AgentRuntime, createTasksExtension } from "@tiny-agents/agent";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
+import { taskStore } from "../tasks/task.store";
 
 let runtime: AgentRuntime | undefined;
 let ready = false;
@@ -30,7 +31,10 @@ export function agentRuntimeReady(): boolean {
 export async function openAgentRuntime(
   options: Parameters<typeof AgentRuntime.open>[0],
 ): Promise<AgentRuntime> {
-  const instance = await AgentRuntime.open(options);
+  const instance = await AgentRuntime.open({
+    ...options,
+    extensions: [createTasksExtension(taskStore), ...(options.extensions ?? [])],
+  });
   runtime = instance;
   ready = true;
   return instance;
@@ -90,6 +94,7 @@ export async function openFauxAgentRuntime(storePath: string): Promise<AgentRunt
     models,
     provider: "faux",
     lockWaitMs: 5_000,
+    extensions: [createTasksExtension(taskStore)],
     settings: { retry: { enabled: false } },
     // The .env allowlist names real gateway custom models that don't exist
     // in the faux registry — without this override /models returns an empty

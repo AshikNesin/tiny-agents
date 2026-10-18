@@ -9,9 +9,10 @@ import {
   fauxProvider,
   fauxText,
   fauxThinking,
+  fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 
-export { fauxAssistantMessage, fauxText, fauxThinking };
+export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";
 
 export const TEST_PROVIDER = "faux";
@@ -22,6 +23,11 @@ export interface TestRuntimeOptions extends Partial<AgentRuntimeOptions> {
   storePath: string;
   /** Builds the reply text for the latest user message. Default: `Echo: <text>`. */
   reply?: (userText: string, systemPrompt: string | undefined) => string;
+  /**
+   * Full control of each faux reply (e.g. tool calls via `fauxToolCall`).
+   * The queue cycles: each function is reused after the queue drains.
+   */
+  respondWith?: (context: PiContext) => ReturnType<typeof fauxAssistantMessage>;
   /** Optional thinking text attached to each reply. */
   reasoning?: string;
   /** Streaming speed of the faux model (tokens per second). Default: instant. */
@@ -52,7 +58,10 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     ...(options.tokensPerSecond ? { tokensPerSecond: options.tokensPerSecond } : {}),
   });
   const reply = options.reply ?? ((text: string) => `Echo: ${text}`);
+  // respondWith gets full control (tool calls, multi-step); otherwise the
+  // plain echo/text reply.
   const respond = (context: PiContext) => {
+    if (options.respondWith) return options.respondWith(context);
     const system = typeof context.systemPrompt === "string" ? context.systemPrompt : undefined;
     const text = reply(lastUserText(context), system);
     return fauxAssistantMessage(
@@ -62,7 +71,7 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
   // The faux provider consumes one queued response per request; keep plenty queued.
   faux.setResponses(Array.from({ length: 500 }, () => respond));
   models.setProvider(faux.provider);
-  const { reply: _r, reasoning: _t, tokensPerSecond: _s, ...rest } = options;
+  const { reply: _r, reasoning: _t, tokensPerSecond: _s, respondWith: _w, ...rest } = options;
   return AgentRuntime.open({
     ...rest,
     models,

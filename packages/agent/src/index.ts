@@ -14,6 +14,13 @@ export {
 } from "./runtime";
 export { StoreLockedError, acquireStoreLock, type StoreLock } from "./lock";
 export {
+  createTasksExtension,
+  type TaskRecord,
+  type TaskStore,
+  type TaskStatus,
+  type TaskPriority,
+} from "./tasks";
+export {
   GATEWAY_ENV_KEYS,
   GATEWAY_PROVIDER,
   createGatewayModels,
