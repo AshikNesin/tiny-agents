@@ -30,8 +30,10 @@ config.local.yml
 # SQLite database files (dev/test data). Keep the dir tracked but ignore contents.
 /data/*.db
 /data/*.db-journal
-/data/*.db-wal
+/data/*.db.lock
+/data/*.db.lock-journal
 /data/*.db-shm
+/data/*.db-wal
 
 # Scratch / generated SQL from scripts (e.g. pnpm db:baseline)
 /tmp/
