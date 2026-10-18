@@ -91,6 +91,10 @@ export async function openFauxAgentRuntime(storePath: string): Promise<AgentRunt
     provider: "faux",
     lockWaitMs: 5_000,
     settings: { retry: { enabled: false } },
+    // The .env allowlist names real gateway custom models that don't exist
+    // in the faux registry — without this override /models returns an empty
+    // catalog and e2e cannot create bots.
+    env: { ...process.env, GATEWAY_MODEL_ALLOWLIST: "" },
   });
   runtime = instance;
   ready = true;

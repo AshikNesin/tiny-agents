@@ -68,6 +68,8 @@ export interface AgentRuntimeOptions {
   onReport?: (error: unknown) => void;
   /** The Harness failed (storage error) and closed itself. The host should exit/restart. */
   onFatal?: (error: unknown) => void;
+  /** Env snapshot override (tests/faux boot). Defaults to process.env. */
+  env?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -120,8 +122,11 @@ export class AgentRuntime {
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {
     // Snapshot ambient env NOW: varlock's auto-load (imported via
     // @groot/core/env) later strips schema vars from process.env, so reading
-    // them lazily would see undefined.
-    const envSource: Readonly<Record<string, string | undefined>> = { ...process.env };
+    // them lazily would see undefined. Callers that swap the provider (faux
+    // boot, tests) pass their own snapshot, e.g. without GATEWAY_MODEL_ALLOWLIST.
+    const envSource: Readonly<Record<string, string | undefined>> = options.env
+      ? { ...options.env }
+      : { ...process.env };
     const inMemory = options.storePath === ":memory:";
     const lock = inMemory
       ? undefined
