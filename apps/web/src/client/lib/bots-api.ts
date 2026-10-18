@@ -109,8 +109,8 @@ export const botsApi = {
   update: (id: string, input: Partial<BotInput>) => apiClient.patch<Bot>(`/bots/${id}`, input),
   remove: (id: string) => apiClient.delete(`/bots/${id}`),
   models: () => apiClient.get<ModelsResponse>("/models"),
-  send: (id: string, requestId: string, text: string) =>
-    apiClient.post(`/bots/${id}/messages`, { requestId, text }),
+  send: (id: string, requestId: string, text: string, mentions?: string[]) =>
+    apiClient.post(`/bots/${id}/messages`, { requestId, text, mentions }),
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),

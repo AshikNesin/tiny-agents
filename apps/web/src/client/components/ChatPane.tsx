@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -32,9 +32,15 @@ import {
 } from "@groot/ui/dialog";
 import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
+import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import {
+  MentionAutocomplete,
+  type MentionAutocompleteHandle,
+  type MentionableBot,
+} from "./MentionAutocomplete";
 import { formatDayDivider } from "../lib/day-divider";
 import {
   MessageScroller,
@@ -75,6 +81,17 @@ export function ChatPane({
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [caret, setCaret] = useState(0);
+  const [mentionClosed, setMentionClosed] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionRef = useRef<MentionAutocompleteHandle>(null);
+
+  const roster = useBotsStore((s) => s.bots);
+  const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
+  // The overlay follows the caret inside the mention token, so it needs
+  // the caret on every keystroke; `mentionClosed` covers Escape.
+  const mention = activeMentionToken(text, caret);
+  const mentionOpen = mention !== null && !mentionClosed;
 
   // (Re)connect whenever the bot's conversation changes: a new chat
   // (resetChat dropped the cached state) moves the bot to a fresh
@@ -118,17 +135,20 @@ export function ChatPane({
     const body = text.trim();
     if (!body || !canSend) return;
     setText("");
+    setMentionClosed(false);
+    const mentions = mentionedBotIds(body, mentionCandidates, bot.id);
     // Optimistic echo: show the message immediately; the SSE snapshot/upsert
     // replaces it once the server confirms (store dedupes by text). If the
     // POST fails the echo is withdrawn and the text returns to the composer.
     const echo = { id: crypto.randomUUID(), text: body, createdAt: Date.now() };
     applyChatEvent(bot.id, { type: "pending-add", message: echo });
     try {
-      await botsApi.send(bot.id, echo.id, body);
+      await botsApi.send(bot.id, echo.id, body, mentions);
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
       toast.error(error instanceof Error ? error.message : "Failed to send");
       setText(body);
+      setCaret(body.length);
     }
   };
 
@@ -164,6 +184,23 @@ export function ChatPane({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start a new chat");
     }
+  };
+
+  const insertMention = (chosen: MentionableBot) => {
+    if (!mention) return;
+    const insertion = `@${chosen.name} `;
+    const next = text.slice(0, mention.start) + insertion + text.slice(caret);
+    setText(next);
+    // Restore the caret after the trailing space once React re-renders the
+    // textarea (it would otherwise land at the very end of the text).
+    const target = mention.start + insertion.length;
+    setCaret(target);
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = target;
+        textareaRef.current.selectionEnd = target;
+      }
+    });
   };
 
   return (
@@ -325,45 +362,65 @@ export function ChatPane({
             </Button>
           </div>
         )}
-        <InputGroup className="mx-auto min-h-12 max-w-3xl rounded-[1.75rem] px-2 py-1.5">
-          <InputGroupTextarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            placeholder={`Ask ${bot.name}`}
-            rows={1}
-            disabled={!gatewayConfigured || !modelKnown}
-            className="px-3 py-2.5"
-          />
-          <InputGroupAddon align="inline-end">
-            {busy ? (
-              <InputGroupButton
-                variant="outline"
-                size="icon-sm"
-                onClick={stop}
-                aria-label="Stop generating"
-                className="size-8 rounded-full"
-              >
-                <Square className="size-3.5" />
-              </InputGroupButton>
-            ) : (
-              <InputGroupButton
-                size="icon-sm"
-                onClick={send}
-                disabled={!canSend}
-                aria-label="Send message"
-                className="bg-primary text-primary-foreground size-8 rounded-full disabled:opacity-30"
-              >
-                <ArrowUp className="size-4" />
-              </InputGroupButton>
-            )}
-          </InputGroupAddon>
-        </InputGroup>
+        <div className="relative mx-auto max-w-3xl">
+          <InputGroup className="min-h-12 rounded-[1.75rem] px-2 py-1.5">
+            <InputGroupTextarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setCaret(e.target.selectionStart ?? e.target.value.length);
+                setMentionClosed(false);
+              }}
+              onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+              onClick={() => setMentionClosed(false)}
+              onBlur={() => setMentionClosed(true)}
+              onKeyDown={(e) => {
+                if (mentionRef.current?.handleKeyDown(e)) return;
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              placeholder={`Ask ${bot.name}`}
+              rows={1}
+              disabled={!gatewayConfigured || !modelKnown}
+              className="px-3 py-2.5"
+            />
+            <InputGroupAddon align="inline-end">
+              {busy ? (
+                <InputGroupButton
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={stop}
+                  aria-label="Stop generating"
+                  className="size-8 rounded-full"
+                >
+                  <Square className="size-3.5" />
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  size="icon-sm"
+                  onClick={send}
+                  disabled={!canSend}
+                  aria-label="Send message"
+                  className="bg-primary text-primary-foreground size-8 rounded-full disabled:opacity-30"
+                >
+                  <ArrowUp className="size-4" />
+                </InputGroupButton>
+              )}
+            </InputGroupAddon>
+          </InputGroup>
+          {mentionOpen && mention && (
+            <MentionAutocomplete
+              ref={mentionRef}
+              bots={mentionCandidates}
+              query={mention.query}
+              onSelect={insertMention}
+              onClose={() => setMentionClosed(true)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Confirmations */}
