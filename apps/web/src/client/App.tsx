@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react-router";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
@@ -19,6 +19,7 @@ import {
   History,
   ListTodo,
   MessageSquare,
+  Plus,
   Plug,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -26,48 +27,78 @@ import {
 } from "lucide-react";
 import { SkillsPage } from "./pages/skills/Skills";
 import { ConnectionsPage } from "./pages/connections/Connections";
+import { useBotsStore } from "./store/bots";
 
 /** Bare shell for every authenticated page: no sidebar, no mobile bar —
  *  secondary pages render AppTopBar (circular back + title + profile) at
  *  the top of their content, matching the chats workspace chrome. */
 function BareShell() {
-  return <Layout header={<span />} commandGroups={COMMAND_GROUPS} mainClassName="min-h-dvh" />;
+  const commandGroups = useCommandGroups();
+
+  return <Layout header={<span />} commandGroups={commandGroups} mainClassName="min-h-dvh" />;
 }
 
 /** Shell instance for the chat workspace: no sidebar, no mobile top bar —
  *  the workspace owns the whole viewport (Grok-style, PRD §6.2). A non-null
  *  `header` disables the default sidebar + mobile bar in Layout. */
 function ChatsShell() {
+  const commandGroups = useCommandGroups();
+
   return (
     <Layout
       header={<span />}
-      commandGroups={COMMAND_GROUPS}
+      commandGroups={commandGroups}
       padded={false}
       mainClassName="h-dvh overflow-hidden"
     />
   );
 }
 
-/** tiny-agents replaces groot's demo Todos nav with Chats (PRD §6.2). */
-/**
- * ⌘K palette entries for this app. Without these the shell falls back to
- * groot's demo groups (Dashboard/Todos/Storage/…) — routes tiny-agents
- * doesn't have, so every palette action dead-ended. The palette wants
- * LucideIcon components (not NavItem's string icon names), so mirror
- * NAV_ITEMS explicitly. `navigate` isn't reachable outside a component,
- * so entries assign `window.location`.
- */
-const COMMAND_GROUPS: CommandGroupEntry[] = [
-  {
-    heading: "Navigation",
-    items: [
-      { label: "Chats", icon: MessageSquare, onSelect: () => window.location.assign("/chats") },
-      { label: "Tasks", icon: ListTodo, onSelect: () => window.location.assign("/tasks") },
-      { label: "Skills", icon: Sparkles, onSelect: () => window.location.assign("/skills") },
-      { label: "Connections", icon: Plug, onSelect: () => window.location.assign("/connections") },
-    ],
-  },
-];
+const NAVIGATION_COMMAND_GROUP: CommandGroupEntry = {
+  heading: "Navigation",
+  items: [
+    { label: "Chats", icon: MessageSquare, onSelect: () => window.location.assign("/chats") },
+    { label: "Tasks", icon: ListTodo, onSelect: () => window.location.assign("/tasks") },
+    { label: "Skills", icon: Sparkles, onSelect: () => window.location.assign("/skills") },
+    { label: "Connections", icon: Plug, onSelect: () => window.location.assign("/connections") },
+  ],
+};
+
+function useCommandGroups(): CommandGroupEntry[] {
+  const bots = useBotsStore((state) => state.bots);
+
+  return useMemo(() => {
+    const botGroups: CommandGroupEntry[] =
+      bots.length === 0
+        ? []
+        : [
+            {
+              heading: "Bots",
+              items: bots.map((bot) => ({
+                id: bot.id,
+                label: bot.name,
+                icon: Bot,
+                onSelect: () => window.location.assign(`/chats/${bot.id}`),
+              })),
+            },
+          ];
+
+    return [
+      {
+        heading: "Actions",
+        items: [
+          {
+            label: "New bot",
+            icon: Plus,
+            onSelect: () => window.location.assign("/chats?new=1"),
+          },
+        ],
+      },
+      ...botGroups,
+      NAVIGATION_COMMAND_GROUP,
+    ];
+  }, [bots]);
+}
 
 /** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {

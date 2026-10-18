@@ -55,13 +55,17 @@ export interface ChatState {
   connected: boolean;
 }
 
+export type ActivityEvent =
+  | { type: "activity"; busy: string[] }
+  | { type: "activity"; conversation: string; busy: boolean; approvals?: number };
+
 export type ChatEvent =
   | { type: "snapshot"; state: ChatState }
   | { type: "upsert"; message: ChatMessage }
   | { type: "remove"; id: string }
   | { type: "delta"; id: string; text?: string; reasoning?: string }
   | { type: "busy"; busy: boolean }
-  | { type: "activity"; busy?: boolean; conversation?: string; approvals?: number }
+  | ActivityEvent
   | { type: "connection"; id: string; status: string; error?: string }
   | { type: "ping" }
   | { type: "error"; message: string }

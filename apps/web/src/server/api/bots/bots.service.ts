@@ -164,6 +164,7 @@ function runtime(): BotAgentRuntime {
 /** Shape returned by the bots list: denormalised preview fields + unread. */
 export interface BotListEntry {
   id: string;
+  conversationId: string;
   name: string;
   description: string;
   modelId: string;
@@ -178,6 +179,7 @@ export interface BotListEntry {
 function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotListEntry {
   return {
     id: bot.id,
+    conversationId: bot.conversationId,
     name: bot.name,
     description: bot.description,
     modelId: bot.modelId,

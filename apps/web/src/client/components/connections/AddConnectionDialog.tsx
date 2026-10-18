@@ -38,6 +38,16 @@ function transportLabel(transport: string): string {
   return transport === "sse" ? "SSE" : "Streamable HTTP";
 }
 
+// new URL() alone would accept mailto:; MCP endpoints are http(s) only.
+function isValidConnectionUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function AddConnectionDialog({
   open,
   onOpenChange,
@@ -48,6 +58,7 @@ export function AddConnectionDialog({
   onCreated: (connection: Connection) => void;
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [touched, setTouched] = useState({ name: false, url: false, secret: false });
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,6 +66,7 @@ export function AddConnectionDialog({
   useEffect(() => {
     if (open) {
       setForm(EMPTY_FORM);
+      setTouched({ name: false, url: false, secret: false });
       setTestResult(null);
       setTesting(false);
       setSaving(false);
@@ -66,12 +78,17 @@ export function AddConnectionDialog({
     setTestResult(null);
   };
 
+  const touch = (key: "name" | "url" | "secret") => () =>
+    setTouched((prev) => ({ ...prev, [key]: true }));
+
+  const nameValid = form.name.trim().length > 0;
+  const urlValid = isValidConnectionUrl(form.url.trim());
+  const secretValid = form.authType !== "header" || form.secret.length > 0;
+  const showNameError = touched.name && !nameValid;
+  const showUrlError = touched.url && !urlValid;
+  const showSecretError = touched.secret && !secretValid;
   const canTest = form.authType === "none" || form.authType === "header";
-  const canSave =
-    form.name.trim().length > 0 &&
-    form.url.trim().length > 0 &&
-    (form.authType !== "header" || form.secret.length > 0) &&
-    !saving;
+  const canSave = nameValid && urlValid && secretValid && !saving;
 
   const test = async () => {
     setTesting(true);
@@ -148,8 +165,11 @@ export function AddConnectionDialog({
               value={form.name}
               maxLength={60}
               placeholder="e.g. GitHub"
+              aria-invalid={showNameError}
+              onBlur={touch("name")}
               onChange={(e) => setField("name", e.target.value)}
             />
+            {showNameError && <p className="text-xs text-destructive">Enter a name</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="connection-url">URL</Label>
@@ -159,8 +179,11 @@ export function AddConnectionDialog({
               value={form.url}
               maxLength={2000}
               placeholder="https://example.com/mcp"
+              aria-invalid={showUrlError}
+              onBlur={touch("url")}
               onChange={(e) => setField("url", e.target.value)}
             />
+            {showUrlError && <p className="text-xs text-destructive">Enter a valid https:// URL</p>}
           </div>
           <div className="space-y-2">
             <Label>Authentication</Label>
@@ -200,8 +223,13 @@ export function AddConnectionDialog({
                   value={form.secret}
                   maxLength={8000}
                   autoComplete="new-password"
+                  aria-invalid={showSecretError}
+                  onBlur={touch("secret")}
                   onChange={(e) => setField("secret", e.target.value)}
                 />
+                {showSecretError && (
+                  <p className="text-xs text-destructive">Enter the header value to send</p>
+                )}
               </div>
             </>
           )}
@@ -267,13 +295,15 @@ export function AddConnectionDialog({
             <Button
               variant="outline"
               onClick={() => void test()}
-              disabled={!form.url.trim() || testing || saving}
+              disabled={!urlValid || testing || saving}
             >
               <PlugZap className="size-4" />
               {testing ? "Testing…" : "Test connection"}
             </Button>
           ) : (
-            <span />
+            <span className="text-xs text-muted-foreground">
+              Sign-in (OAuth) is tested after saving
+            </span>
           )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

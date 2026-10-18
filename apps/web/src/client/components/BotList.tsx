@@ -66,10 +66,16 @@ export function BotList({ bots, onNewBot }: BotListProps) {
               type="button"
               onClick={() => navigate(`/chats/${bot.id}`)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
+                "relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
                 active ? "bg-muted" : "hover:bg-muted/50",
               )}
             >
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="bg-primary absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-full"
+                />
+              )}
               <BotAvatar name={bot.name} className="size-11" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">

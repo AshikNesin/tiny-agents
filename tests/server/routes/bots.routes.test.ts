@@ -477,11 +477,13 @@ describe("Bots API routes", () => {
       data: expect.arrayContaining([
         expect.objectContaining({
           name: "Unread bot",
+          conversationId: "301",
           lastMessagePreview: "A fresh assistant reply",
           unread: true,
         }),
         expect.objectContaining({
           name: "Read bot",
+          conversationId: "302",
           lastMessagePreview: "Older reply",
           unread: false,
         }),

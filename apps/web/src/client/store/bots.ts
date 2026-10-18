@@ -21,6 +21,7 @@ interface BotsState {
   loadBots: () => Promise<void>;
   loadModels: () => Promise<void>;
   refreshBotsInBackground: () => void;
+  markRead: (botId: string) => void;
 
   // Per-bot chat
   chats: Record<string, ChatState>;
@@ -134,6 +135,13 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       .catch(() => undefined);
   },
 
+  markRead: (botId) => {
+    set((state) => ({
+      bots: state.bots.map((bot) => (bot.id === botId ? { ...bot, unread: false } : bot)),
+    }));
+    void botsApi.read(botId).catch(() => undefined);
+  },
+
   chats: {},
 
   connectChat: (botId) => {
@@ -198,8 +206,19 @@ export const useBotsStore = create<BotsState>((set, get) => ({
     if (activityConnection) return;
     activityConnection = subscribeSse("/api/v1/events", (event) => {
       const typed = event as ChatEvent;
-      if (typed.type === "ping" || typed.type === "error") return;
-      // Any busy transition can change typing state, previews, or unread.
+      if (typed.type !== "activity") return;
+      if (!("conversation" in typed)) {
+        get().refreshBotsInBackground();
+        return;
+      }
+      if (typed.busy) {
+        set((state) => ({
+          bots: state.bots.map((bot) =>
+            bot.conversationId === typed.conversation ? { ...bot, replying: true } : bot,
+          ),
+        }));
+        return;
+      }
       get().refreshBotsInBackground();
     });
   },

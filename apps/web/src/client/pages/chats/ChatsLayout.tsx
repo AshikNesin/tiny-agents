@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useBotsStore } from "../../store/bots";
@@ -16,7 +16,7 @@ import { ChatPane } from "../../components/ChatPane";
 export function ChatWorkspace() {
   const { botId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const bots = useBotsStore((s) => s.bots);
   const loading = useBotsStore((s) => s.loading);
   const gatewayConfigured = useBotsStore((s) => s.gatewayConfigured);
@@ -30,6 +30,19 @@ export function ChatWorkspace() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<BotRow | null>(null);
   const [fullBot, setFullBot] = useState<BotRow | null>(null);
+  const handledNewBot = useRef(false);
+
+  useEffect(() => {
+    if (handledNewBot.current || searchParams.get("new") !== "1") return;
+
+    handledNewBot.current = true;
+    setEditing(null);
+    setDialogOpen(true);
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("new");
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     void loadBots();
@@ -44,7 +57,7 @@ export function ChatWorkspace() {
       .then((r) => setModels(r.models))
       .catch(() => undefined);
   }, []);
-  useEffect(refreshModels, [refreshModels, location.pathname]);
+  useEffect(refreshModels, [refreshModels]);
 
   const currentListBot = useMemo(() => bots.find((b) => b.id === botId) ?? null, [bots, botId]);
 
@@ -127,21 +140,25 @@ export function ChatWorkspace() {
                 </Button>
               </>
             ) : (
-              /* Featured bot (Grok-style): the most recent contact, shown
-                 large and centered, tappable to open. */
+              /* Featured bot: the most recent contact as a shortcut, kept
+                 small and muted so it reads as an empty state, not as an
+                 open conversation whose composer failed to load. */
               <button
                 type="button"
                 onClick={() => bots[0] && navigate(`/chats/${bots[0].id}`)}
-                className="group flex flex-col items-center gap-3 rounded-3xl px-10 py-6"
+                className="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl px-8 py-4 text-center"
               >
                 {bots[0] && (
                   <BotAvatar
                     name={bots[0].name}
-                    className="size-28 transition-transform group-hover:scale-105"
+                    className="size-20 opacity-80 transition-transform group-hover:scale-105"
                   />
                 )}
-                <span className="text-muted-foreground text-lg font-semibold">
+                <span className="text-muted-foreground text-sm font-medium">
                   {bots[0]?.name ?? "Pick a bot or create one"}
+                </span>
+                <span className="text-muted-foreground/70 text-xs">
+                  Select a bot to start chatting, or create one.
                 </span>
               </button>
             )}

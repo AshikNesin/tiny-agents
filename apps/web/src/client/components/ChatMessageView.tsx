@@ -28,9 +28,13 @@ function CopyButton({ text }: { text: string }) {
       className="text-muted-foreground hover:text-foreground absolute top-0 right-0 opacity-0 transition-opacity group-hover:opacity-100"
       aria-label="Copy message"
       onClick={async () => {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        } catch {
+          toast.error("Copy failed");
+        }
       }}
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}

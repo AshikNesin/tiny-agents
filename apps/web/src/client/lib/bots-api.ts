@@ -22,6 +22,7 @@ export type ToolPermission = "allow" | "ask" | "off";
 
 export interface BotListEntry {
   id: string;
+  conversationId: string;
   name: string;
   description: string;
   modelId: string;
@@ -79,6 +80,28 @@ export interface BotInput {
   connectionIds?: string[];
 }
 
+// Capabilities are static per server boot, and every chat/dialog mount asks
+// for them, so memoize the promise: one request serves the whole session
+// (a page reload picks up a restarted server). A rejection clears the cache
+// so the next call retries instead of failing forever.
+let capabilitiesCache: Promise<CapabilityInfo[]> | null = null;
+
+/**
+ * The route returns `{ capabilities }`; unwrap here so callers get the
+ * array (a raw `.get<CapabilityInfo[]>()` would hand them the wrapper
+ * object and crash on the first `.filter`/`.flatMap`).
+ */
+async function fetchCapabilities(): Promise<CapabilityInfo[]> {
+  try {
+    return (
+      (await apiClient.get<{ capabilities: CapabilityInfo[] }>("/capabilities")).capabilities ?? []
+    );
+  } catch (error) {
+    capabilitiesCache = null;
+    throw error;
+  }
+}
+
 export const botsApi = {
   list: () => apiClient.get<BotListEntry[]>("/bots"),
   create: (input: BotInput) => apiClient.post<Bot>("/bots", input),
@@ -91,13 +114,7 @@ export const botsApi = {
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
-  /**
-   * The route returns `{ capabilities }`; unwrap here so callers get the
-   * array (a raw `.get<CapabilityInfo[]>()` would hand them the wrapper
-   * object and crash on the first `.filter`/`.flatMap`).
-   */
-  capabilities: async (): Promise<CapabilityInfo[]> =>
-    (await apiClient.get<{ capabilities: CapabilityInfo[] }>("/capabilities")).capabilities ?? [],
+  capabilities: () => (capabilitiesCache ??= fetchCapabilities()),
   decideApproval: (
     id: string,
     taskId: number,

@@ -70,6 +70,7 @@ export function ChatPane({
   const resetChat = useBotsStore((s) => s.resetChat);
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
+  const markRead = useBotsStore((s) => s.markRead);
   const [text, setText] = useState("");
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
@@ -104,8 +105,8 @@ export function ChatPane({
   // Mark read when opening a bot with unread replies.
   const unread = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.unread);
   useEffect(() => {
-    if (unread) void botsApi.read(bot.id).catch(() => undefined);
-  }, [unread, bot.id]);
+    if (unread) markRead(bot.id);
+  }, [markRead, unread, bot.id]);
 
   const messages = chat?.messages ?? [];
   const pending = chat?.pending ?? [];

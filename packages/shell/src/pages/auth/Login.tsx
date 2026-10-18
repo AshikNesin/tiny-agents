@@ -86,7 +86,7 @@ export function Login() {
 
           {isDev && (
             <div className="mt-6 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Demo credentials:</span>
+              <span className="font-medium text-foreground">Demo credentials:</span>{" "}
               demo@example.com / demo@example.com
             </div>
           )}
