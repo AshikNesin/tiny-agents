@@ -28,7 +28,8 @@ function toRecord(row: {
 
 export const taskStore: TaskStore = {
   async create(input) {
-    // Exactly-once across pi-durable replays: the tool call id is unique.
+    // Exactly-once across pi-durable replays: the key is the durable tool
+    // task's identity (unique per agent store, stable when the call reruns).
     const existing = input.idempotencyKey
       ? await prisma.task.findUnique({ where: { sourceKey: input.idempotencyKey } })
       : null;

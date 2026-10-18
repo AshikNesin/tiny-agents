@@ -333,6 +333,92 @@ describe("AgentRuntime", () => {
     }
   });
 
+  it(
+    "resumes a reply interrupted by a restart and shows it exactly once",
+    { timeout: 20_000 },
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "tiny-agents-resume-"));
+      const storePath = join(directory, "agent.db");
+      try {
+        // First process: a slow reply, killed (closed) mid-stream.
+        const first = await openTestRuntime({
+          storePath,
+          tokensPerSecond: 2,
+          reply: () => "one two three four five six seven eight nine ten",
+        });
+        const ref = await first.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+        const before = await observeChat(first, ref);
+        await first.submit(ref, { requestId: "survive-restart", text: "keep going" });
+        await waitUntil(
+          () => before.state().messages.some((message) => message.status === "streaming"),
+          "the reply to begin streaming",
+        );
+        await before.stop();
+        await first.close();
+
+        // Second process on the same store: resume() finishes the reply.
+        const second = await openTestRuntime({ storePath, reply: () => "finished after restart" });
+        try {
+          const after = await observeChat(second, ref);
+          await waitUntil(
+            () =>
+              !after.state().busy &&
+              after
+                .state()
+                .messages.some(
+                  (message) => message.role === "assistant" && message.status === "done",
+                ),
+            "the resumed reply to complete",
+          );
+          const messages = after.state().messages;
+          expect(messages.filter((message) => message.role === "user")).toEqual([
+            expect.objectContaining({ text: "keep going", status: "done" }),
+          ]);
+          // The cut-off attempt is hidden; only the resumed answer shows.
+          expect(messages.filter((message) => message.role === "assistant")).toEqual([
+            expect.objectContaining({ text: "finished after restart", status: "done" }),
+          ]);
+          // Retrying the same send after the restart does not submit twice.
+          await second.submit(ref, { requestId: "survive-restart", text: "keep going" });
+          expect(second.isBusy(ref)).toBe(false);
+          await after.stop();
+        } finally {
+          await second.close();
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("snapshots the whole transcript of a long conversation", { timeout: 60_000 }, async () => {
+    const runtime = await openTestRuntime({ storePath: ":memory:" });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      // > 1 storage page (500 entries) of user + assistant entries.
+      const turns = 300;
+      for (let i = 0; i < turns; i++) {
+        await runtime.submit(ref, { requestId: `long-${i}`, text: `message ${i}` });
+      }
+      await waitUntil(
+        async () => (await runtime.lastMessage(ref))?.text === `Echo: message ${turns - 1}`,
+        "every queued message to be answered",
+        50_000,
+      );
+      const chat = await observeChat(runtime, ref);
+      const messages = chat.state().messages;
+      expect(messages.filter((m) => m.role === "user")).toHaveLength(turns);
+      expect(messages[0]).toMatchObject({ role: "user", text: "message 0" });
+      expect(messages.at(-1)).toMatchObject({
+        role: "assistant",
+        text: `Echo: message ${turns - 1}`,
+      });
+      await chat.stop();
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("rejects a second runtime that tries to own the same durable store", async () => {
     const directory = await mkdtemp(join(tmpdir(), "tiny-agents-lock-"));
     const storePath = join(directory, "agent.db");

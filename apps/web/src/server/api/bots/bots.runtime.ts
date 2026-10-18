@@ -58,7 +58,10 @@ export function setAgentRuntimeForTests(fake: AgentRuntime): void {
  * Faux-provider runtime for dev/E2E boots (TINY_AGENTS_FAUX=1): real durable
  * machinery, scripted replies, no network and no gateway keys.
  */
-export async function openFauxAgentRuntime(storePath: string): Promise<AgentRuntime> {
+export async function openFauxAgentRuntime(
+  storePath: string,
+  handlers: Pick<Parameters<typeof AgentRuntime.open>[0], "onFatal" | "onReport"> = {},
+): Promise<AgentRuntime> {
   const { createModels } = await import("@earendil-works/pi-ai/models");
   const { fauxProvider } = await import("@earendil-works/pi-ai/providers/faux");
 
@@ -90,6 +93,7 @@ export async function openFauxAgentRuntime(storePath: string): Promise<AgentRunt
   models.setProvider(faux.provider);
 
   const instance = await AgentRuntime.open({
+    ...handlers,
     storePath,
     models,
     provider: "faux",

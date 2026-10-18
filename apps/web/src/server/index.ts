@@ -22,6 +22,7 @@ import {
   openFauxAgentRuntime,
   agentRuntimeReady,
 } from "./api/bots/bots.runtime";
+import { endAllSse } from "./api/bots/bots.sse";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -63,6 +64,18 @@ async function main() {
   const agentDir = dirname(agentDbPath());
   mkdirSync(agentDir, { recursive: true });
   let agentRuntime: AgentRuntime | undefined;
+  // pi-durable error rules: a storage error ends the Harness (fatal — exit so
+  // the orchestrator restarts us and resume() picks the work back up); a
+  // throwing hook/listener/tool result is only reported (log, keep running).
+  const durableHandlers = {
+    onFatal: (error: unknown) => {
+      logger.error({ error }, "Agent runtime failed; shutting down");
+      process.exit(1);
+    },
+    onReport: (error: unknown) => {
+      logger.warn({ error }, "Agent runtime reported a non-fatal error");
+    },
+  };
   try {
     // process.env, not the @groot/core env wrapper: varlock's runtime ENV
     // re-resolves from .env.schema and drops -p override files, which e2e
@@ -72,14 +85,8 @@ async function main() {
         ? // Dev/E2E escape hatch: a faux-provider runtime (no network, no
           // keys) so streaming and durability can be exercised end-to-end
           // anywhere. Never enabled implicitly — only when the env var is set.
-          await openFauxAgentRuntime(agentDbPath())
-        : await openAgentRuntime({
-            storePath: agentDbPath(),
-            onFatal: (error) => {
-              logger.error({ error }, "Agent runtime failed; shutting down");
-              process.exit(1);
-            },
-          });
+          await openFauxAgentRuntime(agentDbPath(), durableHandlers)
+        : await openAgentRuntime({ storePath: agentDbPath(), ...durableHandlers });
   } catch (error) {
     logger.error({ error }, "Failed to open agent runtime");
     process.exit(1);
@@ -146,6 +153,9 @@ async function main() {
       }
     },
     onShutdown: async () => {
+      // End chat/activity streams first: they hold their HTTP connections
+      // open forever, and their watches must stop before the Harness closes.
+      endAllSse();
       await closeAgentRuntime();
       if (config.jobs.enabled) {
         await stopJobQueue();

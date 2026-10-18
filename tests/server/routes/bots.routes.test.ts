@@ -6,6 +6,7 @@ import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.mi
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
+import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 
 /**
  * Expected runtime seam for route tests:
@@ -262,13 +263,25 @@ describe("Bots API routes", () => {
       .send({ requestId: "client-generated-id", text: "Hello" })
       .expect(200);
     await request(app).post(`/api/v1/bots/${bot.id}/abort`).set(authorization).send({}).expect(200);
+    expect(agentRuntime.abort).toHaveBeenCalledWith(100);
+    agentRuntime.abort.mockClear();
     await request(app).delete(`/api/v1/bots/${bot.id}`).set(authorization).expect(200);
 
     expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
       requestId: "client-generated-id",
       text: "Hello",
     });
+    // Deleting stops whatever the now-hidden conversation was still doing.
     expect(agentRuntime.abort).toHaveBeenCalledWith(100);
+    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
+  });
+
+  it("still deletes the bot when stopping its conversation fails", async () => {
+    const bot = await createBot();
+    agentRuntime.abort.mockRejectedValueOnce(new Error("conversation gone"));
+
+    await request(buildApp()).delete(`/api/v1/bots/${bot.id}`).set(authorization).expect(200);
+
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
   });
 
@@ -289,6 +302,59 @@ describe("Bots API routes", () => {
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
       conversationId: "200",
     });
+    // The old conversation's in-flight reply is stopped, the new one untouched.
+    expect(agentRuntime.abort).toHaveBeenCalledWith(100);
+    expect(agentRuntime.abort).not.toHaveBeenCalledWith(200);
+  });
+
+  it("ends open chat and activity streams on shutdown and stops their watches", async () => {
+    const bot = await createBot();
+    const stop = vi.fn(async () => undefined);
+    agentRuntime.watchChat.mockImplementation(async (_ref, listener) => {
+      await listener([{ type: "snapshot", state: emptyChat }]);
+      return { initial: emptyChat, stop };
+    });
+    const app = buildApp();
+
+    const openUntilEnded = (path: string) =>
+      new Promise<string>((resolveEnd, rejectEnd) => {
+        let text = "";
+        let ended = false;
+        const timer = setTimeout(() => rejectEnd(new Error(`${path} never ended`)), 3_000);
+        request(app)
+          .get(path)
+          .set(authorization)
+          .buffer(false)
+          .parse((response, callback) => {
+            response.setEncoding("utf8");
+            response.on("data", (chunk: string) => {
+              text += chunk;
+              // Both streams are open and have sent their snapshot: shut down.
+              if (!ended && text.includes("data:")) opened();
+            });
+            response.on("end", () => {
+              ended = true;
+              clearTimeout(timer);
+              resolveEnd(text);
+              callback(null, "");
+            });
+          })
+          .end(() => undefined);
+      });
+    let pending = 2;
+    const opened = () => {
+      if (--pending === 0) endAllSse();
+    };
+
+    const [chat, activity] = await Promise.all([
+      openUntilEnded(`/api/v1/bots/${bot.id}/stream`),
+      openUntilEnded("/api/v1/events"),
+    ]);
+
+    expect(chat).toContain('"type":"snapshot"');
+    expect(activity).toContain('"type":"activity"');
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+    expect(activityListeners.size).toBe(0);
   });
 
   it("marks a bot as read", async () => {

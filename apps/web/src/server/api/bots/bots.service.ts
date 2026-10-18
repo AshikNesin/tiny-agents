@@ -4,6 +4,7 @@
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { AgentRuntime } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 
@@ -127,12 +128,27 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   });
 }
 
-export async function deleteBot(id: string) {
+/**
+ * Stop whatever a conversation the app no longer shows is still doing. A run
+ * left going there would keep calling the model and its tools (e.g. creating
+ * tasks) with nobody watching, and resume after every restart. Best effort:
+ * the row change has already happened, so a failure here is only logged.
+ */
+async function retireConversation(rt: BotAgentRuntime, conversationId: string): Promise<void> {
+  try {
+    await rt.abort(Number(conversationId));
+  } catch (error) {
+    logger.warn({ error, conversationId }, "Failed to stop a retired bot conversation");
+  }
+}
+
+export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await getBot(id);
-  // The durable conversation is left orphaned in agent.db (PRD §5.1); Phase 2
-  // adds cleanup. Stopping an in-flight reply first would race the row delete;
-  // the runtime keeps running the conversation harmlessly without a viewer.
-  return prisma.bot.delete({ where: { id: bot.id } });
+  // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
+  // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
+  const deleted = await prisma.bot.delete({ where: { id: bot.id } });
+  await retireConversation(rt, bot.conversationId);
+  return deleted;
 }
 
 export async function sendMessage(id: string, input: { requestId: string; text: string }) {
@@ -154,12 +170,13 @@ export async function abortReply(id: string) {
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await getBot(id);
-  // Fresh conversation; the old one stays in agent.db, hidden (PRD §5.1).
+  // Fresh conversation; the old one stays in agent.db, hidden (PRD §5.1),
+  // and any reply still running there is stopped.
   const conversationId = await rt.createConversation({
     modelId: bot.modelId,
     systemPrompt: bot.systemPrompt,
   });
-  return prisma.bot.update({
+  const updated = await prisma.bot.update({
     where: { id },
     data: {
       conversationId: String(conversationId),
@@ -168,6 +185,8 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
       lastActivityAt: new Date(),
     },
   });
+  await retireConversation(rt, bot.conversationId);
+  return updated;
 }
 
 export async function markRead(id: string) {

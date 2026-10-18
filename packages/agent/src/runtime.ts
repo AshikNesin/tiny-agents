@@ -11,6 +11,7 @@ import {
   type AgentEvent,
   type Conversation,
   type ConversationId,
+  type Cursor,
   type EntryRecord,
   type HarnessSettings,
   type MessageChange,
@@ -34,8 +35,8 @@ import type {
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-/** Most recent entries loaded into a chat snapshot. */
-const HISTORY_LIMIT = 1000;
+/** Entries read per storage page when loading a chat's history. */
+const HISTORY_PAGE = 500;
 
 /** Task kinds that mean "the bot is replying" (background compaction does not). */
 const REPLY_TASK_KINDS = new Set(["pi.generation", "pi.tool"]);
@@ -138,14 +139,15 @@ export class AgentRuntime {
     const lock = inMemory
       ? undefined
       : acquireStoreLock(options.storePath, { waitMs: options.lockWaitMs });
+    let storage: Storage | undefined;
+    let harness: Harness | undefined;
+    let runtime: AgentRuntime | undefined;
     try {
-      const storage: Storage = inMemory
-        ? new MemoryStorage()
-        : await openNodeSqliteStorage(options.storePath);
+      storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createGatewayModels(envSource);
       const registry = createRegistry();
       for (const extension of options.extensions ?? []) registry.install(extension);
-      const harness = await Harness.open(
+      harness = await Harness.open(
         storage,
         {
           models,
@@ -155,20 +157,26 @@ export class AgentRuntime {
         },
         ctx,
       );
-      const runtime = new AgentRuntime(
+      const opened = new AgentRuntime(
         harness,
         models,
         options.provider ?? GATEWAY_PROVIDER,
         lock,
         envSource,
       );
+      runtime = opened;
       harness.closed.then((end) => {
-        if (end.reason === "failed" && !runtime.#closed) options.onFatal?.(end.error);
+        if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
       });
-      await runtime.#watchActivity();
+      await opened.#watchActivity();
       harness.resume();
-      return runtime;
+      return opened;
     } catch (error) {
+      // A failed open is reported by this rejection, not also via onFatal.
+      if (runtime) runtime.#closed = true;
+      // Release what was opened: the Harness owns (and closes) the storage
+      // once open; before that the storage handle is ours to close.
+      await (harness ? harness.close(ctx) : storage?.close(ctx))?.catch(() => undefined);
       lock?.release();
       throw error;
     }
@@ -445,9 +453,20 @@ function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
   return busy;
 }
 
+/**
+ * Every stored entry of a conversation, ascending — the full transcript, not
+ * just what the model still sees after resets/compactions. Paged so a long
+ * conversation never loads in one storage read.
+ */
 async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
-  const page = await conversation.entries({ order: "descending" }, HISTORY_LIMIT, undefined, ctx);
-  return [...page.items].reverse();
+  const entries: EntryRecord[] = [];
+  let cursor: Cursor | undefined;
+  do {
+    const page = await conversation.entries({ order: "ascending" }, HISTORY_PAGE, cursor, ctx);
+    entries.push(...page.items);
+    cursor = page.next;
+  } while (cursor !== undefined);
+  return entries;
 }
 
 type MutableRaw = {

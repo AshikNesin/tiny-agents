@@ -4,12 +4,21 @@
  * The app injects a `TaskStore` (an adapter over its own database) when it
  * opens the runtime; the tools below run inside pi-durable with
  * `replay: "safe"`, so a call interrupted by a restart re-executes on
- * recovery. Exactly-once is the store's job: `create` takes the tool call's
- * `callId` as an idempotency key (a unique column), so a replayed create
- * returns the existing row instead of duplicating it.
+ * recovery. Exactly-once is the store's job: `create` takes an idempotency
+ * key (a unique column), so a replayed create returns the existing row
+ * instead of duplicating it.
+ *
+ * The key is the durable tool task's identity, not the model's tool call id:
+ * `callId` comes from the provider and is only unique within one assistant
+ * message — OpenAI-compatible upstreams may send short ids ("call_0") or none
+ * at all (pi-ai stores ""), which would collide across turns and bots. The
+ * tool task id is what re-executes on replay, but it is a per-store counter,
+ * so it is salted with the conversation's persisted UUIDv7 (`pi.provider`):
+ * a fresh agent.db next to an old app.db must never hit old rows.
  */
-import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import type { Extension, ToolExecutionResult } from "@earendil-works/pi-durable";
+import { defineExtension, defineTool, ProviderDoc } from "@earendil-works/pi-durable";
+import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
@@ -28,7 +37,7 @@ export interface TaskRecord {
 
 /** What the app provides: CRUD over its task table. */
 export interface TaskStore {
-  /** `idempotencyKey` (the tool call id) makes replays return the same row. */
+  /** `idempotencyKey` (the durable tool task's identity) makes replays return the same row. */
   create(input: {
     idempotencyKey: string;
     title: string;
@@ -81,6 +90,12 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
+/** Replay-stable, store-independent idempotency key for a tool call's side effect (see header). */
+async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Promise<string> {
+  const provider = await api.snapshot(ProviderDoc, api.conversationId, context);
+  return `pi:${provider?.sessionId ?? `conversation-${api.conversationId}`}:${api.taskId}`;
+}
+
 /**
  * The "tasks" extension: task tools every bot gets. `store` is the app-side
  * adapter over its task table (see apps/web bots.runtime.ts). The tools are
@@ -104,8 +119,9 @@ export function createTasksExtension(store: TaskStore): Extension {
       ),
     }),
     replay: "safe",
-    execute: async (args, api) => {
-      const task = await store.create({ idempotencyKey: api.callId, ...args });
+    execute: async (args, api, context) => {
+      const idempotencyKey = await toolIdempotencyKey(api, context);
+      const task = await store.create({ idempotencyKey, ...args });
       return ok(`Created task ${present(task)}`);
     },
   });
@@ -153,15 +169,27 @@ export function createTasksExtension(store: TaskStore): Extension {
     },
   });
 
+  const report = (id: string, removed: boolean) =>
+    removed ? ok(`Deleted task ${id}.`) : fail(`No task with id "${id}".`);
   const deleteTask = defineTool({
     name: "delete_task",
     description:
       "Permanently delete a task by id. Use only when the owner clearly asks; prefer complete_task.",
     parameters: Type.Object({ id: Type.String() }),
     replay: "safe",
-    execute: async (args) => {
-      const removed = await store.remove(args.id);
-      return removed ? ok(`Deleted task ${args.id}.`) : fail(`No task with id "${args.id}".`);
+    execute: async (args, api, context) => {
+      // Deletes are naturally idempotent, but a rerun after a crash would find
+      // the row already gone and tell the model "no task" for a delete that
+      // succeeded. Durable memos (per tool task) remember that an attempt
+      // started and how it ended, so the rerun reports the real outcome.
+      const outcome = await api.memo<boolean>("delete_task:removed", context);
+      if (outcome === undefined) {
+        const resumed = (await api.memo<boolean>("delete_task:started", context)) === true;
+        await api.memo("delete_task:started", true, context);
+        const removed = (await store.remove(args.id)) || resumed;
+        return report(args.id, await api.memo("delete_task:removed", removed, context));
+      }
+      return report(args.id, outcome);
     },
   });
 

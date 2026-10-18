@@ -1,9 +1,12 @@
 /**
  * Task tools: real pi-durable chat turns with a faux model that emits tool
  * calls. Verifies the tools reach the injected TaskStore, the tool result
- * flows back to the model, and a replayed create (same callId) does not
- * duplicate the task.
+ * flows back to the model, a create interrupted by a restart replays without
+ * duplicating the task, and creates are never keyed on provider call ids.
  */
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import {
   createTasksExtension,
@@ -146,11 +149,150 @@ describe("task tools (durable chat turns)", () => {
     expect(state.messages.some((m) => m.text.includes("one open task"))).toBe(true);
   }, 15_000);
 
-  it("a replayed create with the same callId stores the task only once", async () => {
+  it("a replayed create with the same key stores the task only once", async () => {
     const store = memoryStore();
     const first = await store.create({ idempotencyKey: "call-1", title: "once" });
     const second = await store.create({ idempotencyKey: "call-1", title: "once" });
     expect(second.id).toBe(first.id);
     expect(await store.list()).toHaveLength(1);
   });
+
+  it("does not key creates on the provider's tool call id (reused or empty ids)", async () => {
+    // OpenAI-compatible upstreams may reuse short ids ("call_0") or send none;
+    // two different creates with the same callId must stay two tasks.
+    const store = memoryStore();
+    await settled(store, [
+      fauxAssistantMessage([fauxToolCall("create_task", { title: "First" }, { id: "call_0" })]),
+      fauxAssistantMessage([fauxToolCall("create_task", { title: "Second" }, { id: "call_0" })]),
+      fauxAssistantMessage([fauxText("Created both")]),
+    ]);
+    await settled(store, [
+      fauxAssistantMessage([fauxToolCall("create_task", { title: "Other bot" }, { id: "" })]),
+      fauxAssistantMessage([fauxText("Created it")]),
+    ]);
+    expect((await store.list()).map((task) => task.title).sort()).toEqual([
+      "First",
+      "Other bot",
+      "Second",
+    ]);
+  }, 30_000);
+
+  it("re-executes an interrupted create after a restart without duplicating it", async () => {
+    const store = memoryStore();
+    const reply = await interruptAndResume(store, "create", {
+      name: "create_task",
+      args: { title: "Exactly once" },
+    });
+    // The replay-safe tool ran again on resume, and the store deduped it.
+    expect(store.calls.filter((call) => call === "create:Exactly once")).toHaveLength(2);
+    expect(await store.list()).toHaveLength(1);
+    expect(reply).toMatch(/^Created task \[t1\] Exactly once/);
+  }, 30_000);
+
+  it("reports an interrupted delete as done when its rerun finds the row gone", async () => {
+    const store = memoryStore();
+    await store.create({ idempotencyKey: "seed", title: "Doomed" });
+    const reply = await interruptAndResume(store, "remove", {
+      name: "delete_task",
+      args: { id: "t1" },
+    });
+    expect(store.calls.filter((call) => call === "remove:t1")).toHaveLength(2);
+    expect(await store.list()).toHaveLength(0);
+    expect(reply).toBe("Deleted task t1.");
+  }, 30_000);
 });
+
+/**
+ * Run one tool call whose store method performs its effect and then "dies"
+ * (the runtime closes before the result commits), reopen the same agent
+ * store, and return the tool result text the resumed run fed the model.
+ */
+async function interruptAndResume(
+  store: MemoryStore,
+  method: "create" | "remove",
+  call: { name: string; args: Record<string, unknown> },
+): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "tiny-agents-tool-replay-"));
+  const storePath = join(directory, "agent.db");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let interrupt = true;
+  let effects = 0;
+  const flaky: MemoryStore = {
+    ...store,
+    create: async (input) => {
+      const row = await store.create(input);
+      effects++;
+      if (interrupt && method === "create") {
+        interrupt = false;
+        await gate;
+        throw new Error("process died mid-call");
+      }
+      return row;
+    },
+    remove: async (id) => {
+      const removed = await store.remove(id);
+      effects++;
+      if (interrupt && method === "remove") {
+        interrupt = false;
+        await gate;
+        throw new Error("process died mid-call");
+      }
+      return removed;
+    },
+  };
+  try {
+    const first = await openTestRuntime({
+      storePath,
+      extensions: [createTasksExtension(flaky)],
+      respondWith: () => withStopReason(fauxAssistantMessage([fauxToolCall(call.name, call.args)])),
+    });
+    const ref = await first.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+    await first.submit(ref, { requestId: "r1", text: "do it" });
+    const deadline = Date.now() + 10_000;
+    while (effects === 0) {
+      if (Date.now() > deadline) throw new Error(`${call.name} never ran`);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    // Close while the tool is mid-call: its result is never committed.
+    const closing = first.close();
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    await closing;
+
+    // The resumed run's model echoes the tool result it was given.
+    const second = await openTestRuntime({
+      storePath,
+      extensions: [createTasksExtension(flaky)],
+      respondWith: (context) => {
+        const result = [...context.messages].reverse().find((m) => m.role === "toolResult");
+        const text =
+          result && Array.isArray(result.content)
+            ? result.content.map((b) => (b.type === "text" ? b.text : "")).join("")
+            : "";
+        return fauxAssistantMessage([fauxText(`RESULT:${text}`)]);
+      },
+    });
+    try {
+      const events: ChatEvent[] = [];
+      const sub = await second.watchChat(ref, (batch) => events.push(...batch));
+      const until = Date.now() + 10_000;
+      const done = () => {
+        const state = reduce(events);
+        return state && !state.busy
+          ? state.messages.find((m) => m.text.startsWith("RESULT:"))
+          : undefined;
+      };
+      while (!done()) {
+        if (Date.now() > until) throw new Error("resumed run never finished");
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await sub.stop();
+      return done()!.text.slice("RESULT:".length);
+    } finally {
+      await second.close();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
