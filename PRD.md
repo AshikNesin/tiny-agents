@@ -294,19 +294,20 @@ Request bodies validated with zod (groot `parseBody`).
 
 All env vars are declared in `.env.schema` (varlock). No new keys in the synced `config.yml` schema.
 
-| Variable                                                                                            | Source                                    | Notes                         |
-| --------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
-| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, `STORAGE_DRIVER`, … | groot                                     | unchanged                     |
-| `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`                 | groot (upstreamed, §12)                   | gateway auth                  |
-| `DEFAULT_MODEL`                                                                                     | groot (upstreamed, §12)                   | default model id for new bots |
-| `AGENT_DB_PATH`                                                                                     | tiny-agents block at end of `.env.schema` | default `./data/agent.db`     |
+| Variable                                                                                            | Source                                    | Notes                                            |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, `STORAGE_DRIVER`, … | groot                                     | unchanged                                        |
+| `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`                 | groot (upstreamed, §12)                   | gateway auth                                     |
+| `DEFAULT_MODEL`                                                                                     | groot (upstreamed, §12)                   | default model id for new bots                    |
+| `AGENT_DB_PATH`                                                                                     | tiny-agents block at end of `.env.schema` | `./data/agent.db` (dev), `/data/agent.db` (prod) |
 
 ## 11. Deployment
 
 - **Production: Coolify (≥ 4.3.1)** using groot's Railpack setup.
   - Build pack: **Railpack**. Health check: **`/health`**.
-  - One persistent volume at **`/app/data`**: `DATABASE_URL=file:/app/data/app.db`,
-    `AGENT_DB_PATH=/app/data/agent.db`.
+  - One persistent volume at **`/data`**: production defaults already point both stores at
+    it (`DATABASE_URL=file:/data/app.db`, `AGENT_DB_PATH=/data/agent.db`), so mounting the
+    volume is the only step — no env overrides needed for the default SQLite layout.
   - **Container naming → "Consistent name (no rolling updates)"** so Coolify stops the old container before
     starting the new one. Rolling updates would briefly run two processes against the same SQLite files,
     which pi-durable does not support. Accept a few seconds of downtime per deploy; in-flight replies are
