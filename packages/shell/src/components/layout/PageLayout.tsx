@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import { TopBar } from "../TopBar";
 import { PageContainer } from "./PageContainer";
-import { PageHeader } from "./PageHeader";
 
 interface PageLayoutProps {
   children: ReactNode;
@@ -16,22 +16,12 @@ interface PageLayoutProps {
 }
 
 /**
- * Complete page layout with container, header, and content area.
+ * Complete page layout: Grok-style TopBar (circular back, title, profile
+ * circle) above a container with description, actions, and content.
  *
  * Every routed page should render through this (or `PageContainer` +
- * `PageHeader`) so titles, max-widths, and header-to-content spacing stay
+ * `TopBar`) so titles, max-widths, and header-to-content spacing stay
  * identical across the app.
- *
- * @example
- * ```tsx
- * <PageLayout
- *   title="Dashboard"
- *   description="Overview of your finances"
- *   actions={<Button>Action</Button>}
- * >
- *   <Card>Content here</Card>
- * </PageLayout>
- * ```
  */
 export function PageLayout({
   children,
@@ -45,13 +35,14 @@ export function PageLayout({
 }: PageLayoutProps) {
   return (
     <PageContainer maxWidth={maxWidth} className={className}>
-      <PageHeader
-        title={title}
-        description={description}
-        actions={actions}
-        breadcrumb={breadcrumb}
-        titleAdornment={titleAdornment}
-      />
+      <TopBar title={title}>{titleAdornment}</TopBar>
+      {breadcrumb && <div className="mb-4">{breadcrumb}</div>}
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          {description && <div className="text-muted-foreground text-sm">{description}</div>}
+        </div>
+        {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
+      </div>
       <div className="mt-8 space-y-6">{children}</div>
     </PageContainer>
   );

@@ -7,12 +7,21 @@ export interface LoginFeature {
   desc: string;
 }
 
+/** A destination row in the profile menu (replaces the old sidebar nav). */
+export interface NavDestination {
+  label: string;
+  icon?: LucideIcon;
+  to: string;
+}
+
 export interface ShellConfig {
   brand?: {
     label: string;
     icon?: LucideIcon;
     to?: string;
   };
+  /** Rows shown in the profile menu. Empty disables the menu rows. */
+  nav?: NavDestination[];
   login?: {
     tagline?: string;
     description?: string;

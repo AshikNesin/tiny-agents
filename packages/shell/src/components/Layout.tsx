@@ -276,7 +276,7 @@ const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon }> = 
   { value: "system", label: "System", icon: Monitor },
 ];
 
-function ThemeMenu() {
+export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
 
   return (

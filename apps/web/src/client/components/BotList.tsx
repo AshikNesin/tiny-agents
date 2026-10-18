@@ -1,71 +1,19 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { LogOut, Plug, Plus, Search, ListTodo, Settings, Sparkles } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
 import { Badge } from "@groot/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@groot/ui/dropdown-menu";
-import { useAuthStore } from "@groot/shell/store/auth";
+
 import { cn } from "@groot/shell/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import type { BotListEntry } from "../lib/bots-api";
+import { ProfileButton } from "@groot/shell/components/TopBar";
 import { BotAvatar } from "./BotAvatar";
 
 interface BotListProps {
   bots: BotListEntry[];
   onNewBot: () => void;
-}
-
-/** Grok-style profile circle: initials on a ring, opening the app nav +
- *  account menu. This replaces the shell sidebar on the chats workspace. */
-function ProfileButton() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const navigate = useNavigate();
-  const initial = (user?.name?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Account and navigation"
-          className="border-input text-muted-foreground hover:text-foreground flex size-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-transform active:scale-95"
-        >
-          {initial}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuItem onSelect={() => navigate("/tasks")}>
-          <ListTodo className="size-4" /> Tasks
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate("/skills")}>
-          <Sparkles className="size-4" /> Skills
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate("/connections")}>
-          <Plug className="size-4" /> Connections
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate("/settings")}>
-          <Settings className="size-4" /> Settings
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={() => {
-            void logout();
-            navigate("/login");
-          }}
-        >
-          <LogOut className="size-4" /> Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 /** Column 2 (PRD §6.2): searchable, activity-sorted bot rows. */

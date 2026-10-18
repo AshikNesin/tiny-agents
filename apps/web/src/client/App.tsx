@@ -4,7 +4,6 @@ import { NuqsAdapter } from "nuqs/adapters/react-router";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 import { Layout } from "@groot/shell/components/Layout";
-import type { NavItem } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { Tasks } from "./pages/tasks/Tasks";
 import { ChatWorkspace } from "./pages/chats/ChatsLayout";
@@ -21,11 +20,19 @@ import {
   ListTodo,
   MessageSquare,
   Plug,
+  Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { SkillsPage } from "./pages/skills/Skills";
 import { ConnectionsPage } from "./pages/connections/Connections";
+
+/** Bare shell for every authenticated page: no sidebar, no mobile bar —
+ *  secondary pages render AppTopBar (circular back + title + profile) at
+ *  the top of their content, matching the chats workspace chrome. */
+function BareShell() {
+  return <Layout header={<span />} commandGroups={COMMAND_GROUPS} mainClassName="min-h-dvh" />;
+}
 
 /** Shell instance for the chat workspace: no sidebar, no mobile top bar —
  *  the workspace owns the whole viewport (Grok-style, PRD §6.2). A non-null
@@ -42,13 +49,6 @@ function ChatsShell() {
 }
 
 /** tiny-agents replaces groot's demo Todos nav with Chats (PRD §6.2). */
-const NAV_ITEMS: NavItem[] = [
-  { name: "Chats", href: "/chats", icon: MessageSquare },
-  { name: "Tasks", href: "/tasks", icon: ListTodo },
-  { name: "Skills", href: "/skills", icon: Sparkles },
-  { name: "Connections", href: "/connections", icon: Plug },
-];
-
 /**
  * ⌘K palette entries for this app. Without these the shell falls back to
  * groot's demo groups (Dashboard/Todos/Storage/…) — routes tiny-agents
@@ -69,9 +69,15 @@ const COMMAND_GROUPS: CommandGroupEntry[] = [
   },
 ];
 
-/** Brand + login copy for the whole app, in one place (ShellProvider). */
+/** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: Bot, to: "/chats" },
+  nav: [
+    { label: "Tasks", icon: ListTodo, to: "/tasks" },
+    { label: "Skills", icon: Sparkles, to: "/skills" },
+    { label: "Connections", icon: Plug, to: "/connections" },
+    { label: "Settings", icon: SettingsIcon, to: "/settings" },
+  ],
   login: {
     tagline: "Your team of always-on agents.",
     description:
@@ -114,7 +120,7 @@ function App() {
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <Layout navItems={NAV_ITEMS} />
+                    <BareShell />
                   </ProtectedRoute>
                 }
               >
