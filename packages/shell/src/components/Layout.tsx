@@ -203,7 +203,7 @@ export function Layout({
   );
 
   return (
-    <div className={cn("min-h-screen bg-muted/40 text-foreground", className)}>
+    <div className={cn("min-h-dvh bg-muted/40 text-foreground", className)}>
       {/* Single shared command palette dialog — mounted once. */}
       <CommandPaletteDialog groups={commandGroups} />
 
@@ -254,7 +254,11 @@ export function Layout({
 
         <main
           className={cn(
-            "w-full min-h-[calc(100vh-3.5rem)]",
+            // dvh, not vh: on mobile the URL bar eats into 100vh and the
+            // min-height would overflow the visible area (100dvh tracks it).
+            // The 3.5rem offset only exists where the mobile top bar renders.
+            "w-full",
+            useDefaultSidebar && "min-h-[calc(100dvh-3.5rem)]",
             padded && "px-4 pb-10 pt-6 sm:px-6 lg:px-8",
             mainClassName,
           )}

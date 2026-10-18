@@ -13,7 +13,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!hasCheckedAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/40">
+      <div className="flex min-h-dvh items-center justify-center bg-muted/40">
         <LoadingSpinner size="md" />
       </div>
     );
