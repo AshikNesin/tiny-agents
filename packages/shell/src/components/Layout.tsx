@@ -25,6 +25,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
+import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { isTheme, type Theme, useTheme } from "@groot/shell/lib/theme";
 import {
   MoreHorizontal,
@@ -110,6 +111,8 @@ export function Layout({
   const navigate = useNavigate();
   const location = useLocation();
   const toggleCommandPalette = useCommandPaletteStore((state) => state.toggle);
+  const config = useShellConfig();
+  const resolvedBrand = brand ?? config.brand ?? undefined;
 
   // When a custom header is supplied the default sidebar (and its offset /
   // mobile bar) is disabled so the header owns the full top of the page.
@@ -207,7 +210,7 @@ export function Layout({
       {header ?? (
         <SidebarNav
           items={navItems ?? NAV_ITEMS}
-          brand={brand}
+          brand={resolvedBrand}
           pathname={location.pathname}
           open={sidebarOpen}
           onOpenChange={setSidebarOpen}
@@ -240,8 +243,8 @@ export function Layout({
                 <PanelLeft className="size-4" />
               )}
             </Button>
-            <Link to={brand?.to ?? "/"} className="text-sm font-semibold">
-              {brand?.label ?? "Groot"}
+            <Link to={resolvedBrand?.to ?? "/"} className="text-sm font-semibold">
+              {resolvedBrand?.label ?? "Groot"}
             </Link>
             <div className="ml-auto">
               <CommandPaletteTrigger iconOnly />

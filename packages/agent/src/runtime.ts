@@ -39,6 +39,13 @@ const HISTORY_LIMIT = 1000;
 /** Task kinds that mean "the bot is replying" (background compaction does not). */
 const REPLY_TASK_KINDS = new Set(["pi.generation", "pi.tool"]);
 
+export class ModelNotFoundError extends Error {
+  constructor(modelId: string) {
+    super(`Unknown model "${modelId}"`);
+    this.name = "ModelNotFoundError";
+  }
+}
+
 export class ConversationNotFoundError extends Error {
   constructor(ref: ConversationRef) {
     super(`Conversation ${ref} not found`);
@@ -67,10 +74,24 @@ export interface AgentRuntimeOptions {
  * The single owner of pi-durable in tiny-agents (PRD §7.2). One instance per
  * process, opened at boot before the HTTP server accepts requests.
  */
+/** Parse GATEWAY_MODEL_ALLOWLIST (comma-separated ids) into a set, or null. */
+function modelAllowlist(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Set<string> | null {
+  const raw = env.GATEWAY_MODEL_ALLOWLIST?.trim();
+  if (!raw) return null;
+  const ids = raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? new Set(ids) : null;
+}
+
 export class AgentRuntime {
   readonly provider: string;
   readonly #harness: Harness;
   readonly #models: MutableModels;
+  readonly #env: Readonly<Record<string, string | undefined>>;
   readonly #lock: StoreLock | undefined;
   readonly #chats = new Set<ChatSubscription>();
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
@@ -83,11 +104,13 @@ export class AgentRuntime {
     models: MutableModels,
     provider: string,
     lock: StoreLock | undefined,
+    envSource: Readonly<Record<string, string | undefined>> = process.env,
   ) {
     this.#harness = harness;
     this.#models = models;
     this.provider = provider;
     this.#lock = lock;
+    this.#env = { ...envSource };
   }
 
   /**
@@ -95,6 +118,10 @@ export class AgentRuntime {
    * `StoreLockedError` when another process owns the store.
    */
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {
+    // Snapshot ambient env NOW: varlock's auto-load (imported via
+    // @groot/core/env) later strips schema vars from process.env, so reading
+    // them lazily would see undefined.
+    const envSource: Readonly<Record<string, string | undefined>> = { ...process.env };
     const inMemory = options.storePath === ":memory:";
     const lock = inMemory
       ? undefined
@@ -114,7 +141,13 @@ export class AgentRuntime {
         },
         ctx,
       );
-      const runtime = new AgentRuntime(harness, models, options.provider ?? GATEWAY_PROVIDER, lock);
+      const runtime = new AgentRuntime(
+        harness,
+        models,
+        options.provider ?? GATEWAY_PROVIDER,
+        lock,
+        envSource,
+      );
       harness.closed.then((end) => {
         if (end.reason === "failed" && !runtime.#closed) options.onFatal?.(end.error);
       });
@@ -130,21 +163,54 @@ export class AgentRuntime {
   // ── Models ────────────────────────────────────────────────────────────
 
   listModels(): ModelInfo[] {
-    return this.#models.getModels(this.provider).map(toModelInfo);
+    // Catalog models plus any registered gateway custom providers (their ids
+    // are namespaced "custom-<provider>/<model>" so bots' saved modelIds
+    // stay stable and never collide with catalog ids).
+    const catalog = this.#models.getModels(this.provider).map((m) => toModelInfo(m));
+    const custom = this.#models
+      .getProviders()
+      .filter((p) => p.id !== this.provider)
+      .flatMap((p) =>
+        this.#models.getModels(p.id).map((model) => toModelInfo(model, `custom:${p.id}`)),
+      );
+    const all = [...catalog, ...custom];
+    const allow = modelAllowlist(this.#env);
+    return allow ? all.filter((m) => allow.has(m.id)) : all;
   }
 
   hasModel(modelId: string): boolean {
-    return this.#models.getModel(this.provider, modelId) !== undefined;
+    return this.#resolveModel(modelId) !== undefined;
+  }
+
+  /**
+   * Resolve a model id to (provider, model). Catalog ids are plain; gateway
+   * custom providers use "custom:<provider>/<model>" (the slash inside the
+   * provider segment is forbidden by registration, so the first "/" splits).
+   */
+  #resolveModel(modelId: string): { provider: string; model: string } | undefined {
+    if (modelId.startsWith("custom:")) {
+      const rest = modelId.slice("custom:".length);
+      const slash = rest.indexOf("/");
+      if (slash <= 0) return undefined;
+      const providerId = rest.slice(0, slash);
+      const model = rest.slice(slash + 1);
+      return this.#models.getModel(providerId, model) ? { provider: providerId, model } : undefined;
+    }
+    return this.#models.getModel(this.provider, modelId)
+      ? { provider: this.provider, model: modelId }
+      : undefined;
   }
 
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
+    const resolved = this.#resolveModel(config.modelId);
+    if (!resolved) throw new ModelNotFoundError(config.modelId);
     const conversation = await this.#harness.createConversation(
       {
         ownership: { kind: "ownerless" },
         agent: {
-          model: { provider: this.provider, modelId: config.modelId },
+          model: { provider: resolved.provider, modelId: resolved.model },
           instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
         },
       },
@@ -155,10 +221,12 @@ export class AgentRuntime {
 
   /** Change persona/model. Applies from the next model request; history is kept. */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
+    const resolved = this.#resolveModel(config.modelId);
+    if (!resolved) throw new ModelNotFoundError(config.modelId);
     const conversation = await this.#conversation(ref);
     await conversation.configure(
       {
-        model: { provider: this.provider, modelId: config.modelId },
+        model: { provider: resolved.provider, modelId: resolved.model },
         instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
       },
       ctx,

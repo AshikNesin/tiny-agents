@@ -6,7 +6,12 @@
  * pi-durable API churn stays contained here. Child-only package: excluded from
  * groot sync via `.groot/boilerplate-sync.json` `additional_exclusions`.
  */
-export { AgentRuntime, ConversationNotFoundError, type AgentRuntimeOptions } from "./runtime";
+export {
+  AgentRuntime,
+  ConversationNotFoundError,
+  ModelNotFoundError,
+  type AgentRuntimeOptions,
+} from "./runtime";
 export { StoreLockedError, acquireStoreLock, type StoreLock } from "./lock";
 export {
   GATEWAY_ENV_KEYS,

@@ -4,6 +4,7 @@ import { displayClass, h1Class } from "@groot/ui";
 import { Input } from "@groot/ui/input";
 import { Form, FormField } from "@groot/ui/form";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
 import { z } from "zod";
 import { toast } from "sonner";
 import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-react";
@@ -29,12 +30,20 @@ const FEATURES = [
     desc: "JWT + Passkey auth, S3 storage, audit logs.",
   },
   { icon: LayoutDashboard, title: "Production UI", desc: "A polished sidebar shell you can ship." },
-];
+] satisfies LoginFeature[];
 
 export function Login() {
   const login = useAuthStore((state) => state.login);
   const loginWithPasskey = useAuthStore((state) => state.loginWithPasskey);
   const navigate = useNavigate();
+  const config = useShellConfig();
+  const BrandMark = config.brand?.icon ?? LayoutDashboard;
+  const brandLabel = config.brand?.label ?? "Groot";
+  const tagline = config.login?.tagline ?? "The boilerplate that ships like a product.";
+  const description =
+    config.login?.description ??
+    "Everything you need to launch a full-stack SaaS (auth, storage, background jobs, and a polished UI) without the busywork.";
+  const features = config.login?.features ?? FEATURES;
 
   const onSubmit = async (values: LoginValues) => {
     try {
@@ -67,9 +76,9 @@ export function Login() {
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <LayoutDashboard className="size-5" />
+              <BrandMark className="size-5" />
             </span>
-            <span className="font-heading text-base font-semibold">Groot</span>
+            <span className="font-heading text-base font-semibold">{brandLabel}</span>
           </div>
 
           <h1 className={h1Class}>Welcome back</h1>
@@ -129,13 +138,10 @@ export function Login() {
           }}
         />
         <div className="relative max-w-md text-primary-foreground">
-          <h2 className={displayClass}>The boilerplate that ships like a product.</h2>
-          <p className="mt-3 text-sm text-primary-foreground/70">
-            Everything you need to launch a full-stack SaaS (auth, storage, background jobs, and a
-            polished UI) without the busywork.
-          </p>
+          <h2 className={displayClass}>{tagline}</h2>
+          <p className="mt-3 text-sm text-primary-foreground/70">{description}</p>
           <ul className="mt-8 space-y-4">
-            {FEATURES.map((f) => (
+            {features.map((f) => (
               <li key={f.title} className="flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10">
                   <f.icon className="size-4 text-primary-foreground" />

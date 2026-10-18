@@ -12,14 +12,21 @@ import { Jobs, JobDetail } from "@groot/jobs/client";
 import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Login } from "@groot/shell/pages/auth/Login";
 import { GrootUIProvider } from "@groot/ui";
-import { MessageSquare, Bot } from "lucide-react";
+import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
+import {
+  MessageSquare,
+  Bot,
+  BotMessageSquare,
+  MessagesSquare,
+  ShieldCheck,
+  History,
+} from "lucide-react";
 
 /** Shell instance for the chat workspace (unpadded, full-height main). */
 function ChatsShell() {
   return (
     <Layout
       navItems={NAV_ITEMS}
-      brand={BRAND}
       padded={false}
       mainClassName="h-[calc(100dvh-3.5rem)] lg:h-dvh overflow-hidden"
     />
@@ -28,7 +35,33 @@ function ChatsShell() {
 
 /** tiny-agents replaces groot's demo Todos nav with Chats (PRD §6.2). */
 const NAV_ITEMS: NavItem[] = [{ name: "Chats", href: "/chats", icon: MessageSquare }];
-const BRAND = { label: "tiny-agents", icon: Bot, to: "/chats" };
+
+/** Brand + login copy for the whole app, in one place (ShellProvider). */
+const SHELL_CONFIG: ShellConfig = {
+  brand: { label: "tiny-agents", icon: Bot, to: "/chats" },
+  login: {
+    tagline: "Your team of always-on agents.",
+    description:
+      "Every contact is an AI bot you chat with — durable conversations that survive refreshes, crashes and redeploys.",
+    features: [
+      {
+        icon: BotMessageSquare,
+        title: "Bots that remember",
+        desc: "One continuous conversation per bot, kept forever.",
+      },
+      {
+        icon: History,
+        title: "Durable by default",
+        desc: "Replies resume mid-stream after restarts.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Yours alone",
+        desc: "Single-owner app with passkey or password login.",
+      },
+    ],
+  },
+};
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
@@ -41,40 +74,42 @@ function App() {
     <BrowserRouter>
       <NuqsAdapter>
         <GrootUIProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout navItems={NAV_ITEMS} />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Navigate to="/chats" replace />} />
-              <Route path="todos" element={<Todos />} />
-              <Route path="storage" element={<Storage />} />
-              <Route path="jobs" element={<Jobs />} />
-              <Route path="jobs/:queueName/:jobId" element={<JobDetail />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-            {/* Chats get their own shell instance (not nested under the
+          <ShellProvider config={SHELL_CONFIG}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout navItems={NAV_ITEMS} />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<Navigate to="/chats" replace />} />
+                <Route path="todos" element={<Todos />} />
+                <Route path="storage" element={<Storage />} />
+                <Route path="jobs" element={<Jobs />} />
+                <Route path="jobs/:queueName/:jobId" element={<JobDetail />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+              {/* Chats get their own shell instance (not nested under the
                 default Layout, which would stack two sidebars): unpadded,
                 viewport-height main so the list and chat columns scroll
                 independently (PRD §6.2). */}
-            <Route
-              path="/chats"
-              element={
-                <ProtectedRoute>
-                  <ChatsShell />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<ChatWorkspace />} />
-              <Route path=":botId" element={<ChatWorkspace />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              <Route
+                path="/chats"
+                element={
+                  <ProtectedRoute>
+                    <ChatsShell />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<ChatWorkspace />} />
+                <Route path=":botId" element={<ChatWorkspace />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ShellProvider>
         </GrootUIProvider>
       </NuqsAdapter>
     </BrowserRouter>

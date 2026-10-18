@@ -16,7 +16,7 @@ export function ThemeSettings() {
     <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
-        <CardDescription>Choose how Groot looks on this device.</CardDescription>
+        <CardDescription>Choose how the app looks on this device.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2" aria-label="Theme" role="group">
