@@ -13,6 +13,18 @@ export const GATEWAY_ENV_KEYS = [
   "CLOUDFLARE_GATEWAY_ID",
 ] as const;
 
+/**
+ * Strip the literal quotes container UIs (Coolify, docker-compose editors)
+ * leave around values: '"https://x"' is a string containing quotes, not a
+ * quoted string. Also drops incidental whitespace. Keeps inner quotes intact.
+ */
+function unquote(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return trimmed || undefined;
+  const match = trimmed.match(/^(['"])([\s\S]*)\1$/);
+  return match ? match[2].trim() : trimmed;
+}
+
 /** True when every Cloudflare AI Gateway setting is present. */
 export function isGatewayConfigured(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -21,10 +33,12 @@ export function isGatewayConfigured(
 }
 
 /** pi-ai model registry with only the Cloudflare AI Gateway provider registered. */
-export function createGatewayModels(): MutableModels {
+export function createGatewayModels(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): MutableModels {
   const models = createModels();
   models.setProvider(cloudflareAIGatewayProvider());
-  registerGatewayCustomProviders(models);
+  registerGatewayCustomProviders(models, env);
   return models;
 }
 
@@ -59,25 +73,46 @@ export function registerGatewayCustomProviders(
   models: MutableModels,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): void {
-  const raw = env.GATEWAY_CUSTOM_PROVIDERS?.trim();
+  let raw = unquote(env.GATEWAY_CUSTOM_PROVIDERS);
   if (!raw) return;
+  // One extra tolerance pass: quote-wrapped JSON the container UI kept whole
+  // ('[{"id":...}]' as a single quoted value) parses after unquoting above;
+  // anything else malformed must not take the server down — the gateway
+  // catalog alone still works — but say so instead of silently vanishing.
   let providers: unknown;
   try {
     providers = JSON.parse(raw);
   } catch {
-    // A malformed list must not take the server down; the gateway catalog
-    // alone still works.
+    console.warn(
+      "[tiny-agents] GATEWAY_CUSTOM_PROVIDERS is not valid JSON — custom models are NOT registered. " +
+        "Check for quote mangling in the container environment.",
+    );
     return;
   }
   if (!Array.isArray(providers)) return;
-  const account = env.CLOUDFLARE_ACCOUNT_ID?.trim();
-  const gateway = env.CLOUDFLARE_GATEWAY_ID?.trim();
+  const account = unquote(env.CLOUDFLARE_ACCOUNT_ID);
+  const gateway = unquote(env.CLOUDFLARE_GATEWAY_ID);
+  if (!account || !gateway) {
+    console.warn(
+      "[tiny-agents] CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_GATEWAY_ID missing — custom models are NOT registered.",
+    );
+    return;
+  }
   if (!account || !gateway) return;
   // Optional alternate gateway front door (e.g. an exe.dev http-proxy like
   // https://cf-tiny-agents.int.exe.xyz that injects the Cloudflare token, so
   // no key ever reaches this machine). Defaults to the real gateway host.
-  const frontDoor =
-    env.GATEWAY_BASE_URL?.trim().replace(/\/+$/, "") ?? "https://gateway.ai.cloudflare.com";
+  const frontDoorRaw = unquote(env.GATEWAY_BASE_URL)?.replace(/\/+$/, "");
+  let frontDoor = "https://gateway.ai.cloudflare.com";
+  if (frontDoorRaw) {
+    try {
+      frontDoor = new URL(frontDoorRaw).toString().replace(/\/+$/, "");
+    } catch {
+      console.warn(
+        `[tiny-agents] GATEWAY_BASE_URL "${frontDoorRaw}" is not a valid URL — using https://gateway.ai.cloudflare.com instead.`,
+      );
+    }
+  }
 
   for (const entry of providers) {
     if (typeof entry !== "object" || entry === null) continue;
@@ -87,14 +122,27 @@ export function registerGatewayCustomProviders(
       basePath?: unknown;
       models?: unknown;
     };
-    if (typeof provider.id !== "string" || !Array.isArray(provider.models)) continue;
+    const providerId = typeof provider.id === "string" ? unquote(provider.id) : undefined;
+    if (!providerId || !Array.isArray(provider.models)) continue;
     // A custom provider may mount its upstream under a base path (e.g. Z.AI's
     // coding plan lives at /api/coding/paas/v4); the gateway URL includes it.
     const basePath =
-      typeof provider.basePath === "string" ? provider.basePath.replace(/^\/+|\/+$/g, "") : "";
-    const prefix = [frontDoor, "v1", account, gateway, provider.id, basePath]
+      typeof provider.basePath === "string"
+        ? (unquote(provider.basePath)?.replace(/^\/+|\/+$/g, "") ?? "")
+        : "";
+    const prefix = [frontDoor, "v1", account, gateway, providerId, basePath]
       .filter(Boolean)
       .join("/");
+    // The OpenAI SDK runs new URL(baseUrl) at send time; a bad part here
+    // would surface as a cryptic "Invalid URL" mid-chat. Catch it at boot.
+    try {
+      new URL(prefix);
+    } catch {
+      console.warn(
+        `[tiny-agents] custom provider "${providerId}" produced an invalid URL (${prefix}) — skipped.`,
+      );
+      continue;
+    }
     interface CustomModelSpec {
       id: string;
       name: string;
@@ -128,10 +176,10 @@ export function registerGatewayCustomProviders(
         reasoning: m.reasoning === true,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        provider: provider.id,
+        provider: providerId,
         // Z.AI (GLM) quirks: no "developer" role (system only), max_tokens
         // field, reasoning flows through reasoning_content, no effort knob.
-        ...(provider.id.includes("zai")
+        ...(providerId.includes("zai")
           ? {
               compat: {
                 supportsDeveloperRole: false,
@@ -154,8 +202,9 @@ export function registerGatewayCustomProviders(
 
     models.setProvider(
       createProvider({
-        id: provider.id,
-        name: typeof provider.name === "string" ? provider.name : provider.id,
+        id: providerId,
+        name:
+          typeof provider.name === "string" ? (unquote(provider.name) ?? providerId) : providerId,
         baseUrl: prefix,
         // Same credential semantics as the gateway itself: the gateway key
         // authorizes; upstream keys are injected by the gateway (BYOK).

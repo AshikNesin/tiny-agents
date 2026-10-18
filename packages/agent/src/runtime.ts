@@ -83,7 +83,11 @@ export interface AgentRuntimeOptions {
 function modelAllowlist(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Set<string> | null {
-  const raw = env.GATEWAY_MODEL_ALLOWLIST?.trim();
+  // Tolerate the whole value being quote-wrapped by container env UIs
+  // (Coolify editors keep literal quotes); individual ids are trimmed.
+  const raw = env.GATEWAY_MODEL_ALLOWLIST?.trim()
+    .replace(/^(['"])([\s\S]*)\1$/, "$2")
+    .trim();
   if (!raw) return null;
   const ids = raw
     .split(",")
@@ -138,7 +142,7 @@ export class AgentRuntime {
       const storage: Storage = inMemory
         ? new MemoryStorage()
         : await openNodeSqliteStorage(options.storePath);
-      const models = options.models ?? createGatewayModels();
+      const models = options.models ?? createGatewayModels(envSource);
       const registry = createRegistry();
       for (const extension of options.extensions ?? []) registry.install(extension);
       const harness = await Harness.open(
