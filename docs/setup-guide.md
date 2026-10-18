@@ -27,8 +27,9 @@ This installs the global CLIs (varlock, portless), sets up git hooks
 to `config.yml`, `package.json`, and `.env.schema`, then installs deps and
 generates the Prisma client.
 
-Secrets are managed via **varlock + Doppler** — no local `.env` editing needed
-in development (varlock provides working defaults from `.env.schema`).
+Secrets are set as **real environment variables** — on your hosting platform
+in production, or a git-ignored `.env` file locally (varlock provides working
+defaults from `.env.schema` in development).
 
 ### Manual
 
@@ -37,12 +38,12 @@ Copy `.env.schema` to `.env` and configure the keys below (validated in
 
 #### Core
 
-| Variable        | Description                                                                                                                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`      | `development`, `production`, or `test`                                                                                                                                                                                     |
-| `PORT`          | HTTP port for Express (default `3000`; set automatically by hosts like Coolify/Railway)                                                                                                                                    |
-| `DATABASE_URL`  | SQLite file path (e.g. `file:./data/dev.db`) or a Postgres connection string (`postgresql://...`). Its scheme selects the Prisma driver adapter, KV backend, and job queue. See [Database Engines](./database-engines.md). |
-| `DOPPLER_TOKEN` | (Production) varlock uses this to fetch secrets from Doppler. Optional in dev.                                                                                                                                             |
+| Variable       | Description                                                                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`     | `development`, `production`, or `test`                                                                                                                                                                                     |
+| `PORT`         | HTTP port for Express (default `3000`; set automatically by hosts like Coolify/Railway)                                                                                                                                    |
+| `DATABASE_URL` | SQLite file path (e.g. `file:./data/dev.db`) or a Postgres connection string (`postgresql://...`). Its scheme selects the Prisma driver adapter, KV backend, and job queue. See [Database Engines](./database-engines.md). |
+| `SECRETS_KEY`  | Key that encrypts MCP connection secrets at rest (AES-256-GCM). Required before adding a connection with auth. `openssl rand -base64 32`. Changing it makes stored secrets unreadable.                                     |
 
 #### Authentication
 

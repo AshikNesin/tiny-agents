@@ -6,7 +6,7 @@
 #   1. Verify / install global CLIs (varlock, portless)
 #   2. Install git hooks (Vite+ hooks via `pnpm prepare`)
 #   3. Ask for app name and propagate it across config.yml, package.json,
-#      and .env.schema (Doppler project)
+#      and .env.schema
 #   4. Install dependencies + generate Prisma client
 #
 # Usage:  pnpm groot:setup
@@ -155,13 +155,6 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
     else
         print_warning "Node not found — skipping package.json name update"
     fi
-
-    # --- .env.schema: @initDoppler(project=...) ---
-    # The Doppler project name must match the project you created in Doppler.
-    if [ -f ".env.schema" ]; then
-        sed_inplace "s|@initDoppler(project=[^,]*,|@initDoppler(project=$slug_name,|" .env.schema
-        print_success ".env.schema: @initDoppler(project=$slug_name)"
-    fi
 }
 
 # ---------------------------------------------------------------
@@ -175,7 +168,7 @@ final_steps() {
 
     echo ""
     print_info "Next steps:"
-    echo "  1. Set DOPPLER_TOKEN (or set secrets directly on your hosting platform)"
+    echo "  1. Set secrets on your hosting platform (or a git-ignored .env file locally)"
     echo "  2. Run: pnpm dev"
     echo ""
     print_success "Setup complete!"

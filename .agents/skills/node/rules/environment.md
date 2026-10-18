@@ -7,9 +7,12 @@ metadata:
 
 # Environment Configuration in Node.js
 
-## Project Approach: Varlock + Doppler
+## Project Approach: Varlock
 
-This project uses [Varlock](https://varlock.dev) with the [Doppler](https://www.doppler.com/) plugin for secrets management:
+This project uses [Varlock](https://varlock.dev) for env schema validation.
+Secrets are plain environment variables — set on the hosting platform in
+production, or a git-ignored `.env` file locally. No secret manager is wired
+in.
 
 ### .env.schema File
 
@@ -20,8 +23,6 @@ The `.env.schema` file is the single source of truth for environment variables. 
 
 # @defaultRequired=infer @defaultSensitive=true
 # @generateTypes(lang=ts, path=env.d.ts)
-# @plugin(@varlock/doppler-plugin)
-# @initDoppler(project=my-project, config=dev, serviceToken=$DOPPLER_TOKEN)
 
 # @type=enum(development, production, test)
 # @required @public
@@ -79,14 +80,14 @@ import "varlock/auto-load";
 ### Local Development
 
 1. Install Varlock CLI
-2. Run `pnpm dev` - varlock loads `.env.schema` and injects secrets from Doppler
-3. Secrets are synced with Doppler
+2. Run `pnpm dev` — varlock loads `.env.schema` (dev defaults work zero-config)
+3. Override secrets in a git-ignored `.env` or `.env.local` file
 
 ### Production
 
-1. Set `DOPPLER_TOKEN` (a Doppler service token) via your hosting platform's env var management
-2. Varlock fetches secrets from Doppler at runtime
-3. No `.env` files needed in production
+1. Set every required secret via your hosting platform's env var management
+   (Coolify, Railway, docker/k8s, …) — ambient env vars always win
+2. No `.env` files needed in production
 
 ---
 
@@ -306,10 +307,7 @@ Never commit secrets to version control. Use a secrets management service:
 **Infrastructure Tools:**
 
 - [HashiCorp Vault](https://www.vaultproject.io/)
-- [Doppler](https://www.doppler.com/)
 - [Infisical](https://infisical.com/)
-
-See the [Varlock Doppler plugin docs](https://varlock.dev/plugins/doppler/) for setup.
 
 **Container Orchestration:**
 

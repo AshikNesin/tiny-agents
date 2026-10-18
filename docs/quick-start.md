@@ -28,8 +28,8 @@ This installs the global CLIs (varlock, portless), sets up git hooks
 `config.yml`, `package.json`, and `.env.schema`, then installs deps and
 generates the Prisma client.
 
-> Secrets are managed by **varlock + Doppler** — set `DOPPLER_TOKEN`, or
-> configure secrets on your hosting platform. In development, varlock provides
+> Secrets are plain **environment variables** — configure them on your hosting
+> platform, or in a git-ignored `.env` file. In development, varlock provides
 > working defaults from `.env.schema`.
 
 ### Manual
@@ -163,7 +163,7 @@ await apiClient.delete("/todos/1");
 Before deploying:
 
 - [ ] Run `pnpm groot:setup` to configure your app
-- [ ] Set `DOPPLER_TOKEN` (or configure secrets on your hosting platform)
+- [ ] Configure secrets on your hosting platform (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `SECRETS_KEY`)
 - [ ] Set `DATABASE_URL` to your production database (a `file:` path for SQLite, a `postgresql://` URL for Postgres)
 - [ ] Set `JWT_SECRET_KEY` and `ADMIN_AUTH_KEY` (strong random values)
 - [ ] Configure passkey settings in `config.yml` (`passkey.rpId`, `passkey.rpName`, `passkey.origin`)
