@@ -11,11 +11,9 @@ test.describe("Logout (authenticated)", () => {
   });
 
   async function openUserMenu(page: import("@playwright/test").Page) {
-    // Sidebar footer trigger: avatar initial + user name + ellipsis icon
-    await page
-      .getByRole("button", { name: /demo user/i })
-      .last()
-      .click();
+    // Chats workspace profile circle (the shell sidebar is gone there);
+    // labelled by the account initials.
+    await page.getByRole("button", { name: /account and navigation/i }).click();
   }
 
   test("can log out from the user menu", async ({ page }) => {

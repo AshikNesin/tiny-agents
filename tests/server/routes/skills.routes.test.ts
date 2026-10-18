@@ -31,7 +31,7 @@ description: Write the weekly report from my notes
 
 async function seedBot(conversationId = "900") {
   return prisma.bot.create({
-    data: { name: "Ops", modelId: "m", avatarColor: "#14b8a6", conversationId },
+    data: { name: "Ops", modelId: "m", conversationId },
   });
 }
 

@@ -6,6 +6,7 @@ import { useBotsStore } from "../../store/bots";
 import { botsApi, type Bot as BotRow, type ModelInfo } from "../../lib/bots-api";
 import { BotList } from "../../components/BotList";
 import { BotDialog } from "../../components/BotDialog";
+import { BotAvatar } from "../../components/BotAvatar";
 import { ChatPane } from "../../components/ChatPane";
 
 /**
@@ -126,7 +127,23 @@ export function ChatWorkspace() {
                 </Button>
               </>
             ) : (
-              <p className="text-muted-foreground text-sm">Pick a bot or create one</p>
+              /* Featured bot (Grok-style): the most recent contact, shown
+                 large and centered, tappable to open. */
+              <button
+                type="button"
+                onClick={() => bots[0] && navigate(`/chats/${bots[0].id}`)}
+                className="group flex flex-col items-center gap-3 rounded-3xl px-10 py-6"
+              >
+                {bots[0] && (
+                  <BotAvatar
+                    name={bots[0].name}
+                    className="size-28 transition-transform group-hover:scale-105"
+                  />
+                )}
+                <span className="text-muted-foreground text-lg font-semibold">
+                  {bots[0]?.name ?? "Pick a bot or create one"}
+                </span>
+              </button>
             )}
           </div>
         )}

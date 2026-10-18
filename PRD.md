@@ -70,12 +70,12 @@ Explicitly out of scope (see §15 Roadmap):
 
 ### 5.1 Bots
 
-| Story              | Behaviour                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model, avatar (emoji/initials + colour). Model defaults to `DEFAULT_MODEL`. |
-| Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                     |
-| Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                         |
-| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one is kept in `agent.db` but hidden.     |
+| Story              | Behaviour                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model. The avatar is a DiceBear "gaze" illustration derived from the name. Model defaults to `DEFAULT_MODEL`. |
+| Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                                                       |
+| Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                                                           |
+| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one is kept in `agent.db` but hidden.                                       |
 
 ### 5.2 Chat
 
@@ -111,7 +111,7 @@ screens). Pages render inside groot's `shell` layout.
   synced shell CSS).
 - **Light and dark themes**, dark by default, toggle in the user menu and Settings, choice persisted. (groot
   ships dark tokens but no toggle → upstream change, §12.)
-- Bot avatars are rounded squares (emoji/initials on the bot's colour), like Talorys' "T." mark.
+- Bot avatars are DiceBear "gaze" illustrations (`api.dicebear.com/10.x/gaze/svg?seed=<name>`), deterministic per bot name.
 
 ### 6.2 Layout (desktop: three columns)
 
@@ -126,16 +126,16 @@ chat columns fill the viewport height and scroll independently.
 
 ### 6.3 Routes & screens
 
-| Route / screen  | Contents                                                                                                                   |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                                    |
-| `/`             | Redirects to `/chats`.                                                                                                     |
-| `/chats`        | Desktop: bot list + empty chat pane ("Pick a bot or create one"). Mobile: the bot list full-screen.                        |
-| `/chats/:botId` | Desktop: list + open chat. Mobile: chat full-screen with a back arrow to the list (messenger pattern).                     |
-| Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                         |
-| Bot dialog      | Single-page create/edit dialog (name, description, avatar, model, system prompt) — not OpenMausBot's multi-section wizard. |
-| Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                                      |
-| Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                                    |
+| Route / screen  | Contents                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                            |
+| `/`             | Redirects to `/chats`.                                                                                             |
+| `/chats`        | Desktop: bot list + empty chat pane ("Pick a bot or create one"). Mobile: the bot list full-screen.                |
+| `/chats/:botId` | Desktop: list + open chat. Mobile: chat full-screen with a back arrow to the list (messenger pattern).             |
+| Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                 |
+| Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt) — not OpenMausBot's multi-section wizard. |
+| Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                              |
+| Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                            |
 
 ### 6.4 Mobile
 
@@ -254,8 +254,6 @@ model Bot {
   description        String    @default("") // one line, max 200
   systemPrompt       String    @default("") // persona, max ~24 KB
   modelId            String    // id from the cloudflare-ai-gateway catalog
-  avatarEmoji        String?   // emoji; falls back to initials of name
-  avatarColor        String    // hex / palette token
   conversationId     String    @unique // current pi-durable conversation
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())

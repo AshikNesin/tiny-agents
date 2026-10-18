@@ -27,14 +27,16 @@ import {
 import { SkillsPage } from "./pages/skills/Skills";
 import { ConnectionsPage } from "./pages/connections/Connections";
 
-/** Shell instance for the chat workspace (unpadded, full-height main). */
+/** Shell instance for the chat workspace: no sidebar, no mobile top bar —
+ *  the workspace owns the whole viewport (Grok-style, PRD §6.2). A non-null
+ *  `header` disables the default sidebar + mobile bar in Layout. */
 function ChatsShell() {
   return (
     <Layout
-      navItems={NAV_ITEMS}
+      header={<span />}
       commandGroups={COMMAND_GROUPS}
       padded={false}
-      mainClassName="h-[calc(100dvh-3.5rem)] lg:h-dvh overflow-hidden"
+      mainClassName="h-dvh overflow-hidden"
     />
   );
 }

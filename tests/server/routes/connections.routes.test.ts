@@ -185,7 +185,7 @@ describe("MCP connections (header auth, streamable http)", () => {
   it("enables a connection for a bot and re-applies its capability config", async () => {
     const app = buildApp();
     const bot = await prisma.bot.create({
-      data: { name: "Ops", modelId: "m", avatarColor: "#000000", conversationId: "950" },
+      data: { name: "Ops", modelId: "m", conversationId: "950" },
     });
     const created = await request(app)
       .post("/api/v1/connections")

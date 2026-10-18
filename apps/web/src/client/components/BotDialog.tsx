@@ -29,19 +29,6 @@ import { skillsApi, type SkillSummary } from "../lib/skills-api";
 import { connectionsApi, type ConnectionSummary } from "../lib/connections-api";
 import { BotAvatar } from "./BotAvatar";
 
-const AVATAR_COLORS = [
-  "#14b8a6",
-  "#0ea5e9",
-  "#8b5cf6",
-  "#f43f5e",
-  "#f59e0b",
-  "#10b981",
-  "#6366f1",
-  "#ec4899",
-];
-
-const EMOJI_CHOICES = ["🤖", "🧠", "🔎", "📝", "🧪", "📊", "🛠️", "🌿", "🎯", "💬", "⚡", "🧭"];
-
 interface BotDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -72,8 +59,6 @@ export function BotDialog({
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelId, setModelId] = useState("");
-  const [avatarEmoji, setAvatarEmoji] = useState<string>("");
-  const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
   const [saving, setSaving] = useState(false);
 
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
@@ -90,10 +75,6 @@ export function BotDialog({
     setDescription(bot?.description ?? "");
     setSystemPrompt(bot?.systemPrompt ?? "");
     setModelId(bot?.modelId ?? defaultModelId ?? models[0]?.id ?? "");
-    setAvatarEmoji(bot?.avatarEmoji ?? "");
-    setAvatarColor(
-      bot?.avatarColor ?? AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-    );
     setToolkits(bot?.toolkits ?? []);
     setToolPermissions(bot?.toolPermissions ?? {});
     setSelectedSkills(bot?.skillIds ?? []);
@@ -142,19 +123,12 @@ export function BotDialog({
         description: description.trim(),
         systemPrompt,
         modelId,
-        avatarColor,
         toolkits,
         toolPermissions,
         skillIds: selectedSkills,
         connectionIds: selectedConnections,
       };
-      // Create keeps an undefined emoji (server default); update can clear it.
-      const saved = bot
-        ? await botsApi.update(bot.id, {
-            ...payload,
-            avatarEmoji: avatarEmoji || null,
-          })
-        : await botsApi.create({ ...payload, ...(avatarEmoji ? { avatarEmoji } : {}) });
+      const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
       onOpenChange(false);
       toast.success(bot ? "Bot updated" : "Bot created");
@@ -170,12 +144,7 @@ export function BotDialog({
   const profile = (
     <>
       <div className="flex items-center gap-3">
-        <BotAvatar
-          name={name || "Bot"}
-          emoji={avatarEmoji || null}
-          color={avatarColor}
-          className="size-12 text-lg"
-        />
+        <BotAvatar name={name || "Bot"} className="size-12" />
         <div className="flex-1">
           <Label htmlFor="bot-name">Name</Label>
           <Input
@@ -198,45 +167,6 @@ export function BotDialog({
           placeholder="One line, shown under the name"
           maxLength={200}
         />
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label>Avatar</Label>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {EMOJI_CHOICES.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => setAvatarEmoji(avatarEmoji === emoji ? "" : emoji)}
-              className={`rounded-md border p-1.5 text-base ${
-                avatarEmoji === emoji
-                  ? "border-primary bg-primary/10"
-                  : "border-border hover:bg-muted"
-              }`}
-              aria-pressed={avatarEmoji === emoji}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {AVATAR_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => setAvatarColor(color)}
-              className={`size-6 rounded-md ring-offset-2 transition-transform ${
-                avatarColor === color ? "ring-2 ring-ring scale-110" : ""
-              }`}
-              style={{ backgroundColor: color }}
-              aria-label={`Colour ${color}`}
-              aria-pressed={avatarColor === color}
-            />
-          ))}
-          <span className="ml-1 text-xs text-muted-foreground">
-            {avatarEmoji ? "" : "Initials of the name are used without an emoji"}
-          </span>
-        </div>
       </div>
 
       <div className="grid gap-1.5">

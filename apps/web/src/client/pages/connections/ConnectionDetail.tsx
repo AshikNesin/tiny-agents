@@ -306,12 +306,7 @@ export function ConnectionDetail({ id }: { id: string }) {
                     htmlFor={`connection-bot-${bot.id}`}
                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                   >
-                    <BotAvatar
-                      name={bot.name}
-                      emoji={bot.avatarEmoji}
-                      color={bot.avatarColor}
-                      className="size-8 text-xs"
-                    />
+                    <BotAvatar name={bot.name} className="size-8 text-xs" />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-foreground">
                         {bot.name}

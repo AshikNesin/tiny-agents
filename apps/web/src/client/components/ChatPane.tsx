@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowUp,
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
   Square,
   Trash2,
-  SendHorizonal,
 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -35,6 +35,7 @@ import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import { formatDayDivider } from "../lib/day-divider";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -109,11 +110,7 @@ export function ChatPane({
   const messages = chat?.messages ?? [];
   const pending = chat?.pending ?? [];
   const busy = chat?.busy ?? false;
-  const waiting = messages.some((m) =>
-    m.toolCalls?.some((call) => call.status === "awaiting_approval"),
-  );
   const modelKnown = models.some((m) => m.id === bot.modelId);
-  const modelName = models.find((m) => m.id === bot.modelId)?.name ?? bot.modelId;
   const canSend = gatewayConfigured && modelKnown && !busy && text.trim().length > 0;
 
   const send = async () => {
@@ -170,46 +167,37 @@ export function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b px-3 py-2.5 md:px-4">
+      {/* Header - Grok-style: circular back / bot pill (avatar + name) /
+          circular ⋯, floating on the transcript with no border. */}
+      <header className="flex items-center gap-3 px-3 pt-3 pb-2 md:px-4 md:pt-4">
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
-          className="md:hidden"
+          className="rounded-full"
           onClick={() => navigate("/chats")}
           aria-label="Back to bots"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-5" />
         </Button>
-        <BotAvatar
-          name={bot.name}
-          emoji={bot.avatarEmoji}
-          color={bot.avatarColor}
-          className="size-8"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{bot.name}</div>
-          <div className="text-muted-foreground truncate text-xs">
-            {waiting ? (
-              <span className="text-primary">needs your approval</span>
-            ) : busy ? (
-              <span className="text-primary">typing…</span>
-            ) : (
-              modelName
-            )}
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>
-          <MessageSquarePlus className="size-4" />
-          <span className="hidden sm:inline">New chat</span>
-        </Button>
+        <button
+          type="button"
+          onClick={onEditBot}
+          className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:flex-none md:px-2.5"
+          aria-label={`Edit ${bot.name}`}
+        >
+          <BotAvatar name={bot.name} className="size-7" />
+          <span className="truncate text-[15px] font-semibold">{bot.name}</span>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Bot menu">
-              <MoreHorizontal className="size-4" />
+            <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
+              <MoreHorizontal className="size-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
+              <MessageSquarePlus className="size-4" /> New chat
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={onEditBot}>
               <Pencil className="size-4" /> Edit bot
             </DropdownMenuItem>
@@ -222,7 +210,7 @@ export function ChatPane({
 
       {/* Stream health: the transcript is frozen while disconnected */}
       {chat && !chat.connected && (
-        <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-muted-foreground text-xs">
+        <div className="text-muted-foreground flex items-center gap-2 px-4 py-1.5 text-xs">
           <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
           Reconnecting…
         </div>
@@ -235,60 +223,82 @@ export function ChatPane({
           CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
         </div>
       )}
-      {gatewayConfigured && !modelKnown && (
-        <div className="border-b bg-muted px-4 py-2 text-muted-foreground text-xs">
-          {bot.modelId} is no longer in the model catalog. Pick a new model (⋯ → Edit bot) to send
-          messages again.
-        </div>
-      )}
 
       {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
           message pinned unless the reader scrolled up) */}
       <div className="relative min-h-0 flex-1">
         <MessageScrollerProvider>
           <MessageScroller className="h-full">
-            <MessageScrollerViewport className="px-3 py-4 md:px-4">
-              <MessageScrollerContent className="space-y-4">
+            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
+              <MessageScrollerContent className="space-y-3">
                 {messages.length === 0 && pending.length === 0 && (
-                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
-                    <BotAvatar
-                      name={bot.name}
-                      emoji={bot.avatarEmoji}
-                      color={bot.avatarColor}
-                      className="size-12 text-lg"
-                    />
-                    <p>Say hi to {bot.name}</p>
-                    {bot.description && <p className="text-xs">{bot.description}</p>}
+                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
+                    <BotAvatar name={bot.name} className="size-20" />
+                    <div className="max-w-sm">
+                      <p className="text-foreground text-lg font-semibold">{bot.name}</p>
+                      {bot.description ? (
+                        <p className="mt-1 text-sm">{bot.description}</p>
+                      ) : (
+                        <p className="mt-1 text-sm">Say hi to start the conversation.</p>
+                      )}
+                    </div>
                   </div>
                 )}
-                {messages.map((message) => (
-                  <MessageScrollerItem key={message.id} messageId={message.id}>
-                    <ChatMessageView
-                      message={message}
-                      botName={bot.name}
-                      botEmoji={bot.avatarEmoji}
-                      botColor={bot.avatarColor}
-                      botId={bot.id}
-                      toolLabels={toolLabels}
-                    />
-                  </MessageScrollerItem>
-                ))}
-                {pending.map((p) => (
-                  <MessageScrollerItem key={p.id} messageId={p.id}>
-                    <ChatMessageView
-                      message={{
-                        id: p.id,
-                        role: "user",
-                        text: p.text,
-                        status: "streaming",
-                        createdAt: p.createdAt,
-                      }}
-                      botName={bot.name}
-                      botEmoji={bot.avatarEmoji}
-                      botColor={bot.avatarColor}
-                    />
-                  </MessageScrollerItem>
-                ))}
+                {messages.map((message, i) => {
+                  const prev = messages[i - 1];
+                  const showDay =
+                    !prev ||
+                    new Date(prev.createdAt).toDateString() !==
+                      new Date(message.createdAt).toDateString();
+                  return (
+                    <Fragment key={message.id}>
+                      {showDay && (
+                        <div className="text-muted-foreground flex justify-center py-2 text-xs">
+                          {formatDayDivider(message.createdAt)}
+                        </div>
+                      )}
+                      <MessageScrollerItem messageId={message.id}>
+                        <ChatMessageView
+                          message={message}
+                          botName={bot.name}
+                          botId={bot.id}
+                          toolLabels={toolLabels}
+                        />
+                      </MessageScrollerItem>
+                    </Fragment>
+                  );
+                })}
+                {pending.length > 0 &&
+                  (() => {
+                    const last = messages[messages.length - 1];
+                    const showDay =
+                      !last ||
+                      new Date(last.createdAt).toDateString() !==
+                        new Date(pending[0].createdAt).toDateString();
+                    return (
+                      <Fragment>
+                        {showDay && (
+                          <div className="text-muted-foreground flex justify-center py-2 text-xs">
+                            {formatDayDivider(pending[0].createdAt)}
+                          </div>
+                        )}
+                        {pending.map((p) => (
+                          <MessageScrollerItem key={p.id} messageId={p.id}>
+                            <ChatMessageView
+                              message={{
+                                id: p.id,
+                                role: "user",
+                                text: p.text,
+                                status: "streaming",
+                                createdAt: p.createdAt,
+                              }}
+                              botName={bot.name}
+                            />
+                          </MessageScrollerItem>
+                        ))}
+                      </Fragment>
+                    );
+                  })()}
               </MessageScrollerContent>
             </MessageScrollerViewport>
             <MessageScrollerButton
@@ -300,10 +310,21 @@ export function ChatPane({
         </MessageScrollerProvider>
       </div>
 
-      {/* Composer (AI Elements Prompt Input: an input group with the send
-          and stop affordances inline) */}
-      <div className="border-t px-3 py-3 md:px-4">
-        <InputGroup className="mx-auto max-w-3xl">
+      {/* Composer - Grok-style: a single rounded pill with the send/stop
+          button inside on the right. Status (model, warnings) sits above the
+          pill so the input surface stays clean. */}
+      <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4">
+        {gatewayConfigured && !modelKnown && (
+          <div className="mx-auto mb-2 flex max-w-3xl items-center justify-center gap-2">
+            <p className="text-muted-foreground truncate text-center text-xs">
+              {bot.modelId} is no longer in the model catalog
+            </p>
+            <Button variant="link" size="sm" className="h-6 px-1.5 text-xs" onClick={onEditBot}>
+              Choose a model
+            </Button>
+          </div>
+        )}
+        <InputGroup className="mx-auto min-h-12 max-w-3xl rounded-[1.75rem] px-2 py-1.5">
           <InputGroupTextarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -313,9 +334,10 @@ export function ChatPane({
                 void send();
               }
             }}
-            placeholder={`Message ${bot.name}…`}
+            placeholder={`Ask ${bot.name}`}
             rows={1}
             disabled={!gatewayConfigured || !modelKnown}
+            className="px-3 py-2.5"
           />
           <InputGroupAddon align="inline-end">
             {busy ? (
@@ -324,6 +346,7 @@ export function ChatPane({
                 size="icon-sm"
                 onClick={stop}
                 aria-label="Stop generating"
+                className="size-8 rounded-full"
               >
                 <Square className="size-3.5" />
               </InputGroupButton>
@@ -333,15 +356,13 @@ export function ChatPane({
                 onClick={send}
                 disabled={!canSend}
                 aria-label="Send message"
+                className="bg-primary text-primary-foreground size-8 rounded-full disabled:opacity-30"
               >
-                <SendHorizonal className="size-3.5" />
+                <ArrowUp className="size-4" />
               </InputGroupButton>
             )}
           </InputGroupAddon>
         </InputGroup>
-        <p className="text-muted-foreground mt-1.5 text-center text-[11px]">
-          {modelName} · AI can make mistakes — check important details.
-        </p>
       </div>
 
       {/* Confirmations */}

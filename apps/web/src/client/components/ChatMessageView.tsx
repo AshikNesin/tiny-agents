@@ -269,8 +269,6 @@ export function toolLabel(labels: ToolLabels, name: string): string {
 interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
-  botEmoji: string | null;
-  botColor: string;
   botId?: string;
   toolLabels?: ToolLabels;
 }
@@ -285,8 +283,6 @@ interface ChatMessageViewProps {
 export function ChatMessageView({
   message,
   botName,
-  botEmoji,
-  botColor,
   botId,
   toolLabels = {},
 }: ChatMessageViewProps) {
@@ -304,10 +300,13 @@ export function ChatMessageView({
     const failed = message.status === "unanswered";
     return (
       <Message align="end" className="group">
-        <div className="relative max-w-[85%]">
+        {/* content-visibility on the scroller item breaks percentage
+            max-widths, so the bubble is capped by the flex parent chain
+            instead of a nested wrapper. */}
+        <div className="relative max-w-[min(85%,48rem)]">
           <CopyButton text={message.text} />
-          <Bubble align="end" variant={failed ? "destructive" : "muted"}>
-            <BubbleContent>
+          <Bubble align="end" variant="muted" className="max-w-full">
+            <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
               <p className="whitespace-pre-wrap">{message.text}</p>
             </BubbleContent>
           </Bubble>
@@ -320,12 +319,7 @@ export function ChatMessageView({
   const streaming = message.status === "streaming";
   return (
     <Message className="group gap-3">
-      <BotAvatar
-        name={botName}
-        emoji={botEmoji}
-        color={botColor}
-        className="mt-0.5 size-7 text-xs"
-      />
+      <BotAvatar name={botName} className="mt-1 size-8" />
       <div className="relative min-w-0 flex-1">
         <CopyButton text={message.text} />
         {message.toolCalls && message.toolCalls.length > 0 && (
@@ -342,26 +336,30 @@ export function ChatMessageView({
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
-        <div className="min-w-0 text-sm">
-          <Streamdown>{message.text || (streaming ? "" : message.text)}</Streamdown>
-          {streaming && !message.text && (
-            <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-              <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-              thinking…
-            </span>
-          )}
-          {message.status === "error" && (
-            <p className="text-destructive mt-1 text-xs">
-              {message.error ?? "The model returned an error."}
-            </p>
-          )}
-          {message.status === "stopped" && (
-            <p className="text-muted-foreground mt-1 text-xs">Stopped</p>
-          )}
-          {message.status === "unanswered" && (
-            <p className="text-destructive mt-1 text-xs">{message.error}</p>
-          )}
-        </div>
+        {/* Grok-style reply card: a rounded surface with generous padding.
+            Empty-while-thinking renders the pulse line without the card. */}
+        {(message.text || !streaming) && (
+          <div className="bg-secondary/50 rounded-2xl px-4 py-3 text-[15px] leading-relaxed">
+            <Streamdown>{message.text}</Streamdown>
+            {message.status === "error" && (
+              <p className="text-destructive mt-1 text-xs">
+                {message.error ?? "The model returned an error."}
+              </p>
+            )}
+            {message.status === "stopped" && (
+              <p className="text-muted-foreground mt-1 text-xs">Stopped</p>
+            )}
+            {message.status === "unanswered" && (
+              <p className="text-destructive mt-1 text-xs">{message.error}</p>
+            )}
+          </div>
+        )}
+        {streaming && !message.text && (
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 px-1 text-xs">
+            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+            thinking…
+          </span>
+        )}
       </div>
     </Message>
   );

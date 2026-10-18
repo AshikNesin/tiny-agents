@@ -21,8 +21,6 @@ export interface BotRow {
   description: string;
   systemPrompt: string;
   modelId: string;
-  avatarEmoji: string | null;
-  avatarColor: string;
   conversationId: string;
   lastReadAt: Date | null;
   lastActivityAt: Date;
@@ -169,8 +167,6 @@ export interface BotListEntry {
   name: string;
   description: string;
   modelId: string;
-  avatarEmoji: string | null;
-  avatarColor: string;
   lastMessagePreview: string | null;
   lastActivityAt: Date;
   unread: boolean;
@@ -185,8 +181,6 @@ function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotList
     name: bot.name,
     description: bot.description,
     modelId: bot.modelId,
-    avatarEmoji: bot.avatarEmoji,
-    avatarColor: bot.avatarColor,
     lastMessagePreview: bot.lastMessagePreview,
     lastActivityAt: bot.lastActivityAt,
     unread: isUnread(bot),
@@ -248,8 +242,6 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       description: data.description,
       systemPrompt: data.systemPrompt,
       modelId: data.modelId,
-      avatarEmoji: data.avatarEmoji ?? null,
-      avatarColor: data.avatarColor,
       conversationId: String(conversationId),
       toolkits: JSON.stringify(toolkits),
       toolPermissions: JSON.stringify(toolPermissions),
@@ -336,8 +328,6 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.systemPrompt !== undefined ? { systemPrompt } : {}),
       ...(data.modelId !== undefined ? { modelId } : {}),
-      ...(data.avatarEmoji !== undefined ? { avatarEmoji: data.avatarEmoji } : {}),
-      ...(data.avatarColor !== undefined ? { avatarColor: data.avatarColor } : {}),
     },
   });
   return getBot(id);

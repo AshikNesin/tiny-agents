@@ -37,8 +37,6 @@ model Bot {
   description        String    @default("")
   systemPrompt       String    @default("")
   modelId            String
-  avatarEmoji        String?
-  avatarColor        String
   conversationId     String    @unique
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())

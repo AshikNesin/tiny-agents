@@ -79,8 +79,6 @@ const createPayload = {
   description: "Finds answers",
   systemPrompt: "Be precise.",
   modelId: "known-model",
-  avatarEmoji: "🔎",
-  avatarColor: "#14b8a6",
 };
 
 async function createBot(app = buildApp()): Promise<Record<string, unknown>> {
@@ -217,8 +215,6 @@ describe("Bots API routes", () => {
       description: createPayload.description,
       systemPrompt: createPayload.systemPrompt,
       modelId: createPayload.modelId,
-      avatarEmoji: createPayload.avatarEmoji,
-      avatarColor: createPayload.avatarColor,
       conversationId: "100",
     });
   });
@@ -455,7 +451,6 @@ describe("Bots API routes", () => {
         description: "",
         systemPrompt: "",
         modelId: "known-model",
-        avatarColor: "#14b8a6",
         conversationId: "301",
         lastReadAt: earlier,
         lastActivityAt: later,
@@ -468,7 +463,6 @@ describe("Bots API routes", () => {
         description: "",
         systemPrompt: "",
         modelId: "known-model",
-        avatarColor: "#0f172a",
         conversationId: "302",
         lastReadAt: later,
         lastActivityAt: earlier,

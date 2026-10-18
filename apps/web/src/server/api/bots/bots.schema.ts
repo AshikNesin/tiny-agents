@@ -1,20 +1,5 @@
 import { z } from "zod";
 
-export const AVATAR_COLORS = [
-  "#14b8a6",
-  "#0ea5e9",
-  "#8b5cf6",
-  "#f43f5e",
-  "#f59e0b",
-  "#10b981",
-  "#6366f1",
-  "#ec4899",
-] as const;
-
-const hexColor = z
-  .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Avatar colour must be a hex value like #14b8a6");
-
 const toolkits = z.array(z.string().min(1).max(64)).max(50);
 const toolPermissions = z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"]));
 
@@ -27,8 +12,6 @@ export const createBotSchema = z.object({
     .optional()
     .default(""),
   modelId: z.string().min(1, "Model is required"),
-  avatarEmoji: z.string().trim().max(16).optional(),
-  avatarColor: hexColor.optional().default(AVATAR_COLORS[0]),
   toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
@@ -40,8 +23,6 @@ export const updateBotSchema = z.object({
   description: z.string().trim().max(200).optional(),
   systemPrompt: z.string().max(24_576, "System prompt is too long (max ~24 KB)").optional(),
   modelId: z.string().min(1, "Model is required").optional(),
-  avatarEmoji: z.string().trim().max(16).nullable().optional(),
-  avatarColor: hexColor.optional(),
   toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   skillIds: z.array(z.string()).max(200).optional(),

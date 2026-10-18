@@ -37,7 +37,7 @@ test.describe("Chats", () => {
     await expect(page.getByRole("button", { name: /echo bot/i }).first()).toBeVisible();
 
     // Send a message and await the streamed reply
-    const composer = page.getByPlaceholder(/message echo bot/i);
+    const composer = page.getByPlaceholder(/ask echo bot/i);
     await composer.fill("hello e2e");
     await composer.press("Enter");
     await expect(page.getByText("hello e2e").first()).toBeVisible();
@@ -70,7 +70,7 @@ test.describe("Chats", () => {
     }
 
     // The list itself renders previews for each bot row.
-    await expect(page.getByPlaceholder(/search bots/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/^search$/i)).toBeVisible();
   });
 });
 
@@ -102,17 +102,15 @@ test.describe("Chats — new chat", () => {
       .first()
       .click();
 
-    const composer = page.getByPlaceholder(/message reset bot/i);
+    const composer = page.getByPlaceholder(/ask reset bot/i);
     await composer.fill("old message");
     await composer.press("Enter");
     await expect(page.getByText("old message").first()).toBeVisible();
     await expect(page.getByText(/Echo: old message/i).first()).toBeVisible({ timeout: 20_000 });
 
     // New chat: the transcript must clear and stay cleared.
-    await page
-      .getByRole("button", { name: /new chat/i })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "Bot menu" }).click();
+    await page.getByRole("menuitem", { name: /new chat/i }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page.getByText("old message")).toHaveCount(0);
     await expect(page.getByText(/Echo: old message/i)).toHaveCount(0);
