@@ -5,8 +5,8 @@
   },
   "last_sync": {
     "version": "2.6.2",
-    "commit": "72ce54c32d03c89018fddb5487b4b64662953d2c",
-    "date": "2026-10-18T05:18:22.375Z"
+    "commit": "5c7f78ba98e9250a1e9660c895f32a0445cb90c0",
+    "date": "2026-10-18T08:08:22.593Z"
   },
   "additional_exclusions": ["packages/agent/**"]
 }
