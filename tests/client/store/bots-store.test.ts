@@ -124,3 +124,39 @@ describe("bots store — stream health", () => {
     expect(useBotsStore.getState().chats[botId]!.connected).toBe(false);
   });
 });
+
+describe("bots store — new chat (reset)", () => {
+  beforeEach(() => {
+    listeners.clear();
+    openCallbacks.length = 0;
+    useBotsStore.setState({ chats: {} });
+  });
+
+  it("resetChat drops the cached transcript so the next connectChat starts fresh", () => {
+    const botId = "bot-5";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, {
+      type: "snapshot",
+      state: {
+        messages: [
+          { id: "m1", role: "user", text: "old conversation", status: "done", createdAt: 1 },
+        ],
+        busy: false,
+      },
+    });
+    expect(useBotsStore.getState().chats[botId]!.messages).toHaveLength(1);
+
+    // New chat: the server moved the bot to a fresh conversation and the
+    // component closed the stream and dropped the cached ChatState.
+    useBotsStore.getState().resetChat(botId);
+    expect(useBotsStore.getState().chats[botId]).toBeUndefined();
+
+    // Reopening the chat starts from scratch (no stale messages, no busy),
+    // and the first snapshot of the new conversation is the empty transcript.
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    const chat = useBotsStore.getState().chats[botId]!;
+    expect(chat.messages).toHaveLength(0);
+    expect(chat.busy).toBe(false);
+  });
+});

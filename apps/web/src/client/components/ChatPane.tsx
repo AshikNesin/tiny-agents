@@ -66,16 +66,23 @@ export function ChatPane({
   const chat = useBotsStore((s) => s.chats[bot.id]);
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
+  const resetChat = useBotsStore((s) => s.resetChat);
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
+  const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const [text, setText] = useState("");
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // (Re)connect whenever the bot's conversation changes: a new chat
+  // (resetChat dropped the cached state) moves the bot to a fresh
+  // conversation, and the stream must follow it. `resetChat` closes the
+  // old SSE connection, so the effect reopens a new one that gets a fresh
+  // snapshot — the empty transcript of the new conversation.
   useEffect(() => {
     connectChat(bot.id);
     return () => disconnectChat(bot.id);
-  }, [bot.id, connectChat, disconnectChat]);
+  }, [bot.id, bot.conversationId, connectChat, disconnectChat]);
 
   // Tool labels for the transcript rows come from the capability catalog.
   useEffect(() => {
@@ -150,6 +157,11 @@ export function ChatPane({
     setConfirmReset(false);
     try {
       const fresh = await botsApi.reset(bot.id);
+      // Drop the cached chat so the effect below reconnects the SSE to the
+      // bot's new conversation and a fresh (empty) snapshot arrives. The
+      // list row (preview, unread) resets server-side; refresh it too.
+      resetChat(bot.id);
+      refreshBotsInBackground();
       onBotReset(fresh);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start a new chat");

@@ -26,6 +26,13 @@ interface BotsState {
   chats: Record<string, ChatState>;
   connectChat: (botId: string) => void;
   disconnectChat: (botId: string) => void;
+  /**
+   * New chat: the server moved the bot to a fresh conversation. Drop the
+   * cached ChatState — the SSE connection still streams the retired
+   * conversation, so until it is reopened the transcript would keep showing
+   * (and growing) the old messages.
+   */
+  resetChat: (botId: string) => void;
   applyChatEvent: (botId: string, event: ChatEvent) => void;
 
   // App-wide activity feed
@@ -163,6 +170,15 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   disconnectChat: (botId) => {
     chatConnections.get(botId)?.close();
     chatConnections.delete(botId);
+  },
+
+  resetChat: (botId) => {
+    get().disconnectChat(botId);
+    set((s) => {
+      const chats = { ...s.chats };
+      delete chats[botId];
+      return { chats };
+    });
   },
 
   applyChatEvent: (botId, event) => {

@@ -100,7 +100,13 @@ export const botsApi = {
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
-  capabilities: () => apiClient.get<CapabilityInfo[]>("/capabilities"),
+  /**
+   * The route returns `{ capabilities }`; unwrap here so callers get the
+   * array (a raw `.get<CapabilityInfo[]>()` would hand them the wrapper
+   * object and crash on the first `.filter`/`.flatMap`).
+   */
+  capabilities: async (): Promise<CapabilityInfo[]> =>
+    (await apiClient.get<{ capabilities: CapabilityInfo[] }>("/capabilities")).capabilities ?? [],
   decideApproval: (
     id: string,
     taskId: number,
