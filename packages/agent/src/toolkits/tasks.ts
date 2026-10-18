@@ -92,7 +92,7 @@ const fail = (text: string): ToolExecutionResult => ({
 });
 
 /** Replay-stable, store-independent idempotency key for a tool call's side effect (see header). */
-async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Promise<string> {
+export async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Promise<string> {
   const provider = await api.snapshot(ProviderDoc, api.conversationId, context);
   return `pi:${provider?.sessionId ?? `conversation-${api.conversationId}`}:${api.taskId}`;
 }
