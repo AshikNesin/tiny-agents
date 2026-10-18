@@ -38,6 +38,8 @@ export const approvalSchema = z.object({
 export const sendMessageSchema = z.object({
   requestId: z.string().min(8, "requestId is required").max(128),
   text: z.string().min(1, "Message text is required").max(32_768),
+  /** Bot ids the text @mentions; the server delivers copies to each. */
+  mentions: z.array(z.string().min(1).max(64)).max(20).optional(),
 });
 
 export type CreateBotDTO = z.infer<typeof createBotSchema>;

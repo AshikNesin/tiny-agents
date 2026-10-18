@@ -8,16 +8,19 @@
  */
 import {
   AgentRuntime,
+  createBotsToolkit,
   createSkillsCapability,
   createTasksToolkit,
   createTimeToolkit,
   createWebToolkit,
+  type BotMessagingStore,
   type Capability,
 } from "@tiny-agents/agent";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
+import { createBotMessagingStore } from "./bots.messaging";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -42,6 +45,17 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
   ];
 }
 
+/** Bot-to-bot messaging (issue #12). The store needs the live runtime for submits. */
+export function botsCapability(rt: AgentRuntime): Capability {
+  return createBotsToolkit(botMessagingStore(rt));
+}
+
+/** One messaging store per process, rebuilt never (the runtime is a singleton too). */
+let messagingStore: BotMessagingStore | undefined;
+function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
+  return (messagingStore ??= createBotMessagingStore(rt));
+}
+
 let runtime: AgentRuntime | undefined;
 let ready = false;
 
@@ -62,10 +76,14 @@ export function agentRuntimeReady(): boolean {
 export async function openAgentRuntime(
   options: Parameters<typeof AgentRuntime.open>[0],
 ): Promise<AgentRuntime> {
+  // The messaging toolkit needs the runtime itself (it submits into target
+  // conversations), so capabilities resolve after open. installCapability
+  // registers it; bots select it by name on their next configure.
   const instance = await AgentRuntime.open({
     ...options,
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
+  instance.installCapability(botsCapability(instance));
   runtime = instance;
   ready = true;
   return instance;
@@ -136,6 +154,7 @@ export async function openFauxAgentRuntime(
     // catalog and e2e cannot create bots.
     env: { ...process.env, GATEWAY_MODEL_ALLOWLIST: "" },
   });
+  instance.installCapability(botsCapability(instance));
   runtime = instance;
   ready = true;
   return instance;

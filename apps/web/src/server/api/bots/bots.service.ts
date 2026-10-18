@@ -358,9 +358,13 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   return toBot(deleted);
 }
 
-export async function sendMessage(id: string, input: { requestId: string; text: string }) {
+export async function sendMessage(
+  id: string,
+  input: { requestId: string; text: string; mentions?: string[] },
+  rt: BotAgentRuntime = runtime(),
+) {
   const bot = await getBot(id);
-  await runtime().submit(Number(bot.conversationId), input);
+  await rt.submit(Number(bot.conversationId), { requestId: input.requestId, text: input.text });
   await prisma.bot.update({
     where: { id },
     data: {
@@ -368,6 +372,58 @@ export async function sendMessage(id: string, input: { requestId: string; text: 
       lastMessagePreview: input.text.slice(0, 120),
     },
   });
+  if (input.mentions && input.mentions.length > 0) {
+    await deliverMentions(bot, input, rt);
+  }
+}
+
+/** The text a tagged bot receives: enough context to answer in-place. */
+function mentionText(ownerContext: string, text: string): string {
+  return `${ownerContext} ${text}`;
+}
+
+/**
+ * Deliver a copy of the message to every @mentioned bot (issue #12). Each
+ * delivery is a ledger row (kind="mention") whose answer relays back into
+ * the host bot's conversation. Failures never fail the owner's send: the
+ * host conversation already got the message.
+ */
+async function deliverMentions(
+  host: Bot,
+  input: { requestId: string; text: string; mentions?: string[] },
+  rt: BotAgentRuntime,
+): Promise<void> {
+  const targets = await prisma.bot.findMany({
+    where: { id: { in: input.mentions ?? [] }, NOT: { id: host.id } },
+    select: { id: true, name: true, conversationId: true },
+  });
+  if (targets.length === 0) return;
+  const ownerContext = `[From the owner, in ${host.name}'s chat]`;
+  for (const target of targets) {
+    try {
+      const existing = await prisma.botMessage.findUnique({
+        where: { requestId: `mention-${input.requestId}-${target.id}` },
+      });
+      if (existing) continue;
+      await rt.submit(Number(target.conversationId), {
+        requestId: `mention-${input.requestId}-${target.id}`,
+        text: mentionText(ownerContext, input.text),
+      });
+      await prisma.botMessage.create({
+        data: {
+          fromBotId: null,
+          toBotId: target.id,
+          replyToBotId: host.id,
+          kind: "mention",
+          requestId: `mention-${input.requestId}-${target.id}`,
+          text: input.text,
+          deliveredAt: new Date(),
+        },
+      });
+    } catch (error) {
+      logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
+    }
+  }
 }
 
 export async function abortReply(id: string) {

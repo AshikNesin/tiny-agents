@@ -24,6 +24,7 @@ import {
 } from "./api/bots/bots.runtime";
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
+import { createBotRelay } from "./api/bots/bots.relay";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -112,6 +113,20 @@ async function main() {
   await getConnectionManager()
     .start(runtime)
     .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections"));
+
+  // Bot-to-bot relay (issue #12): a bot that finished replying may owe an
+  // answer to another bot's chat. Sweeping at boot also picks up deliveries
+  // interrupted by a restart.
+  const relay = createBotRelay(runtime);
+  runtime.onActivity(async (change) => {
+    if (change.busy) return;
+    try {
+      await relay.sweep();
+    } catch {
+      // Sweeps are best-effort; the next idle retries unanswered rows.
+    }
+  });
+  void relay.sweep().catch(() => undefined);
 
   // Register feature job handlers before routes
   registerJobHandlers();
