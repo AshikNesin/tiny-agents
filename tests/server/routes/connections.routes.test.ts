@@ -383,6 +383,26 @@ describe("MCP OAuth (fake authorization server)", () => {
       const id = await manager.finishAuthorization(state, "the-code");
       expect(id).toBe(row.id);
       expect(await manager.hasTokens(row.id)).toBe(true);
+
+      // The browser returns from the authorization server as a cross-site
+      // redirect: no session cookie, no Authorization header. The callback
+      // route must still complete the exchange (regression: it used to sit
+      // behind jwtAuthMiddleware and failed with UNAUTHORIZED "No token
+      // provided").
+      const second = await prisma.connection.create({
+        data: { name: "Redirect", slug: "redirect", url, authType: "oauth" },
+      });
+      const consent2 = await manager.authorize(second.id);
+      expect(consent2).toContain("authorize");
+      const state2 = decodeURIComponent(new URL(consent2!).searchParams.get("state")!);
+      const app = buildApp();
+      const res = await request(app)
+        .get("/api/v1/connections/oauth/callback")
+        .query({ code: "route-code", state: state2, iss: "https://executor.sh/api/auth" })
+        .expect(200);
+      expect(res.text).toContain(`"id":"${second.id}"`);
+      expect(res.text).not.toContain("error");
+      expect(await manager.hasTokens(second.id)).toBe(true);
     } finally {
       await manager.close();
       setConnectionManagerForTests(undefined);

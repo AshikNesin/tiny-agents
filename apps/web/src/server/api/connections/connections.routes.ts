@@ -12,8 +12,12 @@ import {
 } from "./connections.schema";
 
 /**
- * Public: the OAuth Client ID Metadata Document. Authorization servers fetch
- * it by URL (the client id) when they support CIMD — no auth possible.
+ * Public routes: reachable without a session. The OAuth metadata document is
+ * fetched by authorization servers (no credentials possible), and the OAuth
+ * redirect target is a cross-site browser navigation — the session cookie
+ * (SameSite=Strict in production) is not attached and a navigation carries no
+ * Authorization header. The callback is authorized by the `state` parameter,
+ * which matches only a pending sign-in started by the connection's owner.
  */
 export const publicConnectionsRouter = createRouter();
 
@@ -25,20 +29,11 @@ publicConnectionsRouter.get(
   },
 );
 
-const router = createRouter();
-
-router.get("/connections", async () => connectionsService.list());
-
-router.post("/connections/test", async (req: Request) => {
-  return connectionsService.test(parseBody(req, testConnectionSchema));
-});
-
 /**
- * OAuth redirect target (the browser carries the session cookie). In the
- * sign-in popup it reports back to the opener and closes; opened as a full
- * page (mobile) it returns to the connection.
+ * OAuth redirect target. In the sign-in popup it reports back to the opener
+ * and closes; opened as a full page (mobile) it returns to the connection.
  */
-router.get("/connections/oauth/callback", async (req: Request, res: Response) => {
+publicConnectionsRouter.get("/connections/oauth/callback", async (req: Request, res: Response) => {
   const code = typeof req.query.code === "string" ? req.query.code : undefined;
   const state = typeof req.query.state === "string" ? req.query.state : undefined;
   const denied = typeof req.query.error === "string" ? req.query.error : undefined;
@@ -66,6 +61,14 @@ router.get("/connections/oauth/callback", async (req: Request, res: Response) =>
         `</script>`,
     );
   return undefined;
+});
+
+const router = createRouter();
+
+router.get("/connections", async () => connectionsService.list());
+
+router.post("/connections/test", async (req: Request) => {
+  return connectionsService.test(parseBody(req, testConnectionSchema));
 });
 
 router.post("/connections", async (req: Request, res: Response) => {
