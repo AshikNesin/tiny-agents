@@ -165,7 +165,6 @@ Before deploying:
 - [ ] Run `pnpm groot:setup` to configure your app
 - [ ] Configure secrets on your hosting platform (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `SECRETS_KEY`)
 - [ ] Set `DATABASE_URL` to your production database (a `file:` path for SQLite, a `postgresql://` URL for Postgres)
-- [ ] Set `JWT_SECRET_KEY` and `ADMIN_AUTH_KEY` (strong random values)
 - [ ] Configure passkey settings in `config.yml` (`passkey.rpId`, `passkey.rpName`, `passkey.origin`)
 - [ ] Set `SENTRY_DSN` for error tracking (optional)
 - [ ] Set `NODE_ENV=production`
