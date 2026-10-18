@@ -5,6 +5,7 @@ import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 import { Layout } from "@groot/shell/components/Layout";
 import type { NavItem } from "@groot/shell/components/Layout";
+import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { Tasks } from "./pages/tasks/Tasks";
 import { ChatWorkspace } from "./pages/chats/ChatsLayout";
 import { Storage } from "@groot/shell/pages/storage/Storage";
@@ -31,6 +32,7 @@ function ChatsShell() {
   return (
     <Layout
       navItems={NAV_ITEMS}
+      commandGroups={COMMAND_GROUPS}
       padded={false}
       mainClassName="h-[calc(100dvh-3.5rem)] lg:h-dvh overflow-hidden"
     />
@@ -43,6 +45,26 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Tasks", href: "/tasks", icon: ListTodo },
   { name: "Skills", href: "/skills", icon: Sparkles },
   { name: "Connections", href: "/connections", icon: Plug },
+];
+
+/**
+ * ⌘K palette entries for this app. Without these the shell falls back to
+ * groot's demo groups (Dashboard/Todos/Storage/…) — routes tiny-agents
+ * doesn't have, so every palette action dead-ended. The palette wants
+ * LucideIcon components (not NavItem's string icon names), so mirror
+ * NAV_ITEMS explicitly. `navigate` isn't reachable outside a component,
+ * so entries assign `window.location`.
+ */
+const COMMAND_GROUPS: CommandGroupEntry[] = [
+  {
+    heading: "Navigation",
+    items: [
+      { label: "Chats", icon: MessageSquare, onSelect: () => window.location.assign("/chats") },
+      { label: "Tasks", icon: ListTodo, onSelect: () => window.location.assign("/tasks") },
+      { label: "Skills", icon: Sparkles, onSelect: () => window.location.assign("/skills") },
+      { label: "Connections", icon: Plug, onSelect: () => window.location.assign("/connections") },
+    ],
+  },
 ];
 
 /** Brand + login copy for the whole app, in one place (ShellProvider). */
