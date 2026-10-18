@@ -6,10 +6,41 @@
  * modules read the instance through `getAgentRuntime()`; tests substitute a
  * fake via `setAgentRuntimeForTests()` instead of touching pi-durable.
  */
-import { AgentRuntime, createTasksExtension } from "@tiny-agents/agent";
+import {
+  AgentRuntime,
+  createSkillsCapability,
+  createTasksToolkit,
+  createTimeToolkit,
+  createWebToolkit,
+  type Capability,
+} from "@tiny-agents/agent";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
 import { taskStore } from "../tasks/task.store";
+import { skillStore } from "../skills/skills.store";
+
+type Env = Readonly<Record<string, string | undefined>>;
+
+const unquote = (value: string | undefined) =>
+  value
+    ?.trim()
+    .replace(/^(['"])([\s\S]*)\1$/, "$2")
+    .trim() || undefined;
+
+/** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
+export function builtinCapabilities(env: Env = process.env): Capability[] {
+  return [
+    createSkillsCapability(skillStore),
+    createTasksToolkit(taskStore),
+    createWebToolkit({
+      accountId: unquote(env.CLOUDFLARE_ACCOUNT_ID),
+      apiToken: unquote(env.CLOUDFLARE_API_KEY),
+      gatewayId: unquote(env.CLOUDFLARE_GATEWAY_ID),
+      apiBase: unquote(env.CLOUDFLARE_API_BASE_URL),
+    }),
+    createTimeToolkit({ timeZone: unquote(env.TZ) }),
+  ];
+}
 
 let runtime: AgentRuntime | undefined;
 let ready = false;
@@ -33,7 +64,7 @@ export async function openAgentRuntime(
 ): Promise<AgentRuntime> {
   const instance = await AgentRuntime.open({
     ...options,
-    extensions: [createTasksExtension(taskStore), ...(options.extensions ?? [])],
+    capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
   runtime = instance;
   ready = true;
@@ -98,7 +129,7 @@ export async function openFauxAgentRuntime(
     models,
     provider: "faux",
     lockWaitMs: 5_000,
-    extensions: [createTasksExtension(taskStore)],
+    capabilities: builtinCapabilities(),
     settings: { retry: { enabled: false } },
     // The .env allowlist names real gateway custom models that don't exist
     // in the faux registry — without this override /models returns an empty

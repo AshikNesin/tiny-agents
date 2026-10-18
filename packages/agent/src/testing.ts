@@ -13,6 +13,10 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 
 export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
+/** In-memory MCP server pieces for connection tests (no network). */
+export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";
 
 export const TEST_PROVIDER = "faux";

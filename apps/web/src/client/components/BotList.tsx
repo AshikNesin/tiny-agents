@@ -61,12 +61,14 @@ export function BotList({ bots, onNewBot }: BotListProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{bot.name}</span>
-                {bot.unread && !bot.replying && (
+                {bot.unread && !bot.replying && bot.approvals === 0 && (
                   <Badge className="size-1.5 rounded-full bg-primary p-0" aria-label="Unread" />
                 )}
               </div>
               <div className="text-muted-foreground truncate text-xs">
-                {bot.replying ? (
+                {bot.approvals > 0 ? (
+                  <span className="text-primary">needs your approval</span>
+                ) : bot.replying ? (
                   <span className="text-primary">typing…</span>
                 ) : (
                   (bot.lastMessagePreview ?? bot.description ?? "No messages yet")

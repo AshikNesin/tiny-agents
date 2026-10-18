@@ -1,5 +1,5 @@
 /**
- * TaskStore adapter: gives the agent's task tools (packages/agent/src/tasks)
+ * TaskStore adapter: gives the agent's task tools (packages/agent/src/toolkits/tasks)
  * CRUD access to app.db's task table. Dependency direction stays one-way —
  * `@tiny-agents/agent` defines the port, apps/web implements it.
  */

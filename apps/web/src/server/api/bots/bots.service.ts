@@ -5,7 +5,13 @@
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import { AgentRuntime } from "@tiny-agents/agent";
+import {
+  AgentRuntime,
+  ApprovalNotPendingError,
+  MCP_DEFER_THRESHOLD,
+  type BotAgentConfig,
+  type ToolPermission,
+} from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 
 /** The `Bot` row as Prisma returns it (model defined in apps/web/prisma). */
@@ -21,6 +27,10 @@ export interface BotRow {
   lastReadAt: Date | null;
   lastActivityAt: Date;
   lastMessagePreview: string | null;
+  /** JSON array of enabled toolkit ids. */
+  toolkits: string;
+  /** JSON object: tool name → permission. */
+  toolPermissions: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,8 +38,126 @@ import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
-  "createConversation" | "configure" | "submit" | "abort" | "hasModel" | "busyConversations"
+  | "createConversation"
+  | "configure"
+  | "submit"
+  | "abort"
+  | "hasModel"
+  | "busyConversations"
+  | "listCapabilities"
+  | "pendingApprovals"
+  | "decideApproval"
 >;
+
+/** The bot as the API returns it: capability columns parsed, skills and connections by id. */
+export type Bot = Omit<BotRow, "toolkits" | "toolPermissions"> & {
+  toolkits: string[];
+  toolPermissions: Record<string, ToolPermission>;
+  skillIds: string[];
+  connectionIds: string[];
+  /** Capability ids of the bot's connections (`mcp:<slug>`). */
+  connectionCapabilities: string[];
+};
+
+type BotWithLinks = BotRow & {
+  skills?: { skillId: string }[];
+  connections?: { connectionId: string; connection: { slug: string; toolsCache: string } }[];
+};
+
+const withLinks = {
+  skills: { select: { skillId: true } },
+  connections: {
+    select: { connectionId: true, connection: { select: { slug: true, toolsCache: true } } },
+  },
+} as const;
+
+/** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */
+export function connectionCapabilityId(slug: string): string {
+  return `mcp:${slug}`;
+}
+
+function parseJson<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function toBot(row: BotWithLinks): Bot {
+  const { skills, connections, ...bot } = row;
+  return {
+    ...bot,
+    toolkits: parseJson<string[]>(row.toolkits, []),
+    toolPermissions: parseJson<Record<string, ToolPermission>>(row.toolPermissions, {}),
+    skillIds: skills?.map((link) => link.skillId) ?? [],
+    connectionIds: connections?.map((link) => link.connectionId) ?? [],
+    connectionCapabilities:
+      connections?.map((link) => connectionCapabilityId(link.connection.slug)) ?? [],
+  };
+}
+
+function toolCount(cache: string): number {
+  try {
+    return (JSON.parse(cache) as unknown[]).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** slug → cached tool count for a bot's enabled connections. */
+function connectionToolCounts(bot: {
+  connections?: { connection: { slug: string; toolsCache: string } }[];
+}): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const link of bot.connections ?? []) {
+    counts[link.connection.slug] = toolCount(link.connection.toolsCache);
+  }
+  return counts;
+}
+
+/**
+ * What the bot's durable conversation runs with: persona, model and
+ * capabilities — its toolkits and connections, plus `skills` (always
+ * selected: it lists only the bot's assigned skills, and `save_skill` asks).
+ */
+export function agentConfig(
+  bot: Pick<Bot, "modelId" | "systemPrompt" | "toolkits" | "toolPermissions"> & {
+    connectionCapabilities?: string[];
+    /** Tools cached per enabled connection (slug → count), for the deferral threshold. */
+    connectionToolCounts?: Record<string, number>;
+  },
+): BotAgentConfig {
+  const largeServer = Object.values(bot.connectionToolCounts ?? {}).some(
+    (count) => count > MCP_DEFER_THRESHOLD,
+  );
+  return {
+    modelId: bot.modelId,
+    systemPrompt: bot.systemPrompt,
+    capabilities: {
+      enabled: [
+        ...bot.toolkits,
+        "skills",
+        ...(bot.connectionCapabilities ?? []),
+        ...(largeServer ? ["tool-search"] : []),
+      ],
+      permissions: bot.toolPermissions,
+    },
+  };
+}
+
+/** Reject toolkit ids the runtime doesn't know (typos, removed toolkits). */
+function checkToolkits(rt: BotAgentRuntime, toolkits: string[] | undefined): void {
+  if (!toolkits) return;
+  const known = new Set(
+    rt
+      .listCapabilities()
+      .filter((capability) => capability.kind === "toolkit")
+      .map((capability) => capability.id),
+  );
+  const unknown = toolkits.filter((id) => !known.has(id));
+  if (unknown.length > 0) throw Boom.badRequest(`Unknown toolkit "${unknown[0]}"`);
+}
 
 function runtime(): BotAgentRuntime {
   return getAgentRuntime();
@@ -47,9 +175,11 @@ export interface BotListEntry {
   lastActivityAt: Date;
   unread: boolean;
   replying: boolean;
+  /** Tool calls waiting for the owner's approval. */
+  approvals: number;
 }
 
-function toListEntry(bot: BotRow, replying: boolean): BotListEntry {
+function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotListEntry {
   return {
     id: bot.id,
     name: bot.name,
@@ -61,6 +191,7 @@ function toListEntry(bot: BotRow, replying: boolean): BotListEntry {
     lastActivityAt: bot.lastActivityAt,
     unread: isUnread(bot),
     replying,
+    approvals,
   };
 }
 
@@ -75,26 +206,43 @@ function isUnread(
 export async function listBots(rt: BotAgentRuntime = runtime()) {
   const bots = await prisma.bot.findMany({ orderBy: { lastActivityAt: "desc" } });
   const busy = new Set(rt.busyConversations());
-  return bots.map((bot) => toListEntry(bot, busy.has(Number(bot.conversationId))));
+  return bots.map((bot) =>
+    toListEntry(
+      bot,
+      busy.has(Number(bot.conversationId)),
+      rt.pendingApprovals(Number(bot.conversationId)),
+    ),
+  );
 }
 
-export async function getBot(id: string) {
-  const bot = await prisma.bot.findUnique({ where: { id } });
+async function findBot(id: string): Promise<BotWithLinks> {
+  const bot = await prisma.bot.findUnique({ where: { id }, include: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
   return bot;
+}
+
+export async function getBot(id: string): Promise<Bot> {
+  return toBot(await findBot(id));
 }
 
 export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
   if (!rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
-  const conversationId = await rt.createConversation({
-    modelId: data.modelId,
-    systemPrompt: data.systemPrompt,
-  });
+  checkToolkits(rt, data.toolkits);
+  const toolkits = data.toolkits ?? [];
+  const toolPermissions = data.toolPermissions ?? {};
+  const conversationId = await rt.createConversation(
+    agentConfig({
+      modelId: data.modelId,
+      systemPrompt: data.systemPrompt,
+      toolkits,
+      toolPermissions,
+    }),
+  );
   // If the row insert fails the durable conversation is left orphaned — the
   // same end state as bot deletion, which Phase 2 cleanup will sweep.
-  return prisma.bot.create({
+  const row = await prisma.bot.create({
     data: {
       name: data.name,
       description: data.description,
@@ -103,21 +251,87 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       avatarEmoji: data.avatarEmoji ?? null,
       avatarColor: data.avatarColor,
       conversationId: String(conversationId),
+      toolkits: JSON.stringify(toolkits),
+      toolPermissions: JSON.stringify(toolPermissions),
     },
   });
+  if (data.skillIds || data.connectionIds) {
+    await setLinks(row.id, data.skillIds, data.connectionIds);
+    return reconfigure(row.id, rt);
+  }
+  return getBot(row.id);
+}
+
+/** Replace a bot's skill and/or connection assignments (unknown ids are ignored). */
+async function setLinks(botId: string, skillIds?: string[], connectionIds?: string[]) {
+  if (skillIds) {
+    const skills = await prisma.skill.findMany({
+      where: { id: { in: skillIds } },
+      select: { id: true },
+    });
+    await prisma.$transaction([
+      prisma.botSkill.deleteMany({ where: { botId } }),
+      prisma.botSkill.createMany({ data: skills.map((skill) => ({ botId, skillId: skill.id })) }),
+    ]);
+  }
+  if (connectionIds) {
+    const connections = await prisma.connection.findMany({
+      where: { id: { in: connectionIds } },
+      select: { id: true },
+    });
+    await prisma.$transaction([
+      prisma.botConnection.deleteMany({ where: { botId } }),
+      prisma.botConnection.createMany({
+        data: connections.map((connection) => ({ botId, connectionId: connection.id })),
+      }),
+    ]);
+  }
+}
+
+/** Re-apply a bot's stored configuration to its conversation (after link changes). */
+export async function reconfigure(
+  id: string,
+  rt: Pick<BotAgentRuntime, "configure"> = runtime(),
+): Promise<Bot> {
+  const bot = await findBot(id);
+  await rt.configure(Number(bot.conversationId), agentConfig(toBot(bot)));
+  return toBot(bot);
 }
 
 export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRuntime = runtime()) {
-  const bot = await getBot(id);
+  const row = await findBot(id);
+  const bot = toBot(row);
   const modelId = data.modelId ?? bot.modelId;
   const systemPrompt = data.systemPrompt ?? bot.systemPrompt;
   if (data.modelId !== undefined && !rt.hasModel(modelId)) {
     throw Boom.badRequest(`Unknown model "${modelId}"`);
   }
-  await rt.configure(Number(bot.conversationId), { modelId, systemPrompt });
-  return prisma.bot.update({
+  checkToolkits(rt, data.toolkits);
+  const toolkits = data.toolkits ?? bot.toolkits;
+  const toolPermissions = data.toolPermissions ?? bot.toolPermissions;
+  await setLinks(id, data.skillIds, data.connectionIds);
+  const after = data.connectionIds ? await findBot(id) : null;
+  const links = after ?? row;
+  await rt.configure(
+    Number(bot.conversationId),
+    agentConfig({
+      modelId,
+      systemPrompt,
+      toolkits,
+      toolPermissions,
+      connectionCapabilities: after
+        ? toBot(after).connectionCapabilities
+        : bot.connectionCapabilities,
+      connectionToolCounts: connectionToolCounts(links),
+    }),
+  );
+  await prisma.bot.update({
     where: { id },
     data: {
+      ...(data.toolkits !== undefined ? { toolkits: JSON.stringify(toolkits) } : {}),
+      ...(data.toolPermissions !== undefined
+        ? { toolPermissions: JSON.stringify(toolPermissions) }
+        : {}),
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.systemPrompt !== undefined ? { systemPrompt } : {}),
@@ -126,6 +340,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.avatarColor !== undefined ? { avatarColor: data.avatarColor } : {}),
     },
   });
+  return getBot(id);
 }
 
 /**
@@ -143,12 +358,12 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
 }
 
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
-  const bot = await getBot(id);
+  const bot = await findBot(id);
   // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
   // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
   await retireConversation(rt, bot.conversationId);
-  return deleted;
+  return toBot(deleted);
 }
 
 export async function sendMessage(id: string, input: { requestId: string; text: string }) {
@@ -169,14 +384,14 @@ export async function abortReply(id: string) {
 }
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
-  const bot = await getBot(id);
+  const row = await findBot(id);
+  const bot = toBot(row);
   // Fresh conversation; the old one stays in agent.db, hidden (PRD §5.1),
   // and any reply still running there is stopped.
-  const conversationId = await rt.createConversation({
-    modelId: bot.modelId,
-    systemPrompt: bot.systemPrompt,
-  });
-  const updated = await prisma.bot.update({
+  const conversationId = await rt.createConversation(
+    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
+  );
+  await prisma.bot.update({
     where: { id },
     data: {
       conversationId: String(conversationId),
@@ -186,12 +401,44 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
     },
   });
   await retireConversation(rt, bot.conversationId);
-  return updated;
+  return getBot(id);
 }
 
 export async function markRead(id: string) {
-  await getBot(id);
-  return prisma.bot.update({ where: { id }, data: { lastReadAt: new Date() } });
+  await findBot(id);
+  await prisma.bot.update({ where: { id }, data: { lastReadAt: new Date() } });
+  return getBot(id);
+}
+
+/**
+ * Answer a tool call waiting for approval. "Always allow" also switches the
+ * tool to `allow` for this bot (applies from its next call).
+ */
+export async function decideApproval(
+  id: string,
+  input: { taskId: number; decision: "approved" | "denied"; alwaysAllow?: string },
+  rt: BotAgentRuntime = runtime(),
+) {
+  const row = await findBot(id);
+  const bot = toBot(row);
+  const conversation = Number(bot.conversationId);
+  if (input.decision === "approved" && input.alwaysAllow) {
+    const toolPermissions = { ...bot.toolPermissions, [input.alwaysAllow]: "allow" as const };
+    await rt.configure(
+      conversation,
+      agentConfig({ ...bot, toolPermissions, connectionToolCounts: connectionToolCounts(row) }),
+    );
+    await prisma.bot.update({
+      where: { id },
+      data: { toolPermissions: JSON.stringify(toolPermissions) },
+    });
+  }
+  try {
+    await rt.decideApproval(conversation, input.taskId, input.decision);
+  } catch (error) {
+    if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
+    throw error;
+  }
 }
 
 /**

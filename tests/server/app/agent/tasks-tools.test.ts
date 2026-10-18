@@ -12,7 +12,7 @@ import {
   createTasksExtension,
   type TaskRecord,
   type TaskStore,
-} from "../../../../packages/agent/src/tasks";
+} from "../../../../packages/agent/src/toolkits/tasks";
 import {
   openTestRuntime,
   TEST_MODEL,

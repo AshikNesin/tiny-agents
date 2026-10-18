@@ -7,6 +7,7 @@ import { generateToken } from "@groot/core/utils/jwt.utils";
 import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
+import { ApprovalNotPendingError } from "../../../packages/agent/src/runtime";
 
 /**
  * Expected runtime seam for route tests:
@@ -56,6 +57,12 @@ const agentRuntime = {
   }),
   listModels: vi.fn().mockReturnValue(models),
   hasModel: vi.fn((modelId: string) => modelId === "known-model"),
+  listCapabilities: vi.fn().mockReturnValue([
+    { id: "tasks", kind: "toolkit", name: "Tasks", description: "Tasks", tools: [] },
+    { id: "web", kind: "toolkit", name: "Web", description: "Web", tools: [] },
+  ]),
+  pendingApprovals: vi.fn().mockReturnValue(0),
+  decideApproval: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -200,6 +207,8 @@ describe("Bots API routes", () => {
     expect(agentRuntime.createConversation).toHaveBeenCalledWith({
       modelId: createPayload.modelId,
       systemPrompt: createPayload.systemPrompt,
+      // New bots start with no toolkits (issue #1 D2); skills only lists assigned ones.
+      capabilities: { enabled: ["skills"], permissions: {} },
     });
 
     const bot = await prisma.bot.findUnique({ where: { id: response.body.data.id } });
@@ -246,6 +255,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Use bullet points.",
+      capabilities: { enabled: ["skills"], permissions: {} },
     });
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
       name: "Edited helper",
@@ -355,6 +365,71 @@ describe("Bots API routes", () => {
     expect(activity).toContain('"type":"activity"');
     await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
     expect(activityListeners.size).toBe(0);
+  });
+
+  it("lists capabilities and stores a bot's toolkits and tool permissions", async () => {
+    const app = buildApp();
+    const caps = await request(app).get("/api/v1/capabilities").set(authorization).expect(200);
+    expect(caps.body.data.capabilities.map((c: { id: string }) => c.id)).toEqual(["tasks", "web"]);
+
+    const created = await request(app)
+      .post("/api/v1/bots")
+      .set(authorization)
+      .send({ ...createPayload, toolkits: ["web"], toolPermissions: { web_fetch: "ask" } })
+      .expect(201);
+    expect(created.body.data).toMatchObject({
+      toolkits: ["web"],
+      toolPermissions: { web_fetch: "ask" },
+    });
+    expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        capabilities: { enabled: ["web", "skills"], permissions: { web_fetch: "ask" } },
+      }),
+    );
+
+    const patched = await request(app)
+      .patch(`/api/v1/bots/${created.body.data.id}`)
+      .set(authorization)
+      .send({ toolkits: ["tasks", "web"] })
+      .expect(200);
+    expect(patched.body.data.toolkits).toEqual(["tasks", "web"]);
+    expect(agentRuntime.configure).toHaveBeenLastCalledWith(100, {
+      modelId: "known-model",
+      systemPrompt: "Be precise.",
+      capabilities: { enabled: ["tasks", "web", "skills"], permissions: { web_fetch: "ask" } },
+    });
+
+    await request(app)
+      .post("/api/v1/bots")
+      .set(authorization)
+      .send({ ...createPayload, toolkits: ["nope"] })
+      .expect(400);
+  });
+
+  it("answers approvals, with 'always allow' switching the tool to allow", async () => {
+    const bot = await createBot();
+    const app = buildApp();
+    await request(app)
+      .post(`/api/v1/bots/${bot.id}/approvals/7`)
+      .set(authorization)
+      .send({ decision: "approved", alwaysAllow: "send_email" })
+      .expect(200);
+    expect(agentRuntime.decideApproval).toHaveBeenCalledWith(100, 7, "approved");
+    expect(agentRuntime.configure).toHaveBeenLastCalledWith(
+      100,
+      expect.objectContaining({
+        capabilities: { enabled: ["skills"], permissions: { send_email: "allow" } },
+      }),
+    );
+    const row = await prisma.bot.findUnique({ where: { id: String(bot.id) } });
+    expect(JSON.parse(row!.toolPermissions)).toEqual({ send_email: "allow" });
+
+    agentRuntime.decideApproval.mockRejectedValueOnce(new ApprovalNotPendingError(7));
+    await request(app)
+      .post(`/api/v1/bots/${bot.id}/approvals/7`)
+      .set(authorization)
+      .send({ decision: "denied" })
+      .expect(409);
   });
 
   it("marks a bot as read", async () => {

@@ -20,6 +20,7 @@ import { defineExtension, defineTool, ProviderDoc } from "@earendil-works/pi-dur
 import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
+import type { Capability } from "../capabilities";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -97,7 +98,7 @@ async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Prom
 }
 
 /**
- * The "tasks" extension: task tools every bot gets. `store` is the app-side
+ * The "tasks" extension: task tools. `store` is the app-side
  * adapter over its task table (see apps/web bots.runtime.ts). The tools are
  * created per extension so they close over the store.
  */
@@ -197,4 +198,22 @@ export function createTasksExtension(store: TaskStore): Extension {
     name: "tasks",
     tools: [createTask, listTasks, updateTask, completeTask, deleteTask],
   });
+}
+
+/** The `tasks` toolkit: the owner's task list (`apps/web` Tasks page). */
+export function createTasksToolkit(store: TaskStore): Capability {
+  return {
+    id: "tasks",
+    kind: "toolkit",
+    name: "Tasks",
+    description: "Create and manage your tasks",
+    extension: createTasksExtension(store),
+    tools: [
+      { name: "create_task", label: "Added task", description: "Create a task" },
+      { name: "list_tasks", label: "Listed tasks", description: "List tasks", readOnly: true },
+      { name: "update_task", label: "Updated task", description: "Update a task" },
+      { name: "complete_task", label: "Completed task", description: "Mark a task done" },
+      { name: "delete_task", label: "Deleted task", description: "Delete a task" },
+    ],
+  };
 }

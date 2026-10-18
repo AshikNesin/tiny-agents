@@ -13,7 +13,18 @@ import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Login } from "@groot/shell/pages/auth/Login";
 import { GrootUIProvider } from "@groot/ui";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
-import { Bot, BotMessageSquare, History, ListTodo, MessageSquare, ShieldCheck } from "lucide-react";
+import {
+  Bot,
+  BotMessageSquare,
+  History,
+  ListTodo,
+  MessageSquare,
+  Plug,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { SkillsPage } from "./pages/skills/Skills";
+import { ConnectionsPage } from "./pages/connections/Connections";
 
 /** Shell instance for the chat workspace (unpadded, full-height main). */
 function ChatsShell() {
@@ -30,6 +41,8 @@ function ChatsShell() {
 const NAV_ITEMS: NavItem[] = [
   { name: "Chats", href: "/chats", icon: MessageSquare },
   { name: "Tasks", href: "/tasks", icon: ListTodo },
+  { name: "Skills", href: "/skills", icon: Sparkles },
+  { name: "Connections", href: "/connections", icon: Plug },
 ];
 
 /** Brand + login copy for the whole app, in one place (ShellProvider). */
@@ -83,6 +96,10 @@ function App() {
               >
                 <Route index element={<Navigate to="/chats" replace />} />
                 <Route path="tasks" element={<Tasks />} />
+                <Route path="skills" element={<SkillsPage />} />
+                <Route path="skills/:id" element={<SkillsPage />} />
+                <Route path="connections" element={<ConnectionsPage />} />
+                <Route path="connections/:id" element={<ConnectionsPage />} />
                 <Route path="storage" element={<Storage />} />
                 <Route path="jobs" element={<Jobs />} />
                 <Route path="jobs/:queueName/:jobId" element={<JobDetail />} />

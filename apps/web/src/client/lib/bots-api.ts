@@ -18,6 +18,8 @@ export interface ModelsResponse {
   gatewayConfigured: boolean;
 }
 
+export type ToolPermission = "allow" | "ask" | "off";
+
 export interface BotListEntry {
   id: string;
   name: string;
@@ -29,6 +31,8 @@ export interface BotListEntry {
   lastActivityAt: string;
   unread: boolean;
   replying: boolean;
+  /** Tool calls waiting for the owner's approval. */
+  approvals: number;
 }
 
 export interface Bot {
@@ -43,8 +47,29 @@ export interface Bot {
   lastReadAt: string | null;
   lastActivityAt: string;
   lastMessagePreview: string | null;
+  toolkits: string[];
+  toolPermissions: Record<string, ToolPermission>;
+  skillIds: string[];
+  connectionIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ToolInfo {
+  name: string;
+  label: string;
+  description: string;
+  readOnly?: boolean;
+  askOnly?: boolean;
+}
+
+export interface CapabilityInfo {
+  id: string;
+  kind: "toolkit" | "skills" | "connection";
+  name: string;
+  description: string;
+  tools: ToolInfo[];
+  setupHint?: string;
 }
 
 export interface BotInput {
@@ -54,6 +79,10 @@ export interface BotInput {
   modelId: string;
   avatarEmoji?: string;
   avatarColor?: string;
+  toolkits?: string[];
+  toolPermissions?: Record<string, ToolPermission>;
+  skillIds?: string[];
+  connectionIds?: string[];
 }
 
 export const botsApi = {
@@ -71,4 +100,11 @@ export const botsApi = {
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
+  capabilities: () => apiClient.get<CapabilityInfo[]>("/capabilities"),
+  decideApproval: (
+    id: string,
+    taskId: number,
+    decision: "approved" | "denied",
+    alwaysAllow?: string,
+  ) => apiClient.post(`/bots/${id}/approvals/${taskId}`, { decision, alwaysAllow }),
 };

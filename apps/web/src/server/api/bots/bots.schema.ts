@@ -15,6 +15,9 @@ const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Avatar colour must be a hex value like #14b8a6");
 
+const toolkits = z.array(z.string().min(1).max(64)).max(50);
+const toolPermissions = z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"]));
+
 export const createBotSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   description: z.string().trim().max(200).optional().default(""),
@@ -26,6 +29,10 @@ export const createBotSchema = z.object({
   modelId: z.string().min(1, "Model is required"),
   avatarEmoji: z.string().trim().max(16).optional(),
   avatarColor: hexColor.optional().default(AVATAR_COLORS[0]),
+  toolkits: toolkits.optional(),
+  toolPermissions: toolPermissions.optional(),
+  skillIds: z.array(z.string()).max(200).optional(),
+  connectionIds: z.array(z.string()).max(100).optional(),
 });
 
 export const updateBotSchema = z.object({
@@ -35,6 +42,16 @@ export const updateBotSchema = z.object({
   modelId: z.string().min(1, "Model is required").optional(),
   avatarEmoji: z.string().trim().max(16).nullable().optional(),
   avatarColor: hexColor.optional(),
+  toolkits: toolkits.optional(),
+  toolPermissions: toolPermissions.optional(),
+  skillIds: z.array(z.string()).max(200).optional(),
+  connectionIds: z.array(z.string()).max(100).optional(),
+});
+
+export const approvalSchema = z.object({
+  decision: z.enum(["approved", "denied"]),
+  /** Tool name to switch to `allow` for this bot along with approving. */
+  alwaysAllow: z.string().min(1).max(128).optional(),
 });
 
 export const sendMessageSchema = z.object({
@@ -45,3 +62,4 @@ export const sendMessageSchema = z.object({
 export type CreateBotDTO = z.infer<typeof createBotSchema>;
 export type UpdateBotDTO = z.infer<typeof updateBotSchema>;
 export type SendMessageDTO = z.infer<typeof sendMessageSchema>;
+export type ApprovalDTO = z.infer<typeof approvalSchema>;

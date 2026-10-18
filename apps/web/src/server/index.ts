@@ -23,6 +23,7 @@ import {
   agentRuntimeReady,
 } from "./api/bots/bots.runtime";
 import { endAllSse } from "./api/bots/bots.sse";
+import { getConnectionManager } from "./api/connections/connections.manager";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -106,6 +107,12 @@ async function main() {
     }
   });
 
+  // Remote MCP connections: install cached tools now, connect in the
+  // background (never blocks /health or boot).
+  await getConnectionManager()
+    .start(runtime)
+    .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections"));
+
   // Register feature job handlers before routes
   registerJobHandlers();
 
@@ -156,6 +163,7 @@ async function main() {
       // End chat/activity streams first: they hold their HTTP connections
       // open forever, and their watches must stop before the Harness closes.
       endAllSse();
+      await getConnectionManager().close();
       await closeAgentRuntime();
       if (config.jobs.enabled) {
         await stopJobQueue();

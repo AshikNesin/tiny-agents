@@ -2,11 +2,13 @@ import type { Request, Response } from "express";
 import { createRouter } from "@groot/core/utils/router.utils";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import { env } from "@groot/core/env";
+import { Boom } from "@groot/core/errors";
 import { isGatewayConfigured } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
+import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
-import { createBotSchema, updateBotSchema, sendMessageSchema } from "./bots.schema";
+import { approvalSchema, createBotSchema, updateBotSchema, sendMessageSchema } from "./bots.schema";
 
 const router = createRouter();
 
@@ -26,6 +28,12 @@ router.get("/models", async () => {
   };
 });
 
+// ── Capabilities ──────────────────────────────────────────────────────
+
+router.get("/capabilities", async () => {
+  return { capabilities: getAgentRuntime().listCapabilities() };
+});
+
 // ── Chat + activity streams (SSE; must be registered before /bots/:id) ─
 
 router.get("/events", async (req: Request, res: Response) => {
@@ -41,11 +49,18 @@ router.get("/events", async (req: Request, res: Response) => {
       type: "activity",
       conversation: String(change.conversation),
       busy: change.busy,
+      approvals: change.approvals,
     });
+  });
+  // Connection status (connected / needs sign-in / error) for the
+  // Connections page and the chat banner.
+  const unsubscribeConnections = getConnectionManager().onChange((id, state) => {
+    writeSse(res, { type: "connection", id, ...state });
   });
   const close = () => {
     heartbeat.stop();
     unsubscribe();
+    unsubscribeConnections();
   };
   res.on("close", close);
   // SSE owns the response lifecycle; returning `undefined` lets the route
@@ -120,6 +135,15 @@ router.post("/bots/:id/abort", async (req: Request) => {
 router.post("/bots/:id/reset", async (req: Request) => {
   const id = parseStringParam(req.params.id, "id");
   return await botsService.resetConversation(id);
+});
+
+router.post("/bots/:id/approvals/:taskId", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const taskId = Number(parseStringParam(req.params.taskId, "taskId"));
+  if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
+  const payload = parseBody(req, approvalSchema);
+  await botsService.decideApproval(id, { taskId, ...payload });
+  return { decided: payload.decision };
 });
 
 router.post("/bots/:id/read", async (req: Request) => {

@@ -5,4 +5,7 @@
 import { assertTestDatabase } from "./_db-guard";
 
 process.env.NODE_ENV ??= "test";
+// Connection-secret encryption needs a key in tests (unset in dev until
+// connections with auth are added).
+process.env.SECRETS_KEY ??= "test-only-secrets-key-not-for-production";
 assertTestDatabase(process.env.TEST_DATABASE_URL);

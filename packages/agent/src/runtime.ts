@@ -3,11 +3,13 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
+  configure as configureAgent,
   createRegistry,
   Harness,
   type Extension,
   MemoryStorage,
   watchEvents,
+  type AgentChange,
   type AgentEvent,
   type Conversation,
   type ConversationId,
@@ -15,13 +17,31 @@ import {
   type EntryRecord,
   type HarnessSettings,
   type MessageChange,
+  type Registry,
   type Storage,
   type TaskGraphWatch,
+  type TaskId,
+  type ToolRegistration,
+  type ToolSlot,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import {
+  ApprovalDoc,
+  ApprovalTracker,
+  gateExtension,
+  PermissionsDoc,
+  type ApprovalDecision,
+} from "./approvals";
+import {
+  capabilityInfo,
+  effectivePermission,
+  type Capability,
+  type CapabilityInfo,
+  type CapabilitySelection,
+} from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
-import { chatState, diffChat, type RawChat } from "./transcript";
+import { chatState, diffChat, type LiveTool, type RawChat } from "./transcript";
 import type {
   ActivityChange,
   BotAgentConfig,
@@ -55,6 +75,14 @@ export class ConversationNotFoundError extends Error {
   }
 }
 
+/** The approval was already answered, or its tool call ended. */
+export class ApprovalNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for approval`);
+    this.name = "ApprovalNotPendingError";
+  }
+}
+
 export interface AgentRuntimeOptions {
   /** Path of the pi-durable SQLite store, or ":memory:" (tests). */
   storePath: string;
@@ -66,7 +94,12 @@ export interface AgentRuntimeOptions {
   lockWaitMs?: number;
   /** pi-durable run policy overrides (compaction, retry, progress). */
   settings?: HarnessSettings;
-  /** Extra extensions to install (e.g. tasks tools) alongside the defaults. */
+  /**
+   * Capabilities bots can be given (toolkits, skills, connections). Installed
+   * behind the approval gate; selected per conversation by `configure()`.
+   */
+  capabilities?: readonly Capability[];
+  /** Raw extensions installed as-is (tests). Selected by conversations that never chose capabilities. */
   extensions?: readonly Extension[];
   /** Non-fatal errors pi-durable reports (hooks, listeners, …). */
   onReport?: (error: unknown) => void;
@@ -105,6 +138,9 @@ export class AgentRuntime {
   readonly #lock: StoreLock | undefined;
   readonly #chats = new Set<ChatSubscription>();
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
+  readonly #registry: Registry;
+  readonly #approvals: ApprovalTracker;
+  readonly #capabilities = new Map<string, Capability>();
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
   #closed = false;
@@ -114,13 +150,26 @@ export class AgentRuntime {
     models: MutableModels,
     provider: string,
     lock: StoreLock | undefined,
+    registry: Registry,
+    approvals: ApprovalTracker,
+    capabilities: readonly Capability[],
     envSource: Readonly<Record<string, string | undefined>> = process.env,
   ) {
     this.#harness = harness;
     this.#models = models;
     this.provider = provider;
     this.#lock = lock;
+    this.#registry = registry;
+    this.#approvals = approvals;
+    for (const capability of capabilities) this.#capabilities.set(capability.id, capability);
     this.#env = { ...envSource };
+    approvals.onChange((conversation, approvalCount) => {
+      this.#emitActivity({
+        conversation,
+        busy: this.#busy.has(conversation),
+        approvals: approvalCount,
+      });
+    });
   }
 
   /**
@@ -146,7 +195,13 @@ export class AgentRuntime {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createGatewayModels(envSource);
       const registry = createRegistry();
+      const approvals = new ApprovalTracker();
       for (const extension of options.extensions ?? []) registry.install(extension);
+      // Capabilities must be installed before resume(): interrupted calls of
+      // their tools (e.g. a pending approval) re-run against them.
+      for (const capability of options.capabilities ?? []) {
+        registry.install(gateExtension(capability.extension, approvals));
+      }
       harness = await Harness.open(
         storage,
         {
@@ -162,6 +217,9 @@ export class AgentRuntime {
         models,
         options.provider ?? GATEWAY_PROVIDER,
         lock,
+        registry,
+        approvals,
+        options.capabilities ?? [],
         envSource,
       );
       runtime = opened;
@@ -226,33 +284,148 @@ export class AgentRuntime {
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
-    const resolved = this.#resolveModel(config.modelId);
-    if (!resolved) throw new ModelNotFoundError(config.modelId);
+    const change = this.#agentChange(config);
     const conversation = await this.#harness.createConversation(
-      {
-        ownership: { kind: "ownerless" },
-        agent: {
-          model: { provider: resolved.provider, modelId: resolved.model },
-          instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
-        },
-      },
+      { ownership: { kind: "ownerless" }, agent: change },
       ctx,
     );
-    return Number(conversation.id);
+    const ref = Number(conversation.id);
+    if (config.capabilities) await this.#writePermissions(ref, config.capabilities);
+    return ref;
   }
 
-  /** Change persona/model. Applies from the next model request; history is kept. */
+  /**
+   * Change persona, model and capabilities. Applies from the next model
+   * request; history is kept.
+   */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
+    const change = this.#agentChange(config);
+    await this.#conversation(ref);
+    await this.#harness.commit(async (tx) => {
+      await configureAgent(tx, ref as ConversationId, change);
+      if (config.capabilities) {
+        const doc = await tx.doc(PermissionsDoc, ref as ConversationId);
+        doc.allow = this.#allowedTools(config.capabilities);
+      }
+    }, ctx);
+  }
+
+  #agentChange(config: BotAgentConfig): AgentChange {
     const resolved = this.#resolveModel(config.modelId);
     if (!resolved) throw new ModelNotFoundError(config.modelId);
-    const conversation = await this.#conversation(ref);
-    await conversation.configure(
-      {
-        model: { provider: resolved.provider, modelId: resolved.model },
-        instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
-      },
-      ctx,
+    const change: AgentChange = {
+      model: { provider: resolved.provider, modelId: resolved.model },
+      instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
+    };
+    if (!config.capabilities) return change;
+    const selected = this.#selected(config.capabilities);
+    const installed = this.#registry.snapshot();
+    const off: ToolRegistration[] = [];
+    for (const capability of selected) {
+      for (const tool of capability.tools) {
+        if (effectivePermission(tool, config.capabilities.permissions) !== "off") continue;
+        const registration = installed
+          .extension(capability.id)
+          ?.tools?.find((candidate) => candidate.name === tool.name);
+        if (registration) off.push(registration);
+      }
+    }
+    return {
+      ...change,
+      // pi-durable stores names: a capability installed later (an MCP server
+      // reconnecting) is picked up by name without reconfiguring.
+      extensions: selected
+        .map((capability) => installed.extension(capability.id))
+        .filter((extension): extension is Extension => extension !== undefined),
+      tools: { remove: off },
+    };
+  }
+
+  #selected(selection: CapabilitySelection): Capability[] {
+    return selection.enabled
+      .map((id) => this.#capabilities.get(id))
+      .filter((capability): capability is Capability => capability !== undefined);
+  }
+
+  #allowedTools(selection: CapabilitySelection): string[] {
+    return this.#selected(selection).flatMap((capability) =>
+      capability.tools
+        .filter((tool) => effectivePermission(tool, selection.permissions) === "allow")
+        .map((tool) => tool.name),
     );
+  }
+
+  async #writePermissions(ref: ConversationRef, selection: CapabilitySelection): Promise<void> {
+    await this.#harness.commit(async (tx) => {
+      const doc = await tx.doc(PermissionsDoc, ref as ConversationId);
+      doc.allow = this.#allowedTools(selection);
+    }, ctx);
+  }
+
+  // ── Capabilities ──────────────────────────────────────────────────────
+
+  listCapabilities(): CapabilityInfo[] {
+    return [...this.#capabilities.values()].map(capabilityInfo);
+  }
+
+  /**
+   * Install or replace a capability while running (an MCP connection that
+   * (re)connected or changed its tools). Conversations select it by name, so
+   * bots that enabled it pick it up from their next model request.
+   */
+  installCapability(capability: Capability): void {
+    this.#capabilities.set(capability.id, capability);
+    this.#registry.install(gateExtension(capability.extension, this.#approvals));
+  }
+
+  /** Withdraw a capability (connection removed or signed out). Bots keep it selected by name. */
+  uninstallCapability(id: string): void {
+    const extension = this.#registry.snapshot().extension(id);
+    this.#capabilities.delete(id);
+    if (extension) this.#registry.uninstall(extension);
+  }
+
+  // ── Approvals ─────────────────────────────────────────────────────────
+
+  /** Tool calls of the conversation waiting for the owner's approval. */
+  pendingApprovals(ref: ConversationRef): number {
+    return this.#approvals.count(ref);
+  }
+
+  /**
+   * Answer a gated tool call (`taskId` from the chat's tool call). Throws
+   * `ApprovalNotPendingError` when it was already answered or has ended.
+   */
+  async decideApproval(
+    ref: ConversationRef,
+    taskId: number,
+    decision: ApprovalDecision,
+  ): Promise<void> {
+    const id = taskId as TaskId;
+    try {
+      await this.#harness.commit(async (tx) => {
+        const task = await tx.task(id);
+        if (
+          !task ||
+          Number(task.conversationId) !== ref ||
+          task.kind !== "pi.tool" ||
+          task.state.status === "terminal" ||
+          task.state.status === "completing"
+        ) {
+          throw new ApprovalNotPendingError(taskId);
+        }
+        const doc = await tx.doc(ApprovalDoc, id);
+        if (doc.status !== "pending") throw new ApprovalNotPendingError(taskId);
+        doc.status = decision;
+      }, ctx);
+    } catch (error) {
+      if (error instanceof ApprovalNotPendingError) throw error;
+      // A terminal task's documents are sealed: the call already ended.
+      if (error instanceof Error && /terminal/i.test(error.message)) {
+        throw new ApprovalNotPendingError(taskId);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -322,18 +495,14 @@ export class AgentRuntime {
     const conversation = await this.#conversation(ref);
     const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
 
-    const raw: {
-      entries: Map<number, EntryRecord>;
-      live?: AssistantMessage;
-      busy: boolean;
-      unanswered: Map<number, string>;
-    } = {
+    const raw: MutableRaw = {
       entries: new Map(),
       live: stream.snapshot.generation?.message
         ? structuredClone(stream.snapshot.generation.message)
         : undefined,
       busy: stream.snapshot.run !== undefined,
       unanswered: new Map(),
+      tools: liveTools(stream.snapshot.tools),
     };
     for (const entry of await loadHistory(conversation)) raw.entries.set(Number(entry.id), entry);
     for (const entry of stream.snapshot.entries) raw.entries.set(Number(entry.id), entry);
@@ -343,6 +512,7 @@ export class AgentRuntime {
       live: raw.live,
       busy: raw.busy,
       unanswered: raw.unanswered,
+      tools: raw.tools,
     });
 
     let state: ChatState = chatState(view());
@@ -377,6 +547,7 @@ export class AgentRuntime {
             ? structuredClone(event.generation.message)
             : undefined;
           raw.busy = event.run !== undefined;
+          raw.tools = liveTools(event.tools);
           continue;
         }
         applyEvent(raw, event);
@@ -405,22 +576,28 @@ export class AgentRuntime {
     this.#busy = busyFromGraph(graph.value);
     graph.start(async (value) => {
       const next = busyFromGraph(value);
-      const changes: ActivityChange[] = [];
-      for (const ref of next)
-        if (!this.#busy.has(ref)) changes.push({ conversation: ref, busy: true });
-      for (const ref of this.#busy)
-        if (!next.has(ref)) changes.push({ conversation: ref, busy: false });
+      const changed: ConversationRef[] = [];
+      for (const ref of next) if (!this.#busy.has(ref)) changed.push(ref);
+      for (const ref of this.#busy) if (!next.has(ref)) changed.push(ref);
       this.#busy = next;
-      for (const change of changes) {
-        for (const listener of this.#activityListeners) {
-          try {
-            listener(change);
-          } catch {
-            // listeners must not break the activity feed
-          }
-        }
+      for (const ref of changed) {
+        this.#emitActivity({
+          conversation: ref,
+          busy: next.has(ref),
+          approvals: this.#approvals.count(ref),
+        });
       }
     });
+  }
+
+  #emitActivity(change: ActivityChange): void {
+    for (const listener of this.#activityListeners) {
+      try {
+        listener(change);
+      } catch {
+        // listeners must not break the activity feed
+      }
+    }
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -474,10 +651,52 @@ type MutableRaw = {
   live?: AssistantMessage;
   busy: boolean;
   unanswered: Map<number, string>;
+  tools: Map<string, LiveTool>;
 };
+
+/** Model-issued calls of the current round (nested calls live in `nestedTools`). */
+function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
+  const tools = new Map<string, LiveTool>();
+  for (const slot of slots) {
+    tools.set(slot.callId, {
+      status: slot.status,
+      ...(slot.taskId !== undefined ? { taskId: Number(slot.taskId) } : {}),
+      ...(slot.output ? { output: slot.output } : {}),
+      ...(slot.details !== undefined ? { details: slot.details } : {}),
+    });
+  }
+  return tools;
+}
 
 function applyEvent(raw: MutableRaw, event: AgentEvent): void {
   switch (event.type) {
+    case "tool_execution_start":
+      if (event.parentToolCallId === undefined) {
+        raw.tools.set(event.toolCallId, {
+          status: "running",
+          ...(event.taskId !== undefined ? { taskId: Number(event.taskId) } : {}),
+        });
+      }
+      break;
+    case "tool_execution_update": {
+      const slot = raw.tools.get(event.toolCallId);
+      if (!slot || event.parentToolCallId !== undefined) break;
+      const next: LiveTool = { ...slot };
+      if (event.details !== undefined) next.details = event.details ?? undefined;
+      if (event.output) {
+        next.output =
+          "set" in event.output
+            ? event.output.set
+            : (slot.output ?? "").slice(event.output.trimStart ?? 0) + (event.output.append ?? "");
+      }
+      raw.tools.set(event.toolCallId, next);
+      break;
+    }
+    case "tool_execution_end":
+      if (event.parentToolCallId !== undefined) break;
+      raw.tools.delete(event.toolCallId);
+      if (event.entry) raw.entries.set(Number(event.entry.id), event.entry);
+      break;
     case "message_start":
       if (event.message.role === "assistant") raw.live = structuredClone(event.message);
       break;
@@ -497,6 +716,7 @@ function applyEvent(raw: MutableRaw, event: AgentEvent): void {
     case "run_end":
       raw.busy = false;
       raw.live = undefined;
+      raw.tools.clear();
       break;
     case "submission":
       if (

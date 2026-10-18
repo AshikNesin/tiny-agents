@@ -43,10 +43,83 @@ model Bot {
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())
   lastMessagePreview String?
+  /// JSON array of enabled built-in toolkit ids, e.g. ["tasks", "web"] (issue #1 D2).
+  toolkits           String    @default("[]")
+  /// JSON object: tool name → "allow" | "ask" | "off"; tools without an entry use their default.
+  toolPermissions    String    @default("{}")
+  skills             BotSkill[]
+  connections        BotConnection[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   @@map("bots")
+}
+
+/// An Agent Skill (SKILL.md) in the shared library (issue #1 D5/D6).
+model Skill {
+  id          String     @id @default(cuid())
+  /// Agent Skills name: lowercase-with-hyphens, unique in the library.
+  name        String     @unique
+  description String
+  /// SKILL.md body (markdown, without frontmatter).
+  body        String
+  /// JSON array of bundled files: [{ path, content }]. Text only; never executed.
+  files       String     @default("[]")
+  source      String     @default("manual") // manual | url | bot
+  sourceUrl   String?
+  bots        BotSkill[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("skills")
+}
+
+model BotSkill {
+  botId     String
+  skillId   String
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([botId, skillId])
+  @@index([skillId])
+  @@map("bot_skills")
+}
+
+/// A remote MCP server (issue #1 D8–D13). One account per connection.
+model Connection {
+  id         String          @id @default(cuid())
+  name       String
+  /// Capability id suffix (`mcp:<slug>`) and tool name prefix; immutable.
+  slug       String          @unique
+  url        String
+  transport  String          @default("streamable-http") // streamable-http | sse
+  authType   String          @default("none") // none | header | oauth
+  /// Header carrying `secretEnc` for header auth (e.g. Authorization, x-api-key).
+  headerName String?
+  /// AES-GCM (SECRETS_KEY) encrypted header value.
+  secretEnc  String?
+  /// AES-GCM (SECRETS_KEY) encrypted OAuth state: client registration, tokens, PKCE verifier.
+  oauthEnc   String?
+  /// JSON array of the server's tools as last listed: [{ name, title, description, readOnly }].
+  toolsCache String          @default("[]")
+  bots       BotConnection[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@map("connections")
+}
+
+model BotConnection {
+  botId        String
+  connectionId String
+  bot          Bot        @relation(fields: [botId], references: [id], onDelete: Cascade)
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([botId, connectionId])
+  @@index([connectionId])
+  @@map("bot_connections")
 }
 
 model User {

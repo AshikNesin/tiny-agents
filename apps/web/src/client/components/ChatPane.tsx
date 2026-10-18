@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -10,7 +10,12 @@ import {
   SendHorizonal,
 } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import { Textarea } from "@groot/ui/textarea";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@groot/ui/input-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +34,15 @@ import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
-import { ChatMessageView } from "./ChatMessageView";
+import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "./ui/message-scroller";
 
 interface ChatPaneProps {
   bot: Bot;
@@ -55,15 +68,30 @@ export function ChatPane({
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const [text, setText] = useState("");
+  const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const transcriptRef = useRef<HTMLDivElement>(null);
-  const atBottomRef = useRef(true);
 
   useEffect(() => {
     connectChat(bot.id);
     return () => disconnectChat(bot.id);
   }, [bot.id, connectChat, disconnectChat]);
+
+  // Tool labels for the transcript rows come from the capability catalog.
+  useEffect(() => {
+    void botsApi
+      .capabilities()
+      .then((capabilities) =>
+        setToolLabels(
+          Object.fromEntries(
+            capabilities.flatMap((capability) =>
+              capability.tools.map((tool) => [tool.name, tool.label]),
+            ),
+          ),
+        ),
+      )
+      .catch(() => undefined);
+  }, []);
 
   // Mark read when opening a bot with unread replies.
   const unread = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.unread);
@@ -74,21 +102,12 @@ export function ChatPane({
   const messages = chat?.messages ?? [];
   const pending = chat?.pending ?? [];
   const busy = chat?.busy ?? false;
+  const waiting = messages.some((m) =>
+    m.toolCalls?.some((call) => call.status === "awaiting_approval"),
+  );
   const modelKnown = models.some((m) => m.id === bot.modelId);
   const modelName = models.find((m) => m.id === bot.modelId)?.name ?? bot.modelId;
   const canSend = gatewayConfigured && modelKnown && !busy && text.trim().length > 0;
-
-  // Keep the transcript pinned to the bottom while streaming, unless the
-  // user scrolled up.
-  useEffect(() => {
-    const el = transcriptRef.current;
-    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages, pending]);
-
-  const onScroll = () => {
-    const el = transcriptRef.current;
-    if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  };
 
   const send = async () => {
     const body = text.trim();
@@ -159,7 +178,13 @@ export function ChatPane({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{bot.name}</div>
           <div className="text-muted-foreground truncate text-xs">
-            {busy ? <span className="text-primary">typing…</span> : modelName}
+            {waiting ? (
+              <span className="text-primary">needs your approval</span>
+            ) : busy ? (
+              <span className="text-primary">typing…</span>
+            ) : (
+              modelName
+            )}
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>
@@ -205,54 +230,69 @@ export function ChatPane({
         </div>
       )}
 
-      {/* Transcript */}
-      <div
-        ref={transcriptRef}
-        onScroll={onScroll}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 md:px-4"
-      >
-        {messages.map((message) => (
-          <ChatMessageView
-            key={message.id}
-            message={message}
-            botName={bot.name}
-            botEmoji={bot.avatarEmoji}
-            botColor={bot.avatarColor}
-          />
-        ))}
-        {pending.map((p) => (
-          <ChatMessageView
-            key={p.id}
-            message={{
-              id: p.id,
-              role: "user",
-              text: p.text,
-              status: "streaming",
-              createdAt: p.createdAt,
-            }}
-            botName={bot.name}
-            botEmoji={bot.avatarEmoji}
-            botColor={bot.avatarColor}
-          />
-        ))}
-        {messages.length === 0 && pending.length === 0 && (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
-            <BotAvatar
-              name={bot.name}
-              emoji={bot.avatarEmoji}
-              color={bot.avatarColor}
-              className="size-12 text-lg"
+      {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
+          message pinned unless the reader scrolled up) */}
+      <div className="relative min-h-0 flex-1">
+        <MessageScrollerProvider>
+          <MessageScroller className="h-full">
+            <MessageScrollerViewport className="px-3 py-4 md:px-4">
+              <MessageScrollerContent className="space-y-4">
+                {messages.length === 0 && pending.length === 0 && (
+                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
+                    <BotAvatar
+                      name={bot.name}
+                      emoji={bot.avatarEmoji}
+                      color={bot.avatarColor}
+                      className="size-12 text-lg"
+                    />
+                    <p>Say hi to {bot.name}</p>
+                    {bot.description && <p className="text-xs">{bot.description}</p>}
+                  </div>
+                )}
+                {messages.map((message) => (
+                  <MessageScrollerItem key={message.id} messageId={message.id}>
+                    <ChatMessageView
+                      message={message}
+                      botName={bot.name}
+                      botEmoji={bot.avatarEmoji}
+                      botColor={bot.avatarColor}
+                      botId={bot.id}
+                      toolLabels={toolLabels}
+                    />
+                  </MessageScrollerItem>
+                ))}
+                {pending.map((p) => (
+                  <MessageScrollerItem key={p.id} messageId={p.id}>
+                    <ChatMessageView
+                      message={{
+                        id: p.id,
+                        role: "user",
+                        text: p.text,
+                        status: "streaming",
+                        createdAt: p.createdAt,
+                      }}
+                      botName={bot.name}
+                      botEmoji={bot.avatarEmoji}
+                      botColor={bot.avatarColor}
+                    />
+                  </MessageScrollerItem>
+                ))}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton
+              direction="end"
+              className="absolute right-4 bottom-4"
+              aria-label="Jump to the latest message"
             />
-            <p>Say hi to {bot.name}</p>
-            {bot.description && <p className="text-xs">{bot.description}</p>}
-          </div>
-        )}
+          </MessageScroller>
+        </MessageScrollerProvider>
       </div>
 
-      {/* Composer */}
+      {/* Composer (AI Elements Prompt Input: an input group with the send
+          and stop affordances inline) */}
       <div className="border-t px-3 py-3 md:px-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <Textarea
+        <InputGroup className="mx-auto max-w-3xl">
+          <InputGroupTextarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -263,19 +303,30 @@ export function ChatPane({
             }}
             placeholder={`Message ${bot.name}…`}
             rows={1}
-            className="max-h-40 min-h-9 resize-none"
             disabled={!gatewayConfigured || !modelKnown}
           />
-          {busy ? (
-            <Button variant="outline" size="icon" onClick={stop} aria-label="Stop generating">
-              <Square className="size-4" />
-            </Button>
-          ) : (
-            <Button size="icon" onClick={send} disabled={!canSend} aria-label="Send message">
-              <SendHorizonal className="size-4" />
-            </Button>
-          )}
-        </div>
+          <InputGroupAddon align="inline-end">
+            {busy ? (
+              <InputGroupButton
+                variant="outline"
+                size="icon-sm"
+                onClick={stop}
+                aria-label="Stop generating"
+              >
+                <Square className="size-3.5" />
+              </InputGroupButton>
+            ) : (
+              <InputGroupButton
+                size="icon-sm"
+                onClick={send}
+                disabled={!canSend}
+                aria-label="Send message"
+              >
+                <SendHorizonal className="size-3.5" />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
         <p className="text-muted-foreground mt-1.5 text-center text-[11px]">
           {modelName} · AI can make mistakes — check important details.
         </p>

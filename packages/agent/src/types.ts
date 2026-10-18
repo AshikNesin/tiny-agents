@@ -3,6 +3,8 @@
  * pi-durable, so the rest of the app never depends on its (experimental) API.
  */
 
+import type { CapabilitySelection } from "./capabilities";
+
 /** Opaque id of a durable conversation (pi-durable's numeric conversation id). */
 export type ConversationRef = number;
 
@@ -20,17 +22,50 @@ export interface BotAgentConfig {
   systemPrompt: string;
   /** Model id from the gateway catalog. */
   modelId: string;
+  /**
+   * Capabilities the bot may use and per-tool permissions. Omitted: leave the
+   * conversation's tool selection unchanged (every installed extension).
+   */
+  capabilities?: CapabilitySelection;
 }
 
 export type ChatMessageStatus = "done" | "streaming" | "stopped" | "error" | "unanswered";
+
+export type ChatToolStatus =
+  | "pending"
+  | "running"
+  | "awaiting_approval"
+  | "done"
+  | "error"
+  | "denied"
+  | "interrupted"
+  | "aborted";
+
+/** One tool call of an assistant turn, with its live status or result. */
+export interface ChatToolCall {
+  /** Provider call id (unique within its message only; may be empty). */
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  status: ChatToolStatus;
+  /** Result text for the user (bounded). */
+  output?: string;
+  durationMs?: number;
+  /** Durable tool task id: what approval decisions address. */
+  taskId?: number;
+  /** Set once the owner answered an approval for this call. */
+  approval?: "approved" | "denied";
+  /** Pages the call searched or read (web tools). */
+  sources?: { url: string; title: string }[];
+}
 
 export interface ChatMessage {
   /** Stable id: `e<entryId>` for committed entries, `live` for the in-flight reply. */
   id: string;
   role: "user" | "assistant" | "marker";
   text: string;
-  /** Tool calls this assistant turn made (name + compact args for the chip). */
-  toolCalls?: { name: string; summary: string }[];
+  /** Tool calls this assistant turn made, in order. */
+  toolCalls?: ChatToolCall[];
   /** Model thinking, when the model emitted any. */
   reasoning?: string;
   status: ChatMessageStatus;
@@ -60,6 +95,8 @@ export type ChatEvent =
 export interface ActivityChange {
   conversation: ConversationRef;
   busy: boolean;
+  /** Tool calls waiting for the owner's approval. */
+  approvals: number;
 }
 
 export interface LastMessage {

@@ -1,6 +1,14 @@
-import type { AssistantMessage, Message, ToolCall } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { EntryRecord } from "@earendil-works/pi-durable";
-import type { ChatEvent, ChatMessage, ChatState } from "./types";
+import type { ChatEvent, ChatMessage, ChatState, ChatToolCall, ChatToolStatus } from "./types";
+
+/** A tool call of the current round, as `pi.live` presents it. */
+export interface LiveTool {
+  status: "pending" | "running" | "done";
+  taskId?: number;
+  output?: string;
+  details?: unknown;
+}
 
 /** Raw pieces of a conversation the chat view is derived from. */
 export interface RawChat {
@@ -11,6 +19,17 @@ export interface RawChat {
   busy: boolean;
   /** Failure reasons for inputs that settled without an answer, by user entry id. */
   unanswered: ReadonlyMap<number, string>;
+  /** Tool calls of the current round, by provider call id. */
+  tools?: ReadonlyMap<string, LiveTool>;
+}
+
+/** Longest tool output kept for the user. */
+const MAX_TOOL_OUTPUT = 4000;
+
+interface ToolResult {
+  message: ToolResultMessage;
+  codes: string[];
+  diagnostics: string[];
 }
 
 const UNANSWERED_REASONS: Record<string, string> = {
@@ -28,21 +47,114 @@ function textOf(content: unknown): string {
     .join("");
 }
 
-function toolCallsOf(message: AssistantMessage): { name: string; summary: string }[] {
-  return message.content
-    .filter((block): block is ToolCall => block.type === "toolCall")
-    .map((block) => ({
-      name: block.name,
-      summary: summarizeArgs(block.name, block.arguments as Record<string, unknown>),
-    }));
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
-/** One short phrase per tool: "Ship the feature" for creates, the id otherwise. */
-function summarizeArgs(name: string, args: Record<string, unknown>): string {
-  if (typeof args?.title === "string") return args.title;
-  if (typeof args?.id === "string") return args.id;
-  if (typeof args?.status === "string") return `status: ${args.status}`;
-  return "";
+function clip(text: string): string {
+  return text.length > MAX_TOOL_OUTPUT ? `${text.slice(0, MAX_TOOL_OUTPUT)}…` : text;
+}
+
+function sourcesOf(details: unknown): ChatToolCall["sources"] {
+  const sources = record(details)?.sources ?? record(record(details)?.result)?.sources;
+  if (!Array.isArray(sources)) return undefined;
+  const valid = sources.filter(
+    (s): s is { url: string; title: string } =>
+      typeof s?.url === "string" && typeof s?.title === "string",
+  );
+  return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
+}
+
+function resultStatus(result: ToolResult): ChatToolStatus {
+  const details = record(result.message.details);
+  if (details?.approval === "denied") return "denied";
+  if (details?.interrupted === true || result.codes.includes("interrupted")) return "interrupted";
+  if (result.codes.includes("aborted")) return "aborted";
+  return result.message.isError ? "error" : "done";
+}
+
+/** A tool call merged with its stored result, else with its live slot. */
+function toolCallView(
+  call: ToolCall,
+  result: ToolResult | undefined,
+  slot: LiveTool | undefined,
+  settled: boolean,
+): ChatToolCall {
+  const base: ChatToolCall = {
+    id: call.id,
+    name: call.name,
+    args: (call.arguments as Record<string, unknown>) ?? {},
+    status: "pending",
+  };
+  if (result) {
+    const message = result.message;
+    const output = textOf(message.content) || result.diagnostics.join("\n");
+    const details = record(message.details);
+    const approval = details?.approval;
+    const sources = sourcesOf(message.details);
+    return {
+      ...base,
+      status: resultStatus(result),
+      ...(output ? { output: clip(output) } : {}),
+      ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+      ...(approval === "approved" || approval === "denied" ? { approval } : {}),
+      ...(sources ? { sources } : {}),
+    };
+  }
+  if (slot) {
+    const waiting = record(slot.details)?.approval === "pending";
+    return {
+      ...base,
+      status: waiting ? "awaiting_approval" : slot.status === "running" ? "running" : "pending",
+      ...(slot.taskId !== undefined ? { taskId: slot.taskId } : {}),
+      ...(slot.output ? { output: clip(slot.output) } : {}),
+    };
+  }
+  // No result and no live slot: still queued in a busy run, or cut off for good.
+  return { ...base, status: settled ? "interrupted" : "pending" };
+}
+
+/** Tool results stored after each assistant entry, by provider call id (in order, for duplicate ids). */
+function toolResultsByAssistant(entries: readonly EntryRecord[]): Map<number, ToolResult[]> {
+  const out = new Map<number, ToolResult[]>();
+  let assistant: number | undefined;
+  for (const entry of entries) {
+    if (entry.kind === "pi.assistant") assistant = Number(entry.id);
+    else if (entry.kind === "pi.tool-result" && assistant !== undefined) {
+      const message = entry.model?.[0];
+      if (message?.role !== "toolResult") continue;
+      const diagnostics = (record(entry.data)?.diagnostics ?? []) as {
+        code?: string;
+        message?: string;
+      }[];
+      const list = out.get(assistant) ?? [];
+      list.push({
+        message,
+        codes: diagnostics.map((d) => d.code ?? ""),
+        diagnostics: diagnostics.map((d) => d.message ?? "").filter(Boolean),
+      });
+      out.set(assistant, list);
+    } else if (entry.kind === "pi.user") assistant = undefined;
+  }
+  return out;
+}
+
+function toolCallsOf(
+  message: AssistantMessage,
+  results: ToolResult[] = [],
+  tools: ReadonlyMap<string, LiveTool> | undefined,
+  settled: boolean,
+): ChatToolCall[] {
+  const unmatched = [...results];
+  return message.content
+    .filter((block): block is ToolCall => block.type === "toolCall")
+    .map((call) => {
+      const index = unmatched.findIndex((r) => r.message.toolCallId === call.id);
+      const result = index >= 0 ? unmatched.splice(index, 1)[0] : undefined;
+      return toolCallView(call, result, result ? undefined : tools?.get(call.id), settled);
+    });
 }
 
 function thinkingOf(message: AssistantMessage): string {
@@ -60,6 +172,7 @@ export function assistantToChat(
   id: string,
   message: AssistantMessage,
   streaming = false,
+  tools?: { results?: ToolResult[]; live?: ReadonlyMap<string, LiveTool>; settled: boolean },
 ): ChatMessage {
   const reasoning = thinkingOf(message);
   const status = streaming
@@ -69,7 +182,7 @@ export function assistantToChat(
       : message.stopReason === "error"
         ? "error"
         : "done";
-  const toolCalls = toolCallsOf(message);
+  const toolCalls = toolCallsOf(message, tools?.results, tools?.live, tools?.settled ?? !streaming);
   return {
     id,
     role: "assistant",
@@ -104,6 +217,9 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
   const markersBeforeHead = new Map<number, ChatMessage[]>();
   const ids = new Set(visible.map((e) => Number(e.id)));
   const out: ChatMessage[] = [];
+  const results = toolResultsByAssistant(entries);
+  const lastAssistant = [...visible].reverse().find((e) => e.kind === "pi.assistant");
+  const settled = !raw.busy && raw.live === undefined;
 
   for (const entry of visible) {
     if (entry.kind !== "pi.compaction") continue;
@@ -165,7 +281,14 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       const retried = next ? next.kind === "pi.assistant" : raw.live !== undefined;
       if (retried) continue;
     }
-    out.push(assistantToChat(`e${entry.id}`, assistant));
+    out.push(
+      assistantToChat(`e${entry.id}`, assistant, false, {
+        results: results.get(id),
+        // Live slots belong to the current round: the newest assistant entry.
+        live: entry === lastAssistant ? raw.tools : undefined,
+        settled: settled || entry !== lastAssistant,
+      }),
+    );
   }
 
   // Flag inputs that never got an answer.

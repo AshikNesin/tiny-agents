@@ -6,6 +6,8 @@ import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
 import tasksRoutes from "./api/tasks/task.routes";
 import botsRoutes from "./api/bots/bots.routes";
+import skillsRoutes from "./api/skills/skills.routes";
+import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
@@ -24,6 +26,8 @@ export function registerRoutes(app: Express): void {
   // Public auth routes (no auth required)
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/passkey", passkeyRoutes);
+  // OAuth client metadata document: fetched by authorization servers.
+  app.use("/api/v1", publicConnectionsRouter);
 
   // Protected routes (JWT auth required)
   const protectedRouter = Router();
@@ -31,6 +35,8 @@ export function registerRoutes(app: Express): void {
   // router so its /:id pattern cannot swallow them.
   protectedRouter.use(botsRoutes);
   protectedRouter.use(tasksRoutes);
+  protectedRouter.use(skillsRoutes);
+  protectedRouter.use(connectionsRoutes);
   protectedRouter.use("/jobs", jobRoutes);
   protectedRouter.use("/storage", storageRoutes);
   protectedRouter.use("/settings", appSettingsRoutes);
