@@ -39,18 +39,41 @@ const chatConnections = new Map<string, { close(): void }>();
 function applyEvent(state: ChatState, event: ChatEvent): ChatState {
   switch (event.type) {
     case "snapshot":
-      return event.state;
+      // A fresh snapshot is authoritative: drop every pending echo whose
+      // text now appears as a real user message (confirmed), keep the rest
+      // (still in flight).
+      return {
+        ...event.state,
+        connected: true,
+        pending: state.pending.filter(
+          (p) =>
+            !event.state.messages.some((m) => m.role === "user" && m.text.trim() === p.text.trim()),
+        ),
+      };
     case "busy":
       return { ...state, busy: event.busy };
-    case "upsert":
+    case "upsert": {
+      // The confirmed user message replaces the matching optimistic echo.
+      const pending =
+        event.message.role === "user"
+          ? state.pending.filter((p) => p.text.trim() !== event.message.text.trim())
+          : state.pending;
       return {
         ...state,
+        pending,
         messages: state.messages.some((m) => m.id === event.message.id)
           ? state.messages.map((m) => (m.id === event.message.id ? event.message : m))
           : [...state.messages, event.message],
       };
+    }
     case "remove":
       return { ...state, messages: state.messages.filter((m) => m.id !== event.id) };
+    case "pending-add":
+      return { ...state, pending: [...state.pending, event.message] };
+    case "pending-remove":
+      return { ...state, pending: state.pending.filter((p) => p.id !== event.id) };
+    case "connected":
+      return { ...state, connected: event.connected };
     case "delta":
       return {
         ...state,
@@ -109,11 +132,31 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   connectChat: (botId) => {
     if (chatConnections.has(botId)) return;
     set((s) => ({
-      chats: { ...s.chats, [botId]: s.chats[botId] ?? { messages: [], busy: false } },
+      chats: {
+        ...s.chats,
+        [botId]: s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false },
+      },
     }));
-    const connection = subscribeSse(`/api/v1/bots/${botId}/stream`, (event) => {
-      get().applyChatEvent(botId, event as ChatEvent);
-    });
+    const connection = subscribeSse(
+      `/api/v1/bots/${botId}/stream`,
+      (event) => {
+        const typed = event as ChatEvent;
+        if (typed.type === "error") {
+          set((s) => ({
+            chats: {
+              ...s.chats,
+              [botId]: {
+                ...(s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false }),
+                connected: false,
+              },
+            },
+          }));
+          return;
+        }
+        get().applyChatEvent(botId, typed);
+      },
+      { onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }) },
+    );
     chatConnections.set(botId, connection);
   },
 
@@ -127,7 +170,10 @@ export const useBotsStore = create<BotsState>((set, get) => ({
     set((s) => ({
       chats: {
         ...s.chats,
-        [botId]: applyEvent(s.chats[botId] ?? { messages: [], busy: false }, event),
+        [botId]: applyEvent(
+          s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false },
+          event,
+        ),
       },
     }));
   },

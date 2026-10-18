@@ -53,6 +53,7 @@ export function ChatPane({
   const chat = useBotsStore((s) => s.chats[bot.id]);
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
+  const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const [text, setText] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -71,6 +72,7 @@ export function ChatPane({
   }, [unread, bot.id]);
 
   const messages = chat?.messages ?? [];
+  const pending = chat?.pending ?? [];
   const busy = chat?.busy ?? false;
   const modelKnown = models.some((m) => m.id === bot.modelId);
   const modelName = models.find((m) => m.id === bot.modelId)?.name ?? bot.modelId;
@@ -81,7 +83,7 @@ export function ChatPane({
   useEffect(() => {
     const el = transcriptRef.current;
     if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, pending]);
 
   const onScroll = () => {
     const el = transcriptRef.current;
@@ -92,9 +94,15 @@ export function ChatPane({
     const body = text.trim();
     if (!body || !canSend) return;
     setText("");
+    // Optimistic echo: show the message immediately; the SSE snapshot/upsert
+    // replaces it once the server confirms (store dedupes by text). If the
+    // POST fails the echo is withdrawn and the text returns to the composer.
+    const echo = { id: crypto.randomUUID(), text: body, createdAt: Date.now() };
+    applyChatEvent(bot.id, { type: "pending-add", message: echo });
     try {
-      await botsApi.send(bot.id, crypto.randomUUID(), body);
+      await botsApi.send(bot.id, echo.id, body);
     } catch (error) {
+      applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
       toast.error(error instanceof Error ? error.message : "Failed to send");
       setText(body);
     }
@@ -175,6 +183,14 @@ export function ChatPane({
         </DropdownMenu>
       </header>
 
+      {/* Stream health: the transcript is frozen while disconnected */}
+      {chat && !chat.connected && (
+        <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-muted-foreground text-xs">
+          <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+          Reconnecting…
+        </div>
+      )}
+
       {/* Warnings */}
       {!gatewayConfigured && (
         <div className="border-b bg-destructive/10 px-4 py-2 text-destructive text-xs">
@@ -204,7 +220,22 @@ export function ChatPane({
             botColor={bot.avatarColor}
           />
         ))}
-        {messages.length === 0 && (
+        {pending.map((p) => (
+          <ChatMessageView
+            key={p.id}
+            message={{
+              id: p.id,
+              role: "user",
+              text: p.text,
+              status: "streaming",
+              createdAt: p.createdAt,
+            }}
+            botName={bot.name}
+            botEmoji={bot.avatarEmoji}
+            botColor={bot.avatarColor}
+          />
+        ))}
+        {messages.length === 0 && pending.length === 0 && (
           <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
             <BotAvatar
               name={bot.name}

@@ -14,9 +14,20 @@ export interface ChatMessage {
   marker?: "compaction";
 }
 
+export interface PendingMessage {
+  /** Client-generated id (crypto.randomUUID), stable across retries. */
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface ChatState {
   messages: ChatMessage[];
   busy: boolean;
+  /** Locally echoed messages not yet confirmed by the server snapshot. */
+  pending: PendingMessage[];
+  /** False while the SSE stream is down (backend restart, network drop). */
+  connected: boolean;
 }
 
 export type ChatEvent =
@@ -27,4 +38,7 @@ export type ChatEvent =
   | { type: "busy"; busy: boolean }
   | { type: "activity"; busy?: boolean; conversation?: string }
   | { type: "ping" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "pending-add"; message: PendingMessage }
+  | { type: "pending-remove"; id: string }
+  | { type: "connected"; connected: boolean };

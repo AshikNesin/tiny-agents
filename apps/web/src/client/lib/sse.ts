@@ -21,38 +21,44 @@ export function subscribeSse(
   externalSignal?.addEventListener("abort", onAbort, { once: true });
 
   void (async () => {
+    let delayMs = 1500;
     while (!controller.signal.aborted) {
+      let response: Response | undefined;
       try {
-        const response = await fetch(path, {
+        response = await fetch(path, {
           credentials: "include",
           headers: { Accept: "text/event-stream" },
           signal: controller.signal,
         });
         if (!response.ok || !response.body) {
-          controller.abort();
+          // Surface the failure, then keep retrying — a transient 502
+          // (deploy, proxy hiccup) must not freeze the transcript forever.
+          // Auth failures are the exception: the page will be redirected to
+          // /login on the next API call, so retrying here is pointless.
           onEvent({ type: "error", message: `SSE ${response.status}` });
-          return;
-        }
-        opts.onOpen?.();
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let boundary: number;
-          while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-            const frame = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
-            for (const line of frame.split("\n")) {
-              if (line.startsWith("data:")) {
-                const payload = line.slice(5).trim();
-                if (payload) {
-                  try {
-                    onEvent(JSON.parse(payload));
-                  } catch {
-                    // ignore malformed frames
+          if (response.status === 401 || response.status === 403) return;
+        } else {
+          opts.onOpen?.();
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let boundary: number;
+            while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+              const frame = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + 2);
+              for (const line of frame.split("\n")) {
+                if (line.startsWith("data:")) {
+                  const payload = line.slice(5).trim();
+                  if (payload) {
+                    try {
+                      onEvent(JSON.parse(payload));
+                    } catch {
+                      // ignore malformed frames
+                    }
                   }
                 }
               }
@@ -64,7 +70,8 @@ export function subscribeSse(
       }
       if (controller.signal.aborted) return;
       // Reconnect with backoff; server resends a fresh snapshot.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, 10_000);
     }
   })();
 
