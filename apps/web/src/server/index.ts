@@ -62,10 +62,13 @@ async function main() {
   // process owns agent.db, e.g. an overlapping deploy) must exit non-zero.
   const agentDir = dirname(agentDbPath());
   mkdirSync(agentDir, { recursive: true });
-  let agentRuntime: AgentRuntime;
+  let agentRuntime: AgentRuntime | undefined;
   try {
+    // process.env, not the @groot/core env wrapper: varlock's runtime ENV
+    // re-resolves from .env.schema and drops -p override files, which e2e
+    // uses to enable the faux provider.
     agentRuntime =
-      env.TINY_AGENTS_FAUX === "1"
+      process.env.TINY_AGENTS_FAUX === "1"
         ? // Dev/E2E escape hatch: a faux-provider runtime (no network, no
           // keys) so streaming and durability can be exercised end-to-end
           // anywhere. Never enabled implicitly — only when the env var is set.
@@ -81,12 +84,13 @@ async function main() {
     logger.error({ error }, "Failed to open agent runtime");
     process.exit(1);
   }
+  const runtime = agentRuntime;
   // Fold finished replies into the bot list's denormalised fields.
   const { recordReply } = await import("./api/bots/bots.service");
-  agentRuntime.onActivity(async (change) => {
+  runtime.onActivity(async (change) => {
     if (change.busy) return;
     try {
-      const last = await agentRuntime.lastMessage(change.conversation);
+      const last = await runtime.lastMessage(change.conversation);
       if (last?.role === "assistant") {
         await recordReply(String(change.conversation), last);
       }
@@ -151,6 +155,7 @@ async function main() {
 }
 
 main().catch((error) => {
+  console.error("BOOT FAILURE:", error);
   logger.error({ error }, "Failed to start server");
   process.exit(1);
 });

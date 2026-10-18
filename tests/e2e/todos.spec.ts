@@ -6,9 +6,9 @@ test.describe("Todos page (authenticated)", () => {
     await page.goto("/login");
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     // Wait for redirect to a specific page after login
-    await page.waitForURL(/\/(todos|dashboard)/);
+    await page.waitForURL(/\/(chats|todos|dashboard)/);
   });
 
   test("can view todos page", async ({ page }) => {

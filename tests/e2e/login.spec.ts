@@ -11,7 +11,7 @@ test.describe("Login page", () => {
 
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
 
     // Should redirect after successful login
     await expect(page).not.toHaveURL(/.*login.*/);
@@ -22,7 +22,7 @@ test.describe("Login page", () => {
 
     await page.getByLabel(/email/i).fill("wrong@example.com");
     await page.getByLabel(/password/i).fill("wrongpassword");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
 
     // Should stay on login page
     await expect(page).toHaveURL(/.*login.*/);

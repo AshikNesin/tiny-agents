@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Bot } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useBotsStore } from "../../store/bots";
@@ -14,6 +14,7 @@ import { ChatPane } from "../../components/ChatPane";
  */
 export function ChatWorkspace() {
   const { botId } = useParams();
+  const navigate = useNavigate();
   const location = useLocation();
   const bots = useBotsStore((s) => s.bots);
   const loading = useBotsStore((s) => s.loading);
@@ -61,6 +62,8 @@ export function ChatWorkspace() {
   const onSaved = (bot: BotRow) => {
     void loadBots();
     if (editing && bot.id === editing.id) setFullBot(bot);
+    // Creating a bot drops you straight into its chat (messenger model).
+    if (!editing) navigate(`/chats/${bot.id}`);
   };
 
   const openCreate = () => {

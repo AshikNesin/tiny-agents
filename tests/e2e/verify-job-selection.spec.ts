@@ -36,8 +36,8 @@ test.describe("Jobs page selection", () => {
     await page.goto("/login");
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await page.waitForURL(/\/(todos|dashboard)/);
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await page.waitForURL(/\/(chats|todos|dashboard)/);
   });
 
   test.afterEach(async ({ page }) => {

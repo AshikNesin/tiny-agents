@@ -52,18 +52,26 @@ function App() {
               }
             >
               <Route index element={<Navigate to="/chats" replace />} />
-              {/* Chats get their own shell instance: unpadded, viewport-height
-                    main so the list and chat columns scroll independently
-                    (PRD §6.2). */}
-              <Route path="chats" element={<ChatsShell />}>
-                <Route index element={<ChatWorkspace />} />
-                <Route path=":botId" element={<ChatWorkspace />} />
-              </Route>
               <Route path="todos" element={<Todos />} />
               <Route path="storage" element={<Storage />} />
               <Route path="jobs" element={<Jobs />} />
               <Route path="jobs/:queueName/:jobId" element={<JobDetail />} />
               <Route path="settings" element={<Settings />} />
+            </Route>
+            {/* Chats get their own shell instance (not nested under the
+                default Layout, which would stack two sidebars): unpadded,
+                viewport-height main so the list and chat columns scroll
+                independently (PRD §6.2). */}
+            <Route
+              path="/chats"
+              element={
+                <ProtectedRoute>
+                  <ChatsShell />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<ChatWorkspace />} />
+              <Route path=":botId" element={<ChatWorkspace />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -12,7 +12,7 @@ test.describe("Chats", () => {
     await page.goto("/login");
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
 
     // Empty state → open the create dialog
@@ -22,10 +22,14 @@ test.describe("Chats", () => {
     } else {
       await page.getByRole("button", { name: /new bot/i }).click();
     }
-    await expect(page.getByRole("dialog")).toBeVisible();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // Wait for the model catalog (async fetch) before creating: the dialog
+    // is usable before models arrive and would fail validation.
+    await expect(dialog.locator("select#bot-model option")).not.toHaveCount(0, { timeout: 15_000 });
     await page.getByLabel("Name").fill("Echo Bot");
     await page.getByRole("button", { name: /create bot/i }).click();
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
 
     // Bot appears in the list and chat opens
     await expect(page.getByRole("button", { name: /echo bot/i }).first()).toBeVisible();
@@ -48,7 +52,7 @@ test.describe("Chats", () => {
     await page.goto("/login");
     await page.getByLabel(/email/i).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
 
     // Ensure at least one bot exists, then stay on the list (no chat open).
@@ -60,7 +64,7 @@ test.describe("Chats", () => {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Echo Bot");
       await page.getByRole("button", { name: /create bot/i }).click();
-      await expect(page.getByRole("dialog")).not.toBeVisible();
+      await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
     }
 
     // The list itself renders previews for each bot row.
