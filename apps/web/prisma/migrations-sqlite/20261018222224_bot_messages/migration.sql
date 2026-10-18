@@ -9,6 +9,7 @@ CREATE TABLE "bot_messages" (
     "sourceKey" TEXT,
     "text" TEXT NOT NULL,
     "answeredAt" DATETIME,
+    "deliveredAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "bot_messages_fromBotId_fkey" FOREIGN KEY ("fromBotId") REFERENCES "bots" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "bot_messages_toBotId_fkey" FOREIGN KEY ("toBotId") REFERENCES "bots" ("id") ON DELETE CASCADE ON UPDATE CASCADE,

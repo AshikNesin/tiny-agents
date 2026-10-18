@@ -9,6 +9,7 @@ CREATE TABLE "bot_messages" (
     "sourceKey" TEXT,
     "text" TEXT NOT NULL,
     "answeredAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "bot_messages_pkey" PRIMARY KEY ("id")

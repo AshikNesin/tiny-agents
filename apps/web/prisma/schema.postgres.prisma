@@ -93,7 +93,9 @@ model BotMessage {
   /// Durable tool-call id: exactly-once row create across pi-durable replays (same pattern as Task.sourceKey).
   sourceKey    String?   @unique
   text         String
-  /// ISO timestamp of the assistant reply that answered this delivery, once relayed.
+  /// When the message was submitted into the target's durable conversation (pending → delivered).
+  deliveredAt  DateTime?
+  /// When the target's reply was relayed into replyToBotId's conversation (delivered → answered).
   answeredAt   DateTime?
   createdAt    DateTime  @default(now())
 
