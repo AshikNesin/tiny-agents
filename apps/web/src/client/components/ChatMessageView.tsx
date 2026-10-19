@@ -327,6 +327,10 @@ export function ChatMessageView({
   }
 
   const streaming = message.status === "streaming";
+  // Terminal status notices render inside the reply card, so a failed or
+  // stopped turn with no text still surfaces its notice.
+  const hasNotice =
+    message.status === "error" || message.status === "stopped" || message.status === "unanswered";
   return (
     <Message className="group gap-3">
       <BotAvatar name={botName} className="mt-1 size-8" />
@@ -346,10 +350,15 @@ export function ChatMessageView({
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
-        {/* Grok-style reply card: a rounded surface with generous padding.
-            Empty-while-thinking renders the pulse line without the card. */}
-        {(message.text || !streaming) && (
-          <div className="bg-secondary/50 rounded-2xl px-4 py-3 text-[15px] leading-relaxed">
+        {/* Reply card: a rounded surface with generous padding. Renders only
+            when there is something to show — text, or a terminal status notice.
+            A tool-only turn (empty text, not streaming) shows just its trace
+            rows; rendering the card anyway painted an empty box. */}
+        {(message.text || (hasNotice && !streaming)) && (
+          <div
+            data-slot="reply-card"
+            className="bg-secondary/50 rounded-2xl px-4 py-3 text-[15px] leading-relaxed"
+          >
             <Streamdown>{message.text}</Streamdown>
             {message.status === "error" && (
               <p className="text-destructive mt-1 text-xs">
