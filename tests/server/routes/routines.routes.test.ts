@@ -134,7 +134,7 @@ describe("Routines API routes", () => {
   it("503s with guidance when the job queue is disabled", async () => {
     queueReady = false;
     const bot = await prisma.bot.create({
-      data: { name: "Queueless", modelId: "known-model", conversationId: 101 },
+      data: { name: "Queueless", modelId: "known-model", conversationId: "101" },
     });
     const response = await request(app)
       .post("/api/v1/routines")
