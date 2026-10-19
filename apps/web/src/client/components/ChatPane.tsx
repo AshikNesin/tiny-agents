@@ -300,7 +300,10 @@ export function ChatPane({
                           {formatDayDivider(message.createdAt)}
                         </div>
                       )}
-                      <MessageScrollerItem messageId={message.id}>
+                      <MessageScrollerItem
+                        messageId={message.id}
+                        scrollAnchor={message.role === "user"}
+                      >
                         <ChatMessageView
                           message={message}
                           botName={bot.name}
@@ -326,7 +329,7 @@ export function ChatPane({
                           </div>
                         )}
                         {pending.map((p) => (
-                          <MessageScrollerItem key={p.id} messageId={p.id}>
+                          <MessageScrollerItem key={p.id} messageId={p.id} scrollAnchor>
                             <ChatMessageView
                               message={{
                                 id: p.id,
