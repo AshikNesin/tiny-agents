@@ -25,6 +25,7 @@ import {
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { createBotRelay } from "./api/bots/bots.relay";
+import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -127,6 +128,11 @@ async function main() {
     }
   });
   void relay.sweep().catch(() => undefined);
+
+  // Routines completion (issue #18 phase A): fired runs resolve when their
+  // bot's conversation goes idle; the boot sweep marks runs interrupted by a
+  // restart as failed.
+  startRoutinesWatcher(runtime);
 
   // Register feature job handlers before routes
   registerJobHandlers();

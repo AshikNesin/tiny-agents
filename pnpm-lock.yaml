@@ -368,6 +368,12 @@ importers:
       console-feed:
         specifier: ^3.8.0
         version: 3.8.0(jquery@4.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      cron-parser:
+        specifier: 5.6.1
+        version: 5.6.1
+      cronstrue:
+        specifier: 3.32.0
+        version: 3.32.0
       dayjs:
         specifier: ^1.11.21
         version: 1.11.21
@@ -4211,6 +4217,10 @@ packages:
   cron-parser@5.6.1:
     resolution: {integrity: sha512-QBm4o1PwZiuY7KFbVvW7FLC8bozy7YWzv+Fz6KRS7sQghzcbDZCGxr/Bc5b6TQreAoSwuWVP491dIcK0THCX6A==}
     engines: {node: '>=18'}
+
+  cronstrue@3.32.0:
+    resolution: {integrity: sha512-OHTec7+5nosN4UsitwgBDQ0bofGZF3H4pLqgqa93NR3nExNlhtVHcO2JY3jRognrFH8Bl9oAooT0hyCjSyOU+Q==}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -11426,6 +11436,8 @@ snapshots:
   cron-parser@5.6.1:
     dependencies:
       luxon: 3.7.2
+
+  cronstrue@3.32.0: {}
 
   cross-spawn@7.0.6:
     dependencies:

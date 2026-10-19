@@ -53,6 +53,8 @@ model Bot {
   messagesTo         BotMessage[] @relation("BotMessagesTo")
   /// Conversations whose answer routes back to this bot.
   answersFor         BotMessage[] @relation("BotMessagesReplyTo")
+  /// Scheduled routines that run prompts in this bot's conversation.
+  routines           Routine[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -179,6 +181,57 @@ model Upload {
   createdAt  DateTime @default(now())
 
   @@map("uploads")
+}
+
+/// A standing instruction for a bot: run this prompt on this schedule (issue #18).
+model Routine {
+  id        String   @id @default(cuid())
+  botId     String
+  /// Max 80 chars.
+  name      String
+  /// Max 20k chars.
+  prompt    String
+  /// JSON schedule union (once | cron | interval), parsed with Zod at every boundary.
+  schedule  Json
+  /// Paused or terminal (a fired once) routines keep their row but schedule nothing.
+  enabled   Boolean  @default(true)
+  /// Next occurrence as an absolute UTC instant; null when disabled or terminal.
+  nextRunAt DateTime?
+  /// The queued routine-fire job for nextRunAt (cancel/reschedule handle).
+  pendingJobId String? @unique
+  bot       Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  runs      RoutineRun[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@map("routines")
+}
+
+/// One executed occurrence of a routine: the exactly-once ledger.
+model RoutineRun {
+  id           String   @id @default(cuid())
+  routineId    String
+  /// The occurrence this run represents (UTC instant).
+  scheduledFor DateTime
+  /// awaiting | succeeded | failed | missed | cancelled
+  status       String
+  /// schedule | manual
+  trigger      String   @default("schedule")
+  /// pi-durable submit id: "routine:<routineId>:<scheduledFor ISO>".
+  requestId    String   @unique
+  submittedAt  DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  /// Reply preview, max 2000 chars.
+  output      String?
+  /// Failure reason, max 500 chars.
+  error       String?
+  routine      Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@unique([routineId, scheduledFor])
+  @@index([status])
+  @@map("routine_runs")
 }
 
 model User {

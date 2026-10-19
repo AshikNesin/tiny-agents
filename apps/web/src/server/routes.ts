@@ -5,6 +5,7 @@ import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
 import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
 import tasksRoutes from "./api/tasks/task.routes";
+import routinesRoutes from "./api/routines/routines.routes";
 import botsRoutes from "./api/bots/bots.routes";
 import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
@@ -14,13 +15,14 @@ import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
 
 // Feature job registrations
+import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
 /**
  * Register all feature job handlers.
  * Call this before startWorkers() so every queue name is known upfront.
  */
 export function registerJobHandlers(): void {
-  // add feature job registrations here: registerPostJobs(), etc.
+  registerRoutineJobs();
 }
 
 export function registerRoutes(app: Express): void {
@@ -37,6 +39,7 @@ export function registerRoutes(app: Express): void {
   protectedRouter.use(botsRoutes);
   protectedRouter.use(uploadsRoutes);
   protectedRouter.use(tasksRoutes);
+  protectedRouter.use(routinesRoutes);
   protectedRouter.use(skillsRoutes);
   protectedRouter.use(connectionsRoutes);
   protectedRouter.use("/jobs", jobRoutes);

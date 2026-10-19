@@ -108,8 +108,16 @@ export class PgBossAdapter implements JobQueueAdapter {
   }
 
   async send(name: string, data: unknown, options?: SendJobOptions): Promise<string> {
-    const merged = { ...defaultJobOptions, ...options } as SendJobOptions;
-    return String(await this.boss.send(name, data as object, merged as object));
+    const merged: SendJobOptions = { ...defaultJobOptions, ...options };
+    // pg-boss v12 has no delaySeconds: an unknown key is silently dropped and
+    // the job would run immediately. Map the engine-agnostic delay onto
+    // startAfter (seconds from now) before the adapter boundary loses it.
+    const { delaySeconds, ...bossOptions } = merged;
+    const sendOpts = bossOptions as SendJobOptions & { startAfter?: number };
+    if (delaySeconds !== undefined && sendOpts.startAfter === undefined) {
+      sendOpts.startAfter = delaySeconds;
+    }
+    return String(await this.boss.send(name, data as object, sendOpts as object));
   }
 
   async schedule(
