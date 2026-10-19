@@ -114,6 +114,23 @@ describe("mention delivery", () => {
     expect(await prisma.botMessage.findMany({ where: { toBotId: guest.id } })).toHaveLength(1);
   });
 
+  it("reconciles the target's durable config before delivering a mention", async () => {
+    // The target's conversation may be staler than its row (e.g. its model
+    // gained vision): the mention must not submit under the stale selection.
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    await request(app)
+      .post(`/api/v1/bots/${host.id}/messages`)
+      .set(authorization)
+      .send({
+        requestId: "mention-req-0003",
+        text: "@Guest hi",
+        mentions: [guest.id],
+      });
+    const guestConfig = vi.mocked(runtime.configure).mock.calls.find((c) => c[0] === 2)?.[1];
+    expect(guestConfig).toMatchObject({ modelId: "m1" });
+  });
+
   it("ignores mentions of the host itself and unknown ids", async () => {
     const host = await seedBot("Host", "1");
     const res = await request(app)

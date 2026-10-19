@@ -538,3 +538,29 @@ describe("Bots API routes", () => {
     expect(agentRuntime.onActivity).toHaveBeenCalledOnce();
   });
 });
+
+it("drops a stale vision toolkit when the model gained native vision", async () => {
+  // Saved in the text-only era; the model now sees images inline. The
+  // side-call's prompt section would order see_image calls with ids that
+  // no longer reach the model (production: fabricated upload_ ULIDs).
+  const bot = await prisma.bot.create({
+    data: {
+      id: "stalevision",
+      name: "Stale Vision",
+      systemPrompt: "You help.",
+      modelId: "vision-model",
+      conversationId: "777",
+      toolkits: '["tasks", "vision"]',
+    },
+  });
+  await request(buildApp())
+    .post(`/api/v1/bots/${bot.id}/messages`)
+    .set(authorization)
+    .send({ requestId: "stale-vision-check", text: "Hi" })
+    .expect(200);
+  expect(agentRuntime.configure).toHaveBeenCalledWith(777, {
+    modelId: "vision-model",
+    systemPrompt: "You help.",
+    capabilities: { enabled: ["tasks", "skills"], permissions: {} },
+  });
+});

@@ -11,6 +11,7 @@
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import { sanitizePeerText, type AgentRuntime, type ChatState } from "@tiny-agents/agent";
+import { agentConfig, connectionToolCounts, toBot, withLinks } from "./bots.service";
 
 /** How a relayed reply is presented inside the receiving transcript. */
 export function relayText(fromName: string, text: string): string {
@@ -83,12 +84,18 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     }
     const host = await prisma.bot.findUnique({
       where: { id: row.replyToBotId },
-      select: { conversationId: true },
+      include: withLinks,
     });
     if (!host) {
       await markAnswered(row.id, replyCreatedAt);
       return true;
     }
+    // Same reconciliation as sends and mentions: the host's durable config
+    // must not be staler than its row before it answers.
+    await rt.configure(
+      Number(host.conversationId),
+      agentConfig({ ...toBot(host), connectionToolCounts: connectionToolCounts(host) }),
+    );
     await rt.submit(Number(host.conversationId), {
       requestId: `botmsg-reply-${row.id}`,
       text: relayText(fromName, sanitizePeerText(replyText)),

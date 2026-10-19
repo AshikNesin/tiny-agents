@@ -74,6 +74,12 @@ first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
 `VISION_API_KEY`. Empty answers retry once. None available: the tool errors
 and the bot says so.
 
+Every submit path (send, mention delivery, bot-to-bot relay) reconciles the
+bot's durable config from its row first, and `agentConfig` drops a stale
+`vision` toolkit when the model sees images inline; editing a bot or
+answering an approval reconfigures too. A durable conversation can never run
+a selection older than its row.
+
 Custom models declare their input modality at registration: `vision: true`
 opts in, `vision: false` opts out, and `glm-5.3-flash` defaults to
 image-capable. This matters beyond the side-call: pi-ai's

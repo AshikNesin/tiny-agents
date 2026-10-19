@@ -78,7 +78,7 @@ type BotWithLinks = BotRow & {
   connections?: { connectionId: string; connection: { slug: string; toolsCache: string } }[];
 };
 
-const withLinks = {
+export const withLinks = {
   skills: { select: { skillId: true } },
   connections: {
     select: { connectionId: true, connection: { select: { slug: true, toolsCache: true } } },
@@ -120,7 +120,7 @@ function toolCount(cache: string): number {
 }
 
 /** slug → cached tool count for a bot's enabled connections. */
-function connectionToolCounts(bot: {
+export function connectionToolCounts(bot: {
   connections?: { connection: { slug: string; toolsCache: string } }[];
 }): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -145,17 +145,19 @@ export function agentConfig(
   const largeServer = Object.values(bot.connectionToolCounts ?? {}).some(
     (count) => count > MCP_DEFER_THRESHOLD,
   );
+  const seesImages = modelSeesImages(bot.modelId);
   return {
     modelId: bot.modelId,
     systemPrompt: bot.systemPrompt,
     capabilities: {
       enabled: [
-        ...bot.toolkits,
+        // The see_image side-call is only for models without native vision;
+        // a stale `vision` entry saved while the model was text-only is
+        // dropped here (its prompt section orders calls with ids that no
+        // longer reach the model once images go inline).
+        ...bot.toolkits.filter((id) => !seesImages || id !== "vision"),
         "skills",
-        // A model without native vision gets the see_image side-call toolkit
-        // (issue #17), force-included like skills: it self-adjusts on model
-        // switch, and a toggle would strand the bots that need it most.
-        ...(modelSeesImages(bot.modelId) ? [] : ["vision"]),
+        ...(seesImages ? [] : ["vision"]),
         ...(bot.connectionCapabilities ?? []),
         ...(largeServer ? ["tool-search"] : []),
       ],
@@ -307,9 +309,13 @@ export async function reconfigure(
   id: string,
   rt: Pick<BotAgentRuntime, "configure"> = runtime(),
 ): Promise<Bot> {
-  const bot = await findBot(id);
-  await rt.configure(Number(bot.conversationId), agentConfig(toBot(bot)));
-  return toBot(bot);
+  const row = await findBot(id);
+  const bot = toBot(row);
+  await rt.configure(
+    Number(bot.conversationId),
+    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
+  );
+  return bot;
 }
 
 export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRuntime = runtime()) {
@@ -383,7 +389,15 @@ export async function sendMessage(
   input: { requestId: string; text: string; mentions?: string[]; attachments?: string[] },
   rt: BotAgentRuntime = runtime(),
 ) {
-  const bot = await getBot(id);
+  const row = await findBot(id);
+  const bot = toBot(row);
+  // The durable conversation keeps the config from its last configure;
+  // sends must reconcile it, or drift (a model that gained vision, a toolkit
+  // edited in the row, a connection added) silently strands old selections.
+  await rt.configure(
+    Number(bot.conversationId),
+    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
+  );
   const send = await resolveSend(bot, input);
   await rt.submit(Number(bot.conversationId), {
     requestId: input.requestId,
@@ -514,16 +528,23 @@ async function deliverMentions(
 ): Promise<void> {
   const targets = await prisma.bot.findMany({
     where: { id: { in: input.mentions ?? [] }, NOT: { id: host.id } },
-    select: { id: true, name: true, conversationId: true },
+    include: withLinks,
   });
   if (targets.length === 0) return;
   const ownerContext = `[From the owner, in ${host.name}'s chat]`;
-  for (const target of targets) {
+  for (const targetRow of targets) {
+    const target = toBot(targetRow);
     try {
       const existing = await prisma.botMessage.findUnique({
         where: { requestId: `mention-${input.requestId}-${target.id}` },
       });
       if (existing) continue;
+      // Same reconciliation as the host's send: the target's durable config
+      // must not be staler than its row (stale vision toolkit, link drift).
+      await rt.configure(
+        Number(target.conversationId),
+        agentConfig({ ...target, connectionToolCounts: connectionToolCounts(targetRow) }),
+      );
       await rt.submit(Number(target.conversationId), {
         requestId: `mention-${input.requestId}-${target.id}`,
         text: mentionText(ownerContext, sanitizePeerText(input.text)),
