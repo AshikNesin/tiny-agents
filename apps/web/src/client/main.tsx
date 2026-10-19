@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
 import App from "./App";
 import "@groot/shell/index.css";
+import "streamdown/styles.css";
 import "./app.css";
 
 // tiny-agents stays dark unless the user picks otherwise (PRD §6.1).
