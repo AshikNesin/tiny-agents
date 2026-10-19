@@ -15,6 +15,7 @@ vi.mock("@groot/jobs/server/client", () => ({
     cancelJob: vi.fn(async () => true),
     createQueue: vi.fn(async () => undefined),
   }),
+  jobQueueReady: () => true,
 }));
 
 import {

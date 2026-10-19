@@ -28,6 +28,7 @@ vi.mock("@groot/jobs/server/client", () => ({
     cancelJob: vi.fn(async () => true),
     createQueue: vi.fn(async () => undefined),
   }),
+  jobQueueReady: () => true,
 }));
 
 /** Assistant messages the watcher's chat snapshot will carry. */
