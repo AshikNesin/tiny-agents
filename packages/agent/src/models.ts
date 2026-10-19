@@ -258,5 +258,6 @@ export function toModelInfo(model: Model<Api>, providerTag?: string): ModelInfo 
     family: familyOf(model, providerTag),
     reasoning: Boolean(model.reasoning),
     contextWindow: model.contextWindow,
+    vision: (model.input ?? []).includes("image"),
   };
 }

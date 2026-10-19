@@ -37,6 +37,14 @@ export {
 } from "./toolkits/tasks";
 export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
+export {
+  createVisionToolkit,
+  createTranscriber,
+  VISION_SYSTEM,
+  DEFAULT_QUESTION,
+  type Transcriber,
+  type VisionStore,
+} from "./toolkits/vision";
 export { sanitizePeerText, CUSTODY_RULE } from "./toolkits/peer-text";
 export {
   createSkillsCapability,
@@ -69,5 +77,12 @@ export {
   createGatewayModels,
   isGatewayConfigured,
 } from "./models";
-export { deriveChat, diffChat, chatState, type RawChat } from "./transcript";
+export {
+  deriveChat,
+  diffChat,
+  chatState,
+  CHAT_USER_ENTRY,
+  attachmentsOf,
+  type RawChat,
+} from "./transcript";
 export type * from "./types";

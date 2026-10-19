@@ -15,6 +15,8 @@ export interface ModelInfo {
   family: "anthropic" | "openai" | "workers-ai" | "other";
   reasoning: boolean;
   contextWindow: number;
+  /** The model accepts image content natively. */
+  vision: boolean;
 }
 
 export interface BotAgentConfig {
@@ -59,11 +61,26 @@ export interface ChatToolCall {
   sources?: { url: string; title: string }[];
 }
 
+/** An image or file attached to a user message (issue #17). */
+export interface AttachmentRef {
+  /** Upload row id; resolves bytes through /api/v1/uploads/:id/content. */
+  uploadId: string;
+  kind: "image" | "file";
+  name: string;
+  mimeType: string;
+  size: number;
+  /** Images only, after preparation. */
+  width?: number;
+  height?: number;
+}
+
 export interface ChatMessage {
   /** Stable id: `e<entryId>` for committed entries, `live` for the in-flight reply. */
   id: string;
   role: "user" | "assistant" | "marker";
   text: string;
+  /** Attachments the user sent with this message (user role only). */
+  attachments?: AttachmentRef[];
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   /** Model thinking, when the model emitted any. */

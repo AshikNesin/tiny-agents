@@ -1,6 +1,13 @@
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { EntryRecord } from "@earendil-works/pi-durable";
-import type { ChatEvent, ChatMessage, ChatState, ChatToolCall, ChatToolStatus } from "./types";
+import type {
+  AttachmentRef,
+  ChatEvent,
+  ChatMessage,
+  ChatState,
+  ChatToolCall,
+  ChatToolStatus,
+} from "./types";
 
 /** A tool call of the current round, as `pi.live` presents it. */
 export interface LiveTool {
@@ -45,6 +52,26 @@ function textOf(content: unknown): string {
     .filter((block): block is { type: "text"; text: string } => block?.type === "text")
     .map((block) => block.text)
     .join("");
+}
+
+/** Entry kind a chat send is placed as (pi-durable InputEntry; not "pi."-prefixed). */
+export const CHAT_USER_ENTRY = "chat.user";
+
+/** Attachment refs stored in a `chat.user` entry's data (validated at upload). */
+export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
+  if (entry.kind !== CHAT_USER_ENTRY) return undefined;
+  const data = record(entry.data);
+  const list = Array.isArray(data?.attachments) ? data.attachments : [];
+  const refs = list.filter(
+    (a): a is AttachmentRef =>
+      record(a) !== undefined &&
+      typeof a.uploadId === "string" &&
+      (a.kind === "image" || a.kind === "file") &&
+      typeof a.name === "string" &&
+      typeof a.mimeType === "string" &&
+      typeof a.size === "number",
+  );
+  return refs.length > 0 ? refs : undefined;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -210,9 +237,8 @@ export function assistantToChat(
  */
 export function deriveChat(raw: RawChat): ChatMessage[] {
   const entries = [...raw.entries].sort((a, b) => Number(a.id) - Number(b.id));
-  const visible = entries.filter(
-    (e) => e.kind === "pi.user" || e.kind === "pi.assistant" || e.kind === "pi.compaction",
-  );
+  const visibleKinds = new Set(["pi.user", CHAT_USER_ENTRY, "pi.assistant", "pi.compaction"]);
+  const visible = entries.filter((e) => visibleKinds.has(e.kind));
 
   const markersBeforeHead = new Map<number, ChatMessage[]>();
   const ids = new Set(visible.map((e) => Number(e.id)));
@@ -238,7 +264,6 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       markersBeforeHead.set(head, list);
     }
   }
-
   for (let i = 0; i < visible.length; i++) {
     const entry = visible[i];
     const id = Number(entry.id);
@@ -263,11 +288,13 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     const message = firstMessage(entry);
     if (!message) continue;
 
-    if (entry.kind === "pi.user") {
+    if (entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) {
+      const attachments = attachmentsOf(entry);
       out.push({
         id: `e${entry.id}`,
         role: "user",
         text: textOf(message.content),
+        ...(attachments ? { attachments } : {}),
         status: "done",
         createdAt: message.timestamp ?? 0,
       });

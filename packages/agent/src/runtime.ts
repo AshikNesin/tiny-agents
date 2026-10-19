@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context, JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
@@ -41,9 +41,10 @@ import {
 } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
-import { chatState, diffChat, type LiveTool, type RawChat } from "./transcript";
+import { chatState, diffChat, CHAT_USER_ENTRY, type LiveTool, type RawChat } from "./transcript";
 import type {
   ActivityChange,
+  AttachmentRef,
   BotAgentConfig,
   ChatEvent,
   ChatState,
@@ -433,10 +434,52 @@ export class AgentRuntime {
    * submits twice. While a reply is running, the message is queued as a
    * follow-up and answered next.
    */
-  async submit(ref: ConversationRef, input: { requestId: string; text: string }): Promise<void> {
+  async submit(
+    ref: ConversationRef,
+    input: {
+      requestId: string;
+      /** Plain text, or text plus inline image blocks. */
+      text: string;
+      images?: { data: string; mimeType: string }[];
+      /** Attachment refs stored on the entry for the transcript (issue #17). */
+      attachments?: AttachmentRef[];
+    },
+  ): Promise<void> {
     const conversation = await this.#conversation(ref);
+    const content = input.images?.length
+      ? [
+          ...(input.text ? [{ type: "text" as const, text: input.text }] : []),
+          ...input.images.map((image) => ({
+            type: "image" as const,
+            data: image.data,
+            mimeType: image.mimeType,
+          })),
+        ]
+      : input.text;
     await conversation.submit(
-      { type: "input", content: input.text, requestId: input.requestId },
+      {
+        type: "input",
+        content,
+        requestId: input.requestId,
+        ...(input.attachments?.length
+          ? {
+              entry: {
+                kind: CHAT_USER_ENTRY,
+                data: {
+                  attachments: input.attachments.map((a) => ({
+                    uploadId: a.uploadId,
+                    kind: a.kind,
+                    name: a.name,
+                    mimeType: a.mimeType,
+                    size: a.size,
+                    ...(a.width !== undefined ? { width: a.width } : {}),
+                    ...(a.height !== undefined ? { height: a.height } : {}),
+                  })),
+                } as unknown as JsonValue,
+              },
+            }
+          : {}),
+      },
       ctx,
     );
   }
