@@ -220,7 +220,7 @@ export function ChatPane({
         <button
           type="button"
           onClick={onEditBot}
-          className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:flex-none md:px-2.5"
+          className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:px-2.5"
           aria-label={`Edit ${bot.name}`}
         >
           <BotAvatar name={bot.name} className="size-7" />
@@ -228,7 +228,12 @@ export function ChatPane({
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
+            <Button
+              variant="outline"
+              size="icon"
+              className="ml-auto rounded-full"
+              aria-label="Bot menu"
+            >
               <MoreHorizontal className="size-5" />
             </Button>
           </DropdownMenuTrigger>
