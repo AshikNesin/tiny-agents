@@ -146,7 +146,7 @@ describe("Routines API routes", () => {
         schedule: { kind: "interval", minutes: 30 },
       });
     expect(response.status).toBe(503);
-    expect(response.body.message).toContain("jobs.enabled=true");
+    expect(response.body.error.message).toContain("jobs.enabled=true");
     // No half-armed row survives: the routine was never created.
     await expect(prisma.routine.count()).resolves.toBe(0);
   });
