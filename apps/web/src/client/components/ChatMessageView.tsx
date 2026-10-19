@@ -6,7 +6,14 @@ import { toast } from "sonner";
 import { botsApi } from "../lib/bots-api";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
 import { BotAvatar } from "./BotAvatar";
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockTitle } from "./ui/code-block";
+import {
+  CodeBlock,
+  CodeBlockContent,
+  CodeBlockHeader,
+  CodeBlockLine,
+  CodeBlockTitle,
+} from "./ui/code-block";
+import { useHighlightedCode } from "./ui/hooks/use-highlighted-code";
 import {
   Trace,
   TraceCollapsible,
@@ -168,6 +175,31 @@ function ApprovalCard({
   );
 }
 
+/** One shiki-highlighted JSON block for a tool call's Input or Output. */
+function ToolDetailBlock({
+  title,
+  value,
+  destructive = false,
+}: {
+  title: string;
+  value: string;
+  destructive?: boolean;
+}) {
+  const lines = useHighlightedCode(value, "json");
+  return (
+    <CodeBlock size="sm" variant={destructive ? "destructive" : "default"}>
+      <CodeBlockHeader>
+        <CodeBlockTitle>{title}</CodeBlockTitle>
+      </CodeBlockHeader>
+      <CodeBlockContent wrap className="max-h-64">
+        {lines.map((line, i) => (
+          <CodeBlockLine key={i}>{line}</CodeBlockLine>
+        ))}
+      </CodeBlockContent>
+    </CodeBlock>
+  );
+}
+
 /**
  * One tool call as an AI Elements Tool step: a TraceLine with the call's
  * status, expanding to its arguments and result. Awaiting calls show the
@@ -190,25 +222,18 @@ function ToolRow({
   const detail =
     call.output || argsJson !== "{}" ? (
       <div className="flex flex-col gap-2">
-        {argsJson !== "{}" && (
-          <CodeBlock size="sm">
-            <CodeBlockHeader>
-              <CodeBlockTitle>Input</CodeBlockTitle>
-            </CodeBlockHeader>
-            <CodeBlockContent wrap className="max-h-64">
-              {argsJson}
-            </CodeBlockContent>
-          </CodeBlock>
-        )}
+        {argsJson !== "{}" && <ToolDetailBlock title="Input" value={argsJson} />}
         {call.output && (
-          <CodeBlock size="sm" variant={call.status === "error" ? "destructive" : "default"}>
-            <CodeBlockHeader>
-              <CodeBlockTitle>Output</CodeBlockTitle>
-            </CodeBlockHeader>
-            <CodeBlockContent wrap className="max-h-64">
-              {call.output}
-            </CodeBlockContent>
-          </CodeBlock>
+          <ToolDetailBlock
+            title="Output"
+            value={call.output}
+            destructive={
+              call.status === "error" ||
+              call.status === "denied" ||
+              call.status === "aborted" ||
+              call.status === "interrupted"
+            }
+          />
         )}
         {call.sources && call.sources.length > 0 && (
           <Trace>
