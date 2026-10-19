@@ -153,6 +153,11 @@ export class AgentRuntime {
   #graph: TaskGraphWatch | undefined;
   #closed = false;
 
+  /** The model registry this runtime runs with (built or passed at open). */
+  get models(): MutableModels {
+    return this.#models;
+  }
+
   private constructor(
     harness: Harness,
     models: MutableModels,

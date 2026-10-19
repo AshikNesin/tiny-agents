@@ -100,8 +100,9 @@ export async function openAgentRuntime(
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
   instance.installCapability(botsCapability(instance));
-  if (!options.models) throw new Error("vision capability needs the model registry");
-  instance.installCapability(visionCapability(instance, options.models, options.env));
+  // The vision side-call binds to the registry the runtime opened with
+  // (built internally when the caller passed none).
+  instance.installCapability(visionCapability(instance, instance.models, options.env));
   runtime = instance;
   ready = true;
   return instance;
