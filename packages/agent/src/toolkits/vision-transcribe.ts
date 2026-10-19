@@ -6,8 +6,10 @@
  *
  * Transcriber selection, in order:
  * 1. VISION_MODEL env (gateway catalog id, or "custom:<provider>/<model>").
- * 2. The first vision-capable gateway model, workers-ai first (cheap).
- * 3. VISION_BASE_URL + VISION_API_KEY (OpenAI-compatible direct backend,
+ * 2. The owner's custom gateway model glm-5.3-flash (any custom provider
+ *    serving it; same OpenAI-compat path the bots use).
+ * 3. The first vision-capable gateway model, workers-ai first (cheap).
+ * 4. VISION_BASE_URL + VISION_API_KEY (OpenAI-compatible direct backend,
  *    for setups with no vision model on the gateway).
  * None available throws "no vision model is configured".
  */
@@ -94,10 +96,26 @@ export function createTranscriber(
     );
   };
 
+  // Custom providers register input:["text"] even when the upstream model
+  // accepts images (pi-ai sends image blocks through the same OpenAI-compat
+  // wire path regardless of the declared modality), so the flash pick
+  // searches all custom providers, not catalogVisionIds.
+  const ownerFlashId = (): string | undefined => {
+    for (const provider of models.getProviders()) {
+      if (provider.id === options.providerId) continue; // gateway-native ids, not custom
+      for (const model of models.getModels(provider.id)) {
+        if (model.id.includes("glm-5.3-flash")) return `custom:${provider.id}/${model.id}`;
+      }
+    }
+    return undefined;
+  };
+
   const chosenModelId = (): string | undefined => {
     const explicit = env.VISION_MODEL?.trim();
     if (explicit && resolveCatalog(explicit)) return explicit;
     if (explicit && !directBase) return undefined; // configured but gone: do not silently pick another
+    const ownerFlash = ownerFlashId();
+    if (ownerFlash) return ownerFlash;
     return catalogVisionIds()[0];
   };
 
@@ -132,7 +150,8 @@ export function createTranscriber(
               `vision model ${modelId}`,
             );
             const text = textOf(message);
-            if (!text) throw new UpstreamError(`empty answer from ${modelId}`, false);
+            // Empty answers can be a transient upstream quirk: retry once.
+            if (!text) throw new UpstreamError(`empty answer from ${modelId}`, true);
             return text;
           });
           return answer;
@@ -170,8 +189,13 @@ export function createTranscriber(
         "no vision model is configured (set VISION_MODEL, or add a vision model to the gateway, or set VISION_BASE_URL)",
       );
     },
-    availableModelIds: () =>
-      directBase ? [...catalogVisionIds(), `${directBase} (direct)`] : catalogVisionIds(),
+    availableModelIds: () => {
+      const chosen = chosenModelId();
+      const ids = chosen
+        ? [chosen, ...catalogVisionIds().filter((id) => id !== chosen)]
+        : catalogVisionIds();
+      return directBase ? [...ids, `${directBase} (direct)`] : ids;
+    },
   };
 }
 

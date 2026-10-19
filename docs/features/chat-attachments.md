@@ -66,9 +66,13 @@ The split is per send, from the model catalog's `input` modality
   side-calls a vision-capable transcriber and returns the text. Fail-open:
   upstream errors return `isError` with the reason; the bot keeps its turn.
 
-Transcriber selection order: `VISION_MODEL` (if it resolves), the first
-gateway vision model (workers-ai first), then `VISION_BASE_URL` +
-`VISION_API_KEY`. None available: the tool errors and the bot says so.
+Transcriber selection order: `VISION_MODEL` (if it resolves), the owner's
+custom glm-5.3-flash (any custom provider serving it; custom providers
+register `input:["text"]` while the upstream model accepts images, and
+pi-ai sends image blocks through the same OpenAI-compat wire path), the
+first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
+`VISION_API_KEY`. Empty answers retry once. None available: the tool errors
+and the bot says so.
 
 ## Gotchas encoded in tests
 
