@@ -125,8 +125,15 @@ export function createTranscriber(
       const timeoutMs = call.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const modelId = chosenModelId();
       if (modelId) {
-        const model = resolveCatalog(modelId);
-        if (model) {
+        const resolved = resolveCatalog(modelId);
+        if (resolved) {
+          // The side-call exists to send an image; if the registry declared
+          // the model text-only, pi-ai's transform would strip the image
+          // block ("image omitted: model does not support images") before
+          // the wire. Declare it on the call's copy so the image survives.
+          const model: Model<Api> = (resolved.input ?? []).includes("image")
+            ? resolved
+            : { ...resolved, input: [...(resolved.input ?? ["text"]), "image"] };
           const answer = await retry(async () => {
             const message = await withTimeout(
               models.completeSimple(

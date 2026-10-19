@@ -73,3 +73,19 @@ describe("createTranscriber selection", () => {
     expect(completeSimple).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("image input on the transcriber's model", () => {
+  it("forces image input when the registry declared the model text-only", async () => {
+    const completeSimple = vi
+      .fn()
+      .mockResolvedValue({ content: [{ type: "text", text: "A red pixel." }] });
+    const models = {
+      ...fakeModels({ "custom-zai-coding-plan": [flash] }),
+      completeSimple,
+    } as unknown as TranscriberModels;
+    const t = createTranscriber(models, { providerId: GATEWAY, env: {} });
+    await t.transcribe({ data: "aGk=", mimeType: "image/png", name: "x.png" });
+    const passedModel = completeSimple.mock.calls[0][0] as { input?: string[] };
+    expect(passedModel.input).toContain("image");
+  });
+});

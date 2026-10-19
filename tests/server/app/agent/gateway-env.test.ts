@@ -130,3 +130,39 @@ describe("gateway auth scheme selection", () => {
     expect(model?.baseUrl).toMatch(/^https:\/\/cf-proxy\.example\.com\//);
   });
 });
+
+describe("custom model image input", () => {
+  it("declares glm-5.3-flash image-capable by default (production vision fix)", () => {
+    const providers = models({
+      GATEWAY_CUSTOM_PROVIDERS: GOOD_PROVIDERS,
+      CLOUDFLARE_ACCOUNT_ID: "acc",
+      CLOUDFLARE_GATEWAY_ID: "gw",
+    });
+    const flash = providers[0].getModels().find((m) => m.id === "glm-5.3-flash");
+    expect(flash?.input).toContain("image");
+  });
+
+  it("honors vision:false to opt a model out", () => {
+    const providers = models({
+      GATEWAY_CUSTOM_PROVIDERS: JSON.stringify([
+        { id: "custom-x", models: [{ id: "glm-5.3-flash", vision: false }] },
+      ]),
+      CLOUDFLARE_ACCOUNT_ID: "acc",
+      CLOUDFLARE_GATEWAY_ID: "gw",
+    });
+    const m = providers[0].getModels().find((x) => x.id === "glm-5.3-flash");
+    expect(m?.input).toEqual(["text"]);
+  });
+
+  it("opts other models in with vision:true", () => {
+    const providers = models({
+      GATEWAY_CUSTOM_PROVIDERS: JSON.stringify([
+        { id: "custom-x", models: [{ id: "other-model", vision: true }] },
+      ]),
+      CLOUDFLARE_ACCOUNT_ID: "acc",
+      CLOUDFLARE_GATEWAY_ID: "gw",
+    });
+    const m = providers[0].getModels().find((x) => x.id === "other-model");
+    expect(m?.input).toContain("image");
+  });
+});

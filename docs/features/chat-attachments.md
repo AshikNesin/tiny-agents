@@ -74,6 +74,14 @@ first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
 `VISION_API_KEY`. Empty answers retry once. None available: the tool errors
 and the bot says so.
 
+Custom models declare their input modality at registration: `vision: true`
+opts in, `vision: false` opts out, and `glm-5.3-flash` defaults to
+image-capable. This matters beyond the side-call: pi-ai's
+`downgradeUnsupportedImages` replaces image blocks with a placeholder for
+any model registered text-only, so a wrong flag strips images before the
+wire. The transcriber also declares image input on its resolved model
+defensively, so a stale registration flag cannot neuter the side-call.
+
 ## Gotchas encoded in tests
 
 - Optimistic-echo dedupe compares text AND attachment ids (two image-only

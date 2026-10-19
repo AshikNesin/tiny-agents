@@ -42,13 +42,17 @@ export function createGatewayModels(
   return models;
 }
 
+/** Custom gateway models known to accept images even without `vision: true`. */
+const DEFAULT_VISION_MODEL_IDS = new Set(["glm-5.3-flash"]);
+
 /**
  * Custom (BYOK) providers configured on the gateway, registered as first-class
  * pi-ai providers so bots can use them like catalog models. Driven by
  * GATEWAY_CUSTOM_PROVIDERS (JSON array):
  *
  *   [{ "id": "custom-zai-coding-plan", "models": [{ "id": "glm-5.3-flash",
- *      "name": "GLM 5.3 Flash", "contextWindow": 131072, "reasoning": true }] }]
+ *      "name": "GLM 5.3 Flash", "contextWindow": 131072, "reasoning": true,
+ *      "vision": true }] }]
  *
  * Each model is an OpenAI-compatible chat model routed through
  * https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/<provider-id>,
@@ -180,7 +184,7 @@ export function registerGatewayCustomProviders(
       contextWindow: number;
       maxTokens: number;
       reasoning: boolean;
-      input: ["text"];
+      input: ["text"] | ["text", "image"];
       cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
       provider: string;
       headers?: Record<string, string>;
@@ -203,7 +207,14 @@ export function registerGatewayCustomProviders(
         contextWindow: typeof m.contextWindow === "number" ? m.contextWindow : 131_072,
         maxTokens: typeof m.maxTokens === "number" ? m.maxTokens : 16_384,
         reasoning: m.reasoning === true,
-        input: ["text"],
+        // Declaring image input is what keeps pi-ai from stripping image
+        // blocks (downgradeUnsupportedImages) before the wire. `vision: true`
+        // opts in per model; glm-5.3-flash defaults to it (the owner's
+        // vision side-call model, confirmed image-capable).
+        input:
+          m.vision === true || (m.vision !== false && DEFAULT_VISION_MODEL_IDS.has(m.id))
+            ? (["text", "image"] as const)
+            : (["text"] as const),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         provider: providerId,
         // Z.AI (GLM) quirks: no "developer" role (system only), max_tokens
