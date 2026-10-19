@@ -116,3 +116,100 @@ test.describe("Chats — new chat", () => {
     await expect(page.getByText(/Echo: old message/i)).toHaveCount(0);
   });
 });
+
+test.describe("Chats — attachments (issue #17)", () => {
+  test("attach an image, send, render, survive reload", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel(/password/i).fill("demo@example.com");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await expect(page).toHaveURL(/\/chats$/);
+
+    // Ensure a bot exists.
+    const hasBot = await page
+      .getByRole("button", { name: /attach bot/i })
+      .first()
+      .isVisible();
+    if (!hasBot) {
+      await page.getByRole("button", { name: /new bot/i }).click();
+      await page.getByLabel("Name").fill("Attach Bot");
+      await expect(page.getByRole("button", { name: "Test Model (faux)" })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByRole("button", { name: /create bot/i }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
+    }
+    await page
+      .getByRole("button", { name: /attach bot/i })
+      .first()
+      .click();
+
+    // A real 1x1 PNG through the file input.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.setInputFiles('input[type="file"]', {
+      name: "e2e-shot.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+
+    // Staged thumbnail appears, then upload settles and Send enables.
+    await expect(page.getByTestId("staged-image")).toBeVisible();
+    await page.getByPlaceholder(/(?:ask|message) attach bot/i).fill("what is this?");
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    // Transcript: user message with the image, echoed reply.
+    await expect(page.getByText("what is this?").first()).toBeVisible();
+    await expect(page.getByAltText("e2e-shot.png").first()).toBeVisible();
+    await expect(page.getByText(/Echo:/i).first()).toBeVisible({ timeout: 20_000 });
+
+    // Reload: rendering is durable (entry data), not client state.
+    await page.reload();
+    await page
+      .getByRole("button", { name: /attach bot/i })
+      .first()
+      .click();
+    await expect(page.getByAltText("e2e-shot.png").first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("image-only send works without text", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel(/password/i).fill("demo@example.com");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await expect(page).toHaveURL(/\/chats$/);
+    const hasBot = await page
+      .getByRole("button", { name: /attach bot/i })
+      .first()
+      .isVisible();
+    if (!hasBot) {
+      await page.getByRole("button", { name: /new bot/i }).click();
+      await page.getByLabel("Name").fill("Attach Bot");
+      await expect(page.getByRole("button", { name: "Test Model (faux)" })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByRole("button", { name: /create bot/i }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
+    }
+    await page
+      .getByRole("button", { name: /attach bot/i })
+      .first()
+      .click();
+
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.setInputFiles('input[type="file"]', {
+      name: "only-image.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+    await expect(page.getByTestId("staged-image")).toBeVisible();
+    // Send stays disabled while uploading, then enables with no text.
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByAltText("only-image.png").first()).toBeVisible({ timeout: 15_000 });
+  });
+});
