@@ -37,7 +37,7 @@ test.describe("Chats", () => {
     await expect(page.getByRole("button", { name: /echo bot/i }).first()).toBeVisible();
 
     // Send a message and await the streamed reply
-    const composer = page.getByPlaceholder(/ask echo bot/i);
+    const composer = page.getByPlaceholder(/(?:ask|message) echo bot/i);
     await composer.fill("hello e2e");
     await composer.press("Enter");
     await expect(page.getByText("hello e2e").first()).toBeVisible();
@@ -102,7 +102,7 @@ test.describe("Chats — new chat", () => {
       .first()
       .click();
 
-    const composer = page.getByPlaceholder(/ask reset bot/i);
+    const composer = page.getByPlaceholder(/(?:ask|message) reset bot/i);
     await composer.fill("old message");
     await composer.press("Enter");
     await expect(page.getByText("old message").first()).toBeVisible();
