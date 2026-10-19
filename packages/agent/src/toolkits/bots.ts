@@ -29,7 +29,7 @@ export interface BotMessagingStore {
     text: string;
     requestId: string;
     sourceKey: string;
-  }): Promise<{ delivered: boolean; reason?: "unknown_bot" | "self" | "loop" | "busy_target" }>;
+  }): Promise<{ delivered: boolean; reason?: "unknown_bot" | "self" | "loop" }>;
   /** Bot names the model can message (roster section). */
   roster(conversationId: number): Promise<{ name: string; description: string }[]>;
 }
@@ -49,7 +49,7 @@ export function createBotsToolkit(store: BotMessagingStore): Capability {
     name: "message_bot",
     description:
       "Send a message to another bot by name, to ask for help or information or to collaborate. " +
-      "Fire-and-forget: the reply arrives later in your conversation as \"Reply from <name>\", " +
+      'Fire-and-forget: the reply arrives later in your conversation as "Reply from <name>", ' +
       "so there is no need to wait or poll. Keep the text self-contained, with all context the other bot needs.",
     parameters: Type.Object({
       to: Type.String({ minLength: 1, maxLength: 100, description: "Bot name from the roster" }),

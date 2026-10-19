@@ -9,7 +9,7 @@ import type { AgentRuntime } from "@tiny-agents/agent";
 import type { BotMessagingStore } from "@tiny-agents/agent";
 
 /** Same shape as the ledger kinds (schema.sqlite.prisma BotMessage.kind). */
-type DeliverReason = "unknown_bot" | "self" | "loop" | "busy_target";
+type DeliverReason = "unknown_bot" | "self" | "loop";
 
 /** Loop guard: more than this many sends from one bot to one target in the window is a runaway loop. */
 const LOOP_WINDOW_MS = 10 * 60 * 1000;

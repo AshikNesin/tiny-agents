@@ -38,9 +38,10 @@ test.describe("Bot to bot", () => {
     await page.goto("/chats");
     await createBot(page, "Relay Host");
     // Creating a bot navigates into its chat; the host is the open one.
-    await expect(page.getByPlaceholder(/ask relay host/i)).toBeVisible({ timeout: 15_000 });
+    // Two bots exist now, so the placeholder advertises @mentions.
+    const composer = page.getByPlaceholder(/message relay host/i);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    const composer = page.getByPlaceholder(/ask relay host/i);
     await composer.fill("what do you think @Relay Guest");
     await composer.press("Enter");
 

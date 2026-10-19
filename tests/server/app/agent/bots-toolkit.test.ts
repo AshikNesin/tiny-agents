@@ -20,7 +20,7 @@ interface MemoryStore extends BotMessagingStore {
   /** Rows the "unique requestId column" accepted: one per real delivery. */
   deliveries: string[];
   roster: { name: string; description: string }[];
-  nextResult: { delivered: boolean; reason?: "unknown_bot" | "self" | "loop" | "busy_target" };
+  nextResult: { delivered: boolean; reason?: "unknown_bot" | "self" | "loop" };
 }
 
 function memoryStore(
@@ -63,7 +63,11 @@ function api(overrides: Partial<ToolExecutionApi> = {}): ToolExecutionApi {
   return Object.assign(base, overrides);
 }
 
-async function run(capability: Capability, args: Record<string, unknown>, apiOverride?: ToolExecutionApi) {
+async function run(
+  capability: Capability,
+  args: Record<string, unknown>,
+  apiOverride?: ToolExecutionApi,
+) {
   const tool = capability.extension.tools!.find((t) => t.name === "message_bot")!;
   const result = (await tool.execute(
     args as never,
@@ -168,7 +172,9 @@ describe("bots toolkit", () => {
 
     const empty = memoryStore([]);
     const noRoster = createBotsToolkit(empty).extension.sections!.find((s) => s.key === "bots")!;
-    expect(await noRoster.render({ conversationId: 3 } as never, BACKGROUND_CONTEXT)).toBeUndefined();
+    expect(
+      await noRoster.render({ conversationId: 3 } as never, BACKGROUND_CONTEXT),
+    ).toBeUndefined();
   });
 
   it("exposes UI metadata: default ask, never read-only or ask-only", () => {

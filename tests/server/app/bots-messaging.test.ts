@@ -157,11 +157,24 @@ describe("relay", () => {
         deliveredAt: new Date(),
       },
     });
-    runtime.lastMessage.mockResolvedValue({
-      role: "assistant",
-      text: "Here is my answer",
-      createdAt: Date.now(),
-    });
+    const answered = Date.now();
+    runtime.watchChat.mockImplementation(
+      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
+        await listener([
+          {
+            type: "snapshot",
+            state: {
+              messages: [
+                { id: "u1", role: "user", text: "hello", createdAt: answered - 2_000 },
+                { id: "a1", role: "assistant", text: "Here is my answer", createdAt: answered },
+              ],
+              busy: false,
+            },
+          },
+        ]);
+        return { initial: { messages: [], busy: false }, stop: async () => undefined };
+      },
+    );
     const relay = createBotRelay(runtime);
     const relayed = await relay.relayForBot(guest.id);
     expect(relayed).toBe(1);
@@ -198,5 +211,109 @@ describe("relay", () => {
     expect(await relay.relayForBot(guest.id)).toBe(0);
     const row = await prisma.botMessage.findUnique({ where: { requestId: "r2" } });
     expect(row?.answeredAt).toBeNull();
+  });
+
+  it("never relays a stale reply that predates the delivery (boot sweep)", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    await prisma.botMessage.create({
+      data: {
+        fromBotId: null,
+        toBotId: guest.id,
+        replyToBotId: host.id,
+        kind: "mention",
+        requestId: "r3",
+        text: "hello",
+        deliveredAt: new Date(),
+      },
+    });
+    // The guest's last reply predates the delivery: a restart sweep must
+    // not present it as the answer.
+    runtime.watchChat.mockImplementation(
+      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
+        await listener([
+          {
+            type: "snapshot",
+            state: {
+              messages: [
+                {
+                  id: "old",
+                  role: "assistant",
+                  text: "Old reply before the mention",
+                  createdAt: Date.now() - 60_000,
+                },
+              ],
+              busy: false,
+            },
+          },
+        ]);
+        return { initial: { messages: [], busy: false }, stop: async () => undefined };
+      },
+    );
+    const relay = createBotRelay(runtime);
+    expect(await relay.relayForBot(guest.id)).toBe(0);
+    const row = await prisma.botMessage.findUnique({ where: { requestId: "r3" } });
+    expect(row?.answeredAt).toBeNull();
+  });
+
+  it("gives each of two queued deliveries its own reply, in order", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    const deliveredAt = new Date();
+    for (const [requestId, text] of [
+      ["first", "question one"],
+      ["second", "question two"],
+    ] as const) {
+      await prisma.botMessage.create({
+        data: {
+          fromBotId: null,
+          toBotId: guest.id,
+          replyToBotId: host.id,
+          kind: "mention",
+          requestId,
+          text,
+          deliveredAt,
+        },
+      });
+    }
+    runtime.watchChat.mockImplementation(
+      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
+        await listener([
+          {
+            type: "snapshot",
+            state: {
+              messages: [
+                {
+                  id: "a1",
+                  role: "assistant",
+                  text: "Answer to question one",
+                  createdAt: deliveredAt.getTime() + 1_000,
+                },
+                {
+                  id: "a2",
+                  role: "assistant",
+                  text: "Answer to question two",
+                  createdAt: deliveredAt.getTime() + 2_000,
+                },
+              ],
+              busy: false,
+            },
+          },
+        ]);
+        return { initial: { messages: [], busy: false }, stop: async () => undefined };
+      },
+    );
+    const relay = createBotRelay(runtime);
+    expect(await relay.relayForBot(guest.id)).toBe(2);
+    const texts = runtime.submit.mock.calls.map((call: unknown[]) => call[1] as { text: string });
+    expect(texts.map((t) => t.text)).toEqual([
+      "**Reply from Guest:** Answer to question one",
+      "**Reply from Guest:** Answer to question two",
+    ]);
+    for (const requestId of ["first", "second"]) {
+      const row = await prisma.botMessage.findUnique({ where: { requestId } });
+      expect(row?.answeredAt).not.toBeNull();
+      expect(row?.answerReplyAt).not.toBeNull();
+    }
   });
 });

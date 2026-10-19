@@ -87,8 +87,11 @@ describe("mentionedBotIds", () => {
     expect(mentionedBotIds("@Ada Lovelace hi", BOTS, "host")).toEqual(["b1"]);
   });
 
-  it("matches case-sensitively as inserted", () => {
-    expect(mentionedBotIds("@ada hi", BOTS, "host")).toEqual([]);
+  it("falls back to case-insensitive for a hand-typed tag", () => {
+    // Exact case still wins; "@ada" still reaches "Ada" instead of silently
+    // dropping the tag.
+    expect(mentionedBotIds("@ada hi", BOTS, "host")).toEqual(["b1"]);
+    expect(mentionedBotIds("@Ada hi", BOTS, "host")).toEqual(["b1"]);
   });
 
   it("collects multiple mentions in text order", () => {

@@ -36,10 +36,7 @@ export {
   type TaskPriority,
 } from "./toolkits/tasks";
 export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
-export {
-  createBotsToolkit,
-  type BotMessagingStore,
-} from "./toolkits/bots";
+export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
   createSkillsCapability,
   SKILL_NAME,

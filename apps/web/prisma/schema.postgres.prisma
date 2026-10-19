@@ -97,6 +97,10 @@ model BotMessage {
   deliveredAt  DateTime?
   /// When the target's reply was relayed into replyToBotId's conversation (delivered → answered).
   answeredAt   DateTime?
+  /// Created-at of the assistant reply that answered this delivery. Correlates
+  /// deliveries to replies so one reply never answers two rows (queued
+  /// deliveries) and a reply older than the delivery never answers (stale boot sweep).
+  answerReplyAt DateTime?
   createdAt    DateTime  @default(now())
 
   bot          Bot?       @relation("BotMessagesFrom", fields: [fromBotId], references: [id], onDelete: Cascade)

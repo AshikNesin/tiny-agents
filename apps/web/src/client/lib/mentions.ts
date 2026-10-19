@@ -53,17 +53,24 @@ function escapeRegExp(text: string): string {
  * the trailing space must not silently lose the tag.
  */
 function firstMentionRange(text: string, name: string): { start: number; end: number } | null {
-  const match = new RegExp(`(^|\\s)(@${escapeRegExp(name)})(?![\\p{L}\\p{N}_])`, "gu").exec(text);
-  if (!match) return null;
-  const start = match.index + match[1]!.length;
-  return { start, end: start + match[2]!.length };
+  // Exact case first (the autocomplete always inserts the exact name); a
+  // hand-typed "@ada" still finds "Ada" so a near-miss tag is not silently
+  // dropped. Token boundaries in both cases ("@Adazine" is not "@Ada").
+  for (const candidate of [name, name.toLowerCase()]) {
+    const pattern = `(^|\\s)(@${escapeRegExp(candidate)})(?![\\p{L}\\p{N}_])`;
+    const match = new RegExp(pattern, "gu").exec(text);
+    if (!match) continue;
+    const start = match.index + match[1]!.length;
+    return { start, end: start + match[2]!.length };
+  }
+  return null;
 }
 
 /**
- * Bot ids the final text mentions: an exact, case-sensitive `@Name` with
- * token boundaries. The host never receives its own chat's message, ids
- * dedupe, and a longer name wins over a shorter prefix at the same `@`
- * (tagging "@Pi Helper" does not also ping "Pi").
+ * Bot ids the final text mentions: an `@Name` with token boundaries, exact
+ * case first with a case-insensitive fallback. The host never receives its
+ * own chat's message, ids dedupe, and a longer name wins over a shorter
+ * prefix at the same `@` (tagging "@Pi Helper" does not also ping "Pi").
  */
 export function mentionedBotIds(text: string, bots: MentionCandidate[], hostId: string): string[] {
   const found = bots

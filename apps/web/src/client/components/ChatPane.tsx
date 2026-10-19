@@ -382,7 +382,11 @@ export function ChatPane({
                   void send();
                 }
               }}
-              placeholder={`Ask ${bot.name}`}
+              placeholder={
+                mentionCandidates.length > 0
+                  ? `Message ${bot.name} (type @ to tag another bot)`
+                  : `Ask ${bot.name}`
+              }
               rows={1}
               disabled={!gatewayConfigured || !modelKnown}
               className="px-3 py-2.5"
