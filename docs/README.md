@@ -27,15 +27,16 @@ feature docs as you need them.
 
 ## Features
 
-| Document                                                                     | What it covers                                       |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [`features/todos.md`](./features/todos.md)                                   | The reference feature module (CRUD + jobs)           |
-| [`features/jobs.md`](./features/jobs.md)                                     | Background jobs: adapter, registration, HTTP API, UI |
-| [`features/client.md`](./features/client.md)                                 | Client routing, JWT auth guard, data fetching        |
-| [`features/storage.md`](./features/storage.md)                               | S3 file browser, uploads, rate limits                |
-| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn/FIDO2 passwordless authentication           |
-| [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output           |
-| [`kv.md`](./kv.md)                                                           | Keyv key-value storage (SQLite or Postgres backend)  |
+| Document                                                                     | What it covers                                         |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| [`features/todos.md`](./features/todos.md)                                   | The reference feature module (CRUD + jobs)             |
+| [`features/jobs.md`](./features/jobs.md)                                     | Background jobs: adapter, registration, HTTP API, UI   |
+| [`features/client.md`](./features/client.md)                                 | Client routing, JWT auth guard, data fetching          |
+| [`features/storage.md`](./features/storage.md)                               | S3 file browser, uploads, rate limits                  |
+| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn/FIDO2 passwordless authentication             |
+| [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output             |
+| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: chat image/file attachments, vision paths |
+| [`kv.md`](./kv.md)                                                           | Keyv key-value storage (SQLite or Postgres backend)    |
 
 ## Reference
 
