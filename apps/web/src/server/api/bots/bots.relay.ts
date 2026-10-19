@@ -10,7 +10,7 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
-import type { AgentRuntime, ChatState } from "@tiny-agents/agent";
+import { sanitizePeerText, type AgentRuntime, type ChatState } from "@tiny-agents/agent";
 
 /** How a relayed reply is presented inside the receiving transcript. */
 export function relayText(fromName: string, text: string): string {
@@ -91,7 +91,7 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     }
     await rt.submit(Number(host.conversationId), {
       requestId: `botmsg-reply-${row.id}`,
-      text: relayText(fromName, replyText),
+      text: relayText(fromName, sanitizePeerText(replyText)),
     });
     await markAnswered(row.id, replyCreatedAt);
     return true;

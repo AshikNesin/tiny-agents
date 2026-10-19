@@ -9,6 +9,7 @@ import {
   AgentRuntime,
   ApprovalNotPendingError,
   MCP_DEFER_THRESHOLD,
+  sanitizePeerText,
   type BotAgentConfig,
   type ToolPermission,
 } from "@tiny-agents/agent";
@@ -407,7 +408,7 @@ async function deliverMentions(
       if (existing) continue;
       await rt.submit(Number(target.conversationId), {
         requestId: `mention-${input.requestId}-${target.id}`,
-        text: mentionText(ownerContext, input.text),
+        text: mentionText(ownerContext, sanitizePeerText(input.text)),
       });
       await prisma.botMessage.create({
         data: {

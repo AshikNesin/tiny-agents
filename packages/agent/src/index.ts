@@ -37,6 +37,7 @@ export {
 } from "./toolkits/tasks";
 export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
+export { sanitizePeerText, CUSTODY_RULE } from "./toolkits/peer-text";
 export {
   createSkillsCapability,
   SKILL_NAME,
