@@ -198,6 +198,8 @@ model Routine {
   nextRunAt DateTime?
   /// The queued routine-fire job for nextRunAt (cancel/reschedule handle).
   pendingJobId String? @unique
+  /// Durable tool-call id: exactly-once row create across pi-durable replays (same pattern as Task.sourceKey).
+  sourceKey    String?   @unique
   bot       Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
   runs      RoutineRun[]
   createdAt DateTime @default(now())

@@ -9,6 +9,7 @@
 import {
   AgentRuntime,
   createBotsToolkit,
+  createRoutinesToolkit,
   createSkillsCapability,
   createTasksToolkit,
   createTimeToolkit,
@@ -25,6 +26,7 @@ import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createVisionStore } from "../uploads/uploads.store";
+import { createRoutineStore } from "../routines/routines.toolkit-store";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -39,6 +41,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
   return [
     createSkillsCapability(skillStore),
     createTasksToolkit(taskStore),
+    createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({
       accountId: unquote(env.CLOUDFLARE_ACCOUNT_ID),
       apiToken: unquote(env.CLOUDFLARE_API_KEY),

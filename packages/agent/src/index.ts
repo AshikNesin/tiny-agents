@@ -38,6 +38,16 @@ export {
 export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
+  createRoutinesExtension,
+  createRoutinesToolkit,
+  confirmationCard,
+  type RoutineCreateInput,
+  type RoutineRecord,
+  type RoutineSchedule,
+  type RoutineStore,
+  type RoutineUpdateInput,
+} from "./toolkits/routines";
+export {
   createVisionToolkit,
   createTranscriber,
   VISION_SYSTEM,
