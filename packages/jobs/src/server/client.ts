@@ -14,6 +14,10 @@ export const getJobQueue = (): JobQueueAdapter => {
   return adapter;
 };
 
+/** True when initJobQueue() has run, so callers can fail with guidance
+ * (routines cannot run on an enqueue-only process) instead of a raw 500. */
+export const jobQueueReady = (): boolean => adapter !== null;
+
 export const initJobQueue = async (): Promise<void> => {
   if (adapter) {
     logger.warn("Job queue already initialized");

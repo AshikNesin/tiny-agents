@@ -24,7 +24,7 @@ default:
     jwtExpiresIn: "30d"
 
   jobs:
-    enabled: false
+    enabled: true
     concurrency: 5
     pollIntervalSeconds: 5
     archiveCompletedAfterSeconds: 604800

@@ -7,6 +7,7 @@
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
 import { cancelJob } from "@groot/jobs/server/queue";
+import { jobQueueReady } from "@groot/jobs/server/client";
 import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
 import {
   MAX_ROUTINES,
@@ -70,8 +71,20 @@ async function assertBotExists(botId: string): Promise<void> {
   if (!bot) throw Boom.badRequest("Bot not found");
 }
 
-/** Enable the chain: next occurrence from `from`, queued, handle stored. */
+function assertQueueReady(): void {
+  if (!jobQueueReady()) {
+    throw Boom.unavailable(
+      "Job queue is disabled (set jobs.enabled=true in config.yml and restart) " +
+        "so scheduled routines cannot run",
+    );
+  }
+}
+
+/** Enable the chain: next occurrence from `from`, queued, handle stored.
+ * Arming needs the queue; a boot without it (jobs.enabled false) fails with
+ * how to fix instead of an internal error. */
 async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<void> {
+  assertQueueReady();
   const now = new Date();
   const next = await enqueueOccurrence(id, schedule, from, now);
   await prisma.routine.update({

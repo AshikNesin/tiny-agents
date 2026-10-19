@@ -37,7 +37,11 @@ vi.mock("@groot/jobs/server/client", () => ({
     }),
     createQueue: vi.fn(async () => undefined),
   }),
+  jobQueueReady: () => queueReady,
 }));
+
+/** Flipped by the disabled-queue test: arm paths must 503 with guidance. */
+let queueReady = true;
 
 const emptyChat = { messages: [], busy: false };
 
@@ -105,6 +109,7 @@ describe("Routines API routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    queueReady = true;
     sentJobs.length = 0;
     cancelledJobs.length = 0;
     setAgentRuntimeForTests(fakeRuntime());
@@ -124,6 +129,26 @@ describe("Routines API routes", () => {
     const response = await request(app).get("/api/v1/routines");
     expect(response.status).toBe(401);
     expect(response.body).toMatchObject({ success: false });
+  });
+
+  it("503s with guidance when the job queue is disabled", async () => {
+    queueReady = false;
+    const bot = await prisma.bot.create({
+      data: { name: "Queueless", modelId: "known-model", conversationId: 101 },
+    });
+    const response = await request(app)
+      .post("/api/v1/routines")
+      .set(authorization)
+      .send({
+        botId: bot.id,
+        name: "Email check",
+        prompt: "Check email",
+        schedule: { kind: "interval", minutes: 30 },
+      });
+    expect(response.status).toBe(503);
+    expect(response.body.message).toContain("jobs.enabled=true");
+    // No half-armed row survives: the routine was never created.
+    await expect(prisma.routine.count()).resolves.toBe(0);
   });
 
   it("creates an armed routine and queues its first delayed job", async () => {
