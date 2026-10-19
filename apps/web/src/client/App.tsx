@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 import { Layout } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { Tasks } from "./pages/tasks/Tasks";
+import { Routines } from "./pages/routines/Routines";
 import { ChatWorkspace } from "./pages/chats/ChatsLayout";
 import { Storage } from "@groot/shell/pages/storage/Storage";
 import { Jobs, JobDetail } from "@groot/jobs/client";
@@ -16,6 +17,7 @@ import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
 import {
   Bot,
   BotMessageSquare,
+  CalendarClock,
   History,
   ListTodo,
   MessageSquare,
@@ -59,6 +61,7 @@ const NAVIGATION_COMMAND_GROUP: CommandGroupEntry = {
   items: [
     { label: "Chats", icon: MessageSquare, onSelect: () => window.location.assign("/chats") },
     { label: "Tasks", icon: ListTodo, onSelect: () => window.location.assign("/tasks") },
+    { label: "Routines", icon: CalendarClock, onSelect: () => window.location.assign("/routines") },
     { label: "Skills", icon: Sparkles, onSelect: () => window.location.assign("/skills") },
     { label: "Connections", icon: Plug, onSelect: () => window.location.assign("/connections") },
   ],
@@ -105,6 +108,7 @@ const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: Bot, to: "/chats" },
   nav: [
     { label: "Tasks", icon: ListTodo, to: "/tasks" },
+    { label: "Routines", icon: CalendarClock, to: "/routines" },
     { label: "Skills", icon: Sparkles, to: "/skills" },
     { label: "Connections", icon: Plug, to: "/connections" },
     { label: "Settings", icon: SettingsIcon, to: "/settings" },
@@ -157,6 +161,7 @@ function App() {
               >
                 <Route index element={<Navigate to="/chats" replace />} />
                 <Route path="tasks" element={<Tasks />} />
+                <Route path="routines" element={<Routines />} />
                 <Route path="skills" element={<SkillsPage />} />
                 <Route path="skills/:id" element={<SkillsPage />} />
                 <Route path="connections" element={<ConnectionsPage />} />
