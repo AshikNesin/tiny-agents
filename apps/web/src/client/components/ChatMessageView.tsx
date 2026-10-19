@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { botsApi } from "../lib/bots-api";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
 import { BotAvatar } from "./BotAvatar";
+import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockTitle } from "./ui/code-block";
 import {
   Trace,
   TraceCollapsible,
@@ -185,33 +186,45 @@ function ToolRow({
 }) {
   const summary = summarizeArgs(call);
   const extra = STATUS_TEXT[call.status];
+  const argsJson = JSON.stringify(call.args, null, 2);
   const detail =
-    call.output !== undefined || Object.keys(call.args ?? {}).length > 0 ? (
-      <>
-        {Object.keys(call.args ?? {}).length > 0 && (
-          <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[0.9em] whitespace-pre-wrap">
-            {JSON.stringify(call.args, null, 2)}
-          </pre>
+    call.output || argsJson !== "{}" ? (
+      <div className="flex flex-col gap-2">
+        {argsJson !== "{}" && (
+          <CodeBlock size="sm">
+            <CodeBlockHeader>
+              <CodeBlockTitle>Input</CodeBlockTitle>
+            </CodeBlockHeader>
+            <CodeBlockContent wrap className="max-h-64">
+              {argsJson}
+            </CodeBlockContent>
+          </CodeBlock>
         )}
-        {call.output && <p className="line-clamp-6 whitespace-pre-wrap">{call.output}</p>}
+        {call.output && (
+          <CodeBlock size="sm" variant={call.status === "error" ? "destructive" : "default"}>
+            <CodeBlockHeader>
+              <CodeBlockTitle>Output</CodeBlockTitle>
+            </CodeBlockHeader>
+            <CodeBlockContent wrap className="max-h-64">
+              {call.output}
+            </CodeBlockContent>
+          </CodeBlock>
+        )}
         {call.sources && call.sources.length > 0 && (
-          <ul className="space-y-0.5">
+          <Trace>
             {call.sources.map((source) => (
-              <li key={source.url}>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-foreground inline-flex items-center gap-1 underline underline-offset-2"
-                >
-                  <ExternalLink className="size-3" />
-                  {source.title}
-                </a>
-              </li>
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                <TraceLine>
+                  <TraceIcon>
+                    <ExternalLink />
+                  </TraceIcon>
+                  <TraceTitle>{source.title}</TraceTitle>
+                </TraceLine>
+              </a>
             ))}
-          </ul>
+          </Trace>
         )}
-      </>
+      </div>
     ) : null;
 
   if (call.status === "awaiting_approval" && call.taskId !== undefined) {
