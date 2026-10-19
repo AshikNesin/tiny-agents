@@ -160,3 +160,76 @@ describe("bots store — new chat (reset)", () => {
     expect(chat.busy).toBe(false);
   });
 });
+
+describe("bots store — attachment echoes (issue #17)", () => {
+  beforeEach(() => {
+    listeners.clear();
+    openCallbacks.length = 0;
+    useBotsStore.setState({ chats: {} });
+  });
+
+  it("two image-only sends (empty text) do not dedupe each other", () => {
+    const botId = "bot-img";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+
+    const attachment = (uploadId: string) => [
+      { uploadId, kind: "image", name: "shot.png", mimeType: "image/png", size: 10 },
+    ];
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "echo-a", text: "", createdAt: 1, attachments: attachment("aaa") },
+    });
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "echo-b", text: "", createdAt: 2, attachments: attachment("bbb") },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(2);
+
+    // First send confirms: only its echo (matching attachment id) clears.
+    emit(botId, {
+      type: "upsert",
+      message: {
+        id: "e1",
+        role: "user",
+        text: "",
+        status: "done",
+        createdAt: 1,
+        attachments: attachment("aaa"),
+      },
+    });
+    const chat = useBotsStore.getState().chats[botId]!;
+    expect(chat.pending).toHaveLength(1);
+    expect(chat.pending[0].id).toBe("echo-b");
+  });
+
+  it("clears an echo when a snapshot carries the same text and attachments", () => {
+    const botId = "bot-img2";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    const attachments = [
+      { uploadId: "zzz", kind: "file", name: "notes.txt", mimeType: "text/plain", size: 5 },
+    ];
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "echo-c", text: "see this", createdAt: 1, attachments },
+    });
+    emit(botId, {
+      type: "snapshot",
+      state: {
+        messages: [
+          {
+            id: "e2",
+            role: "user",
+            text: "see this",
+            status: "done",
+            createdAt: 1,
+            attachments,
+          },
+        ],
+        busy: true,
+      },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
+  });
+});

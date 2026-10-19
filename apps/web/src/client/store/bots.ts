@@ -44,6 +44,21 @@ interface BotsState {
 let activityConnection: { close(): void } | null = null;
 const chatConnections = new Map<string, { close(): void }>();
 
+/** Attachment ids of a message, for echo matching (empty texts collide). */
+function attachmentIds(message: { attachments?: { uploadId: string }[] }): string[] {
+  return (message.attachments ?? []).map((a) => a.uploadId).sort();
+}
+
+function echoMatches(
+  pending: { text: string; attachments?: { uploadId: string }[] },
+  message: { text: string; attachments?: { uploadId: string }[] },
+): boolean {
+  return (
+    pending.text.trim() === message.text.trim() &&
+    attachmentIds(pending).join(",") === attachmentIds(message).join(",")
+  );
+}
+
 function applyEvent(state: ChatState, event: ChatEvent): ChatState {
   switch (event.type) {
     case "snapshot":
@@ -54,8 +69,7 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         ...event.state,
         connected: true,
         pending: state.pending.filter(
-          (p) =>
-            !event.state.messages.some((m) => m.role === "user" && m.text.trim() === p.text.trim()),
+          (p) => !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)),
         ),
       };
     case "busy":
@@ -64,7 +78,7 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       // The confirmed user message replaces the matching optimistic echo.
       const pending =
         event.message.role === "user"
-          ? state.pending.filter((p) => p.text.trim() !== event.message.text.trim())
+          ? state.pending.filter((p) => !echoMatches(p, event.message))
           : state.pending;
       return {
         ...state,

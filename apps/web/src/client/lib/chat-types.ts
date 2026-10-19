@@ -56,6 +56,8 @@ export interface PendingMessage {
   id: string;
   text: string;
   createdAt: number;
+  /** Attachment refs echoed optimistically (issue #17). */
+  attachments?: AttachmentRef[];
 }
 
 export interface ChatState {

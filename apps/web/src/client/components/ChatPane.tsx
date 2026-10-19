@@ -5,6 +5,7 @@ import {
   ArrowUp,
   MessageSquarePlus,
   MoreHorizontal,
+  Paperclip,
   Pencil,
   Square,
   Trash2,
@@ -36,6 +37,7 @@ import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/men
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import { MessageAttachments, StagedAttachment, type StagedItem } from "./Attachments";
 import {
   MentionAutocomplete,
   type MentionAutocompleteHandle,
@@ -83,6 +85,9 @@ export function ChatPane({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
+  const [staged, setStaged] = useState<StagedItem[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pasteCount = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
 
@@ -129,26 +134,99 @@ export function ChatPane({
   const pending = chat?.pending ?? [];
   const busy = chat?.busy ?? false;
   const modelKnown = models.some((m) => m.id === bot.modelId);
-  const canSend = gatewayConfigured && modelKnown && !busy && text.trim().length > 0;
+  const model = models.find((m) => m.id === bot.modelId);
+  const uploading = staged.some((item) => item.status === "uploading");
+  const readyAttachments = staged.filter((item) => item.status === "done" && item.ref);
+  const canSend =
+    gatewayConfigured &&
+    modelKnown &&
+    !busy &&
+    !uploading &&
+    (text.trim().length > 0 || readyAttachments.length > 0);
+
+  const stageFiles = (files: FileList | File[]) => {
+    const limit = 10 - staged.length;
+    if (limit <= 0) {
+      toast.error("Up to 10 attachments per message");
+      return;
+    }
+    for (const file of Array.from(files).slice(0, limit)) {
+      const key = crypto.randomUUID();
+      const isImage = file.type.startsWith("image/");
+      const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
+      const name = file.name || `pasted-image-${++pasteCount.current}.png`;
+      setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
+      botsApi
+        .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
+        .then(({ ref }) =>
+          setStaged((current) =>
+            current.map((item) => (item.key === key ? { ...item, status: "done", ref } : item)),
+          ),
+        )
+        .catch((error) => {
+          setStaged((current) =>
+            current.map((item) =>
+              item.key === key
+                ? {
+                    ...item,
+                    status: "error",
+                    error: error instanceof Error ? error.message : "Upload failed",
+                  }
+                : item,
+            ),
+          );
+        });
+    }
+  };
+
+  const unstage = (item: StagedItem) => {
+    setStaged((current) => current.filter((candidate) => candidate.key !== item.key));
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    if (item.ref) void botsApi.deleteUpload(item.ref.uploadId).catch(() => undefined);
+  };
 
   const send = async () => {
     const body = text.trim();
-    if (!body || !canSend) return;
+    if (!canSend || (!body && readyAttachments.length === 0)) return;
+    const attachmentRefs = readyAttachments.map((item) => item.ref!);
     setText("");
+    setStaged([]);
     setMentionClosed(false);
+    for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     const mentions = mentionedBotIds(body, mentionCandidates, bot.id);
     // Optimistic echo: show the message immediately; the SSE snapshot/upsert
-    // replaces it once the server confirms (store dedupes by text). If the
-    // POST fails the echo is withdrawn and the text returns to the composer.
-    const echo = { id: crypto.randomUUID(), text: body, createdAt: Date.now() };
+    // replaces it once the server confirms (store dedupes by text and
+    // attachment ids). If the POST fails the echo is withdrawn and the text
+    // returns to the composer.
+    const echo = {
+      id: crypto.randomUUID(),
+      text: body,
+      createdAt: Date.now(),
+      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+    };
     applyChatEvent(bot.id, { type: "pending-add", message: echo });
     try {
-      await botsApi.send(bot.id, echo.id, body, mentions);
+      await botsApi.send(
+        bot.id,
+        echo.id,
+        body,
+        mentions,
+        attachmentRefs.map((a) => a.uploadId),
+      );
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
       toast.error(error instanceof Error ? error.message : "Failed to send");
       setText(body);
-      setCaret(body.length);
+      setStaged(
+        attachmentRefs.map((ref, i) => ({
+          key: crypto.randomUUID(),
+          name: ref.name,
+          status: "done" as const,
+          ref,
+          previewUrl: ref.kind === "image" ? botsApi.uploadUrl(ref.uploadId) : undefined,
+          ...(i === -1 ? {} : {}),
+        })),
+      );
     }
   };
 
@@ -335,6 +413,7 @@ export function ChatPane({
                                 id: p.id,
                                 role: "user",
                                 text: p.text,
+                                ...(p.attachments?.length ? { attachments: p.attachments } : {}),
                                 status: "streaming",
                                 createdAt: p.createdAt,
                               }}
@@ -371,7 +450,47 @@ export function ChatPane({
           </div>
         )}
         <div className="relative mx-auto max-w-3xl">
+          {staged.length > 0 && (
+            <div
+              className="mb-2 flex flex-wrap justify-end gap-1.5 px-1"
+              data-testid="staged-strip"
+            >
+              {staged.map((item) => (
+                <StagedAttachment key={item.key} attachment={item} onRemove={() => unstage(item)} />
+              ))}
+            </div>
+          )}
+          {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
+            <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
+              {model.name} reads images with the see_image tool
+            </p>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov"
+            onChange={(e) => {
+              if (e.target.files?.length) stageFiles(e.target.files);
+              e.target.value = "";
+            }}
+            aria-label="Attach files"
+            data-testid="file-input"
+          />
           <InputGroup className="min-h-12 rounded-[1.75rem] px-2 py-1.5">
+            <InputGroupAddon align="inline-start">
+              <InputGroupButton
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!gatewayConfigured || !modelKnown || staged.length >= 10}
+                aria-label="Attach files"
+                className="size-8 rounded-full"
+              >
+                <Paperclip className="size-4" />
+              </InputGroupButton>
+            </InputGroupAddon>
             <InputGroupTextarea
               ref={textareaRef}
               value={text}
@@ -383,6 +502,13 @@ export function ChatPane({
               onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
               onClick={() => setMentionClosed(false)}
               onBlur={() => setMentionClosed(true)}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData?.files ?? []);
+                if (files.length > 0) {
+                  e.preventDefault();
+                  stageFiles(files);
+                }
+              }}
               onKeyDown={(e) => {
                 if (mentionRef.current?.handleKeyDown(e)) return;
                 if (e.key === "Enter" && !e.shiftKey) {

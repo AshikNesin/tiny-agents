@@ -17,6 +17,7 @@ import {
   TraceTitle,
 } from "./ui/trace";
 import { Bubble, BubbleContent } from "./ui/bubble";
+import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 
@@ -309,11 +310,16 @@ export function ChatMessageView({
             instead of a nested wrapper. */}
         <div className="relative max-w-[min(85%,48rem)]">
           <CopyButton text={message.text} />
-          <Bubble align="end" variant="muted" className="max-w-full">
-            <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
-              <p className="whitespace-pre-wrap">{message.text}</p>
-            </BubbleContent>
-          </Bubble>
+          {message.attachments && message.attachments.length > 0 && (
+            <MessageAttachments attachments={message.attachments} />
+          )}
+          {message.text && (
+            <Bubble align="end" variant="muted" className="max-w-full">
+              <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
+                <p className="whitespace-pre-wrap">{message.text}</p>
+              </BubbleContent>
+            </Bubble>
+          )}
           {failed && <p className="text-destructive mt-1 text-right text-xs">{message.error}</p>}
         </div>
       </Message>
