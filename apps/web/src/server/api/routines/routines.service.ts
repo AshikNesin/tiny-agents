@@ -120,6 +120,9 @@ export async function create(input: CreateRoutineDTO): Promise<ReturnType<typeof
   if (count >= MAX_ROUTINES) {
     throw Boom.badRequest(`Routine limit reached (${MAX_ROUTINES})`);
   }
+  // Precondition, not cleanup: a create that cannot arm must not leave a
+  // disabled orphan row behind when the arm step throws.
+  if (input.enabled) assertQueueReady();
   const row = await prisma.routine.create({
     data: {
       botId: input.botId,
