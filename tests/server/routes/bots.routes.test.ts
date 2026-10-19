@@ -28,6 +28,15 @@ const models = [
     family: "other" as const,
     reasoning: false,
     contextWindow: 8_192,
+    vision: false,
+  },
+  {
+    id: "vision-model",
+    name: "Vision Model",
+    family: "other" as const,
+    reasoning: false,
+    contextWindow: 8_192,
+    vision: true,
   },
 ];
 const emptyChat = { messages: [], busy: false };
@@ -56,7 +65,7 @@ const agentRuntime = {
     return () => activityListeners.delete(listener);
   }),
   listModels: vi.fn().mockReturnValue(models),
-  hasModel: vi.fn((modelId: string) => modelId === "known-model"),
+  hasModel: vi.fn((modelId: string) => modelId === "known-model" || modelId === "vision-model"),
   listCapabilities: vi.fn().mockReturnValue([
     { id: "tasks", kind: "toolkit", name: "Tasks", description: "Tasks", tools: [] },
     { id: "web", kind: "toolkit", name: "Web", description: "Web", tools: [] },
@@ -81,11 +90,14 @@ const createPayload = {
   modelId: "known-model",
 };
 
-async function createBot(app = buildApp()): Promise<Record<string, unknown>> {
+async function createBot(
+  app = buildApp(),
+  overrides: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
   const response = await request(app)
     .post("/api/v1/bots")
     .set(authorization)
-    .send(createPayload)
+    .send({ ...createPayload, ...overrides })
     .expect(201);
   return response.body.data as Record<string, unknown>;
 }
@@ -144,7 +156,9 @@ describe("Bots API routes", () => {
     vi.clearAllMocks();
     activityListeners.clear();
     agentRuntime.createConversation.mockResolvedValue(100);
-    agentRuntime.hasModel.mockImplementation((modelId: string) => modelId === "known-model");
+    agentRuntime.hasModel.mockImplementation(
+      (modelId: string) => modelId === "known-model" || modelId === "vision-model",
+    );
     agentRuntime.isBusy.mockReturnValue(false);
     agentRuntime.lastMessage.mockResolvedValue(undefined);
     agentRuntime.listModels.mockReturnValue(models);
@@ -206,7 +220,7 @@ describe("Bots API routes", () => {
       modelId: createPayload.modelId,
       systemPrompt: createPayload.systemPrompt,
       // New bots start with no toolkits (issue #1 D2); skills only lists assigned ones.
-      capabilities: { enabled: ["skills"], permissions: {} },
+      capabilities: { enabled: ["skills", "vision"], permissions: {} },
     });
 
     const bot = await prisma.bot.findUnique({ where: { id: response.body.data.id } });
@@ -251,7 +265,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Use bullet points.",
-      capabilities: { enabled: ["skills"], permissions: {} },
+      capabilities: { enabled: ["skills", "vision"], permissions: {} },
     });
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
       name: "Edited helper",
@@ -277,6 +291,13 @@ describe("Bots API routes", () => {
       requestId: "client-generated-id",
       text: "Hello",
     });
+    // Vision-model bots do NOT get the vision toolkit auto-included.
+    const visionBot = await createBot(undefined, { modelId: "vision-model" });
+    await request(buildApp())
+      .post(`/api/v1/bots/${visionBot.id}/messages`)
+      .set(authorization)
+      .send({ requestId: "client-generated-id-2", text: "Hello again" })
+      .expect(200);
     // Deleting stops whatever the now-hidden conversation was still doing.
     expect(agentRuntime.abort).toHaveBeenCalledWith(100);
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
@@ -379,7 +400,7 @@ describe("Bots API routes", () => {
     });
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        capabilities: { enabled: ["web", "skills"], permissions: { web_fetch: "ask" } },
+        capabilities: { enabled: ["web", "skills", "vision"], permissions: { web_fetch: "ask" } },
       }),
     );
 
@@ -392,7 +413,10 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Be precise.",
-      capabilities: { enabled: ["tasks", "web", "skills"], permissions: { web_fetch: "ask" } },
+      capabilities: {
+        enabled: ["tasks", "web", "skills", "vision"],
+        permissions: { web_fetch: "ask" },
+      },
     });
 
     await request(app)
@@ -414,7 +438,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
       100,
       expect.objectContaining({
-        capabilities: { enabled: ["skills"], permissions: { send_email: "allow" } },
+        capabilities: { enabled: ["skills", "vision"], permissions: { send_email: "allow" } },
       }),
     );
     const row = await prisma.bot.findUnique({ where: { id: String(bot.id) } });

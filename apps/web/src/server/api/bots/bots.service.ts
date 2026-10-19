@@ -10,10 +10,25 @@ import {
   ApprovalNotPendingError,
   MCP_DEFER_THRESHOLD,
   sanitizePeerText,
+  type AttachmentRef,
   type BotAgentConfig,
   type ToolPermission,
 } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
+import { modelImage } from "../uploads/uploads.service";
+
+/** Cached vision lookup over the live model catalog (rebuilt per call site). */
+function modelSeesImages(modelId: string): boolean {
+  try {
+    return Boolean(
+      getAgentRuntime()
+        .listModels()
+        .find((m) => m.id === modelId)?.vision,
+    );
+  } catch {
+    return false; // runtime not open (tests without a fake): treat as text-only
+  }
+}
 
 /** The `Bot` row as Prisma returns it (model defined in apps/web/prisma). */
 export interface BotRow {
@@ -137,6 +152,10 @@ export function agentConfig(
       enabled: [
         ...bot.toolkits,
         "skills",
+        // A model without native vision gets the see_image side-call toolkit
+        // (issue #17), force-included like skills: it self-adjusts on model
+        // switch, and a toggle would strand the bots that need it most.
+        ...(modelSeesImages(bot.modelId) ? [] : ["vision"]),
         ...(bot.connectionCapabilities ?? []),
         ...(largeServer ? ["tool-search"] : []),
       ],
@@ -361,21 +380,120 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
 
 export async function sendMessage(
   id: string,
-  input: { requestId: string; text: string; mentions?: string[] },
+  input: { requestId: string; text: string; mentions?: string[]; attachments?: string[] },
   rt: BotAgentRuntime = runtime(),
 ) {
   const bot = await getBot(id);
-  await rt.submit(Number(bot.conversationId), { requestId: input.requestId, text: input.text });
+  const send = await resolveSend(bot, input);
+  await rt.submit(Number(bot.conversationId), {
+    requestId: input.requestId,
+    text: send.text,
+    ...(send.images ? { images: send.images } : {}),
+    ...(send.attachments ? { attachments: send.attachments } : {}),
+  });
   await prisma.bot.update({
     where: { id },
     data: {
       lastActivityAt: new Date(),
-      lastMessagePreview: input.text.slice(0, 120),
+      lastMessagePreview: previewOf(input.text, send.attachments).slice(0, 120),
     },
   });
   if (input.mentions && input.mentions.length > 0) {
     await deliverMentions(bot, input, rt);
   }
+}
+
+/** Bot-list preview: text, else a hint of what was attached (issue #17). */
+function previewOf(text: string, attachments: AttachmentRef[] | undefined): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (trimmed) return trimmed;
+  if (!attachments?.length) return "";
+  const first = attachments[0];
+  return first.kind === "image"
+    ? `[Image] ${attachments.filter((a) => a.kind === "image").length > 1 ? `+${attachments.length - 1} more` : first.name}`
+    : `[File] ${first.name}`;
+}
+
+/** One send's resolved content: blocks for the model, refs for the entry. */
+interface ResolvedSend {
+  text: string;
+  images?: { data: string; mimeType: string }[];
+  attachments?: AttachmentRef[];
+}
+
+/**
+ * Resolve a send's attachments (issue #17). Vision models get inline image
+ * blocks; text-only models get a see_image note per image and file metadata
+ * lines, so every model can reason about what arrived. Unknown upload ids
+ * reject the send before anything durable happens.
+ */
+async function resolveSend(
+  bot: Bot,
+  input: { text: string; attachments?: string[] },
+): Promise<ResolvedSend> {
+  const ids = input.attachments ?? [];
+  if (ids.length === 0) return { text: input.text };
+  if (new Set(ids).size !== ids.length) throw Boom.badRequest("Duplicate attachment id");
+
+  const rows = await prisma.upload.findMany({ where: { id: { in: ids } } });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const missing = ids.find((uploadId) => !byId.get(uploadId));
+  if (missing) throw Boom.notFound(`Unknown attachment "${missing}"`);
+
+  const attachments: AttachmentRef[] = ids.map((uploadId) => {
+    const row = byId.get(uploadId)!;
+    return {
+      uploadId,
+      kind: row.kind === "image" ? "image" : "file",
+      name: row.name,
+      mimeType: row.mimeType,
+      size: row.size,
+      ...(row.width !== null && row.height !== null
+        ? { width: row.width, height: row.height }
+        : {}),
+    };
+  });
+
+  const images = attachments.filter((a) => a.kind === "image");
+  const files = attachments.filter((a) => a.kind === "file");
+  const text = input.text.trim();
+
+  // Vision path: inline image blocks, the refs ride the entry.
+  if (images.length > 0 && modelSeesImages(bot.modelId)) {
+    const blocks: { data: string; mimeType: string }[] = [];
+    for (const image of images) {
+      const prepared = await modelImage(image.uploadId);
+      if (prepared) blocks.push({ data: prepared.data, mimeType: prepared.mimeType });
+    }
+    if (blocks.length > 0) {
+      return { text, images: blocks, attachments };
+    }
+    // Preparation failed for every image (swept storage): fall through to notes.
+  }
+
+  // Text-model path (or storage loss): describe attachments as text lines.
+  const lines: string[] = [];
+  for (const image of images) {
+    const size = image.width && image.height ? `, ${image.width}x${image.height}` : "";
+    lines.push(`[image attached: ${image.name}${size} (${image.uploadId})]`);
+  }
+  for (const file of files) {
+    lines.push(
+      `[file attached: ${file.name}, ${file.mimeType}, ${Math.round(file.size / 1024)} KB]`,
+    );
+  }
+  const notes =
+    lines.length > 0
+      ? `${lines.join("\n")}${
+          images.length > 0 && !modelSeesImages(bot.modelId)
+            ? "\n(The owner attached image(s); call see_image with an id above to view.)"
+            : ""
+        }`
+      : "";
+  return {
+    text: text ? `${text}\n\n${notes}` : notes.replace(/^\n+/, ""),
+    attachments,
+  };
 }
 
 /** The text a tagged bot receives: enough context to answer in-place. */

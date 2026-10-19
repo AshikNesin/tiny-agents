@@ -1,0 +1,218 @@
+/**
+ * Upload service (issue #17): validate, prepare and store chat attachments.
+ *
+ * One row per attachment is the single validated metadata source; bytes live
+ * in files storage under chat/<uploadId>/{original,model}. Images get a
+ * model-ready variant (EXIF-upright, resized, base64-bounded) prepared at
+ * upload time so the send click never waits on Photon.
+ */
+import { createHash } from "node:crypto";
+import { Boom } from "@groot/core/errors";
+import { storageService } from "@groot/core/storage";
+import { prisma } from "@groot/core/database";
+import type { AttachmentRef } from "@tiny-agents/agent";
+import { imageSize, prepareImage, sniffImage } from "./uploads.prepare";
+
+/** Max original sizes (issue #17 limits table). */
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+/** Max attachments on one send. */
+export const MAX_ATTACHMENTS = 10;
+
+/** Extensions a chat attachment may carry (denylist: executables, scripts). */
+const ALLOWED_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
+  "pdf",
+  "txt",
+  "md",
+  "json",
+  "csv",
+  "yaml",
+  "yml",
+  "xml",
+  "html",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "odt",
+  "ods",
+  "odp",
+  "zip",
+  "tar",
+  "gz",
+  "tgz",
+  "bz2",
+  "7z",
+  "rar",
+  "mp3",
+  "wav",
+  "ogg",
+  "m4a",
+  "mp4",
+  "webm",
+  "mov",
+]);
+
+export interface StoredUpload {
+  ref: AttachmentRef;
+}
+
+function sanitizeName(name: string): string {
+  const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
+  return trimmed.slice(0, 200) || "file";
+}
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+/** Reject executables/scripts and unknown extensions at the boundary. */
+function checkExtension(name: string): void {
+  const ext = extensionOf(name);
+  if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
+    throw Boom.badRequest(
+      `Files of type ".${ext || "?"}" are not supported. Images, documents, archives and media are.`,
+    );
+  }
+}
+
+export async function createUpload(
+  input: { name: string; mimeType: string; bytes: Buffer },
+  prepare: { image: typeof prepareImage } = { image: prepareImage },
+): Promise<StoredUpload> {
+  const name = sanitizeName(input.name);
+  checkExtension(name);
+  const sniffed = sniffImage(input.bytes);
+  const isImage = Boolean(sniffed);
+  if (isImage && input.bytes.length > MAX_IMAGE_BYTES) {
+    throw Boom.badRequest("Images are limited to 20 MB.");
+  }
+  if (!isImage && input.bytes.length > MAX_FILE_BYTES) {
+    throw Boom.badRequest("Files are limited to 25 MB.");
+  }
+  // A name claiming image but bytes disagreeing (or the reverse) is rejected:
+  // the model path and the UI must agree on what this is.
+  const claimsImage = ["png", "jpg", "jpeg", "webp", "gif"].includes(extensionOf(name));
+  if (claimsImage !== isImage) {
+    throw Boom.badRequest(
+      claimsImage
+        ? "This file's contents are not a supported image."
+        : "This looks like an image; save it with an image extension (.png, .jpg, .webp, .gif).",
+    );
+  }
+
+  const uploadId = createHash("sha256")
+    .update(
+      `${name}:${input.mimeType}:${createHash("sha1").update(input.bytes).digest("hex")}:${Date.now()}:${Math.random()}`,
+    )
+    .digest("hex")
+    .slice(0, 24);
+  const originalKey = `chat/${uploadId}/original`;
+  let modelKey: string | null = null;
+  // Dimensions come from the original bytes: Photon reports them only when
+  // it resized, and the UI shows the owner's image, not the variant.
+  const size = imageSize(input.bytes, sniffed!);
+  const width = size?.width;
+  const height = size?.height;
+
+  await storageService.uploadFile({
+    filePath: originalKey,
+    fileData: input.bytes,
+    contentType: input.mimeType,
+  });
+  if (isImage) {
+    const prepared = await prepare.image(input.bytes, sniffed!);
+    if (!prepared)
+      throw Boom.badRequest("This image could not be decoded (corrupt or unsupported).");
+    modelKey = `chat/${uploadId}/model`;
+    await storageService.uploadFile({
+      filePath: modelKey,
+      fileData: Buffer.from(prepared.data, "base64"),
+      contentType: prepared.mimeType,
+    });
+  }
+
+  const row = await prisma.upload.create({
+    data: {
+      id: uploadId,
+      kind: isImage ? "image" : "file",
+      name,
+      mimeType: sniffed ?? input.mimeType,
+      size: input.bytes.length,
+      ...(width !== undefined && height !== undefined ? { width, height } : {}),
+      modelKey,
+      storageKey: originalKey,
+    },
+  });
+  return { ref: toRef(row) };
+}
+
+function toRef(row: {
+  id: string;
+  kind: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+}): AttachmentRef {
+  return {
+    uploadId: row.id,
+    kind: row.kind === "image" ? "image" : "file",
+    name: row.name,
+    mimeType: row.mimeType,
+    size: row.size,
+    ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
+  };
+}
+
+export async function getUpload(id: string): Promise<AttachmentRef> {
+  const row = await prisma.upload.findUnique({ where: { id } });
+  if (!row) throw Boom.notFound("Unknown upload");
+  return toRef(row);
+}
+
+/** Original bytes for the UI/download endpoint. */
+export async function originalBytes(id: string): Promise<{ bytes: Buffer; ref: AttachmentRef }> {
+  const ref = await getUpload(id);
+  const file = await storageService.downloadFile({ filePath: `chat/${id}/original` });
+  return { bytes: file.buffer, ref };
+}
+
+/** Model-ready variant bytes for see_image and inline sends. */
+export async function modelImage(
+  id: string,
+): Promise<
+  { data: string; mimeType: string; name: string; width?: number; height?: number } | undefined
+> {
+  const row = await prisma.upload.findUnique({ where: { id } });
+  if (!row || row.kind !== "image" || !row.modelKey) return undefined;
+  const file = await storageService.downloadFile({ filePath: row.modelKey });
+  return {
+    data: file.buffer.toString("base64"),
+    mimeType: file.contentType || row.mimeType,
+    name: row.name,
+    ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
+  };
+}
+
+/** Delete a staged upload (owner removed it before send). */
+export async function deleteUpload(id: string): Promise<void> {
+  const row = await prisma.upload.findUnique({ where: { id } });
+  if (!row) throw Boom.notFound("Unknown upload");
+  await prisma.upload.delete({ where: { id } });
+  const keys = [row.storageKey, ...(row.modelKey ? [row.modelKey] : [])];
+  try {
+    await storageService.deleteFiles({ filePaths: keys });
+  } catch {
+    // The row is gone; leftover bytes are sweepable. Never block the delete.
+  }
+}

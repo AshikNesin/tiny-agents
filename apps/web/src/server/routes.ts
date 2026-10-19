@@ -6,6 +6,7 @@ import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
 import tasksRoutes from "./api/tasks/task.routes";
 import botsRoutes from "./api/bots/bots.routes";
+import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
@@ -34,6 +35,7 @@ export function registerRoutes(app: Express): void {
   // Bots routes own /models, /events, and /bots — registered before the todo
   // router so its /:id pattern cannot swallow them.
   protectedRouter.use(botsRoutes);
+  protectedRouter.use(uploadsRoutes);
   protectedRouter.use(tasksRoutes);
   protectedRouter.use(skillsRoutes);
   protectedRouter.use(connectionsRoutes);

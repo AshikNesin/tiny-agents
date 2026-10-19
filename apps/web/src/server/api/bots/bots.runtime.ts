@@ -12,15 +12,19 @@ import {
   createSkillsCapability,
   createTasksToolkit,
   createTimeToolkit,
+  createTranscriber,
+  createVisionToolkit,
   createWebToolkit,
   type BotMessagingStore,
   type Capability,
 } from "@tiny-agents/agent";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
+import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { createBotMessagingStore } from "./bots.messaging";
+import { createVisionStore } from "../uploads/uploads.store";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -48,6 +52,18 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
 /** Bot-to-bot messaging (issue #12). The store needs the live runtime for submits. */
 export function botsCapability(rt: AgentRuntime): Capability {
   return createBotsToolkit(botMessagingStore(rt));
+}
+
+/** The vision side-call (issue #17): uploads bytes + a transcriber model. */
+export function visionCapability(
+  rt: AgentRuntime,
+  models: Parameters<typeof createTranscriber>[0],
+  env: Env = process.env,
+): Capability {
+  return createVisionToolkit(
+    createVisionStore(rt),
+    createTranscriber(models, { providerId: GATEWAY_PROVIDER, env }),
+  );
 }
 
 /** One messaging store per process, rebuilt never (the runtime is a singleton too). */
@@ -84,6 +100,8 @@ export async function openAgentRuntime(
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
   instance.installCapability(botsCapability(instance));
+  if (!options.models) throw new Error("vision capability needs the model registry");
+  instance.installCapability(visionCapability(instance, options.models, options.env));
   runtime = instance;
   ready = true;
   return instance;
@@ -155,6 +173,7 @@ export async function openFauxAgentRuntime(
     env: { ...process.env, GATEWAY_MODEL_ALLOWLIST: "" },
   });
   instance.installCapability(botsCapability(instance));
+  instance.installCapability(visionCapability(instance, models));
   runtime = instance;
   ready = true;
   return instance;

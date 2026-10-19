@@ -41,7 +41,14 @@ import {
 } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
-import { chatState, diffChat, CHAT_USER_ENTRY, type LiveTool, type RawChat } from "./transcript";
+import {
+  attachmentsOf,
+  chatState,
+  diffChat,
+  CHAT_USER_ENTRY,
+  type LiveTool,
+  type RawChat,
+} from "./transcript";
 import type {
   ActivityChange,
   AttachmentRef,
@@ -391,6 +398,23 @@ export class AgentRuntime {
   /** Tool calls of the conversation waiting for the owner's approval. */
   pendingApprovals(ref: ConversationRef): number {
     return this.#approvals.count(ref);
+  }
+
+  /**
+   * Upload ids attached to the conversation's recent sends (issue #17):
+   * what see_image may read. Bounded to the newest 50 user entries; a bot
+   * referencing an attachment older than that gets the not-found result.
+   */
+  async attachmentIds(ref: ConversationRef): Promise<string[]> {
+    const conversation = await this.#conversation(ref);
+    const page = await conversation.entries({ order: "descending" }, 50, undefined, ctx);
+    const ids: string[] = [];
+    for (const entry of page.items) {
+      for (const attachment of attachmentsOf(entry) ?? []) {
+        if (!ids.includes(attachment.uploadId)) ids.push(attachment.uploadId);
+      }
+    }
+    return ids;
   }
 
   /**

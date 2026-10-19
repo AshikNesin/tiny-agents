@@ -10,6 +10,8 @@ export interface ModelInfo {
   family: "anthropic" | "openai" | "workers-ai" | "other";
   reasoning: boolean;
   contextWindow: number;
+  /** The model accepts image content natively (issue #17). */
+  vision: boolean;
 }
 
 export interface ModelsResponse {
@@ -50,6 +52,16 @@ export interface Bot {
   connectionIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AttachmentRef {
+  uploadId: string;
+  kind: "image" | "file";
+  name: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
 }
 
 export interface ToolInfo {
@@ -109,8 +121,26 @@ export const botsApi = {
   update: (id: string, input: Partial<BotInput>) => apiClient.patch<Bot>(`/bots/${id}`, input),
   remove: (id: string) => apiClient.delete(`/bots/${id}`),
   models: () => apiClient.get<ModelsResponse>("/models"),
-  send: (id: string, requestId: string, text: string, mentions?: string[]) =>
-    apiClient.post(`/bots/${id}/messages`, { requestId, text, mentions }),
+  send: (
+    id: string,
+    requestId: string,
+    text: string,
+    mentions?: string[],
+    attachments?: string[],
+  ) =>
+    apiClient.post(`/bots/${id}/messages`, {
+      requestId,
+      text,
+      ...(mentions?.length ? { mentions } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    }),
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient.postForm<{ ref: AttachmentRef }>("/uploads", form);
+  },
+  uploadUrl: (uploadId: string) => `/api/v1/uploads/${uploadId}/content`,
+  deleteUpload: (uploadId: string) => apiClient.delete(`/uploads/${uploadId}`),
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),

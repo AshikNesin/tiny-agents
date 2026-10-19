@@ -35,12 +35,22 @@ export const approvalSchema = z.object({
   alwaysAllow: z.string().min(1).max(128).optional(),
 });
 
-export const sendMessageSchema = z.object({
-  requestId: z.string().min(8, "requestId is required").max(128),
-  text: z.string().min(1, "Message text is required").max(32_768),
-  /** Bot ids the text @mentions; the server delivers copies to each. */
-  mentions: z.array(z.string().min(1).max(64)).max(20).optional(),
-});
+export const sendMessageSchema = z
+  .object({
+    requestId: z.string().min(8, "requestId is required").max(128),
+    text: z.string().max(32_768),
+    /** Bot ids the text @mentions; the server delivers copies to each. */
+    mentions: z.array(z.string().min(1).max(64)).max(20).optional(),
+    /** Upload ids attached to this message (issue #17). */
+    attachments: z
+      .array(z.string().regex(/^[a-f0-9]{24}$/, "Invalid upload id"))
+      .max(10)
+      .optional(),
+  })
+  .refine((data) => (data.text ?? "").trim().length > 0 || (data.attachments?.length ?? 0) > 0, {
+    message: "Message text or at least one attachment is required",
+    path: ["text"],
+  });
 
 export type CreateBotDTO = z.infer<typeof createBotSchema>;
 export type UpdateBotDTO = z.infer<typeof updateBotSchema>;

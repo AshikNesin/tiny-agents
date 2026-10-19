@@ -25,10 +25,22 @@ export interface ChatToolCall {
   sources?: { url: string; title: string }[];
 }
 
+export interface AttachmentRef {
+  uploadId: string;
+  kind: "image" | "file";
+  name: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "marker";
   text: string;
+  /** Attachments the user sent with this message (issue #17). */
+  attachments?: AttachmentRef[];
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   reasoning?: string;

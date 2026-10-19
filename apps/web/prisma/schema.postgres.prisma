@@ -160,6 +160,27 @@ model BotConnection {
   @@map("bot_connections")
 }
 
+model Upload {
+  id         String   @id @default(cuid())
+  /// "image" | "file"
+  kind       String
+  /// Original filename, sanitized.
+  name       String
+  mimeType   String
+  /// Original byte size.
+  size       Int
+  /// Images only, after preparation.
+  width      Int?
+  height     Int?
+  /// Storage key of the model-ready image variant (null for files).
+  modelKey   String?
+  /// Storage key of the original bytes.
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  @@map("uploads")
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique

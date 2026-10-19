@@ -86,3 +86,12 @@ export {
   type RawChat,
 } from "./transcript";
 export type * from "./types";
+// Image preparation re-exports (issue #17): apps/web must not import
+// pi-durable directly (PRD §7.2), so the Photon helpers flow through here.
+export { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
+export {
+  DEFAULT_IMAGE_LIMITS,
+  type ImageProcessor,
+  type ImageLimits,
+  type PreparedImage,
+} from "@earendil-works/pi-durable/tools";

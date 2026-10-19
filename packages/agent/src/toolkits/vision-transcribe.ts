@@ -46,8 +46,8 @@ export interface Transcriber {
 /** The minimum the transcriber needs from a pi-ai model registry. */
 export type TranscriberModels = {
   getModel(provider: string, id: string): Model<Api> | undefined;
-  getProviders(): { id: string }[];
-  getModels(provider: string): Model<Api>[];
+  getProviders(): readonly { id: string }[];
+  getModels(provider: string): readonly Model<Api>[];
   completeSimple(
     model: Model<Api>,
     context: Context,
