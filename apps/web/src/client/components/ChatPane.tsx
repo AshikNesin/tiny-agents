@@ -329,172 +329,173 @@ function ChatPaneBody({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Header - Grok-style: circular back / bot pill (avatar + name) /
+    <div className="flex h-full min-h-0 flex-col md:flex-row">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+        {/* Header - Grok-style: circular back / bot pill (avatar + name) /
           circular ⋯, floating on the transcript with no border. */}
-      <header className="flex items-center gap-3 px-3 pt-3 pb-2 md:px-4 md:pt-4">
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full"
-          onClick={() => navigate("/chats")}
-          aria-label="Back to bots"
-        >
-          <ArrowLeft className="size-5" />
-        </Button>
-        <button
-          type="button"
-          onClick={onEditBot}
-          className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:px-2.5"
-          aria-label={`Edit ${bot.name}`}
-        >
-          <BotAvatar name={bot.name} className="size-7" />
-          <span className="truncate text-[15px] font-semibold">{bot.name}</span>
-        </button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="ml-auto shrink-0 rounded-full"
-          onClick={() => setBrowserOpen((v) => !v)}
-          aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
-          data-testid="browser-toggle"
-        >
-          <Globe className="size-5" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
-              <MoreHorizontal className="size-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
-              <MessageSquarePlus className="size-4" /> New chat
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onEditBot}>
-              <Pencil className="size-4" /> Edit bot
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-              <Trash2 className="size-4" /> Delete bot
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </header>
+        <header className="flex items-center gap-3 px-3 pt-3 pb-2 md:px-4 md:pt-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full"
+            onClick={() => navigate("/chats")}
+            aria-label="Back to bots"
+          >
+            <ArrowLeft className="size-5" />
+          </Button>
+          <button
+            type="button"
+            onClick={onEditBot}
+            className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:px-2.5"
+            aria-label={`Edit ${bot.name}`}
+          >
+            <BotAvatar name={bot.name} className="size-7" />
+            <span className="truncate text-[15px] font-semibold">{bot.name}</span>
+          </button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="ml-auto shrink-0 rounded-full"
+            onClick={() => setBrowserOpen((v) => !v)}
+            aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
+            data-testid="browser-toggle"
+          >
+            <Globe className="size-5" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
+                <MoreHorizontal className="size-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
+                <MessageSquarePlus className="size-4" /> New chat
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onEditBot}>
+                <Pencil className="size-4" /> Edit bot
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+                <Trash2 className="size-4" /> Delete bot
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
 
-      {/* Stream health: the transcript is frozen while disconnected */}
-      {chat && !chat.connected && (
-        <div className="text-muted-foreground flex items-center gap-2 px-4 py-1.5 text-xs">
-          <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-          Reconnecting…
-        </div>
-      )}
+        {/* Stream health: the transcript is frozen while disconnected */}
+        {chat && !chat.connected && (
+          <div className="text-muted-foreground flex items-center gap-2 px-4 py-1.5 text-xs">
+            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+            Reconnecting…
+          </div>
+        )}
 
-      {/* Warnings */}
-      {!gatewayConfigured && (
-        <div className="border-b bg-destructive/10 px-4 py-2 text-destructive text-xs">
-          Cloudflare AI Gateway is not configured. Set CLOUDFLARE_API_KEY, CLOUDFLARE_ACCOUNT_ID and
-          CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
-        </div>
-      )}
+        {/* Warnings */}
+        {!gatewayConfigured && (
+          <div className="border-b bg-destructive/10 px-4 py-2 text-destructive text-xs">
+            Cloudflare AI Gateway is not configured. Set CLOUDFLARE_API_KEY, CLOUDFLARE_ACCOUNT_ID
+            and CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
+          </div>
+        )}
 
-      {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
+        {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
           message pinned unless the reader scrolled up). The provider mounts
           at the pane root so the body can drive it (send → scroll to end). */}
-      <div className="relative min-h-0 flex-1">
-        <MessageScroller className="h-full">
-          <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
-            <MessageScrollerContent className="space-y-3">
-              {messages.length === 0 && pending.length === 0 && (
-                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
-                  <BotAvatar name={bot.name} className="size-20" />
-                  <div className="max-w-sm">
-                    <p className="text-foreground text-lg font-semibold">{bot.name}</p>
-                    {bot.description ? (
-                      <p className="mt-1 text-sm">{bot.description}</p>
-                    ) : (
-                      <p className="mt-1 text-sm">Say hi to start the conversation.</p>
-                    )}
+        <div className="relative min-h-0 flex-1">
+          <MessageScroller className="h-full">
+            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
+              <MessageScrollerContent className="space-y-3">
+                {messages.length === 0 && pending.length === 0 && (
+                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
+                    <BotAvatar name={bot.name} className="size-20" />
+                    <div className="max-w-sm">
+                      <p className="text-foreground text-lg font-semibold">{bot.name}</p>
+                      {bot.description ? (
+                        <p className="mt-1 text-sm">{bot.description}</p>
+                      ) : (
+                        <p className="mt-1 text-sm">Say hi to start the conversation.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {messages.map((message, i) => {
-                const prev = messages[i - 1];
-                const showDay =
-                  !prev ||
-                  new Date(prev.createdAt).toDateString() !==
-                    new Date(message.createdAt).toDateString();
-                return (
-                  <Fragment key={message.id}>
-                    {showDay && (
-                      <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                        {formatDayDivider(message.createdAt)}
-                      </div>
-                    )}
-                    {firstUnreadIndex === i && (
-                      <div
-                        data-testid="unread-divider"
-                        className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
-                      >
-                        <span className="bg-border h-px flex-1" aria-hidden="true" />
-                        New messages
-                        <span className="bg-border h-px flex-1" aria-hidden="true" />
-                      </div>
-                    )}
-                    <MessageScrollerItem messageId={message.id} scrollAnchor={isRead(i)}>
-                      <ChatMessageView
-                        message={message}
-                        botName={bot.name}
-                        botId={bot.id}
-                        toolLabels={toolLabels}
-                      />
-                    </MessageScrollerItem>
-                  </Fragment>
-                );
-              })}
-              {pending.length > 0 &&
-                (() => {
-                  const last = messages[messages.length - 1];
+                )}
+                {messages.map((message, i) => {
+                  const prev = messages[i - 1];
                   const showDay =
-                    !last ||
-                    new Date(last.createdAt).toDateString() !==
-                      new Date(pending[0].createdAt).toDateString();
+                    !prev ||
+                    new Date(prev.createdAt).toDateString() !==
+                      new Date(message.createdAt).toDateString();
                   return (
-                    <Fragment>
+                    <Fragment key={message.id}>
                       {showDay && (
                         <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                          {formatDayDivider(pending[0].createdAt)}
+                          {formatDayDivider(message.createdAt)}
                         </div>
                       )}
-                      {pending.map((p) => (
-                        <MessageScrollerItem key={p.id} messageId={p.id}>
-                          <ChatMessageView
-                            message={{
-                              id: p.id,
-                              role: "user",
-                              text: p.text,
-                              ...(p.attachments?.length ? { attachments: p.attachments } : {}),
-                              status: "streaming",
-                              createdAt: p.createdAt,
-                            }}
-                            botName={bot.name}
-                          />
-                        </MessageScrollerItem>
-                      ))}
+                      {firstUnreadIndex === i && (
+                        <div
+                          data-testid="unread-divider"
+                          className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
+                        >
+                          <span className="bg-border h-px flex-1" aria-hidden="true" />
+                          New messages
+                          <span className="bg-border h-px flex-1" aria-hidden="true" />
+                        </div>
+                      )}
+                      <MessageScrollerItem messageId={message.id} scrollAnchor={isRead(i)}>
+                        <ChatMessageView
+                          message={message}
+                          botName={bot.name}
+                          botId={bot.id}
+                          toolLabels={toolLabels}
+                        />
+                      </MessageScrollerItem>
                     </Fragment>
                   );
-                })()}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton
-            direction="end"
-            className="absolute right-4 bottom-4"
-            aria-label="Jump to the latest message"
-          />
-        </MessageScroller>
+                })}
+                {pending.length > 0 &&
+                  (() => {
+                    const last = messages[messages.length - 1];
+                    const showDay =
+                      !last ||
+                      new Date(last.createdAt).toDateString() !==
+                        new Date(pending[0].createdAt).toDateString();
+                    return (
+                      <Fragment>
+                        {showDay && (
+                          <div className="text-muted-foreground flex justify-center py-2 text-xs">
+                            {formatDayDivider(pending[0].createdAt)}
+                          </div>
+                        )}
+                        {pending.map((p) => (
+                          <MessageScrollerItem key={p.id} messageId={p.id}>
+                            <ChatMessageView
+                              message={{
+                                id: p.id,
+                                role: "user",
+                                text: p.text,
+                                ...(p.attachments?.length ? { attachments: p.attachments } : {}),
+                                status: "streaming",
+                                createdAt: p.createdAt,
+                              }}
+                              botName={bot.name}
+                            />
+                          </MessageScrollerItem>
+                        ))}
+                      </Fragment>
+                    );
+                  })()}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton
+              direction="end"
+              className="absolute right-4 bottom-4"
+              aria-label="Jump to the latest message"
+            />
+          </MessageScroller>
+        </div>
       </div>
-
-      {/* Browser live view (issue #24): docks beside the transcript when the
-          owner opens it. Toggle in the header actions. */}
+      {/* Browser live view (issue #24): beside the transcript on desktop,
+          full-screen overlay on mobile. */}
       {browserOpen && <BrowserPanel bot={bot} onClose={() => setBrowserOpen(false)} />}
 
       {/* Composer - Grok-style: a single rounded pill with the send/stop

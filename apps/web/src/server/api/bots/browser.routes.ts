@@ -14,7 +14,13 @@ import { z } from "zod";
 import { createRouter } from "@groot/core/utils/router.utils";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import { getLiveBrowserSession, setDriver, type BrowserInput } from "@tiny-agents/agent";
+import {
+  closeBrowserSession,
+  browserProfilesDir,
+  getLiveBrowserSession,
+  setDriver,
+  type BrowserInput,
+} from "@tiny-agents/agent";
 import * as botsService from "./bots.service";
 
 const router = createRouter();
@@ -105,13 +111,37 @@ router.get("/bots/:id/browser/live", async (req: Request, res: Response) => {
     },
     closed: () => res.end(),
   });
-  await live.session.startScreencast();
+  await startScreencastShared(conversationId, live.session);
   res.on("close", () => {
     off();
-    void live.session.stopScreencast();
+    void stopScreencastShared(conversationId, live.session);
   });
   return undefined;
 });
+
+// Screencast is session-wide; several viewers may watch one session. Only
+// the last disconnect stops it (cubic: one viewer closing froze the rest).
+const screencastViewers = new Map<number, number>();
+async function startScreencastShared(
+  conversationId: number,
+  session: { startScreencast(): Promise<void> },
+) {
+  const n = (screencastViewers.get(conversationId) ?? 0) + 1;
+  screencastViewers.set(conversationId, n);
+  if (n === 1) await session.startScreencast();
+}
+async function stopScreencastShared(
+  conversationId: number,
+  session: { stopScreencast(): Promise<void> },
+) {
+  const n = (screencastViewers.get(conversationId) ?? 1) - 1;
+  if (n <= 0) {
+    screencastViewers.delete(conversationId);
+    await session.stopScreencast();
+  } else {
+    screencastViewers.set(conversationId, n);
+  }
+}
 
 router.post("/bots/:id/browser/input", async (req) => {
   const id = parseStringParam(req.params.id, "id");
@@ -141,13 +171,9 @@ router.post("/bots/:id/browser/driver", async (req) => {
 router.delete("/bots/:id/browser/profile", async (req) => {
   const id = parseStringParam(req.params.id, "id");
   const conversationId = await botConversation(id);
-  const live = getLiveBrowserSession(conversationId);
-  if (live) {
-    setDriver(conversationId, "agent");
-    await live.session.close();
-  }
+  await closeBrowserSession(conversationId);
   const { rmSync } = await import("node:fs");
-  rmSync(`./data/browser-profiles/${conversationId}`, { recursive: true, force: true });
+  rmSync(`${browserProfilesDir()}/${conversationId}`, { recursive: true, force: true });
   return { reset: true };
 });
 

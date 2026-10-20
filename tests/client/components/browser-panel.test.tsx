@@ -65,7 +65,12 @@ describe("BrowserPanel", () => {
     fireEvent.click(screen.getByTestId("browser-takeover"));
     await waitFor(() => expect(driver).toHaveBeenCalledWith("b1", "human"));
     const field = await screen.findByTestId("browser-secret");
-    fireEvent.keyDown(field, { key: "s" });
+    // Secret-protection regressions: masked field, printable keys never
+    // reach the DOM input (they go to the page only).
+    expect(field).toHaveAttribute("type", "password");
+    const printable = new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true });
+    fireEvent(field, printable);
+    expect(printable.defaultPrevented).toBe(true);
     fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(input).toHaveBeenCalledTimes(2));
     expect(input).toHaveBeenNthCalledWith(1, "b1", { kind: "key", key: "s", text: "s" });

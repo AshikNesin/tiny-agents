@@ -37,6 +37,8 @@ export interface BrowserSessionEvents {
 export interface OpenBrowserOptions {
   viewportWidth: number;
   viewportHeight: number;
+  /** Hosts exempt from the private-address block (redirect checks honor it). */
+  allowedPrivateHosts?: string;
 }
 
 /** What the toolkit and the live-view routes need from a live browser. */
@@ -82,6 +84,8 @@ export interface LiveBrowserSession {
   session: BrowserSession;
   driver: BrowserDriver;
   lastActivity: number;
+  /** This session's idle close window (ms), from the toolkit options. */
+  idleMs: number;
 }
 
 const fail = (text: string): ToolExecutionResult => ({
@@ -89,7 +93,10 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
+let profilesRoot: string | undefined;
+
 export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capability {
+  profilesRoot = options.profilesDir ?? "./data/browser-profiles";
   const tools: { name: string; label: string; description: string; readOnly?: boolean }[] = [
     {
       name: "browser_navigate",
@@ -143,7 +150,9 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               return fail((error as Error).message);
             }
             try {
-              const s = await acquire(options, Number(api.conversationId));
+              // Navigation is an action: it must respect takeover like every
+              // other effect (navigating away mid-secret breaks the contract).
+              const s = await withDriverTurn(options, Number(api.conversationId));
               const result = await s.session.navigate(url.href);
               return {
                 output: [{ type: "text", text: `${result.status ?? "no status"} ${result.url}` }],
@@ -318,12 +327,38 @@ export async function acquire(
     const session = await transport(dir, {
       viewportWidth: options.viewportWidth ?? 1280,
       viewportHeight: options.viewportHeight ?? 800,
+      allowedPrivateHosts: options.allowedPrivateHosts,
     });
-    entry = { session, driver: "agent", lastActivity: Date.now() };
+    entry = {
+      session,
+      driver: "agent",
+      lastActivity: Date.now(),
+      idleMs: (options.idleMinutes ?? 10) * 60_000,
+    };
     live.set(key, entry);
   }
   entry.lastActivity = Date.now();
   return entry;
+}
+
+/**
+ * True when a URL is private/loopback and not exempt. The toolkit validates
+ * the submitted URL; the transport re-checks every redirect hop, so an open
+ * redirect on a public site cannot reach the private network.
+ */
+export function isBlockedPrivateUrl(raw: string, allowedPrivateHosts?: string): boolean {
+  const exempt = (allowedPrivateHosts ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  try {
+    const url = new URL(raw);
+    if (exempt.includes(url.hostname.toLowerCase())) return false;
+    checkPublicUrl(raw);
+    return false;
+  } catch {
+    return true; // invalid or private
+  }
 }
 
 /** Ref shape every transport must honor: `e` + digits from the last snapshot. */
@@ -364,6 +399,21 @@ export function setDriver(conversationId: number, driver: BrowserDriver): void {
   if (entry) entry.driver = driver;
 }
 
+/** Close and remove a session (profile reset): later calls open fresh. */
+export async function closeBrowserSession(conversationId: number): Promise<void> {
+  const entry = live.get(String(conversationId));
+  if (entry) {
+    entry.driver = "agent"; // release any blocked action tools
+    live.delete(String(conversationId));
+    await entry.session.close();
+  }
+}
+
+/** Profiles root the toolkit was configured with (reset endpoint wipes under it). */
+export function browserProfilesDir(): string {
+  return profilesRoot ?? "./data/browser-profiles";
+}
+
 export function getLiveBrowserSession(conversationId: number): LiveBrowserSession | undefined {
   return live.get(String(conversationId));
 }
@@ -375,10 +425,10 @@ export function liveBrowserConversations(): number[] {
 function touchActivity() {
   if (sweeper) return;
   sweeper = setInterval(() => {
-    const cutoff = Date.now() - 10 * 60_000;
+    const now = Date.now();
     for (const [key, entry] of live) {
       if (entry.driver === "human") continue; // an open takeover is activity
-      if (entry.lastActivity < cutoff) {
+      if (entry.lastActivity < now - entry.idleMs) {
         live.delete(key);
         void entry.session.close();
       }

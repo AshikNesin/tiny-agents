@@ -11,6 +11,7 @@
 import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
 import type { CDPSession, Page } from "playwright-core";
+import { isBlockedPrivateUrl } from "./browser";
 import type {
   BrowserFrame,
   BrowserInput,
@@ -67,7 +68,20 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
         return () => listeners.delete(events);
       },
       navigate: async (url) => {
+        // Redirect guard: validate every hop of the redirect chain. Route
+        // interception never sees redirect hops here, but the response's
+        // request chain does (redirectedFrom). A private hop bails to
+        // about:blank before any private byte is rendered.
         const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        const hops: string[] = [];
+        for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
+        const bad = hops.find((hop) => isBlockedPrivateUrl(hop, open.allowedPrivateHosts));
+        if (bad) {
+          await page.goto("about:blank").catch(() => {});
+          throw new Error(
+            `Blocked: the page redirected to a private address (${new URL(bad).host}).`,
+          );
+        }
         return { url: page.url(), status: response?.status() ?? null };
       },
       snapshot: () => snapshotOf(page),

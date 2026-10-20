@@ -47,6 +47,8 @@ export {
 } from "./toolkits/sandbox";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
+  browserProfilesDir,
+  closeBrowserSession,
   createBrowserToolkit,
   setDriver,
   getLiveBrowserSession,

@@ -8,8 +8,10 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
+  closeBrowserSession,
   createBrowserToolkit,
   getLiveBrowserSession,
+  isBlockedPrivateUrl,
   resetBrowserSessionsForTests,
   setDriver,
   type BrowserInput,
@@ -172,6 +174,46 @@ describe("browser toolkit", () => {
     const done = await pending;
     expect(done.isError).toBeUndefined();
     expect(log.filter((e) => e.method === "click")).toHaveLength(1);
+  });
+
+  it("navigate waits while the human drives (takeover covers navigation)", async () => {
+    const { transport, log } = fakeTransport();
+    const tk = createBrowserToolkit({
+      transport,
+      profilesDir: "/tmp/ta-test-profiles",
+      humanDriverWaitMs: 1500,
+    });
+    // A session must exist before takeover can be claimed (the routes
+    // requireSession first); create it, then flip the driver.
+    await run(tk, "browser_snapshot", {});
+    setDriver(4242, "human");
+    const pending = run(tk, "browser_navigate", { url: "https://example.com/" });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(log.filter((e) => e.method === "navigate")).toHaveLength(0);
+    setDriver(4242, "agent");
+    const done = await pending;
+    expect(done.isError).toBeUndefined();
+  });
+
+  it("closeBrowserSession removes the session so the next call reopens", async () => {
+    const { transport, log } = fakeTransport();
+    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await run(tk, "browser_navigate", { url: "https://example.com/" });
+    expect(getLiveBrowserSession(4242)).toBeDefined();
+    await closeBrowserSession(4242);
+    expect(getLiveBrowserSession(4242)).toBeUndefined();
+    expect(log.some((e) => e.method === "close")).toBe(true);
+    // The next navigate opens a fresh session (a second transport dial).
+    const dials = log.filter((e) => e.method === "navigate").length;
+    await run(tk, "browser_navigate", { url: "https://example.com/2" });
+    expect(log.filter((e) => e.method === "navigate").length).toBeGreaterThan(dials);
+  });
+
+  it("isBlockedPrivateUrl knows exemptions", () => {
+    expect(isBlockedPrivateUrl("https://example.com/")).toBe(false);
+    expect(isBlockedPrivateUrl("http://localhost:1/")).toBe(true);
+    expect(isBlockedPrivateUrl("http://localhost:1/", "localhost")).toBe(false);
+    expect(isBlockedPrivateUrl("http://127.0.0.1:1/", "localhost")).toBe(true);
   });
 
   it("human input goes through the same session (peer channel)", async () => {

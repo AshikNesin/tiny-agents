@@ -17,7 +17,6 @@ import type { Bot } from "../lib/bots-api";
 
 export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [status, setStatus] = useState<BrowserStatus | null>(null);
-  const [secret, setSecret] = useState("");
   const imgRef = useRef<HTMLImageElement>(null);
   const humanDrives = status?.driver === "human";
 
@@ -50,32 +49,43 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
     }
   };
 
-  // Coordinate translation: displayed width -> 1280-wide viewport.
-  const toViewport = useCallback((event: React.MouseEvent) => {
-    const img = imgRef.current;
-    if (!img) return { x: 0, y: 0 };
-    const rect = img.getBoundingClientRect();
-    const scale = 1280 / rect.width;
-    return {
-      x: Math.round((event.clientX - rect.left) * scale),
-      y: Math.round((event.clientY - rect.top) * scale),
-    };
-  }, []);
+  // Coordinate translation: the 1280x800 frame is object-contained, so the
+  // img box letterboxes it. Map through the rendered frame, not the box.
+  const toViewport = useCallback(
+    (clientX: number, clientY: number, el: HTMLElement | null = imgRef.current) => {
+      if (!el) return { x: 0, y: 0 };
+      const rect = el.getBoundingClientRect();
+      const scale = Math.min(rect.width / 1280, rect.height / 800);
+      const offsetX = (rect.width - 1280 * scale) / 2;
+      const offsetY = (rect.height - 800 * scale) / 2;
+      return {
+        x: Math.round((clientX - rect.left - offsetX) / scale),
+        y: Math.round((clientY - rect.top - offsetY) / scale),
+      };
+    },
+    [],
+  );
 
   const onMouse = (event: React.MouseEvent) => {
     if (!humanDrives) return;
-    void botsApi.browserInput(bot.id, { kind: "mouse", ...toViewport(event) });
+    void botsApi.browserInput(bot.id, {
+      kind: "mouse",
+      ...toViewport(event.clientX, event.clientY),
+    });
   };
   const onWheel = (event: React.WheelEvent) => {
     if (!humanDrives) return;
-    void botsApi.browserInput(bot.id, {
-      kind: "scroll",
-      ...toViewport(event),
-      deltaY: Math.round(event.deltaY),
-    });
+    const { x, y } = toViewport(event.clientX, event.clientY);
+    void botsApi.browserInput(bot.id, { kind: "scroll", x, y, deltaY: Math.round(event.deltaY) });
   };
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!humanDrives) return;
+    // Modified shortcuts (Ctrl/Cmd+…) are not text: swallow them rather
+    // than sending the bare character into the page.
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      event.preventDefault();
+      return;
+    }
     if (event.key.length === 1) {
       void botsApi.browserInput(bot.id, { kind: "key", key: event.key, text: event.key });
     } else if (
@@ -90,14 +100,31 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
     event.preventDefault();
   };
 
-  // Masked secret field: each character goes straight into the page.
+  // Masked secret field: each keystroke goes straight into the page. The
+  // element is readOnly so no copy of the secret exists in client state;
+  // paste is forwarded as characters, never stored.
   const onSecretKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      event.preventDefault();
+      return;
+    }
     if (event.key.length === 1) {
       void botsApi.browserInput(bot.id, { kind: "key", key: event.key, text: event.key });
       event.preventDefault();
-    } else if (event.key === "Enter") {
-      void botsApi.browserInput(bot.id, { kind: "key", key: "Enter" });
+    } else if (
+      event.key === "Enter" ||
+      event.key === "Backspace" ||
+      event.key === "Delete" ||
+      event.key === "Tab"
+    ) {
+      void botsApi.browserInput(bot.id, { kind: "key", key: event.key });
       event.preventDefault();
+    }
+  };
+  const onSecretPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    for (const ch of event.clipboardData.getData("text")) {
+      void botsApi.browserInput(bot.id, { kind: "key", key: ch, text: ch });
     }
   };
 
@@ -113,7 +140,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
 
   return (
     <div
-      className="bg-background fixed inset-0 z-40 flex flex-col md:static md:z-auto md:w-[420px] md:shrink-0 md:border-l"
+      className="bg-background fixed inset-0 z-40 flex flex-col md:static md:z-auto md:h-full md:w-[420px] md:shrink-0 md:border-l"
       data-testid="browser-panel"
     >
       <div className="flex items-center gap-2 border-b px-3 py-2">
@@ -167,12 +194,12 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
             <Keyboard className="size-3.5 text-muted-foreground" />
             <input
               type="password"
-              value={secret}
-              onChange={(e) => setSecret(e.target.value.slice(-1) && e.target.value.slice(0, 64))}
               onKeyDown={onSecretKey}
-              placeholder="type here — goes straight into the page"
+              onPaste={onSecretPaste}
+              placeholder="type or paste — goes straight into the page"
               className="h-7 flex-1 rounded border bg-transparent px-2 text-xs"
               autoComplete="off"
+              readOnly
               data-testid="browser-secret"
             />
             <Button
