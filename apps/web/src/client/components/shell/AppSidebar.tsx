@@ -126,14 +126,17 @@ export function AppSidebar() {
         <div
           className={cn(
             "flex h-14 shrink-0 items-center justify-between px-3",
-            rail && "md:flex-col md:justify-center md:gap-1 md:py-3",
+            rail && "md:justify-center",
           )}
         >
           <Link
             to="/chats"
             onClick={closeDrawer}
             aria-label="tiny-agents"
-            className="text-foreground hover:bg-sidebar-accent flex size-8 items-center justify-center rounded-xl"
+            className={cn(
+              "text-foreground hover:bg-sidebar-accent flex size-8 items-center justify-center rounded-xl",
+              rail && "md:hidden",
+            )}
           >
             <Bot className="size-5" />
           </Link>

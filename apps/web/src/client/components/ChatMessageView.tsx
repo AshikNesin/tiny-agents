@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Ban, Check, Clock, Copy, ExternalLink, MessagesSquare, Sparkles } from "lucide-react";
+import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import { botsApi } from "../lib/bots-api";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
 import { BotAvatar } from "./BotAvatar";
+import { BotHandoff } from "./BotHandoff";
 import {
   CodeBlock,
   CodeBlockContent,
@@ -262,31 +263,9 @@ function ToolRow({
     return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
   }
 
-  // message_bot row: the Grok handoff pill — the peer's avatar, their name,
-  // and the outbound snippet. Only a completed delivery says "Messaged";
-  // every other terminal state says what actually happened (cubic).
+  // message_bot row: Grok's centered handoff line that opens the thread.
   if (call.name === "message_bot") {
-    const to = typeof call.args?.to === "string" ? call.args.to : "";
-    const snippet =
-      typeof call.args?.text === "string"
-        ? call.args.text.replace(/\s+/g, " ").trim().slice(0, 60)
-        : "";
-    return (
-      <Trace className="gap-1">
-        <TraceLine status={traceStatus(call.status)} data-testid="bot-handoff">
-          <TraceIcon>
-            <BotAvatar name={to} className="size-4" />
-          </TraceIcon>
-          <TraceTitle>
-            {messageBotLabel(call.status)} {to || "bot"}
-          </TraceTitle>
-          {snippet && <TraceDescription>“{snippet}”</TraceDescription>}
-          {call.durationMs !== undefined && (
-            <TraceDescription>{formatDuration(call.durationMs)}</TraceDescription>
-          )}
-        </TraceLine>
-      </Trace>
-    );
+    return <BotHandoff call={call} botName={botName} />;
   }
 
   const line = (
@@ -497,40 +476,37 @@ export function PeerIncomingCard({
 }) {
   return (
     <Message
-      className="group gap-3"
+      className="group flex-col gap-1.5"
       data-testid="peer-card"
       data-peer={name}
       data-relayed={relayed ? "true" : undefined}
     >
-      <BotAvatar name={name} className="mt-1 size-8" />
-      <div className="min-w-0 flex-1">
-        <p className="text-muted-foreground mb-1 flex items-center gap-1.5 px-1 text-xs">
-          <MessagesSquare className="size-3" aria-hidden />
-          <span className="text-foreground/80 font-medium">{name}</span>
-          <span aria-hidden>·</span>
-          <span>{relayed ? "reply relayed into this chat" : "messaged you"}</span>
-        </p>
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            data-slot="reply-card"
-            className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
-          >
-            <Streamdown>{text}</Streamdown>
-          </div>
-          <CopyButton text={text} />
+      <p className="text-muted-foreground flex items-center justify-center gap-1.5 py-1 text-xs">
+        <BotAvatar name={name} className="size-4" />
+        <span className="text-foreground/80 font-medium">{name}</span>
+        <span aria-hidden>·</span>
+        <span>{relayed ? "reply relayed into this chat" : "messaged you"}</span>
+      </p>
+      <div className="flex min-w-0 items-center gap-2">
+        <div
+          data-slot="reply-card"
+          className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
+        >
+          <Streamdown>{text}</Streamdown>
         </div>
-        {streaming && (
-          <span className="text-muted-foreground mt-1 inline-flex items-center gap-1.5 px-1 text-xs">
-            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-            replying…
-          </span>
-        )}
-        {failed && (
-          <p className="text-destructive mt-1 px-1 text-xs">
-            {error ?? "This delivery was not answered."}
-          </p>
-        )}
+        <CopyButton text={text} />
       </div>
+      {streaming && (
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 px-1 text-xs">
+          <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+          replying…
+        </span>
+      )}
+      {failed && (
+        <p className="text-destructive px-1 text-xs">
+          {error ?? "This delivery was not answered."}
+        </p>
+      )}
     </Message>
   );
 }
@@ -597,13 +573,4 @@ function assistantView(
       </div>
     </Message>
   );
-}
-
-function messageBotLabel(status: ChatToolCall["status"]): string {
-  if (status === "running" || status === "pending") return "Messaging";
-  if (status === "done") return "Messaged";
-  if (status === "denied") return "Blocked message to";
-  if (status === "aborted") return "Stopped messaging";
-  if (status === "interrupted") return "Interrupted message to";
-  return "Failed to message";
 }

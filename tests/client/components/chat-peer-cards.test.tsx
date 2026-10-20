@@ -6,6 +6,7 @@
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ChatMessageView, PeerIncomingCard } from "@/components/ChatMessageView";
 import type { ChatMessage } from "@/lib/chat-types";
@@ -168,6 +169,47 @@ describe("message_bot tool row (Grok handoff pill)", () => {
       />,
     );
     expect(screen.getByText(/Messaging Radar/)).toBeInTheDocument();
+  });
+});
+
+describe("handoff thread dialog", () => {
+  const longText = "research Grok routines and report back with sources ".repeat(3).trim();
+  const handoff = (status: "done" | "error" = "done") => (
+    <ChatMessageView
+      {...base}
+      message={{
+        id: "a1",
+        role: "assistant",
+        text: "",
+        status: "done",
+        createdAt: 0,
+        toolCalls: [
+          {
+            id: "t1",
+            name: "message_bot",
+            args: { to: "Radar", text: longText },
+            status,
+            output: status === "error" ? "Radar is unavailable" : undefined,
+          },
+        ],
+      }}
+    />
+  );
+
+  it("opens a view-only thread with the full message", async () => {
+    render(handoff());
+    await userEvent.click(screen.getByTestId("bot-handoff"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Engineer");
+    expect(dialog).toHaveTextContent("Radar");
+    expect(dialog).toHaveTextContent(longText);
+    expect(dialog).toHaveTextContent("This chat is view-only");
+  });
+
+  it("shows why a message was not delivered", async () => {
+    render(handoff("error"));
+    await userEvent.click(screen.getByTestId("bot-handoff"));
+    expect(await screen.findByText("Radar is unavailable")).toBeInTheDocument();
   });
 });
 
