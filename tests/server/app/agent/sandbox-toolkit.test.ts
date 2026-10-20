@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import {
   createMemoryHostKeyStore,
   createSandboxToolkit,
+  PreDispatchError,
   type ExecResult,
   type SandboxSession,
   type SandboxTransport,
@@ -37,7 +38,7 @@ function fakeTransport(execReply: (command: string) => ExecResult, opts: { kills
     const dead = () => killed++ < (opts.kills ?? 0);
     const session: SandboxSession = {
       exec: async (command) => {
-        if (dead()) throw new Error("Keepalive timeout");
+        if (dead()) throw new PreDispatchError("channel open refused: connection dead");
         calls.push(command);
         return execReply(command);
       },
@@ -125,6 +126,31 @@ describe("sandbox toolkit (unit, fake transport)", () => {
     expect(fake.calls).toEqual(["one", "two", "three"]);
   });
 
+  it("surfaces post-dispatch failures instead of re-running the command", async () => {
+    const calls: string[] = [];
+    const transport: SandboxTransport = async () => ({
+      exec: async (command) => {
+        calls.push(command);
+        throw new Error("Command timed out after 5s"); // dispatched, then died
+      },
+      readFile: async () => ({ text: "", truncated: false }),
+      writeFile: async () => {},
+      close: () => {},
+    });
+    const sandbox = createSandboxToolkit({ host: "vm", transport });
+    const result = await run(sandbox, "run_command", { command: "cargo build" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("timed out");
+    expect(calls).toEqual(["cargo build"]); // exactly once
+  });
+
+  it("refuses to dial when unconfigured, even if the capability is enabled", async () => {
+    const sandbox = createSandboxToolkit({ host: undefined });
+    const result = await run(sandbox, "run_command", { command: "ls" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("SANDBOX_HOST");
+  });
+
   it("wraps detached commands in setsid/nohup and returns the pid line", async () => {
     const fake = fakeTransport((c) => ({
       output: c.includes("setsid") ? "4242" : "no",
@@ -133,7 +159,7 @@ describe("sandbox toolkit (unit, fake transport)", () => {
     const sandbox = createSandboxToolkit({ host: "vm", transport: fake.transport });
     const result = await run(sandbox, "run_command", { command: "npm run build", detached: true });
     expect(result.isError).toBeUndefined();
-    expect(fake.calls[0]).toMatch(/^setsid nohup npm run build/);
+    expect(fake.calls[0]).toMatch(/^setsid nohup sh -c 'npm run build' >/);
     expect(result.text).toContain("4242");
   });
 });

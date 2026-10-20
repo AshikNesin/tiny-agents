@@ -11,9 +11,10 @@ import {
   renameSync,
   unlinkSync,
   statSync,
+  rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 import { EventEmitter } from "node:events";
 import ssh2 from "ssh2";
@@ -50,9 +51,16 @@ export function startFakeSandboxServer(
   }) as unknown as string;
   const execCalls: string[] = [];
   let closed = false;
+  const clients = new Set<Connection>();
 
   const server = new SshServer({ hostKeys: [hostKey] }, (client: Connection) => {
-    client.on("authentication", (ctx) => ctx.accept());
+    clients.add(client);
+    client.on("close", () => clients.delete(client));
+    // Tailscale-style: only `none` auth. A client that starts sending
+    // credentials is not the shape this fixture simulates — reject it.
+    client.on("authentication", (ctx) =>
+      ctx.method === "none" ? ctx.accept() : ctx.reject(["none"]),
+    );
     client.on("session", (accept) => {
       const session = accept();
       session.on("exec", (acceptExec, reject, info) => {
@@ -85,20 +93,23 @@ export function startFakeSandboxServer(
         root,
         execCalls,
         close: () => {
-          if (!closed) {
-            closed = true;
-            server.close();
-          }
+          if (closed) return;
+          closed = true;
+          for (const c of clients) c.end();
+          clients.clear();
+          server.close();
+          rmSync(root, { recursive: true, force: true });
         },
       });
     });
   });
 }
 
-/** Path safety: resolve inside root, refuse escapes. */
+/** Path safety: resolve inside root, refuse escapes (prefix match is not enough). */
 function safe(root: string, path: string): string | null {
   const resolved = join(root, path.replace(/^\/+/, ""));
-  return resolved.startsWith(root) ? resolved : null;
+  const rel = relative(root, resolved);
+  return rel.startsWith("..") || rel === "" ? null : resolved;
 }
 
 function handleSftp(sftp: SftpServerStream, root: string): void {

@@ -10,10 +10,26 @@
  * tailnet's `accept` rules are the identity check, so ssh2 connects with no
  * credentials and expects `none` auth to succeed.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import ssh2, { type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
 const { Client } = ssh2;
 type ClientClass = typeof Client;
+
+export type {
+  ConnectOptions,
+  ExecOptions,
+  ExecResult,
+  SandboxSession,
+  SandboxTransport,
+} from "./sandbox";
+
+/**
+ * A connection-level failure raised before a command or transfer was
+ * dispatched on the wire: safe to retry on a fresh connection because
+ * nothing has started. Anything after dispatch is a different failure and
+ * must surface, honoring the tools' `unsafe` replay contract.
+ */
+export class PreDispatchError extends Error {}
 import type { ConnectOptions, ExecResult, SandboxSession, SandboxTransport } from "./sandbox";
 
 /** TOFU host-key store: remember one key hash per host, reject changes. */
@@ -109,8 +125,10 @@ function createSession(client: ssh2.Client): SandboxSession {
   return {
     exec(command, options) {
       return new Promise((resolve, reject) => {
+        // A refusal here (dead pooled connection, channel open denied) happens
+        // before the command runs anywhere — mark it retry-safe.
         client.exec(command, (error, channel) => {
-          if (error) return reject(error);
+          if (error) return reject(new PreDispatchError(error.message, { cause: error }));
           collect(channel, options?.timeoutMs ?? 120_000).then(resolve, reject);
         });
       });
@@ -118,56 +136,19 @@ function createSession(client: ssh2.Client): SandboxSession {
 
     async readFile(path, options) {
       const s = await sftp();
-      const maxBytes = options?.maxBytes ?? 200_000;
-      const readSize = Math.min(maxBytes + 1, 65_536);
-      const buffer = Buffer.alloc(readSize);
-      const chunks: Buffer[] = [];
-      let offset = 0;
-      const handle = await new Promise<Buffer>((resolve, reject) =>
-        s.open(path, "r", (e, h) => (e ? reject(sftpError(e, path)) : resolve(h))),
-      );
       try {
-        for (;;) {
-          const bytesRead = await new Promise<number>((resolve, reject) =>
-            s.read(handle, buffer, 0, readSize, offset, (e, b) =>
-              e ? reject(sftpError(e, path)) : resolve(b),
-            ),
-          );
-          if (bytesRead === 0) break;
-          chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
-          offset += bytesRead;
-          if (offset > maxBytes) break;
-        }
-        const all = Buffer.concat(chunks);
-        const truncated = all.length > maxBytes;
-        const slice = truncated ? all.subarray(0, maxBytes) : all;
-        return {
-          text: looksUtf8(slice)
-            ? slice.toString("utf8")
-            : `[binary file, ${all.length} bytes] — inspect with run_command (file, hexdump -C | head)`,
-          truncated,
-        };
+        return await readAll(s, path, options?.maxBytes ?? 200_000);
       } finally {
-        s.close(handle, () => {});
+        s.end(); // never leak the channel on the pooled connection
       }
     },
 
     async writeFile(path, content) {
       const s = await sftp();
-      // temp name then rename: a crash mid-write never leaves a half file
-      const tmp = `${path}.ta-tmp-${process.pid}-${Date.now()}`;
       try {
-        await new Promise<void>((resolve, reject) =>
-          s.writeFile(tmp, Buffer.from(content, "utf8"), (e) =>
-            e ? reject(sftpError(e, tmp)) : resolve(),
-          ),
-        );
-        await new Promise<void>((resolve, reject) =>
-          s.rename(tmp, path, (e) => (e ? reject(sftpError(e, path)) : resolve())),
-        );
-      } catch (error) {
-        s.unlink(tmp, () => {});
-        throw error;
+        await writeAtomic(s, path, content);
+      } finally {
+        s.end();
       }
     },
 
@@ -177,11 +158,88 @@ function createSession(client: ssh2.Client): SandboxSession {
   };
 }
 
+async function readAll(
+  s: SFTPWrapper,
+  path: string,
+  maxBytes: number,
+): Promise<{ text: string; truncated: boolean }> {
+  {
+    const readSize = Math.min(maxBytes + 1, 65_536);
+    const buffer = Buffer.alloc(readSize);
+    const chunks: Buffer[] = [];
+    let offset = 0;
+    const handle = await new Promise<Buffer>((resolve, reject) =>
+      s.open(path, "r", (e, h) => (e ? reject(sftpError(e, path)) : resolve(h))),
+    );
+    try {
+      for (;;) {
+        const bytesRead = await new Promise<number>((resolve, reject) =>
+          s.read(handle, buffer, 0, readSize, offset, (e, b) =>
+            e ? reject(sftpError(e, path)) : resolve(b),
+          ),
+        );
+        if (bytesRead === 0) break;
+        chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+        offset += bytesRead;
+        if (offset > maxBytes) break;
+      }
+      const all = Buffer.concat(chunks);
+      const truncated = all.length > maxBytes;
+      const slice = truncated ? all.subarray(0, maxBytes) : all;
+      return {
+        text: looksUtf8(trimPartialRune(slice))
+          ? slice.toString("utf8")
+          : `[binary file, ${all.length} bytes] — inspect with run_command (file, hexdump -C | head)`,
+        truncated,
+      };
+    } finally {
+      s.close(handle, () => {});
+    }
+  }
+}
+
+async function writeAtomic(s: SFTPWrapper, path: string, content: string): Promise<void> {
+  {
+    // temp name then rename: a crash mid-write never leaves a half file.
+    // Random suffix: pid+ms collide for concurrent writes.
+    const tmp = `${path}.ta-tmp-${process.pid}-${cryptoRandomSuffix()}`;
+    try {
+      await new Promise<void>((resolve, reject) =>
+        s.writeFile(tmp, Buffer.from(content, "utf8"), (e) =>
+          e ? reject(sftpError(e, tmp)) : resolve(),
+        ),
+      );
+      await new Promise<void>((resolve, reject) =>
+        s.rename(tmp, path, (e) => (e ? reject(sftpError(e, path)) : resolve())),
+      );
+    } catch (error) {
+      s.unlink(tmp, () => {});
+      throw error;
+    }
+  }
+}
+
+function cryptoRandomSuffix(): string {
+  return randomBytes(6).toString("hex");
+}
+
+/** Drop a trailing partial UTF-8 rune so a capped slice still validates as text. */
+function trimPartialRune(buffer: Buffer): Buffer {
+  for (let drop = 0; drop < 4 && buffer.length - drop > 0; drop++) {
+    const last = buffer[buffer.length - 1 - drop];
+    const need = last < 0x80 ? 0 : last < 0xe0 ? 1 : last < 0xf0 ? 2 : 3;
+    if (need === 0) return buffer.subarray(0, buffer.length - drop);
+    const start = buffer.length - 1 - drop - (need - 1);
+    if (start >= 0 && buffer[start] >= 0xc0) return buffer.subarray(0, start);
+  }
+  return buffer;
+}
+
 /** ssh2 SFTP status codes → one readable line. */
 function sftpError(error: unknown, path: string): Error {
   const code =
     error && typeof error === "object" && "code" in error ? Number(error.code) : undefined;
-  if (code === 2 || code === 4) return new Error(`No such file: ${path}`);
+  if (code === 2) return new Error(`No such file: ${path}`);
   if (code === 3) return new Error(`Permission denied: ${path}`);
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -198,8 +256,14 @@ function collect(channel: ClientChannel, timeoutMs: number): Promise<ExecResult>
         ),
       );
     }, timeoutMs);
-    channel.on("data", (b: Buffer) => stdout.push(b));
-    channel.stderr.on("data", (b: Buffer) => stderr.push(b));
+    const cap = 60_000; // bytes kept before the char cap trims; excess dropped live
+    let kept = 0;
+    const push = (sink: Buffer[]) => (b: Buffer) => {
+      kept += b.length;
+      if (kept <= cap) sink.push(b);
+    };
+    channel.on("data", push(stdout));
+    channel.stderr.on("data", push(stderr));
     channel.on("close", (code: number | null) => {
       clearTimeout(timer);
       const combined =
@@ -208,7 +272,7 @@ function collect(channel: ClientChannel, timeoutMs: number): Promise<ExecResult>
       const trimmed = combined.trimEnd();
       resolve({
         output: trimmed.length > 30_000 ? trimmed.slice(0, 30_000) + "\n… (truncated)" : trimmed,
-        exitCode: code ?? 0,
+        exitCode: code ?? 255,
       });
     });
     channel.on("error", (e: Error) => {

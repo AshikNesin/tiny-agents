@@ -15,7 +15,10 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
-import { createSsh2Transport, type HostKeyStore } from "./sandbox-ssh2";
+import { createSsh2Transport, PreDispatchError, type HostKeyStore } from "./sandbox-ssh2";
+
+export { createMemoryHostKeyStore, createSsh2Transport, PreDispatchError } from "./sandbox-ssh2";
+export type { HostKeyStore } from "./sandbox-ssh2";
 
 /** One command's outcome: combined output plus exit status. */
 export interface ExecResult {
@@ -48,9 +51,6 @@ export interface ConnectOptions {
 
 /** The transport port: production is ssh2, tests substitute fakes. */
 export type SandboxTransport = (options: ConnectOptions) => Promise<SandboxSession>;
-
-export type { HostKeyStore } from "./sandbox-ssh2";
-export { createMemoryHostKeyStore, createSsh2Transport } from "./sandbox-ssh2";
 
 export interface SandboxToolkitOptions {
   /** MagicDNS name or Tailscale IP of the sandbox VM. */
@@ -88,6 +88,13 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
   // tools share it — ssh2 multiplexes exec/SFTP channels over one connection.
   let session: Promise<SandboxSession> | undefined;
   const dial = (): Promise<SandboxSession> => {
+    // Never fall through to ssh2's defaults: an unset host would dial
+    // localhost — the app server itself — so refuse to dial at all.
+    if (!options.host) {
+      return Promise.reject(
+        new Error("Sandbox is not configured: set SANDBOX_HOST on the server."),
+      );
+    }
     const attempt = transport({
       host: options.host!,
       port: options.port ?? 22,
@@ -100,17 +107,27 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     return attempt;
   };
 
-  const withSession = <T>(fn: (s: SandboxSession) => Promise<T>): Promise<T> => {
-    const run = (s: Promise<SandboxSession>) =>
-      s.then(fn, (error) => {
-        throw error;
-      });
-    return run((session ??= dial())).catch(() => {
-      // A dead pooled connection (keepalive timeout, VM reboot) is retried
-      // once on a fresh one — reconnect, not a tool error.
-      session = undefined;
-      return run((session = dial()));
-    });
+  const withSession = async <T>(fn: (s: SandboxSession) => Promise<T>): Promise<T> => {
+    const acquire = async (): Promise<SandboxSession> => {
+      try {
+        return await (session ??= dial());
+      } catch {
+        session = undefined; // a failed dial must not be cached
+        return await (session = dial());
+      }
+    };
+    const s = await acquire();
+    try {
+      return await fn(s);
+    } catch (error) {
+      session = undefined; // a session that just failed is not reused
+      // Retry only when nothing was dispatched: a pre-dispatch failure
+      // (channel open refused on a dead pooled connection) never started the
+      // command, so re-running it cannot double a side effect. Anything after
+      // dispatch is surfaced, honoring the tools' `unsafe` replay contract.
+      if (!isPreDispatch(error)) throw error;
+      return fn(await acquire());
+    }
   };
 
   const runCommand = defineTool({
@@ -127,14 +144,13 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     replay: "unsafe",
     execute: async (args) => {
       const timeoutMs = (args.timeout_secs ?? options.defaultTimeoutSecs ?? 120) * 1000;
+      // The whole command runs as one sh -c argument, so chains (&&, ;) stay
+      // inside the detached session and the redirect covers every step.
+      const detach = (command: string) =>
+        `setsid nohup sh -c ${shellQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
       try {
         const result = await withSession((s) =>
-          s.exec(
-            args.detached
-              ? `setsid nohup ${args.command} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`
-              : args.command,
-            { timeoutMs },
-          ),
+          s.exec(args.detached ? detach(args.command) : args.command, { timeoutMs }),
         );
         if (result.exitCode !== 0) {
           return {
@@ -185,7 +201,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       "then renamed, so a crash mid-write never leaves a half file.",
     parameters: Type.Object({
       path: Type.String({ minLength: 1, maxLength: 4096 }),
-      content: Type.String({ minLength: 1, maxLength: 500_000 }),
+      content: Type.String({ maxLength: 500_000 }), // empty = create/truncate
     }),
     replay: "unsafe",
     execute: async (args) => {
@@ -225,3 +241,10 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     ...(configured ? {} : { setupHint: "Set SANDBOX_HOST to enable the sandbox." }),
   };
 }
+
+/** POSIX single-quoting for embedding one argument in a remote shell line. */
+function shellQuote(value: string): string {
+  return `'` + value.replace(/'/g, `'\\''`) + `'`;
+}
+
+const isPreDispatch = (error: unknown): boolean => error instanceof PreDispatchError;
