@@ -21,6 +21,10 @@ export const externalPackages = [
   "fsevents",
   // Native modules + their optional platform packages cannot be bundled
   // (esbuild has no ".node" loader). Keep them as runtime requires.
+  // ssh2's optional cpu-features falls in the same class: unbuilt in dev,
+  // require()'d only when present.
+  "ssh2",
+  "cpu-features",
   "better-sqlite3",
   "sqlite3",
   "pg",
