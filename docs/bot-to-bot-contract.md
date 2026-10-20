@@ -83,9 +83,10 @@ On `runtime.onActivity` idle transitions (a conversation stopped replying):
   the bot ids it resolved into the request: `{ requestId, text, mentions?: string[] }`.
 - For each mention id ≠ host: create a `kind="mention"` row (fromBotId null,
   replyToBotId = host id) and deliver with requestId
-  `mention-{hostRequestId}-{botId}`, text `[From {owner}] {text}` … the host's
-  own submit gets the text unchanged.
-- Tagged bot sees: `[From owner, in {hostName}'s chat] {text}`.
+  `mention-{hostRequestId}-{botId}`, text `[From the owner, in {hostName}'s
+chat] {text}` … the host's own submit gets the text unchanged.
+- Tagged bot sees the same `[From the owner, in {hostName}'s chat] {text}`
+  prefix — one mention format everywhere (the model-facing custody line).
 
 ### 4. Agent runtime additions (packages/agent/src/runtime.ts)
 
@@ -98,9 +99,12 @@ open time; conversations select it with `configure`.
   listing other bots (avatar + name + description, host excluded). Enter/Tab/click
   inserts `@Name `. Backdrop click or Esc closes.
 - Mentions ship as `mentions: [botId, …]` on send.
-- Transcript rendering (Grok-style cards): the pipeline's attribution prefixes
-  are parsed at render time by `parsePeerEnvelope`
-  (`@tiny-agents/agent/peer-envelope`) and drawn as attributed cards —
+- Transcript rendering (Grok-style cards): attribution is **trusted entry
+  metadata** (`peer` on the `chat.user` entry, set by relay/message_bot/mention
+  delivery), not parsed from the message text — a typed text that merely looks
+  like a prefix renders as a plain bubble. The prefix itself stays in the
+  stored text for the model (issue #13 custody) and is stripped for the card;
+  cards are drawn only when the `peer` metadata is present.
   relays (`**Reply from X:**`) and message_bot deliveries (`**Message from X
 (bot):**`) as a peer-avatar card with a "reply relayed into this chat" /
   "messaged you" marker, owner mentions (`[From the owner, in Y's chat]`) as

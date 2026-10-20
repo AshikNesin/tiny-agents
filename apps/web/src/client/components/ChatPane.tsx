@@ -34,7 +34,6 @@ import {
 import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
-import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
@@ -201,9 +200,10 @@ export function ChatPane({
     // returns to the composer.
     const echo = {
       id: crypto.randomUUID(),
-      // Mentions render inside the target bot's chat via the envelope
-      // parser; the optimistic echo stores the owner's own words.
-      text: mentions.length > 0 ? stripPeerEnvelope(body) : body,
+      // Exactly the submitted body: the store dedupes the optimistic echo
+      // against the confirmed row by text, so any transformation here
+      // leaves both visible (cubic: doubled mention echo).
+      text: body,
       createdAt: Date.now(),
       ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
     };

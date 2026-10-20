@@ -99,6 +99,7 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     await rt.submit(Number(host.conversationId), {
       requestId: `botmsg-reply-${row.id}`,
       text: relayText(fromName, sanitizePeerText(replyText)),
+      peer: { kind: "reply", name: fromName },
     });
     await markAnswered(row.id, replyCreatedAt);
     return true;

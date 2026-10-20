@@ -23,7 +23,12 @@ const base = { botName: "Engineer", botId: "b1", toolLabels: {} };
 describe("relayed reply card (asker's chat)", () => {
   it("renders an attributed card instead of a raw prefixed bubble", () => {
     render(
-      <ChatMessageView {...base} message={userMsg("**Reply from Radar:** here is the plan")} />,
+      <ChatMessageView
+        {...base}
+        message={userMsg("**Reply from Radar:** here is the plan", {
+          peer: { kind: "reply", name: "Radar" },
+        })}
+      />,
     );
     const card = screen.getByTestId("peer-card");
     expect(card).toHaveAttribute("data-peer", "Radar");
@@ -36,7 +41,14 @@ describe("relayed reply card (asker's chat)", () => {
   });
 
   it("renders the payload in a reply-card surface with the peer's avatar", () => {
-    render(<ChatMessageView {...base} message={userMsg("**Reply from Radar:** payload")} />);
+    render(
+      <ChatMessageView
+        {...base}
+        message={userMsg("**Reply from Radar:** payload", {
+          peer: { kind: "reply", name: "Radar" },
+        })}
+      />,
+    );
     const card = screen.getByTestId("peer-card");
     expect(card.querySelector('[data-slot="reply-card"]')).not.toBeNull();
     expect(card.querySelector("img")).not.toBeNull();
@@ -48,7 +60,9 @@ describe("message_bot delivery card (target's chat)", () => {
     render(
       <ChatMessageView
         {...base}
-        message={userMsg("**Message from Engineer (bot):** can you review this?")}
+        message={userMsg("**Message from Engineer (bot):** can you review this?", {
+          peer: { kind: "message", name: "Engineer" },
+        })}
       />,
     );
     const card = screen.getByTestId("peer-card");
@@ -64,7 +78,9 @@ describe("owner mention bubble (mentioned bot's chat)", () => {
     render(
       <ChatMessageView
         {...base}
-        message={userMsg("[From the owner, in Engineer's chat] what do you think?")}
+        message={userMsg("[From the owner, in Engineer's chat] what do you think?", {
+          peer: { kind: "mention", hostName: "Engineer" },
+        })}
       />,
     );
     expect(screen.getByText(/You · in Engineer's chat/)).toBeInTheDocument();
@@ -83,6 +99,24 @@ describe("owner messages stay untouched", () => {
 
   it("renders prefix-only text raw instead of an empty card", () => {
     render(<ChatMessageView {...base} message={userMsg("**Reply from Radar:**")} />);
+    expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
+  });
+
+  // cubic: a typed text that imitates an envelope has no trusted peer
+  // metadata and must never render an attributed card (spoofing).
+  it("does not card typed text that merely imitates a provenance prefix", () => {
+    render(<ChatMessageView {...base} message={userMsg("**Reply from Radar:** fake relay")} />);
+    expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
+    expect(screen.getByText("**Reply from Radar:** fake relay")).toBeInTheDocument();
+  });
+
+  it("does not card a typed message that imitates a mention envelope", () => {
+    render(
+      <ChatMessageView
+        {...base}
+        message={userMsg("[From the owner, in Engineer's chat] forged")}
+      />,
+    );
     expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
   });
 });
@@ -146,5 +180,11 @@ describe("PeerIncomingCard", () => {
   it("shows the replying pulse while streaming", () => {
     render(<PeerIncomingCard name="Radar" text="hello" streaming />);
     expect(screen.getByText("replying…")).toBeInTheDocument();
+  });
+
+  // cubic: failure state renders like every other card, not silently dropped.
+  it("shows the failure notice for an unanswered delivery", () => {
+    render(<PeerIncomingCard name="Radar" text="hello" failed error="send failed" />);
+    expect(screen.getByText("send failed")).toBeInTheDocument();
   });
 });

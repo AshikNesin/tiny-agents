@@ -28,7 +28,7 @@ import { Bubble, BubbleContent } from "./ui/bubble";
 import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
-import { parsePeerEnvelope, type PeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import type { Bot } from "../lib/bots-api";
 
 function CopyButton({ text }: { text: string }) {
@@ -259,7 +259,8 @@ function ToolRow({
   }
 
   // message_bot row: the Grok handoff pill — the peer's avatar, their name,
-  // and the outbound snippet.
+  // and the outbound snippet. Only a completed delivery says "Messaged";
+  // every other terminal state says what actually happened (cubic).
   if (call.name === "message_bot") {
     const to = typeof call.args?.to === "string" ? call.args.to : "";
     const snippet =
@@ -273,8 +274,7 @@ function ToolRow({
             <BotAvatar name={to} className="size-4" />
           </TraceIcon>
           <TraceTitle>
-            {call.status === "running" || call.status === "pending" ? "Messaging" : "Messaged"}{" "}
-            {to || "bot"}
+            {messageBotLabel(call.status)} {to || "bot"}
           </TraceTitle>
           {snippet && <TraceDescription>“{snippet}”</TraceDescription>}
           {call.durationMs !== undefined && (
@@ -370,11 +370,15 @@ export function ChatMessageView({
 
   if (message.role === "user") {
     const failed = message.status === "unanswered";
-    const envelope = parsePeerEnvelope(message.text);
-    if (envelope) {
+    // Trusted attribution only (entry metadata set by the delivery pipeline):
+    // a typed text that merely looks like an envelope renders as a plain
+    // bubble, so no one can forge a peer card (cubic: spoofing).
+    const peer = message.peer;
+    if (peer) {
       return (
         <PeerCard
-          envelope={envelope}
+          peer={peer}
+          text={stripPeerEnvelope(message.text)}
           failed={failed}
           error={message.error}
           streaming={message.status === "streaming"}
@@ -409,29 +413,31 @@ export function ChatMessageView({
 
 /** One peer-traffic user message as a Grok-style attributed card. */
 function PeerCard({
-  envelope,
+  peer,
+  text,
   failed,
   error,
   streaming,
 }: {
-  envelope: PeerEnvelope;
+  peer: NonNullable<ChatMessage["peer"]>;
+  text: string;
   failed: boolean;
   error?: string;
   streaming: boolean;
 }) {
-  if (envelope.kind === "mention") {
+  if (peer.kind === "mention") {
     // The owner tagged this bot from {host}'s chat: the owner's own words
     // in a labeled muted bubble.
     return (
       <Message align="end" className="group">
         <div className="relative max-w-[min(85%,48rem)]">
-          <CopyButton text={envelope.text} />
+          <CopyButton text={text} />
           <p className="text-muted-foreground px-1 pb-0.5 text-right text-xs">
-            You · in {envelope.hostName}&apos;s chat
+            You · in {peer.hostName}&apos;s chat
           </p>
           <Bubble align="end" variant="muted" className="max-w-full">
             <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
-              <p className="whitespace-pre-wrap">{envelope.text}</p>
+              <p className="whitespace-pre-wrap">{text}</p>
             </BubbleContent>
           </Bubble>
           {failed && <p className="text-destructive mt-1 text-right text-xs">{error}</p>}
@@ -439,14 +445,29 @@ function PeerCard({
       </Message>
     );
   }
-  if (envelope.kind === "message") {
+  if (peer.kind === "message") {
     // A bot messaged this bot via message_bot: attributed incoming card.
-    return <PeerIncomingCard name={envelope.name} text={envelope.text} streaming={streaming} />;
+    return (
+      <PeerIncomingCard
+        name={peer.name}
+        text={text}
+        failed={failed}
+        error={error}
+        streaming={streaming}
+      />
+    );
   }
   // A relayed reply into the asker's chat: attributed incoming card with a
   // relayed marker.
   return (
-    <PeerIncomingCard name={envelope.name} text={envelope.text} relayed streaming={streaming} />
+    <PeerIncomingCard
+      name={peer.name}
+      text={text}
+      relayed
+      failed={failed}
+      error={error}
+      streaming={streaming}
+    />
   );
 }
 
@@ -460,11 +481,15 @@ export function PeerIncomingCard({
   name,
   text,
   relayed = false,
+  failed = false,
+  error,
   streaming = false,
 }: {
   name: string;
   text: string;
   relayed?: boolean;
+  failed?: boolean;
+  error?: string;
   streaming?: boolean;
 }) {
   return (
@@ -494,6 +519,11 @@ export function PeerIncomingCard({
             <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
             replying…
           </span>
+        )}
+        {failed && (
+          <p className="text-destructive mt-1 px-1 text-xs">
+            {error ?? "This delivery was not answered."}
+          </p>
         )}
       </div>
     </Message>
@@ -561,4 +591,13 @@ function assistantView(
       </div>
     </Message>
   );
+}
+
+function messageBotLabel(status: ChatToolCall["status"]): string {
+  if (status === "running" || status === "pending") return "Messaging";
+  if (status === "done") return "Messaged";
+  if (status === "denied") return "Blocked message to";
+  if (status === "aborted") return "Stopped messaging";
+  if (status === "interrupted") return "Interrupted message to";
+  return "Failed to message";
 }

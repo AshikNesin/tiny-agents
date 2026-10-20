@@ -102,6 +102,7 @@ export {
   diffChat,
   chatState,
   CHAT_USER_ENTRY,
+  peerOf,
   attachmentsOf,
   type RawChat,
 } from "./transcript";

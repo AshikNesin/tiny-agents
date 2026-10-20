@@ -57,6 +57,25 @@ function textOf(content: unknown): string {
 /** Entry kind a chat send is placed as (pi-durable InputEntry; not "pi."-prefixed). */
 export const CHAT_USER_ENTRY = "chat.user";
 
+/** Trusted peer attribution stored in a `chat.user` entry's data. */
+export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
+  if (entry.kind !== CHAT_USER_ENTRY) return undefined;
+  const data = record(entry.data);
+  const peer = record(data?.peer);
+  if (!peer) return undefined;
+  if (peer.kind === "reply" || peer.kind === "message") {
+    return typeof peer.name === "string" && peer.name
+      ? { kind: peer.kind, name: peer.name }
+      : undefined;
+  }
+  if (peer.kind === "mention") {
+    return typeof peer.hostName === "string" && peer.hostName
+      ? { kind: "mention", hostName: peer.hostName }
+      : undefined;
+  }
+  return undefined;
+}
+
 /** Attachment refs stored in a `chat.user` entry's data (validated at upload). */
 export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
@@ -290,11 +309,13 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
 
     if (entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) {
       const attachments = attachmentsOf(entry);
+      const peer = peerOf(entry);
       out.push({
         id: `e${entry.id}`,
         role: "user",
         text: textOf(message.content),
         ...(attachments ? { attachments } : {}),
+        ...(peer ? { peer } : {}),
         status: "done",
         createdAt: message.timestamp ?? 0,
       });

@@ -551,6 +551,7 @@ async function deliverMentions(
       await rt.submit(Number(target.conversationId), {
         requestId: `mention-${input.requestId}-${target.id}`,
         text: mentionText(ownerContext, sanitizePeerText(input.text)),
+        peer: { kind: "mention", hostName: host.name },
       });
       await prisma.botMessage.create({
         data: {
