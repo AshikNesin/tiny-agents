@@ -144,7 +144,7 @@ export function BotDialog({
   const profile = (
     <>
       <div className="flex items-center gap-3">
-        <BotAvatar name={name || "Bot"} className="size-12" />
+        <BotAvatar name={name || "Bot"} className="size-14" />
         <div className="flex-1">
           <Label htmlFor="bot-name">Name</Label>
           <Input
@@ -239,8 +239,8 @@ export function BotDialog({
       {toolkitsList.map((toolkit) => {
         const enabled = toolkits.includes(toolkit.id);
         return (
-          <div key={toolkit.id} className="rounded-lg border">
-            <div className="flex cursor-pointer items-center gap-3 p-3">
+          <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
+            <div className="flex cursor-pointer items-center gap-3 p-3.5">
               <Wrench className="text-muted-foreground size-4" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{toolkit.name}</p>
@@ -259,7 +259,7 @@ export function BotDialog({
               />
             </div>
             {enabled && (
-              <div className="border-t px-3 pb-3 pt-1">
+              <div className="border-border/60 border-t px-3 pb-3 pt-1">
                 {toolkit.setupHint ? null : toolkit.tools.map(toolRow)}
               </div>
             )}
@@ -313,7 +313,7 @@ export function BotDialog({
         return (
           <div
             key={skill.id}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+            className="bg-secondary/50 flex cursor-pointer items-start gap-3 rounded-2xl p-3.5"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{skill.name}</p>
@@ -336,7 +336,7 @@ export function BotDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>
           <DialogDescription>

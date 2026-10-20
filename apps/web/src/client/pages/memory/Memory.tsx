@@ -28,7 +28,7 @@ import { SkeletonList } from "@groot/ui/loading-skeleton";
 import { metaLabelClass } from "@groot/ui/typography";
 import { cn } from "@groot/ui/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
-import { PageLayout } from "@groot/shell/components/layout";
+import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { Switch } from "../../components/ui/switch";
 import {

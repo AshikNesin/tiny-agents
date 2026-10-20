@@ -43,7 +43,7 @@ export function PageLayout({
         </div>
         {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      <div className="mt-8 space-y-6">{children}</div>
+      <div className="mt-6 space-y-6">{children}</div>
     </PageContainer>
   );
 }

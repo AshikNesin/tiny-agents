@@ -3,7 +3,7 @@ import { listRowGridClass } from "@groot/ui/list-row";
 import { Card } from "@groot/ui/card";
 import { cn } from "@groot/ui/lib/utils";
 import { tableColumnHeaderClass } from "@groot/ui/table";
-import { Section } from "@groot/shell/components/layout";
+import { Section } from "@groot/shell/components/layout/Section";
 import type { ScheduledJob } from "@groot/jobs/client/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { ScheduledJobsSkeleton } from "./skeletons";

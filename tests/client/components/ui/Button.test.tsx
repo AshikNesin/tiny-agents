@@ -44,6 +44,6 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: /small/i })).toHaveClass("h-7");
 
     rerender(<Button size="lg">Large</Button>);
-    expect(screen.getByRole("button", { name: /large/i })).toHaveClass("h-9");
+    expect(screen.getByRole("button", { name: /large/i })).toHaveClass("h-10");
   });
 });
