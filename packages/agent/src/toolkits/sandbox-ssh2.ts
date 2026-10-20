@@ -12,13 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
-import type {
-  ConnectOptions,
-  ExecOptions,
-  ExecResult,
-  SandboxSession,
-  SandboxTransport,
-} from "./sandbox";
+import type { ConnectOptions, ExecResult, SandboxSession, SandboxTransport } from "./sandbox";
 
 /** TOFU host-key store: remember one key hash per host, reject changes. */
 export interface HostKeyStore {

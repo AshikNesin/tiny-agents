@@ -105,7 +105,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       s.then(fn, (error) => {
         throw error;
       });
-    return run((session ??= dial())).catch((error) => {
+    return run((session ??= dial())).catch(() => {
       // A dead pooled connection (keepalive timeout, VM reboot) is retried
       // once on a fresh one — reconnect, not a tool error.
       session = undefined;
