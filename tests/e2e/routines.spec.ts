@@ -41,7 +41,7 @@ test.describe("Routines", () => {
 
     // Ensure a faux bot exists for the editor's picker.
     const hasBot = await page
-      .getByRole("button", { name: /routine bot/i })
+      .getByRole("link", { name: /routine bot/i })
       .first()
       .isVisible();
     if (!hasBot) {

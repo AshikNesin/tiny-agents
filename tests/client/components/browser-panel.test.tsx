@@ -25,6 +25,7 @@ const bot: Bot = {
   lastActivityAt: "",
   lastMessagePreview: null,
   approvals: 0,
+  pinnedAt: null,
   unread: false,
   replying: false,
 } as unknown as Bot;

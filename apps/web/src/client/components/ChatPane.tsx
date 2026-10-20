@@ -1,23 +1,20 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowUp,
   Globe,
+  Menu,
   MessageSquarePlus,
   MoreHorizontal,
   Paperclip,
   Pencil,
+  Pin,
+  PinOff,
+  Plus,
   Square,
   Trash2,
 } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@groot/ui/input-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +33,7 @@ import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
+import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
@@ -107,6 +105,9 @@ function ChatPaneBody({
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
+  const togglePin = useBotsStore((s) => s.togglePin);
+  const pinned = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.pinnedAt) != null;
+  const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [text, setText] = useState("");
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
@@ -331,44 +332,56 @@ function ChatPaneBody({
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        {/* Header - Grok-style: circular back / bot pill (avatar + name) /
-          circular ⋯, floating on the transcript with no border. */}
-        <header className="flex items-center gap-3 px-3 pt-3 pb-2 md:px-4 md:pt-4">
+        {/* Header: bot identity on the left (click edits), browser toggle and
+          the ⋯ menu on the right. Floats on the page background, no border. */}
+        <header className="flex h-14 shrink-0 items-center gap-1 px-3">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
-            className="rounded-full"
-            onClick={() => navigate("/chats")}
-            aria-label="Back to bots"
+            className="rounded-xl md:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
           >
-            <ArrowLeft className="size-5" />
+            <Menu className="size-5" />
           </Button>
           <button
             type="button"
             onClick={onEditBot}
-            className="border-input bg-secondary/40 hover:bg-muted flex h-10 min-w-0 items-center gap-2.5 rounded-full border px-2 py-1 text-left md:px-2.5"
+            className="text-foreground hover:bg-accent flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
             aria-label={`Edit ${bot.name}`}
           >
-            <BotAvatar name={bot.name} className="size-7" />
-            <span className="truncate text-[15px] font-semibold">{bot.name}</span>
+            <BotAvatar name={bot.name} className="size-5" />
+            <span className="truncate">{bot.name}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmReset(true)}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-lg"
+            aria-label="Start a new chat"
+          >
+            <Plus className="size-4" />
           </button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
-            className="ml-auto shrink-0 rounded-full"
+            className="ml-auto shrink-0 rounded-xl"
             onClick={() => setBrowserOpen((v) => !v)}
             aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
             data-testid="browser-toggle"
           >
-            <Globe className="size-5" />
+            <Globe className="size-4" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
-                <MoreHorizontal className="size-5" />
+              <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Bot menu">
+                <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
+                {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                {pinned ? "Unpin" : "Pin"}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
                 <MessageSquarePlus className="size-4" /> New chat
               </DropdownMenuItem>
@@ -402,9 +415,13 @@ function ChatPaneBody({
           message pinned unless the reader scrolled up). The provider mounts
           at the pane root so the body can drive it (send → scroll to end). */}
         <div className="relative min-h-0 flex-1">
+          <div
+            aria-hidden="true"
+            className="chat-header-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-4"
+          />
           <MessageScroller className="h-full">
-            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
-              <MessageScrollerContent className="space-y-3">
+            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-5 py-4">
+              <MessageScrollerContent className="space-y-4">
                 {messages.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                     <BotAvatar name={bot.name} className="size-20" />
@@ -493,139 +510,140 @@ function ChatPaneBody({
             />
           </MessageScroller>
         </div>
-      </div>
-      {/* Browser live view (issue #24): beside the transcript on desktop,
-          full-screen overlay on mobile. */}
-      {browserOpen && <BrowserPanel bot={bot} onClose={() => setBrowserOpen(false)} />}
 
-      {/* Composer - Grok-style: a single rounded pill with the send/stop
+        {/* Composer - Grok-style: a single rounded pill with the send/stop
           button inside on the right. Status (model, warnings) sits above the
           pill so the input surface stays clean. */}
-      <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4">
-        {gatewayConfigured && !modelKnown && (
-          <div className="mx-auto mb-2 flex max-w-3xl items-center justify-center gap-2">
-            <p className="text-muted-foreground truncate text-center text-xs">
-              {bot.modelId} is no longer in the model catalog
-            </p>
-            <Button variant="link" size="sm" className="h-6 px-1.5 text-xs" onClick={onEditBot}>
-              Choose a model
-            </Button>
-          </div>
-        )}
-        <div className="relative mx-auto max-w-3xl">
-          {staged.length > 0 && (
-            <div
-              className="mb-2 flex flex-wrap justify-end gap-1.5 px-1"
-              data-testid="staged-strip"
-            >
-              {staged.map((item) => (
-                <StagedAttachment key={item.key} attachment={item} onRemove={() => unstage(item)} />
-              ))}
+        <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4">
+          {gatewayConfigured && !modelKnown && (
+            <div className="mx-auto mb-2 flex max-w-[752px] items-center justify-center gap-2">
+              <p className="text-muted-foreground truncate text-center text-xs">
+                {bot.modelId} is no longer in the model catalog
+              </p>
+              <Button variant="link" size="sm" className="h-6 px-1.5 text-xs" onClick={onEditBot}>
+                Choose a model
+              </Button>
             </div>
           )}
-          {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
-            <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
-              {model.name} reads images with the see_image tool
-            </p>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov"
-            onChange={(e) => {
-              if (e.target.files?.length) stageFiles(e.target.files);
-              e.target.value = "";
-            }}
-            aria-label="Attach files"
-            data-testid="file-input"
-          />
-          <InputGroup className="min-h-12 rounded-[1.75rem] px-2 py-1.5">
-            <InputGroupAddon align="inline-start">
-              <InputGroupButton
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!gatewayConfigured || !modelKnown || staged.length >= 10}
-                aria-label="Attach files"
-                className="size-8 rounded-full"
+          <div className="relative mx-auto max-w-[752px]">
+            {staged.length > 0 && (
+              <div
+                className="mb-2 flex flex-wrap justify-end gap-1.5 px-1"
+                data-testid="staged-strip"
               >
-                <Paperclip className="size-4" />
-              </InputGroupButton>
-            </InputGroupAddon>
-            <InputGroupTextarea
-              ref={textareaRef}
-              value={text}
+                {staged.map((item) => (
+                  <StagedAttachment
+                    key={item.key}
+                    attachment={item}
+                    onRemove={() => unstage(item)}
+                  />
+                ))}
+              </div>
+            )}
+            {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
+              <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
+                {model.name} reads images with the see_image tool
+              </p>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov"
               onChange={(e) => {
-                setText(e.target.value);
-                setCaret(e.target.selectionStart ?? e.target.value.length);
-                setMentionClosed(false);
+                if (e.target.files?.length) stageFiles(e.target.files);
+                e.target.value = "";
               }}
-              onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-              onClick={() => setMentionClosed(false)}
-              onBlur={() => setMentionClosed(true)}
-              onPaste={(e) => {
-                const files = Array.from(e.clipboardData?.files ?? []);
-                if (files.length > 0) {
-                  e.preventDefault();
-                  stageFiles(files);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (mentionRef.current?.handleKeyDown(e)) return;
-                // Enter sends only on a physical keyboard (fine pointer).
-                // On touch (pointer: coarse) Enter inserts a newline and the
-                // send button is the only way to send (issue #1).
-                if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-              placeholder={
-                mentionCandidates.length > 0
-                  ? `Message ${bot.name} (type @ to tag another bot)`
-                  : `Ask ${bot.name}`
-              }
-              rows={1}
-              disabled={!gatewayConfigured || !modelKnown}
-              className="px-3 py-2.5"
+              aria-label="Attach files"
+              data-testid="file-input"
             />
-            <InputGroupAddon align="inline-end">
-              {busy ? (
-                <InputGroupButton
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={stop}
-                  aria-label="Stop generating"
-                  className="size-8 rounded-full"
+            <div className="bg-composer border-input focus-within:border-ring relative overflow-hidden rounded-3xl border">
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setCaret(e.target.selectionStart ?? e.target.value.length);
+                  setMentionClosed(false);
+                }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+                onClick={() => setMentionClosed(false)}
+                onBlur={() => setMentionClosed(true)}
+                onPaste={(e) => {
+                  const files = Array.from(e.clipboardData?.files ?? []);
+                  if (files.length > 0) {
+                    e.preventDefault();
+                    stageFiles(files);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (mentionRef.current?.handleKeyDown(e)) return;
+                  // Enter sends only on a physical keyboard (fine pointer).
+                  // On touch (pointer: coarse) Enter inserts a newline and the
+                  // send button is the only way to send (issue #1).
+                  if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                placeholder={
+                  mentionCandidates.length > 0
+                    ? `Message ${bot.name} (type @ to tag another bot)`
+                    : `Message ${bot.name}`
+                }
+                rows={1}
+                disabled={!gatewayConfigured || !modelKnown}
+                className="placeholder:text-fg-tertiary field-sizing-content max-h-[25rem] min-h-[2.75rem] w-full resize-none bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between px-2.5 pb-2.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!gatewayConfigured || !modelKnown || staged.length >= 10}
+                  aria-label="Attach files"
+                  className="text-muted-foreground size-10 rounded-full"
                 >
-                  <Square className="size-3.5" />
-                </InputGroupButton>
-              ) : (
-                <InputGroupButton
-                  size="icon-sm"
-                  onClick={send}
-                  disabled={!canSend}
-                  aria-label="Send message"
-                  className="bg-primary text-primary-foreground size-8 rounded-full disabled:opacity-30"
-                >
-                  <ArrowUp className="size-4" />
-                </InputGroupButton>
-              )}
-            </InputGroupAddon>
-          </InputGroup>
-          {mentionOpen && mention && (
-            <MentionAutocomplete
-              ref={mentionRef}
-              bots={mentionCandidates}
-              query={mention.query}
-              onSelect={insertMention}
-              onClose={() => setMentionClosed(true)}
-            />
-          )}
+                  <Paperclip className="size-5" />
+                </Button>
+                {busy ? (
+                  <Button
+                    size="icon"
+                    onClick={stop}
+                    aria-label="Stop generating"
+                    className="size-10 rounded-full"
+                  >
+                    <Square className="size-4 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon"
+                    onClick={send}
+                    disabled={!canSend}
+                    aria-label="Send message"
+                    className="size-10 rounded-full disabled:opacity-30"
+                  >
+                    <ArrowUp className="size-5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            {mentionOpen && mention && (
+              <MentionAutocomplete
+                ref={mentionRef}
+                bots={mentionCandidates}
+                query={mention.query}
+                onSelect={insertMention}
+                onClose={() => setMentionClosed(true)}
+              />
+            )}
+          </div>
         </div>
       </div>
+      {/* Browser live view (issue #24): beside the conversation on desktop,
+          full-screen overlay on mobile. */}
+      {browserOpen && <BrowserPanel bot={bot} onClose={() => setBrowserOpen(false)} />}
 
       {/* Confirmations */}
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>

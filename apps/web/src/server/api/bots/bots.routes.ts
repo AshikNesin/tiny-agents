@@ -8,7 +8,13 @@ import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
-import { approvalSchema, createBotSchema, updateBotSchema, sendMessageSchema } from "./bots.schema";
+import {
+  approvalSchema,
+  createBotSchema,
+  pinBotSchema,
+  updateBotSchema,
+  sendMessageSchema,
+} from "./bots.schema";
 
 const router = createRouter();
 
@@ -144,6 +150,12 @@ router.post("/bots/:id/approvals/:taskId", async (req: Request) => {
   const payload = parseBody(req, approvalSchema);
   await botsService.decideApproval(id, { taskId, ...payload });
   return { decided: payload.decision };
+});
+
+router.post("/bots/:id/pin", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const payload = parseBody(req, pinBotSchema);
+  return await botsService.setPinned(id, payload.pinned);
 });
 
 router.post("/bots/:id/read", async (req: Request) => {

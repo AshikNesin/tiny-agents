@@ -478,6 +478,51 @@ describe("Bots API routes", () => {
     });
   });
 
+  it("pins and unpins a bot without reconfiguring its conversation", async () => {
+    const bot = await createBot();
+    agentRuntime.configure.mockClear();
+
+    const pinned = await request(buildApp())
+      .post(`/api/v1/bots/${bot.id}/pin`)
+      .set(authorization)
+      .send({ pinned: true })
+      .expect(200);
+    expect(pinned.body.data.pinnedAt).toEqual(expect.any(String));
+
+    // Pinning again keeps the original position.
+    const again = await request(buildApp())
+      .post(`/api/v1/bots/${bot.id}/pin`)
+      .set(authorization)
+      .send({ pinned: true })
+      .expect(200);
+    expect(again.body.data.pinnedAt).toBe(pinned.body.data.pinnedAt);
+
+    const list = await request(buildApp()).get("/api/v1/bots").set(authorization).expect(200);
+    expect(list.body.data[0]).toMatchObject({ id: bot.id, pinnedAt: pinned.body.data.pinnedAt });
+
+    const unpinned = await request(buildApp())
+      .post(`/api/v1/bots/${bot.id}/pin`)
+      .set(authorization)
+      .send({ pinned: false })
+      .expect(200);
+    expect(unpinned.body.data.pinnedAt).toBeNull();
+    expect(agentRuntime.configure).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid pin body and an unknown bot", async () => {
+    const bot = await createBot();
+    await request(buildApp())
+      .post(`/api/v1/bots/${bot.id}/pin`)
+      .set(authorization)
+      .send({ pinned: "yes" })
+      .expect(400);
+    await request(buildApp())
+      .post("/api/v1/bots/missing/pin")
+      .set(authorization)
+      .send({ pinned: true })
+      .expect(404);
+  });
+
   it("returns list fields with preview and unread state", async () => {
     const earlier = new Date(Date.now() - 60_000);
     const later = new Date();

@@ -100,29 +100,27 @@ Explicitly out of scope (see §15 Roadmap):
 
 ## 6. UX & screens
 
-Visual and layout reference: **[Talorys](https://rociiu.github.io/talorys/#demo)** (Chat, Memories, Automations
-screens). Pages render inside groot's `shell` layout.
+Visual and layout reference: the **grok.com Bots** UI (sidebar + conversation), originally Talorys. Every
+authenticated page renders inside one app-wide sidebar shell (`AppShell`).
 
-### 6.1 Visual style (Talorys-like)
+### 6.1 Visual style (Grok-like)
 
 - Calm, minimal workspace: neutral surfaces, thin borders, generous whitespace, **Inter** (already groot's font),
-  one accent colour used sparingly (primary buttons, send button, active state, toggles). Accent: Talorys-style
-  teal, set by an app-level CSS override of the shell's `--primary`/`--ring` tokens in `apps/web` (no edit to the
-  synced shell CSS).
+  no accent colour: a warm monochrome palette (off-white/near-black surfaces, dark user bubble, light-grey bot
+  bubble) set by app-level token overrides in `apps/web/src/client/app.css` (no edit to the synced shell CSS).
 - **Light and dark themes**, dark by default, toggle in the user menu and Settings, choice persisted. (groot
   ships dark tokens but no toggle → upstream change, §12.)
 - Bot avatars are DiceBear "gaze" illustrations (`api.dicebear.com/10.x/gaze/svg?seed=<name>`), deterministic per bot name.
 
-### 6.2 Layout (desktop: three columns)
+### 6.2 Layout (desktop: sidebar + conversation)
 
-| Column                           | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. App nav (groot shell sidebar) | Brand mark "tiny-agents", nav item **Chats** (Phase 1's only section; later phases add Memory, Routines, … like Talorys' Memory/Tasks/Automations), user menu at the bottom with Settings, theme toggle, Log out. Collapsible to an icon rail (shell behaviour).                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 2. Bot list                      | **"+ New bot"** button, **"Search bots"** field (client-side filter by name), then bot rows: avatar, name, last-message preview, relative time ("just now"), "typing…" state, unread badge; sorted by most recent activity; selected row highlighted.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 3. Chat pane                     | **Header:** bot avatar + name, model name (muted), **"+ New chat"** button (= reset conversation, with confirm) and a ⋯ menu (Edit bot, Delete bot). **Transcript:** user messages as right-aligned muted bubbles; assistant messages left-aligned with the bot avatar and **no bubble** (full-width markdown), Reasoning collapsible above the text, copy action on hover; "earlier messages summarized" divider. **Composer:** full-width rounded input pinned to the bottom ("Message {bot}…", Enter to send, Shift+Enter newline) with an accent send button that turns into **Stop** while replying; muted footnote below ("{model} · AI can make mistakes — check important details."). |
+| Region                | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Sidebar (app-wide) | 256px, collapsible to a 64px icon rail (persisted). Brand, **Search** (command palette), app nav (Tasks, Skills, Memory, Routines, Settings, …), then the **Bots** section: a **+** button, a **Pinned** group, a **Recent** group (folded after 8 with "Show more"), rows with avatar, name, unread/replying/approval state and a ⋯ menu (Pin/Unpin, Edit). User menu at the bottom (Settings, theme, Log out).                                                                                                                    |
+| 2. Conversation       | **Header:** bot avatar + name (opens the edit dialog), **+** new chat (with confirm), browser toggle, ⋯ menu (Pin/Unpin, New chat, Edit bot, Delete bot). **Transcript** (768px column): user messages as right-aligned dark pills, bot replies as left-aligned light cards (radius 24, max 80%), Reasoning collapsible above the text, copy action on hover. **Composer** (752px, radius 24): textarea on top, round attach button left and send/Stop button right below it ("Message {bot}", Enter to send, Shift+Enter newline). |
 
-The chat route uses its own pathless layout route with `<Layout padded={false} mainClassName=…>` so the list and
-chat columns fill the viewport height and scroll independently.
+Pinning is stored per bot (`pinnedAt`, `POST /api/bots/:id/pin`). The page-level top bar keeps the shell's floating
+chrome on mobile only (`pageChrome: "sidebar"` hides the back button and profile button at md+).
 
 ### 6.3 Routes & screens
 
@@ -130,8 +128,8 @@ chat columns fill the viewport height and scroll independently.
 | --------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                            |
 | `/`             | Redirects to `/chats`.                                                                                             |
-| `/chats`        | Desktop: bot list + empty chat pane ("Pick a bot or create one"). Mobile: the bot list full-screen.                |
-| `/chats/:botId` | Desktop: list + open chat. Mobile: chat full-screen with a back arrow to the list (messenger pattern).             |
+| `/chats`        | Desktop: sidebar + empty chat pane ("Pick a bot or create one"). Mobile: the Bots section full-screen.             |
+| `/chats/:botId` | Desktop: sidebar + open chat. Mobile: chat full-screen; the hamburger opens the sidebar drawer.                    |
 | Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                 |
 | Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt) — not OpenMausBot's multi-section wizard. |
 | Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                              |
@@ -140,7 +138,7 @@ chat columns fill the viewport height and scroll independently.
 ### 6.4 Mobile
 
 - groot shell's mobile top bar (brand, menu drawer for app nav) stays as-is.
-- The bot list and the chat are **separate full-screen views** (list → chat → back), not a second drawer.
+- The sidebar becomes a drawer (hamburger in the chat header); `/chats` with no bot open shows the Bots section full-screen.
 - Composer stays pinned above the keyboard (`100dvh` layout).
 - A Talorys-style **bottom tab bar** is deferred until there are several sections (Phase 2+).
 

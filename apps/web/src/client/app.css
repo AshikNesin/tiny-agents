@@ -1,22 +1,120 @@
 /*
- * tiny-agents app-level theme override (PRD §6.1).
+ * tiny-agents app-level theme override.
  *
- * The shell's synced index.css stays untouched; this file re-points the
- * primary/ring tokens to a Talorys-style teal in both themes. It loads after
- * the shell stylesheet (see main.tsx import order).
+ * The shell's synced index.css stays untouched; this file re-points its
+ * tokens to a warm monochrome palette (measured from grok.com/bot) in both
+ * themes, and adds the chat-specific tokens. It loads after the shell
+ * stylesheet (see main.tsx import order).
  */
 
-/* Talorys teal: calm, slightly desaturated cyan-green. */
 :root {
-  --primary: oklch(0.72 0.11 178);
-  --primary-foreground: oklch(0.16 0.02 200);
-  --ring: oklch(0.72 0.11 178);
-  --sidebar-ring: oklch(0.72 0.11 178);
+  --background: #f9f8f7;
+  --foreground: #050505;
+  --card: #ffffff;
+  --card-foreground: #050505;
+  --popover: #ffffff;
+  --popover-foreground: #050505;
+  --primary: #050505;
+  --primary-foreground: #fcfcfc;
+  --secondary: #f0efed;
+  --secondary-foreground: #050505;
+  --muted: #f0efed;
+  --muted-foreground: #636363;
+  --accent: #f0efed;
+  --accent-foreground: #050505;
+  --border: rgb(15 13 10 / 8%);
+  --input: #e6e5e3;
+  --ring: rgb(5 5 5 / 30%);
+
+  --sidebar: #f5f3f2;
+  --sidebar-foreground: #050505;
+  --sidebar-primary: #050505;
+  --sidebar-primary-foreground: #fcfcfc;
+  --sidebar-accent: rgb(5 5 5 / 4%);
+  --sidebar-accent-foreground: #050505;
+  --sidebar-border: rgb(15 13 10 / 8%);
+  --sidebar-ring: rgb(5 5 5 / 30%);
+
+  /* Chat surfaces */
+  --bubble: #f0efed;
+  --bubble-user: #070707;
+  --bubble-user-foreground: #ffffff;
+  --composer: #ffffff;
+  --fg-tertiary: #858585;
+  --link: oklch(0.5 0.2 267.7);
+  --inline-code-bg: rgb(250 117 0 / 10%);
+  --inline-code-fg: #9e3a00;
 }
 
 .dark {
-  --primary: oklch(0.78 0.12 178);
-  --primary-foreground: oklch(0.16 0.03 200);
-  --ring: oklch(0.78 0.12 178);
-  --sidebar-ring: oklch(0.78 0.12 178);
+  --background: #131211;
+  --foreground: #fcfcfc;
+  --card: #201f1d;
+  --card-foreground: #fcfcfc;
+  --popover: #201f1d;
+  --popover-foreground: #fcfcfc;
+  --primary: #fcfcfc;
+  --primary-foreground: #050505;
+  --secondary: #201f1d;
+  --secondary-foreground: #fcfcfc;
+  --muted: #201f1d;
+  --muted-foreground: #9e9e9e;
+  --accent: #2a2927;
+  --accent-foreground: #fcfcfc;
+  --border: rgb(252 252 252 / 8%);
+  --input: rgb(252 252 252 / 10%);
+  --ring: rgb(252 252 252 / 30%);
+
+  --sidebar: #181716;
+  --sidebar-foreground: #fcfcfc;
+  --sidebar-primary: #fcfcfc;
+  --sidebar-primary-foreground: #050505;
+  --sidebar-accent: rgb(252 252 252 / 8%);
+  --sidebar-accent-foreground: #fcfcfc;
+  --sidebar-border: rgb(252 252 252 / 8%);
+  --sidebar-ring: rgb(252 252 252 / 30%);
+
+  --bubble: #201f1d;
+  --bubble-user: #5a5a5a;
+  --bubble-user-foreground: #fcfcfc;
+  --composer: #201f1d;
+  --fg-tertiary: #858585;
+  --link: oklch(0.72 0.146 271.2);
+  --inline-code-bg: rgb(253 186 116 / 10%);
+  --inline-code-fg: #fdba74;
+}
+
+/* Markdown inside a reply card (15px / 22.5px, 15px paragraph rhythm). */
+.chat-md {
+  font-size: 15px;
+  line-height: 22.5px;
+  overflow-wrap: anywhere;
+}
+
+/* Streamdown's list utilities (list-disc, list-inside) are not in the
+   Tailwind source scan, and preflight strips the default markers. */
+.chat-md ul {
+  list-style: disc inside;
+}
+.chat-md ol {
+  list-style: decimal inside;
+}
+
+.chat-md a {
+  color: var(--link);
+  font-weight: 500;
+}
+
+.chat-md :not(pre) > code {
+  background: var(--inline-code-bg);
+  color: var(--inline-code-fg);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+/* Fade behind the floating chat header so the transcript scrolls under it. */
+.chat-header-fade {
+  background: linear-gradient(to bottom, var(--background) 0%, var(--background) 60%, transparent);
 }

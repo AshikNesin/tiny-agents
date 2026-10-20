@@ -7,7 +7,8 @@
  *   then minimal diffs applied in order. Reconnects receive a fresh snapshot.
  */
 import { create } from "zustand";
-import { botsApi, type BotListEntry } from "../lib/bots-api";
+import { toast } from "sonner";
+import { botsApi, type BotListEntry, type ModelInfo } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { ChatEvent, ChatState } from "../lib/chat-types";
 
@@ -17,11 +18,14 @@ interface BotsState {
   error: string | null;
   gatewayConfigured: boolean;
   defaultModel?: string;
+  models: ModelInfo[];
 
   loadBots: () => Promise<void>;
   loadModels: () => Promise<void>;
   refreshBotsInBackground: () => void;
   markRead: (botId: string) => void;
+  /** Optimistic pin/unpin; rolls back and toasts if the server refuses. */
+  togglePin: (botId: string) => Promise<void>;
 
   // Per-bot chat
   chats: Record<string, ChatState>;
@@ -122,6 +126,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   error: null,
   gatewayConfigured: false,
   defaultModel: undefined,
+  models: [],
 
   loadBots: async () => {
     set({ loading: true, error: null });
@@ -139,9 +144,27 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   loadModels: async () => {
     try {
       const { models, defaultModel, gatewayConfigured } = await botsApi.models();
-      set({ gatewayConfigured, defaultModel: defaultModel ?? models[0]?.id });
+      set({ gatewayConfigured, models, defaultModel: defaultModel ?? models[0]?.id });
     } catch {
       // Banner state stays as-is; the chat pane shows its own error.
+    }
+  },
+
+  togglePin: async (botId) => {
+    const current = get().bots.find((bot) => bot.id === botId);
+    if (!current) return;
+    const pinned = current.pinnedAt === null;
+    const setPinnedAt = (pinnedAt: string | null) =>
+      set((state) => ({
+        bots: state.bots.map((bot) => (bot.id === botId ? { ...bot, pinnedAt } : bot)),
+      }));
+    setPinnedAt(pinned ? new Date().toISOString() : null);
+    try {
+      const updated = await botsApi.pin(botId, pinned);
+      setPinnedAt(updated.pinnedAt);
+    } catch (error) {
+      setPinnedAt(current.pinnedAt);
+      toast.error(error instanceof Error ? error.message : "Failed to update pin");
     }
   },
 

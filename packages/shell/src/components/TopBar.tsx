@@ -78,12 +78,14 @@ export function TopBar({
   backTo?: string;
 }) {
   const navigate = useNavigate();
+  const { pageChrome } = useShellConfig();
+  const sidebarChrome = pageChrome === "sidebar";
   return (
     <header className="flex w-full items-center gap-3 pt-4 pb-2">
       <Button
         variant="outline"
         size="icon"
-        className="rounded-full"
+        className={cn("rounded-full", sidebarChrome && "md:hidden")}
         onClick={() => navigate(backTo ?? "/chats")}
         aria-label="Back"
       >
@@ -91,7 +93,7 @@ export function TopBar({
       </Button>
       <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{title}</h1>
       {children}
-      <ProfileButton />
+      <ProfileButton className={cn(sidebarChrome && "md:hidden")} />
     </header>
   );
 }
