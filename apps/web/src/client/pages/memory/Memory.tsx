@@ -154,11 +154,6 @@ export function MemoryPage() {
     }
   };
 
-  const restore = (memory: MemoryRecord) =>
-    act(memory.id, () => botsApi.updateMemory(memory.id, { restore: true }), "restore").then(
-      () => void toast.success("Memory restored"),
-    );
-
   const searching = query.trim() !== "";
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

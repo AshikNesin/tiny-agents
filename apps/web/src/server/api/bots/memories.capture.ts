@@ -11,11 +11,8 @@ import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import {
   extractionResultSchema,
-  MEMORY_MAX_ACTIVE,
   MEMORY_QUIET_MS,
-  MEMORY_TRIVIAL_BYTES,
   MEMORY_TURN_LIMIT,
-  renderMemoryBlock,
   type ExtractedMemory,
 } from "./memories.domain";
 import { enforceBudget } from "./memories.service";
