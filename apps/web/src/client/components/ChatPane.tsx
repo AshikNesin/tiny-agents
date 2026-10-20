@@ -200,6 +200,9 @@ export function ChatPane({
     // returns to the composer.
     const echo = {
       id: crypto.randomUUID(),
+      // Exactly the submitted body: the store dedupes the optimistic echo
+      // against the confirmed row by text, so any transformation here
+      // leaves both visible (cubic: doubled mention echo).
       text: body,
       createdAt: Date.now(),
       ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),

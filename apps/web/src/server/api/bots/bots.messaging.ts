@@ -89,6 +89,7 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
       await rt.submit(Number(target.conversationId), {
         requestId: input.requestId,
         text: botToBotText(sender.name, sanitizePeerText(input.text)),
+        peer: { kind: "message", name: sender.name },
       });
       await prisma.botMessage.create({
         data: {

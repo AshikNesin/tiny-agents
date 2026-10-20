@@ -36,6 +36,10 @@ const aliases = [
   { find: "@groot/ui", replacement: path.resolve(packagesDir, "ui/src") },
   { find: "@groot/jobs/client", replacement: path.resolve(packagesDir, "jobs/src/client") },
   { find: "@groot/shell", replacement: path.resolve(packagesDir, "shell/src") },
+  {
+    find: "@tiny-agents/agent/peer-envelope",
+    replacement: path.resolve(packagesDir, "agent/src/toolkits/peer-envelope.ts"),
+  },
   { find: "@", replacement: clientSrc },
 ];
 

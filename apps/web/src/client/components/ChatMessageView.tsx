@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
+import { Ban, Check, Clock, Copy, ExternalLink, MessagesSquare, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
@@ -28,6 +28,8 @@ import { Bubble, BubbleContent } from "./ui/bubble";
 import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import type { Bot } from "../lib/bots-api";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -256,6 +258,33 @@ function ToolRow({
     return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
   }
 
+  // message_bot row: the Grok handoff pill — the peer's avatar, their name,
+  // and the outbound snippet. Only a completed delivery says "Messaged";
+  // every other terminal state says what actually happened (cubic).
+  if (call.name === "message_bot") {
+    const to = typeof call.args?.to === "string" ? call.args.to : "";
+    const snippet =
+      typeof call.args?.text === "string"
+        ? call.args.text.replace(/\s+/g, " ").trim().slice(0, 60)
+        : "";
+    return (
+      <Trace className="gap-1">
+        <TraceLine status={traceStatus(call.status)} data-testid="bot-handoff">
+          <TraceIcon>
+            <BotAvatar name={to} className="size-4" />
+          </TraceIcon>
+          <TraceTitle>
+            {messageBotLabel(call.status)} {to || "bot"}
+          </TraceTitle>
+          {snippet && <TraceDescription>“{snippet}”</TraceDescription>}
+          {call.durationMs !== undefined && (
+            <TraceDescription>{formatDuration(call.durationMs)}</TraceDescription>
+          )}
+        </TraceLine>
+      </Trace>
+    );
+  }
+
   const line = (
     <TraceLine status={traceStatus(call.status)}>
       {statusIcon(call) ? <TraceIcon>{statusIcon(call)}</TraceIcon> : null}
@@ -309,7 +338,7 @@ export function toolLabel(labels: ToolLabels, name: string): string {
   return name.replace(/_/g, " ");
 }
 
-interface ChatMessageViewProps {
+export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
   botId?: string;
@@ -341,6 +370,21 @@ export function ChatMessageView({
 
   if (message.role === "user") {
     const failed = message.status === "unanswered";
+    // Trusted attribution only (entry metadata set by the delivery pipeline):
+    // a typed text that merely looks like an envelope renders as a plain
+    // bubble, so no one can forge a peer card (cubic: spoofing).
+    const peer = message.peer;
+    if (peer) {
+      return (
+        <PeerCard
+          peer={peer}
+          text={stripPeerEnvelope(message.text)}
+          failed={failed}
+          error={message.error}
+          streaming={message.status === "streaming"}
+        />
+      );
+    }
     return (
       <Message align="end" className="group">
         {/* content-visibility on the scroller item breaks percentage
@@ -364,6 +408,133 @@ export function ChatMessageView({
     );
   }
 
+  return assistantView(message, { botName, botId, toolLabels });
+}
+
+/** One peer-traffic user message as a Grok-style attributed card. */
+function PeerCard({
+  peer,
+  text,
+  failed,
+  error,
+  streaming,
+}: {
+  peer: NonNullable<ChatMessage["peer"]>;
+  text: string;
+  failed: boolean;
+  error?: string;
+  streaming: boolean;
+}) {
+  if (peer.kind === "mention") {
+    // The owner tagged this bot from {host}'s chat: the owner's own words
+    // in a labeled muted bubble.
+    return (
+      <Message align="end" className="group">
+        <div className="relative max-w-[min(85%,48rem)]">
+          <CopyButton text={text} />
+          <p className="text-muted-foreground px-1 pb-0.5 text-right text-xs">
+            You · in {peer.hostName}&apos;s chat
+          </p>
+          <Bubble align="end" variant="muted" className="max-w-full">
+            <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
+              <p className="whitespace-pre-wrap">{text}</p>
+            </BubbleContent>
+          </Bubble>
+          {failed && <p className="text-destructive mt-1 text-right text-xs">{error}</p>}
+        </div>
+      </Message>
+    );
+  }
+  if (peer.kind === "message") {
+    // A bot messaged this bot via message_bot: attributed incoming card.
+    return (
+      <PeerIncomingCard
+        name={peer.name}
+        text={text}
+        failed={failed}
+        error={error}
+        streaming={streaming}
+      />
+    );
+  }
+  // A relayed reply into the asker's chat: attributed incoming card with a
+  // relayed marker.
+  return (
+    <PeerIncomingCard
+      name={peer.name}
+      text={text}
+      relayed
+      failed={failed}
+      error={error}
+      streaming={streaming}
+    />
+  );
+}
+
+/**
+ * Incoming card for bot-to-bot traffic: peer avatar + name header (the
+ * Grok handoff pattern) with the payload below; full-width like assistant
+ * replies, never painted as the owner's bubble. `relayed` marks a reply
+ * that the relay delivered back into the asker's chat.
+ */
+export function PeerIncomingCard({
+  name,
+  text,
+  relayed = false,
+  failed = false,
+  error,
+  streaming = false,
+}: {
+  name: string;
+  text: string;
+  relayed?: boolean;
+  failed?: boolean;
+  error?: string;
+  streaming?: boolean;
+}) {
+  return (
+    <Message
+      className="group gap-3"
+      data-testid="peer-card"
+      data-peer={name}
+      data-relayed={relayed ? "true" : undefined}
+    >
+      <BotAvatar name={name} className="mt-1 size-8" />
+      <div className="relative min-w-0 flex-1">
+        <CopyButton text={text} />
+        <p className="text-muted-foreground mb-1 flex items-center gap-1.5 px-1 text-xs">
+          <MessagesSquare className="size-3" aria-hidden />
+          <span className="text-foreground/80 font-medium">{name}</span>
+          <span aria-hidden>·</span>
+          <span>{relayed ? "reply relayed into this chat" : "messaged you"}</span>
+        </p>
+        <div
+          data-slot="reply-card"
+          className="bg-secondary/50 rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed"
+        >
+          <Streamdown>{text}</Streamdown>
+        </div>
+        {streaming && (
+          <span className="text-muted-foreground mt-1 inline-flex items-center gap-1.5 px-1 text-xs">
+            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+            replying…
+          </span>
+        )}
+        {failed && (
+          <p className="text-destructive mt-1 px-1 text-xs">
+            {error ?? "This delivery was not answered."}
+          </p>
+        )}
+      </div>
+    </Message>
+  );
+}
+
+function assistantView(
+  message: ChatMessage,
+  ctx: { botName: string; botId?: string; toolLabels: ToolLabels },
+) {
+  const { botName, botId, toolLabels } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -420,4 +591,13 @@ export function ChatMessageView({
       </div>
     </Message>
   );
+}
+
+function messageBotLabel(status: ChatToolCall["status"]): string {
+  if (status === "running" || status === "pending") return "Messaging";
+  if (status === "done") return "Messaged";
+  if (status === "denied") return "Blocked message to";
+  if (status === "aborted") return "Stopped messaging";
+  if (status === "interrupted") return "Interrupted message to";
+  return "Failed to message";
 }

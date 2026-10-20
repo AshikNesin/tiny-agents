@@ -81,6 +81,16 @@ export interface ChatMessage {
   text: string;
   /** Attachments the user sent with this message (user role only). */
   attachments?: AttachmentRef[];
+  /**
+   * Trusted attribution for a cross-bot delivery (user role only): set by
+   * the delivery pipeline, never by the owner's composer. A text that merely
+   * looks like an envelope has no `peer` and renders as a plain bubble —
+   * the parser alone must never attribute a card (cubic: spoofing).
+   */
+  peer?:
+    | { kind: "reply"; name: string }
+    | { kind: "message"; name: string }
+    | { kind: "mention"; hostName: string };
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   /** Model thinking, when the model emitted any. */

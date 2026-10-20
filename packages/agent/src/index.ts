@@ -65,6 +65,7 @@ export {
   type VisionStore,
 } from "./toolkits/vision";
 export { sanitizePeerText, CUSTODY_RULE } from "./toolkits/peer-text";
+export { parsePeerEnvelope, stripPeerEnvelope, type PeerEnvelope } from "./toolkits/peer-envelope";
 export {
   createSkillsCapability,
   SKILL_NAME,
@@ -101,6 +102,7 @@ export {
   diffChat,
   chatState,
   CHAT_USER_ENTRY,
+  peerOf,
   attachmentsOf,
   type RawChat,
 } from "./transcript";

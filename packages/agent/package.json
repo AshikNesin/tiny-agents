@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./peer-envelope": "./src/toolkits/peer-envelope.ts"
   },
   "dependencies": {
     "@earendil-works/chord": "1.3.0",

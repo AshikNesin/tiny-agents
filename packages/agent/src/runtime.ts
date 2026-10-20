@@ -54,6 +54,7 @@ import type {
   AttachmentRef,
   BotAgentConfig,
   ChatEvent,
+  ChatMessage,
   ChatState,
   ChatSubscription,
   ConversationRef,
@@ -472,6 +473,8 @@ export class AgentRuntime {
       images?: { data: string; mimeType: string }[];
       /** Attachment refs stored on the entry for the transcript (issue #17). */
       attachments?: AttachmentRef[];
+      /** Trusted attribution for a cross-bot delivery (rendered as a card). */
+      peer?: ChatMessage["peer"];
     },
   ): Promise<void> {
     const conversation = await this.#conversation(ref);
@@ -490,20 +493,25 @@ export class AgentRuntime {
         type: "input",
         content,
         requestId: input.requestId,
-        ...(input.attachments?.length
+        ...(input.attachments?.length || input.peer
           ? {
               entry: {
                 kind: CHAT_USER_ENTRY,
                 data: {
-                  attachments: input.attachments.map((a) => ({
-                    uploadId: a.uploadId,
-                    kind: a.kind,
-                    name: a.name,
-                    mimeType: a.mimeType,
-                    size: a.size,
-                    ...(a.width !== undefined ? { width: a.width } : {}),
-                    ...(a.height !== undefined ? { height: a.height } : {}),
-                  })),
+                  ...(input.peer ? { peer: input.peer } : {}),
+                  ...(input.attachments?.length
+                    ? {
+                        attachments: input.attachments.map((a) => ({
+                          uploadId: a.uploadId,
+                          kind: a.kind,
+                          name: a.name,
+                          mimeType: a.mimeType,
+                          size: a.size,
+                          ...(a.width !== undefined ? { width: a.width } : {}),
+                          ...(a.height !== undefined ? { height: a.height } : {}),
+                        })),
+                      }
+                    : {}),
                 } as unknown as JsonValue,
               },
             }

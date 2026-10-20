@@ -10,6 +10,7 @@ import {
   ApprovalNotPendingError,
   MCP_DEFER_THRESHOLD,
   sanitizePeerText,
+  stripPeerEnvelope,
   type AttachmentRef,
   type BotAgentConfig,
   type ToolPermission,
@@ -419,7 +420,9 @@ export async function sendMessage(
 
 /** Bot-list preview: text, else a hint of what was attached (issue #17). */
 function previewOf(text: string, attachments: AttachmentRef[] | undefined): string {
-  const trimmed = text.replace(/\s+/g, " ").trim();
+  // Cross-bot deliveries carry system attribution prefixes (relay, message_bot,
+  // mention). The list preview shows the payload, like the transcript does.
+  const trimmed = stripPeerEnvelope(text).replace(/\s+/g, " ").trim();
   if (trimmed) return trimmed;
   if (!attachments?.length) return "";
   const first = attachments[0];
@@ -548,6 +551,7 @@ async function deliverMentions(
       await rt.submit(Number(target.conversationId), {
         requestId: `mention-${input.requestId}-${target.id}`,
         text: mentionText(ownerContext, sanitizePeerText(input.text)),
+        peer: { kind: "mention", hostName: host.name },
       });
       await prisma.botMessage.create({
         data: {
@@ -638,7 +642,11 @@ export async function recordReply(
   last: { role: "user" | "assistant"; text: string; createdAt: number } | undefined,
 ) {
   if (!last) return;
-  const preview = last.text.replace(/\s+/g, " ").trim().slice(0, 120);
+  // Cross-bot deliveries land as user turns carrying an attribution prefix
+  // (relay, message_bot, mention). The list preview shows the payload, like
+  // the transcript card does.
+  const payload = last.role === "user" ? stripPeerEnvelope(last.text) : last.text;
+  const preview = payload.replace(/\s+/g, " ").trim().slice(0, 120);
   await prisma.bot
     .updateMany({
       where: { conversationId },

@@ -41,6 +41,8 @@ export interface ChatMessage {
   text: string;
   /** Attachments the user sent with this message (issue #17). */
   attachments?: AttachmentRef[];
+  /** Trusted cross-bot attribution (delivery pipeline only; renders as a card). */
+  peer?: import("@tiny-agents/agent").ChatMessage["peer"];
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   reasoning?: string;
