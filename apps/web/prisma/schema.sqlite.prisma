@@ -54,6 +54,12 @@ model Bot {
   answersFor         BotMessage[] @relation("BotMessagesReplyTo")
   /// Scheduled routines that run prompts in this bot's conversation.
   routines           Routine[]
+  /// Long-term memories this bot keeps about the owner (issue #22).
+  memories           Memory[]
+  /// Memory capture + injection switch (issue #22).
+  memoryEnabled      Boolean   @default(true)
+  /// Transcript watermark: owner turns captured through this instant (issue #22).
+  memoryCapturedThrough DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -207,6 +213,35 @@ model Routine {
 
   @@index([enabled, nextRunAt])
   @@map("routines")
+}
+
+/// One durable fact a bot remembers about the owner (issue #22).
+model Memory {
+  id        String   @id @default(cuid())
+  botId     String
+  /// One self-contained third-person sentence, max 300 chars.
+  text      String
+  /// preference | fact | goal | habit (Zod-validated at every boundary).
+  category  String
+  /// active | superseded | archived | expired | deleted. Only `active` injects.
+  status    String   @default("active")
+  /// capture | manual (source line on the Memory page).
+  source    String   @default("capture")
+  /// Extraction confidence 0..1; null for manual entries.
+  confidence Float?
+  /// Optional expiry; null = no expiry. Expired rows stay rows, leave the prompt.
+  until     DateTime?
+  /// Set when a newer memory replaced this one (strike-through in the UI).
+  supersededById String?
+  supersededAt   DateTime?
+  bot            Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  supersededBy   Memory?   @relation("MemorySupersession", fields: [supersededById], references: [id])
+  superseding    Memory[]  @relation("MemorySupersession")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([botId, status, category])
+  @@map("memories")
 }
 
 /// One executed occurrence of a routine: the exactly-once ledger.

@@ -73,6 +73,7 @@ export {
   type SkillStore,
   type SkillSummary,
 } from "./skills";
+export { createMemoryCapability, type MemoryLine, type MemoryStore } from "./toolkits/memory";
 export { createWebToolkit, checkPublicUrl, type WebToolkitOptions } from "./toolkits/web";
 export {
   connectMcp,
