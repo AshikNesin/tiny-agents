@@ -62,6 +62,10 @@ export {
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";
 export {
+  createRemoteCdpTransport,
+  type RemoteCdpTransportOptions,
+} from "./toolkits/browser-remote-cdp";
+export {
   createRoutinesExtension,
   createRoutinesToolkit,
   confirmationCard,

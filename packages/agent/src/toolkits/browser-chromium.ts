@@ -61,72 +61,89 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
       ...(options.args?.length ? { args: options.args } : {}),
     });
     const page: Page = context.pages()[0] ?? (await context.newPage());
-
-    let cdp: Awaited<ReturnType<typeof context.newCDPSession>> | undefined;
-    const listeners = new Set<BrowserSessionEvents>();
-    let screencasting = false;
-
-    const session: BrowserSession = {
-      url: () => page.url(),
-      on: (events) => {
-        listeners.add(events);
-        return () => listeners.delete(events);
-      },
-      navigate: async (url) => {
-        // Redirect guard: validate every hop of the redirect chain. Route
-        // interception never sees redirect hops here, but the response's
-        // request chain does (redirectedFrom). A private hop bails to
-        // about:blank before any private byte is rendered.
-        const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        const hops: string[] = [];
-        for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
-        const bad = hops.find((hop) => isBlockedPrivateUrl(hop, open.allowedPrivateHosts));
-        if (bad) {
-          await page.goto("about:blank").catch(() => {});
-          throw new Error(
-            `Blocked: the page redirected to a private address (${new URL(bad).host}).`,
-          );
-        }
-        return { url: page.url(), status: response?.status() ?? null };
-      },
-      snapshot: () => snapshotOf(page),
-      click: (ref) => clickRef(page, ref),
-      type: (ref, text) => typeRef(page, ref, text),
-      press: (key) => page.keyboard.press(key),
-      scroll: (direction, amount) => page.mouse.wheel(0, direction === "down" ? amount : -amount),
-      screenshot: async () => ({
-        data: (await page.screenshot({ type: "jpeg", quality: 60 })).toString("base64"),
-      }),
-      input: (event) => injectInput(page, event),
-      startScreencast: async () => {
-        cdp ??= await context.newCDPSession(page);
-        if (screencasting) return;
-        screencasting = true;
-        cdp.on("Page.screencastFrame", (frame) => {
-          void cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
-          for (const l of listeners) l.frame?.({ jpeg: Buffer.from(frame.data, "base64") });
-        });
-        await cdp.send("Page.enable");
-        await cdp.send("Page.startScreencast", {
-          format: "jpeg",
-          quality: 60,
-          maxWidth: open.viewportWidth,
-          maxHeight: open.viewportHeight,
-          everyNthFrame: 1,
-        });
-      },
-      stopScreencast: async () => {
-        screencasting = false;
-        await cdp?.send("Page.stopScreencast").catch(() => {});
-      },
+    return pageSession(page, open, {
       close: async () => {
-        for (const l of listeners) l.closed?.();
-        listeners.clear();
         await context.close().catch(() => {});
       },
-    };
-    return session;
+    });
   };
+}
+
+/**
+ * The page-level session every chromium transport shares: navigation with
+ * the redirect guard, ref snapshot/click/type, CDP input + screencast.
+ * `teardown.close` disposes the transport-specific resources around the
+ * page (local context vs a remote chromium + tunnel).
+ */
+export function pageSession(
+  page: Page,
+  open: OpenBrowserOptions,
+  teardown: { close: () => Promise<void> },
+): BrowserSession {
+  let cdp: CDPSession | undefined;
+  const listeners = new Set<BrowserSessionEvents>();
+  let screencasting = false;
+
+  const session: BrowserSession = {
+    url: () => page.url(),
+    on: (events) => {
+      listeners.add(events);
+      return () => listeners.delete(events);
+    },
+    navigate: async (url) => {
+      // Redirect guard: validate every hop of the redirect chain. Route
+      // interception never sees redirect hops here, but the response's
+      // request chain does (redirectedFrom). A private hop bails to
+      // about:blank before any private byte is rendered.
+      const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      const hops: string[] = [];
+      for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
+      const bad = hops.find((hop) => isBlockedPrivateUrl(hop, open.allowedPrivateHosts));
+      if (bad) {
+        await page.goto("about:blank").catch(() => {});
+        throw new Error(
+          `Blocked: the page redirected to a private address (${new URL(bad).host}).`,
+        );
+      }
+      return { url: page.url(), status: response?.status() ?? null };
+    },
+    snapshot: () => snapshotOf(page),
+    click: (ref) => clickRef(page, ref),
+    type: (ref, text) => typeRef(page, ref, text),
+    press: (key) => page.keyboard.press(key),
+    scroll: (direction, amount) => page.mouse.wheel(0, direction === "down" ? amount : -amount),
+    screenshot: async () => ({
+      data: (await page.screenshot({ type: "jpeg", quality: 60 })).toString("base64"),
+    }),
+    input: (event) => injectInput(page, event),
+    startScreencast: async () => {
+      cdp ??= await page.context().newCDPSession(page);
+      if (screencasting) return;
+      screencasting = true;
+      cdp.on("Page.screencastFrame", (frame) => {
+        void cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
+        for (const l of listeners) l.frame?.({ jpeg: Buffer.from(frame.data, "base64") });
+      });
+      await cdp.send("Page.enable");
+      await cdp.send("Page.startScreencast", {
+        format: "jpeg",
+        quality: 60,
+        maxWidth: open.viewportWidth,
+        maxHeight: open.viewportHeight,
+        everyNthFrame: 1,
+      });
+    },
+    stopScreencast: async () => {
+      screencasting = false;
+      await cdp?.send("Page.stopScreencast").catch(() => {});
+    },
+    close: async () => {
+      for (const l of listeners) l.closed?.();
+      listeners.clear();
+      await teardown.close();
+    },
+  };
+  return session;
 }
 
 /** Inject `data-ta-ref` attributes, then return the serialized aria snapshot. */

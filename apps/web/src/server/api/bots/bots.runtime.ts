@@ -11,6 +11,7 @@ import {
   createBotsToolkit,
   createBrowserToolkit,
   createChromiumTransport,
+  createRemoteCdpTransport,
   createMemoryCapability,
   createMemoryHostKeyStore,
   createRoutinesToolkit,
@@ -72,13 +73,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
       idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
-      ...(unquote(env.BROWSER_EXECUTABLE_PATH)
-        ? {
-            transport: createChromiumTransport({
-              executablePath: unquote(env.BROWSER_EXECUTABLE_PATH)!,
-            }),
-          }
-        : {}),
+      transport: browserTransport(env),
     }),
   ];
 }
@@ -88,6 +83,26 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
  * KV (the `keyv` table) so a restart remembers what it trusted on first connect.
  */
 /** One KV-backed TOFU store per process; memory fallback keeps tests key-free. */
+/**
+ * Browser transport for the deploy model: chromium runs on the sandbox VM
+ * (SANDBOX_HOST over Tailscale SSH), not in this container. With
+ * BROWSER_EXECUTABLE_PATH set we drive that local binary instead (dev on
+ * the exe.dev VM); with neither, Playwright's bundled Chromium.
+ */
+function browserTransport(env: Env) {
+  const executable = unquote(env.BROWSER_EXECUTABLE_PATH);
+  if (executable) return createChromiumTransport({ executablePath: executable });
+  const sandboxHost = unquote(env.SANDBOX_HOST);
+  if (sandboxHost) {
+    return createRemoteCdpTransport({
+      host: sandboxHost,
+      port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
+      user: unquote(env.SANDBOX_USER),
+    });
+  }
+  return createChromiumTransport();
+}
+
 function kvHostKeyStore(): HostKeyStore {
   try {
     const kv = createNamespaceKv("SANDBOX");
