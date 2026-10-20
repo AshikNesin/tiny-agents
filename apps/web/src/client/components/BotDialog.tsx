@@ -143,10 +143,10 @@ export function BotDialog({
 
   const profile = (
     <>
-      <div className="flex items-center gap-3">
-        <BotAvatar name={name || "Bot"} className="size-14" />
-        <div className="flex-1">
-          <Label htmlFor="bot-name">Name</Label>
+      <div className="grid gap-1.5">
+        <Label htmlFor="bot-name">Name</Label>
+        <div className="flex items-center gap-3">
+          <BotAvatar name={name || "Bot"} className="size-10 shrink-0" />
           <Input
             id="bot-name"
             value={name}
