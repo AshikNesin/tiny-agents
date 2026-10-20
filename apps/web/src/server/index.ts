@@ -139,8 +139,9 @@ async function main() {
   // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
   // window or 6 turns later one side-call extracts durable facts off the
   // reply path. Faux/gateway-off modes resolve no capture model and skip.
+  let stopMemoryCapture: (() => void) | undefined;
   if (process.env.TINY_AGENTS_FAUX !== "1") {
-    startMemoryCapture(runtime, {
+    stopMemoryCapture = startMemoryCapture(runtime, {
       models: runtime.models as never,
       captureNow: (conversationId) =>
         captureConversation(conversationId, {
@@ -204,6 +205,9 @@ async function main() {
       // End chat/activity streams first: they hold their HTTP connections
       // open forever, and their watches must stop before the Harness closes.
       endAllSse();
+      // Disarm capture debounce timers before the runtime closes: a firing
+      // timer would call into a closed store.
+      stopMemoryCapture?.();
       await getConnectionManager().close();
       await closeAgentRuntime();
       if (config.jobs.enabled) {

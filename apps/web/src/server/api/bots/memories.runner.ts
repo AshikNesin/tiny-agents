@@ -15,7 +15,6 @@ import {
   type CaptureModels,
 } from "./memories.capture";
 import { MEMORY_TRIVIAL_BYTES } from "./memories.domain";
-import { renderMemoryBlock } from "./memories.domain";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -62,6 +61,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+function resolveCaptureModel(models: CaptureModels, modelId: string): unknown {
+  const customPrefix = "custom:";
+  if (modelId.startsWith(customPrefix)) {
+    const rest = modelId.slice(customPrefix.length);
+    const slash = rest.indexOf("/");
+    return slash > 0 ? models.getModel(rest.slice(0, slash), rest.slice(slash + 1)) : undefined;
+  }
+  return models.getModel(GATEWAY_PROVIDER, modelId);
+}
+
 export interface CaptureSideCall {
   models: CaptureModels;
   /** Model id resolved through the registry; undefined = skip. */
@@ -95,7 +104,7 @@ export async function captureConversation(
     const messages = await deps.readTranscript(conversationId);
     const window = ownerWindow(messages, bot.memoryCapturedThrough);
     if (!window.through) return;
-    const bytes = window.lines.join("\n").length;
+    const bytes = Buffer.byteLength(window.lines.join("\n"), "utf8");
     if (bytes < MEMORY_TRIVIAL_BYTES) {
       // Advance the watermark anyway: sub-trivial chatter must not pile up
       // into a later capture window it no longer relates to.
@@ -106,21 +115,18 @@ export async function captureConversation(
       return;
     }
 
-    const current = renderMemoryBlock(
-      bot.memories.map((m) => ({
-        id: m.id,
-        text: m.text,
-        category: m.category as "preference",
-        until: m.until?.toISOString() ?? null,
-        createdAt: m.createdAt.toISOString(),
-      })),
-    );
+    const current = bot.memories
+      .map(
+        (m) =>
+          `- ${m.id} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
+      )
+      .join("\n");
     const prompt = buildCapturePrompt({
       botName: bot.name,
       transcript: window.lines.join("\n"),
       currentMemories: current,
     });
-    const model = deps.sideCall.models.getModel(GATEWAY_PROVIDER, deps.sideCall.modelId);
+    const model = resolveCaptureModel(deps.sideCall.models, deps.sideCall.modelId);
     if (!model) return;
     const reply = await withTimeout(
       deps.sideCall.models.completeSimple(model, {
@@ -130,6 +136,10 @@ export async function captureConversation(
       CAPTURE_TIMEOUT_MS,
     );
     const extraction = parseExtraction(reply as { content?: unknown[] });
+    if (extraction === null) {
+      logger.warn({ conversationId }, "Memory capture output unparseable; window will retry");
+      return;
+    }
     const result = await applyExtraction(bot.id, extraction, window.through);
     logger.info({ conversationId, ...result }, "Memory capture complete");
   } catch (error) {

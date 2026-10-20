@@ -23,8 +23,9 @@ new rows, so a crash before commit re-runs the window harmlessly (exact-text
 dedupe absorbs the repeat).
 
 Constants live in `memories.domain.ts`: 100 active rows, 300 chars per row,
-~6 000 char render cap, 2-minute quiet window, 6-turn trigger, 200-byte
-trivial threshold.
+a 6 000-char render cap on the injected block (newest entries win; the same
+cap applies to the capture-side context), 2-minute quiet window, 6-turn
+trigger, 200-byte trivial threshold (UTF-8 bytes).
 
 ## Injection
 
@@ -39,8 +40,10 @@ provider prompt caching survives between captures.
 ## Capture
 
 `memories.capture.ts` + `memories.runner.ts`. An `onActivity` listener arms a
-per-conversation debounce; 2 minutes quiet or 6 owner turns fires one gateway
-side-call (`MEMORY_CAPTURE_MODEL` when set, else the default). Skip rules run
+per-conversation debounce; 2 minutes quiet or 6 idle transitions (any reply
+completing, including peer deliveries — extraction still filters to
+owner-authored turns) fires one gateway side-call (`MEMORY_CAPTURE_MODEL`
+when set, else the default). Captures never overlap per conversation. Skip rules run
 before any model call: memory off, no model (faux mode, missing gateway),
 trivial window (advances the watermark without a call), no owner turns since
 the watermark. Peer deliveries and routine fires are not memory sources —
@@ -49,10 +52,11 @@ only owner-authored turns count.
 The extraction prompt carries the anti-junk contract (owner's words only,
 third-person single sentences, no secrets or quoted text, `until` dates,
 `supersedesIds` for contradictions) and returns JSON. `applyExtraction`
-applies it in code: exact-text dedupe against all rows including tombstones
-(a deleted fact is never re-added), supersession validated to same-bot rows,
-budget archive of the oldest active rows, watermark bump — one transaction.
-Malformed output is dropped whole.
+applies it in code: trimmed, case-insensitive text dedupe against all rows
+including tombstones (a deleted fact is never re-added), supersession
+validated to same-bot rows, watermark bump — one transaction, with budget
+archival of the oldest active rows inside the same commit. Unparseable output
+returns null and leaves the watermark unchanged, so the window retries.
 
 ## API
 

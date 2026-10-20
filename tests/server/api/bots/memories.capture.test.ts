@@ -11,11 +11,14 @@ import {
   captureConversation,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
 
-async function seedBot(): Promise<string> {
+const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
+
+async function seedBot(): Promise<{ botId: string; conversationId: number }> {
+  const conv = conversationId();
   const bot = await prisma.bot.create({
-    data: { name: "Cap", modelId: "m", conversationId: `c${Math.random().toString(36).slice(2)}` },
+    data: { name: "Cap", modelId: "m", conversationId: String(conv) },
   });
-  return bot.id;
+  return { botId: bot.id, conversationId: conv };
 }
 
 describe("buildCapturePrompt", () => {
@@ -44,23 +47,23 @@ describe("parseExtraction", () => {
     expect(parsed[0].text).toBe("Likes tea");
   });
 
-  it("drops malformed output whole", () => {
-    expect(parseExtraction({ content: [{ type: "text", text: "not json" }] })).toEqual([]);
+  it("returns null for malformed output so the watermark stays put", () => {
+    expect(parseExtraction({ content: [{ type: "text", text: "not json" }] })).toBeNull();
     expect(
       parseExtraction({
         content: [{ type: "text", text: '[{"text":"x","category":"vibe","confidence":0.5}]' }],
       }),
-    ).toEqual([]);
+    ).toBeNull();
   });
 
-  it("returns [] for a model that says nothing", () => {
-    expect(parseExtraction(undefined)).toEqual([]);
+  it("returns null for a model that says nothing", () => {
+    expect(parseExtraction(undefined)).toBeNull();
   });
 });
 
 describe("applyExtraction", () => {
   it("creates rows and advances the watermark in the same transaction", async () => {
-    const botId = await seedBot();
+    const { botId } = await seedBot();
     const through = new Date();
     const result = await applyExtraction(
       botId,
@@ -73,7 +76,7 @@ describe("applyExtraction", () => {
   });
 
   it("skips exact-text duplicates, including tombstones (never re-add)", async () => {
-    const botId = await seedBot();
+    const { botId } = await seedBot();
     await applyExtraction(
       botId,
       [{ text: "Prefers pnpm", category: "preference", confidence: 0.9 }],
@@ -98,8 +101,8 @@ describe("applyExtraction", () => {
   });
 
   it("supersedes only rows of the same bot", async () => {
-    const botA = await seedBot();
-    const botB = await seedBot();
+    const { botId: botA } = await seedBot();
+    const { botId: botB } = await seedBot();
     const first = await applyExtraction(
       botA,
       [{ text: "Lives in Bangalore", category: "fact", confidence: 0.8 }],
@@ -138,7 +141,7 @@ describe("applyExtraction", () => {
   });
 
   it("archives the oldest active rows past the budget", async () => {
-    const botId = await seedBot();
+    const { botId } = await seedBot();
     const extraction = Array.from({ length: 105 }, (_, i) => ({
       text: `Fact ${i}`,
       category: "fact" as const,
@@ -176,14 +179,16 @@ describe("ownerWindow", () => {
 
 describe("captureConversation skip rules", () => {
   it("makes no model call when memory is disabled", async () => {
-    const botId = await seedBot();
+    const { botId, conversationId } = await seedBot();
     await prisma.bot.update({ where: { id: botId }, data: { memoryEnabled: false } });
     const completeSimple = vi.fn();
-    await captureConversation(Number(botId.split("c")[1] ? 1 : 1), {
+    await captureConversation(conversationId, {
       sideCall: { models: { completeSimple } as never, modelId: "m" },
-      readTranscript: async () => [],
-    }).catch(() => undefined);
+      readTranscript: async () => [{ role: "user", text: "x".repeat(300), createdAt: Date.now() }],
+    });
     expect(completeSimple).not.toHaveBeenCalled();
+    const bot = await prisma.bot.findUnique({ where: { id: botId } });
+    expect(bot?.memoryCapturedThrough).toBeNull();
   });
 
   it("advances the watermark without a call for a trivial window", async () => {
@@ -224,6 +229,43 @@ describe("startMemoryCapture debounce", () => {
     expect(captureNow).not.toHaveBeenCalled();
     vi.advanceTimersByTime(50);
     expect(captureNow).toHaveBeenCalledWith(7);
+    stop();
+    vi.useRealTimers();
+  });
+
+  it("does not run a second capture while one is inflight", async () => {
+    vi.useFakeTimers();
+    const listeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
+    const gates: Array<() => void> = [];
+    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
+    const stop = startMemoryCapture(
+      {
+        onActivity: (l) => {
+          listeners.add(l);
+          return () => listeners.delete(l);
+        },
+      },
+      { models: undefined, captureNow, quietMs: 100_000, turnLimit: 3 },
+    );
+    const emit = () => listeners.forEach((l) => l({ conversation: 9, busy: false }));
+    emit();
+    emit();
+    emit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    emit();
+    emit();
+    emit();
+    emit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1); // still inflight
+    gates[0]!();
+    await vi.advanceTimersByTimeAsync(0);
+    emit();
+    emit();
+    emit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(2);
     stop();
     vi.useRealTimers();
   });

@@ -417,6 +417,13 @@ function MemoryRow({
 
 const INACTIVE_STATUSES: ReadonlySet<string> = new Set(["superseded", "archived", "expired"]);
 
+/** ISO instant → datetime-local value in the browser's timezone. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function MemoryEditor({
   editor,
   onOpenChange,
@@ -446,7 +453,7 @@ function MemoryEditor({
     setText(editor.memory?.text ?? "");
     setCategory(editor.memory?.category ?? "preference");
     // datetime-local wants local wall time; the wire wants an instant.
-    setUntil(editor.memory?.until ? editor.memory.until.slice(0, 16) : "");
+    setUntil(editor.memory?.until ? toLocalInput(editor.memory.until) : "");
     setRestore(editor.memory !== null && INACTIVE_STATUSES.has(editor.memory.status));
   }, [editor, loadedKey]);
 
@@ -454,12 +461,16 @@ function MemoryEditor({
     if (!editor || !text.trim()) return;
     setSaving(true);
     const trimmed = text.trim();
+    // A restore with the old (past) deadline would flip straight back to
+    // expired, so restoring drops a deadline that is already past.
+    let nextUntil = until ? new Date(until).toISOString() : null;
+    if (restore && nextUntil && new Date(nextUntil) <= new Date()) nextUntil = null;
     try {
       if (editor.memory) {
         await botsApi.updateMemory(editor.memory.id, {
           text: trimmed,
           category,
-          until: until ? new Date(until).toISOString() : null,
+          until: nextUntil,
           ...(restore ? { restore: true } : {}),
         });
         toast.success("Memory saved");

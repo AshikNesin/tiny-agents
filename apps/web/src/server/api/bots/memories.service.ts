@@ -110,7 +110,7 @@ export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryR
   if (data.text !== undefined) next.text = data.text;
   if (data.category !== undefined) next.category = data.category;
   if (data.until !== undefined) next.until = data.until ? new Date(data.until) : null;
-  if (data.restore) {
+  if (data.restore && row.status !== "deleted") {
     next.status = "active";
     next.supersededById = null;
     next.supersededAt = null;
@@ -131,6 +131,7 @@ export async function remove(id: string): Promise<{ deleted: true }> {
  * active rows first — never silent truncation of new facts.
  */
 export async function enforceBudget(botId: string): Promise<number> {
+  await sweepExpired(botId);
   const active = await prisma.memory.findMany({
     where: { botId, status: "active" },
     orderBy: { createdAt: "asc" },

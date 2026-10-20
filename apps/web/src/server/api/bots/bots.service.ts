@@ -278,6 +278,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       conversationId: String(conversationId),
       toolkits: JSON.stringify(toolkits),
       toolPermissions: JSON.stringify(toolPermissions),
+      ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
     },
   });
   if (data.skillIds || data.connectionIds) {

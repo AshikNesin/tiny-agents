@@ -11,11 +11,11 @@ import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import {
   extractionResultSchema,
+  MEMORY_MAX_ACTIVE,
   MEMORY_QUIET_MS,
   MEMORY_TURN_LIMIT,
   type ExtractedMemory,
 } from "./memories.domain";
-import { enforceBudget } from "./memories.service";
 
 /** The minimum the capture side-call needs from the runtime's model registry. */
 export interface CaptureModels {
@@ -69,8 +69,14 @@ export function buildCapturePrompt(input: {
   ].join("\n");
 }
 
-/** Parse the side-call reply: first text block, JSON array, validated whole. */
-export function parseExtraction(reply: { content?: unknown[] } | undefined): ExtractedMemory[] {
+/**
+ * Parse the side-call reply: first text block, JSON array, validated whole.
+ * Null means unparseable — distinct from a valid empty extraction, so the
+ * caller leaves the watermark alone and the window retries later.
+ */
+export function parseExtraction(
+  reply: { content?: unknown[] } | undefined,
+): ExtractedMemory[] | null {
   const text = (reply?.content ?? [])
     .filter(
       (b): b is { type: string; text?: string } =>
@@ -81,13 +87,13 @@ export function parseExtraction(reply: { content?: unknown[] } | undefined): Ext
     .trim();
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) return [];
+  if (start === -1 || end === -1 || end < start) return null;
   try {
     const parsed: unknown = JSON.parse(text.slice(start, end + 1));
     const result = extractionResultSchema.safeParse(parsed);
-    return result.success ? result.data : [];
+    return result.success ? result.data : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -115,6 +121,7 @@ export async function applyExtraction(
   let superseded = 0;
   let skipped = 0;
   const result = await prisma.$transaction(async (tx) => {
+    const now = new Date();
     const seen = new Set<string>();
     for (const item of extraction) {
       const key = item.text.trim().toLowerCase();
@@ -146,11 +153,24 @@ export async function applyExtraction(
         superseded += validSupersedes.length;
       }
     }
+    // Budget inside the same commit: if archival fails, the window retries.
+    // Expired rows never count toward the active budget.
+    const activeRows = await tx.memory.findMany({
+      where: { botId, status: "active", OR: [{ until: null }, { until: { gt: now } }] },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    const overflow = activeRows.slice(0, Math.max(0, activeRows.length - MEMORY_MAX_ACTIVE));
+    if (overflow.length > 0) {
+      await tx.memory.updateMany({
+        where: { id: { in: overflow.map((m) => m.id) } },
+        data: { status: "archived" },
+      });
+    }
     await tx.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
+    return { created, superseded, skipped };
   });
-  void result;
-  await enforceBudget(botId);
-  return { created, superseded, skipped };
+  return result;
 }
 
 interface PendingCapture {
@@ -176,6 +196,19 @@ export function startMemoryCapture(
   const quietMs = deps.quietMs ?? MEMORY_QUIET_MS;
   const turnLimit = deps.turnLimit ?? MEMORY_TURN_LIMIT;
   const pending = new Map<number, PendingCapture>();
+  // One capture per conversation at a time: overlapping captures could both
+  // pass dedupe against the same rows and an older run could overwrite a
+  // newer watermark.
+  const inflight = new Set<number>();
+
+  const run = (conversationId: number) => {
+    if (inflight.has(conversationId)) return;
+    inflight.add(conversationId);
+    void deps
+      .captureNow(conversationId)
+      .catch((error: unknown) => logger.error({ error }, "Memory capture failed"))
+      .finally(() => inflight.delete(conversationId));
+  };
 
   const arm = (conversationId: number, turns: number) => {
     const state = pending.get(conversationId) ?? { timer: null, turns: 0 };
@@ -183,16 +216,12 @@ export function startMemoryCapture(
     if (state.timer) clearTimeout(state.timer);
     if (turns >= turnLimit) {
       pending.set(conversationId, { timer: null, turns: 0 });
-      void deps
-        .captureNow(conversationId)
-        .catch((error: unknown) => logger.error({ error }, "Memory capture failed"));
+      run(conversationId);
       return;
     }
     state.timer = setTimeout(() => {
       pending.set(conversationId, { timer: null, turns: 0 });
-      void deps
-        .captureNow(conversationId)
-        .catch((error: unknown) => logger.error({ error }, "Memory capture failed"));
+      run(conversationId);
     }, quietMs);
     pending.set(conversationId, state);
   };

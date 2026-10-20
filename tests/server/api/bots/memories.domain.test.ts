@@ -63,7 +63,7 @@ describe("renderMemoryBlock", () => {
     expect(renderMemoryBlock(memories)).toBe(block);
   });
 
-  it("caps the rendered block at MEMORY_RENDER_CHAR_CAP", () => {
+  it("caps the rendered block and keeps the newest entries", () => {
     const memories = Array.from({ length: 100 }, (_, i) => ({
       ...base,
       id: `m${i}`,
@@ -71,8 +71,22 @@ describe("renderMemoryBlock", () => {
       createdAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString(),
     }));
     const block = renderMemoryBlock(memories)!;
-    expect(block.length).toBeLessThanOrEqual(MEMORY_RENDER_CHAR_CAP + 40);
+    expect(block.length).toBeLessThanOrEqual(MEMORY_RENDER_CHAR_CAP + 60);
+    expect(block).toContain("Fact number 99");
     expect(block).toContain("older memories omitted");
+  });
+
+  it("drops the oldest entries first when the cap overflows", () => {
+    const memories = Array.from({ length: 200 }, (_, i) => ({
+      ...base,
+      id: `m${i}`,
+      text: `Fact ${String(i).padStart(3, "0")} ${"x".repeat(20)}`,
+      createdAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString(),
+    }));
+    const block = renderMemoryBlock(memories)!;
+    expect(block).toContain("Fact 199");
+    expect(block).not.toContain("Fact 000");
+    expect(block).not.toContain("Fact 010");
   });
 
   it("renders the until date as a suffix", () => {
@@ -93,6 +107,13 @@ describe("isExpired", () => {
 });
 
 describe("extractionResultSchema", () => {
+  it("accepts date-only until values from the model", () => {
+    const parsed = extractionResultSchema.parse([
+      { text: "Is in Goa until Friday", category: "fact", confidence: 0.8, until: "2026-10-23" },
+    ]);
+    expect(parsed[0].until).toBe("2026-10-23");
+  });
+
   it("accepts null and normalizes to empty", () => {
     expect(extractionResultSchema.parse(null)).toEqual([]);
   });
