@@ -25,6 +25,12 @@ export const externalPackages = [
   // require()'d only when present.
   "ssh2",
   "cpu-features",
+  // playwright-core lazily requires chromium-bidi for WebDriver-BiDi
+  // channels — a package it does not declare as a dependency, so esbuild
+  // cannot resolve it. We launch with executablePath/channel "chromium",
+  // never bidi-*; keeping the whole package external (deploy installs it
+  // from root deps) sidesteps the dead requires entirely.
+  "playwright-core",
   "better-sqlite3",
   "sqlite3",
   "pg",
