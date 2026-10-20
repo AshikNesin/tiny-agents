@@ -26,7 +26,7 @@ import { EmptyState } from "@groot/ui/empty-state";
 import { Card } from "@groot/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { cn } from "@groot/ui/lib/utils";
-import { PageLayout } from "@groot/shell/components/layout";
+import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { tasksApi, type Task, type TaskInput } from "../../lib/tasks-api";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 
@@ -192,7 +192,7 @@ export function Tasks() {
             maxLength={300}
             aria-label="New task title"
           />
-          <Button type="submit" disabled={!quick.trim()} aria-label="Add task">
+          <Button type="submit" size="lg" disabled={!quick.trim()} aria-label="Add task">
             <Plus className="size-4" />
             <span className="hidden sm:inline">Add</span>
           </Button>

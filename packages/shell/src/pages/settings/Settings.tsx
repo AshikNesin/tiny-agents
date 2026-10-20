@@ -10,7 +10,7 @@ export function Settings() {
     <PageLayout
       title="Settings"
       description="Manage your application preferences, configuration, and security."
-      maxWidth="6xl"
+      maxWidth="5xl"
     >
       <Tabs defaultValue="general">
         <TabsList variant="line">

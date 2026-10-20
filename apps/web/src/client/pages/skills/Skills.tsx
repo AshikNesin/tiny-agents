@@ -12,7 +12,7 @@ import { Card } from "@groot/ui/card";
 import { EmptyState, ErrorState } from "@groot/ui/empty-state";
 import { listRowClass } from "@groot/ui/list-row";
 import { cn } from "@groot/ui/lib/utils";
-import { PageLayout } from "@groot/shell/components/layout";
+import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { skillsApi, type Skill } from "../../lib/skills-api";
 import { CreateSkillDialog } from "../../components/skills/CreateSkillDialog";

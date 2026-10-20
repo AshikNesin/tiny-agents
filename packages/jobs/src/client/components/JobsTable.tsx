@@ -12,7 +12,7 @@ import { tableColumnHeaderClass } from "@groot/ui/table";
 import { listRowGridClass } from "@groot/ui/list-row";
 import { StatusBadge } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
-import { Section } from "@groot/shell/components/layout";
+import { Section } from "@groot/shell/components/layout/Section";
 import { formatDuration, formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
 import { formatJobId } from "@groot/jobs/client/utils";
 import type { Job } from "@groot/jobs/client/types";
