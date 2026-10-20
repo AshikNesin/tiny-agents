@@ -52,6 +52,8 @@ export interface Bot {
   toolPermissions: Record<string, ToolPermission>;
   skillIds: string[];
   connectionIds: string[];
+  /** Memory capture + injection switch (issue #22). */
+  memoryEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,7 +94,48 @@ export interface BotInput {
   toolPermissions?: Record<string, ToolPermission>;
   skillIds?: string[];
   connectionIds?: string[];
+  memoryEnabled?: boolean;
 }
+
+export const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+/** Only `active` is ever injected; the rest is visible history (issue #22 5.4). */
+export type MemoryStatus = "active" | "superseded" | "archived" | "expired" | "deleted";
+
+export type MemorySource = "capture" | "manual";
+
+/** Category display order, the same order the injected block renders in. */
+export const CATEGORY_ORDER: readonly MemoryCategory[] = ["preference", "fact", "goal", "habit"];
+
+export const MEMORY_TEXT_MAX = 300;
+
+/** A memory row as the API returns it (ISO dates, typed enums). */
+export interface MemoryRecord {
+  id: string;
+  botId: string;
+  text: string;
+  category: MemoryCategory;
+  status: MemoryStatus;
+  source: MemorySource;
+  confidence: number | null;
+  until: string | null;
+  supersededById: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryInput {
+  text: string;
+  category: MemoryCategory;
+  until?: string | null;
+}
+
+export type MemoryUpdate = Partial<Pick<MemoryInput, "text" | "category">> & {
+  until?: string | null;
+  restore?: boolean;
+};
 
 // Capabilities are static per server boot, and every chat/dialog mount asks
 // for them, so memoize the promise: one request serves the whole session
@@ -153,4 +196,11 @@ export const botsApi = {
     decision: "approved" | "denied",
     alwaysAllow?: string,
   ) => apiClient.post(`/bots/${id}/approvals/${taskId}`, { decision, alwaysAllow }),
+  listMemories: (id: string, includeArchived = true) =>
+    apiClient.get<{ memories: MemoryRecord[] }>(`/bots/${id}/memories`, { includeArchived }),
+  createMemory: (id: string, input: MemoryInput) =>
+    apiClient.post<{ memory: MemoryRecord }>(`/bots/${id}/memories`, input),
+  updateMemory: (id: string, input: MemoryUpdate) =>
+    apiClient.patch<{ memory: MemoryRecord }>(`/memories/${id}`, input),
+  deleteMemory: (id: string) => apiClient.delete<{ deleted: boolean }>(`/memories/${id}`),
 };
