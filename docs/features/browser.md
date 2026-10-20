@@ -52,14 +52,23 @@ CDP session per page
 `BROWSER_EXECUTABLE_PATH`, `BROWSER_IDLE_MINUTES`,
 `BROWSER_ALLOWED_PRIVATE_HOSTS` (all optional; see `.env.schema`).
 
-**Binary resolution order** — no env var required on our deploys:
+**Where chromium runs** — on deploys, not in the app container:
 
-1. `BROWSER_EXECUTABLE_PATH` if set
-2. `/headless-shell/headless-shell` (the exe.dev VM's pre-provisioned shell)
-3. `/usr/bin/chromium` (Debian's apt chromium; `railpack.json` installs it
-   into the deploy image via `aptPackages`)
-4. Playwright's bundled Chromium (requires
-   `pnpm exec playwright install chromium` in the build)
+- `SANDBOX_HOST` set (production): the browser runs **on that VM**. Each bot
+  session SSHes in (keyless Tailscale, same channel as the sandbox toolkit),
+  starts a per-profile headless-shell with CDP bound to 127.0.0.1 on the VM,
+  and tunnels it back through the same connection. No browser bytes in the
+  app container; no exposed ports; closing a session kills the remote
+  chromium.
+- `BROWSER_EXECUTABLE_PATH` set: a local binary (dev overrides).
+- Neither: local fallbacks — `/headless-shell/headless-shell` (exe.dev VM),
+  `/usr/bin/chromium` (Debian apt, via `railpack.json` `aptPackages`), then
+  Playwright's bundled Chromium (`pnpm exec playwright install chromium`).
 
-Without any of these, `browser_navigate` returns a setup hint naming all
-three options and nothing else breaks.
+Without any of these, `browser_navigate` returns a setup hint naming the
+options and nothing else breaks.
+
+Tailscale-SSH realities the remote transport encodes (verified live): after
+a direct-tcpip channel closes, later channels on the same connection stall —
+each incoming socket dials a fresh SSH connection; and the ~50ms dial must
+buffer the socket's first bytes or CDP's opening HTTP request is lost.
