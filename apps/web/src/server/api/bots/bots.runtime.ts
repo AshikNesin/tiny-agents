@@ -9,7 +9,9 @@
 import {
   AgentRuntime,
   createBotsToolkit,
+  createMemoryHostKeyStore,
   createRoutinesToolkit,
+  createSandboxToolkit,
   createSkillsCapability,
   createTasksToolkit,
   createTimeToolkit,
@@ -18,10 +20,12 @@ import {
   createWebToolkit,
   type BotMessagingStore,
   type Capability,
+  type HostKeyStore,
 } from "@tiny-agents/agent";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
 import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
+import { createNamespaceKv } from "@groot/core/kv";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { createBotMessagingStore } from "./bots.messaging";
@@ -49,7 +53,34 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       apiBase: unquote(env.CLOUDFLARE_API_BASE_URL),
     }),
     createTimeToolkit({ timeZone: unquote(env.TZ) }),
+    createSandboxToolkit({
+      host: unquote(env.SANDBOX_HOST),
+      port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
+      user: unquote(env.SANDBOX_USER),
+      hostKeys: kvHostKeyStore(),
+    }),
   ];
+}
+
+/**
+ * The sandbox's TOFU host-key pins, one per host, persisted through the app's
+ * KV (the `keyv` table) so a restart remembers what it trusted on first connect.
+ */
+/** One KV-backed TOFU store per process; memory fallback keeps tests key-free. */
+function kvHostKeyStore(): HostKeyStore {
+  try {
+    const kv = createNamespaceKv("SANDBOX");
+    return {
+      async get(host) {
+        return (await kv.get<string>(host)) ?? undefined;
+      },
+      async set(host, hash) {
+        await kv.set(host, hash);
+      },
+    };
+  } catch {
+    return createMemoryHostKeyStore();
+  }
 }
 
 /** Bot-to-bot messaging (issue #12). The store needs the live runtime for submits. */

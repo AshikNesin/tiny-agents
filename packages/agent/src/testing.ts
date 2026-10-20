@@ -83,3 +83,9 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     settings: { retry: { enabled: false }, ...rest.settings },
   });
 }
+/** In-process SSH server (issue #19 sandbox tests): none-auth, canned exec, real SFTP. */
+export {
+  startFakeSandboxServer,
+  type FakeSandboxServer,
+  type ExecHandler,
+} from "./testing-ssh-server";
