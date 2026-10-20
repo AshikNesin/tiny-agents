@@ -30,6 +30,8 @@ export interface BotListEntry {
   modelId: string;
   lastMessagePreview: string | null;
   lastActivityAt: string;
+  /** Pre-open read marker (epoch ms) — the open-at-unread scroll uses it. */
+  lastReadAt: string | null;
   unread: boolean;
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */

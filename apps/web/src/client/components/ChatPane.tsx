@@ -51,7 +51,17 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from "./ui/message-scroller";
+
+/**
+ * Primary-pointer media query (pointer: coarse = touch, e.g. phones and
+ * tablets). On such devices Enter inserts a newline and only the send
+ * button sends — Enter-to-send is a physical-keyboard affordance (issue #1).
+ */
+function prefersCoarsePointer(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+}
 
 interface ChatPaneProps {
   bot: Bot;
@@ -62,8 +72,24 @@ interface ChatPaneProps {
   onBotReset: (bot: Bot) => void;
 }
 
-/** Column 3 (PRD §6.2): header, transcript, composer. */
-export function ChatPane({
+/**
+ * Column 3 (PRD §6.2): header, transcript, composer. Thin shell — the
+ * transcript needs `useMessageScroller` *inside* the scroller Provider, so
+ * the pane body is a child component.
+ */
+export function ChatPane(props: ChatPaneProps) {
+  return (
+    // `last-anchor` opens the transcript on the newest read (anchored)
+    // message — WhatsApp-style first-unread positioning (issue #2b) —
+    // instead of jumping to the very top of the history. `autoScroll` then
+    // keeps the newest message pinned while the reader is at the bottom.
+    <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+      <ChatPaneBody {...props} />
+    </MessageScrollerProvider>
+  );
+}
+
+function ChatPaneBody({
   bot,
   models,
   gatewayConfigured,
@@ -90,6 +116,8 @@ export function ChatPane({
   const pasteCount = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
+  const scroller = useMessageScroller();
+  const coarsePointer = useMemo(prefersCoarsePointer, []);
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
@@ -133,6 +161,16 @@ export function ChatPane({
   const messages = chat?.messages ?? [];
   const pending = chat?.pending ?? [];
   const busy = chat?.busy ?? false;
+
+  // Read/unread split (issue #3): messages older than the frozen pre-open
+  // marker are read; the rest arrived while the owner was away. The first
+  // unread gets the "New messages" divider above it, and read items are the
+  // scroller's anchors — `last-anchor` opens on the newest read message
+  // (WhatsApp-style), with the unread block peeking in below it.
+  const unreadFrom = chat?.unreadFrom ?? null;
+  const firstUnreadIndex = messages.findIndex((m) => m.createdAt > (unreadFrom ?? 0));
+  const isRead = (i: number) => firstUnreadIndex === -1 || i < firstUnreadIndex;
+
   const modelKnown = models.some((m) => m.id === bot.modelId);
   const model = models.find((m) => m.id === bot.modelId);
   const uploading = staged.some((item) => item.status === "uploading");
@@ -194,6 +232,9 @@ export function ChatPane({
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     const mentions = mentionedBotIds(body, mentionCandidates, bot.id);
+    // Keep the just-sent message visible: the reader may be scrolled up in
+    // the history, and sending is an explicit jump-to-now (issue #2a).
+    scroller.scrollToEnd({ behavior: "auto" });
     // Optimistic echo: show the message immediately; the SSE snapshot/upsert
     // replaces it once the server confirms (store dedupes by text and
     // attachment ids). If the POST fails the echo is withdrawn and the text
@@ -349,93 +390,99 @@ export function ChatPane({
       )}
 
       {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
-          message pinned unless the reader scrolled up) */}
+          message pinned unless the reader scrolled up). The provider mounts
+          at the pane root so the body can drive it (send → scroll to end). */}
       <div className="relative min-h-0 flex-1">
-        <MessageScrollerProvider>
-          <MessageScroller className="h-full">
-            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
-              <MessageScrollerContent className="space-y-3">
-                {messages.length === 0 && pending.length === 0 && (
-                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
-                    <BotAvatar name={bot.name} className="size-20" />
-                    <div className="max-w-sm">
-                      <p className="text-foreground text-lg font-semibold">{bot.name}</p>
-                      {bot.description ? (
-                        <p className="mt-1 text-sm">{bot.description}</p>
-                      ) : (
-                        <p className="mt-1 text-sm">Say hi to start the conversation.</p>
-                      )}
-                    </div>
+        <MessageScroller className="h-full">
+          <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 py-4">
+            <MessageScrollerContent className="space-y-3">
+              {messages.length === 0 && pending.length === 0 && (
+                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
+                  <BotAvatar name={bot.name} className="size-20" />
+                  <div className="max-w-sm">
+                    <p className="text-foreground text-lg font-semibold">{bot.name}</p>
+                    {bot.description ? (
+                      <p className="mt-1 text-sm">{bot.description}</p>
+                    ) : (
+                      <p className="mt-1 text-sm">Say hi to start the conversation.</p>
+                    )}
                   </div>
-                )}
-                {messages.map((message, i) => {
-                  const prev = messages[i - 1];
+                </div>
+              )}
+              {messages.map((message, i) => {
+                const prev = messages[i - 1];
+                const showDay =
+                  !prev ||
+                  new Date(prev.createdAt).toDateString() !==
+                    new Date(message.createdAt).toDateString();
+                return (
+                  <Fragment key={message.id}>
+                    {showDay && (
+                      <div className="text-muted-foreground flex justify-center py-2 text-xs">
+                        {formatDayDivider(message.createdAt)}
+                      </div>
+                    )}
+                    {firstUnreadIndex === i && (
+                      <div
+                        data-testid="unread-divider"
+                        className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
+                      >
+                        <span className="bg-border h-px flex-1" aria-hidden="true" />
+                        New messages
+                        <span className="bg-border h-px flex-1" aria-hidden="true" />
+                      </div>
+                    )}
+                    <MessageScrollerItem messageId={message.id} scrollAnchor={isRead(i)}>
+                      <ChatMessageView
+                        message={message}
+                        botName={bot.name}
+                        botId={bot.id}
+                        toolLabels={toolLabels}
+                      />
+                    </MessageScrollerItem>
+                  </Fragment>
+                );
+              })}
+              {pending.length > 0 &&
+                (() => {
+                  const last = messages[messages.length - 1];
                   const showDay =
-                    !prev ||
-                    new Date(prev.createdAt).toDateString() !==
-                      new Date(message.createdAt).toDateString();
+                    !last ||
+                    new Date(last.createdAt).toDateString() !==
+                      new Date(pending[0].createdAt).toDateString();
                   return (
-                    <Fragment key={message.id}>
+                    <Fragment>
                       {showDay && (
                         <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                          {formatDayDivider(message.createdAt)}
+                          {formatDayDivider(pending[0].createdAt)}
                         </div>
                       )}
-                      <MessageScrollerItem
-                        messageId={message.id}
-                        scrollAnchor={message.role === "user"}
-                      >
-                        <ChatMessageView
-                          message={message}
-                          botName={bot.name}
-                          botId={bot.id}
-                          toolLabels={toolLabels}
-                        />
-                      </MessageScrollerItem>
+                      {pending.map((p) => (
+                        <MessageScrollerItem key={p.id} messageId={p.id}>
+                          <ChatMessageView
+                            message={{
+                              id: p.id,
+                              role: "user",
+                              text: p.text,
+                              ...(p.attachments?.length ? { attachments: p.attachments } : {}),
+                              status: "streaming",
+                              createdAt: p.createdAt,
+                            }}
+                            botName={bot.name}
+                          />
+                        </MessageScrollerItem>
+                      ))}
                     </Fragment>
                   );
-                })}
-                {pending.length > 0 &&
-                  (() => {
-                    const last = messages[messages.length - 1];
-                    const showDay =
-                      !last ||
-                      new Date(last.createdAt).toDateString() !==
-                        new Date(pending[0].createdAt).toDateString();
-                    return (
-                      <Fragment>
-                        {showDay && (
-                          <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                            {formatDayDivider(pending[0].createdAt)}
-                          </div>
-                        )}
-                        {pending.map((p) => (
-                          <MessageScrollerItem key={p.id} messageId={p.id} scrollAnchor>
-                            <ChatMessageView
-                              message={{
-                                id: p.id,
-                                role: "user",
-                                text: p.text,
-                                ...(p.attachments?.length ? { attachments: p.attachments } : {}),
-                                status: "streaming",
-                                createdAt: p.createdAt,
-                              }}
-                              botName={bot.name}
-                            />
-                          </MessageScrollerItem>
-                        ))}
-                      </Fragment>
-                    );
-                  })()}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton
-              direction="end"
-              className="absolute right-4 bottom-4"
-              aria-label="Jump to the latest message"
-            />
-          </MessageScroller>
-        </MessageScrollerProvider>
+                })()}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton
+            direction="end"
+            className="absolute right-4 bottom-4"
+            aria-label="Jump to the latest message"
+          />
+        </MessageScroller>
       </div>
 
       {/* Composer - Grok-style: a single rounded pill with the send/stop
@@ -514,7 +561,10 @@ export function ChatPane({
               }}
               onKeyDown={(e) => {
                 if (mentionRef.current?.handleKeyDown(e)) return;
-                if (e.key === "Enter" && !e.shiftKey) {
+                // Enter sends only on a physical keyboard (fine pointer).
+                // On touch (pointer: coarse) Enter inserts a newline and the
+                // send button is the only way to send (issue #1).
+                if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
                   e.preventDefault();
                   void send();
                 }

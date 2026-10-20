@@ -193,6 +193,8 @@ export interface BotListEntry {
   modelId: string;
   lastMessagePreview: string | null;
   lastActivityAt: Date;
+  /** Pre-open read marker; the client opens at the first message after it. */
+  lastReadAt: Date | null;
   unread: boolean;
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */
@@ -208,6 +210,7 @@ function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotList
     modelId: bot.modelId,
     lastMessagePreview: bot.lastMessagePreview,
     lastActivityAt: bot.lastActivityAt,
+    lastReadAt: bot.lastReadAt,
     unread: isUnread(bot),
     replying,
     approvals,

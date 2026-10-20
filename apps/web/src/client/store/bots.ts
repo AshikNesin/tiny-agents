@@ -64,13 +64,15 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
     case "snapshot":
       // A fresh snapshot is authoritative: drop every pending echo whose
       // text now appears as a real user message (confirmed), keep the rest
-      // (still in flight).
+      // (still in flight). `unreadFrom` is session state, not stream state,
+      // so it survives the replacement.
       return {
         ...event.state,
         connected: true,
         pending: state.pending.filter(
           (p) => !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)),
         ),
+        unreadFrom: state.unreadFrom,
       };
     case "busy":
       return { ...state, busy: event.busy };
@@ -150,6 +152,9 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   },
 
   markRead: (botId) => {
+    // The durable marker lives on the bot row (server lastReadAt); it is
+    // frozen into chat state as `unreadFrom` at connect time, so there is
+    // nothing to advance here — just clear the badge and persist.
     set((state) => ({
       bots: state.bots.map((bot) => (bot.id === botId ? { ...bot, unread: false } : bot)),
     }));
@@ -160,10 +165,24 @@ export const useBotsStore = create<BotsState>((set, get) => ({
 
   connectChat: (botId) => {
     if (chatConnections.has(botId)) return;
+    // Freeze the pre-open read marker: everything newer arrived while the
+    // owner was away and renders below the "new messages" divider. The
+    // live marker advances via markRead; this one stays put for the open
+    // session (WhatsApp-style unread divider).
+    // The Bot (full) and BotListEntry (list) rows both carry lastReadAt.
+    const bot = get().bots.find((b) => b.id === botId);
+    const marker = bot?.lastReadAt;
+    const unreadFrom = marker ? Date.parse(marker) : null;
     set((s) => ({
       chats: {
         ...s.chats,
-        [botId]: s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false },
+        [botId]: s.chats[botId] ?? {
+          messages: [],
+          busy: false,
+          pending: [],
+          connected: false,
+          unreadFrom: Number.isNaN(unreadFrom) ? null : unreadFrom,
+        },
       },
     }));
     const connection = subscribeSse(
@@ -175,7 +194,13 @@ export const useBotsStore = create<BotsState>((set, get) => ({
             chats: {
               ...s.chats,
               [botId]: {
-                ...(s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false }),
+                ...(s.chats[botId] ?? {
+                  messages: [],
+                  busy: false,
+                  pending: [],
+                  connected: false,
+                  unreadFrom: null,
+                }),
                 connected: false,
               },
             },
@@ -209,7 +234,13 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       chats: {
         ...s.chats,
         [botId]: applyEvent(
-          s.chats[botId] ?? { messages: [], busy: false, pending: [], connected: false },
+          s.chats[botId] ?? {
+            messages: [],
+            busy: false,
+            pending: [],
+            connected: false,
+            unreadFrom: null,
+          },
           event,
         ),
       },

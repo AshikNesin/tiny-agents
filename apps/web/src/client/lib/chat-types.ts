@@ -1,5 +1,6 @@
 /** Chat stream shapes shared by the SSE client and the UI. Mirrors
- * `@tiny-agents/agent` ChatEvent/ChatState (server sends them verbatim). */
+ * `@tiny-agents/agent` ChatEvent/ChatState (server sends them verbatim).
+ * Client-only additions live here: `connected`, `pending`, `unreadFrom`. */
 export type ChatMessageStatus = "done" | "streaming" | "stopped" | "error" | "unanswered";
 
 export type ChatToolStatus =
@@ -69,6 +70,12 @@ export interface ChatState {
   pending: PendingMessage[];
   /** False while the SSE stream is down (backend restart, network drop). */
   connected: boolean;
+  /**
+   * Pre-open read marker (epoch ms), seeded once when the chat connects and
+   * never advanced: messages newer than it arrived while the owner was away.
+   * Drives the WhatsApp-style "new messages" divider (issue #3).
+   */
+  unreadFrom: number | null;
 }
 
 export type ActivityEvent =
