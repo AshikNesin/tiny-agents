@@ -347,6 +347,7 @@ describe("Bots API routes", () => {
       new Promise<string>((resolveEnd, rejectEnd) => {
         let text = "";
         let ended = false;
+        let counted = false;
         const timer = setTimeout(() => rejectEnd(new Error(`${path} never ended`)), 3_000);
         request(app)
           .get(path)
@@ -357,7 +358,12 @@ describe("Bots API routes", () => {
             response.on("data", (chunk: string) => {
               text += chunk;
               // Both streams are open and have sent their snapshot: shut down.
-              if (!ended && text.includes("data:")) opened();
+              // Latch: one `data:` per stream, however many chunks deliver it —
+              // chunked delivery (postgres) would otherwise double-fire opened().
+              if (!counted && text.includes("data:")) {
+                counted = true;
+                opened();
+              }
             });
             response.on("end", () => {
               ended = true;
