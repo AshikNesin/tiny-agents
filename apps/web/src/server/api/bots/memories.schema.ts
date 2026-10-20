@@ -3,7 +3,8 @@ import { z } from "zod";
 import { MEMORY_TEXT_MAX, memoryCategorySchema, memoryTextSchema } from "./memories.domain";
 
 export const listMemoriesSchema = z.object({
-  includeArchived: z.coerce.boolean().optional().default(false),
+  // stringbool, not coerce: coerce.boolean() would read the string "false" as true.
+  includeArchived: z.stringbool().optional().default(false),
 });
 
 export const createMemorySchema = z.object({

@@ -178,6 +178,19 @@ describe("Memories API routes", () => {
     expect(statuses).toContain("expired");
   });
 
+  it("treats the string 'false' as false for includeArchived", async () => {
+    const botId = await seedBot(app);
+    await prisma.memory.create({
+      data: { botId, text: "Archived one", category: "fact", status: "archived", source: "manual" },
+    });
+    const list = await request(app)
+      .get(`/api/v1/bots/${botId}/memories`)
+      .set(authorization)
+      .query({ includeArchived: "false" })
+      .expect(200);
+    expect(list.body.data.memories).toHaveLength(0);
+  });
+
   it("404s for a missing bot and a missing memory", async () => {
     const botId = await seedBot(app);
     await request(app).get("/api/v1/bots/nope/memories").set(authorization).expect(404);
