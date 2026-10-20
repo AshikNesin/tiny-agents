@@ -46,6 +46,10 @@ export interface BotRow {
   toolkits: string;
   /** JSON object: tool name → permission. */
   toolPermissions: string;
+  /** Memory capture + injection switch (issue #22). */
+  memoryEnabled: boolean;
+  /** Transcript watermark: owner turns captured through this instant. */
+  memoryCapturedThrough: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -158,6 +162,7 @@ export function agentConfig(
         // longer reach the model once images go inline).
         ...bot.toolkits.filter((id) => !seesImages || id !== "vision"),
         "skills",
+        "memory",
         ...(seesImages ? [] : ["vision"]),
         ...(bot.connectionCapabilities ?? []),
         ...(largeServer ? ["tool-search"] : []),
@@ -273,6 +278,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       conversationId: String(conversationId),
       toolkits: JSON.stringify(toolkits),
       toolPermissions: JSON.stringify(toolPermissions),
+      ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
     },
   });
   if (data.skillIds || data.connectionIds) {
@@ -360,6 +366,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.systemPrompt !== undefined ? { systemPrompt } : {}),
       ...(data.modelId !== undefined ? { modelId } : {}),
+      ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
     },
   });
   return getBot(id);

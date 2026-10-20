@@ -54,6 +54,7 @@ const HOST: Bot = {
   toolPermissions: {},
   skillIds: [],
   connectionIds: [],
+  memoryEnabled: true,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

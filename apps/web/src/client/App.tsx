@@ -17,6 +17,7 @@ import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
 import {
   Bot,
   BotMessageSquare,
+  Brain,
   CalendarClock,
   History,
   ListTodo,
@@ -28,6 +29,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { SkillsPage } from "./pages/skills/Skills";
+import { MemoryPage } from "./pages/memory";
 import { ConnectionsPage } from "./pages/connections/Connections";
 import { useBotsStore } from "./store/bots";
 
@@ -63,6 +65,7 @@ const NAVIGATION_COMMAND_GROUP: CommandGroupEntry = {
     { label: "Tasks", icon: ListTodo, onSelect: () => window.location.assign("/tasks") },
     { label: "Routines", icon: CalendarClock, onSelect: () => window.location.assign("/routines") },
     { label: "Skills", icon: Sparkles, onSelect: () => window.location.assign("/skills") },
+    { label: "Memory", icon: Brain, onSelect: () => window.location.assign("/memory") },
     { label: "Connections", icon: Plug, onSelect: () => window.location.assign("/connections") },
   ],
 };
@@ -110,6 +113,7 @@ const SHELL_CONFIG: ShellConfig = {
     { label: "Tasks", icon: ListTodo, to: "/tasks" },
     { label: "Routines", icon: CalendarClock, to: "/routines" },
     { label: "Skills", icon: Sparkles, to: "/skills" },
+    { label: "Memory", icon: Brain, to: "/memory" },
     { label: "Connections", icon: Plug, to: "/connections" },
     { label: "Settings", icon: SettingsIcon, to: "/settings" },
   ],
@@ -164,6 +168,7 @@ function App() {
                 <Route path="routines" element={<Routines />} />
                 <Route path="skills" element={<SkillsPage />} />
                 <Route path="skills/:id" element={<SkillsPage />} />
+                <Route path="memory" element={<MemoryPage />} />
                 <Route path="connections" element={<ConnectionsPage />} />
                 <Route path="connections/:id" element={<ConnectionsPage />} />
                 <Route path="storage" element={<Storage />} />

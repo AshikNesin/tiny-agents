@@ -220,7 +220,7 @@ describe("Bots API routes", () => {
       modelId: createPayload.modelId,
       systemPrompt: createPayload.systemPrompt,
       // New bots start with no toolkits (issue #1 D2); skills only lists assigned ones.
-      capabilities: { enabled: ["skills", "vision"], permissions: {} },
+      capabilities: { enabled: ["skills", "memory", "vision"], permissions: {} },
     });
 
     const bot = await prisma.bot.findUnique({ where: { id: response.body.data.id } });
@@ -265,7 +265,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Use bullet points.",
-      capabilities: { enabled: ["skills", "vision"], permissions: {} },
+      capabilities: { enabled: ["skills", "memory", "vision"], permissions: {} },
     });
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
       name: "Edited helper",
@@ -347,6 +347,7 @@ describe("Bots API routes", () => {
       new Promise<string>((resolveEnd, rejectEnd) => {
         let text = "";
         let ended = false;
+        let counted = false;
         const timer = setTimeout(() => rejectEnd(new Error(`${path} never ended`)), 3_000);
         request(app)
           .get(path)
@@ -357,7 +358,12 @@ describe("Bots API routes", () => {
             response.on("data", (chunk: string) => {
               text += chunk;
               // Both streams are open and have sent their snapshot: shut down.
-              if (!ended && text.includes("data:")) opened();
+              // Latch: one `data:` per stream, however many chunks deliver it —
+              // chunked delivery (postgres) would otherwise double-fire opened().
+              if (!counted && text.includes("data:")) {
+                counted = true;
+                opened();
+              }
             });
             response.on("end", () => {
               ended = true;
@@ -400,7 +406,10 @@ describe("Bots API routes", () => {
     });
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        capabilities: { enabled: ["web", "skills", "vision"], permissions: { web_fetch: "ask" } },
+        capabilities: {
+          enabled: ["web", "skills", "memory", "vision"],
+          permissions: { web_fetch: "ask" },
+        },
       }),
     );
 
@@ -414,7 +423,7 @@ describe("Bots API routes", () => {
       modelId: "known-model",
       systemPrompt: "Be precise.",
       capabilities: {
-        enabled: ["tasks", "web", "skills", "vision"],
+        enabled: ["tasks", "web", "skills", "memory", "vision"],
         permissions: { web_fetch: "ask" },
       },
     });
@@ -438,7 +447,10 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
       100,
       expect.objectContaining({
-        capabilities: { enabled: ["skills", "vision"], permissions: { send_email: "allow" } },
+        capabilities: {
+          enabled: ["skills", "memory", "vision"],
+          permissions: { send_email: "allow" },
+        },
       }),
     );
     const row = await prisma.bot.findUnique({ where: { id: String(bot.id) } });
@@ -561,6 +573,6 @@ it("drops a stale vision toolkit when the model gained native vision", async () 
   expect(agentRuntime.configure).toHaveBeenCalledWith(777, {
     modelId: "vision-model",
     systemPrompt: "You help.",
-    capabilities: { enabled: ["tasks", "skills"], permissions: {} },
+    capabilities: { enabled: ["tasks", "skills", "memory"], permissions: {} },
   });
 });

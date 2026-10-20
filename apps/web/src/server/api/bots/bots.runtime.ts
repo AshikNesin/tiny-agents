@@ -9,6 +9,7 @@
 import {
   AgentRuntime,
   createBotsToolkit,
+  createMemoryCapability,
   createMemoryHostKeyStore,
   createRoutinesToolkit,
   createSandboxToolkit,
@@ -28,6 +29,7 @@ import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { createNamespaceKv } from "@groot/core/kv";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
+import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createVisionStore } from "../uploads/uploads.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
@@ -44,6 +46,7 @@ const unquote = (value: string | undefined) =>
 export function builtinCapabilities(env: Env = process.env): Capability[] {
   return [
     createSkillsCapability(skillStore),
+    createMemoryCapability(memoryStore),
     createTasksToolkit(taskStore),
     createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({

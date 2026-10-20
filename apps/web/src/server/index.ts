@@ -26,6 +26,8 @@ import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { createBotRelay } from "./api/bots/bots.relay";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
+import { startMemoryCapture } from "./api/bots/memories.capture";
+import { captureConversation, resolveCaptureModelId } from "./api/bots/memories.runner";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -134,6 +136,25 @@ async function main() {
   // restart as failed.
   startRoutinesWatcher(runtime);
 
+  // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
+  // window or 6 turns later one side-call extracts durable facts off the
+  // reply path. Faux/gateway-off modes resolve no capture model and skip.
+  let stopMemoryCapture: (() => void) | undefined;
+  if (process.env.TINY_AGENTS_FAUX !== "1") {
+    stopMemoryCapture = startMemoryCapture(runtime, {
+      models: runtime.models as never,
+      captureNow: (conversationId) =>
+        captureConversation(conversationId, {
+          sideCall: { models: runtime.models as never, modelId: resolveCaptureModelId(runtime) },
+          readTranscript: async (id) => {
+            const sub = await runtime.watchChat(id, () => undefined);
+            void sub.stop();
+            return sub.initial.messages;
+          },
+        }),
+    });
+  }
+
   // Register feature job handlers before routes
   registerJobHandlers();
 
@@ -184,6 +205,9 @@ async function main() {
       // End chat/activity streams first: they hold their HTTP connections
       // open forever, and their watches must stop before the Harness closes.
       endAllSse();
+      // Disarm capture debounce timers before the runtime closes: a firing
+      // timer would call into a closed store.
+      stopMemoryCapture?.();
       await getConnectionManager().close();
       await closeAgentRuntime();
       if (config.jobs.enabled) {
