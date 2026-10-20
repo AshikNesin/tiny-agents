@@ -466,7 +466,12 @@ function checkUrl(raw: string, allowedPrivateHosts?: string): URL {
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/Executable doesn't exist|playwright install|browserType\.launch/.test(message)) {
-    return "No browser is installed on the server. Run `pnpm exec playwright install chromium` first.";
+    return (
+      "No browser is installed on the server. Install one and redeploy: " +
+      'either add "chromium" to railpack.json aptPackages (self-hosted deploys), ' +
+      "or run `pnpm exec playwright install chromium --with-deps` in the build, " +
+      "or set BROWSER_EXECUTABLE_PATH to an existing system binary."
+    );
   }
   return message;
 }

@@ -30,17 +30,22 @@ export interface ChromiumTransportOptions {
 
 /** The exe.dev VM ships a dedicated headless-shell build (Chromium 151). */
 const VM_HEADLESS_SHELL = "/headless-shell/headless-shell";
+/** Debian's apt chromium (installed via railpack aptPackages on deploys). */
+const DEBIAN_CHROMIUM = "/usr/bin/chromium";
 
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
-  // Prefer the pre-provisioned VM binary: no download needed, and
-  // `pnpm exec playwright install` never has to run on this host.
-  try {
-    statSync(VM_HEADLESS_SHELL);
-    return VM_HEADLESS_SHELL;
-  } catch {
-    return undefined; // Playwright's bundled Chromium
+  // Prefer pre-provisioned system binaries: no download needed, and
+  // `pnpm exec playwright install` never has to run on the host.
+  for (const candidate of [VM_HEADLESS_SHELL, DEBIAN_CHROMIUM]) {
+    try {
+      statSync(candidate);
+      return candidate;
+    } catch {
+      // keep looking
+    }
   }
+  return undefined; // Playwright's bundled Chromium
 }
 
 export function createChromiumTransport(options: ChromiumTransportOptions = {}) {

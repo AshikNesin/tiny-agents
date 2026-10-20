@@ -2,6 +2,6 @@
   "$schema": "https://schema.railpack.com",
   "deploy": {
     "startCommand": "pnpm run postinstall && pnpm start",
-    "aptPackages": ["libsqlite3-0"]
+    "aptPackages": ["chromium", "libsqlite3-0"]
   }
 }

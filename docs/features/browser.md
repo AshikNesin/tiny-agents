@@ -50,6 +50,16 @@ CDP session per page
 ## Env
 
 `BROWSER_EXECUTABLE_PATH`, `BROWSER_IDLE_MINUTES`,
-`BROWSER_ALLOWED_PRIVATE_HOSTS` (all optional; see `.env.schema`). Without
-a browser binary, `browser_navigate` returns a setup hint
-(`pnpm exec playwright install chromium`) and nothing else breaks.
+`BROWSER_ALLOWED_PRIVATE_HOSTS` (all optional; see `.env.schema`).
+
+**Binary resolution order** — no env var required on our deploys:
+
+1. `BROWSER_EXECUTABLE_PATH` if set
+2. `/headless-shell/headless-shell` (the exe.dev VM's pre-provisioned shell)
+3. `/usr/bin/chromium` (Debian's apt chromium; `railpack.json` installs it
+   into the deploy image via `aptPackages`)
+4. Playwright's bundled Chromium (requires
+   `pnpm exec playwright install chromium` in the build)
+
+Without any of these, `browser_navigate` returns a setup hint naming all
+three options and nothing else breaks.
