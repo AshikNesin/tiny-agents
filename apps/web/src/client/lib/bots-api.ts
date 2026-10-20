@@ -36,6 +36,8 @@ export interface BotListEntry {
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */
   approvals: number;
+  /** ISO time the owner pinned the bot; null when not pinned. */
+  pinnedAt: string | null;
 }
 
 export interface Bot {
@@ -54,6 +56,7 @@ export interface Bot {
   connectionIds: string[];
   /** Memory capture + injection switch (issue #22). */
   memoryEnabled: boolean;
+  pinnedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -189,6 +192,7 @@ export const botsApi = {
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
+  pin: (id: string, pinned: boolean) => apiClient.post<Bot>(`/bots/${id}/pin`, { pinned }),
   capabilities: () => (capabilitiesCache ??= fetchCapabilities()),
   decideApproval: (
     id: string,

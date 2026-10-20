@@ -117,6 +117,16 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Chat surface tokens: the app defines the values (apps/web app.css); the
+     mappings live here because Tailwind only generates utilities from this
+     stylesheet. */
+  --color-bubble: var(--bubble);
+  --color-bubble-user: var(--bubble-user);
+  --color-bubble-user-foreground: var(--bubble-user-foreground);
+  --color-composer: var(--composer);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-link: var(--link);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

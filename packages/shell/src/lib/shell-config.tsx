@@ -22,6 +22,12 @@ export interface ShellConfig {
   };
   /** Rows shown in the profile menu. Empty disables the menu rows. */
   nav?: NavDestination[];
+  /**
+   * `floating` (default): every page's TopBar carries the circular back
+   * button and profile menu. `sidebar`: the app renders its own persistent
+   * sidebar, so TopBar drops both from md up and keeps title + actions.
+   */
+  pageChrome?: "floating" | "sidebar";
   login?: {
     tagline?: string;
     description?: string;

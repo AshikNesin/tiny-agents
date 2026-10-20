@@ -55,6 +55,7 @@ const HOST: Bot = {
   skillIds: [],
   connectionIds: [],
   memoryEnabled: true,
+  pinnedAt: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -67,6 +68,7 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
         unread: false,
         replying: false,
         approvals: 0,
+        pinnedAt: null,
         lastReadAt: opts.lastReadAt ?? null,
       },
     ],

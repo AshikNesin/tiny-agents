@@ -50,6 +50,8 @@ export interface BotRow {
   memoryEnabled: boolean;
   /** Transcript watermark: owner turns captured through this instant. */
   memoryCapturedThrough: Date | null;
+  /** Set while the bot is pinned to the top of the sidebar. */
+  pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -204,6 +206,7 @@ export interface BotListEntry {
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */
   approvals: number;
+  pinnedAt: Date | null;
 }
 
 function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotListEntry {
@@ -219,6 +222,7 @@ function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotList
     unread: isUnread(bot),
     replying,
     approvals,
+    pinnedAt: bot.pinnedAt,
   };
 }
 
@@ -603,6 +607,15 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
     },
   });
   await retireConversation(rt, bot.conversationId);
+  return getBot(id);
+}
+
+/** Pin or unpin a bot. Row-only: unlike `updateBot` it never reconfigures the conversation. */
+export async function setPinned(id: string, pinned: boolean) {
+  const row = await findBot(id);
+  // Re-pinning an already pinned bot keeps its place in the pinned group.
+  const pinnedAt = pinned ? (row.pinnedAt ?? new Date()) : null;
+  await prisma.bot.update({ where: { id }, data: { pinnedAt } });
   return getBot(id);
 }
 

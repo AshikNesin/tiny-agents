@@ -24,19 +24,19 @@ import {
   TraceLine,
   TraceTitle,
 } from "./ui/trace";
-import { Bubble, BubbleContent } from "./ui/bubble";
 import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import type { Bot } from "../lib/bots-api";
 
+/** Round hover action beside a bubble; always visible on touch, where there is no hover. */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
-      className="text-muted-foreground hover:text-foreground absolute top-0 right-0 opacity-0 transition-opacity group-hover:opacity-100"
+      className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       aria-label="Copy message"
       onClick={async () => {
         try {
@@ -52,6 +52,10 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
+
+/** The owner's pill: dark in light mode, mid-grey in dark (Grok palette). */
+const USER_PILL =
+  "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-3xl px-4 py-3 text-[15px] leading-[22.5px] wrap-break-word";
 
 /** Thinking block: an AI Elements Reasoning step — open while streaming. */
 function Reasoning({ text, running }: { text: string; running: boolean }) {
@@ -346,9 +350,8 @@ export interface ChatMessageViewProps {
 }
 
 /**
- * One transcript row. User messages are right-aligned bubbles (AI Elements
- * Message + Bubble); assistant replies render full-width markdown with the
- * bot avatar and no bubble (PRD §6.2). Tool calls are Trace steps above the
+ * One transcript row. User messages are right-aligned dark pills; assistant
+ * replies are left-aligned light cards with markdown (PRD §6.2). Tool calls are Trace steps above the
  * reply; a call waiting for approval renders its Confirmation card.
  * Compaction entries become a divider marker.
  */
@@ -388,21 +391,21 @@ export function ChatMessageView({
     return (
       <Message align="end" className="group">
         {/* content-visibility on the scroller item breaks percentage
-            max-widths, so the bubble is capped by the flex parent chain
+            max-widths, so the pill is capped by the flex parent chain
             instead of a nested wrapper. */}
-        <div className="relative max-w-[min(85%,48rem)]">
-          <CopyButton text={message.text} />
+        <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
           {message.attachments && message.attachments.length > 0 && (
             <MessageAttachments attachments={message.attachments} />
           )}
           {message.text && (
-            <Bubble align="end" variant="muted" className="max-w-full">
-              <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
+            <div className="flex max-w-full min-w-0 items-center gap-2">
+              <CopyButton text={message.text} />
+              <div className={USER_PILL}>
                 <p className="whitespace-pre-wrap">{message.text}</p>
-              </BubbleContent>
-            </Bubble>
+              </div>
+            </div>
           )}
-          {failed && <p className="text-destructive mt-1 text-right text-xs">{message.error}</p>}
+          {failed && <p className="text-destructive text-right text-xs">{message.error}</p>}
         </div>
       </Message>
     );
@@ -430,17 +433,17 @@ function PeerCard({
     // in a labeled muted bubble.
     return (
       <Message align="end" className="group">
-        <div className="relative max-w-[min(85%,48rem)]">
-          <CopyButton text={text} />
-          <p className="text-muted-foreground px-1 pb-0.5 text-right text-xs">
+        <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
+          <p className="text-muted-foreground px-1 text-right text-xs">
             You · in {peer.hostName}&apos;s chat
           </p>
-          <Bubble align="end" variant="muted" className="max-w-full">
-            <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
+          <div className="flex max-w-full min-w-0 items-center gap-2">
+            <CopyButton text={text} />
+            <div className={USER_PILL}>
               <p className="whitespace-pre-wrap">{text}</p>
-            </BubbleContent>
-          </Bubble>
-          {failed && <p className="text-destructive mt-1 text-right text-xs">{error}</p>}
+            </div>
+          </div>
+          {failed && <p className="text-destructive text-right text-xs">{error}</p>}
         </div>
       </Message>
     );
@@ -500,19 +503,21 @@ export function PeerIncomingCard({
       data-relayed={relayed ? "true" : undefined}
     >
       <BotAvatar name={name} className="mt-1 size-8" />
-      <div className="relative min-w-0 flex-1">
-        <CopyButton text={text} />
+      <div className="min-w-0 flex-1">
         <p className="text-muted-foreground mb-1 flex items-center gap-1.5 px-1 text-xs">
           <MessagesSquare className="size-3" aria-hidden />
           <span className="text-foreground/80 font-medium">{name}</span>
           <span aria-hidden>·</span>
           <span>{relayed ? "reply relayed into this chat" : "messaged you"}</span>
         </p>
-        <div
-          data-slot="reply-card"
-          className="bg-secondary/50 rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed"
-        >
-          <Streamdown>{text}</Streamdown>
+        <div className="flex min-w-0 items-center gap-2">
+          <div
+            data-slot="reply-card"
+            className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
+          >
+            <Streamdown>{text}</Streamdown>
+          </div>
+          <CopyButton text={text} />
         </div>
         {streaming && (
           <span className="text-muted-foreground mt-1 inline-flex items-center gap-1.5 px-1 text-xs">
@@ -541,10 +546,8 @@ function assistantView(
   const hasNotice =
     message.status === "error" || message.status === "stopped" || message.status === "unanswered";
   return (
-    <Message className="group gap-3">
-      <BotAvatar name={botName} className="mt-1 size-8" />
-      <div className="relative min-w-0 flex-1">
-        <CopyButton text={message.text} />
+    <Message className="group">
+      <div className="min-w-0 flex-1">
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mb-2 space-y-1">
             {message.toolCalls.map((call, i) => (
@@ -559,27 +562,30 @@ function assistantView(
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
-        {/* Reply card: a rounded surface with generous padding. Renders only
-            when there is something to show — text, or a terminal status notice.
-            A tool-only turn (empty text, not streaming) shows just its trace
-            rows; rendering the card anyway painted an empty box. */}
+        {/* Reply card: renders only when there is something to show — text,
+            or a terminal status notice. A tool-only turn (empty text, not
+            streaming) shows just its trace rows; rendering the card anyway
+            painted an empty box. */}
         {(message.text || (hasNotice && !streaming)) && (
-          <div
-            data-slot="reply-card"
-            className="bg-secondary/50 rounded-2xl px-4 py-3 text-[15px] leading-relaxed"
-          >
-            <Streamdown>{message.text}</Streamdown>
-            {message.status === "error" && (
-              <p className="text-destructive mt-1 text-xs">
-                {message.error ?? "The model returned an error."}
-              </p>
-            )}
-            {message.status === "stopped" && (
-              <p className="text-muted-foreground mt-1 text-xs">Stopped</p>
-            )}
-            {message.status === "unanswered" && (
-              <p className="text-destructive mt-1 text-xs">{message.error}</p>
-            )}
+          <div className="flex min-w-0 items-center gap-2">
+            <div
+              data-slot="reply-card"
+              className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
+            >
+              <Streamdown>{message.text}</Streamdown>
+              {message.status === "error" && (
+                <p className="text-destructive mt-1 text-xs">
+                  {message.error ?? "The model returned an error."}
+                </p>
+              )}
+              {message.status === "stopped" && (
+                <p className="text-muted-foreground mt-1 text-xs">Stopped</p>
+              )}
+              {message.status === "unanswered" && (
+                <p className="text-destructive mt-1 text-xs">{message.error}</p>
+              )}
+            </div>
+            {message.text && <CopyButton text={message.text} />}
           </div>
         )}
         {streaming && !message.text && (

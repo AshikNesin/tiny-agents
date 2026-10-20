@@ -76,6 +76,21 @@ describe("ChatMessageView reply card", () => {
     expect(document.querySelector('[data-slot="reply-card"]')).not.toBeInTheDocument();
   });
 
+  it("renders bot replies as a card with no per-message avatar", () => {
+    render(<ChatMessageView message={msg({ text: "hi there" })} {...base} />);
+    const card = document.querySelector('[data-slot="reply-card"]');
+    expect(card).toHaveClass("bg-bubble");
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeInTheDocument();
+  });
+
+  it("renders the owner's message as a dark pill", () => {
+    render(<ChatMessageView message={msg({ role: "user", text: "my question" })} {...base} />);
+    const pill = screen.getByText("my question").parentElement;
+    expect(pill).toHaveClass("bg-bubble-user");
+    expect(document.querySelector('[data-slot="reply-card"]')).not.toBeInTheDocument();
+  });
+
   it("renders the card with the error notice for a failed empty turn", () => {
     render(<ChatMessageView message={msg({ status: "error", error: "boom" })} {...base} />);
     const card = document.querySelector('[data-slot="reply-card"]');

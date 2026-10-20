@@ -34,7 +34,7 @@ test.describe("Chats", () => {
     await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
 
     // Bot appears in the list and chat opens
-    await expect(page.getByRole("button", { name: /echo bot/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /echo bot/i }).first()).toBeVisible();
 
     // Send a message and await the streamed reply
     const composer = page.getByPlaceholder(/(?:ask|message) echo bot/i);
@@ -59,7 +59,7 @@ test.describe("Chats", () => {
 
     // Ensure at least one bot exists, then stay on the list (no chat open).
     const hasBot = await page
-      .getByRole("button", { name: /echo bot/i })
+      .getByRole("link", { name: /echo bot/i })
       .first()
       .isVisible();
     if (!hasBot) {
@@ -69,8 +69,8 @@ test.describe("Chats", () => {
       await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
     }
 
-    // The list itself renders previews for each bot row.
-    await expect(page.getByPlaceholder(/^search$/i)).toBeVisible();
+    // The app sidebar lists the bots and carries Search.
+    await expect(page.getByRole("button", { name: /^search/i })).toBeVisible();
   });
 });
 
@@ -84,7 +84,7 @@ test.describe("Chats — new chat", () => {
 
     // Ensure a bot with some history exists.
     const hasBot = await page
-      .getByRole("button", { name: /reset bot/i })
+      .getByRole("link", { name: /reset bot/i })
       .first()
       .isVisible();
     if (!hasBot) {
@@ -98,7 +98,7 @@ test.describe("Chats — new chat", () => {
       await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
     }
     await page
-      .getByRole("button", { name: /reset bot/i })
+      .getByRole("link", { name: /reset bot/i })
       .first()
       .click();
 
@@ -127,7 +127,7 @@ test.describe("Chats — attachments (issue #17)", () => {
 
     // Ensure a bot exists.
     const hasBot = await page
-      .getByRole("button", { name: /attach bot/i })
+      .getByRole("link", { name: /attach bot/i })
       .first()
       .isVisible();
     if (!hasBot) {
@@ -140,7 +140,7 @@ test.describe("Chats — attachments (issue #17)", () => {
       await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
     }
     await page
-      .getByRole("button", { name: /attach bot/i })
+      .getByRole("link", { name: /attach bot/i })
       .first()
       .click();
 
@@ -168,7 +168,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     // Reload: rendering is durable (entry data), not client state.
     await page.reload();
     await page
-      .getByRole("button", { name: /attach bot/i })
+      .getByRole("link", { name: /attach bot/i })
       .first()
       .click();
     await expect(page.getByAltText("e2e-shot.png").first()).toBeVisible({ timeout: 15_000 });
@@ -181,7 +181,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
     const hasBot = await page
-      .getByRole("button", { name: /attach bot/i })
+      .getByRole("link", { name: /attach bot/i })
       .first()
       .isVisible();
     if (!hasBot) {
@@ -194,7 +194,7 @@ test.describe("Chats — attachments (issue #17)", () => {
       await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
     }
     await page
-      .getByRole("button", { name: /attach bot/i })
+      .getByRole("link", { name: /attach bot/i })
       .first()
       .click();
 

@@ -54,6 +54,7 @@ const HOST: Bot = {
   skillIds: [],
   connectionIds: [],
   memoryEnabled: true,
+  pinnedAt: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

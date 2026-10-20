@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Bot } from "lucide-react";
+import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useBotsStore } from "../../store/bots";
-import { botsApi, type Bot as BotRow, type ModelInfo } from "../../lib/bots-api";
-import { BotList } from "../../components/BotList";
-import { BotDialog } from "../../components/BotDialog";
+import { useUiStore } from "../../store/ui";
+import { botsApi, type Bot as BotRow } from "../../lib/bots-api";
 import { BotAvatar } from "../../components/BotAvatar";
 import { ChatPane } from "../../components/ChatPane";
+import { BotsSection } from "../../components/shell/BotsSection";
 
 /**
- * Three-column chat workspace (PRD §6.2): shell nav (outside this layout),
- * bot list, chat pane. Mobile: list and chat are separate full-screen views.
+ * Chat area beside the sidebar (PRD §6.2): the open bot's chat, or an empty
+ * state. On mobile with no bot open it is the full-screen bot list.
  */
 export function ChatWorkspace() {
   const { botId } = useParams();
@@ -19,112 +19,90 @@ export function ChatWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const bots = useBotsStore((s) => s.bots);
   const loading = useBotsStore((s) => s.loading);
+  const models = useBotsStore((s) => s.models);
   const gatewayConfigured = useBotsStore((s) => s.gatewayConfigured);
-  const defaultModel = useBotsStore((s) => s.defaultModel);
   const loadBots = useBotsStore((s) => s.loadBots);
-  const loadModels = useBotsStore((s) => s.loadModels);
-  const connectActivity = useBotsStore((s) => s.connectActivity);
-  const disconnectActivity = useBotsStore((s) => s.disconnectActivity);
+  const openCreateBot = useUiStore((s) => s.openCreateBot);
+  const openEditBot = useUiStore((s) => s.openEditBot);
+  const setMobileOpen = useUiStore((s) => s.setMobileOpen);
+  const savedTick = useUiStore((s) => s.savedTick);
 
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<BotRow | null>(null);
   const [fullBot, setFullBot] = useState<BotRow | null>(null);
-  const handledNewBot = useRef(false);
 
+  // `/chats?new=1` (older links, the command palette) opens the create dialog.
   useEffect(() => {
-    if (handledNewBot.current || searchParams.get("new") !== "1") return;
-
-    handledNewBot.current = true;
-    setEditing(null);
-    setDialogOpen(true);
-
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete("new");
-    setSearchParams(nextSearchParams, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  useEffect(() => {
-    void loadBots();
-    void loadModels();
-    connectActivity();
-    return () => disconnectActivity();
-  }, [loadBots, loadModels, connectActivity, disconnectActivity]);
-
-  const refreshModels = useCallback(() => {
-    void botsApi
-      .models()
-      .then((r) => setModels(r.models))
-      .catch(() => undefined);
-  }, []);
-  useEffect(refreshModels, [refreshModels]);
+    if (searchParams.get("new") !== "1") return;
+    openCreateBot();
+    const next = new URLSearchParams(searchParams);
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, openCreateBot]);
 
   const currentListBot = useMemo(() => bots.find((b) => b.id === botId) ?? null, [bots, botId]);
+  const currentId = currentListBot?.id;
+  const currentConversation = currentListBot?.conversationId;
 
-  // Editing + chat need full fields the list doesn't carry.
+  // The chat needs fields the list entry lacks; refetch after an edit
+  // (savedTick) or when "New chat" moves the bot to a fresh conversation.
   useEffect(() => {
-    if (currentListBot) {
-      void botsApi
-        .get(currentListBot.id)
-        .then(setFullBot)
-        .catch(() => setFullBot(null));
-    } else {
+    if (!currentId) {
       setFullBot(null);
+      return;
     }
-  }, [currentListBot?.id]);
+    let cancelled = false;
+    void botsApi
+      .get(currentId)
+      .then((bot) => !cancelled && setFullBot(bot))
+      .catch(() => !cancelled && setFullBot(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [currentId, currentConversation, savedTick]);
 
-  const onSaved = (bot: BotRow) => {
-    void loadBots();
-    if (editing && bot.id === editing.id) setFullBot(bot);
-    // Creating a bot drops you straight into its chat (messenger model).
-    if (!editing) navigate(`/chats/${bot.id}`);
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-  const openEdit = () => {
-    if (fullBot) {
-      setEditing(fullBot);
-      setDialogOpen(true);
-    }
-  };
-
-  const isMobileChat = Boolean(botId);
+  const noBots = bots.length === 0 && !loading;
 
   return (
-    <div className="flex h-full min-h-0">
-      {/* Column 2 — bot list. Full-screen on mobile; hidden once a chat opens. */}
-      <aside
-        className={
-          isMobileChat
-            ? "hidden w-72 shrink-0 border-r md:flex md:flex-col"
-            : "flex h-full w-full flex-col border-r md:w-72 md:shrink-0"
-        }
-      >
-        <BotList bots={bots} onNewBot={openCreate} />
-      </aside>
-
-      {/* Column 3 — chat pane or empty state */}
-      <main
-        className={isMobileChat ? "h-full min-w-0 flex-1" : "hidden h-full min-w-0 flex-1 md:block"}
-      >
-        {fullBot && currentListBot ? (
-          <ChatPane
-            key={fullBot.id}
-            bot={fullBot}
-            models={models}
-            gatewayConfigured={gatewayConfigured}
-            onEditBot={openEdit}
-            onBotDeleted={() => void loadBots()}
-            onBotReset={(fresh) => setFullBot(fresh)}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
-            {bots.length === 0 && !loading ? (
+    <div className="h-full min-h-0">
+      {fullBot && currentListBot ? (
+        <ChatPane
+          key={fullBot.id}
+          bot={fullBot}
+          models={models}
+          gatewayConfigured={gatewayConfigured}
+          onEditBot={() => void openEditBot(fullBot.id)}
+          onBotDeleted={() => void loadBots()}
+          onBotReset={(fresh) => setFullBot(fresh)}
+        />
+      ) : (
+        <>
+          {/* Mobile, nothing open: the bot list is the screen (messenger flow). */}
+          {!noBots && (
+            <div className="flex h-full flex-col md:hidden">
+              <div className="flex h-14 shrink-0 items-center gap-2 px-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileOpen(true)}
+                  aria-label="Open menu"
+                >
+                  <Menu className="size-5" />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+                <BotsSection bots={bots} activeId={null} />
+              </div>
+            </div>
+          )}
+          <div
+            className={
+              noBots
+                ? "flex h-full flex-col items-center justify-center gap-4 p-6 text-center"
+                : "hidden h-full flex-col items-center justify-center gap-4 p-6 text-center md:flex"
+            }
+          >
+            {noBots ? (
               <>
-                <div className="bg-primary/10 text-primary flex size-14 items-center justify-center rounded-2xl">
+                <div className="bg-muted text-foreground flex size-14 items-center justify-center rounded-2xl">
                   <Bot className="size-7" />
                 </div>
                 <div>
@@ -134,7 +112,7 @@ export function ChatWorkspace() {
                     and it remembers the whole conversation.
                   </p>
                 </div>
-                <Button onClick={openCreate}>
+                <Button onClick={openCreateBot}>
                   <Bot className="size-4" />
                   Create your first bot
                 </Button>
@@ -163,17 +141,8 @@ export function ChatWorkspace() {
               </button>
             )}
           </div>
-        )}
-      </main>
-
-      <BotDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        models={models}
-        defaultModelId={defaultModel}
-        bot={editing}
-        onSaved={onSaved}
-      />
+        </>
+      )}
     </div>
   );
 }

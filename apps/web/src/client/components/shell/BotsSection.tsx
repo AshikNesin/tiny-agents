@@ -1,0 +1,170 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { MoreHorizontal, Pencil, Pin, PinOff, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
+import { cn } from "@groot/shell/lib/utils";
+import type { BotListEntry } from "../../lib/bots-api";
+import { groupBots, visibleRecent } from "../../lib/bot-groups";
+import { useBotsStore } from "../../store/bots";
+import { useUiStore } from "../../store/ui";
+import { BotAvatar } from "../BotAvatar";
+
+/** Trailing state of a row: approvals > replying > unread. */
+function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
+  if (bot.approvals > 0) {
+    return (
+      <span
+        aria-label={`${bot.approvals} awaiting approval`}
+        className="bg-primary text-primary-foreground flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs"
+      >
+        {bot.approvals}
+      </span>
+    );
+  }
+  if (bot.replying) {
+    return (
+      <span role="status" aria-label="Replying" className="flex items-center gap-0.5">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="bg-fg-tertiary size-1 animate-pulse rounded-full"
+            style={{ animationDelay: `${i * 150}ms` }}
+          />
+        ))}
+      </span>
+    );
+  }
+  if (bot.unread && !active) {
+    return <span aria-label="Unread" className="bg-primary size-2 rounded-full" />;
+  }
+  return null;
+}
+
+function BotRow({
+  bot,
+  active,
+  onNavigate,
+}: {
+  bot: BotListEntry;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  const togglePin = useBotsStore((s) => s.togglePin);
+  const openEditBot = useUiStore((s) => s.openEditBot);
+  const pinned = bot.pinnedAt !== null;
+
+  return (
+    <li className="group/row relative">
+      <Link
+        to={`/chats/${bot.id}`}
+        onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
+          "focus-visible:ring-sidebar-ring focus-visible:ring-1",
+          active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
+        )}
+      >
+        <BotAvatar name={bot.name} className="size-6" />
+        <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+        <span className="group-focus-within/row:hidden group-hover/row:hidden">
+          <RowStatus bot={bot} active={active} />
+        </span>
+      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${bot.name} actions`}
+            className="text-muted-foreground hover:bg-sidebar-accent absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="right">
+          <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
+            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {pinned ? "Unpin" : "Pin"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void openEditBot(bot.id)}>
+            <Pencil className="size-4" /> Edit bot
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </li>
+  );
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return <p className="text-fg-tertiary px-1.5 pt-2 pb-1 text-xs select-none">{children}</p>;
+}
+
+interface BotsSectionProps {
+  bots: BotListEntry[];
+  activeId: string | null;
+  onNavigate?: () => void;
+}
+
+/** The "Bots" block: pinned group, recent group, fold, and the + button. */
+export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSectionProps) {
+  const openCreateBot = useUiStore((s) => s.openCreateBot);
+  const [expanded, setExpanded] = useState(false);
+  const { pinned, recent } = useMemo(() => groupBots(bots), [bots]);
+  const shown = visibleRecent(recent, expanded, activeId);
+  const hidden = recent.length - shown.length;
+  const foldable = recent.length > shown.length || (expanded && recent.length > 8);
+
+  return (
+    <section aria-label="Bots" className="px-2.5">
+      <div className="flex h-8 items-center justify-between px-1.5">
+        <h2 className="text-fg-tertiary text-sm font-medium select-none">Bots</h2>
+        <button
+          type="button"
+          onClick={openCreateBot}
+          aria-label="New bot"
+          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 items-center justify-center rounded-lg"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+
+      {bots.length === 0 && <p className="text-fg-tertiary px-1.5 py-2 text-sm">No bots yet.</p>}
+
+      {pinned.length > 0 && (
+        <>
+          <GroupLabel>Pinned</GroupLabel>
+          <ul className="space-y-0.5">
+            {pinned.map((bot) => (
+              <BotRow key={bot.id} bot={bot} active={bot.id === activeId} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {recent.length > 0 && (
+        <>
+          {pinned.length > 0 && <GroupLabel>Recent</GroupLabel>}
+          <ul className="space-y-0.5">
+            {shown.map((bot) => (
+              <BotRow key={bot.id} bot={bot} active={bot.id === activeId} onNavigate={onNavigate} />
+            ))}
+          </ul>
+          {foldable && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-muted-foreground hover:text-foreground mt-0.5 flex h-9 w-full items-center rounded-xl px-1.5 text-sm font-medium"
+            >
+              {expanded ? "Show less" : `Show more${hidden > 0 ? ` (${hidden})` : ""}`}
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

@@ -31,6 +31,8 @@ export const updateBotSchema = z.object({
   connectionIds: z.array(z.string()).max(100).optional(),
 });
 
+export const pinBotSchema = z.object({ pinned: z.boolean() });
+
 export const approvalSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   /** Tool name to switch to `allow` for this bot along with approving. */
