@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
+import { Ban, Check, Clock, Copy, ExternalLink, MessagesSquare, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
@@ -28,6 +28,8 @@ import { Bubble, BubbleContent } from "./ui/bubble";
 import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
+import { parsePeerEnvelope, type PeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import type { Bot } from "../lib/bots-api";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -256,6 +258,33 @@ function ToolRow({
     return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
   }
 
+  // message_bot row: the Grok handoff pill — the peer's avatar, their name,
+  // and the outbound snippet.
+  if (call.name === "message_bot") {
+    const to = typeof call.args?.to === "string" ? call.args.to : "";
+    const snippet =
+      typeof call.args?.text === "string"
+        ? call.args.text.replace(/\s+/g, " ").trim().slice(0, 60)
+        : "";
+    return (
+      <Trace className="gap-1">
+        <TraceLine status={traceStatus(call.status)} data-testid="bot-handoff">
+          <TraceIcon>
+            <BotAvatar name={to} className="size-4" />
+          </TraceIcon>
+          <TraceTitle>
+            {call.status === "running" || call.status === "pending" ? "Messaging" : "Messaged"}{" "}
+            {to || "bot"}
+          </TraceTitle>
+          {snippet && <TraceDescription>“{snippet}”</TraceDescription>}
+          {call.durationMs !== undefined && (
+            <TraceDescription>{formatDuration(call.durationMs)}</TraceDescription>
+          )}
+        </TraceLine>
+      </Trace>
+    );
+  }
+
   const line = (
     <TraceLine status={traceStatus(call.status)}>
       {statusIcon(call) ? <TraceIcon>{statusIcon(call)}</TraceIcon> : null}
@@ -309,7 +338,7 @@ export function toolLabel(labels: ToolLabels, name: string): string {
   return name.replace(/_/g, " ");
 }
 
-interface ChatMessageViewProps {
+export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
   botId?: string;
@@ -341,6 +370,17 @@ export function ChatMessageView({
 
   if (message.role === "user") {
     const failed = message.status === "unanswered";
+    const envelope = parsePeerEnvelope(message.text);
+    if (envelope) {
+      return (
+        <PeerCard
+          envelope={envelope}
+          failed={failed}
+          error={message.error}
+          streaming={message.status === "streaming"}
+        />
+      );
+    }
     return (
       <Message align="end" className="group">
         {/* content-visibility on the scroller item breaks percentage
@@ -364,6 +404,107 @@ export function ChatMessageView({
     );
   }
 
+  return assistantView(message, { botName, botId, toolLabels });
+}
+
+/** One peer-traffic user message as a Grok-style attributed card. */
+function PeerCard({
+  envelope,
+  failed,
+  error,
+  streaming,
+}: {
+  envelope: PeerEnvelope;
+  failed: boolean;
+  error?: string;
+  streaming: boolean;
+}) {
+  if (envelope.kind === "mention") {
+    // The owner tagged this bot from {host}'s chat: the owner's own words
+    // in a labeled muted bubble.
+    return (
+      <Message align="end" className="group">
+        <div className="relative max-w-[min(85%,48rem)]">
+          <CopyButton text={envelope.text} />
+          <p className="text-muted-foreground px-1 pb-0.5 text-right text-xs">
+            You · in {envelope.hostName}&apos;s chat
+          </p>
+          <Bubble align="end" variant="muted" className="max-w-full">
+            <BubbleContent className="rounded-2xl px-4 py-2.5 text-[15px]">
+              <p className="whitespace-pre-wrap">{envelope.text}</p>
+            </BubbleContent>
+          </Bubble>
+          {failed && <p className="text-destructive mt-1 text-right text-xs">{error}</p>}
+        </div>
+      </Message>
+    );
+  }
+  if (envelope.kind === "message") {
+    // A bot messaged this bot via message_bot: attributed incoming card.
+    return <PeerIncomingCard name={envelope.name} text={envelope.text} streaming={streaming} />;
+  }
+  // A relayed reply into the asker's chat: attributed incoming card with a
+  // relayed marker.
+  return (
+    <PeerIncomingCard name={envelope.name} text={envelope.text} relayed streaming={streaming} />
+  );
+}
+
+/**
+ * Incoming card for bot-to-bot traffic: peer avatar + name header (the
+ * Grok handoff pattern) with the payload below; full-width like assistant
+ * replies, never painted as the owner's bubble. `relayed` marks a reply
+ * that the relay delivered back into the asker's chat.
+ */
+export function PeerIncomingCard({
+  name,
+  text,
+  relayed = false,
+  streaming = false,
+}: {
+  name: string;
+  text: string;
+  relayed?: boolean;
+  streaming?: boolean;
+}) {
+  return (
+    <Message
+      className="group gap-3"
+      data-testid="peer-card"
+      data-peer={name}
+      data-relayed={relayed ? "true" : undefined}
+    >
+      <BotAvatar name={name} className="mt-1 size-8" />
+      <div className="relative min-w-0 flex-1">
+        <CopyButton text={text} />
+        <p className="text-muted-foreground mb-1 flex items-center gap-1.5 px-1 text-xs">
+          <MessagesSquare className="size-3" aria-hidden />
+          <span className="text-foreground/80 font-medium">{name}</span>
+          <span aria-hidden>·</span>
+          <span>{relayed ? "reply relayed into this chat" : "messaged you"}</span>
+        </p>
+        <div
+          data-slot="reply-card"
+          className="bg-secondary/50 rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed"
+        >
+          <Streamdown>{text}</Streamdown>
+        </div>
+        {streaming && (
+          <span className="text-muted-foreground mt-1 inline-flex items-center gap-1.5 px-1 text-xs">
+            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
+            replying…
+          </span>
+        )}
+      </div>
+    </Message>
+  );
+}
+
+function assistantView(
+  message: ChatMessage,
+  ctx: { botName: string; botId?: string; toolLabels: ToolLabels },
+) {
+  const { botName, botId, toolLabels } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.

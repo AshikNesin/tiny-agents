@@ -98,5 +98,14 @@ open time; conversations select it with `configure`.
   listing other bots (avatar + name + description, host excluded). Enter/Tab/click
   inserts `@Name `. Backdrop click or Esc closes.
 - Mentions ship as `mentions: [botId, …]` on send.
-- No transcript rendering changes: relayed replies arrive as ordinary user
-  messages with a bold prefix; the host bot's answer follows normally.
+- Transcript rendering (Grok-style cards): the pipeline's attribution prefixes
+  are parsed at render time by `parsePeerEnvelope`
+  (`@tiny-agents/agent/peer-envelope`) and drawn as attributed cards —
+  relays (`**Reply from X:**`) and message_bot deliveries (`**Message from X
+(bot):**`) as a peer-avatar card with a "reply relayed into this chat" /
+  "messaged you" marker, owner mentions (`[From the owner, in Y's chat]`) as
+  the owner's bubble with a "You · in Y's chat" label. The stored text and
+  everything the model reads is unchanged (issue #13 custody). The
+  `message_bot` tool call renders as the handoff pill: peer avatar, "Messaged
+  {name}", and the outbound snippet. Bot-list previews strip the prefix via
+  `stripPeerEnvelope` (both `previewOf` and `recordReply`).
