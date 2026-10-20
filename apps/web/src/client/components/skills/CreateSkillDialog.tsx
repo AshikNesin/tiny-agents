@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogBody,
 } from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -67,44 +68,47 @@ export function CreateSkillDialog({
             A name, a short description, and the instructions your bot follows.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="new-skill-name">Name</Label>
-            <Input
-              id="new-skill-name"
-              value={form.name}
-              maxLength={64}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="pdf-form-filler"
-              aria-invalid={form.name.length > 0 && !nameValid}
-            />
-            <p className="text-muted-foreground text-xs">
-              Lowercase letters, digits and hyphens — bots reference the skill by this name.
-            </p>
+        <DialogBody>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-skill-name">Name</Label>
+              <Input
+                id="new-skill-name"
+                value={form.name}
+                maxLength={64}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="pdf-form-filler"
+                aria-invalid={form.name.length > 0 && !nameValid}
+              />
+              <p className="text-muted-foreground text-xs">
+                Lowercase letters, digits and hyphens — bots reference the skill by this name.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-skill-description">Description</Label>
+              <Textarea
+                id="new-skill-description"
+                rows={3}
+                maxLength={1024}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What the skill does and when the bot should load it"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-skill-body">Instructions</Label>
+              <Textarea
+                id="new-skill-body"
+                rows={8}
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                placeholder="Write the skill's instructions in markdown…"
+                className="font-mono"
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-skill-description">Description</Label>
-            <Textarea
-              id="new-skill-description"
-              rows={3}
-              maxLength={1024}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="What the skill does and when the bot should load it"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-skill-body">Instructions</Label>
-            <Textarea
-              id="new-skill-body"
-              rows={8}
-              value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              placeholder="Write the skill's instructions in markdown…"
-              className="font-mono"
-            />
-          </div>
-        </div>
+        </DialogBody>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

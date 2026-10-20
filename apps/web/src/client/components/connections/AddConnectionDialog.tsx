@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogBody,
 } from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -157,139 +158,144 @@ export function AddConnectionDialog({
           <DialogTitle>Add connection</DialogTitle>
           <DialogDescription>Connect a remote MCP server for your bots.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="connection-name">Name</Label>
-            <Input
-              id="connection-name"
-              value={form.name}
-              maxLength={60}
-              placeholder="e.g. GitHub"
-              aria-invalid={showNameError}
-              onBlur={touch("name")}
-              onChange={(e) => setField("name", e.target.value)}
-            />
-            {showNameError && <p className="text-xs text-destructive">Enter a name</p>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="connection-url">URL</Label>
-            <Input
-              id="connection-url"
-              type="url"
-              value={form.url}
-              maxLength={2000}
-              placeholder="https://example.com/mcp"
-              aria-invalid={showUrlError}
-              onBlur={touch("url")}
-              onChange={(e) => setField("url", e.target.value)}
-            />
-            {showUrlError && <p className="text-xs text-destructive">Enter a valid https:// URL</p>}
-          </div>
-          <div className="space-y-2">
-            <Label>Authentication</Label>
-            <Select
-              value={form.authType}
-              onValueChange={(v) => setField("authType", v as AuthType)}
-            >
-              <SelectTrigger className="w-full" aria-label="Authentication type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AUTH_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {form.authType === "header" && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="connection-header-name">Header name</Label>
-                <Input
-                  id="connection-header-name"
-                  value={form.headerName}
-                  maxLength={100}
-                  autoComplete="off"
-                  onChange={(e) => setField("headerName", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="connection-secret">Secret</Label>
-                <Input
-                  id="connection-secret"
-                  type="password"
-                  value={form.secret}
-                  maxLength={8000}
-                  autoComplete="new-password"
-                  aria-invalid={showSecretError}
-                  onBlur={touch("secret")}
-                  onChange={(e) => setField("secret", e.target.value)}
-                />
-                {showSecretError && (
-                  <p className="text-xs text-destructive">Enter the header value to send</p>
-                )}
-              </div>
-            </>
-          )}
-          {form.authType === "oauth" && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="connection-client-id">Client ID</Label>
-                <Input
-                  id="connection-client-id"
-                  value={form.clientId}
-                  maxLength={500}
-                  autoComplete="off"
-                  onChange={(e) => setField("clientId", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="connection-client-secret">Client secret</Label>
-                <Input
-                  id="connection-client-secret"
-                  type="password"
-                  value={form.clientSecret}
-                  maxLength={2000}
-                  autoComplete="new-password"
-                  onChange={(e) => setField("clientSecret", e.target.value)}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Only if the server requires a pre-registered app.
-              </p>
-            </>
-          )}
-          {testResult && (
-            <div className="space-y-1.5 rounded-lg bg-muted/50 p-3">
-              <p className="text-xs font-medium text-foreground">
-                {transportLabel(testResult.transport)} ·{" "}
-                {testResult.tools.length === 1
-                  ? "1 tool found"
-                  : `${testResult.tools.length} tools found`}
-              </p>
-              {testResult.tools.length > 0 && (
-                <ul className="space-y-0.5">
-                  {testResult.tools.slice(0, 8).map((tool, index) => (
-                    <li
-                      key={`${tool.label}-${index}`}
-                      className="truncate text-xs text-muted-foreground"
-                    >
-                      {tool.label}
-                      {tool.readOnly ? " · read-only" : ""}
-                    </li>
-                  ))}
-                  {testResult.tools.length > 8 && (
-                    <li className="text-xs text-muted-foreground">
-                      +{testResult.tools.length - 8} more
-                    </li>
-                  )}
-                </ul>
+        <DialogBody>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="connection-name">Name</Label>
+              <Input
+                id="connection-name"
+                value={form.name}
+                maxLength={60}
+                placeholder="e.g. GitHub"
+                aria-invalid={showNameError}
+                onBlur={touch("name")}
+                onChange={(e) => setField("name", e.target.value)}
+              />
+              {showNameError && <p className="text-xs text-destructive">Enter a name</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="connection-url">URL</Label>
+              <Input
+                id="connection-url"
+                type="url"
+                value={form.url}
+                maxLength={2000}
+                placeholder="https://example.com/mcp"
+                aria-invalid={showUrlError}
+                onBlur={touch("url")}
+                onChange={(e) => setField("url", e.target.value)}
+              />
+              {showUrlError && (
+                <p className="text-xs text-destructive">Enter a valid https:// URL</p>
               )}
             </div>
-          )}
-        </div>
+            <div className="space-y-2">
+              <Label>Authentication</Label>
+              <Select
+                value={form.authType}
+                onValueChange={(v) => setField("authType", v as AuthType)}
+              >
+                <SelectTrigger className="w-full" aria-label="Authentication type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUTH_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.authType === "header" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="connection-header-name">Header name</Label>
+                  <Input
+                    id="connection-header-name"
+                    value={form.headerName}
+                    maxLength={100}
+                    autoComplete="off"
+                    onChange={(e) => setField("headerName", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="connection-secret">Secret</Label>
+                  <Input
+                    id="connection-secret"
+                    type="password"
+                    value={form.secret}
+                    maxLength={8000}
+                    autoComplete="new-password"
+                    aria-invalid={showSecretError}
+                    onBlur={touch("secret")}
+                    onChange={(e) => setField("secret", e.target.value)}
+                  />
+                  {showSecretError && (
+                    <p className="text-xs text-destructive">Enter the header value to send</p>
+                  )}
+                </div>
+              </>
+            )}
+            {form.authType === "oauth" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="connection-client-id">Client ID</Label>
+                  <Input
+                    id="connection-client-id"
+                    value={form.clientId}
+                    maxLength={500}
+                    autoComplete="off"
+                    onChange={(e) => setField("clientId", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="connection-client-secret">Client secret</Label>
+                  <Input
+                    id="connection-client-secret"
+                    type="password"
+                    value={form.clientSecret}
+                    maxLength={2000}
+                    autoComplete="new-password"
+                    onChange={(e) => setField("clientSecret", e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Only if the server requires a pre-registered app.
+                </p>
+              </>
+            )}
+            {testResult && (
+              <div className="space-y-1.5 rounded-lg bg-muted/50 p-3">
+                <p className="text-xs font-medium text-foreground">
+                  {transportLabel(testResult.transport)} ·{" "}
+                  {testResult.tools.length === 1
+                    ? "1 tool found"
+                    : `${testResult.tools.length} tools found`}
+                </p>
+                {testResult.tools.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {testResult.tools.slice(0, 8).map((tool, index) => (
+                      <li
+                        key={`${tool.label}-${index}`}
+                        className="truncate text-xs text-muted-foreground"
+                      >
+                        {tool.label}
+                        {tool.readOnly ? " · read-only" : ""}
+                      </li>
+                    ))}
+                    {testResult.tools.length > 8 && (
+                      <li className="text-xs text-muted-foreground">
+                        +{testResult.tools.length - 8} more
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogBody>
+
         <DialogFooter className="sm:justify-between">
           {canTest ? (
             <Button

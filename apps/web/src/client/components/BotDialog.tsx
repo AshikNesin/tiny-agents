@@ -6,6 +6,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogBody,
 } from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -336,7 +337,7 @@ export function BotDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>
           <DialogDescription>
@@ -345,10 +346,9 @@ export function BotDialog({
               : "A bot is a contact with its own persona and model."}
           </DialogDescription>
         </DialogHeader>
-
         {bot ? (
-          <Tabs defaultValue="profile">
-            <TabsList className="w-full">
+          <Tabs defaultValue="profile" className="min-h-0 flex-1 gap-4">
+            <TabsList className="w-full shrink-0">
               <TabsTrigger value="profile" className="flex-1">
                 Profile
               </TabsTrigger>
@@ -359,14 +359,16 @@ export function BotDialog({
                 Skills
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="profile" className="mt-4 space-y-4">
-              {profile}
-            </TabsContent>
-            <TabsContent value="tools">{tools}</TabsContent>
-            <TabsContent value="skills">{skillsTab}</TabsContent>
+            <DialogBody>
+              <TabsContent value="profile" className="space-y-4">
+                {profile}
+              </TabsContent>
+              <TabsContent value="tools">{tools}</TabsContent>
+              <TabsContent value="skills">{skillsTab}</TabsContent>
+            </DialogBody>
           </Tabs>
         ) : (
-          <div className="space-y-4">{profile}</div>
+          <DialogBody className="space-y-4">{profile}</DialogBody>
         )}
 
         <DialogFooter>

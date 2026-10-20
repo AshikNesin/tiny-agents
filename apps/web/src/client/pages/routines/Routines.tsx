@@ -24,6 +24,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogBody,
 } from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -634,159 +635,162 @@ function RoutineEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{routine ? "Edit routine" : "New routine"}</DialogTitle>
           <DialogDescription>
             Times are read in IST. The preview shows the next 3 runs before you save.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Bot</Label>
-            <Select value={form.botId} onValueChange={(v) => set("botId", v)}>
-              <SelectTrigger aria-label="Bot" className="w-full">
-                <SelectValue placeholder={bots === null ? "Loading bots…" : "Pick a bot"} />
-              </SelectTrigger>
-              <SelectContent>
-                {(bots ?? []).map((bot) => (
-                  <SelectItem key={bot.id} value={bot.id}>
-                    {bot.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="routine-name">Name</Label>
-            <Input
-              id="routine-name"
-              value={form.name}
-              maxLength={MAX_NAME_CHARS}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="e.g. weekday-digest"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="routine-prompt">Prompt</Label>
-            <Textarea
-              id="routine-prompt"
-              rows={4}
-              value={form.prompt}
-              maxLength={MAX_PROMPT_CHARS}
-              onChange={(e) => set("prompt", e.target.value)}
-              placeholder="What should the bot do each run?"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Schedule</Label>
-            <Tabs value={form.kind} onValueChange={(v) => set("kind", v as ScheduleKind)}>
-              <TabsList className="flex w-full flex-wrap">
-                {SCHEDULE_TABS.map((tab) => (
-                  <TabsTrigger key={tab.value} value={tab.value}>
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-
-            {form.kind === "once" && (
-              <div className="space-y-1.5">
-                <Input
-                  type="datetime-local"
-                  aria-label="Run at (IST)"
-                  value={form.onceAt}
-                  onChange={(e) => set("onceAt", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">Read as an IST wall time.</p>
-              </div>
-            )}
-            {form.kind === "daily" && (
-              <TimeSelect
-                label="Time (IST)"
-                value={form.dailyTime}
-                onChange={(v) => set("dailyTime", v)}
+        <DialogBody>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Bot</Label>
+              <Select value={form.botId} onValueChange={(v) => set("botId", v)}>
+                <SelectTrigger aria-label="Bot" className="w-full">
+                  <SelectValue placeholder={bots === null ? "Loading bots…" : "Pick a bot"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(bots ?? []).map((bot) => (
+                    <SelectItem key={bot.id} value={bot.id}>
+                      {bot.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routine-name">Name</Label>
+              <Input
+                id="routine-name"
+                value={form.name}
+                maxLength={MAX_NAME_CHARS}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="e.g. weekday-digest"
               />
-            )}
-            {form.kind === "weekly" && (
-              <div className="grid grid-cols-2 gap-3">
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routine-prompt">Prompt</Label>
+              <Textarea
+                id="routine-prompt"
+                rows={4}
+                value={form.prompt}
+                maxLength={MAX_PROMPT_CHARS}
+                onChange={(e) => set("prompt", e.target.value)}
+                placeholder="What should the bot do each run?"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Schedule</Label>
+              <Tabs value={form.kind} onValueChange={(v) => set("kind", v as ScheduleKind)}>
+                <TabsList className="flex w-full flex-wrap">
+                  {SCHEDULE_TABS.map((tab) => (
+                    <TabsTrigger key={tab.value} value={tab.value}>
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+
+              {form.kind === "once" && (
                 <div className="space-y-1.5">
-                  <Label>Day</Label>
-                  <Select value={form.weeklyDay} onValueChange={(v) => set("weeklyDay", v)}>
-                    <SelectTrigger aria-label="Day of week" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DAYS_OF_WEEK.map((day, index) => (
-                        <SelectItem key={day} value={String(index)}>
-                          {day}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    type="datetime-local"
+                    aria-label="Run at (IST)"
+                    value={form.onceAt}
+                    onChange={(e) => set("onceAt", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Read as an IST wall time.</p>
                 </div>
+              )}
+              {form.kind === "daily" && (
                 <TimeSelect
                   label="Time (IST)"
-                  value={form.weeklyTime}
-                  onChange={(v) => set("weeklyTime", v)}
+                  value={form.dailyTime}
+                  onChange={(v) => set("dailyTime", v)}
                 />
-              </div>
-            )}
-            {form.kind === "interval" && (
-              <div className="space-y-1.5">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  aria-label="Interval minutes"
-                  min={MIN_INTERVAL_MINUTES}
-                  max={MAX_INTERVAL_MINUTES}
-                  step={1}
-                  value={form.intervalMinutes}
-                  onChange={(e) => set("intervalMinutes", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Every {form.intervalMinutes || "…"} minutes, {MIN_INTERVAL_MINUTES} to{" "}
-                  {MAX_INTERVAL_MINUTES} allowed.
-                </p>
-              </div>
-            )}
-            {form.kind === "cron" && (
-              <div className="space-y-1.5">
-                <Input
-                  aria-label="Cron expression"
-                  placeholder="0 9 * * 1-5"
-                  className={cn(monoClass, "w-full")}
-                  value={form.cronExpr}
-                  onChange={(e) => set("cronExpr", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  5-field cron (minute hour day-of-month month day-of-week), read in IST.
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+              {form.kind === "weekly" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Day</Label>
+                    <Select value={form.weeklyDay} onValueChange={(v) => set("weeklyDay", v)}>
+                      <SelectTrigger aria-label="Day of week" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DAYS_OF_WEEK.map((day, index) => (
+                          <SelectItem key={day} value={String(index)}>
+                            {day}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <TimeSelect
+                    label="Time (IST)"
+                    value={form.weeklyTime}
+                    onChange={(v) => set("weeklyTime", v)}
+                  />
+                </div>
+              )}
+              {form.kind === "interval" && (
+                <div className="space-y-1.5">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    aria-label="Interval minutes"
+                    min={MIN_INTERVAL_MINUTES}
+                    max={MAX_INTERVAL_MINUTES}
+                    step={1}
+                    value={form.intervalMinutes}
+                    onChange={(e) => set("intervalMinutes", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Every {form.intervalMinutes || "…"} minutes, {MIN_INTERVAL_MINUTES} to{" "}
+                    {MAX_INTERVAL_MINUTES} allowed.
+                  </p>
+                </div>
+              )}
+              {form.kind === "cron" && (
+                <div className="space-y-1.5">
+                  <Input
+                    aria-label="Cron expression"
+                    placeholder="0 9 * * 1-5"
+                    className={cn(monoClass, "w-full")}
+                    value={form.cronExpr}
+                    onChange={(e) => set("cronExpr", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    5-field cron (minute hour day-of-month month day-of-week), read in IST.
+                  </p>
+                </div>
+              )}
+            </div>
 
-          {/* Acceptance criterion (issue #18): the next 3 runs are visible
+            {/* Acceptance criterion (issue #18): the next 3 runs are visible
               before saving. */}
-          <div className="rounded-lg bg-muted/40 px-3 py-3">
-            <p className={cn(metaLabelClass, "mb-1.5")}>Preview</p>
-            {compiled.schedule && preview ? (
-              <>
-                <p className="text-sm">{preview.sentence}</p>
-                <ul className="mt-1.5 space-y-0.5">
-                  {preview.times.map((time) => (
-                    <li key={time} className="text-xs text-muted-foreground">
-                      {time}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">{compiled.error}</p>
-            )}
+            <div className="rounded-lg bg-muted/40 px-3 py-3">
+              <p className={cn(metaLabelClass, "mb-1.5")}>Preview</p>
+              {compiled.schedule && preview ? (
+                <>
+                  <p className="text-sm">{preview.sentence}</p>
+                  <ul className="mt-1.5 space-y-0.5">
+                    {preview.times.map((time) => (
+                      <li key={time} className="text-xs text-muted-foreground">
+                        {time}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">{compiled.error}</p>
+              )}
+            </div>
           </div>
-        </div>
+        </DialogBody>
+
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

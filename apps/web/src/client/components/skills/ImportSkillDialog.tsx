@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogBody,
 } from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -109,77 +110,78 @@ export function ImportSkillDialog({
               : "Bring in a skill from pasted SKILL.md content or a GitHub link."}
           </DialogDescription>
         </DialogHeader>
-
-        {preview ? (
-          <div className="space-y-4">
-            <DataFields columns={2}>
-              <DataField label="Name">{preview.name}</DataField>
-              <DataField label="Files">{preview.files.length}</DataField>
-              <div className="col-span-2">
-                <DataField label="Description">{preview.description}</DataField>
+        <DialogBody>
+          {preview ? (
+            <div className="space-y-4">
+              <DataFields columns={2}>
+                <DataField label="Name">{preview.name}</DataField>
+                <DataField label="Files">{preview.files.length}</DataField>
+                <div className="col-span-2">
+                  <DataField label="Description">{preview.description}</DataField>
+                </div>
+              </DataFields>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                <div className="rounded-lg border p-4 text-sm">
+                  {preview.body.trim() ? (
+                    <Streamdown>{preview.body}</Streamdown>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No instructions body.</p>
+                  )}
+                </div>
+                <SkillFileList files={preview.files} />
               </div>
-            </DataFields>
-            <div className="max-h-64 space-y-2 overflow-y-auto">
-              <div className="rounded-lg border p-4 text-sm">
-                {preview.body.trim() ? (
-                  <Streamdown>{preview.body}</Streamdown>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No instructions body.</p>
-                )}
-              </div>
-              <SkillFileList files={preview.files} />
+              {preview.warnings.length > 0 && (
+                <ul className="space-y-1.5">
+                  {preview.warnings.map((warning) => (
+                    <li key={warning} className="flex items-start gap-2 text-xs text-warning">
+                      <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            {preview.warnings.length > 0 && (
-              <ul className="space-y-1.5">
-                {preview.warnings.map((warning) => (
-                  <li key={warning} className="flex items-start gap-2 text-xs text-warning">
-                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                    {warning}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ) : (
-          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="paste">Paste</TabsTrigger>
-              <TabsTrigger value="github">GitHub URL</TabsTrigger>
-            </TabsList>
-            <TabsContent value="paste" className="mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="import-content">SKILL.md content</Label>
-                <Textarea
-                  id="import-content"
-                  rows={10}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={PASTE_PLACEHOLDER}
-                  className="font-mono"
-                />
-                <p className="text-muted-foreground text-xs">
-                  Needs frontmatter with a name and a description.
-                </p>
-              </div>
-            </TabsContent>
-            <TabsContent value="github" className="mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="import-url">GitHub URL</Label>
-                <Input
-                  id="import-url"
-                  type="url"
-                  value={url}
-                  maxLength={2000}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
-                />
-                <p className="text-muted-foreground text-xs">
-                  A link to a public skill folder or its SKILL.md.
-                </p>
-              </div>
-            </TabsContent>
-          </Tabs>
-        )}
+          ) : (
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="paste">Paste</TabsTrigger>
+                <TabsTrigger value="github">GitHub URL</TabsTrigger>
+              </TabsList>
+              <TabsContent value="paste" className="mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="import-content">SKILL.md content</Label>
+                  <Textarea
+                    id="import-content"
+                    rows={10}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={PASTE_PLACEHOLDER}
+                    className="font-mono"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Needs frontmatter with a name and a description.
+                  </p>
+                </div>
+              </TabsContent>
+              <TabsContent value="github" className="mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="import-url">GitHub URL</Label>
+                  <Input
+                    id="import-url"
+                    type="url"
+                    value={url}
+                    maxLength={2000}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    A link to a public skill folder or its SKILL.md.
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogBody>
 
         <DialogFooter>
           {preview ? (
