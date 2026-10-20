@@ -4,7 +4,7 @@
  *
  - `GET /live` is MJPEG over a streaming response: the client is a plain
  *   <img>, authorized by the same JWT cookie the app already uses for
- *   uploads. Compression is skipped (multipart/x-mixed-replace filter).
+ *   uploads. Compression is skipped (text/event-stream filter).
  * - `POST /input` injects mouse/key events through the same CDP channel the
  *   agent uses. Secret keystrokes typed during takeover go straight into the
  *   page and are never logged or persisted.
@@ -57,7 +57,7 @@ function requireSession(conversationId: number) {
   return live;
 }
 
-// Status must sit before the MJPEG route only in name; both are exact paths.
+// Status and live are both exact paths.
 router.get("/bots/:id/browser", async (req) => {
   const id = parseStringParam(req.params.id, "id");
   const conversationId = await botConversation(id);
@@ -74,8 +74,13 @@ router.get("/bots/:id/browser/live", async (req: Request, res: Response) => {
   const conversationId = await botConversation(id);
   const live = requireSession(conversationId);
 
+  // SSE, not MJPEG: multipart/x-mixed-replace in an <img> does not survive
+  // reverse proxies (Cloudflare in front of the deploy buffers or reshapes
+  // it, leaving the panel black), while text/event-stream streams through
+  // the whole chain — the chat feed already proves that path. Frames are
+  // base64 JPEGs; the client paints them into the <img> as blob URLs.
   res.writeHead(200, {
-    "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+    "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     "X-Accel-Buffering": "no",
     Connection: "keep-alive",
@@ -83,7 +88,7 @@ router.get("/bots/:id/browser/live", async (req: Request, res: Response) => {
   res.flushHeaders?.();
 
   // Back-pressure: keep only the newest frame. A stale frame is worthless;
-  // the img element just wants the latest.
+  // the viewer just wants the latest.
   let pending: Buffer | undefined;
   let writing = false;
   const flush = async () => {
@@ -93,10 +98,9 @@ router.get("/bots/:id/browser/live", async (req: Request, res: Response) => {
     pending = undefined;
     try {
       await new Promise<void>((resolve, reject) => {
-        res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`);
-        res.write(frame, (error) => (error ? reject(error) : resolve()));
+        res.write(`event: frame\ndata: ${JSON.stringify({ jpeg: frame.toString("base64") })}\n\n`);
+        res.write("", (error) => (error ? reject(error) : resolve()));
       });
-      res.write("\r\n");
     } catch {
       // client gone
     } finally {

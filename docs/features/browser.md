@@ -18,7 +18,7 @@ in-process Playwright persistent context (headless=new), no CDP port
 
 Both:
 CDP session per page
-  ├─ Page.startScreencast ─► JPEG frames ─► MJPEG response ─► <img> in BrowserPanel
+  ├─ Page.startScreencast ─► JPEG frames ─► SSE feed ─► blob URLs ─► <img> in BrowserPanel
   └─ Input.dispatch*       ◄─ agent tools AND human input (peer channel)
 ```
 
@@ -37,13 +37,13 @@ CDP session per page
 
 ## API
 
-| Method | Path                               | Description                       |
-| ------ | ---------------------------------- | --------------------------------- |
-| GET    | `/api/v1/bots/:id/browser`         | `{ active, url, driver }`         |
-| GET    | `/api/v1/bots/:id/browser/live`    | MJPEG stream (JWT cookie `<img>`) |
-| POST   | `/api/v1/bots/:id/browser/input`   | mouse / scroll / key event        |
-| POST   | `/api/v1/bots/:id/browser/driver`  | `{ driver: "agent" \| "human" }`  |
-| DELETE | `/api/v1/bots/:id/browser/profile` | close + wipe the profile          |
+| Method | Path                               | Description                                       |
+| ------ | ---------------------------------- | ------------------------------------------------- |
+| GET    | `/api/v1/bots/:id/browser`         | `{ active, url, driver }`                         |
+| GET    | `/api/v1/bots/:id/browser/live`    | SSE frame feed (JWT; `<img>` painted client-side) |
+| POST   | `/api/v1/bots/:id/browser/input`   | mouse / scroll / key event                        |
+| POST   | `/api/v1/bots/:id/browser/driver`  | `{ driver: "agent" \| "human" }`                  |
+| DELETE | `/api/v1/bots/:id/browser/profile` | close + wipe the profile                          |
 
 ## Security rules
 

@@ -1,8 +1,9 @@
 /**
  * BrowserPanel (issue #24): the bot's browser viewport, live.
  *
- * The view is one <img> whose src is the MJPEG stream (JWT cookie
- * authorizes it, same as uploads). Takeover flips the server's driver flag;
+ * The view is one <img> painted from frames arriving over SSE (the JWT
+ * cookie authorizes the stream, same as the chat feed). Takeover flips the
+ * server's driver flag;
  * while the human drives, mouse and key events are POSTed to the input
  * route and injected as real CDP input. The masked secret field sends
  * keystrokes only: the value is never held anywhere client-side beyond the
@@ -39,6 +40,67 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       clearInterval(timer);
     };
   }, [bot.id]);
+
+  // Frames: subscribe to the SSE live feed and paint each frame into the
+  // <img> as a blob URL (revoking the previous one). MJPEG-in-<img> does not
+  // survive reverse proxies (Cloudflare); SSE does — the chat feed proves it.
+  const frameUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!status?.active) return;
+    const controller = new AbortController();
+    const paint = (jpeg: string) => {
+      const bytes = Uint8Array.from(atob(jpeg), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: "image/jpeg" });
+      const url = URL.createObjectURL(blob);
+      const img = imgRef.current;
+      if (img) img.src = url;
+      if (frameUrlRef.current) URL.revokeObjectURL(frameUrlRef.current);
+      frameUrlRef.current = url;
+    };
+    void (async () => {
+      try {
+        const response = await fetch(`/api/v1/bots/${bot.id}/browser/live`, {
+          credentials: "include",
+          headers: { Accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let boundary: number;
+          while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            if (frame.startsWith("event: frame")) {
+              const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+              if (dataLine) {
+                try {
+                  const payload = JSON.parse(dataLine.slice(5).trim());
+                  if (typeof payload.jpeg === "string") paint(payload.jpeg);
+                } catch {
+                  /* skip malformed frame */
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        /* aborted or disconnected; status poll re-mounts us */
+      }
+    })();
+    return () => {
+      controller.abort();
+      if (frameUrlRef.current) {
+        URL.revokeObjectURL(frameUrlRef.current);
+        frameUrlRef.current = null;
+      }
+    };
+  }, [status?.active, bot.id]);
 
   const setDriver = async (driver: "agent" | "human") => {
     try {
@@ -174,7 +236,6 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
         {status?.active ? (
           <img
             ref={imgRef}
-            src={`/api/v1/bots/${bot.id}/browser/live`}
             alt="bot browser viewport"
             className="h-full w-full object-contain"
             onClick={onMouse}

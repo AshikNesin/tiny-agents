@@ -143,7 +143,7 @@ describe("browser routes", () => {
     expect(r.body.data.driver).toBe("agent");
   });
 
-  it("streams MJPEG frames with the boundary content type", { timeout: 8000 }, async () => {
+  it("streams SSE frames with the event-stream content type", { timeout: 8000 }, async () => {
     // supertest's parsers fight streaming responses; use a real socket.
     const { createServer } = await import("node:http");
     const server = createServer(app);
@@ -154,14 +154,16 @@ describe("browser routes", () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("multipart/x-mixed-replace");
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
       expect(res.headers.get("x-accel-buffering")).toBe("no");
       const reader = res.body!.getReader();
       const { value } = await Promise.race([
         reader.read(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("no frame in 3s")), 3000)),
       ]);
-      expect(Buffer.from(value!).toString()).toContain("jpegbytes");
+      const text = Buffer.from(value!).toString();
+      expect(text).toContain("event: frame");
+      expect(text).toContain(Buffer.from("jpegbytes").toString("base64"));
       await reader.cancel();
     } finally {
       await new Promise((resolveClose) => server.close(resolveClose));

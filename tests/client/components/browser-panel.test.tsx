@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import { botsApi, type Bot } from "@/lib/bots-api";
 import type { BrowserStatus } from "@/lib/bots-api";
@@ -45,6 +45,16 @@ function mockApi(s: BrowserStatus) {
   return { input, driver };
 }
 
+// jsdom's fetch has no streaming body; stub the SSE feed so the frame
+// subscription no-ops instead of throwing.
+const realFetch = global.fetch;
+beforeEach(() => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, body: null });
+});
+afterEach(() => {
+  global.fetch = realFetch;
+});
+
 describe("BrowserPanel", () => {
   it("shows the viewport image and driver badge while the bot drives", async () => {
     mockApi(status({}));
@@ -53,7 +63,9 @@ describe("BrowserPanel", () => {
       expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/"),
     );
     const img = screen.getByAltText("bot browser viewport") as HTMLImageElement;
-    expect(img.getAttribute("src")).toBe("/api/v1/bots/b1/browser/live");
+    // The viewport is painted from the SSE feed (blob URLs), so the img has
+    // no route src; the frame subscription fetches /browser/live.
+    expect(img.getAttribute("src")).toBeNull();
     expect(screen.getByTestId("browser-driver").textContent).toContain("Surfer drives");
     expect(screen.queryByTestId("browser-secret")).not.toBeInTheDocument();
   });
