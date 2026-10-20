@@ -8,6 +8,7 @@
  * acked immediately so Chrome keeps its own pacing; the consumer's back-
  * pressure is a drop-oldest ring of one, because a stale frame is worthless.
  */
+import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
 import type { CDPSession, Page } from "playwright-core";
 import type {
@@ -19,19 +20,38 @@ import type {
 } from "./browser";
 
 export interface ChromiumTransportOptions {
-  /** Overrides the browser binary; default: Playwright's bundled Chromium. */
+  /** Overrides the browser binary; default: the VM's headless shell if
+   * present, else Playwright's bundled Chromium. */
   executablePath?: string;
   /** Extra Chromium args (tests may need --no-sandbox on locked-down CI). */
   args?: string[];
 }
 
+/** The exe.dev VM ships a dedicated headless-shell build (Chromium 151). */
+const VM_HEADLESS_SHELL = "/headless-shell/headless-shell";
+
+function resolveExecutable(explicit?: string): string | undefined {
+  if (explicit) return explicit;
+  // Prefer the pre-provisioned VM binary: no download needed, and
+  // `pnpm exec playwright install` never has to run on this host.
+  try {
+    statSync(VM_HEADLESS_SHELL);
+    return VM_HEADLESS_SHELL;
+  } catch {
+    return undefined; // Playwright's bundled Chromium
+  }
+}
+
 export function createChromiumTransport(options: ChromiumTransportOptions = {}) {
   return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
+    const executablePath = resolveExecutable(options.executablePath);
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: true,
-      channel: "chromium", // the new headless renderer; screencast works
+      // The new headless renderer; screencast works. Only for Playwright's
+      // own browser — an explicit executable (VM headless shell) brings its
+      // own channel and must not be overridden.
+      ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
       viewport: { width: open.viewportWidth, height: open.viewportHeight },
-      ...(options.executablePath ? { executablePath: options.executablePath } : {}),
       ...(options.args?.length ? { args: options.args } : {}),
     });
     const page: Page = context.pages()[0] ?? (await context.newPage());
