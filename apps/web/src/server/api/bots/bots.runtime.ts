@@ -53,8 +53,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       apiBase: unquote(env.CLOUDFLARE_API_BASE_URL),
     }),
     createTimeToolkit({ timeZone: unquote(env.TZ) }),
+    // Default host is the verified MagicDNS name (issue #19 runbook); the
+    // env var exists to override — e.g. the Tailscale IP if MagicDNS breaks.
     createSandboxToolkit({
-      host: unquote(env.SANDBOX_HOST),
+      host: unquote(env.SANDBOX_HOST) ?? "tiny-agents-vm",
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
