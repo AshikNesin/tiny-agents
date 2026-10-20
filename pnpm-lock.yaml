@@ -428,6 +428,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.4.3)
+      playwright-core:
+        specifier: 1.61.1
+        version: 1.61.1
       ssh2:
         specifier: 1.17.0
         version: 1.17.0

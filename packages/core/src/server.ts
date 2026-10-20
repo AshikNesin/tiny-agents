@@ -46,10 +46,12 @@ let isShuttingDown = false;
  */
 export function sseSafeCompressionFilter(req: express.Request, res: express.Response): boolean {
   const contentType = res.getHeader("Content-Type");
-  return (
-    (typeof contentType !== "string" || !contentType.startsWith("text/event-stream")) &&
-    compression.filter(req, res)
-  );
+  // Never compress streaming responses (SSE, MJPEG browser live view):
+  // buffers would break their latency, and JPEG frames do not compress.
+  const streaming =
+    (typeof contentType === "string" && contentType.startsWith("text/event-stream")) ||
+    (typeof contentType === "string" && contentType.startsWith("multipart/x-mixed-replace"));
+  return !streaming && compression.filter(req, res);
 }
 
 export async function createServer(options: ServerOptions): Promise<ServerInstance> {

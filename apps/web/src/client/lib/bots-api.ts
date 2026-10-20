@@ -196,6 +196,12 @@ export const botsApi = {
     decision: "approved" | "denied",
     alwaysAllow?: string,
   ) => apiClient.post(`/bots/${id}/approvals/${taskId}`, { decision, alwaysAllow }),
+  browserStatus: (id: string) => apiClient.get<BrowserStatus>(`/bots/${id}/browser`),
+  browserDriver: (id: string, driver: "agent" | "human") =>
+    apiClient.post(`/bots/${id}/browser/driver`, { driver }),
+  browserInput: (id: string, event: BrowserInputEvent) =>
+    apiClient.post(`/bots/${id}/browser/input`, event),
+  browserResetProfile: (id: string) => apiClient.delete(`/bots/${id}/browser/profile`),
   listMemories: (id: string, includeArchived = true) =>
     apiClient.get<{ memories: MemoryRecord[] }>(`/bots/${id}/memories`, { includeArchived }),
   createMemory: (id: string, input: MemoryInput) =>
@@ -204,3 +210,16 @@ export const botsApi = {
     apiClient.patch<{ memory: MemoryRecord }>(`/memories/${id}`, input),
   deleteMemory: (id: string) => apiClient.delete<{ deleted: boolean }>(`/memories/${id}`),
 };
+
+/** Live browser session state for a bot (issue #24). */
+export interface BrowserStatus {
+  active: boolean;
+  url: string | null;
+  driver: "agent" | "human" | null;
+}
+
+/** Human input injected into the bot's browser (CDP peer channel). */
+export type BrowserInputEvent =
+  | { kind: "mouse"; x: number; y: number }
+  | { kind: "scroll"; x: number; y: number; deltaY: number }
+  | { kind: "key"; key: string; text?: string };

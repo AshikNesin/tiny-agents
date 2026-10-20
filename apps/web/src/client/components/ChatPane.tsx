@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowUp,
+  Globe,
   MessageSquarePlus,
   MoreHorizontal,
   Paperclip,
@@ -36,6 +37,7 @@ import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
 import { BotAvatar } from "./BotAvatar";
+import { BrowserPanel } from "./BrowserPanel";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
 import { MessageAttachments, StagedAttachment, type StagedItem } from "./Attachments";
 import {
@@ -108,6 +110,7 @@ function ChatPaneBody({
   const [text, setText] = useState("");
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
@@ -348,14 +351,19 @@ function ChatPaneBody({
           <BotAvatar name={bot.name} className="size-7" />
           <span className="truncate text-[15px] font-semibold">{bot.name}</span>
         </button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="ml-auto shrink-0 rounded-full"
+          onClick={() => setBrowserOpen((v) => !v)}
+          aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
+          data-testid="browser-toggle"
+        >
+          <Globe className="size-5" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="ml-auto rounded-full"
-              aria-label="Bot menu"
-            >
+            <Button variant="outline" size="icon" className="rounded-full" aria-label="Bot menu">
               <MoreHorizontal className="size-5" />
             </Button>
           </DropdownMenuTrigger>
@@ -484,6 +492,10 @@ function ChatPaneBody({
           />
         </MessageScroller>
       </div>
+
+      {/* Browser live view (issue #24): docks beside the transcript when the
+          owner opens it. Toggle in the header actions. */}
+      {browserOpen && <BrowserPanel bot={bot} onClose={() => setBrowserOpen(false)} />}
 
       {/* Composer - Grok-style: a single rounded pill with the send/stop
           button inside on the right. Status (model, warnings) sits above the

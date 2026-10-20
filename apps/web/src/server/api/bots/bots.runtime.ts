@@ -9,6 +9,8 @@
 import {
   AgentRuntime,
   createBotsToolkit,
+  createBrowserToolkit,
+  createChromiumTransport,
   createMemoryCapability,
   createMemoryHostKeyStore,
   createRoutinesToolkit,
@@ -63,6 +65,20 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
+    }),
+    // Browser runs in-process (issue #24): one Chromium persistent context
+    // per bot profile, lazy, idle-closed; never a debug port.
+    createBrowserToolkit({
+      profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
+      idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
+      allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
+      ...(unquote(env.BROWSER_EXECUTABLE_PATH)
+        ? {
+            transport: createChromiumTransport({
+              executablePath: unquote(env.BROWSER_EXECUTABLE_PATH)!,
+            }),
+          }
+        : {}),
     }),
   ];
 }

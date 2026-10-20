@@ -47,6 +47,19 @@ export {
 } from "./toolkits/sandbox";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
+  createBrowserToolkit,
+  setDriver,
+  getLiveBrowserSession,
+  liveBrowserConversations,
+  type BrowserToolkitOptions,
+  type BrowserSession,
+  type BrowserTransport,
+  type BrowserInput,
+  type BrowserDriver,
+  type LiveBrowserSession,
+} from "./toolkits/browser";
+export { createChromiumTransport } from "./toolkits/browser-chromium";
+export {
   createRoutinesExtension,
   createRoutinesToolkit,
   confirmationCard,
