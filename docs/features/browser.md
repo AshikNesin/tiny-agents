@@ -7,8 +7,16 @@ control mid-run, including typing secrets that must never reach the model.
 ## Architecture
 
 ```
-Chromium persistent context, one profile dir per bot (./data/browser-profiles/<id>)
-  └─ in-process Playwright (headless=new), no remote-debugging port ever
+One browser per bot, one profile dir per bot (remote: on the VM; local: ./data/browser-profiles/<id>)
+
+Remote (SANDBOX_HOST set — production):
+VM headless-shell ─ CDP on 127.0.0.1 (VM-only, ephemeral port)
+  └─ SSH tunnel (keyless Tailscale) ─► playwright-core connectOverCDP in the app
+
+Local fallback (no SANDBOX_HOST):
+in-process Playwright persistent context (headless=new), no CDP port
+
+Both:
 CDP session per page
   ├─ Page.startScreencast ─► JPEG frames ─► MJPEG response ─► <img> in BrowserPanel
   └─ Input.dispatch*       ◄─ agent tools AND human input (peer channel)
@@ -39,7 +47,9 @@ CDP session per page
 
 ## Security rules
 
-- No CDP port is bound anywhere; Playwright talks over a pipe.
+- No CDP port is reachable from outside: local fallback never binds one
+  (Playwright over a pipe); on the VM it binds to 127.0.0.1 only, reachable
+  solely through the SSH tunnel from the app.
 - Navigation passes the same private-address rules as `web_fetch`
   (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts.
 - Secrets: the masked field in takeover mode sends keystrokes straight to

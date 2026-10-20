@@ -25,6 +25,7 @@ export interface RemoteCdpTransportOptions {
   /** SSH host of the VM running the browser (MagicDNS name). */
   host: string;
   port?: number;
+  /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
   user?: string;
   /** Binary on the VM; default /headless-shell/headless-shell. */
   executablePath?: string;
@@ -62,7 +63,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         .connect({
           host: options.host,
           port: options.port ?? 22,
-          username: options.user,
+          username: options.user ?? "exedev",
           keepaliveInterval: 15_000,
           readyTimeout: options.connectTimeoutMs ?? 10_000,
           // The tailnet is the auth (tag:codevm -> tag:tiny-agents-vm accept
@@ -117,93 +118,107 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     }
 
     const profile = profileDir.replaceAll("'", "'\"'\"'");
-    await exec(
-      `mkdir -p '${profile}' && (nohup ${executable} ` +
-        `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 ` +
-        `--user-data-dir='${profile}' --no-first-run --disable-gpu --headless ` +
-        `</dev/null >/dev/null 2>&1 & echo $! > '${profile}/.cdp-pid') ; exit 0`,
-    );
-
-    // Wait for CDP to answer on the VM itself (no tunnel yet).
-    const up = await exec(
-      `for i in $(seq 1 50); do curl -sf http://127.0.0.1:${port}/json/version >/dev/null 2>&1 && echo up && exit 0; sleep 0.2; done; exit 1`,
-    ).catch(() => "");
-    if (up !== "up") throw new Error("Chromium did not start on the VM within 10s");
-
-    // Local forwarding server. Two tailscaled (Tailscale SSH) realities:
-    // 1. after a direct-tcpip channel closes, later channels on the same
-    //    connection stall — so each incoming socket dials its OWN connection;
-    // 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
-    //    write their HTTP request immediately) — buffer until the channel
-    //    exists and replay. CDP uses few long-lived connections; the dial
-    //    cost per connection is fine.
-    const server = createServer();
     const live: Client[] = [];
-    server.on("connection", (socket) => {
-      const early: Buffer[] = [];
-      const onEarly = (d: Buffer) => early.push(d);
-      socket.on("data", onEarly);
-      void dial()
-        .then((client) => {
-          live.push(client);
-          client.forwardOut(
-            socket.remoteAddress ?? "127.0.0.1",
-            socket.remotePort ?? 0,
-            "127.0.0.1",
-            port,
-            (error, channel) => {
-              if (error) {
-                socket.destroy();
-                client.end();
-                return;
-              }
-              socket.removeListener("data", onEarly);
-              for (const d of early) channel.write(d);
-              socket.pipe(channel);
-              channel.pipe(socket);
-              const done = () => {
-                socket.destroy();
-                channel.close();
-                client.end();
-              };
-              socket.on("close", done);
-              channel.on("close", done);
-            },
-          );
-        })
-        .catch(() => socket.destroy());
-    });
-    const localPort = await new Promise<number>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => {
-        const addr = server.address();
-        if (addr && typeof addr === "object") resolve(addr.port);
-        else reject(new Error("Could not bind a local tunnel port"));
+    let server: ReturnType<typeof createServer> | undefined;
+    // Kill the remote chromium (pid recorded at launch) and drop the tunnel
+    // connections; used both by session close and by failed setup.
+    const cleanup = async () => {
+      for (const c of live.splice(0)) c.end();
+      server?.close();
+      await exec(
+        `cat '${profile}/.cdp-pid' 2>/dev/null | xargs -r kill 2>/dev/null; rm -f '${profile}/.cdp-pid'`,
+      ).catch(() => {});
+    };
+    try {
+      await exec(
+        `mkdir -p '${profile}' && (nohup ${executable} ` +
+          `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 ` +
+          `--user-data-dir='${profile}' --no-first-run --disable-gpu --headless ` +
+          `</dev/null >/dev/null 2>&1 & echo $! > '${profile}/.cdp-pid') ; exit 0`,
+      );
+
+      // Wait for CDP to answer on the VM itself (no tunnel yet).
+      const up = await exec(
+        `for i in $(seq 1 50); do curl -sf http://127.0.0.1:${port}/json/version >/dev/null 2>&1 && echo up && exit 0; sleep 0.2; done; exit 1`,
+      ).catch(() => "");
+      if (up !== "up") throw new Error("Chromium did not start on the VM within 10s");
+
+      // Local forwarding server. Two tailscaled (Tailscale SSH) realities:
+      // 1. after a direct-tcpip channel closes, later channels on the same
+      //    connection stall — so each incoming socket dials its OWN connection;
+      // 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
+      //    write their HTTP request immediately) — buffer until the channel
+      //    exists and replay. CDP uses few long-lived connections; the dial
+      //    cost per connection is fine.
+      const fwd = createServer();
+      server = fwd;
+      fwd.on("connection", (socket) => {
+        const early: Buffer[] = [];
+        const onEarly = (d: Buffer) => early.push(d);
+        socket.on("data", onEarly);
+        void dial()
+          .then((client) => {
+            live.push(client);
+            client.forwardOut(
+              socket.remoteAddress ?? "127.0.0.1",
+              socket.remotePort ?? 0,
+              "127.0.0.1",
+              port,
+              (error, channel) => {
+                if (error) {
+                  socket.destroy();
+                  client.end();
+                  return;
+                }
+                socket.removeListener("data", onEarly);
+                for (const d of early) channel.write(d);
+                socket.pipe(channel);
+                channel.pipe(socket);
+                const done = () => {
+                  socket.destroy();
+                  channel.close();
+                  client.end();
+                };
+                socket.on("close", done);
+                channel.on("close", done);
+              },
+            );
+          })
+          .catch(() => socket.destroy());
       });
-    });
+      const localPort = await new Promise<number>((resolve, reject) => {
+        fwd.once("error", reject);
+        fwd.listen(0, "127.0.0.1", () => {
+          const addr = fwd.address();
+          if (addr && typeof addr === "object") resolve(addr.port);
+          else reject(new Error("Could not bind a local tunnel port"));
+        });
+      });
 
-    // connectOverCDP uses webSocketDebuggerUrl from /json/version verbatim —
-    // it names the VM-side port, unreachable here. Fetch it through the
-    // tunnel, rewrite to the local port, pass ws:// (used as-is).
-    const version = await fetchJsonVersion(localPort);
-    const wsUrl = version.webSocketDebuggerUrl?.replace(/:(\d+)\//, `:${localPort}/`);
-    if (!wsUrl) throw new Error("Chromium on the VM did not report a debugger URL");
-    const browser = await chromium.connectOverCDP(wsUrl);
-    const context = browser.contexts()[0] ?? (await browser.newContext());
-    const page: Page = context.pages()[0] ?? (await context.newPage());
-    await page.setViewportSize({ width: open.viewportWidth, height: open.viewportHeight });
+      // connectOverCDP uses webSocketDebuggerUrl from /json/version verbatim —
+      // it names the VM-side port, unreachable here. Fetch it through the
+      // tunnel, rewrite to the local port, pass ws:// (used as-is).
+      const version = await fetchJsonVersion(localPort);
+      const wsUrl = version.webSocketDebuggerUrl?.replace(/:(\d+)\//, `:${localPort}/`);
+      if (!wsUrl) throw new Error("Chromium on the VM did not report a debugger URL");
+      const browser = await chromium.connectOverCDP(wsUrl);
+      const context = browser.contexts()[0] ?? (await browser.newContext());
+      const page: Page = context.pages()[0] ?? (await context.newPage());
+      await page.setViewportSize({ width: open.viewportWidth, height: open.viewportHeight });
 
-    return pageSession(page, open, {
-      close: async () => {
-        // Detach playwright, then kill the remote chromium explicitly
-        // (closing a CDP-attached browser does not terminate it).
-        await browser.close().catch(() => {});
-        server.close();
-        for (const c of live) c.end();
-        await exec(
-          `cat '${profile}/.cdp-pid' 2>/dev/null | xargs -r kill 2>/dev/null; rm -f '${profile}/.cdp-pid'`,
-        ).catch(() => {});
-      },
-    });
+      return pageSession(page, open, {
+        close: async () => {
+          // Detach playwright, then kill the remote chromium explicitly
+          // (closing a CDP-attached browser does not terminate it).
+          await browser.close().catch(() => {});
+          await cleanup().catch(() => {});
+        },
+      });
+    } catch (error) {
+      // Setup failed after chromium launched and/or the tunnel bound —
+      // tear both down instead of leaking them.
+      await cleanup().catch(() => {});
+      throw error;
+    }
   };
 }
