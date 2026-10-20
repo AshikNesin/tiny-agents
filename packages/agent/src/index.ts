@@ -36,6 +36,15 @@ export {
   type TaskPriority,
 } from "./toolkits/tasks";
 export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
+export {
+  createSandboxToolkit,
+  createMemoryHostKeyStore,
+  createSsh2Transport,
+  type SandboxToolkitOptions,
+  type SandboxTransport,
+  type SandboxSession,
+  type HostKeyStore,
+} from "./toolkits/sandbox";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
   createRoutinesExtension,
