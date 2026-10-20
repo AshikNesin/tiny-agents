@@ -26,6 +26,8 @@ import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { createBotRelay } from "./api/bots/bots.relay";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
+import { startMemoryCapture } from "./api/bots/memories.capture";
+import { captureConversation, resolveCaptureModelId } from "./api/bots/memories.runner";
 import { AgentRuntime } from "@tiny-agents/agent";
 
 /**
@@ -133,6 +135,24 @@ async function main() {
   // bot's conversation goes idle; the boot sweep marks runs interrupted by a
   // restart as failed.
   startRoutinesWatcher(runtime);
+
+  // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
+  // window or 6 turns later one side-call extracts durable facts off the
+  // reply path. Faux/gateway-off modes resolve no capture model and skip.
+  if (process.env.TINY_AGENTS_FAUX !== "1") {
+    startMemoryCapture(runtime, {
+      models: runtime.models as never,
+      captureNow: (conversationId) =>
+        captureConversation(conversationId, {
+          sideCall: { models: runtime.models as never, modelId: resolveCaptureModelId(runtime) },
+          readTranscript: async (id) => {
+            const sub = await runtime.watchChat(id, () => undefined);
+            void sub.stop();
+            return sub.initial.messages;
+          },
+        }),
+    });
+  }
 
   // Register feature job handlers before routes
   registerJobHandlers();
