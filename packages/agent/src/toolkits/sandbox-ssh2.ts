@@ -11,7 +11,9 @@
  * credentials and expects `none` auth to succeed.
  */
 import { createHash } from "node:crypto";
-import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
+import ssh2, { type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
+const { Client } = ssh2;
+type ClientClass = typeof Client;
 import type { ConnectOptions, ExecResult, SandboxSession, SandboxTransport } from "./sandbox";
 
 /** TOFU host-key store: remember one key hash per host, reject changes. */
@@ -32,7 +34,7 @@ export function createMemoryHostKeyStore(): HostKeyStore {
  * The production transport: one ssh2 Client, `none` auth, 15s keepalive,
  * TOFU host-key check against the injected store.
  */
-export function createSsh2Transport(ClientClass: typeof Client = Client): SandboxTransport {
+export function createSsh2Transport(ClientClass: ClientClass = Client): SandboxTransport {
   return (options) =>
     new Promise((resolve, reject) => {
       const client = new ClientClass();
@@ -98,7 +100,7 @@ async function checkHostKey(options: ConnectOptions, raw: Buffer): Promise<boole
   return true;
 }
 
-function createSession(client: Client): SandboxSession {
+function createSession(client: ssh2.Client): SandboxSession {
   const sftp = (): Promise<SFTPWrapper> =>
     new Promise((resolve, reject) =>
       client.sftp((error, s) => (error ? reject(error) : resolve(s))),

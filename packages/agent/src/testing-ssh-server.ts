@@ -16,7 +16,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { Server as SshServer, type Connection } from "ssh2";
+import ssh2 from "ssh2";
+// default-interop: a plain-node child (durability tests) can't resolve ssh2's
+// named exports through cjs-module-lexer, but the default export works everywhere
+const { Server: SshServer } = ssh2;
+type Connection = import("ssh2").Connection;
 // The server-side SFTP stream lives in ssh2's runtime but not its types.
 type SftpServerStream = EventEmitter & Record<string, any>;
 
