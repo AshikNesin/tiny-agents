@@ -67,11 +67,12 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
     }),
-    // Browser runs in-process (issue #24): one Chromium persistent context
-    // per bot profile, lazy, idle-closed; never a debug port.
+    // Browser (issue #24): one Chrome per bot profile, lazy, idle-closed;
+    // on the sandbox VM the owner also gets a VNC-streamed desktop.
     createBrowserToolkit({
       profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
       idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
+      scale: Number(env.BROWSER_SCALE) === 1 ? 1 : 2,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
       transport: browserTransport(env),
     }),

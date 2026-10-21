@@ -47,17 +47,21 @@ export {
 } from "./toolkits/sandbox";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
+  browserOpenState,
   browserProfilesDir,
+  closeAllBrowserSessions,
   closeBrowserSession,
   createBrowserToolkit,
   setDriver,
+  startBrowserSession,
   getLiveBrowserSession,
   liveBrowserConversations,
   type BrowserToolkitOptions,
   type BrowserSession,
   type BrowserTransport,
-  type BrowserInput,
   type BrowserDriver,
+  type BrowserPhase,
+  type BrowserVnc,
   type LiveBrowserSession,
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";

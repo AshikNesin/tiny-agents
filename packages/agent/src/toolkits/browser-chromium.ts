@@ -1,24 +1,15 @@
 /**
- * The production `BrowserSession` transport: one Chromium persistent context
- * per profile directory, driven by Playwright, watched through one CDP
- * session. No remote-debugging port is ever opened (CDP has no
- * authentication; Playwright talks to the browser over a pipe).
- *
- * Screencast frames come from CDP `Page.screencastFrame` (JPEG) and are
- * acked immediately so Chrome keeps its own pacing; the consumer's back-
- * pressure is a drop-oldest ring of one, because a stale frame is worthless.
+ * The local `BrowserSession` transport: one headless Chromium persistent
+ * context per profile directory, driven by Playwright. No remote-debugging
+ * port is ever opened (CDP has no authentication; Playwright talks to the
+ * browser over a pipe). It has no display, so the owner cannot watch it; the
+ * live view needs the VM transport (`browser-remote-cdp.ts`).
  */
 import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
-import type { CDPSession, Page } from "playwright-core";
+import type { Page } from "playwright-core";
 import { isBlockedPrivateUrl } from "./browser";
-import type {
-  BrowserFrame,
-  BrowserInput,
-  BrowserSession,
-  BrowserSessionEvents,
-  OpenBrowserOptions,
-} from "./browser";
+import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser";
 
 export interface ChromiumTransportOptions {
   /** Overrides the browser binary; default: the VM's headless shell if
@@ -53,9 +44,9 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
     const executablePath = resolveExecutable(options.executablePath);
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: true,
-      // The new headless renderer; screencast works. Only for Playwright's
-      // own browser — an explicit executable (VM headless shell) brings its
-      // own channel and must not be overridden.
+      // The new headless renderer. Only for Playwright's own browser — an
+      // explicit executable (VM headless shell) brings its own channel and
+      // must not be overridden.
       ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
       viewport: { width: open.viewportWidth, height: open.viewportHeight },
       ...(options.args?.length ? { args: options.args } : {}),
@@ -71,25 +62,51 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
 
 /**
  * The page-level session every chromium transport shares: navigation with
- * the redirect guard, ref snapshot/click/type, CDP input + screencast.
+ * the redirect guard and ref snapshot/click/type.
  * `teardown.close` disposes the transport-specific resources around the
  * page (local context vs a remote chromium + tunnel).
  */
 export function pageSession(
-  page: Page,
+  initialPage: Page,
   open: OpenBrowserOptions,
-  teardown: { close: () => Promise<void> },
+  teardown: {
+    close: () => Promise<void>;
+    vnc?: BrowserVnc;
+    wipeProfile?: () => Promise<void>;
+  },
 ): BrowserSession {
-  let cdp: CDPSession | undefined;
-  const listeners = new Set<BrowserSessionEvents>();
-  let screencasting = false;
+  // The tab the agent drives. With a streamed desktop the owner can open
+  // and close tabs, so this follows them (see `follow`).
+  let page = initialPage;
+  let closing = false;
+
+  const switchTo = async (next: Page) => {
+    if (next === page) return;
+    page = next;
+    follow(next);
+  };
+
+  // When the current tab closes, move to the most recent remaining tab; a
+  // closed-out browser gets a fresh blank one so the agent never holds a
+  // dead page.
+  const follow = (target: Page) => {
+    target.once("close", () => {
+      if (closing || page !== target) return;
+      const remaining = target.context().pages();
+      const next = remaining[remaining.length - 1];
+      void (next ? switchTo(next) : target.context().newPage().then(switchTo)).catch(() => {});
+    });
+  };
+  follow(page);
 
   const session: BrowserSession = {
-    url: () => page.url(),
-    on: (events) => {
-      listeners.add(events);
-      return () => listeners.delete(events);
+    vnc: teardown.vnc,
+    wipeProfile: teardown.wipeProfile,
+    adoptActiveTab: async () => {
+      const visible = await visiblePage(page.context().pages());
+      if (visible) await switchTo(visible);
     },
+    url: () => page.url(),
     navigate: async (url) => {
       // Redirect guard: validate every hop of the redirect chain. Route
       // interception never sees redirect hops here, but the response's
@@ -113,37 +130,38 @@ export function pageSession(
     press: (key) => page.keyboard.press(key),
     scroll: (direction, amount) => page.mouse.wheel(0, direction === "down" ? amount : -amount),
     screenshot: async () => ({
-      data: (await page.screenshot({ type: "jpeg", quality: 60 })).toString("base64"),
+      // CSS scale: on a 2x desktop the default would double both dimensions
+      // and the model would pay for pixels it cannot use.
+      data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
     }),
-    input: (event) => injectInput(page, event),
-    startScreencast: async () => {
-      cdp ??= await page.context().newCDPSession(page);
-      if (screencasting) return;
-      screencasting = true;
-      cdp.on("Page.screencastFrame", (frame) => {
-        void cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
-        for (const l of listeners) l.frame?.({ jpeg: Buffer.from(frame.data, "base64") });
-      });
-      await cdp.send("Page.enable");
-      await cdp.send("Page.startScreencast", {
-        format: "jpeg",
-        quality: 60,
-        maxWidth: open.viewportWidth,
-        maxHeight: open.viewportHeight,
-        everyNthFrame: 1,
-      });
-    },
-    stopScreencast: async () => {
-      screencasting = false;
-      await cdp?.send("Page.stopScreencast").catch(() => {});
-    },
     close: async () => {
-      for (const l of listeners) l.closed?.();
-      listeners.clear();
+      closing = true;
       await teardown.close();
     },
   };
   return session;
+}
+
+/** The tab Chrome is showing: the one whose document reports itself visible. */
+function visiblePage(pages: Page[]): Promise<Page | undefined> {
+  return new Promise((resolve) => {
+    let pending = pages.length;
+    // A hidden tab can be slow to answer; settle on the first visible one.
+    const timer = setTimeout(() => resolve(undefined), 1500);
+    const settle = (found?: Page) => {
+      if (found || --pending <= 0) {
+        clearTimeout(timer);
+        resolve(found);
+      }
+    };
+    if (pending === 0) settle();
+    for (const p of pages) {
+      p.evaluate("document.visibilityState", undefined).then(
+        (state) => settle(state === "visible" ? p : undefined),
+        () => settle(),
+      );
+    }
+  });
 }
 
 /** Inject `data-ta-ref` attributes, then return the serialized aria snapshot. */
@@ -205,92 +223,3 @@ async function typeRef(page: Page, ref: string, text: string) {
   await loc.type(text, { delay: 10 });
   return { url: page.url() };
 }
-
-/** Human and agent input are peers: both land as CDP input events. */
-async function injectInput(page: Page, event: BrowserInput) {
-  // One CDP session per page, reused: fresh sessions dropped the first
-  // keystrokes (the page had not seen the session's Input domain yet).
-  const cdp = await cdpFor(page);
-  try {
-    if (event.kind === "mouse") {
-      const base = { x: event.x, y: event.y, button: "left" as const, clickCount: 1 };
-      await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...base });
-      await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...base });
-    } else if (event.kind === "scroll") {
-      await cdp.send("Input.dispatchMouseEvent", {
-        type: "mouseWheel",
-        x: event.x,
-        y: event.y,
-        deltaX: 0,
-        deltaY: event.deltaY,
-      });
-    } else if (event.kind === "key") {
-      if (event.text) {
-        // Printable: text carries the character.
-        await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", text: event.text });
-        await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: event.text });
-      } else {
-        const code = KEY_CODES[event.key];
-        await cdp.send("Input.dispatchKeyEvent", {
-          type: "rawKeyDown",
-          key: event.key,
-          code,
-          windowsVirtualKeyCode: VK[event.key],
-        });
-        await cdp.send("Input.dispatchKeyEvent", {
-          type: "keyUp",
-          key: event.key,
-          code,
-          windowsVirtualKeyCode: VK[event.key],
-        });
-      }
-    }
-  } catch (error) {
-    inputCdpByPage.delete(page); // a broken session must not be cached
-    throw error;
-  }
-}
-
-const inputCdpByPage = new WeakMap<Page, CDPSession>();
-async function cdpFor(page: Page) {
-  let cdp = inputCdpByPage.get(page);
-  if (!cdp) {
-    cdp = await page.context().newCDPSession(page);
-    inputCdpByPage.set(page, cdp);
-  }
-  return cdp;
-}
-
-const KEY_CODES: Record<string, string> = {
-  Enter: "Enter",
-  Tab: "Tab",
-  Backspace: "Backspace",
-  Delete: "Delete",
-  Escape: "Escape",
-  ArrowUp: "ArrowUp",
-  ArrowDown: "ArrowDown",
-  ArrowLeft: "ArrowLeft",
-  ArrowRight: "ArrowRight",
-  Home: "Home",
-  End: "End",
-  PageUp: "PageUp",
-  PageDown: "PageDown",
-};
-
-const VK: Record<string, number> = {
-  Enter: 13,
-  Tab: 9,
-  Backspace: 8,
-  Delete: 46,
-  Escape: 27,
-  ArrowUp: 38,
-  ArrowDown: 40,
-  ArrowLeft: 37,
-  ArrowRight: 39,
-  Home: 36,
-  End: 35,
-  PageUp: 33,
-  PageDown: 34,
-};
-
-export type { BrowserFrame };

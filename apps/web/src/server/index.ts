@@ -28,7 +28,8 @@ import { createBotRelay } from "./api/bots/bots.relay";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { startMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation, resolveCaptureModelId } from "./api/bots/memories.runner";
-import { AgentRuntime } from "@tiny-agents/agent";
+import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
+import { attachBrowserVnc } from "./api/bots/browser.vnc";
 
 /**
  * The pi-durable agent store path. Plain path (not a file: URL) — the store
@@ -155,6 +156,9 @@ async function main() {
     });
   }
 
+  // VNC viewers for bot browsers connect over WebSocket (browser.vnc.ts).
+  const browserVnc = attachBrowserVnc(httpServer);
+
   // Register feature job handlers before routes
   registerJobHandlers();
 
@@ -205,6 +209,9 @@ async function main() {
       // End chat/activity streams first: they hold their HTTP connections
       // open forever, and their watches must stop before the Harness closes.
       endAllSse();
+      // Viewers first, then the remote browsers they were watching.
+      browserVnc.close();
+      await closeAllBrowserSessions();
       // Disarm capture debounce timers before the runtime closes: a firing
       // timer would call into a closed store.
       stopMemoryCapture?.();

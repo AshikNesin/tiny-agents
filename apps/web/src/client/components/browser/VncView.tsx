@@ -1,0 +1,208 @@
+/**
+ * The streamed browser: a noVNC canvas wired to the server's VNC WebSocket.
+ *
+ * The viewer stays view-only until the owner takes control. It reconnects
+ * with backoff (fetching a fresh one-time ticket each try), fits the remote
+ * desktop to its box, and carries the clipboard both ways.
+ */
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { botsApi } from "../../lib/bots-api";
+import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
+import { createRfb, type RfbClient } from "../../lib/novnc";
+
+export type VncState = "connecting" | "live" | "reconnecting";
+
+export interface VncHandle {
+  /** Send the local clipboard to the remote browser and press Ctrl+V. */
+  paste(): Promise<void>;
+  focus(): void;
+}
+
+interface VncViewProps {
+  botId: string;
+  /** False keeps the viewer view-only (the agent is driving). */
+  interactive: boolean;
+  onState: (state: VncState) => void;
+}
+
+const BACKOFF_SECONDS = [1, 3, 5, 10, 20, 30];
+const RESIZE_DEBOUNCE_MS = 500;
+/** Pause between setting the remote clipboard and pressing Ctrl+V. */
+const PASTE_SETTLE_MS = 80;
+
+function socketUrl(path: string): string {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${window.location.host}${path}`;
+}
+
+function sendStrokes(rfb: RfbClient, strokes: KeyStroke[]): void {
+  for (const stroke of strokes) rfb.sendKey(stroke.keysym, stroke.code, stroke.down);
+}
+
+const PASTE_CHORD = {
+  key: "v",
+  code: "KeyV",
+  shiftKey: false,
+  altKey: false,
+} as const;
+
+export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
+  { botId, interactive, onState },
+  ref,
+) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const rfbRef = useRef<RfbClient | null>(null);
+  const interactiveRef = useRef(interactive);
+  const onStateRef = useRef(onState);
+  const fitRef = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    onStateRef.current = onState;
+  }, [onState]);
+
+  // Take control = stop being view-only and grab the keyboard.
+  useEffect(() => {
+    interactiveRef.current = interactive;
+    const rfb = rfbRef.current;
+    if (!rfb) return;
+    rfb.viewOnly = !interactive;
+    if (interactive) rfb.focus({ preventScroll: true });
+  }, [interactive]);
+
+  const paste = useCallback(async () => {
+    const rfb = rfbRef.current;
+    if (!rfb) return;
+    const text = await navigator.clipboard.readText();
+    if (text) rfb.clipboardPasteFrom(text);
+    await new Promise((resolve) => setTimeout(resolve, PASTE_SETTLE_MS));
+    const strokes = remapMetaChord(PASTE_CHORD);
+    if (strokes) sendStrokes(rfb, strokes);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({ paste, focus: () => rfbRef.current?.focus({ preventScroll: true }) }),
+    [paste],
+  );
+
+  // Connection lifecycle: ticket -> noVNC -> reconnect with backoff.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    let cancelled = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleRetry = () => {
+      onStateRef.current("reconnecting");
+      const delay = BACKOFF_SECONDS[Math.min(attempt, BACKOFF_SECONDS.length - 1)]! * 1000;
+      attempt += 1;
+      retry = setTimeout(() => void connect(), delay);
+    };
+
+    const connect = async () => {
+      if (cancelled) return;
+      onStateRef.current(attempt === 0 ? "connecting" : "reconnecting");
+      try {
+        const ticket = await botsApi.browserVncTicket(botId);
+        if (cancelled) return;
+        const rfb = await createRfb(host, socketUrl(ticket.path), ticket.scale);
+        if (cancelled) {
+          rfb.disconnect();
+          return;
+        }
+        rfbRef.current = rfb;
+        rfb.viewOnly = !interactiveRef.current;
+        rfb.addEventListener("connect", () => {
+          attempt = 0;
+          onStateRef.current("live");
+          if (interactiveRef.current) rfb.focus({ preventScroll: true });
+          setTimeout(() => fitRef.current(), 300);
+        });
+        rfb.addEventListener("disconnect", () => {
+          if (rfbRef.current === rfb) rfbRef.current = null;
+          if (!cancelled) scheduleRetry();
+        });
+        rfb.addEventListener("clipboard", (event) => {
+          const text = (event as CustomEvent<{ text: string }>).detail.text;
+          void navigator.clipboard?.writeText(text).catch(() => {
+            /* the browser may refuse without a user gesture; Paste still works */
+          });
+        });
+      } catch {
+        // No ticket (session gone) or no socket: the panel's status poll
+        // removes this view when the session is truly gone.
+        if (!cancelled) scheduleRetry();
+      }
+    };
+    void connect();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+      rfbRef.current?.disconnect();
+      rfbRef.current = null;
+    };
+  }, [botId]);
+
+  // Fit the remote Chrome window to the viewer. noVNC resizes the display
+  // itself; the window inside it needs the same size (in CSS pixels).
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || typeof ResizeObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fit = () => {
+      const rect = host.getBoundingClientRect();
+      void botsApi
+        .browserResize(botId, {
+          width: Math.max(320, Math.round(rect.width)),
+          height: Math.max(240, Math.round(rect.height)),
+        })
+        .catch(() => {
+          /* the next resize retries */
+        });
+    };
+    fitRef.current = fit;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(fit, RESIZE_DEBOUNCE_MS);
+    });
+    observer.observe(host);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+      fitRef.current = () => undefined;
+    };
+  }, [botId]);
+
+  // Cmd shortcuts on a Mac become Ctrl shortcuts on the remote Linux Chrome.
+  // Captured before noVNC sees them: noVNC would send Meta as Super.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !isMac()) return;
+    const onKey = (event: KeyboardEvent) => {
+      const rfb = rfbRef.current;
+      if (!rfb || !interactiveRef.current) return;
+      if (event.key !== "Meta" && !event.metaKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type !== "keydown" || event.key === "Meta") return;
+      if (event.key.toLowerCase() === "v" && !event.shiftKey) {
+        void paste().catch(() => {
+          /* clipboard permission denied */
+        });
+        return;
+      }
+      const strokes = remapMetaChord(event);
+      if (strokes) sendStrokes(rfb, strokes);
+    };
+    host.addEventListener("keydown", onKey, true);
+    host.addEventListener("keyup", onKey, true);
+    return () => {
+      host.removeEventListener("keydown", onKey, true);
+      host.removeEventListener("keyup", onKey, true);
+    };
+  }, [paste]);
+
+  return <div ref={hostRef} className="bg-muted absolute inset-0" data-testid="browser-vnc" />;
+});

@@ -5,46 +5,56 @@
  * Three ideas carry the design (research: `tmp/browser-use-patterns.md`):
  * - Perception is AX-tree-first with stable refs (playwright-mcp's model);
  *   vision is the `browser_screenshot` fallback.
- * - Human and agent are peers at the input channel (CDP `Input.*`); takeover
- *   is a driver flag that suspends tool dispatch, not a focus lock.
+ * - The owner watches and drives the same Chrome over VNC (see `BrowserVnc`);
+ *   takeover is a driver flag that suspends tool dispatch, not a focus lock.
  * - Secrets never enter model context: the owner types them into the real
  *   page during takeover; no tool result ever echoes typed input values.
  *
  * Sessions are per-profile (per bot in the app), lazy, idle-closed, and the
  * transport is a narrow port (`BrowserTransport`) so tests substitute fakes.
  */
+import type { Duplex } from "node:stream";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { checkPublicUrl } from "./web";
 
-/** One JPEG frame from the viewport, already acked. */
-export interface BrowserFrame {
-  jpeg: Buffer;
-}
-
-/** Human input events injected into the page as real input. */
-export type BrowserInput =
-  | { kind: "mouse"; x: number; y: number }
-  | { kind: "scroll"; x: number; y: number; deltaY: number }
-  | { kind: "key"; key: string; text?: string };
-
-export interface BrowserSessionEvents {
-  frame?(frame: BrowserFrame): void;
-  closed?(): void;
-}
+/** Where a session is while it opens; `installing` is the one-time VM setup. */
+export type BrowserPhase = "installing" | "starting";
 
 export interface OpenBrowserOptions {
   viewportWidth: number;
   viewportHeight: number;
   /** Hosts exempt from the private-address block (redirect checks honor it). */
   allowedPrivateHosts?: string;
+  /** Device pixel ratio for transports that stream a real desktop (1 or 2). */
+  scale?: number;
+  /** Progress callback for slow opens (first-run VM install). */
+  onPhase?: (phase: BrowserPhase) => void;
+}
+
+/**
+ * A real desktop the owner can watch and drive over VNC. Present only on
+ * transports that run a headful browser on a display (the VM transport).
+ */
+export interface BrowserVnc {
+  /** Device pixel ratio of the remote desktop; the viewer scales its size by it. */
+  scale: number;
+  /** A fresh byte stream to the display's RFB server (one per viewer). */
+  openStream(): Promise<Duplex>;
+  /** Fit the browser window to a viewer, in CSS pixels. */
+  resize(width: number, height: number): Promise<void>;
 }
 
 /** What the toolkit and the live-view routes need from a live browser. */
 export interface BrowserSession {
+  /** Present when the browser runs on a VNC-served display. */
+  vnc?: BrowserVnc;
+  /** Follow the tab the owner left in front (after a takeover). */
+  adoptActiveTab?(): Promise<void>;
+  /** Delete the persisted profile; called after `close()` on reset. */
+  wipeProfile?(): Promise<void>;
   url(): string;
-  on(events: BrowserSessionEvents): () => void;
   navigate(url: string): Promise<{ url: string; status: number | null }>;
   snapshot(): Promise<string>;
   click(ref: string): Promise<{ url: string }>;
@@ -52,9 +62,6 @@ export interface BrowserSession {
   press(key: string): Promise<void>;
   scroll(direction: "up" | "down", amount: number): Promise<void>;
   screenshot(): Promise<{ data: string }>;
-  input(event: BrowserInput): Promise<void>;
-  startScreencast(): Promise<void>;
-  stopScreencast(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -78,6 +85,8 @@ export interface BrowserToolkitOptions {
   viewportHeight?: number;
   /** Bound for how long action tools wait while the human drives (ms). */
   humanDriverWaitMs?: number;
+  /** Device pixel ratio for VNC-streamed sessions (1 or 2, default 2). */
+  scale?: number;
 }
 
 export interface LiveBrowserSession {
@@ -94,9 +103,12 @@ const fail = (text: string): ToolExecutionResult => ({
 });
 
 let profilesRoot: string | undefined;
+/** The options the app configured the toolkit with; `startBrowserSession` reuses them. */
+let toolkitOptions: BrowserToolkitOptions = {};
 
 export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capability {
   profilesRoot = options.profilesDir ?? "./data/browser-profiles";
+  toolkitOptions = options;
   const tools: { name: string; label: string; description: string; readOnly?: boolean }[] = [
     {
       name: "browser_navigate",
@@ -308,6 +320,13 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
 // ---------------------------------------------------------------------------
 
 const live = new Map<string, LiveBrowserSession>();
+/** In-flight opens, so a tool call and the owner's "Open browser" share one launch. */
+const opening = new Map<
+  string,
+  { promise: Promise<LiveBrowserSession>; readonly phase: BrowserPhase }
+>();
+/** Last open failure per session, surfaced by the status route until the next attempt. */
+const openErrors = new Map<string, string>();
 let sweeper: ReturnType<typeof setInterval> | undefined;
 
 export async function acquire(
@@ -318,27 +337,80 @@ export async function acquire(
   touchActivity();
   let entry = live.get(key);
   if (!entry) {
-    const root = options.profilesDir ?? "./data/browser-profiles";
-    const dir = `${root.replace(/\/$/, "")}/${key}`;
-    const { mkdirSync } = await import("node:fs");
-    mkdirSync(dir, { recursive: true });
-    const transport =
-      options.transport ?? (await import("./browser-chromium")).createChromiumTransport();
-    const session = await transport(dir, {
-      viewportWidth: options.viewportWidth ?? 1280,
-      viewportHeight: options.viewportHeight ?? 800,
-      allowedPrivateHosts: options.allowedPrivateHosts,
-    });
-    entry = {
-      session,
-      driver: "agent",
-      lastActivity: Date.now(),
-      idleMs: (options.idleMinutes ?? 10) * 60_000,
-    };
-    live.set(key, entry);
+    let pending = opening.get(key);
+    if (!pending) {
+      let phase: BrowserPhase = "starting";
+      const promise = openSession(options, key, (next) => {
+        phase = next;
+      })
+        .then((opened) => {
+          live.set(key, opened);
+          openErrors.delete(key);
+          return opened;
+        })
+        .catch((error: unknown) => {
+          openErrors.set(key, describe(error));
+          throw error;
+        })
+        .finally(() => opening.delete(key));
+      pending = {
+        promise,
+        get phase() {
+          return phase;
+        },
+      };
+      opening.set(key, pending);
+    }
+    entry = await pending.promise;
   }
   entry.lastActivity = Date.now();
   return entry;
+}
+
+async function openSession(
+  options: BrowserToolkitOptions,
+  key: string,
+  onPhase: (phase: BrowserPhase) => void,
+): Promise<LiveBrowserSession> {
+  const root = options.profilesDir ?? "./data/browser-profiles";
+  const dir = `${root.replace(/\/$/, "")}/${key}`;
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(dir, { recursive: true });
+  const transport =
+    options.transport ?? (await import("./browser-chromium")).createChromiumTransport();
+  const session = await transport(dir, {
+    viewportWidth: options.viewportWidth ?? 1280,
+    viewportHeight: options.viewportHeight ?? 800,
+    allowedPrivateHosts: options.allowedPrivateHosts,
+    scale: options.scale === 1 ? 1 : 2,
+    onPhase,
+  });
+  return {
+    session,
+    driver: "agent",
+    lastActivity: Date.now(),
+    idleMs: (options.idleMinutes ?? 10) * 60_000,
+  };
+}
+
+/**
+ * Open the session without a tool call, for the owner's "Open browser"
+ * button. Resolves once the browser is up; the first run on a fresh VM
+ * installs the stack and can take minutes, so routes should not await it.
+ */
+export function startBrowserSession(conversationId: number): Promise<LiveBrowserSession> {
+  openErrors.delete(String(conversationId));
+  return acquire(toolkitOptions, conversationId);
+}
+
+/** What the status route reports for a session that is not live (yet). */
+export function browserOpenState(
+  conversationId: number,
+): { opening: true; phase: BrowserPhase } | { opening: false; error?: string } {
+  const key = String(conversationId);
+  const pending = opening.get(key);
+  if (pending) return { opening: true, phase: pending.phase };
+  return { opening: false, error: openErrors.get(key) };
 }
 
 /**
@@ -372,6 +444,8 @@ export function assertRefShape(ref: string): void {
 export function resetBrowserSessionsForTests(): void {
   for (const [, entry] of live) void entry.session.close();
   live.clear();
+  opening.clear();
+  openErrors.clear();
 }
 
 /** Action tools wait here while the human drives, then re-check. */
@@ -394,19 +468,38 @@ async function withDriverTurn(
 }
 
 /** Called by the app's routes: flip the driver, wake waiters by polling. */
-export function setDriver(conversationId: number, driver: BrowserDriver): void {
+export async function setDriver(conversationId: number, driver: BrowserDriver): Promise<void> {
   const entry = live.get(String(conversationId));
-  if (entry) entry.driver = driver;
+  if (!entry) return;
+  const released = entry.driver === "human" && driver === "agent";
+  entry.driver = driver;
+  // The owner may have opened or switched tabs while driving; the agent
+  // continues from whichever tab they left in front.
+  if (released) await entry.session.adoptActiveTab?.().catch(() => {});
 }
 
-/** Close and remove a session (profile reset): later calls open fresh. */
-export async function closeBrowserSession(conversationId: number): Promise<void> {
+/**
+ * Close and remove a session: later calls open fresh. With `wipeProfile` the
+ * persisted profile (cookies, logins) goes too.
+ */
+export async function closeBrowserSession(
+  conversationId: number,
+  options: { wipeProfile?: boolean } = {},
+): Promise<void> {
   const entry = live.get(String(conversationId));
   if (entry) {
     entry.driver = "agent"; // release any blocked action tools
     live.delete(String(conversationId));
     await entry.session.close();
+    if (options.wipeProfile) await entry.session.wipeProfile?.();
   }
+}
+
+/** Graceful shutdown: close every session so remote browsers do not outlive the app. */
+export async function closeAllBrowserSessions(): Promise<void> {
+  const sessions = [...live.values()];
+  live.clear();
+  await Promise.allSettled(sessions.map((entry) => entry.session.close()));
 }
 
 /** Profiles root the toolkit was configured with (reset endpoint wipes under it). */

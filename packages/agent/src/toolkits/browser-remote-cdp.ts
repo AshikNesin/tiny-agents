@@ -3,23 +3,34 @@
  * (tiny-agents-vm over Tailscale SSH), not in the app's container.
  *
  * Per bot profile: SSH in (no credentials — the tailnet authenticates,
- * exactly like the sandbox toolkit), start a dedicated headless-shell with
- * --remote-debugging-port bound to 127.0.0.1, tunnel that port through a
- * dedicated SSH connection, and drive it with playwright-core over CDP. No
- * ports are exposed beyond the tailnet; closing a session kills the remote
- * chromium.
+ * exactly like the sandbox toolkit), make sure the browser stack is
+ * installed (first run only), then start a headful Chrome on a private X
+ * display served by Xtigervnc. Both the DevTools port (driven by
+ * playwright-core) and the VNC port (watched and driven by the owner's
+ * noVNC viewer) bind to 127.0.0.1 on the VM and are reached through SSH
+ * channels. No ports are exposed beyond the tailnet; closing a session kills
+ * the remote processes.
  *
- * One SSH connection per browser session: Tailscale's SSH server
- * (tailscaled) multiplexes channels less robustly than openssh — after a
- * direct-tcpip channel closes, later channels on the same connection can
- * stall. Fresh connections (~50ms) sidestep it; sessions are long-lived.
+ * One SSH connection per stream: Tailscale's SSH server (tailscaled)
+ * multiplexes channels less robustly than openssh — after a direct-tcpip
+ * channel closes, later channels on the same connection can stall. Fresh
+ * connections (~50ms) sidestep it; sessions are long-lived.
  */
 import { createServer } from "node:http";
+import type { Duplex } from "node:stream";
 import type { Page } from "playwright-core";
 import { chromium } from "playwright-core";
 import ssh2, { type Client } from "ssh2";
 import { pageSession } from "./browser-chromium";
-import type { BrowserSession, BrowserTransport, OpenBrowserOptions } from "./browser";
+import {
+  installStackCommand,
+  launchStackCommand,
+  parseLaunchOutput,
+  stackReadyCommand,
+  teardownStackCommand,
+  wipeProfileCommand,
+} from "./browser-vm-setup";
+import type { BrowserSession, BrowserTransport, BrowserVnc, OpenBrowserOptions } from "./browser";
 
 export interface RemoteCdpTransportOptions {
   /** SSH host of the VM running the browser (MagicDNS name). */
@@ -27,10 +38,12 @@ export interface RemoteCdpTransportOptions {
   port?: number;
   /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
   user?: string;
-  /** Binary on the VM; default /headless-shell/headless-shell. */
-  executablePath?: string;
   connectTimeoutMs?: number;
 }
+
+/** First-run install budget: apt update + TigerVNC + the Chrome .deb. */
+const INSTALL_TIMEOUT_MS = 10 * 60_000;
+const LAUNCH_TIMEOUT_MS = 60_000;
 
 /** GET /json/version through the local tunnel port. */
 async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerUrl?: string }> {
@@ -58,7 +71,10 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
           settled = true;
           resolve(client);
         })
-        .once("error", fail)
+        // Stay subscribed for the connection's whole life: after a handshake
+        // timeout ssh2 emits a second, fatal "Connection lost" error, and an
+        // unhandled 'error' event would take the whole server down.
+        .on("error", fail)
         .once("close", () => fail(new Error("SSH connection closed before ready")))
         .connect({
           host: options.host,
@@ -72,14 +88,15 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     });
 
   /** Run one command on a fresh connection and close it. */
-  const exec = async (command: string, timeoutMs = 15_000): Promise<string> => {
+  const exec = async (
+    command: string,
+    timeoutMs = 15_000,
+    label = command.slice(0, 80),
+  ): Promise<string> => {
     const client = await dial();
     try {
       return await new Promise((resolve, reject) => {
-        const timer = setTimeout(
-          () => reject(new Error(`VM exec timed out: ${command}`)),
-          timeoutMs,
-        );
+        const timer = setTimeout(() => reject(new Error(`VM exec timed out: ${label}`)), timeoutMs);
         client.exec(command, (error, channel) => {
           if (error) {
             clearTimeout(timer);
@@ -87,16 +104,24 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
             return;
           }
           let text = "";
+          let errText = "";
           let exitCode = -1;
           channel.on("data", (d: Buffer) => (text += d.toString("utf8")));
+          channel.stderr.on("data", (d: Buffer) => (errText += d.toString("utf8")));
           channel.on("exit", (code: number) => {
             exitCode = code;
             clearTimeout(timer);
             // Backgrounded commands never send 'close' on the channel; settle
             // shortly after exit with whatever output arrived.
             setTimeout(() => {
-              if (exitCode === 0) resolve(text.trim());
-              else reject(new Error(`VM exec failed (${exitCode}): ${command}`));
+              if (exitCode === 0) {
+                resolve(text.trim());
+                return;
+              }
+              const detail = (errText || text).trim().slice(-600);
+              reject(
+                new Error(`VM exec failed (${exitCode}): ${label}${detail ? `\n${detail}` : ""}`),
+              );
             }, 50);
           });
         });
@@ -107,43 +132,64 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
   };
 
   return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
-    const executable = options.executablePath ?? "/headless-shell/headless-shell";
-    const port = Number(
+    const scale = open.scale === 1 ? 1 : 2;
+
+    const ready = await exec(stackReadyCommand(), 15_000, "check the browser stack");
+    if (ready !== "ready") {
+      open.onPhase?.("installing");
+      await exec(installStackCommand(), INSTALL_TIMEOUT_MS, "install the browser stack");
+    }
+    open.onPhase?.("starting");
+
+    const launched = parseLaunchOutput(
       await exec(
-        `python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'`,
+        launchStackCommand({
+          profileDir,
+          width: open.viewportWidth,
+          height: open.viewportHeight,
+          scale,
+        }),
+        LAUNCH_TIMEOUT_MS,
+        "start the browser",
       ),
     );
-    if (!Number.isInteger(port) || port <= 0) {
-      throw new Error("Could not allocate a port on the VM");
-    }
 
-    const profile = profileDir.replaceAll("'", "'\"'\"'");
-    const live: Client[] = [];
+    const live = new Set<Client>();
     let server: ReturnType<typeof createServer> | undefined;
-    // Kill the remote chromium (pid recorded at launch) and drop the tunnel
+    // Kill the remote processes (pids recorded at launch) and drop the tunnel
     // connections; used both by session close and by failed setup.
     const cleanup = async () => {
-      for (const c of live.splice(0)) c.end();
+      for (const c of live) c.end();
+      live.clear();
       server?.close();
-      await exec(
-        `cat '${profile}/.cdp-pid' 2>/dev/null | xargs -r kill 2>/dev/null; rm -f '${profile}/.cdp-pid'`,
-      ).catch(() => {});
+      await exec(teardownStackCommand(profileDir), 15_000, "stop the browser").catch(() => {});
     };
+
+    /** A fresh SSH connection with one direct-tcpip channel to a VM-local port. */
+    const openChannel = async (targetPort: number): Promise<Duplex> => {
+      // Tailscale SSH handshakes occasionally stall; one retry hides it from
+      // the viewer, who would otherwise sit on "Connecting" until the backoff.
+      const client = await dial().catch(() => dial());
+      live.add(client);
+      return new Promise<Duplex>((resolve, reject) => {
+        client.forwardOut("127.0.0.1", 0, "127.0.0.1", targetPort, (error, channel) => {
+          if (error) {
+            live.delete(client);
+            client.end();
+            reject(error);
+            return;
+          }
+          channel.once("close", () => {
+            live.delete(client);
+            client.end();
+          });
+          resolve(channel);
+        });
+      });
+    };
+
     try {
-      await exec(
-        `mkdir -p '${profile}' && (nohup ${executable} ` +
-          `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 ` +
-          `--user-data-dir='${profile}' --no-first-run --disable-gpu --headless ` +
-          `</dev/null >/dev/null 2>&1 & echo $! > '${profile}/.cdp-pid') ; exit 0`,
-      );
-
-      // Wait for CDP to answer on the VM itself (no tunnel yet).
-      const up = await exec(
-        `for i in $(seq 1 50); do curl -sf http://127.0.0.1:${port}/json/version >/dev/null 2>&1 && echo up && exit 0; sleep 0.2; done; exit 1`,
-      ).catch(() => "");
-      if (up !== "up") throw new Error("Chromium did not start on the VM within 10s");
-
-      // Local forwarding server. Two tailscaled (Tailscale SSH) realities:
+      // Local forwarding server for CDP. Two tailscaled (Tailscale SSH) realities:
       // 1. after a direct-tcpip channel closes, later channels on the same
       //    connection stall — so each incoming socket dials its OWN connection;
       // 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
@@ -156,33 +202,18 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         const early: Buffer[] = [];
         const onEarly = (d: Buffer) => early.push(d);
         socket.on("data", onEarly);
-        void dial()
-          .then((client) => {
-            live.push(client);
-            client.forwardOut(
-              socket.remoteAddress ?? "127.0.0.1",
-              socket.remotePort ?? 0,
-              "127.0.0.1",
-              port,
-              (error, channel) => {
-                if (error) {
-                  socket.destroy();
-                  client.end();
-                  return;
-                }
-                socket.removeListener("data", onEarly);
-                for (const d of early) channel.write(d);
-                socket.pipe(channel);
-                channel.pipe(socket);
-                const done = () => {
-                  socket.destroy();
-                  channel.close();
-                  client.end();
-                };
-                socket.on("close", done);
-                channel.on("close", done);
-              },
-            );
+        openChannel(launched.cdpPort)
+          .then((channel) => {
+            socket.removeListener("data", onEarly);
+            for (const d of early) channel.write(d);
+            socket.pipe(channel);
+            channel.pipe(socket);
+            const done = () => {
+              socket.destroy();
+              channel.destroy();
+            };
+            socket.on("close", done);
+            channel.on("close", done);
           })
           .catch(() => socket.destroy());
       });
@@ -204,18 +235,42 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       const browser = await chromium.connectOverCDP(wsUrl);
       const context = browser.contexts()[0] ?? (await browser.newContext());
       const page: Page = context.pages()[0] ?? (await context.newPage());
-      await page.setViewportSize({ width: open.viewportWidth, height: open.viewportHeight });
+
+      const vnc: BrowserVnc = {
+        scale,
+        openStream: () => openChannel(launched.vncPort),
+        // Chrome's window defines the viewport on a real desktop, so fitting
+        // a viewer means resizing the window (CSS pixels).
+        resize: async (width, height) => {
+          const target = context.pages()[0];
+          if (!target) return;
+          const cdp = await context.newCDPSession(target);
+          try {
+            const { windowId } = await cdp.send("Browser.getWindowForTarget");
+            await cdp.send("Browser.setWindowBounds", {
+              windowId,
+              bounds: { left: 0, top: 0, width, height, windowState: "normal" },
+            });
+          } finally {
+            await cdp.detach().catch(() => {});
+          }
+        },
+      };
 
       return pageSession(page, open, {
+        vnc,
         close: async () => {
-          // Detach playwright, then kill the remote chromium explicitly
+          // Detach playwright, then kill the remote processes explicitly
           // (closing a CDP-attached browser does not terminate it).
           await browser.close().catch(() => {});
           await cleanup().catch(() => {});
         },
+        wipeProfile: async () => {
+          await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile").catch(() => {});
+        },
       });
     } catch (error) {
-      // Setup failed after chromium launched and/or the tunnel bound —
+      // Setup failed after the stack launched and/or the tunnel bound —
       // tear both down instead of leaking them.
       await cleanup().catch(() => {});
       throw error;

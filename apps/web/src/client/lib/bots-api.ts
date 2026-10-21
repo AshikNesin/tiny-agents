@@ -203,8 +203,11 @@ export const botsApi = {
   browserStatus: (id: string) => apiClient.get<BrowserStatus>(`/bots/${id}/browser`),
   browserDriver: (id: string, driver: "agent" | "human") =>
     apiClient.post(`/bots/${id}/browser/driver`, { driver }),
-  browserInput: (id: string, event: BrowserInputEvent) =>
-    apiClient.post(`/bots/${id}/browser/input`, event),
+  browserStart: (id: string) => apiClient.post<{ starting: boolean }>(`/bots/${id}/browser/start`),
+  browserVncTicket: (id: string) =>
+    apiClient.post<BrowserVncTicket>(`/bots/${id}/browser/vnc-ticket`),
+  browserResize: (id: string, size: { width: number; height: number }) =>
+    apiClient.post(`/bots/${id}/browser/resize`, size),
   browserResetProfile: (id: string) => apiClient.delete(`/bots/${id}/browser/profile`),
   listMemories: (id: string, includeArchived = true) =>
     apiClient.get<{ memories: MemoryRecord[] }>(`/bots/${id}/memories`, { includeArchived }),
@@ -220,10 +223,19 @@ export interface BrowserStatus {
   active: boolean;
   url: string | null;
   driver: "agent" | "human" | null;
+  /** `vnc`: a streamed desktop with a full Chrome UI; `headless`: usable by the bot, no live view. */
+  mode?: "vnc" | "headless" | null;
+  /** Pixel density of the VNC desktop. */
+  scale?: number | null;
+  /** The browser is opening; `installing` is the one-time VM setup. */
+  starting?: boolean;
+  phase?: "installing" | "starting" | null;
+  /** Why the last open attempt failed, until the next attempt. */
+  error?: string | null;
 }
 
-/** Human input injected into the bot's browser (CDP peer channel). */
-export type BrowserInputEvent =
-  | { kind: "mouse"; x: number; y: number }
-  | { kind: "scroll"; x: number; y: number; deltaY: number }
-  | { kind: "key"; key: string; text?: string };
+/** One-time credential for the VNC WebSocket; `path` is same-origin. */
+export interface BrowserVncTicket {
+  path: string;
+  scale: number;
+}

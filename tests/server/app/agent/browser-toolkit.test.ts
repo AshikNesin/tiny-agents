@@ -8,13 +8,14 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
+  browserOpenState,
   closeBrowserSession,
   createBrowserToolkit,
   getLiveBrowserSession,
   isBlockedPrivateUrl,
   resetBrowserSessionsForTests,
   setDriver,
-  type BrowserInput,
+  startBrowserSession,
   type BrowserSession,
   type BrowserTransport,
 } from "../../../../packages/agent/src/toolkits/browser";
@@ -38,7 +39,9 @@ function fakeTransport() {
   const transport: BrowserTransport = async () => {
     const session: BrowserSession = {
       url: () => url,
-      on: () => () => {},
+      adoptActiveTab: async () => {
+        log.push({ method: "adoptActiveTab" });
+      },
       navigate: async (next) => {
         log.push({ method: "navigate", args: next });
         url = next;
@@ -65,15 +68,6 @@ function fakeTransport() {
       screenshot: async () => {
         log.push({ method: "screenshot" });
         return { data: "anBnZGF0YQ==" };
-      },
-      input: async (event: BrowserInput) => {
-        log.push({ method: "input", args: event });
-      },
-      startScreencast: async () => {
-        log.push({ method: "startScreencast" });
-      },
-      stopScreencast: async () => {
-        log.push({ method: "stopScreencast" });
       },
       close: async () => {
         log.push({ method: "close" });
@@ -216,13 +210,62 @@ describe("browser toolkit", () => {
     expect(isBlockedPrivateUrl("http://127.0.0.1:1/", "localhost")).toBe(true);
   });
 
-  it("human input goes through the same session (peer channel)", async () => {
+  it("releasing control makes the agent adopt the tab the owner left in front", async () => {
     const { transport, log } = fakeTransport();
     const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
-    await run(tk, "browser_navigate", { url: "https://example.com/" });
-    const live = getLiveBrowserSession(4242);
-    expect(live).toBeDefined();
-    await live!.session.input({ kind: "key", text: "s" });
-    expect(log.some((e) => e.method === "input")).toBe(true);
+    await run(tk, "browser_snapshot", {});
+    await setDriver(4242, "agent"); // already the agent: nothing to adopt
+    expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(0);
+    await setDriver(4242, "human");
+    expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(0);
+    await setDriver(4242, "agent");
+    expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(1);
+    expect(getLiveBrowserSession(4242)?.driver).toBe("agent");
+  });
+
+  it("an owner-started open and a tool call share one launch and report the phase", async () => {
+    const { transport: inner, log } = fakeTransport();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let dials = 0;
+    const transport: BrowserTransport = async (dir, open) => {
+      dials += 1;
+      open.onPhase?.("installing");
+      await gate;
+      return inner(dir, open);
+    };
+    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+
+    const started = startBrowserSession(4242);
+    const tool = run(tk, "browser_snapshot", {});
+    await new Promise((r) => setTimeout(r, 20));
+    expect(browserOpenState(4242)).toEqual({ opening: true, phase: "installing" });
+    expect(getLiveBrowserSession(4242)).toBeUndefined();
+
+    release();
+    await started;
+    await tool;
+    expect(dials).toBe(1);
+    expect(log.filter((e) => e.method === "snapshot")).toHaveLength(1);
+    expect(browserOpenState(4242)).toEqual({ opening: false, error: undefined });
+    expect(getLiveBrowserSession(4242)).toBeDefined();
+  });
+
+  it("remembers why the last open failed until the next attempt", async () => {
+    createBrowserToolkit({
+      transport: async () => {
+        throw new Error("VM exec failed: no sudo");
+      },
+      profilesDir: "/tmp/ta-test-profiles",
+    });
+    await expect(startBrowserSession(4242)).rejects.toThrow("no sudo");
+    const failed = browserOpenState(4242);
+    expect(failed.opening).toBe(false);
+    expect(failed.opening === false && failed.error).toContain("no sudo");
+
+    const { transport } = fakeTransport();
+    createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await startBrowserSession(4242);
+    expect(browserOpenState(4242)).toEqual({ opening: false, error: undefined });
   });
 });

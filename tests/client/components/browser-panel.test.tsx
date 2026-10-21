@@ -1,18 +1,42 @@
 /**
  * @vitest-environment jsdom
  *
- * BrowserPanel (issue #24): live-view docking, takeover/release, the masked
- * secret field, and the never-hold-a-secret rule (keystrokes go to the
- * input route, the input element holds at most the display string).
+ * BrowserPanel (issue #24): the VNC-streamed browser — connect/reconnect,
+ * take control and release, clipboard, full screen, fitting the remote
+ * window — plus the headless and closed states. noVNC itself is faked; its
+ * canvas needs a real browser (covered by the live check against the VM).
  */
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserPanel } from "@/components/BrowserPanel";
-import { botsApi, type Bot } from "@/lib/bots-api";
-import type { BrowserStatus } from "@/lib/bots-api";
+import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
+import { createRfb } from "@/lib/novnc";
+
+const fakes = vi.hoisted(() => ({ rfbs: [] as FakeRfb[] }));
+
+interface FakeRfb extends EventTarget {
+  viewOnly: boolean;
+  focus: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+  sendKey: ReturnType<typeof vi.fn>;
+  clipboardPasteFrom: ReturnType<typeof vi.fn>;
+}
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/lib/novnc", () => ({
+  createRfb: vi.fn(async () => {
+    const rfb = Object.assign(new EventTarget(), {
+      viewOnly: true,
+      focus: vi.fn(),
+      disconnect: vi.fn(),
+      sendKey: vi.fn(),
+      clipboardPasteFrom: vi.fn(),
+    });
+    fakes.rfbs.push(rfb as unknown as FakeRfb);
+    return rfb;
+  }),
+}));
 
 const bot: Bot = {
   id: "b1",
@@ -30,80 +54,341 @@ const bot: Bot = {
   replying: false,
 } as unknown as Bot;
 
-const status = (s: Partial<BrowserStatus>): BrowserStatus => ({
+const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
   active: true,
   url: "https://example.com/",
   driver: "agent",
+  mode: "vnc",
+  scale: 2,
+  starting: false,
+  phase: null,
+  error: null,
   ...s,
 });
 
-function mockApi(s: BrowserStatus) {
-  const input = vi.fn().mockResolvedValue(undefined);
-  const driver = vi.fn().mockResolvedValue(undefined);
-  vi.spyOn(botsApi, "browserStatus").mockResolvedValue(s);
-  vi.spyOn(botsApi, "browserInput").mockImplementation(input);
-  vi.spyOn(botsApi, "browserDriver").mockImplementation(driver);
-  return { input, driver };
+function mockApi(initial: BrowserStatus) {
+  let current = initial;
+  const api = {
+    status: vi.spyOn(botsApi, "browserStatus").mockImplementation(async () => current),
+    driver: vi.spyOn(botsApi, "browserDriver").mockImplementation(async (_id, driver) => {
+      current = { ...current, driver };
+    }),
+    start: vi.spyOn(botsApi, "browserStart").mockResolvedValue({ starting: true }),
+    ticket: vi.spyOn(botsApi, "browserVncTicket").mockResolvedValue({
+      path: "/api/v1/bots/b1/browser/vnc?ticket=t1",
+      scale: 2,
+    }),
+    resize: vi.spyOn(botsApi, "browserResize").mockResolvedValue(undefined as never),
+    reset: vi.spyOn(botsApi, "browserResetProfile").mockResolvedValue(undefined as never),
+    set: (next: BrowserStatus) => (current = next),
+  };
+  return api;
 }
 
-// jsdom's fetch has no streaming body; stub the SSE feed so the frame
-// subscription no-ops instead of throwing.
-const realFetch = global.fetch;
-beforeEach(() => {
-  global.fetch = vi.fn().mockResolvedValue({ ok: true, body: null });
-});
-afterEach(() => {
-  global.fetch = realFetch;
-});
+const latestRfb = () => fakes.rfbs[fakes.rfbs.length - 1]!;
+// Generous: a viewer that appears after "Open browser" waits for the next
+// 1.5s status poll before it mounts.
+const connected = async () => {
+  await waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
+  act(() => {
+    latestRfb().dispatchEvent(new Event("connect"));
+  });
+  await screen.findByText("Live");
+};
 
 describe("BrowserPanel", () => {
-  it("shows the viewport image and driver badge while the bot drives", async () => {
-    mockApi(status({}));
-    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
-    await waitFor(() =>
-      expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/"),
-    );
-    const img = screen.getByAltText("bot browser viewport") as HTMLImageElement;
-    // The viewport is painted from the SSE feed (blob URLs), so the img has
-    // no route src; the frame subscription fetches /browser/live.
-    expect(img.getAttribute("src")).toBeNull();
-    expect(screen.getByTestId("browser-driver").textContent).toContain("Surfer drives");
-    expect(screen.queryByTestId("browser-secret")).not.toBeInTheDocument();
+  beforeEach(() => {
+    fakes.rfbs.length = 0;
+    vi.mocked(createRfb).mockClear();
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("takeover flips to the masked field; typed characters go straight to the input route", async () => {
-    const { driver, input } = mockApi(status({}));
+  it("streams the browser and goes live once the viewer connects", async () => {
+    mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
-    await waitFor(() => screen.getByTestId("browser-takeover"));
+
+    await screen.findByTestId("browser-vnc");
+    expect(await screen.findByText("Connecting")).toBeInTheDocument();
+    expect(screen.getByText("Connecting to the browser…")).toBeInTheDocument();
+    await waitFor(() => expect(createRfb).toHaveBeenCalledTimes(1));
+    expect(createRfb).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.stringMatching(/^wss?:\/\/[^/]+\/api\/v1\/bots\/b1\/browser\/vnc\?ticket=t1$/),
+      2,
+    );
+    expect(latestRfb().viewOnly).toBe(true);
+
+    await connected();
+    expect(screen.queryByText("Connecting to the browser…")).not.toBeInTheDocument();
+    expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/");
+    expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer drives");
+    expect(screen.getByTestId("browser-takeover")).toBeEnabled();
+    expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
+  });
+
+  it("take control makes the viewer interactive; release hands it back", async () => {
+    const api = mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
     fireEvent.click(screen.getByTestId("browser-takeover"));
-    await waitFor(() => expect(driver).toHaveBeenCalledWith("b1", "human"));
-    const field = await screen.findByTestId("browser-secret");
-    // Secret-protection regressions: masked field, printable keys never
-    // reach the DOM input (they go to the page only).
-    expect(field).toHaveAttribute("type", "password");
-    const printable = new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true });
-    fireEvent(field, printable);
-    expect(printable.defaultPrevented).toBe(true);
-    fireEvent.keyDown(field, { key: "Enter" });
-    await waitFor(() => expect(input).toHaveBeenCalledTimes(2));
-    expect(input).toHaveBeenNthCalledWith(1, "b1", { kind: "key", key: "s", text: "s" });
-    expect(input).toHaveBeenNthCalledWith(2, "b1", { kind: "key", key: "Enter" });
-  });
+    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
+    await waitFor(() => expect(latestRfb().viewOnly).toBe(false));
+    expect(latestRfb().focus).toHaveBeenCalled();
+    expect(screen.getByTestId("browser-driver").textContent).toBe("You drive");
+    // The streamed Chrome has its own address bar; the stale agent URL goes.
+    expect(screen.getByTestId("browser-url").textContent).toBe("");
+    expect(screen.getByTestId("browser-paste")).toBeInTheDocument();
 
-  it("release hands the wheel back", async () => {
-    const { driver } = mockApi(status({ driver: "human" }));
-    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
-    const release = await screen.findByTestId("browser-release");
-    fireEvent.click(release);
-    await waitFor(() => expect(driver).toHaveBeenCalledWith("b1", "agent"));
-  });
-
-  it("shows the waiting state before any session exists", async () => {
-    mockApi(status({ active: false, url: null, driver: null }));
-    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    const polls = api.status.mock.calls.length;
+    api.set(vncStatus({ url: "https://example.org/", driver: "agent" }));
+    fireEvent.click(screen.getByTestId("browser-release"));
+    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(latestRfb().viewOnly).toBe(true));
+    // Releasing re-reads the status so the adopted tab's URL shows at once.
+    await waitFor(() => expect(api.status.mock.calls.length).toBeGreaterThan(polls));
     await waitFor(() =>
-      expect(screen.getByText(/opens when Surfer first uses it/i)).toBeInTheDocument(),
+      expect(screen.getByTestId("browser-url").textContent).toBe("https://example.org/"),
     );
+  });
+
+  it("pastes the local clipboard into the remote browser", async () => {
+    mockApi(vncStatus({ driver: "human" }));
+    const readText = vi.fn().mockResolvedValue("hello");
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText, writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    fireEvent.click(await screen.findByTestId("browser-paste"));
+    await waitFor(() => expect(latestRfb().clipboardPasteFrom).toHaveBeenCalledWith("hello"));
+    // Then Ctrl+V: control down, v down, v up, control up.
+    await waitFor(() => expect(latestRfb().sendKey).toHaveBeenCalledTimes(4));
+    expect(latestRfb().sendKey.mock.calls.map(([keysym, , down]) => [keysym, down])).toEqual([
+      [0xffe3, true],
+      [0x76, true],
+      [0x76, false],
+      [0xffe3, false],
+    ]);
+  });
+
+  it("copies text the remote browser copied to the local clipboard", async () => {
+    mockApi(vncStatus());
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: vi.fn(), writeText },
+      configurable: true,
+    });
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    act(() => {
+      latestRfb().dispatchEvent(new CustomEvent("clipboard", { detail: { text: "from vm" } }));
+    });
+    expect(writeText).toHaveBeenCalledWith("from vm");
+  });
+
+  it("goes full screen on the whole panel and locks the browser's shortcut keys", async () => {
+    mockApi(vncStatus());
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      value: requestFullscreen,
+      configurable: true,
+    });
+    const lock = vi.fn().mockResolvedValue(undefined);
+    const unlock = vi.fn();
+    Object.defineProperty(navigator, "keyboard", { value: { lock, unlock }, configurable: true });
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    fireEvent.click(screen.getByTestId("browser-fullscreen"));
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    const panel = screen.getByTestId("browser-panel");
+    expect(requestFullscreen.mock.contexts[0]).toBe(panel);
+
+    Object.defineProperty(document, "fullscreenElement", { value: panel, configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(lock).toHaveBeenCalledWith(expect.arrayContaining(["Escape", "KeyW", "KeyT"]));
+    expect(screen.getByTestId("browser-fullscreen")).toHaveAttribute(
+      "aria-label",
+      "Exit full screen",
+    );
+    expect(screen.queryByTestId("browser-resize")).not.toBeInTheDocument();
+
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(unlock).toHaveBeenCalled();
+    expect(screen.getByTestId("browser-fullscreen")).toHaveAttribute("aria-label", "Full screen");
+  });
+
+  it("fits the remote window to the panel after it settles", async () => {
+    const api = mockApi(vncStatus());
+    let notify: () => void = () => undefined;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 801.4,
+      height: 600.2,
+    } as DOMRect);
+    try {
+      render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+      await connected();
+
+      notify();
+      notify();
+      notify();
+      await waitFor(
+        () => expect(api.resize).toHaveBeenCalledWith("b1", { width: 801, height: 600 }),
+        {
+          timeout: 2000,
+        },
+      );
+      const burst = api.resize.mock.calls.filter(([, size]) => size.width === 801).length;
+      expect(burst).toBeLessThanOrEqual(2); // the burst collapsed into one request (+ the first connect)
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reconnects with a fresh ticket after the connection drops", async () => {
+    const api = mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+    const first = latestRfb();
+
+    act(() => {
+      first.dispatchEvent(new Event("disconnect"));
+    });
+    expect(await screen.findByText("Reconnecting")).toBeInTheDocument();
+    expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
+
+    await waitFor(() => expect(fakes.rfbs.length).toBe(2), { timeout: 3000 });
+    expect(api.ticket).toHaveBeenCalledTimes(2); // tickets are single use
+    act(() => {
+      latestRfb().dispatchEvent(new Event("connect"));
+    });
+    await screen.findByText("Live");
+  });
+
+  it("disconnects the viewer when the panel closes", async () => {
+    mockApi(vncStatus());
+    const { unmount } = render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+    const rfb = latestRfb();
+    unmount();
+    expect(rfb.disconnect).toHaveBeenCalled();
+  });
+
+  it("remembers the panel width dragged on the edge", async () => {
+    mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+    const panel = screen.getByTestId("browser-panel");
+    const before = Number(panel.style.getPropertyValue("--browser-panel-width").replace("px", ""));
+    const handle = screen.getByTestId("browser-resize");
+
+    fireEvent.pointerDown(handle, { clientX: 500, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 450, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientX: 450, pointerId: 1 });
+
+    const after = Number(panel.style.getPropertyValue("--browser-panel-width").replace("px", ""));
+    expect(after).toBe(before + 50);
+    expect(window.localStorage.getItem("tiny-agents:browser-panel-width")).toBe(String(after));
+  });
+
+  it("says there is no live view for a headless browser", async () => {
+    mockApi(vncStatus({ mode: "headless", scale: null }));
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+
+    expect(await screen.findByTestId("browser-headless")).toHaveTextContent(
+      "No live view for this browser.",
+    );
+    expect(screen.getByText("Headless")).toBeInTheDocument();
+    expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/");
+    expect(screen.queryByTestId("browser-vnc")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("browser-fullscreen")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-takeover")).toBeDisabled();
+    expect(createRfb).not.toHaveBeenCalled();
+  });
+
+  it("offers to open a browser that is closed, then follows it opening", async () => {
+    const api = mockApi(vncStatus({ active: false, url: null, driver: null, mode: null }));
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
+    expect(screen.getByText("Closed")).toBeInTheDocument();
+    expect(screen.getByTestId("browser-takeover")).toBeDisabled();
+
+    api.set(vncStatus({ active: false, url: null, driver: null, mode: null, starting: true }));
+    fireEvent.click(screen.getByTestId("browser-open"));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith("b1"));
+    expect(await screen.findByText("Starting the browser")).toBeInTheDocument();
+    expect(screen.getByText("Starting")).toBeInTheDocument();
+
+    api.set(vncStatus());
+    await connected();
+  });
+
+  it("explains the one-time VM setup", async () => {
+    mockApi(
+      vncStatus({
+        active: false,
+        url: null,
+        driver: null,
+        mode: null,
+        starting: true,
+        phase: "installing",
+      }),
+    );
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    expect(await screen.findByText("Setting up the browser on the VM")).toBeInTheDocument();
+    expect(screen.getByText(/First run only/)).toBeInTheDocument();
+    expect(screen.queryByTestId("browser-open")).not.toBeInTheDocument();
+  });
+
+  it("shows why the browser failed to open and offers a retry", async () => {
+    const api = mockApi(
+      vncStatus({
+        active: false,
+        url: null,
+        driver: null,
+        mode: null,
+        error: "VM exec failed (1): install the browser stack",
+      }),
+    );
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+
+    expect(await screen.findByTestId("browser-error")).toHaveTextContent("VM exec failed");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith("b1"));
+  });
+
+  it("reset closes the browser and returns to the closed state", async () => {
+    const api = mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    api.set(vncStatus({ active: false, url: null, driver: null, mode: null }));
+    fireEvent.click(screen.getByTestId("browser-reset"));
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith("b1"));
+    expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
+    await waitFor(() => expect(latestRfb().disconnect).toHaveBeenCalled());
   });
 });
