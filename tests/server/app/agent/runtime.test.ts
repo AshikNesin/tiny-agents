@@ -2,11 +2,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
+import type { InboxItem, SubmissionRecord } from "@earendil-works/pi-durable";
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import {
   chatState,
   deriveChat,
   diffChat,
+  queuedOf,
+  CHAT_USER_ENTRY,
   StoreLockedError,
   type ChatEvent,
   type ChatMessage,
@@ -67,6 +70,9 @@ function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatSta
       case "busy":
         state = { ...state, busy: event.busy };
         break;
+      case "queued":
+        state = { ...state, queued: event.items };
+        break;
     }
   }
   return state;
@@ -81,7 +87,7 @@ async function observeChat(
   stop: () => Promise<void>;
 }> {
   const batches: ChatEvent[][] = [];
-  let current: ChatState = { messages: [], busy: false };
+  let current: ChatState = { messages: [], busy: false, queued: [] };
   const subscription = await runtime.watchChat(ref, (events) => {
     batches.push([...events]);
     current = applyEvents(current, events);
@@ -169,7 +175,9 @@ describe("AgentRuntime", () => {
       });
       const chat = await observeChat(runtime, ref);
 
-      expect(chat.batches[0]).toEqual([{ type: "snapshot", state: { messages: [], busy: false } }]);
+      expect(chat.batches[0]).toEqual([
+        { type: "snapshot", state: { messages: [], busy: false, queued: [] } },
+      ]);
 
       await runtime.submit(ref, { requestId: "first-send", text: "hello runtime" });
       await waitUntil(() => runtime.isBusy(ref), "the runtime to become busy");
@@ -234,6 +242,176 @@ describe("AgentRuntime", () => {
       await runtime.close();
     }
   });
+
+  it(
+    "steers a running reply: the message queues, joins the reply, and is answered",
+    { timeout: 20_000 },
+    async () => {
+      const runtime = await openTestRuntime({
+        storePath: ":memory:",
+        tokensPerSecond: 5,
+        reply: (text) => `Reply to ${text}, padded for a slow stream`,
+      });
+      try {
+        const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+        const chat = await observeChat(runtime, ref);
+
+        await runtime.submit(ref, { requestId: "steer-1", text: "start a slow reply" });
+        await waitUntil(() => chat.state().busy, "the run to start");
+
+        // Sent while busy: the message is durably held, not lost.
+        await runtime.submit(ref, {
+          requestId: "steer-2",
+          text: "steer me",
+          whenBusy: "steer",
+        });
+        await waitUntil(
+          () => chat.state().queued.some((item) => item.requestId === "steer-2"),
+          "the steer to appear in the queue",
+        );
+        expect(chat.state().queued).toEqual([
+          { requestId: "steer-2", mode: "steer", text: "steer me" },
+        ]);
+
+        // A watcher that attaches mid-queue sees it in its fresh snapshot
+        // (a reload keeps showing the held message).
+        const lateChat = await observeChat(runtime, ref);
+        expect(lateChat.state().queued).toEqual([
+          { requestId: "steer-2", mode: "steer", text: "steer me" },
+        ]);
+
+        // The steer joins the reply: placed as a user message and answered
+        // in the same run, then the queue empties.
+        await waitUntil(
+          () =>
+            chat
+              .state()
+              .messages.some((message) => message.role === "user" && message.text === "steer me") &&
+            chat
+              .state()
+              .messages.some(
+                (message) =>
+                  message.role === "assistant" &&
+                  message.text === "Reply to steer me, padded for a slow stream",
+              ),
+          "the steered reply",
+        );
+        await waitUntil(() => !chat.state().busy, "the run to end");
+        expect(chat.state().queued).toEqual([]);
+
+        await chat.stop();
+        await lateChat.stop();
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  it(
+    "queues a follow-up behind a busy reply and answers it in the next run",
+    { timeout: 20_000 },
+    async () => {
+      const runtime = await openTestRuntime({
+        storePath: ":memory:",
+        tokensPerSecond: 5,
+        reply: (text) => `Reply to ${text}, padded for a slow stream`,
+      });
+      try {
+        const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+        const chat = await observeChat(runtime, ref);
+
+        await runtime.submit(ref, { requestId: "follow-1", text: "first" });
+        await waitUntil(() => chat.state().busy, "the run to start");
+
+        await runtime.submit(ref, {
+          requestId: "follow-2",
+          text: "after this",
+          whenBusy: "followUp",
+        });
+        await waitUntil(
+          () => chat.state().queued.some((item) => item.requestId === "follow-2"),
+          "the follow-up to appear in the queue",
+        );
+        expect(chat.state().queued[0].mode).toBe("followUp");
+
+        // The first run answers, then the follow-up places and starts the
+        // next one — both messages end up answered in order.
+        await waitUntil(
+          () =>
+            !chat.state().busy &&
+            chat
+              .state()
+              .messages.some(
+                (message) =>
+                  message.role === "assistant" &&
+                  message.text === "Reply to after this, padded for a slow stream",
+              ),
+          "the follow-up's reply",
+        );
+        const texts = chat.state().messages.map((message) => `${message.role}:${message.text}`);
+        expect(texts).toEqual([
+          "user:first",
+          "assistant:Reply to first, padded for a slow stream",
+          "user:after this",
+          "assistant:Reply to after this, padded for a slow stream",
+        ]);
+        expect(chat.state().queued).toEqual([]);
+
+        await chat.stop();
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  it(
+    "withdraws a queued message and reports placed, settled, and unknown inputs",
+    { timeout: 20_000 },
+    async () => {
+      const runtime = await openTestRuntime({
+        storePath: ":memory:",
+        tokensPerSecond: 5,
+        reply: () => "one two three four five six seven eight nine ten eleven twelve",
+      });
+      try {
+        const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+        const chat = await observeChat(runtime, ref);
+
+        await runtime.submit(ref, { requestId: "withdraw-1", text: "keep this one busy" });
+        await waitUntil(() => chat.state().busy, "the run to start");
+
+        await runtime.submit(ref, {
+          requestId: "withdraw-2",
+          text: "withdraw me",
+          whenBusy: "followUp",
+        });
+        await waitUntil(
+          () => chat.state().queued.some((item) => item.requestId === "withdraw-2"),
+          "the message to queue",
+        );
+
+        // Withdrawn while queued: gone from the stream, never answered.
+        expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
+        await waitUntil(() => chat.state().queued.length === 0, "the queue to clear");
+        // Re-withdrawing the same input is idempotent, not a conflict.
+        expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
+        expect(await runtime.withdraw(ref, "never-submitted")).toBe("not_found");
+
+        // The run ends and answers "withdraw-1": its input is settled.
+        await waitUntil(() => !chat.state().busy, "the run to end");
+        expect(await runtime.withdraw(ref, "withdraw-1")).toBe("settled");
+
+        // A placed input belongs to its run: withdrawal is refused with 409.
+        await runtime.submit(ref, { requestId: "withdraw-3", text: "place me" });
+        await waitUntil(() => chat.state().busy, "the placed run to start");
+        expect(await runtime.withdraw(ref, "withdraw-3")).toBe("already_placed");
+
+        await chat.stop();
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
 
   it(
     "shows a stopped or unanswered terminal state after aborting a streamed reply",
@@ -489,13 +667,84 @@ describe("transcript derivation", () => {
   });
 
   it("emits deltas for append-only text and upserts for a changed message", () => {
-    const previous: ChatState = { messages: [assistantMessage("Hel")], busy: true };
-    const appended: ChatState = { messages: [assistantMessage("Hello")], busy: true };
-    const changed: ChatState = { messages: [assistantMessage("Howdy")], busy: true };
+    const previous: ChatState = { messages: [assistantMessage("Hel")], busy: true, queued: [] };
+    const appended: ChatState = { messages: [assistantMessage("Hello")], busy: true, queued: [] };
+    const changed: ChatState = { messages: [assistantMessage("Howdy")], busy: true, queued: [] };
 
     expect(diffChat(previous, appended)).toEqual([{ type: "delta", id: "live", text: "lo" }]);
     expect(diffChat(previous, changed)).toEqual([
       { type: "upsert", message: assistantMessage("Howdy") },
+    ]);
+  });
+
+  it("emits a queued event only when the queue changes", () => {
+    const item = { requestId: "q1", mode: "steer" as const, text: "wait up" };
+    const idle: ChatState = { messages: [], busy: true, queued: [] };
+    const holding: ChatState = { messages: [], busy: true, queued: [item] };
+
+    expect(diffChat(idle, holding)).toEqual([{ type: "queued", items: [item] }]);
+    expect(diffChat(holding, holding)).toEqual([]);
+    expect(diffChat(holding, idle)).toEqual([{ type: "queued", items: [] }]);
+  });
+
+  it("derives queued owner messages, hiding peer deliveries and writes", () => {
+    const record = (id: string, requestId: string) =>
+      ({
+        id,
+        conversationId: 1,
+        requestId,
+        type: "input",
+        status: "queued",
+      }) as unknown as SubmissionRecord;
+    const records = new Map([
+      ["1", record("1", "owner-send")],
+      ["2", record("2", "mention-send")],
+      ["4", record("4", "with-attachment")],
+    ]);
+    const items = [
+      // A plain owner steer.
+      { id: "1", mode: "steer", content: "wait up" },
+      // A mention delivered cross-bot: not the owner's message.
+      {
+        id: "2",
+        mode: "followUp",
+        content: "tagged from elsewhere",
+        entry: { kind: CHAT_USER_ENTRY, data: { peer: { kind: "mention", hostName: "Host" } } },
+      },
+      // A write submission (a compaction summary): not a chat message.
+      { id: "3", mode: "write", entry: { kind: "app.note", data: {} } },
+      // An owner send with attachments, content split into blocks.
+      {
+        id: "4",
+        mode: "followUp",
+        content: [{ type: "text", text: "see this" }],
+        entry: {
+          kind: CHAT_USER_ENTRY,
+          data: {
+            attachments: [
+              {
+                uploadId: "zzz",
+                kind: "image",
+                name: "shot.png",
+                mimeType: "image/png",
+                size: 10,
+              },
+            ],
+          },
+        },
+      },
+    ] as unknown as readonly InboxItem[];
+
+    expect(queuedOf(items, records)).toEqual([
+      { requestId: "owner-send", mode: "steer", text: "wait up" },
+      {
+        requestId: "with-attachment",
+        mode: "followUp",
+        text: "see this",
+        attachments: [
+          { uploadId: "zzz", kind: "image", name: "shot.png", mimeType: "image/png", size: 10 },
+        ],
+      },
     ]);
   });
 });

@@ -39,7 +39,7 @@ const models = [
     vision: true,
   },
 ];
-const emptyChat = { messages: [], busy: false };
+const emptyChat = { messages: [], busy: false, queued: [] };
 const activityListeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
 
 const agentRuntime = {
@@ -47,6 +47,7 @@ const agentRuntime = {
   configure: vi.fn().mockResolvedValue(undefined),
   submit: vi.fn().mockResolvedValue(undefined),
   abort: vi.fn().mockResolvedValue(undefined),
+  withdraw: vi.fn().mockResolvedValue("withdrawn"),
   watchChat: vi.fn(
     async (
       _ref: number,
@@ -301,6 +302,71 @@ describe("Bots API routes", () => {
     // Deleting stops whatever the now-hidden conversation was still doing.
     expect(agentRuntime.abort).toHaveBeenCalledWith(100);
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
+  });
+
+  it("passes the steering mode through to the runtime on a busy send", async () => {
+    const bot = await createBot();
+    const app = buildApp();
+    await request(app)
+      .post(`/api/v1/bots/${bot.id}/messages`)
+      .set(authorization)
+      .send({ requestId: "steering-client-id", text: "change course", whenBusy: "steer" })
+      .expect(200);
+    expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
+      requestId: "steering-client-id",
+      text: "change course",
+      whenBusy: "steer",
+    });
+    // Without the flag the runtime keeps its default (a queued follow-up).
+    await request(app)
+      .post(`/api/v1/bots/${bot.id}/messages`)
+      .set(authorization)
+      .send({ requestId: "plain-client-id", text: "plain hello" })
+      .expect(200);
+    expect(agentRuntime.submit).toHaveBeenLastCalledWith(100, {
+      requestId: "plain-client-id",
+      text: "plain hello",
+    });
+    // Unknown modes are rejected before the runtime sees anything.
+    agentRuntime.submit.mockClear();
+    await request(buildApp())
+      .post(`/api/v1/bots/${bot.id}/messages`)
+      .set(authorization)
+      .send({ requestId: "bad-mode-client-id", text: "nope", whenBusy: "sideways" })
+      .expect(400);
+    expect(agentRuntime.submit).not.toHaveBeenCalled();
+  });
+
+  it("withdraws a queued message, refusing placed and unknown ones", async () => {
+    const bot = await createBot();
+    const app = buildApp();
+    agentRuntime.withdraw.mockResolvedValueOnce("withdrawn");
+
+    await request(app)
+      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
+      .set(authorization)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({ success: true, data: { withdrawn: true } });
+      });
+    expect(agentRuntime.withdraw).toHaveBeenCalledWith(100, "steering-client-id");
+
+    // Placed or settled inputs are a conflict; unknown ids are not found.
+    agentRuntime.withdraw.mockResolvedValueOnce("already_placed");
+    await request(app)
+      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
+      .set(authorization)
+      .expect(409);
+    agentRuntime.withdraw.mockResolvedValueOnce("settled");
+    await request(app)
+      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
+      .set(authorization)
+      .expect(409);
+    agentRuntime.withdraw.mockResolvedValueOnce("not_found");
+    await request(app)
+      .delete(`/api/v1/bots/${bot.id}/messages/never-sent-id`)
+      .set(authorization)
+      .expect(404);
   });
 
   it("still deletes the bot when stopping its conversation fails", async () => {

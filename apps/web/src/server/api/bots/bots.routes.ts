@@ -132,6 +132,12 @@ router.post("/bots/:id/messages", async (req: Request) => {
   return { submitted: true };
 });
 
+router.delete("/bots/:id/messages/:requestId", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const requestId = parseStringParam(req.params.requestId, "requestId");
+  return await botsService.withdrawMessage(id, { requestId });
+});
+
 router.post("/bots/:id/abort", async (req: Request) => {
   const id = parseStringParam(req.params.id, "id");
   await botsService.abortReply(id);

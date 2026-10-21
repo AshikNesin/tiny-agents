@@ -63,6 +63,7 @@ export type BotAgentRuntime = Pick<
   | "configure"
   | "submit"
   | "abort"
+  | "withdraw"
   | "hasModel"
   | "busyConversations"
   | "listCapabilities"
@@ -401,7 +402,13 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
 
 export async function sendMessage(
   id: string,
-  input: { requestId: string; text: string; mentions?: string[]; attachments?: string[] },
+  input: {
+    requestId: string;
+    text: string;
+    mentions?: string[];
+    attachments?: string[];
+    whenBusy?: "steer" | "followUp";
+  },
   rt: BotAgentRuntime = runtime(),
 ) {
   const row = await findBot(id);
@@ -419,6 +426,7 @@ export async function sendMessage(
     text: send.text,
     ...(send.images ? { images: send.images } : {}),
     ...(send.attachments ? { attachments: send.attachments } : {}),
+    ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
   });
   await prisma.bot.update({
     where: { id },
@@ -587,6 +595,19 @@ async function deliverMentions(
 export async function abortReply(id: string) {
   const bot = await getBot(id);
   await runtime().abort(Number(bot.conversationId));
+}
+
+/**
+ * Withdraw a message queued behind (or steering into) a busy reply: the x on
+ * a queued bubble. Inputs already placed into the running reply, or answered,
+ * are refused with 409 — they are part of the conversation.
+ */
+export async function withdrawMessage(id: string, input: { requestId: string }) {
+  const bot = await getBot(id);
+  const outcome = await runtime().withdraw(Number(bot.conversationId), input.requestId);
+  if (outcome === "not_found") throw Boom.notFound("Message not found");
+  if (outcome !== "withdrawn") throw Boom.conflict("Message is no longer queued");
+  return { withdrawn: true };
 }
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {

@@ -55,7 +55,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** The owner's pill: dark in light mode, mid-grey in dark (Grok palette). */
-const USER_PILL =
+export const USER_PILL =
   "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-3xl px-4 py-3 text-[15px] leading-[22.5px] wrap-break-word";
 
 /** Thinking block: an AI Elements Reasoning step — open while streaming. */

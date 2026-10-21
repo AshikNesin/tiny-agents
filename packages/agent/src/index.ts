@@ -128,6 +128,7 @@ export {
   CHAT_USER_ENTRY,
   peerOf,
   attachmentsOf,
+  queuedOf,
   type RawChat,
 } from "./transcript";
 export type * from "./types";

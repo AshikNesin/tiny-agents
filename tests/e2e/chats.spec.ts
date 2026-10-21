@@ -213,3 +213,69 @@ test.describe("Chats — attachments (issue #17)", () => {
     await expect(page.getByAltText("only-image.png").first()).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe("Chats — steering (issue #9)", () => {
+  test("sending mid-reply queues a steer that survives a reload and can be cancelled", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel(/password/i).fill("demo@example.com");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await expect(page).toHaveURL(/\/chats$/);
+
+    // Ensure the bot exists.
+    const hasBot = await page
+      .getByRole("link", { name: /steer bot/i })
+      .first()
+      .isVisible();
+    if (!hasBot) {
+      await page.getByRole("button", { name: /new bot/i }).click();
+      await page.getByLabel("Name").fill("Steer Bot");
+      await expect(page.getByRole("button", { name: "Test Model (faux)" })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByRole("button", { name: /create bot/i }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
+    }
+    await page
+      .getByRole("link", { name: /steer bot/i })
+      .first()
+      .click();
+
+    // A long message streams slowly (the faux model runs at 6 tokens/s), so
+    // the bot is verifiably busy — the send button stays live and steers.
+    const longMessage = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ");
+    const composer = page.getByPlaceholder(/(?:ask|message) steer bot/i);
+    await composer.fill(longMessage);
+    await composer.press("Enter");
+    await expect(page.getByRole("button", { name: "Steer the reply" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await composer.fill("steer this");
+    await composer.press("Enter");
+    const bubble = page.getByTestId("queued-bubble");
+    await expect(bubble).toBeVisible({ timeout: 15_000 });
+    await expect(bubble).toHaveAttribute("data-mode", "steer");
+    await expect(bubble.getByText("steer this")).toBeVisible();
+
+    // Reload: the held message is server state, not client state.
+    await page.reload();
+    await page
+      .getByRole("link", { name: /steer bot/i })
+      .first()
+      .click();
+    await expect(page.getByTestId("queued-bubble")).toBeVisible({ timeout: 15_000 });
+
+    // Cancel (x): the server withdraws it and the queue empties.
+    await page.getByRole("button", { name: "Cancel this message" }).click();
+    await expect(page.getByTestId("queued-bubble")).toHaveCount(0, { timeout: 15_000 });
+
+    // The slow reply finishes; the withdrawn message never lands anywhere.
+    await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("steer this")).toHaveCount(0);
+  });
+});

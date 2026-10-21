@@ -63,9 +63,24 @@ export interface PendingMessage {
   attachments?: AttachmentRef[];
 }
 
+/**
+ * An input the server holds while the bot is replying: a steer joins the
+ * running reply, a follow-up starts the next one. Mirrors the agent package's
+ * QueuedMessage (the queued SSE event carries it verbatim).
+ */
+export interface QueuedMessage {
+  /** The send's request id: what withdrawal (the bubble's x) addresses. */
+  requestId: string;
+  mode: "steer" | "followUp";
+  text: string;
+  attachments?: AttachmentRef[];
+}
+
 export interface ChatState {
   messages: ChatMessage[];
   busy: boolean;
+  /** Owner inputs the server holds behind (or steering into) the reply. */
+  queued: QueuedMessage[];
   /** Locally echoed messages not yet confirmed by the server snapshot. */
   pending: PendingMessage[];
   /** False while the SSE stream is down (backend restart, network drop). */
@@ -87,6 +102,7 @@ export type ChatEvent =
   | { type: "upsert"; message: ChatMessage }
   | { type: "remove"; id: string }
   | { type: "delta"; id: string; text?: string; reasoning?: string }
+  | { type: "queued"; items: QueuedMessage[] }
   | { type: "busy"; busy: boolean }
   | ActivityEvent
   | { type: "connection"; id: string; status: string; error?: string }

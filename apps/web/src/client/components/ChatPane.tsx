@@ -13,6 +13,7 @@ import {
   Plus,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -36,7 +37,7 @@ import { useBotsStore } from "../store/bots";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
-import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import { ChatMessageView, USER_PILL, type ToolLabels } from "./ChatMessageView";
 import { MessageAttachments, StagedAttachment, type StagedItem } from "./Attachments";
 import {
   MentionAutocomplete,
@@ -44,6 +45,8 @@ import {
   type MentionableBot,
 } from "./MentionAutocomplete";
 import { formatDayDivider } from "../lib/day-divider";
+import { Message } from "./ui/message";
+import type { QueuedMessage } from "../lib/chat-types";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -164,6 +167,7 @@ function ChatPaneBody({
 
   const messages = chat?.messages ?? [];
   const pending = chat?.pending ?? [];
+  const queued = chat?.queued ?? [];
   const busy = chat?.busy ?? false;
 
   // Read/unread split (issue #3): messages older than the frozen pre-open
@@ -179,10 +183,11 @@ function ChatPaneBody({
   const model = models.find((m) => m.id === bot.modelId);
   const uploading = staged.some((item) => item.status === "uploading");
   const readyAttachments = staged.filter((item) => item.status === "done" && item.ref);
+  // Busy no longer blocks sending (steering, issue #9): the server queues the
+  // message and the send button stays live beside Stop.
   const canSend =
     gatewayConfigured &&
     modelKnown &&
-    !busy &&
     !uploading &&
     (text.trim().length > 0 || readyAttachments.length > 0);
 
@@ -227,7 +232,7 @@ function ChatPaneBody({
     if (item.ref) void botsApi.deleteUpload(item.ref.uploadId).catch(() => undefined);
   };
 
-  const send = async () => {
+  const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     const body = text.trim();
     if (!canSend || (!body && readyAttachments.length === 0)) return;
     const attachmentRefs = readyAttachments.map((item) => item.ref!);
@@ -239,10 +244,10 @@ function ChatPaneBody({
     // Keep the just-sent message visible: the reader may be scrolled up in
     // the history, and sending is an explicit jump-to-now (issue #2a).
     scroller.scrollToEnd({ behavior: "auto" });
-    // Optimistic echo: show the message immediately; the SSE snapshot/upsert
-    // replaces it once the server confirms (store dedupes by text and
-    // attachment ids). If the POST fails the echo is withdrawn and the text
-    // returns to the composer.
+    // Optimistic echo: show the message immediately; the SSE queued event
+    // replaces it once the server confirms the message is held (steer or
+    // follow-up), and the snapshot/upsert once it is placed. If the POST
+    // fails the echo is withdrawn and the text returns to the composer.
     const echo = {
       id: crypto.randomUUID(),
       // Exactly the submitted body: the store dedupes the optimistic echo
@@ -260,6 +265,7 @@ function ChatPaneBody({
         body,
         mentions,
         attachmentRefs.map((a) => a.uploadId),
+        whenBusy,
       );
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
@@ -283,6 +289,20 @@ function ChatPaneBody({
       await botsApi.abort(bot.id);
     } catch {
       toast.error("Failed to stop the reply");
+    }
+  };
+
+  /** Withdraw a queued/steering message: the x on its bubble. */
+  const cancelQueued = async (item: QueuedMessage) => {
+    try {
+      await botsApi.withdraw(bot.id, item.requestId);
+      // The queued SSE event clears the bubble.
+    } catch (error) {
+      // A refusal means the message was placed or answered meanwhile; the
+      // server's message says which.
+      toast.error(
+        error instanceof Error && error.message ? error.message : "Failed to cancel the message",
+      );
     }
   };
 
@@ -469,6 +489,18 @@ function ChatPaneBody({
                     </Fragment>
                   );
                 })}
+                {/* Messages the server holds behind (or steering into) the
+                  running reply (issue #9). They render in queue order between
+                  the transcript and the in-flight echoes; placement turns
+                  them into real user bubbles. */}
+                {queued.map((item) => (
+                  <MessageScrollerItem
+                    key={`queued-${item.requestId}`}
+                    messageId={`queued-${item.requestId}`}
+                  >
+                    <QueuedMessageView item={item} onCancel={() => void cancelQueued(item)} />
+                  </MessageScrollerItem>
+                ))}
                 {pending.length > 0 &&
                   (() => {
                     const last = messages[messages.length - 1];
@@ -581,10 +613,12 @@ function ChatPaneBody({
                   if (mentionRef.current?.handleKeyDown(e)) return;
                   // Enter sends only on a physical keyboard (fine pointer).
                   // On touch (pointer: coarse) Enter inserts a newline and the
-                  // send button is the only way to send (issue #1).
+                  // send button is the only way to send (issue #1). While a
+                  // reply runs, Enter steers it and Alt+Enter queues a
+                  // follow-up for afterwards (issue #9).
                   if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
                     e.preventDefault();
-                    void send();
+                    void send(e.altKey ? "followUp" : "steer");
                   }
                 }}
                 placeholder={
@@ -607,26 +641,30 @@ function ChatPaneBody({
                 >
                   <Paperclip className="size-5" />
                 </Button>
-                {busy ? (
+                <div className="flex items-center gap-1.5">
+                  {/* While replying, Stop and Send live side by side: a send
+                    steers the running reply (issue #9), Alt+Enter queues a
+                    follow-up for after it. */}
+                  {busy && (
+                    <Button
+                      size="icon"
+                      onClick={stop}
+                      aria-label="Stop generating"
+                      className="size-10 rounded-full"
+                    >
+                      <Square className="size-4 fill-current" />
+                    </Button>
+                  )}
                   <Button
                     size="icon"
-                    onClick={stop}
-                    aria-label="Stop generating"
-                    className="size-10 rounded-full"
-                  >
-                    <Square className="size-4 fill-current" />
-                  </Button>
-                ) : (
-                  <Button
-                    size="icon"
-                    onClick={send}
+                    onClick={() => void send("steer")}
                     disabled={!canSend}
-                    aria-label="Send message"
+                    aria-label={busy ? "Steer the reply" : "Send message"}
                     className="size-10 rounded-full disabled:opacity-30"
                   >
                     <ArrowUp className="size-5" />
                   </Button>
-                )}
+                </div>
               </div>
             </div>
             {mentionOpen && mention && (
@@ -681,5 +719,41 @@ function ChatPaneBody({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * A message the server holds while the bot is replying (issue #9): a steer
+ * joins the running reply after its current tool round, a follow-up is
+ * answered by the next run. Rendered like the owner's pill with its state
+ * and a cancel (x) that withdraws it from the queue.
+ */
+function QueuedMessageView({ item, onCancel }: { item: QueuedMessage; onCancel: () => void }) {
+  return (
+    <Message align="end" data-testid="queued-bubble" data-mode={item.mode}>
+      <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
+        {item.attachments && item.attachments.length > 0 && (
+          <MessageAttachments attachments={item.attachments} />
+        )}
+        {item.text && (
+          <div className={USER_PILL}>
+            <p className="whitespace-pre-wrap">{item.text}</p>
+          </div>
+        )}
+        <div className="text-muted-foreground flex items-center gap-1 px-1 text-xs">
+          <span>
+            {item.mode === "steer" ? "Steering into the reply" : "Queued for the next reply"}
+          </span>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="hover:bg-accent hover:text-foreground flex size-5 items-center justify-center rounded-full"
+            aria-label="Cancel this message"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      </div>
+    </Message>
   );
 }

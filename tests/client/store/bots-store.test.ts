@@ -233,3 +233,62 @@ describe("bots store — attachment echoes (issue #17)", () => {
     expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
   });
 });
+
+describe("bots store — queued messages while busy (issue #9)", () => {
+  beforeEach(() => {
+    listeners.clear();
+    openCallbacks.length = 0;
+    useBotsStore.setState({ chats: {} });
+  });
+
+  it("replaces the optimistic echo with the server's queued item", () => {
+    const botId = "bot-q1";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: true, queued: [] } });
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "req-1", text: "wait up", createdAt: 1 },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(1);
+
+    // Server confirms: the message is held — a steer joins the running reply.
+    emit(botId, {
+      type: "queued",
+      items: [{ requestId: "req-1", mode: "steer", text: "wait up" }],
+    });
+    const chat = useBotsStore.getState().chats[botId]!;
+    expect(chat.pending).toHaveLength(0);
+    expect(chat.queued).toEqual([{ requestId: "req-1", mode: "steer", text: "wait up" }]);
+  });
+
+  it("keeps queued items through reconnect snapshots and clears them when placed", () => {
+    const botId = "bot-q2";
+    useBotsStore.getState().connectChat(botId);
+    const messages = [
+      { id: "m1", role: "user", text: "first", status: "done", createdAt: 1 },
+      { id: "m2", role: "assistant", text: "working", status: "streaming", createdAt: 2 },
+    ];
+    const held = { requestId: "req-9", mode: "followUp", text: "then this" };
+    emit(botId, { type: "snapshot", state: { messages, busy: true, queued: [held] } });
+
+    // A reconnect (SSE drop, page reload) re-snapshots the held message: the
+    // optimistic echo of the same send is superseded by the queued item.
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "req-9", text: "then this", createdAt: 3 },
+    });
+    emit(botId, { type: "snapshot", state: { messages, busy: true, queued: [held] } });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
+    expect(useBotsStore.getState().chats[botId]!.queued).toEqual([held]);
+
+    // Placement: the real user message lands and the queue empties.
+    emit(botId, {
+      type: "upsert",
+      message: { id: "e5", role: "user", text: "then this", status: "done", createdAt: 4 },
+    });
+    emit(botId, { type: "queued", items: [] });
+    const chat = useBotsStore.getState().chats[botId]!;
+    expect(chat.queued).toEqual([]);
+    expect(chat.messages.some((message) => message.id === "e5")).toBe(true);
+  });
+});

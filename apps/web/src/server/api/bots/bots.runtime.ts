@@ -196,10 +196,15 @@ export function setAgentRuntimeForTests(fake: AgentRuntime): void {
 /**
  * Faux-provider runtime for dev/E2E boots (TINY_AGENTS_FAUX=1): real durable
  * machinery, scripted replies, no network and no gateway keys.
+ *
+ * TINY_AGENTS_FAUX_TOKENS_PER_SECOND streams the scripted echoes at that many
+ * tokens per second instead of instantly, giving e2e a real busy window to
+ * steer or queue into. Unset (or non-numeric) streams instantly.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
   handlers: Pick<Parameters<typeof AgentRuntime.open>[0], "onFatal" | "onReport"> = {},
+  env: Env = process.env,
 ): Promise<AgentRuntime> {
   const { createModels } = await import("@earendil-works/pi-ai/models");
   const { fauxProvider } = await import("@earendil-works/pi-ai/providers/faux");
@@ -222,9 +227,11 @@ export async function openFauxAgentRuntime(
   };
 
   const models = createModels();
+  const tokensPerSecond = Number(env.TINY_AGENTS_FAUX_TOKENS_PER_SECOND);
   const faux = fauxProvider({
     provider: "faux",
     models: [{ id: TEST_MODEL, name: "Test Model (faux)", reasoning: true }],
+    ...(Number.isFinite(tokensPerSecond) && tokensPerSecond > 0 ? { tokensPerSecond } : {}),
   });
   // The faux provider consumes one queued response per request; keep a deep
   // queue so long sessions never run dry.

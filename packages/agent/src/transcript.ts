@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { EntryRecord } from "@earendil-works/pi-durable";
+import type { EntryRecord, InboxItem, SubmissionRecord } from "@earendil-works/pi-durable";
 import type {
   AttachmentRef,
   ChatEvent,
@@ -7,6 +7,7 @@ import type {
   ChatState,
   ChatToolCall,
   ChatToolStatus,
+  QueuedMessage,
 } from "./types";
 
 /** A tool call of the current round, as `pi.live` presents it. */
@@ -28,6 +29,8 @@ export interface RawChat {
   unanswered: ReadonlyMap<number, string>;
   /** Tool calls of the current round, by provider call id. */
   tools?: ReadonlyMap<string, LiveTool>;
+  /** Owner inputs queued behind (or steering into) the running reply. */
+  queued?: readonly QueuedMessage[];
 }
 
 /** Longest tool output kept for the user. */
@@ -79,7 +82,11 @@ export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
 /** Attachment refs stored in a `chat.user` entry's data (validated at upload). */
 export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
-  const data = record(entry.data);
+  return attachmentsOfData(record(entry.data));
+}
+
+/** Attachment refs of any entry data object: an inbox item's entry is plain JSON. */
+function attachmentsOfData(data: Record<string, unknown> | undefined): AttachmentRef[] | undefined {
   const list = Array.isArray(data?.attachments) ? data.attachments : [];
   const refs = list.filter(
     (a): a is AttachmentRef =>
@@ -91,6 +98,32 @@ export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
       typeof a.size === "number",
   );
   return refs.length > 0 ? refs : undefined;
+}
+
+/**
+ * Owner messages of a conversation's inbox (pi-durable's queued submissions).
+ * Steers and follow-ups whose entry carries no peer attribution render as
+ * queued bubbles; write submissions (compaction summaries) and cross-bot
+ * deliveries (peer entries) do not.
+ */
+export function queuedOf(
+  items: readonly InboxItem[],
+  records: ReadonlyMap<string, SubmissionRecord>,
+): QueuedMessage[] {
+  const out: QueuedMessage[] = [];
+  for (const item of items) {
+    if (item.mode === "write") continue;
+    const data = record(record(item.entry)?.data);
+    if (data?.peer) continue;
+    const attachments = attachmentsOfData(data);
+    out.push({
+      requestId: records.get(String(item.id))?.requestId ?? String(item.id),
+      mode: item.mode,
+      text: textOf(item.content),
+      ...(attachments ? { attachments } : {}),
+    });
+  }
+  return out;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -362,7 +395,11 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
 }
 
 export function chatState(raw: RawChat): ChatState {
-  return { messages: deriveChat(raw), busy: raw.busy || raw.live !== undefined };
+  return {
+    messages: deriveChat(raw),
+    busy: raw.busy || raw.live !== undefined,
+    queued: raw.queued ?? [],
+  };
 }
 
 function sameExceptText(a: ChatMessage, b: ChatMessage): boolean {
@@ -421,5 +458,8 @@ export function diffChat(prev: ChatState, next: ChatState): ChatEvent[] {
     }
   }
   if (prev.busy !== next.busy) events.push({ type: "busy", busy: next.busy });
+  if (JSON.stringify(prev.queued) !== JSON.stringify(next.queued)) {
+    events.push({ type: "queued", items: next.queued });
+  }
   return events;
 }

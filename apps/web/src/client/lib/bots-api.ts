@@ -175,13 +175,18 @@ export const botsApi = {
     text: string,
     mentions?: string[],
     attachments?: string[],
+    whenBusy?: "steer" | "followUp",
   ) =>
     apiClient.post(`/bots/${id}/messages`, {
       requestId,
       text,
       ...(mentions?.length ? { mentions } : {}),
       ...(attachments?.length ? { attachments } : {}),
+      ...(whenBusy ? { whenBusy } : {}),
     }),
+  /** Withdraw a queued message (the x on a queued/steering bubble). */
+  withdraw: (id: string, requestId: string) =>
+    apiClient.delete(`/bots/${id}/messages/${encodeURIComponent(requestId)}`),
   upload: (file: File) => {
     const form = new FormData();
     form.append("file", file);

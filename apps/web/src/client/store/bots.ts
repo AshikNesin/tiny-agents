@@ -68,13 +68,17 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
     case "snapshot":
       // A fresh snapshot is authoritative: drop every pending echo whose
       // text now appears as a real user message (confirmed), keep the rest
-      // (still in flight). `unreadFrom` is session state, not stream state,
-      // so it survives the replacement.
+      // (still in flight). Echoes whose request id is queued server-side
+      // are covered by the queued items instead. `unreadFrom` is session
+      // state, not stream state, so it survives the replacement.
       return {
         ...event.state,
+        queued: event.state.queued ?? [],
         connected: true,
         pending: state.pending.filter(
-          (p) => !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)),
+          (p) =>
+            !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)) &&
+            !(event.state.queued ?? []).some((q) => q.requestId === p.id),
         ),
         unreadFrom: state.unreadFrom,
       };
@@ -100,6 +104,14 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, pending: [...state.pending, event.message] };
     case "pending-remove":
       return { ...state, pending: state.pending.filter((p) => p.id !== event.id) };
+    case "queued":
+      // The server holds these behind (or steering into) the reply; the
+      // matching optimistic echoes are superseded by the queued items.
+      return {
+        ...state,
+        queued: event.items,
+        pending: state.pending.filter((p) => !event.items.some((q) => q.requestId === p.id)),
+      };
     case "connected":
       return { ...state, connected: event.connected };
     case "delta":
@@ -202,6 +214,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         [botId]: s.chats[botId] ?? {
           messages: [],
           busy: false,
+          queued: [],
           pending: [],
           connected: false,
           unreadFrom: Number.isNaN(unreadFrom) ? null : unreadFrom,
@@ -220,6 +233,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
                 ...(s.chats[botId] ?? {
                   messages: [],
                   busy: false,
+                  queued: [],
                   pending: [],
                   connected: false,
                   unreadFrom: null,
@@ -260,6 +274,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
           s.chats[botId] ?? {
             messages: [],
             busy: false,
+            queued: [],
             pending: [],
             connected: false,
             unreadFrom: null,

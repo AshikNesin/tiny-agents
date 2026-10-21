@@ -50,6 +50,11 @@ export const sendMessageSchema = z
       .array(z.string().regex(/^[a-f0-9]{24}$/, "Invalid upload id"))
       .max(10)
       .optional(),
+    /**
+     * Placement while a reply runs: "steer" joins it after the current tool
+     * round, "followUp" is answered by the next run. Default: followUp.
+     */
+    whenBusy: z.enum(["steer", "followUp"]).optional(),
   })
   .refine((data) => (data.text ?? "").trim().length > 0 || (data.attachments?.length ?? 0) > 0, {
     message: "Message text or at least one attachment is required",

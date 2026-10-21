@@ -106,10 +106,27 @@ export interface ChatMessage {
   marker?: "compaction";
 }
 
+/**
+ * An input durably queued while the conversation is busy: a steer joins the
+ * running reply after its current tool round; a follow-up starts the next one.
+ * Owner messages only — cross-bot deliveries (peer entries) never queue here.
+ */
+export interface QueuedMessage {
+  /** Host request id: what withdrawal (the transcript's cancel) addresses. */
+  requestId: string;
+  mode: "steer" | "followUp";
+  /** Message text (image blocks are flattened to their notes server-side). */
+  text: string;
+  /** Attachments the message carries (issue #17). */
+  attachments?: AttachmentRef[];
+}
+
 export interface ChatState {
   messages: ChatMessage[];
   /** A reply is being generated (or queued work is running). */
   busy: boolean;
+  /** Owner inputs waiting behind (or steering into) the running reply. */
+  readonly queued: readonly QueuedMessage[];
 }
 
 export type ChatEvent =
@@ -117,6 +134,7 @@ export type ChatEvent =
   | { type: "upsert"; message: ChatMessage }
   | { type: "remove"; id: string }
   | { type: "delta"; id: string; text?: string; reasoning?: string }
+  | { type: "queued"; items: readonly QueuedMessage[] }
   | { type: "busy"; busy: boolean };
 
 export interface ActivityChange {
@@ -131,6 +149,9 @@ export interface LastMessage {
   text: string;
   createdAt: number;
 }
+
+/** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */
+export type WithdrawOutcome = "withdrawn" | "already_placed" | "settled" | "not_found";
 
 export interface ChatSubscription {
   /** State at attach time (also delivered as the first `snapshot` event). */

@@ -7,6 +7,7 @@ import {
   createRegistry,
   Harness,
   type Extension,
+  InboxDoc,
   MemoryStorage,
   watchEvents,
   type AgentChange,
@@ -47,6 +48,7 @@ import {
   diffChat,
   CHAT_USER_ENTRY,
   type LiveTool,
+  queuedOf,
   type RawChat,
 } from "./transcript";
 import type {
@@ -60,6 +62,8 @@ import type {
   ConversationRef,
   LastMessage,
   ModelInfo,
+  QueuedMessage,
+  WithdrawOutcome,
 } from "./types";
 
 const ctx: Context = BACKGROUND_CONTEXT;
@@ -461,8 +465,9 @@ export class AgentRuntime {
 
   /**
    * Durably admit a user message. Retrying with the same `requestId` never
-   * submits twice. While a reply is running, the message is queued as a
-   * follow-up and answered next.
+   * submits twice. While a reply is running, the message is queued: a steer
+   * (`whenBusy: "steer"`) joins the reply after its current tool round; the
+   * default follow-up is answered by the next run.
    */
   async submit(
     ref: ConversationRef,
@@ -475,6 +480,8 @@ export class AgentRuntime {
       attachments?: AttachmentRef[];
       /** Trusted attribution for a cross-bot delivery (rendered as a card). */
       peer?: ChatMessage["peer"];
+      /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
+      whenBusy?: "steer" | "followUp";
     },
   ): Promise<void> {
     const conversation = await this.#conversation(ref);
@@ -493,6 +500,7 @@ export class AgentRuntime {
         type: "input",
         content,
         requestId: input.requestId,
+        ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
         ...(input.attachments?.length || input.peer
           ? {
               entry: {
@@ -525,6 +533,29 @@ export class AgentRuntime {
   async abort(ref: ConversationRef): Promise<void> {
     const conversation = await this.#conversation(ref);
     await conversation.abort(ctx);
+  }
+
+  /**
+   * Withdraw a message by its request id. A queued input leaves the inbox
+   * (settling `unanswered`, reason `aborted`); a placed one is already part
+   * of the running reply, and a settled one is done.
+   */
+  async withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
+    const record = await this.#harness.commit(
+      (tx) => tx.submissionByRequest(ref as ConversationId, requestId),
+      ctx,
+    );
+    // Writes (compaction summaries) and unknown ids are not owner messages.
+    if (!record || record.type !== "input") return "not_found";
+    if (record.status === "queued") {
+      const result = await this.#harness.abortSubmission(record.id, ctx, ref as ConversationId);
+      if (result === "aborted") return "withdrawn";
+      return result;
+    }
+    if (record.status === "placed") return "already_placed";
+    // An input already withdrawn (by cancel or Stop) stays withdrawn, not 409.
+    if (record.status === "unanswered" && record.reason === "aborted") return "withdrawn";
+    return "settled";
   }
 
   isBusy(ref: ConversationRef): boolean {
@@ -583,9 +614,13 @@ export class AgentRuntime {
       busy: stream.snapshot.run !== undefined,
       unanswered: new Map(),
       tools: liveTools(stream.snapshot.tools),
+      queued: [],
     };
     for (const entry of await loadHistory(conversation)) raw.entries.set(Number(entry.id), entry);
     for (const entry of stream.snapshot.entries) raw.entries.set(Number(entry.id), entry);
+    // Seed the queue from the inbox doc (read after the snapshot, so it is at
+    // least as new): a reload shows what a busy conversation is still holding.
+    await this.#refreshQueued(raw, ref);
 
     const view = (): RawChat => ({
       entries: [...raw.entries.values()],
@@ -593,6 +628,7 @@ export class AgentRuntime {
       busy: raw.busy,
       unanswered: raw.unanswered,
       tools: raw.tools,
+      queued: raw.queued,
     });
 
     let state: ChatState = chatState(view());
@@ -615,6 +651,7 @@ export class AgentRuntime {
     stream.start(async (events) => {
       if (stopped) return;
       let resnapshot = false;
+      let inboxChanged = false;
       for (const event of events) {
         if (event.type === "snapshot") {
           resnapshot = true;
@@ -630,8 +667,15 @@ export class AgentRuntime {
           raw.tools = liveTools(event.tools);
           continue;
         }
+        // The inbox doc moved (send while busy, placement, withdrawal); the
+        // items' content lives in the doc, not the event.
+        if (event.type === "inbox_update") {
+          inboxChanged = true;
+          continue;
+        }
         applyEvent(raw, event);
       }
+      if (resnapshot || inboxChanged) await this.#refreshQueued(raw, ref);
       const next = chatState(view());
       const diff = resnapshot
         ? [{ type: "snapshot", state: next } as ChatEvent]
@@ -695,6 +739,28 @@ export class AgentRuntime {
     }
   }
 
+  /**
+   * Read the conversation's queued owner messages from `pi.inbox`. The inbox
+   * doc holds the items; the submission records (via `inspect()`) supply the
+   * request ids withdrawal addresses. Both reads are plain snapshots, newer
+   * than any event that triggered the refresh.
+   */
+  async #refreshQueued(raw: MutableRaw, ref: ConversationRef): Promise<void> {
+    const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
+    const items = inbox?.items ?? [];
+    if (items.length === 0) {
+      raw.queued = [];
+      return;
+    }
+    const inspection = await this.#harness.inspect(ctx);
+    const records = new Map(
+      inspection.submissions
+        .filter((record) => Number(record.conversationId) === ref)
+        .map((record) => [String(record.id), record]),
+    );
+    raw.queued = queuedOf(items, records);
+  }
+
   async #conversation(ref: ConversationRef): Promise<Conversation> {
     const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
     if (!conversation) throw new ConversationNotFoundError(ref);
@@ -732,6 +798,7 @@ type MutableRaw = {
   busy: boolean;
   unanswered: Map<number, string>;
   tools: Map<string, LiveTool>;
+  queued: QueuedMessage[];
 };
 
 /** Model-issued calls of the current round (nested calls live in `nestedTools`). */
