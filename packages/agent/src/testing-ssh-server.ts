@@ -33,6 +33,7 @@ interface PtyServerStream extends EventEmitter {
   setWindow(rows: number, cols: number, height?: number, width?: number): void;
   write(data: string | Buffer): boolean;
   end(): void;
+  exit(code: number | null): void;
 }
 
 export interface FakeSandboxServer {
@@ -83,6 +84,9 @@ export function fakePty(command: string, info: PtyRequestInfo): FakePty {
       p.serverStream?.write(data);
     },
     end() {
+      // exit-status first, like a real program exiting, so the client's
+      // `close` code is 0 rather than undefined.
+      p.serverStream?.exit(0);
       p.serverStream?.end();
     },
   };
@@ -181,7 +185,11 @@ export function startFakeSandboxServer(
           bound.serverStream = stream;
           boundPty = fake;
           stream.on("data", (data: Buffer) => fake.written.push(data));
-          stream.once("close", () => fake.end());
+          // A real exiting program sends exit-status before EOF; without it
+          // the client's `close` carries no code at all.
+          stream.once("close", () => {
+            fake.end();
+          });
           return;
         }
         let reply: ReturnType<ExecHandler>;

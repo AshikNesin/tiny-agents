@@ -45,6 +45,35 @@ export {
   type SandboxSession,
   type HostKeyStore,
 } from "./toolkits/sandbox";
+export {
+  createTerminalService,
+  SessionLimitError,
+  SessionNotFoundError,
+  SessionBusyError,
+  TerminalUnreachableError,
+  TmuxMissingError,
+  TMUX_INSTALL_COMMAND,
+  type TerminalService,
+  type TerminalServiceOptions,
+  type TerminalSessionRow,
+  type TerminalStatus,
+  type TerminalTransport,
+  type TerminalExecResult,
+  type PtyStream,
+} from "./terminal/terminal";
+export {
+  createSsh2TerminalTransport,
+  type Ssh2TerminalTransportOptions,
+} from "./terminal/terminal-ssh2";
+export {
+  MAX_SESSIONS,
+  SCROLLBACK,
+  SESSION_PREFIX,
+  TERM,
+  TMUX_SOCKET,
+  parseSessionName,
+  type SessionName,
+} from "./terminal/tmux";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
   browserOpenState,
