@@ -22,14 +22,22 @@ import ssh2 from "ssh2";
 // named exports through cjs-module-lexer, but the default export works everywhere
 const { Server: SshServer } = ssh2;
 type Connection = import("ssh2").Connection;
-// The server-side SFTP stream lives in ssh2's runtime but not its types.
+// The server-side exec stream lives in ssh2's runtime but not its types; a
+// FakePty needs the reverse direction wired onto it.
 type SftpServerStream = EventEmitter & Record<string, any>;
+interface PtyServerStream extends EventEmitter {
+  setWindow(rows: number, cols: number, height?: number, width?: number): void;
+  write(data: string | Buffer): boolean;
+  end(): void;
+}
 
 export interface FakeSandboxServer {
   port: number;
   root: string;
   /** Every command the server has been asked to run, in order. */
   execCalls: string[];
+  /** Completed SSH handshakes: makes fresh-connection invariants observable. */
+  connections: number;
   close(): void;
 }
 
@@ -40,8 +48,71 @@ export type ExecHandler = (command: string) => {
   exitCode?: number;
 };
 
+/** Attach metadata the server sees when a pty is requested on exec. */
+export interface PtyRequestInfo {
+  term: string;
+  cols: number;
+  rows: number;
+}
+
+/** Interactivity handler: `null` (default) rejects pty requests; tests opt in. */
+export type PtyHandler = null | ((command: string, info: PtyRequestInfo) => FakePty | null);
+
+/**
+ * Build a FakePty a test returns from its PtyHandler. The ssh2 stream is
+ * bound after the handler answers, so the methods below act on it lazily;
+ * `emit` before binding drops the bytes (nothing is listening yet).
+ */
+export function fakePty(command: string, info: PtyRequestInfo): FakePty {
+  const p: BoundFakePty = {
+    command,
+    term: info.term,
+    cols: info.cols,
+    rows: info.rows,
+    written: [],
+    setWindow(cols, rows) {
+      p.cols = cols;
+      p.rows = rows;
+      p.serverStream?.setWindow(rows, cols);
+    },
+    emit(data) {
+      p.serverStream?.write(data);
+    },
+    end() {
+      p.serverStream?.end();
+    },
+  };
+  return p;
+}
+
+/**
+ * The pty shape a terminal test needs: a command stream the handler keeps
+ * open, echoes bytes back from, and can set the window size on. Recording
+ * the requested pty (term/cols/rows) lets tests assert the attach asked for
+ * the right terminal geometry.
+ */
+export interface FakePty {
+  command: string;
+  term: string;
+  cols: number;
+  rows: number;
+  /** Bytes the client sent into the pty, in order. */
+  written: Buffer[];
+  setWindow(cols: number, rows: number): void;
+  /** Push output to the client as if the remote program had printed it. */
+  emit(data: string | Buffer): void;
+  /** End the stream from the server side, like the remote program exiting. */
+  end(): void;
+}
+
+/** The ssh2 exec stream a FakePty is bound to, hidden from tests. */
+interface BoundFakePty extends FakePty {
+  serverStream?: PtyServerStream;
+}
+
 export function startFakeSandboxServer(
   exec: ExecHandler = () => ({ stdout: "" }),
+  pty: PtyHandler = null,
 ): Promise<FakeSandboxServer> {
   const root = mkdtempSync(join(tmpdir(), "ta-sandbox-test-"));
   // ssh2 1.17 cannot parse ed25519 pkcs8; EC P-256 in sec1 parses fine.
@@ -50,11 +121,13 @@ export function startFakeSandboxServer(
     type: "sec1",
   }) as unknown as string;
   const execCalls: string[] = [];
+  let connections = 0;
   let closed = false;
   const clients = new Set<Connection>();
 
   const server = new SshServer({ hostKeys: [hostKey] }, (client: Connection) => {
     clients.add(client);
+    connections++;
     client.on("close", () => clients.delete(client));
     // Tailscale-style: only `none` auth. A client that starts sending
     // credentials is not the shape this fixture simulates — reject it.
@@ -63,8 +136,32 @@ export function startFakeSandboxServer(
     );
     client.on("session", (accept) => {
       const session = accept();
+      let sessionPty: PtyRequestInfo | null = null;
+      // A pty attach (terminal feature) is interactive: the pty request
+      // arrives as its own event before exec, and the exec stream only
+      // becomes readable once both are accepted. Without a pty handler the
+      // request is rejected, matching a pre-pty server.
+      session.on("pty", (acceptPty, reject, info: import("ssh2").PseudoTtyInfo) => {
+        if (!pty) return reject();
+        sessionPty = {
+          term: info.term,
+          cols: info.cols,
+          rows: info.rows,
+        };
+        acceptPty();
+      });
       session.on("exec", (acceptExec, reject, info) => {
         execCalls.push(info.command);
+        if (sessionPty && pty) {
+          const fake = pty(info.command, sessionPty);
+          if (!fake) return reject();
+          const stream = acceptExec();
+          const bound = fake as BoundFakePty;
+          bound.serverStream = stream;
+          stream.on("data", (data: Buffer) => fake.written.push(data));
+          stream.once("close", () => fake.end());
+          return;
+        }
         let reply: ReturnType<ExecHandler>;
         try {
           reply = exec(info.command);
@@ -92,6 +189,9 @@ export function startFakeSandboxServer(
         port,
         root,
         execCalls,
+        get connections() {
+          return connections;
+        },
         close: () => {
           if (closed) return;
           closed = true;
