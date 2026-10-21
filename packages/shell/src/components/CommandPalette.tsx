@@ -130,7 +130,13 @@ export function CommandPaletteDialog({ groups }: { groups?: CommandGroupEntry[] 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="overflow-hidden p-0 shadow-2xl [&>button]:hidden">
+      {/* A palette is not a form: nothing to discard, so a click outside
+          should dismiss it (the default DialogContent prevents outside
+          clicks to protect form input). */}
+      <DialogContent
+        dismissOnOutsideClick
+        className="overflow-hidden p-0 shadow-2xl [&>button]:hidden"
+      >
         <DialogTitle className="sr-only">Command Menu</DialogTitle>
         <Command className="[&_[cmdk-input-wrapper]]:border-b-0">
           <CommandInput placeholder="Type a command or search..." />
