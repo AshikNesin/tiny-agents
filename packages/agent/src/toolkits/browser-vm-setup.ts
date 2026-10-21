@@ -88,10 +88,33 @@ export interface LaunchedStack {
 
 const PID_FILE = ".stack-pids";
 
+/** Serializes launches on a VM: display numbers and ports are picked under it. */
+export const LAUNCH_LOCK_FILE = "browser-launch.lock";
+
+/** Closes the lock's fd (8) in a child; see `launchStackCommand`. */
+const RELEASE_LOCK = "8>&-";
+
+const LOCK_WAIT_SECONDS = 25;
+const X_WAIT_SECONDS = 10;
+const CDP_WAIT_SECONDS = 30;
+
+/**
+ * Upper bound on how long a launch script runs: its three waits plus the
+ * fixed sleeps and process starts. The script always ends by itself within
+ * this, so a caller that waits at least this long never walks away from a
+ * script that is still running on the VM.
+ */
+export const LAUNCH_BUDGET_MS = (LOCK_WAIT_SECONDS + X_WAIT_SECONDS + CDP_WAIT_SECONDS + 5) * 1000;
+
 /**
  * Start Xtigervnc and a headful Chrome on it. Prints
  * `ok display=<n> vnc=<port> cdp=<port>` once CDP answers; on failure it
  * kills what it started, prints the log tails, and exits non-zero.
+ *
+ * Launches on one VM run one at a time. The lock is fd 8 and lives until the
+ * script exits, so every process that outlives the script must close it
+ * (`8>&-`): a browser that inherited the fd would keep the lock for as long
+ * as it runs and every later launch would wait on it.
  */
 export function launchStackCommand(options: LaunchStackOptions): string {
   const profile = shQuote(options.profileDir);
@@ -104,8 +127,8 @@ export function launchStackCommand(options: LaunchStackOptions): string {
       "set -e",
       `PROFILE=${profile}`,
       'mkdir -p "$PROFILE" "$HOME/.tiny-agents"',
-      'exec 8>"$HOME/.tiny-agents/launch.lock"',
-      "flock 8",
+      `exec 8>"$HOME/.tiny-agents/${LAUNCH_LOCK_FILE}"`,
+      `flock -w ${LOCK_WAIT_SECONDS} 8 || { echo "Gave up after ${LOCK_WAIT_SECONDS}s waiting for another browser to finish starting on the VM" >&2; exit 1; }`,
       // A previous app process may have died without tearing down: its Chrome
       // would hold the profile lock and swallow this launch.
       `if [ -s "$PROFILE/${PID_FILE}" ]; then xargs -r kill < "$PROFILE/${PID_FILE}" 2>/dev/null || true; fi`,
@@ -136,13 +159,14 @@ print(free(), free())')"`,
       `rm -f "$PROFILE/${PID_FILE}"`,
       'setsid nohup Xtigervnc ":$DISP" -geometry ' +
         px +
-        ' -depth 24 -rfbport "$VNC" -localhost -nolisten tcp -SecurityTypes None -AlwaysShared -desktop tiny-agents </dev/null >"$XLOG" 2>&1 &',
+        ` -depth 24 -rfbport "$VNC" -localhost -nolisten tcp -SecurityTypes None -AlwaysShared -desktop tiny-agents </dev/null >"$XLOG" 2>&1 ${RELEASE_LOCK} &`,
       "XPID=$!",
       `echo "$XPID" > "$PROFILE/${PID_FILE}"`,
-      'for i in $(seq 1 100); do [ -S "/tmp/.X11-unix/X$DISP" ] && break; sleep 0.1; done',
+      `XWAIT=$((SECONDS + ${X_WAIT_SECONDS}))`,
+      'while [ ! -S "/tmp/.X11-unix/X$DISP" ] && [ "$SECONDS" -lt "$XWAIT" ]; do sleep 0.1; done',
       // vncconfig is the bridge between X selections and VNC clipboard
       // messages: without it copy/paste never reaches the viewer.
-      'DISPLAY=":$DISP" setsid nohup vncconfig -nowin </dev/null >"$PROFILE/.vncconfig.log" 2>&1 &',
+      `DISPLAY=":$DISP" setsid nohup vncconfig -nowin </dev/null >"$PROFILE/.vncconfig.log" 2>&1 ${RELEASE_LOCK} &`,
       `echo "$!" >> "$PROFILE/${PID_FILE}"`,
       'DISPLAY=":$DISP" setsid nohup google-chrome-stable ' +
         '--user-data-dir="$PROFILE" ' +
@@ -150,15 +174,19 @@ print(free(), free())')"`,
         `--window-position=0,0 --window-size=${cssW},${cssH} --force-device-scale-factor=${scale} ` +
         "--no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain " +
         "--disable-features=Translate,MediaRouter --disable-session-crashed-bubble --hide-crash-restore-bubble " +
-        'about:blank </dev/null >"$CLOG" 2>&1 &',
+        `about:blank </dev/null >"$CLOG" 2>&1 ${RELEASE_LOCK} &`,
       "CPID=$!",
       `echo "$CPID" >> "$PROFILE/${PID_FILE}"`,
       "UP=0",
-      'for i in $(seq 1 150); do curl -sf "http://127.0.0.1:$CDP/json/version" >/dev/null 2>&1 && { UP=1; break; }; sleep 0.2; done',
+      `CDPWAIT=$((SECONDS + ${CDP_WAIT_SECONDS}))`,
+      'while [ "$SECONDS" -lt "$CDPWAIT" ]; do',
+      '  curl -sf --max-time 2 "http://127.0.0.1:$CDP/json/version" >/dev/null 2>&1 && { UP=1; break; }',
+      "  sleep 0.2",
+      "done",
       'if [ "$UP" != 1 ]; then',
-      '  echo "Chrome did not start on the VM within 30s" >&2',
+      `  echo "Chrome did not start on the VM within ${CDP_WAIT_SECONDS}s" >&2`,
       '  tail -n 20 "$XLOG" "$CLOG" >&2 || true',
-      '  kill "$CPID" "$XPID" 2>/dev/null || true',
+      `  xargs -r kill < "$PROFILE/${PID_FILE}" 2>/dev/null || true`,
       `  rm -f "$PROFILE/${PID_FILE}"`,
       "  exit 1",
       "fi",

@@ -87,6 +87,31 @@ describe("browser VM setup commands", () => {
     expect(script).not.toContain("0.0.0.0");
   });
 
+  it("keeps every background process off the launch lock", () => {
+    const script = launchStackCommand({
+      profileDir: "/data/p",
+      width: 1280,
+      height: 800,
+      scale: 2,
+    });
+    // The lock is fd 8, held until the script exits. A browser that inherits it
+    // holds the lock for as long as it runs, and every later launch waits on it.
+    const background = script.split("\n").filter((line) => line.endsWith(" &"));
+    expect(background).toHaveLength(3); // Xtigervnc, vncconfig, Chrome
+    for (const line of background) expect(line).toContain("8>&-");
+  });
+
+  it("gives up on the launch lock instead of waiting forever", () => {
+    const script = launchStackCommand({
+      profileDir: "/data/p",
+      width: 1280,
+      height: 800,
+      scale: 2,
+    });
+    expect(script).toMatch(/flock -w \d+ 8 \|\| \{ echo "[^"]*waiting for another browser/);
+    expect(script).not.toMatch(/flock 8/);
+  });
+
   it("sizes the display by the pixel density", () => {
     const at = (scale: number) =>
       launchStackCommand({ profileDir: "/data/p", width: 1280, height: 800, scale });

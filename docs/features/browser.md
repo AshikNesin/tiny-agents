@@ -83,6 +83,26 @@ shows "Setting up the browser on the VM" while it runs (a few minutes, once
 per VM). `STACK_VERSION` in `browser-vm-setup.ts` names a marker file
 (`~/.tiny-agents/browser-stack-v1`); bump it to re-run the install.
 
+## Several bots at once
+
+Every bot gets its own Xtigervnc display and Chrome on the VM, so any number
+of bots can have a live browser at the same time. Only the launches take
+turns: the launch script holds `~/.tiny-agents/browser-launch.lock` while it
+picks a display and ports, and drops it as soon as Chrome answers.
+
+- **A running browser never holds the lock.** The lock is fd 8 in the script,
+  and Xtigervnc, vncconfig and Chrome are started with `8>&-` so they do not
+  inherit it. A browser that did would keep the lock for as long as it ran, and
+  every other bot's launch would hang until that browser was closed (10 idle
+  minutes at most). `tests/server/app/agent/browser-vm-launch.test.ts` runs
+  the real script against stand-in binaries to guard this.
+- **Launches are bounded.** A launch that cannot get the lock in 25 s fails
+  with "Gave up after 25s waiting for another browser to finish starting on
+  the VM". The script's own waits add up to `LAUNCH_BUDGET_MS`, and the
+  transport waits 20 s longer than that, so a script is never left running on
+  the VM after the app has given up on it. A launch that fails midway tears
+  down what it started.
+
 ## API
 
 | Method | Path                                  | Description                                                              |

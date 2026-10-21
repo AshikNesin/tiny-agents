@@ -24,7 +24,9 @@ import ssh2, { type Client } from "ssh2";
 import { pageSession } from "./browser-chromium";
 import {
   installStackCommand,
+  LAUNCH_BUDGET_MS,
   launchStackCommand,
+  type LaunchedStack,
   parseLaunchOutput,
   stackReadyCommand,
   teardownStackCommand,
@@ -43,7 +45,12 @@ export interface RemoteCdpTransportOptions {
 
 /** First-run install budget: apt update + TigerVNC + the Chrome .deb. */
 const INSTALL_TIMEOUT_MS = 10 * 60_000;
-const LAUNCH_TIMEOUT_MS = 60_000;
+/**
+ * The launch script ends by itself within its budget and says why it failed;
+ * the margin covers the SSH dial. Giving up sooner would leave the script
+ * running on the VM, and a bare timeout would hide its message.
+ */
+const LAUNCH_TIMEOUT_MS = LAUNCH_BUDGET_MS + 20_000;
 
 /** GET /json/version through the local tunnel port. */
 async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerUrl?: string }> {
@@ -141,18 +148,29 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     }
     open.onPhase?.("starting");
 
-    const launched = parseLaunchOutput(
-      await exec(
-        launchStackCommand({
-          profileDir,
-          width: open.viewportWidth,
-          height: open.viewportHeight,
-          scale,
-        }),
-        LAUNCH_TIMEOUT_MS,
-        "start the browser",
-      ),
-    );
+    const launchStack = async (): Promise<LaunchedStack> => {
+      try {
+        return parseLaunchOutput(
+          await exec(
+            launchStackCommand({
+              profileDir,
+              width: open.viewportWidth,
+              height: open.viewportHeight,
+              scale,
+            }),
+            LAUNCH_TIMEOUT_MS,
+            "start the browser",
+          ),
+        );
+      } catch (error) {
+        // A launch that broke after starting Xtigervnc or Chrome (a dropped
+        // connection, an unreadable report) leaves them running with nothing
+        // to stop them.
+        await exec(teardownStackCommand(profileDir), 15_000, "stop the browser").catch(() => {});
+        throw error;
+      }
+    };
+    const launched = await launchStack();
 
     const live = new Set<Client>();
     let server: ReturnType<typeof createServer> | undefined;
