@@ -11,10 +11,23 @@ import { apiClient } from "@groot/shell/lib/api";
 export interface TerminalSession {
   name: string;
   /** Foreground process (pane_current_command); null when idle at the shell. */
-  command: string | null;
+  process: string | null;
   /** A viewer is currently attached to this tab. */
   attached: boolean;
   createdAt: string;
+}
+
+/** Server availability: drives the page's setup/error/empty states. */
+export type TerminalStatusWire =
+  | { kind: "ready" }
+  | { kind: "unconfigured" }
+  | { kind: "unreachable"; message: string }
+  | { kind: "tmux-missing"; installCommand: string };
+
+/** GET /terminal/sessions answers availability and tabs in one dial. */
+export interface TerminalList {
+  status: TerminalStatusWire;
+  sessions: TerminalSession[];
 }
 
 /**
@@ -28,7 +41,7 @@ export interface TerminalCloseBlocked {
 }
 
 export const terminalApi = {
-  list: () => apiClient.get<TerminalSession[]>("/terminal/sessions"),
+  list: () => apiClient.get<TerminalList>("/terminal/sessions"),
   create: (size?: { cols?: number; rows?: number }) =>
     apiClient.post<TerminalSession>("/terminal/sessions", size ?? {}),
   remove: (name: string, force = false) =>

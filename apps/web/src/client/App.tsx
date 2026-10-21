@@ -22,6 +22,7 @@ import {
 import { SkillsPage } from "./pages/skills/Skills";
 import { MemoryPage } from "./pages/memory";
 import { ConnectionsPage } from "./pages/connections/Connections";
+import { TerminalPage } from "./pages/terminal";
 import { AppShell } from "./components/shell/AppShell";
 import { APP_NAV } from "./components/shell/nav";
 
@@ -80,6 +81,7 @@ function App() {
                 <Route path="/chats" element={<ChatWorkspace />} />
                 <Route path="/chats/:botId" element={<ChatWorkspace />} />
                 <Route path="/tasks" element={<Tasks />} />
+                <Route path="/terminal" element={<TerminalPage />} />
                 <Route path="/routines" element={<Routines />} />
                 <Route path="/skills" element={<SkillsPage />} />
                 <Route path="/skills/:id" element={<SkillsPage />} />
