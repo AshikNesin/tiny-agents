@@ -1,0 +1,342 @@
+/**
+ * The VM launch script run for real in bash, against stand-ins for Xtigervnc
+ * and Chrome, so the lock and process behaviour is checked rather than the
+ * script's text.
+ *
+ * A launch holds a VM-wide lock while it picks a display and ports. Browsers
+ * must not inherit that lock: one that does keeps it for as long as it runs,
+ * and every other bot's launch waits on it.
+ */
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import {
+  LAUNCH_LOCK_FILE,
+  launchStackCommand,
+  parseLaunchOutput,
+  teardownStackCommand,
+} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+
+const hasPython = (() => {
+  try {
+    execFileSync("python3", ["--version"], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const runIfPython = hasPython ? describe : describe.skip;
+
+/** Stand-ins that put the script through the same waits the real ones do. */
+const FAKES: Record<string, string> = {
+  // Binds the X socket the script waits for and removes it on SIGTERM.
+  Xtigervnc: `#!/usr/bin/env python3
+import os, signal, socket, sys, time
+
+path = os.path.join(os.environ["FAKE_X11_DIR"], "X" + sys.argv[1].lstrip(":"))
+server = socket.socket(socket.AF_UNIX)
+server.bind(path)
+
+def stop(*_):
+    os.unlink(path)
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, stop)
+time.sleep(600)
+`,
+  vncconfig: `#!/bin/sh
+exec sleep 600
+`,
+  // Answers /json/version on the DevTools port, like Chrome once it is up.
+  "google-chrome-stable": `#!/usr/bin/env python3
+import socket, sys
+
+port = int(next(a for a in sys.argv if a.startswith("--remote-debugging-port=")).split("=")[1])
+server = socket.socket()
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("127.0.0.1", port))
+server.listen(8)
+while True:
+    conn, _ = server.accept()
+    conn.recv(4096)
+    conn.sendall(b"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\nConnection: close\\r\\n\\r\\n{}")
+    conn.close()
+`,
+};
+
+/** For machines without util-linux (macOS); they sit last on PATH so real tools win. */
+const SHIMS: Record<string, string> = {
+  setsid: `#!/bin/sh
+exec "$@"
+`,
+  flock: `#!/usr/bin/env python3
+import fcntl, sys, time
+
+args = sys.argv[1:]
+wait, nonblock = None, False
+while args and args[0].startswith("-"):
+    flag = args.pop(0)
+    if flag == "-w":
+        wait = float(args.pop(0))
+    elif flag == "-n":
+        nonblock = True
+    else:
+        sys.exit(64)
+fd = int(args[0])
+deadline = None if wait is None else time.monotonic() + wait
+while True:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        sys.exit(0)
+    except BlockingIOError:
+        if nonblock or (deadline is not None and time.monotonic() >= deadline):
+            sys.exit(1)
+        time.sleep(0.05)
+`,
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitUntil(predicate: () => boolean, ms = 5_000) {
+  const deadline = Date.now() + ms;
+  while (!predicate() && Date.now() < deadline) await sleep(50);
+}
+
+/** Running, and not a zombie: orphans of the script may sit under an init that never reaps. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  try {
+    return !/\) Z /.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return true; // no /proc (macOS)
+  }
+}
+
+function stackPids(profile: string): number[] {
+  try {
+    return readFileSync(join(profile, ".stack-pids"), "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map(Number);
+  } catch {
+    return [];
+  }
+}
+
+interface Run {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
+/** Run a command string the way SSH does, resolving at exit even if children linger. */
+function run(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<Run> {
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      env,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        process.kill(-child.pid!, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }, timeoutMs);
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      // Output can trail the exit event.
+      setTimeout(() => resolve({ code, stdout, stderr, timedOut }), 50);
+    });
+  });
+}
+
+runIfPython("browser stack launch script", () => {
+  // Written once for the file: macOS scans every new executable on its first
+  // run, which costs ~0.7s each.
+  let tools: string;
+  let root: string;
+  let home: string;
+  let x11: string;
+  let env: NodeJS.ProcessEnv;
+  let profiles: string[];
+  let holders: ChildProcess[];
+
+  beforeAll(() => {
+    tools = mkdtempSync(join(tmpdir(), "ta-vm-tools-"));
+    for (const [dir, files] of [
+      ["bin", FAKES],
+      ["shims", SHIMS],
+    ] as const) {
+      mkdirSync(join(tools, dir));
+      for (const [name, body] of Object.entries(files)) {
+        writeFileSync(join(tools, dir, name), body, { mode: 0o755 });
+      }
+    }
+  });
+
+  afterAll(() => rmSync(tools, { recursive: true, force: true }));
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "ta-vm-launch-"));
+    home = join(root, "home");
+    x11 = join(root, "x11");
+    for (const dir of [join(home, ".tiny-agents"), x11]) mkdirSync(dir, { recursive: true });
+    env = {
+      ...process.env,
+      HOME: home,
+      FAKE_X11_DIR: x11,
+      // Fakes first so they win over a real install; shims last so real tools win over them.
+      PATH: `${join(tools, "bin")}:${process.env.PATH}:${join(tools, "shims")}`,
+    };
+    profiles = [];
+    holders = [];
+  });
+
+  afterEach(() => {
+    for (const holder of holders) holder.kill("SIGKILL");
+    for (const profile of profiles) {
+      for (const pid of stackPids(profile)) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  async function launch(name: string, options: { lockWaitSeconds?: number } = {}) {
+    const profile = join(root, "profiles", name);
+    profiles.push(profile);
+    let command = launchStackCommand({ profileDir: profile, width: 1280, height: 800, scale: 2 });
+    // The script names the VM's real X socket directory; aim it at the fake one.
+    expect(command).toContain("/tmp/.X11-unix");
+    command = command
+      .replaceAll("/tmp/.X11-unix", x11)
+      .replaceAll("/tmp/.X$n-lock", () => `${x11}/.X$n-lock`);
+    if (options.lockWaitSeconds !== undefined) {
+      expect(command).toMatch(/flock -w \d+ 8/);
+      command = command.replace(/flock -w \d+ 8/, `flock -w ${options.lockWaitSeconds} 8`);
+    }
+    return { ...(await run(command, env, 20_000)), profile };
+  }
+
+  const lockFile = () => join(home, ".tiny-agents", LAUNCH_LOCK_FILE);
+
+  /** True when another process holds the launch lock (same flock(2) the script takes). */
+  function lockHeld(): boolean {
+    expect(existsSync(lockFile())).toBe(true);
+    try {
+      execFileSync(
+        "python3",
+        [
+          "-c",
+          "import fcntl,sys\nf=open(sys.argv[1],'a')\nfcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)",
+          lockFile(),
+        ],
+        { stdio: "pipe" },
+      );
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  function holdLock(): Promise<void> {
+    const holder = spawn(
+      "python3",
+      [
+        "-c",
+        "import fcntl,sys,time\nf=open(sys.argv[1],'a')\nfcntl.flock(f,fcntl.LOCK_EX)\nprint('locked',flush=True)\ntime.sleep(600)",
+        lockFile(),
+      ],
+      { stdio: ["ignore", "pipe", "ignore"] },
+    );
+    holders.push(holder);
+    return new Promise((resolve, reject) => {
+      holder.stdout!.once("data", () => resolve());
+      holder.once("exit", () => reject(new Error("the lock holder exited early")));
+    });
+  }
+
+  it("leaves the launch lock free while the browser keeps running", async () => {
+    const a = await launch("a");
+    expect(a.code).toBe(0);
+    parseLaunchOutput(a.stdout);
+    const pids = stackPids(a.profile);
+    expect(pids).toHaveLength(3); // Xtigervnc, vncconfig, Chrome
+    expect(pids.every(alive)).toBe(true);
+    expect(lockHeld()).toBe(false);
+  }, 60_000);
+
+  it("starts a second bot's browser while the first is still running", async () => {
+    const a = await launch("a");
+    const b = await launch("b");
+    expect(b.timedOut).toBe(false);
+    expect([a.code, b.code]).toEqual([0, 0]);
+    const first = parseLaunchOutput(a.stdout);
+    const second = parseLaunchOutput(b.stdout);
+    expect(second.display).not.toBe(first.display);
+    expect(second.cdpPort).not.toBe(first.cdpPort);
+    expect(stackPids(a.profile).every(alive)).toBe(true);
+    expect(stackPids(b.profile).every(alive)).toBe(true);
+  }, 60_000);
+
+  it("serializes simultaneous launches onto distinct displays and ports", async () => {
+    const [a, b] = await Promise.all([launch("a"), launch("b")]);
+    expect([a.code, b.code]).toEqual([0, 0]);
+    const first = parseLaunchOutput(a.stdout);
+    const second = parseLaunchOutput(b.stdout);
+    expect(new Set([first.display, second.display]).size).toBe(2);
+    expect(new Set([first.vncPort, first.cdpPort, second.vncPort, second.cdpPort]).size).toBe(4);
+  }, 60_000);
+
+  it("replaces a stale stack of the same profile instead of waiting on it", async () => {
+    const first = await launch("a");
+    const stale = stackPids(first.profile);
+    const again = await launch("a");
+    expect(again.timedOut).toBe(false);
+    expect(again.code).toBe(0);
+    await waitUntil(() => stale.every((pid) => !alive(pid)));
+    expect(stale.some(alive)).toBe(false);
+    expect(stackPids(again.profile).every(alive)).toBe(true);
+  }, 60_000);
+
+  it("gives up with a clear message when another launch never finishes", async () => {
+    await holdLock();
+    const result = await launch("a", { lockWaitSeconds: 1 });
+    expect(result.timedOut).toBe(false);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toMatch(/waiting for another browser/);
+    expect(existsSync(join(result.profile, ".stack-pids"))).toBe(false);
+  }, 60_000);
+
+  it("tears down one browser without touching another", async () => {
+    const a = await launch("a");
+    const b = await launch("b");
+    expect([a.code, b.code]).toEqual([0, 0]);
+    const pidsA = stackPids(a.profile);
+    expect(pidsA).toHaveLength(3);
+    execFileSync("sh", ["-c", teardownStackCommand(a.profile)], { env });
+    await waitUntil(() => pidsA.every((pid) => !alive(pid)));
+    expect(pidsA.some(alive)).toBe(false);
+    expect(stackPids(b.profile)).toHaveLength(3);
+    expect(stackPids(b.profile).every(alive)).toBe(true);
+  }, 60_000);
+});
