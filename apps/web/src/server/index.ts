@@ -30,6 +30,7 @@ import { startMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
 import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
+import { attachTerminalWs } from "./api/terminal/terminal.ws";
 
 /**
  * The pi-durable agent store path. Plain path (not a file: URL) — the store
@@ -163,6 +164,8 @@ async function main() {
 
   // VNC viewers for bot browsers connect over WebSocket (browser.vnc.ts).
   const browserVnc = attachBrowserVnc(httpServer);
+  // Terminal tabs attach over WebSocket too (terminal.ws.ts).
+  const terminalWs = attachTerminalWs(httpServer);
 
   // Register feature job handlers before routes
   registerJobHandlers();
@@ -216,6 +219,7 @@ async function main() {
       endAllSse();
       // Viewers first, then the remote browsers they were watching.
       browserVnc.close();
+      terminalWs.close();
       await closeAllBrowserSessions();
       // Disarm capture debounce timers before the runtime closes: a firing
       // timer would call into a closed store.

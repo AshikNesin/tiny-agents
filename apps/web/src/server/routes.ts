@@ -9,6 +9,7 @@ import routinesRoutes from "./api/routines/routines.routes";
 import botsRoutes from "./api/bots/bots.routes";
 import memoriesRoutes from "./api/bots/memories.routes";
 import browserRoutes from "./api/bots/browser.routes";
+import terminalRoutes from "./api/terminal/terminal.routes";
 import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
@@ -41,6 +42,7 @@ export function registerRoutes(app: Express): void {
   protectedRouter.use(botsRoutes);
   protectedRouter.use(memoriesRoutes);
   protectedRouter.use(browserRoutes);
+  protectedRouter.use(terminalRoutes);
   protectedRouter.use(uploadsRoutes);
   protectedRouter.use(tasksRoutes);
   protectedRouter.use(routinesRoutes);

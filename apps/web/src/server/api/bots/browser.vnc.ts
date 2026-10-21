@@ -57,8 +57,12 @@ export function resetVncTicketsForTests(): void {
   tickets.clear();
 }
 
-/** Browsers send Origin on WebSocket handshakes: it must be this app's own. */
-function defaultOriginAllowed(req: IncomingMessage): boolean {
+/**
+ * The default Origin policy, exported for the terminal WebSocket bridge:
+ * same-host, configured CORS origin, or env.ORIGIN. Browsers send Origin on
+ * WebSocket handshakes; a foreign one is refused.
+ */
+export function isOriginAllowed(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   if (!origin) return true; // non-browser client; the ticket is the credential
   let originHost: string;
@@ -100,7 +104,7 @@ export function attachBrowserVnc(
   options: BrowserVncOptions = {},
 ): { close(): void } {
   const wss = new WebSocketServer({ noServer: true });
-  const isOriginAllowed = options.isOriginAllowed ?? defaultOriginAllowed;
+  const originAllowed = options.isOriginAllowed ?? isOriginAllowed;
   const viewers = new Map<number, number>();
 
   httpServer.on("upgrade", (req, socket, head) => {
@@ -112,7 +116,7 @@ export function attachBrowserVnc(
       if (httpServer.listenerCount("upgrade") <= 1) socket.destroy();
       return;
     }
-    if (!isOriginAllowed(req)) return reject(socket, "403 Forbidden");
+    if (!originAllowed(req)) return reject(socket, "403 Forbidden");
 
     const botId = decodeURIComponent(match[1]!);
     const ticket = redeemVncTicket(url.searchParams.get("ticket") ?? "", botId);
