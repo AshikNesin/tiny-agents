@@ -17,7 +17,7 @@ supersession, expiry, and the never-re-add tombstone structural:
 - `until` — optional expiry; expired rows stay rows, leave the prompt
 - `supersededById/At` — strike-through chain when a newer fact replaces one
 
-`Bot.memoryEnabled` gates capture and injection. `Bot.memoryCapturedThrough`
+`Bot.memoryEnabled` gates capture, chat-side saves, and injection. `Bot.memoryCapturedThrough`
 is the transcript watermark: capture commits it in the same transaction as
 new rows, so a crash before commit re-runs the window harmlessly (exact-text
 dedupe absorbs the repeat).
@@ -25,7 +25,7 @@ dedupe absorbs the repeat).
 Constants live in `memories.domain.ts`: 100 active rows, 300 chars per row,
 a 6 000-char render cap on the injected block (newest entries win; the same
 cap applies to the capture-side context), 2-minute quiet window, 6-turn
-trigger, 200-byte trivial threshold (UTF-8 bytes).
+trigger, 24-byte owner-text trivial threshold (UTF-8 bytes, excluding role labels).
 
 ## Injection
 
@@ -43,20 +43,42 @@ provider prompt caching survives between captures.
 per-conversation debounce; 2 minutes quiet or 6 idle transitions (any reply
 completing, including peer deliveries — extraction still filters to
 owner-authored turns) fires one gateway side-call (`MEMORY_CAPTURE_MODEL`
-when set, else the default). Captures never overlap per conversation. Skip rules run
-before any model call: memory off, no model (faux mode, missing gateway),
+when set and known to the registry, else the bot's own `modelId`, including
+custom providers). The override is read at boot, not lazily from `process.env`.
+Captures never overlap per conversation. Skip rules run
+before any model call: memory off, no resolvable model (faux mode disables capture),
 trivial window (advances the watermark without a call), no owner turns since
 the watermark. Peer deliveries and routine fires are not memory sources —
-only owner-authored turns count.
+only owner-authored turns count. Assistant replies provide context for the
+owner's words, clipped to 1,500 characters each; error replies and replies
+to peers/routines stay out. Role labels and assistant text do not count
+toward the trivial threshold.
 
 The extraction prompt carries the anti-junk contract (owner's words only,
 third-person single sentences, no secrets or quoted text, `until` dates,
-`supersedesIds` for contradictions) and returns JSON. `applyExtraction`
+`supersedesIds` for contradictions), includes today's date for computing
+temporary expiries, and returns JSON. `applyExtraction`
 applies it in code: trimmed, case-insensitive text dedupe against all rows
 including tombstones (a deleted fact is never re-added), supersession
 validated to same-bot rows, watermark bump — one transaction, with budget
 archival of the oldest active rows inside the same commit. Unparseable output
-returns null and leaves the watermark unchanged, so the window retries.
+returns null and leaves the watermark unchanged, so the next capture retries.
+Returned model errors (not just thrown errors) also preserve the watermark
+and log the model id and error message.
+
+## Chat-side saves
+
+The `memory` capability also exposes `remember({ text, category, until? })`.
+Use “Remember that I prefer TypeScript” to ask the bot to save a fact without
+waiting for background capture. It uses the existing approval card (default
+**Ask**); **Always allow** permits future saves for that bot without a prompt.
+The tool must succeed before the bot can claim the fact was saved.
+
+Saves use the same transaction, tombstone dedupe, and active-row budget as
+background capture, with `source: capture` (“From chat”). They do not move
+the capture watermark. Disabling memory refuses tool writes as well as
+capture and injection. Existing read-only `MemoryStore` adapters remain
+supported; they do not expose the tool.
 
 ## API
 

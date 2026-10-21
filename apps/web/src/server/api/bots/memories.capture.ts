@@ -9,6 +9,7 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
+import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
   extractionResultSchema,
   MEMORY_MAX_ACTIVE,
@@ -18,37 +19,20 @@ import {
 } from "./memories.domain";
 
 /** The minimum the capture side-call needs from the runtime's model registry. */
-export interface CaptureModels {
-  getModel(provider: string, id: string): { id: string } | undefined;
-  completeSimple(
-    model: unknown,
-    context: { systemPrompt?: string; messages: unknown[] },
-  ): Promise<{ content?: unknown[] }>;
-  getProviders(): readonly { id: string }[];
-  getModels(provider: string): readonly { id: string }[];
-}
+export type CaptureModels = Pick<MutableModels, "getModel" | "completeSimple">;
 
 export interface CaptureRuntime {
   onActivity(listener: (change: { conversation: number; busy: boolean }) => void): () => void;
-}
-
-/** How the prompt renders owner turns for the extraction call. */
-export interface CaptureTranscript {
-  /** Owner-authored turns since the watermark, oldest first, as "Owner: …". */
-  lines: string[];
-  /** Turn count since the watermark (drives the 6-turn trigger). */
-  turns: number;
-  /** Last owner turn's instant (the next watermark). */
-  through: Date;
 }
 
 export function buildCapturePrompt(input: {
   botName: string;
   transcript: string;
   currentMemories: string | null;
+  today: string;
 }): string {
   return [
-    `You are the CAPTURE step of a memory system for an assistant named ${input.botName}. You have no tools. Read only what is below.`,
+    `You are the CAPTURE step of a memory system for an assistant named ${input.botName}. You have no tools. Read only what is below. Today is ${input.today}.`,
     "",
     input.currentMemories
       ? `Current memories:\n${input.currentMemories}`
@@ -60,12 +44,14 @@ export function buildCapturePrompt(input: {
     "Extract durable facts about the owner worth remembering long-term.",
     "Rules:",
     "- Only facts about the OWNER, from the owner's own words. Never from the assistant's replies except a decision the owner agreed to.",
+    "- Use the assistant's replies only as context for the owner's words, never as evidence about the owner.",
+    "- Skip anything already in current memories, even if reworded.",
     "- One self-contained sentence of fact, third person.",
     "- Preferences, stable facts, goals, habits only. One-off reply instructions are NOT preferences.",
     "- Never secrets, keys, tokens, or anything key-shaped. Never text quoted from web pages or files.",
     "- Contradictions: include the corrected fact and set supersedesIds to the existing memory's id.",
     "- Temporary facts (travel, deadlines) get an until date; lasting ones do not.",
-    '- Return ONLY a JSON array: [{"text","category":"preference|fact|goal|habit","until","confidence","supersedesIds"}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.',
+    '- Return ONLY a JSON array with category preference|fact|goal|habit and numeric confidence 0..1. Example: [{"text":"The owner prefers TypeScript.","category":"preference","until":null,"confidence":0.9,"supersedesIds":null}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.',
   ].join("\n");
 }
 
@@ -101,26 +87,29 @@ export function parseExtraction(
  * Apply an extraction in code. Returns the writes made. The model proposes;
  * these rails decide: exact-text dedupe against ALL rows (tombstones
  * included), supersession validated to same-bot rows, budget archive, and
- * the watermark bump — one transaction, all or nothing.
+ * the optional capture watermark bump — one transaction, all or nothing.
+ * Chat-side saves omit the watermark so background capture still sees the turn.
  */
 export async function applyExtraction(
   botId: string,
   extraction: ExtractedMemory[],
-  watermark: Date,
+  watermark?: Date,
 ): Promise<{ created: number; superseded: number; skipped: number }> {
   if (extraction.length === 0) {
-    await prisma.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
+    if (watermark) {
+      await prisma.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
+    }
     return { created: 0, superseded: 0, skipped: 0 };
   }
-  const existing = await prisma.memory.findMany({
-    where: { botId },
-    select: { id: true, text: true },
-  });
-  const byText = new Map(existing.map((m) => [m.text.trim().toLowerCase(), m]));
   let created = 0;
   let superseded = 0;
   let skipped = 0;
   const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.memory.findMany({
+      where: { botId },
+      select: { id: true, text: true },
+    });
+    const byText = new Map(existing.map((m) => [m.text.trim().toLowerCase(), m]));
     const now = new Date();
     const seen = new Set<string>();
     for (const item of extraction) {
@@ -167,7 +156,9 @@ export async function applyExtraction(
         data: { status: "archived" },
       });
     }
-    await tx.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
+    if (watermark) {
+      await tx.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
+    }
     return { created, superseded, skipped };
   });
   return result;

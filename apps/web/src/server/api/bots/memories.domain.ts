@@ -25,7 +25,7 @@ export const MEMORY_TEXT_MAX = 300;
 /** Soft cap on the rendered block injected into a bot's prompt. */
 export const MEMORY_RENDER_CHAR_CAP = 6_000;
 /** Capture skip threshold: fewer owner bytes than this since the watermark. */
-export const MEMORY_TRIVIAL_BYTES = 200;
+export const MEMORY_TRIVIAL_BYTES = 24;
 /** Capture debounce: quiet window / turn count (OpenMausBot's proven pair). */
 export const MEMORY_QUIET_MS = 2 * 60_000;
 export const MEMORY_TURN_LIMIT = 6;

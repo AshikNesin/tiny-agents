@@ -1,24 +1,49 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { prisma } from "@groot/core/database";
+import { logger } from "@groot/core/logger";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
 import {
   buildCapturePrompt,
   parseExtraction,
   applyExtraction,
   startMemoryCapture,
+  type CaptureModels,
 } from "../../../../apps/web/src/server/api/bots/memories.capture";
 import {
-  ownerWindow,
+  captureWindow,
   captureConversation,
+  resolveCaptureModelId,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
+import { composeRoutinePrompt } from "../../../../apps/web/src/server/api/routines/routines.schedule";
 
 const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
+vi.mock("@groot/core/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+const botIds: string[] = [];
+afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  await prisma.bot.deleteMany({ where: { id: { in: botIds.splice(0) } } });
+});
 
 async function seedBot(): Promise<{ botId: string; conversationId: number }> {
   const conv = conversationId();
   const bot = await prisma.bot.create({
     data: { name: "Cap", modelId: "m", conversationId: String(conv) },
   });
+  botIds.push(bot.id);
   return { botId: bot.id, conversationId: conv };
+}
+
+function sideCall(reply = fauxAssistantMessage([fauxText("[]")])) {
+  const getModel = vi.fn((_provider: string, id: string) => ({ id }) as Model<Api>);
+  const completeSimple = vi.fn<CaptureModels["completeSimple"]>().mockResolvedValue(reply);
+  return {
+    models: { getModel, completeSimple },
+    hasModel: vi.fn((id: string) => id === "m" || id === "custom:test/chat"),
+  };
 }
 
 describe("buildCapturePrompt", () => {
@@ -27,11 +52,14 @@ describe("buildCapturePrompt", () => {
       botName: "Scout",
       transcript: "Owner: hi",
       currentMemories: null,
+      today: "2026-10-21",
     });
     expect(prompt).toContain("CAPTURE step");
     expect(prompt).toContain("Never secrets");
     expect(prompt).toContain("supersedesIds");
     expect(prompt).toContain("third person");
+    expect(prompt).toContain("Today is 2026-10-21");
+    expect(prompt).toContain("even if reworded");
   });
 });
 
@@ -157,7 +185,7 @@ describe("applyExtraction", () => {
   });
 });
 
-describe("ownerWindow", () => {
+describe("captureWindow", () => {
   const msgs = [
     { role: "user", text: "old turn", createdAt: 1, peer: undefined },
     { role: "user", text: "peer delivery", createdAt: 5, peer: { kind: "reply", name: "Bot" } },
@@ -166,44 +194,183 @@ describe("ownerWindow", () => {
   ];
 
   it("counts only owner-authored user turns after the watermark", () => {
-    const w = ownerWindow(msgs, new Date(2));
+    const w = captureWindow(msgs, new Date(2), "Scout");
     expect(w.turns).toBe(1);
     expect(w.lines).toEqual(["Owner: I prefer pnpm"]);
     expect(w.through?.getTime()).toBe(10);
   });
 
   it("returns no watermark when nothing qualifies", () => {
-    expect(ownerWindow([], null).through).toBeNull();
+    expect(captureWindow([], null, "Scout").through).toBeNull();
+  });
+
+  it("includes assistant context but excludes peers, routines, and their replies", () => {
+    const messages = [
+      { role: "user", text: "Let's get acquainted.", createdAt: 1 },
+      { role: "assistant", text: "Where do you live?", createdAt: 3 },
+      { role: "user", text: "In Chennai, near my office.", createdAt: 4 },
+      { role: "assistant", text: "Got it.", createdAt: 5 },
+      { role: "user", text: "Peer's request", createdAt: 6, peer: { kind: "request" } },
+      { role: "assistant", text: "Peer's answer", createdAt: 7 },
+      {
+        role: "user",
+        text: composeRoutinePrompt("Daily", "Read the news", new Date()),
+        createdAt: 8,
+      },
+      { role: "assistant", text: "Routine answer", createdAt: 9 },
+    ];
+    const window = captureWindow(messages, new Date(1), "Scout");
+    expect(window.lines).toEqual([
+      "Scout: Where do you live?",
+      "Owner: In Chennai, near my office.",
+      "Scout: Got it.",
+    ]);
+    expect(window.turns).toBe(1);
+    expect(window.through?.getTime()).toBe(4);
+    expect(window.ownerBytes).toBe(Buffer.byteLength("In Chennai, near my office."));
+  });
+
+  it("clips assistant replies and ignores errors without inflating owner bytes", () => {
+    const window = captureWindow(
+      [
+        { role: "user", text: "你好", createdAt: 1 },
+        { role: "assistant", text: "x".repeat(3_000), createdAt: 2 },
+        { role: "assistant", text: "model error", createdAt: 3, status: "error" },
+      ],
+      null,
+      "Scout",
+    );
+    expect(window.ownerBytes).toBe(6);
+    expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(1_500)}`]);
+  });
+});
+
+describe("resolveCaptureModelId", () => {
+  it("uses the bot's model instead of a hardcoded gateway model", () => {
+    expect(resolveCaptureModelId(sideCall(), "m")).toBe("m");
+    expect(resolveCaptureModelId(sideCall(), "custom:test/chat")).toBe("custom:test/chat");
+  });
+
+  it("honors known overrides and falls back for unknown overrides", () => {
+    expect(resolveCaptureModelId(sideCall(), "m", '"custom:test/chat"')).toBe("custom:test/chat");
+    expect(resolveCaptureModelId(sideCall(), "m", "unknown")).toBe("m");
+    expect(resolveCaptureModelId(sideCall(), "missing")).toBeUndefined();
   });
 });
 
 describe("captureConversation skip rules", () => {
+  it("captures a short durable preference instead of discarding it", async () => {
+    const { botId, conversationId } = await seedBot();
+    const call = sideCall(
+      fauxAssistantMessage([
+        fauxText(
+          '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
+        ),
+      ]),
+    );
+    await captureConversation(conversationId, {
+      sideCall: call,
+      readTranscript: async () => [
+        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+      ],
+    });
+    expect(call.models.completeSimple).toHaveBeenCalledOnce();
+    expect(call.models.getModel).toHaveBeenCalledWith("cloudflare-ai-gateway", "m");
+    expect(await prisma.memory.findFirst({ where: { botId } })).toMatchObject({
+      text: "The owner prefers TypeScript, never JavaScript.",
+      source: "capture",
+      status: "active",
+    });
+  });
+
   it("makes no model call when memory is disabled", async () => {
     const { botId, conversationId } = await seedBot();
     await prisma.bot.update({ where: { id: botId }, data: { memoryEnabled: false } });
-    const completeSimple = vi.fn();
+    const call = sideCall();
     await captureConversation(conversationId, {
-      sideCall: { models: { completeSimple } as never, modelId: "m" },
+      sideCall: call,
       readTranscript: async () => [{ role: "user", text: "x".repeat(300), createdAt: Date.now() }],
     });
-    expect(completeSimple).not.toHaveBeenCalled();
+    expect(call.models.completeSimple).not.toHaveBeenCalled();
     const bot = await prisma.bot.findUnique({ where: { id: botId } });
     expect(bot?.memoryCapturedThrough).toBeNull();
   });
 
   it("advances the watermark without a call for a trivial window", async () => {
-    const conversationId = Math.floor(Math.random() * 1_000_000);
-    await prisma.bot.create({
-      data: { name: "Triv", modelId: "m", conversationId: String(conversationId) },
-    });
-    const completeSimple = vi.fn();
+    const { conversationId } = await seedBot();
+    const call = sideCall();
     await captureConversation(conversationId, {
-      sideCall: { models: { completeSimple } as never, modelId: "m" },
+      sideCall: call,
       readTranscript: async () => [{ role: "user", text: "hi", createdAt: Date.now() }],
     });
-    expect(completeSimple).not.toHaveBeenCalled();
+    expect(call.models.completeSimple).not.toHaveBeenCalled();
     const bot = await prisma.bot.findUnique({ where: { conversationId: String(conversationId) } });
     expect(bot?.memoryCapturedThrough).not.toBeNull();
+  });
+
+  it("resolves a custom bot model even with an invalid capture override", async () => {
+    const { botId, conversationId } = await seedBot();
+    await prisma.bot.update({ where: { id: botId }, data: { modelId: "custom:test/chat" } });
+    const call = sideCall();
+    await captureConversation(conversationId, {
+      sideCall: { ...call, modelId: "unknown" },
+      readTranscript: async () => [
+        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+      ],
+    });
+    expect(call.models.getModel).toHaveBeenCalledWith("test", "chat");
+    expect(call.models.completeSimple).toHaveBeenCalledOnce();
+  });
+
+  it("logs returned model errors and retries the unchanged window later", async () => {
+    const { botId, conversationId } = await seedBot();
+    const call = sideCall({
+      ...fauxAssistantMessage([fauxText("[]")]),
+      stopReason: "error",
+      errorMessage: "Provider unavailable",
+    });
+    const messages = [
+      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+    ];
+    const deps = { sideCall: call, readTranscript: async () => messages };
+    await captureConversation(conversationId, deps);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ errorMessage: "Provider unavailable", modelId: "m" }),
+      expect.stringContaining("model failed"),
+    );
+    expect(
+      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough,
+    ).toBeNull();
+    call.models.completeSimple.mockResolvedValue(fauxAssistantMessage([fauxText("[]")]));
+    await captureConversation(conversationId, deps);
+    expect(call.models.completeSimple).toHaveBeenCalledTimes(2);
+    expect(
+      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough?.getTime(),
+    ).toBe(messages[0].createdAt);
+  });
+
+  it("leaves malformed extractions uncommitted and skips peer/routine-only windows", async () => {
+    const { botId, conversationId } = await seedBot();
+    const call = sideCall(fauxAssistantMessage([fauxText("not json")]));
+    await captureConversation(conversationId, {
+      sideCall: call,
+      readTranscript: async () => [
+        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+      ],
+    });
+    expect(
+      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough,
+    ).toBeNull();
+    call.models.completeSimple.mockClear();
+    await captureConversation(conversationId, {
+      sideCall: call,
+      readTranscript: async () => [
+        { role: "user", text: "Peer ".repeat(60), peer: { kind: "request" }, createdAt: 1 },
+        { role: "assistant", text: "Peer reply", createdAt: 2 },
+        { role: "user", text: composeRoutinePrompt("Daily", "News", new Date()), createdAt: 3 },
+      ],
+    });
+    expect(call.models.completeSimple).not.toHaveBeenCalled();
   });
 });
 

@@ -27,7 +27,7 @@ import { getConnectionManager } from "./api/connections/connections.manager";
 import { createBotRelay } from "./api/bots/bots.relay";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { startMemoryCapture } from "./api/bots/memories.capture";
-import { captureConversation, resolveCaptureModelId } from "./api/bots/memories.runner";
+import { captureConversation } from "./api/bots/memories.runner";
 import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 
@@ -139,17 +139,22 @@ async function main() {
 
   // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
   // window or 6 turns later one side-call extracts durable facts off the
-  // reply path. Faux/gateway-off modes resolve no capture model and skip.
+  // reply path. Faux mode never makes capture calls.
   let stopMemoryCapture: (() => void) | undefined;
   if (process.env.TINY_AGENTS_FAUX !== "1") {
+    const captureModelId = env.MEMORY_CAPTURE_MODEL;
     stopMemoryCapture = startMemoryCapture(runtime, {
-      models: runtime.models as never,
+      models: runtime.models,
       captureNow: (conversationId) =>
         captureConversation(conversationId, {
-          sideCall: { models: runtime.models as never, modelId: resolveCaptureModelId(runtime) },
+          sideCall: {
+            models: runtime.models,
+            hasModel: (id) => runtime.hasModel(id),
+            modelId: captureModelId,
+          },
           readTranscript: async (id) => {
             const sub = await runtime.watchChat(id, () => undefined);
-            void sub.stop();
+            await sub.stop();
             return sub.initial.messages;
           },
         }),

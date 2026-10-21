@@ -8,7 +8,13 @@
  * provider's prompt cache.
  */
 import { prisma } from "@groot/core/database";
-import { CATEGORY_ORDER, isExpired, type MemoryCategory } from "./memories.domain";
+import {
+  CATEGORY_ORDER,
+  extractedMemorySchema,
+  isExpired,
+  type MemoryCategory,
+} from "./memories.domain";
+import { applyExtraction } from "./memories.capture";
 import type { MemoryLine, MemoryStore } from "@tiny-agents/agent";
 
 function order(category: string): number {
@@ -17,6 +23,17 @@ function order(category: string): number {
 }
 
 export const memoryStore: MemoryStore = {
+  async remember(conversationId, input) {
+    const bot = await prisma.bot.findUnique({
+      where: { conversationId: String(conversationId) },
+      select: { id: true, memoryEnabled: true },
+    });
+    if (!bot?.memoryEnabled) return { status: "disabled" };
+    const item = extractedMemorySchema.parse({ ...input, confidence: 1 });
+    const result = await applyExtraction(bot.id, [item]);
+    return { status: result.created > 0 ? "saved" : "duplicate" };
+  },
+
   async list(conversationId: number) {
     const bot = await prisma.bot.findUnique({
       where: { conversationId: String(conversationId) },
