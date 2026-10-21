@@ -2,7 +2,7 @@ import { test, expect, type Page, type WebSocket } from "@playwright/test";
 import { login } from "./helpers/login";
 
 /**
- * Live terminal e2e (issue #28) — the full stack against a real sandbox VM
+ * Live terminal e2e (issue #28), the full stack against a real sandbox VM
  * over the tailnet: UI -> REST -> tmux -> ssh2 pty -> WS bridge -> xterm.
  * Skipped where no VM is reachable (CI has no tailnet); the deterministic
  * page states are terminal.spec.ts.
@@ -95,6 +95,29 @@ test.describe("Terminal live (sandbox VM)", () => {
     await page.keyboard.press("Enter");
     await expect
       .poll(() => frames.received.some((frame) => frame.includes("exedev")), { timeout: 30_000 })
+      .toBeTruthy();
+  });
+
+  test("a keys-panel press reaches the pty as its bytes", async ({ page }) => {
+    const frames = captureFrames(page);
+
+    await page.goto("/terminal");
+    await page.getByTestId("terminal-create").click();
+    await terminalSocket(page);
+    await expect
+      .poll(() => frames.received.some((frame) => /[$#%]/.test(frame)), { timeout: 30_000 })
+      .toBeTruthy();
+
+    // The desktop viewport opens the panel by default; assert the sent bytes,
+    // not the shell's reaction to arrow-up (history state is not ours to know).
+    await page.getByTestId("terminal-key-arrow-up").click();
+    await expect
+      .poll(
+        // captureFrames decodes binary payloads to utf8 strings: the frame is
+        // ESC [ A.
+        () => frames.sent.some((f) => f.charCodeAt(0) === 0x1b && f.endsWith("[A")),
+        { timeout: 10_000 },
+      )
       .toBeTruthy();
   });
 

@@ -6,9 +6,10 @@
  * no server is involved.
  */
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
+import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { TerminalPage } from "@/pages/terminal/Terminal";
 import { GrootUIProvider } from "@groot/ui";
@@ -116,16 +117,29 @@ async function findTab(n: number) {
   return await screen.findByTestId(`terminal-tab-ta-term-${n}`);
 }
 
-describe("Terminal page", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    connections.length = 0;
-    createTerminalMock.mockImplementation(async () => fakeTerminal());
-    listMock.mockResolvedValue(ready([]));
-    createMock.mockResolvedValue(session(1));
-    removeMock.mockResolvedValue({ deleted: true });
-  });
+/**
+ * The pty bytes each sendInput call carried, as plain arrays: this stack's
+ * deep-equal does not match TextEncoder output against a constructed
+ * Uint8Array, but the bytes themselves are the observable contract.
+ */
+function sentBytes(connection: TerminalConnection): number[][] {
+  return vi.mocked(connection.sendInput).mock.calls.map((call) => Array.from(call[0]!));
+}
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  // No auto-cleanup in this environment: a leaked tree's 5s poll keeps
+  // answering the current test's mocked list and mounting views into it.
+  cleanup();
+  connections.length = 0;
+  window.localStorage.clear();
+  createTerminalMock.mockImplementation(async () => fakeTerminal());
+  listMock.mockResolvedValue(ready([]));
+  createMock.mockResolvedValue(session(1));
+  removeMock.mockResolvedValue({ deleted: true });
+});
+
+describe("Terminal page", () => {
   it("renders the unconfigured empty state", async () => {
     listMock.mockResolvedValue({ status: { kind: "unconfigured" }, sessions: [] });
     mount();
@@ -252,6 +266,160 @@ describe("Terminal page", () => {
       expect(screen.getByTestId("terminal-tab-ta-term-2").getAttribute("aria-selected")).toBe(
         "true",
       ),
+    );
+  });
+});
+
+describe("Terminal keys panel", () => {
+  /** Mount with one live tab and return its captured connection. */
+  async function mountLive(n = 1) {
+    listMock.mockResolvedValue(ready([session(n)]));
+    mount();
+    await findTab(n);
+    await waitFor(() => expect(connections.length).toBe(1));
+    return connections[0]!;
+  }
+
+  it("sends a key's bytes to the active view and focuses it", async () => {
+    const { connection } = await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(screen.getByTestId("terminal-key-esc"));
+    await user.click(screen.getByTestId("terminal-key-arrow-up"));
+    await user.click(screen.getByTestId("terminal-key-pgdn"));
+    expect(sentBytes(connection)).toEqual([[0x1b], [0x1b, 0x5b, 0x41], [0x1b, 0x5b, 0x36, 0x7e]]);
+  });
+
+  it("composes ctrl with a letter and alt with any character", async () => {
+    const { connection } = await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    // ctrl masks a typeable character to its control byte.
+    await user.click(screen.getByTestId("terminal-key-ctrl"));
+    expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByTestId("terminal-key-tilde"));
+    // ~ is not a letter: ctrl does not mask it, but it is consumed.
+    expect(sentBytes(connection)).toEqual([[0x7e]]);
+    expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(screen.getByTestId("terminal-key-alt"));
+    await user.click(screen.getByTestId("terminal-key-tilde"));
+    expect(sentBytes(connection)).toEqual([[0x7e], [0x1b, 0x7e]]);
+  });
+
+  it("ctrl composes the ctrl+letter combo on a ready-made control key", async () => {
+    const { connection } = await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    // ^L is already Ctrl+L; sticky ctrl must not double-mask it.
+    await user.click(screen.getByTestId("terminal-key-ctrl"));
+    await user.click(screen.getByTestId("terminal-key-ctrl-l"));
+    expect(sentBytes(connection)).toEqual([[0x0c]]);
+    expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("pastes the clipboard into the active view", async () => {
+    const { connection } = await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const readText = vi.fn().mockResolvedValue("hi");
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText },
+      configurable: true,
+    });
+
+    await user.click(screen.getByTestId("terminal-key-paste"));
+    await waitFor(() => expect(sentBytes(connection)).toEqual([[0x68, 0x69]]));
+  });
+
+  it("toasts when the clipboard is unavailable", async () => {
+    await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: vi.fn().mockRejectedValue(new Error("denied")) },
+      configurable: true,
+    });
+
+    await user.click(screen.getByTestId("terminal-key-paste"));
+    expect(await screen.findByText("Clipboard unavailable")).toBeTruthy();
+  });
+
+  it("hides on the header toggle and remembers the choice", async () => {
+    await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(screen.getByTestId("terminal-keys-toggle"));
+    expect(screen.queryByTestId("terminal-keys-panel")).toBeNull();
+    expect(window.localStorage.getItem("tiny-agents:terminal-keys")).toBe("0");
+
+    await user.click(screen.getByTestId("terminal-keys-toggle"));
+    expect(screen.getByTestId("terminal-keys-panel")).toBeTruthy();
+    expect(window.localStorage.getItem("tiny-agents:terminal-keys")).toBe("1");
+  });
+
+  it("collapses from the panel itself", async () => {
+    await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await user.click(screen.getByTestId("terminal-keys-collapse"));
+    expect(screen.queryByTestId("terminal-keys-panel")).toBeNull();
+  });
+
+  it("renders no panel without an active tab", async () => {
+    mount();
+    await screen.findByText("No tabs open");
+    expect(screen.queryByTestId("terminal-keys-panel")).toBeNull();
+  });
+});
+
+describe("Terminal full screen", () => {
+  it("enters via the Fullscreen API and exits with its events", async () => {
+    listMock.mockResolvedValue(ready([session(1)]));
+    mount();
+    await findTab(1);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const toggle = screen.getByTestId("terminal-fullscreen");
+    expect(toggle.getAttribute("aria-label")).toBe("Full screen");
+
+    const request = vi.fn().mockResolvedValue(undefined);
+    const exit = vi.fn().mockResolvedValue(undefined);
+    // jsdom ships none of the Fullscreen API; install the bits the page reads.
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, "exitFullscreen", { value: exit, configurable: true });
+    const region = screen.getByTestId("terminal-region");
+    Object.defineProperty(region, "requestFullscreen", { value: request, configurable: true });
+
+    await user.click(toggle);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(toggle.getAttribute("aria-label")).toBe("Exit full screen");
+
+    fullscreenElement = region;
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(screen.getByTestId("terminal-region").className).toContain("fixed");
+
+    fullscreenElement = null;
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(screen.getByTestId("terminal-region").className).not.toContain("fixed");
+    expect(toggle.getAttribute("aria-label")).toBe("Full screen");
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("falls back to CSS full screen without the Fullscreen API", async () => {
+    listMock.mockResolvedValue(ready([session(1)]));
+    mount();
+    await findTab(1);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(screen.getByTestId("terminal-fullscreen"));
+    expect(screen.getByTestId("terminal-region").className).toContain("fixed");
+    expect(screen.getByTestId("terminal-fullscreen").getAttribute("aria-label")).toBe(
+      "Exit full screen",
     );
   });
 });

@@ -94,6 +94,38 @@ past 4 MB queued, then resuming (the VNC bridge's constant).
 Attach initial size rides the WS query (`?cols=&rows=`), validated at the
 boundary.
 
+## Keys panel and full screen
+
+- **The keys panel is a registry consumer, not a view sibling.** Each
+  `TerminalView` publishes `{ send, focus }` through `onControls` on socket
+  connect (and `null` on dispose); the page keeps them in a ref map keyed by
+  tab name. The panel resolves `get(active)` **per press**; the map fills
+  asynchronously after first render, so a render-time prop would forever
+  see the pre-connect `undefined`. No re-render on socket lifecycles.
+- **Key composition is data, not branches.** Keys are `PanelKey` records
+  (`char` for typeable characters, `seq` for fixed escape sequences; `^C`
+  _is_ Ctrl+C already). Sticky `ctrl` masks a typeable character
+  (`c & 0x1f`), `alt` prefixes ESC; any press consumes both modifiers.
+- **The panel is one element, responsive by CSS.** Below `md` it is
+  `absolute right-1 top-1 bottom-1 z-10 w-28` inside the terminal row with
+  `bg-background/80 backdrop-blur-sm`, an overlay, so the terminal's box
+  never changes when it opens (no resize, no refit, the grid stays put).
+  At `md+` it docks as a `w-44` static column with `border-l
+border-border/50`. Only the `md` crossing changes the terminal's column.
+- **Phones start collapsed.** First paint without a stored preference
+  reads `matchMedia("(max-width: 767px)")`; `localStorage
+tiny-agents:terminal-keys` ("1"/"0") overrides forever after. Toggle is
+  the header Keyboard button (`terminal-keys-toggle`) or the panel's own
+  chevron (`terminal-keys-collapse`); the panel unmounts when hidden.
+- **Full screen is CSS-first.** `terminal-region` swaps to `fixed inset-0
+z-40 p-2` (rounded/ring off, the terminal row already `flex-1`), and the
+  Fullscreen API is best-effort chrome-hiding on top; iOS Safari never
+  fullscreens a div, so the class is the source of truth, and
+  `fullscreenchange` only syncs the icon when the API works. Esc stays
+  reachable through the panel's esc key while
+  `navigator.keyboard.lock(["Escape"])` holds it. The debounced refit after
+  entering/exiting is covered by the existing ResizeObserver path.
+
 ## Session model and UI behaviors
 
 - **Tabs are always mounted, hidden with `display:none`.** One

@@ -13,6 +13,14 @@ import {
 } from "../../lib/terminal-ws";
 import { createTerminal, type TerminalHandle, type TerminalSize } from "../../lib/xterm";
 
+/** What the page's keys panel needs from a live view. */
+export interface TerminalControls {
+  /** Keystrokes as pty bytes; a no-op until the socket is open. */
+  send: (bytes: Uint8Array<ArrayBuffer>) => void;
+  /** Put the caret back in the terminal (after a panel key press). */
+  focus: () => void;
+}
+
 export interface TerminalViewProps {
   name: string;
   active: boolean;
@@ -22,17 +30,27 @@ export interface TerminalViewProps {
   onResize?: (size: TerminalSize) => void;
   /** Grid before the first fit, so a new tab opens at the size it becomes. */
   initialSize?: TerminalSize;
+  /** Live controls, registered on connect and unregistered on dispose. */
+  onControls?: (controls: TerminalControls | null) => void;
 }
 
 /** Same debounce as VncView's resize path. */
 const RESIZE_DEBOUNCE_MS = 150;
 
-export function TerminalView({ name, active, onState, onResize, initialSize }: TerminalViewProps) {
+export function TerminalView({
+  name,
+  active,
+  onState,
+  onResize,
+  initialSize,
+  onControls,
+}: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalHandle | null>(null);
   const connectionRef = useRef<TerminalConnection | null>(null);
   const onStateRef = useRef(onState);
   const onResizeRef = useRef(onResize);
+  const onControlsRef = useRef(onControls);
   const fitRef = useRef<() => void>(() => undefined);
   const encoderRef = useRef(new TextEncoder());
   const [reconnecting, setReconnecting] = useState(false);
@@ -44,6 +62,9 @@ export function TerminalView({ name, active, onState, onResize, initialSize }: T
   useEffect(() => {
     onResizeRef.current = onResize;
   }, [onResize]);
+  useEffect(() => {
+    onControlsRef.current = onControls;
+  }, [onControls]);
 
   // Create + attach is a one-shot per session: the effect keys only on
   // `name`, and the cleanup disposes exactly once even under StrictMode's
@@ -99,6 +120,13 @@ export function TerminalView({ name, active, onState, onResize, initialSize }: T
       });
 
       fitRef.current();
+
+      // The page keeps one registry entry per tab so its keys panel can
+      // write into whichever view is active.
+      onControlsRef.current?.({
+        send: (bytes) => connectionRef.current?.sendInput(bytes),
+        focus: () => terminalRef.current?.focus(),
+      });
     };
     void start();
 
@@ -110,6 +138,7 @@ export function TerminalView({ name, active, onState, onResize, initialSize }: T
       connectionRef.current = null;
       terminalRef.current?.dispose();
       terminalRef.current = null;
+      onControlsRef.current?.(null);
     };
     // initialSize is the pre-fit grid only; a view is mounted per session
     // with one stable value, so it is intentionally not a dependency.

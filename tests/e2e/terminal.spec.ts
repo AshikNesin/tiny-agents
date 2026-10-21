@@ -144,6 +144,41 @@ test.describe("Terminal page states", () => {
     await expect(tab2.getByText("vim")).toBeVisible();
   });
 
+  test("the keys panel overlays the terminal on a phone and the toggle hides it", async ({
+    page,
+  }) => {
+    await stubTickets(page);
+    const sessions = [session("ta-term-1")];
+    await page.route("**/api/v1/terminal/sessions", (route) =>
+      json(route, 200, { success: true, data: { status: { kind: "ready" }, sessions } }),
+    );
+    await login(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/terminal");
+
+    // A narrow first visit has no stored preference: the panel starts hidden.
+    const panel = page.getByTestId("terminal-keys-panel");
+    await expect(page.getByTestId("terminal-key-esc")).not.toBeVisible();
+
+    await page.getByTestId("terminal-keys-toggle").click();
+    await expect(page.getByTestId("terminal-key-esc")).toBeVisible();
+
+    // Below md the panel overlays the terminal area instead of squeezing it.
+    const rowBox = await page.locator('[data-testid^="terminal-view-"]').boundingBox();
+    const panelBox = await panel.boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox!.y).toBeGreaterThanOrEqual(rowBox!.y);
+    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 1);
+    await expect(panel).toHaveCSS("position", "absolute");
+
+    await page.getByTestId("terminal-keys-collapse").click();
+    await expect(page.getByTestId("terminal-key-esc")).not.toBeVisible();
+    expect(
+      await page.evaluate(() => window.localStorage.getItem("tiny-agents:terminal-keys")),
+    ).toBe("0");
+  });
+
   test("closing a busy tab confirms the process, then force-deletes", async ({ page }) => {
     await stubTickets(page);
     let sessions = [session("ta-term-1"), session("ta-term-2", "sleep")];

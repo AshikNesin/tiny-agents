@@ -8,13 +8,22 @@
  * session is listed, inactive ones hidden with display:none and re-fitted on
  * activation. xterm.js is happy rendering into a display:none host (it just
  * has no measurable box until shown), so scrollback, the pty stream and the
- * ticketed socket all stay warm across tab switches — switching back is a
+ * ticketed socket all stay warm across tab switches, switching back is a
  * local repaint, not a reconnect, and output landing on a background tab is
  * already in its buffer when the owner returns.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MonitorOff, PackageOpen, Plus, SquareTerminal, X } from "lucide-react";
+import {
+  Keyboard,
+  Maximize2,
+  Minimize2,
+  MonitorOff,
+  PackageOpen,
+  Plus,
+  SquareTerminal,
+  X,
+} from "lucide-react";
 import { Button, EmptyState, ErrorState, monoClass } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
@@ -26,7 +35,8 @@ import {
   type TerminalStatusWire,
 } from "../../lib/terminal-api";
 import type { TerminalConnectionState } from "../../lib/terminal-ws";
-import { TerminalView } from "./TerminalView";
+import { TerminalView, type TerminalControls } from "./TerminalView";
+import { TerminalKeysPanel } from "./TerminalKeysPanel";
 
 /** GET /terminal/sessions answers { status, sessions } (frozen contract). */
 
@@ -50,6 +60,30 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+/** Below md the panel would cover most of a phone's terminal, so a first
+ * visit starts it collapsed there and open everywhere else. */
+const KEYS_KEY = "tiny-agents:terminal-keys";
+
+function readKeysOpen(): boolean {
+  try {
+    const stored = window.localStorage.getItem(KEYS_KEY);
+    if (stored !== null) return stored === "1";
+  } catch {
+    /* storage unavailable: fall through to the viewport default */
+  }
+  return !window.matchMedia?.("(max-width: 767px)").matches;
+}
+
+function storeKeysOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(KEYS_KEY, open ? "1" : "0");
+  } catch {
+    /* storage unavailable: the choice just won't persist */
+  }
+}
+
+type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
+
 export function TerminalPage() {
   const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
   const [status, setStatus] = useState<TerminalStatusWire | null>(null);
@@ -57,7 +91,14 @@ export function TerminalPage() {
   const [active, setActive] = useState<string | null>(null);
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
   const [creating, setCreating] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(readKeysOpen);
   const confirm = useConfirm();
+  const regionRef = useRef<HTMLDivElement>(null);
+
+  // Live views by tab name: the keys panel writes into the active one. A ref,
+  // not state, registrations happen on socket lifecycles that don't render.
+  const controlsRef = useRef(new Map<string, TerminalControls>());
 
   // The current grid, for "New tab" (a tab opens at the size the owner sees).
   // Ref, not state: it changes on every resize without deserving a re-render.
@@ -149,6 +190,45 @@ export function TerminalPage() {
     setTabStatus((prev) => (prev[name] === state ? prev : { ...prev, [name]: state }));
   }, []);
 
+  // Full screen is the CSS state (fixed inset-0), so it works where the
+  // Fullscreen API doesn't (iOS Safari never fullscreens a div). The API is
+  // best-effort chrome-hiding; when it does work, its events stay in sync.
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === regionRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  useEffect(() => {
+    const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
+    if (fullscreen) void keyboard?.lock?.(["Escape"]).catch(() => undefined);
+    else keyboard?.unlock?.();
+    return () => {
+      if (fullscreen) keyboard?.unlock?.();
+    };
+  }, [fullscreen]);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+      return;
+    }
+    // Already pseudo-full-screen (the API was missing or refused): leave it.
+    if (fullscreen) {
+      setFullscreen(false);
+      return;
+    }
+    setFullscreen(true);
+    regionRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
+
+  const toggleKeys = () => {
+    setKeysOpen((open) => {
+      storeKeysOpen(!open);
+      return !open;
+    });
+  };
+
   const body = (() => {
     if (loadError && sessions === null) {
       return (
@@ -221,11 +301,18 @@ export function TerminalPage() {
       );
     }
     return (
-      <div className="overflow-hidden rounded-xl bg-background ring-1 ring-border">
+      <div
+        ref={regionRef}
+        className={cn(
+          "flex flex-col overflow-hidden rounded-xl bg-background ring-1 ring-border",
+          fullscreen ? "fixed inset-0 z-40 rounded-none p-2 ring-0" : "md:h-[calc(100dvh-15rem)]",
+        )}
+        data-testid="terminal-region"
+      >
         <div
           role="tablist"
           aria-label="Terminal tabs"
-          className="flex items-stretch gap-0.5 overflow-x-auto border-b border-border bg-muted/40 px-1 pt-1"
+          className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto border-b border-border bg-muted/40 px-1 pt-1"
         >
           {sessions.map((session) => {
             const isActive = session.name === active;
@@ -281,19 +368,39 @@ export function TerminalPage() {
             <Plus />
           </Button>
         </div>
-        <div className="h-[60vh] min-h-[320px] md:h-[calc(100dvh-15rem)]">
-          {sessions.map((session) => (
-            <TerminalView
-              key={session.name}
-              name={session.name}
-              active={session.name === active}
-              onState={(state) => onState(session.name, state)}
-              onResize={(size) => {
-                sizeRef.current = size;
+        {/* The terminal row: the view column and the keys panel. Below md
+            the panel overlays the terminal (it is positioned against this
+            row), at md+ it docks beside it, and since the terminal keeps
+            its column either way, its box only changes on the md crossing. */}
+        <div className="relative flex min-h-0 flex-1">
+          <div className="h-[60vh] min-h-[320px] w-full md:h-full md:min-h-0">
+            {sessions.map((session) => (
+              <TerminalView
+                key={session.name}
+                name={session.name}
+                active={session.name === active}
+                onState={(state) => onState(session.name, state)}
+                onResize={(size) => {
+                  sizeRef.current = size;
+                }}
+                initialSize={sizeRef.current ?? undefined}
+                onControls={(controls) => {
+                  const registry = controlsRef.current;
+                  if (controls) registry.set(session.name, controls);
+                  else registry.delete(session.name);
+                }}
+              />
+            ))}
+          </div>
+          {active && keysOpen && (
+            <TerminalKeysPanel
+              getControls={() => controlsRef.current.get(active ?? "")}
+              onCollapse={() => {
+                setKeysOpen(false);
+                storeKeysOpen(false);
               }}
-              initialSize={sizeRef.current ?? undefined}
             />
-          ))}
+          )}
         </div>
       </div>
     );
@@ -305,10 +412,37 @@ export function TerminalPage() {
       description="Shells on the sandbox VM. Tabs keep running when you leave."
       maxWidth="full"
       actions={
-        <Button onClick={() => void create()} disabled={creating} data-testid="terminal-create">
-          <Plus />
-          New tab
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-pressed={keysOpen}
+            aria-label={keysOpen ? "Hide keys panel" : "Show keys panel"}
+            title={keysOpen ? "Hide keys panel" : "Show keys panel"}
+            onClick={toggleKeys}
+            disabled={!active}
+            className="text-muted-foreground hover:text-foreground"
+            data-testid="terminal-keys-toggle"
+          >
+            <Keyboard className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleFullscreen}
+            disabled={!active}
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            title={fullscreen ? "Exit full screen" : "Full screen"}
+            className="text-muted-foreground hover:text-foreground"
+            data-testid="terminal-fullscreen"
+          >
+            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </Button>
+          <Button onClick={() => void create()} disabled={creating} data-testid="terminal-create">
+            <Plus />
+            New tab
+          </Button>
+        </>
       }
     >
       {body}
