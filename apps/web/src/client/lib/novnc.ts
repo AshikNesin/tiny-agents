@@ -4,6 +4,7 @@
  * package.json, because `scaleRemoteResize` replaces a private method.
  */
 import type RFB from "@novnc/novnc";
+import { remoteWindowSize } from "./remote-window";
 
 export type RfbClient = RFB;
 
@@ -25,8 +26,10 @@ interface RfbInternals {
 
 /**
  * Replace noVNC's remote-resize request with one that
- * - asks for `scale` times the viewer's CSS size, so a 2x Chrome on the VM
- *   fills a Retina canvas with real pixels instead of an upscaled blur, and
+ * - asks for `scale` times the remote window's CSS size, so a 2x Chrome on
+ *   the VM fills a Retina canvas with real pixels instead of an upscaled
+ *   blur (the window is the viewer's box, or wider when Chrome cannot be
+ *   that narrow, see `remoteWindowSize`), and
  * - also works while the viewer is view-only: the panel must fit the remote
  *   desktop to its box before the owner takes control.
  * Everything else matches noVNC's own implementation.
@@ -47,8 +50,9 @@ function scaleRemoteResize(rfb: RFB, rfbClass: typeof RFB, scale: number): void 
     this._resizeTimeout = null;
 
     const size = this._screenSize();
-    const width = Math.floor(size.w * scale);
-    const height = Math.floor(size.h * scale);
+    const desktop = remoteWindowSize(size.w, size.h);
+    const width = Math.floor(desktop.width * scale);
+    const height = Math.floor(desktop.height * scale);
     if (width === this._fbWidth && height === this._fbHeight) return;
 
     this._pendingRemoteResize = true;

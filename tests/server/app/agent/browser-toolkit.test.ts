@@ -36,8 +36,13 @@ function fakeTransport() {
   const log: { method: string; args?: unknown }[] = [];
   let url = "about:blank";
   let snapshotText = '- body [ref=e1]\n  - input [ref=e2]\n  - button "Go" [ref=e3]';
+  /** One entry per session the transport opened: calling it reports that browser dead. */
+  const deaths: (() => void)[] = [];
   const transport: BrowserTransport = async () => {
     const session: BrowserSession = {
+      onDisconnect: (listener) => {
+        deaths.push(listener);
+      },
       url: () => url,
       adoptActiveTab: async () => {
         log.push({ method: "adoptActiveTab" });
@@ -78,6 +83,7 @@ function fakeTransport() {
   return {
     transport,
     log,
+    deaths,
     setSnapshot: (t: string) => (snapshotText = t),
     get url() {
       return url;
@@ -201,6 +207,59 @@ describe("browser toolkit", () => {
     const dials = log.filter((e) => e.method === "navigate").length;
     await run(tk, "browser_navigate", { url: "https://example.com/2" });
     expect(log.filter((e) => e.method === "navigate").length).toBeGreaterThan(dials);
+  });
+
+  it("drops a browser that died so the next call opens a fresh one", async () => {
+    const { transport, log, deaths } = fakeTransport();
+    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await run(tk, "browser_navigate", { url: "https://example.com/" });
+    expect(getLiveBrowserSession(4242)).toBeDefined();
+    expect(deaths).toHaveLength(1);
+
+    deaths[0]!(); // the link to the browser dropped
+    expect(getLiveBrowserSession(4242)).toBeUndefined();
+    // The dead session is torn down (the remote processes must not leak) ...
+    expect(log.filter((e) => e.method === "close")).toHaveLength(1);
+    // ... and the next tool call starts over instead of failing on a corpse.
+    const next = await run(tk, "browser_navigate", { url: "https://example.com/2" });
+    expect(next.isError).toBeUndefined();
+    expect(deaths).toHaveLength(2);
+    expect(getLiveBrowserSession(4242)).toBeDefined();
+  });
+
+  it("does not keep action tools waiting on an owner whose browser died", async () => {
+    const { transport, deaths } = fakeTransport();
+    const tk = createBrowserToolkit({
+      transport,
+      profilesDir: "/tmp/ta-test-profiles",
+      humanDriverWaitMs: 60_000,
+    });
+    await run(tk, "browser_snapshot", {});
+    await setDriver(4242, "human");
+    const pending = run(tk, "browser_click", { ref: "e3" });
+    await new Promise((r) => setTimeout(r, 300)); // parked behind the takeover
+
+    deaths[0]!();
+    const outcome = await Promise.race([
+      pending.then(() => "released"),
+      new Promise((r) => setTimeout(() => r("still waiting"), 1500)),
+    ]);
+    expect(outcome).toBe("released");
+  });
+
+  it("ignores a death reported by a session that was already closed or replaced", async () => {
+    const { transport, log, deaths } = fakeTransport();
+    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await run(tk, "browser_snapshot", {});
+    await closeBrowserSession(4242);
+    await run(tk, "browser_snapshot", {});
+    const fresh = getLiveBrowserSession(4242);
+    expect(deaths).toHaveLength(2);
+    expect(log.filter((e) => e.method === "close")).toHaveLength(1);
+
+    deaths[0]!(); // the first session's late "gone" report
+    expect(getLiveBrowserSession(4242)).toBe(fresh);
+    expect(log.filter((e) => e.method === "close")).toHaveLength(1);
   });
 
   it("isBlockedPrivateUrl knows exemptions", () => {

@@ -85,6 +85,22 @@ function mockApi(initial: BrowserStatus) {
   return api;
 }
 
+/** A ResizeObserver whose callback the test fires by hand (jsdom has no layout). */
+function stubResizeObserver() {
+  const observer = { notify: () => {} };
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        observer.notify = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  return observer;
+}
+
 const latestRfb = () => fakes.rfbs[fakes.rfbs.length - 1]!;
 // Generous: a viewer that appears after "Open browser" waits for the next
 // 1.5s status poll before it mounts.
@@ -129,6 +145,18 @@ describe("BrowserPanel", () => {
     expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
   });
 
+  it("titles the card and labels its tools", async () => {
+    mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    expect(screen.getByRole("heading", { name: "Browser" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take control" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Full screen" })).toHaveTextContent("Full screen");
+    expect(screen.getByRole("button", { name: "Reset browser profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close browser panel" })).toBeInTheDocument();
+  });
+
   it("take control makes the viewer interactive; release hands it back", async () => {
     const api = mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
@@ -140,8 +168,13 @@ describe("BrowserPanel", () => {
     expect(latestRfb().focus).toHaveBeenCalled();
     expect(screen.getByTestId("browser-driver").textContent).toBe("You drive");
     // The streamed Chrome has its own address bar; the stale agent URL goes.
-    expect(screen.getByTestId("browser-url").textContent).toBe("");
+    expect(screen.queryByTestId("browser-url")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-paste")).toBeInTheDocument();
+    expect(screen.getByTestId("browser-release")).toHaveTextContent("Release control");
+    // The label is hidden in a narrow header; the button keeps its name.
+    expect(screen.getByRole("button", { name: "Release control" })).toBe(
+      screen.getByTestId("browser-release"),
+    );
 
     const polls = api.status.mock.calls.length;
     api.set(vncStatus({ url: "https://example.org/", driver: "agent" }));
@@ -267,6 +300,89 @@ describe("BrowserPanel", () => {
     }
   });
 
+  it("asks for a window Chrome can draw when the viewer is narrower than that", async () => {
+    // Chrome will not be narrower than 500px; a smaller window would show cropped.
+    const api = mockApi(vncStatus());
+    stubResizeObserver();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 352,
+      height: 828,
+    } as DOMRect);
+    try {
+      render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+      await connected();
+
+      // The viewer scales this window down to its own box: same shape.
+      await waitFor(
+        () => expect(api.resize).toHaveBeenCalledWith("b1", { width: 500, height: 1176 }),
+        { timeout: 2000 },
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps one fit in flight and refits to the latest size after it", async () => {
+    const api = mockApi(vncStatus());
+    const observer = stubResizeObserver();
+    let box = { width: 800, height: 600 };
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      () => box as DOMRect,
+    );
+    let finishFirst: () => void = () => undefined;
+    api.resize.mockImplementationOnce(
+      () => new Promise<never>((resolve) => (finishFirst = () => resolve(undefined as never))),
+    );
+    try {
+      render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+      await connected();
+      // The fit that follows the viewer connecting is still out when full screen resizes the box.
+      await waitFor(() => expect(api.resize).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      box = { width: 1440, height: 900 };
+      observer.notify();
+      // Long enough for any debounce to have run: still no second request.
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(api.resize).toHaveBeenCalledTimes(1);
+
+      finishFirst();
+      await waitFor(() => expect(api.resize).toHaveBeenCalledTimes(2), { timeout: 2000 });
+      expect(api.resize).toHaveBeenLastCalledWith("b1", { width: 1440, height: 900 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("retries a fit that failed, a couple of times, then leaves it", async () => {
+    const api = mockApi(vncStatus());
+    api.resize.mockRejectedValue(new Error("The browser could not be resized"));
+    stubResizeObserver();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 800,
+      height: 600,
+    } as DOMRect);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+      await connected();
+      const advance = (ms: number) =>
+        act(async () => {
+          await vi.advanceTimersByTimeAsync(ms);
+        });
+
+      await advance(350); // the fit that follows the viewer connecting
+      expect(api.resize).toHaveBeenCalledTimes(1);
+      await advance(1000);
+      expect(api.resize).toHaveBeenCalledTimes(2);
+      await advance(1000);
+      expect(api.resize).toHaveBeenCalledTimes(3);
+      await advance(10_000);
+      expect(api.resize).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reconnects with a fresh ticket after the connection drops", async () => {
     const api = mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
@@ -324,7 +440,8 @@ describe("BrowserPanel", () => {
     expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/");
     expect(screen.queryByTestId("browser-vnc")).not.toBeInTheDocument();
     expect(screen.queryByTestId("browser-fullscreen")).not.toBeInTheDocument();
-    expect(screen.getByTestId("browser-takeover")).toBeDisabled();
+    // Without a display there is nothing to take over.
+    expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
     expect(createRfb).not.toHaveBeenCalled();
   });
 
@@ -334,7 +451,7 @@ describe("BrowserPanel", () => {
 
     expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
     expect(screen.getByText("Closed")).toBeInTheDocument();
-    expect(screen.getByTestId("browser-takeover")).toBeDisabled();
+    expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
 
     api.set(vncStatus({ active: false, url: null, driver: null, mode: null, starting: true }));
     fireEvent.click(screen.getByTestId("browser-open"));

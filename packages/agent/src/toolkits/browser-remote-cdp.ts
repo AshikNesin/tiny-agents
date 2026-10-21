@@ -16,9 +16,9 @@
  * channel closes, later channels on the same connection can stall. Fresh
  * connections (~50ms) sidestep it; sessions are long-lived.
  */
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
-import type { Page } from "playwright-core";
+import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { chromium } from "playwright-core";
 import ssh2, { type Client } from "ssh2";
 import { pageSession } from "./browser-chromium";
@@ -51,6 +51,119 @@ const INSTALL_TIMEOUT_MS = 10 * 60_000;
  * running on the VM, and a bare timeout would hide its message.
  */
 const LAUNCH_TIMEOUT_MS = LAUNCH_BUDGET_MS + 20_000;
+/** A stalled link must not hang the viewer's resize request. */
+const RESIZE_TIMEOUT_MS = 10_000;
+
+async function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms / 1000}s`)), ms);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * A local TCP listener that pipes each connection through its own channel to
+ * the VM (used for CDP). Two tailscaled (Tailscale SSH) realities shape it:
+ * 1. after a direct-tcpip channel closes, later channels on the same
+ *    connection stall, so each incoming socket dials its OWN connection;
+ * 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
+ *    write their HTTP request immediately), so they are buffered until the
+ *    channel exists and replayed. CDP uses few long-lived connections; the
+ *    dial cost per connection is fine.
+ *
+ * A raw TCP server on purpose: `node:http`'s server cuts any connection that
+ * has not sent a full request header within 60 s (headersTimeout), which
+ * killed Playwright's idle CDP websocket and left a "live" session that could
+ * no longer resize or drive the browser.
+ */
+export function createForwardingServer(openChannel: () => Promise<Duplex>): Server {
+  const server = createServer();
+  server.on("connection", (socket) => {
+    const early: Buffer[] = [];
+    const onEarly = (d: Buffer) => early.push(d);
+    socket.on("data", onEarly);
+    openChannel()
+      .then((channel) => {
+        socket.removeListener("data", onEarly);
+        for (const d of early) channel.write(d);
+        socket.pipe(channel);
+        channel.pipe(socket);
+        const done = () => {
+          socket.destroy();
+          channel.destroy();
+        };
+        socket.on("close", done);
+        channel.on("close", done);
+      })
+      .catch(() => socket.destroy());
+  });
+  return server;
+}
+
+/**
+ * Fits Chrome's window to a size in CSS pixels, one call at a time and in
+ * order (two in flight can land swapped and leave the window at a stale
+ * size). The window's DevTools session is kept between calls: over a slow
+ * link a resize is then one round trip instead of four (attach, look up the
+ * window, set it, detach), so the window keeps up with the viewer.
+ */
+export function createWindowResizer(
+  context: Pick<BrowserContext, "pages" | "newCDPSession">,
+): (width: number, height: number) => Promise<void> {
+  let held: { page: Page; cdp: CDPSession; windowId: number } | undefined;
+  let queue: Promise<unknown> = Promise.resolve();
+
+  const release = () => {
+    const stale = held;
+    held = undefined;
+    void stale?.cdp.detach().catch(() => {});
+  };
+
+  const attach = async (page: Page) => {
+    const cdp = await context.newCDPSession(page);
+    try {
+      const { windowId } = await cdp.send("Browser.getWindowForTarget");
+      return { page, cdp, windowId };
+    } catch (error) {
+      await cdp.detach().catch(() => {});
+      throw error;
+    }
+  };
+
+  const fit = async (width: number, height: number): Promise<void> => {
+    for (let attempt = 0; ; attempt += 1) {
+      const page = context.pages()[0];
+      if (!page) throw new Error("The browser has no open tab to resize.");
+      try {
+        if (held?.page !== page) {
+          release();
+          held = await attach(page);
+        }
+        await held.cdp.send("Browser.setWindowBounds", {
+          windowId: held.windowId,
+          bounds: { left: 0, top: 0, width, height, windowState: "normal" },
+        });
+        return;
+      } catch (error) {
+        // The tab or its window may have gone since the last resize: look
+        // them up again once before giving up.
+        release();
+        if (attempt > 0) throw error;
+      }
+    }
+  };
+
+  return (width, height) => {
+    const run = queue.then(() => fit(width, height));
+    queue = run.catch(() => {});
+    return run;
+  };
+}
 
 /** GET /json/version through the local tunnel port. */
 async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerUrl?: string }> {
@@ -173,7 +286,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     const launched = await launchStack();
 
     const live = new Set<Client>();
-    let server: ReturnType<typeof createServer> | undefined;
+    let server: Server | undefined;
     // Kill the remote processes (pids recorded at launch) and drop the tunnel
     // connections; used both by session close and by failed setup.
     const cleanup = async () => {
@@ -207,34 +320,8 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     };
 
     try {
-      // Local forwarding server for CDP. Two tailscaled (Tailscale SSH) realities:
-      // 1. after a direct-tcpip channel closes, later channels on the same
-      //    connection stall — so each incoming socket dials its OWN connection;
-      // 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
-      //    write their HTTP request immediately) — buffer until the channel
-      //    exists and replay. CDP uses few long-lived connections; the dial
-      //    cost per connection is fine.
-      const fwd = createServer();
+      const fwd = createForwardingServer(() => openChannel(launched.cdpPort));
       server = fwd;
-      fwd.on("connection", (socket) => {
-        const early: Buffer[] = [];
-        const onEarly = (d: Buffer) => early.push(d);
-        socket.on("data", onEarly);
-        openChannel(launched.cdpPort)
-          .then((channel) => {
-            socket.removeListener("data", onEarly);
-            for (const d of early) channel.write(d);
-            socket.pipe(channel);
-            channel.pipe(socket);
-            const done = () => {
-              socket.destroy();
-              channel.destroy();
-            };
-            socket.on("close", done);
-            channel.on("close", done);
-          })
-          .catch(() => socket.destroy());
-      });
       const localPort = await new Promise<number>((resolve, reject) => {
         fwd.once("error", reject);
         fwd.listen(0, "127.0.0.1", () => {
@@ -254,29 +341,25 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       const context = browser.contexts()[0] ?? (await browser.newContext());
       const page: Page = context.pages()[0] ?? (await context.newPage());
 
+      const setWindowSize = createWindowResizer(context);
       const vnc: BrowserVnc = {
         scale,
         openStream: () => openChannel(launched.vncPort),
         // Chrome's window defines the viewport on a real desktop, so fitting
-        // a viewer means resizing the window (CSS pixels).
-        resize: async (width, height) => {
-          const target = context.pages()[0];
-          if (!target) return;
-          const cdp = await context.newCDPSession(target);
-          try {
-            const { windowId } = await cdp.send("Browser.getWindowForTarget");
-            await cdp.send("Browser.setWindowBounds", {
-              windowId,
-              bounds: { left: 0, top: 0, width, height, windowState: "normal" },
-            });
-          } finally {
-            await cdp.detach().catch(() => {});
-          }
-        },
+        // a viewer means resizing the window (CSS pixels). The timeout also
+        // covers the wait behind an earlier resize that is still stuck.
+        resize: (width, height) =>
+          withTimeout(setWindowSize(width, height), RESIZE_TIMEOUT_MS, "Resizing the browser"),
       };
 
       return pageSession(page, open, {
         vnc,
+        onDisconnect: (listener) => {
+          // Already gone before anyone could listen: report it after the
+          // caller has registered the session.
+          if (browser.isConnected()) browser.once("disconnected", listener);
+          else setTimeout(listener, 0);
+        },
         close: async () => {
           // Detach playwright, then kill the remote processes explicitly
           // (closing a CDP-attached browser does not terminate it).

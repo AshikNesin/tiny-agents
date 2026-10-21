@@ -53,6 +53,7 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
     });
     const page: Page = context.pages()[0] ?? (await context.newPage());
     return pageSession(page, open, {
+      onDisconnect: (listener) => context.once("close", listener),
       close: async () => {
         await context.close().catch(() => {});
       },
@@ -71,6 +72,8 @@ export function pageSession(
   open: OpenBrowserOptions,
   teardown: {
     close: () => Promise<void>;
+    /** Subscribe to the browser dying; see `BrowserSession.onDisconnect`. */
+    onDisconnect?: (listener: () => void) => void;
     vnc?: BrowserVnc;
     wipeProfile?: () => Promise<void>;
   },
@@ -102,6 +105,10 @@ export function pageSession(
   const session: BrowserSession = {
     vnc: teardown.vnc,
     wipeProfile: teardown.wipeProfile,
+    onDisconnect: (listener) =>
+      teardown.onDisconnect?.(() => {
+        if (!closing) listener();
+      }),
     adoptActiveTab: async () => {
       const visible = await visiblePage(page.context().pages());
       if (visible) await switchTo(visible);

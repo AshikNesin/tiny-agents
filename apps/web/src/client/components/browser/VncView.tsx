@@ -9,6 +9,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import { botsApi } from "../../lib/bots-api";
 import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
 import { createRfb, type RfbClient } from "../../lib/novnc";
+import { remoteWindowSize } from "../../lib/remote-window";
 
 export type VncState = "connecting" | "live" | "reconnecting";
 
@@ -26,7 +27,11 @@ interface VncViewProps {
 }
 
 const BACKOFF_SECONDS = [1, 3, 5, 10, 20, 30];
-const RESIZE_DEBOUNCE_MS = 500;
+/** Short: entering full screen should not leave the old window size on screen for long. */
+const RESIZE_DEBOUNCE_MS = 150;
+/** A failed fit is retried this many times, this far apart. */
+const FIT_RETRIES = 2;
+const FIT_RETRY_MS = 1000;
 /** Pause between setting the remote clipboard and pressing Ctrl+V. */
 const PASTE_SETTLE_MS = 80;
 
@@ -146,29 +151,58 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
   }, [botId]);
 
   // Fit the remote Chrome window to the viewer. noVNC resizes the display
-  // itself; the window inside it needs the same size (in CSS pixels).
+  // itself; the window inside it needs the same size (in CSS pixels), which
+  // for a viewer narrower than Chrome can be is a wider one that the canvas
+  // scales down. Chrome accepts a window larger than the display, so the two
+  // can land in either order. One request at a time keeps the last size the
+  // winner.
   useEffect(() => {
     const host = hostRef.current;
     if (!host || typeof ResizeObserver === "undefined") return;
+    let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const fit = () => {
+    let inFlight = false;
+    let stale = false;
+
+    const fit = (attempt = 0) => {
+      if (disposed) return;
+      if (inFlight) {
+        stale = true; // the box changed mid-request: fit again afterwards
+        return;
+      }
+      inFlight = true;
       const rect = host.getBoundingClientRect();
+      const desktop = remoteWindowSize(rect.width, rect.height);
       void botsApi
         .browserResize(botId, {
-          width: Math.max(320, Math.round(rect.width)),
-          height: Math.max(240, Math.round(rect.height)),
+          width: Math.max(320, Math.round(desktop.width)),
+          height: Math.max(240, Math.round(desktop.height)),
         })
-        .catch(() => {
-          /* the next resize retries */
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => {
+          inFlight = false;
+          if (disposed) return;
+          if (stale) {
+            stale = false;
+            timer = setTimeout(() => fit(), RESIZE_DEBOUNCE_MS);
+          } else if (!ok && attempt < FIT_RETRIES) {
+            // Toggling full screen has no later resize to repair a failed
+            // fit, and the window would stay at its old size.
+            timer = setTimeout(() => fit(attempt + 1), FIT_RETRY_MS);
+          }
         });
     };
-    fitRef.current = fit;
+    fitRef.current = () => fit();
     const observer = new ResizeObserver(() => {
       clearTimeout(timer);
-      timer = setTimeout(fit, RESIZE_DEBOUNCE_MS);
+      timer = setTimeout(() => fit(), RESIZE_DEBOUNCE_MS);
     });
     observer.observe(host);
     return () => {
+      disposed = true;
       observer.disconnect();
       clearTimeout(timer);
       fitRef.current = () => undefined;

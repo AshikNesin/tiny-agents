@@ -104,7 +104,11 @@ router.post("/bots/:id/browser/resize", async (req) => {
   const conversationId = await botConversation(id);
   const live = requireSession(conversationId);
   if (!live.session.vnc) throw Boom.conflict("This browser cannot be resized.");
-  await live.session.vnc.resize(body.width, body.height);
+  try {
+    await live.session.vnc.resize(body.width, body.height);
+  } catch (error) {
+    throw Boom.badGateway(error instanceof Error ? error.message : "Could not resize the browser.");
+  }
   live.lastActivity = Date.now();
   return { width: body.width, height: body.height };
 });

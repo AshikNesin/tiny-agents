@@ -54,6 +54,12 @@ export interface BrowserSession {
   adoptActiveTab?(): Promise<void>;
   /** Delete the persisted profile; called after `close()` on reset. */
   wipeProfile?(): Promise<void>;
+  /**
+   * Call `listener` once if the browser dies under the app (a dropped link to
+   * a remote Chrome, Chrome exiting), never after `close()`. Transports that
+   * cannot tell leave it out.
+   */
+  onDisconnect?(listener: () => void): void;
   url(): string;
   navigate(url: string): Promise<{ url: string; status: number | null }>;
   snapshot(): Promise<string>;
@@ -385,12 +391,26 @@ async function openSession(
     scale: options.scale === 1 ? 1 : 2,
     onPhase,
   });
-  return {
+  const entry: LiveBrowserSession = {
     session,
     driver: "agent",
     lastActivity: Date.now(),
     idleMs: (options.idleMinutes ?? 10) * 60_000,
   };
+  session.onDisconnect?.(() => dropDeadSession(key, entry));
+  return entry;
+}
+
+/**
+ * A browser that died under the app must stop answering as live: until the
+ * idle sweeper noticed (minutes), every tool call and viewer resize would
+ * fail or silently do nothing against it. The next call opens a fresh one.
+ */
+function dropDeadSession(key: string, entry: LiveBrowserSession): void {
+  if (live.get(key) !== entry) return; // already closed, reset or replaced
+  live.delete(key);
+  entry.driver = "agent"; // release any blocked action tools
+  void entry.session.close().catch(() => {});
 }
 
 /**

@@ -36,9 +36,10 @@ function buildApp() {
   return app;
 }
 
-function fakeSession(options: { vnc?: boolean } = {}) {
+function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
   const resizes: { width: number; height: number }[] = [];
   const wipes: string[] = [];
+  const disconnects: (() => void)[] = [];
   let driver: "agent" | "human" = "agent";
   const vnc: BrowserVnc | undefined = options.vnc
     ? {
@@ -47,12 +48,16 @@ function fakeSession(options: { vnc?: boolean } = {}) {
           throw new Error("not used by the route tests");
         },
         resize: async (width, height) => {
+          if (options.resizeError) throw new Error(options.resizeError);
           resizes.push({ width, height });
         },
       }
     : undefined;
   const session: BrowserSession = {
     vnc,
+    onDisconnect: (listener) => {
+      disconnects.push(listener);
+    },
     wipeProfile: async () => {
       wipes.push("wipe");
     },
@@ -70,6 +75,8 @@ function fakeSession(options: { vnc?: boolean } = {}) {
     session,
     resizes,
     wipes,
+    /** The browser dies under the app (a dropped link, Chrome exiting). */
+    die: () => disconnects.forEach((listener) => listener()),
     get driver() {
       return driver;
     },
@@ -109,7 +116,7 @@ describe("browser routes", () => {
   let fake: ReturnType<typeof fakeSession>;
 
   // Installs the fake as the live session for this bot (headless or VNC).
-  async function openFake(options: { vnc?: boolean } = {}) {
+  async function openFake(options: { vnc?: boolean; resizeError?: string } = {}) {
     resetBrowserSessionsForTests();
     fake = fakeSession(options);
     await acquire(
@@ -279,6 +286,35 @@ describe("browser routes", () => {
       .set(authorization)
       .send({ width: 900, height: 700 })
       .expect(409);
+  });
+
+  it("answers 502 instead of pretending when the window cannot be resized", async () => {
+    await openFake({ vnc: true, resizeError: "Resizing the browser timed out after 10s" });
+    const r = await request(app)
+      .post(`/api/v1/bots/${botId}/browser/resize`)
+      .set(authorization)
+      .send({ width: 900, height: 700 })
+      .expect(502);
+    expect(JSON.stringify(r.body)).toContain("timed out");
+  });
+
+  it("reports a browser that died as closed instead of live", async () => {
+    await openFake({ vnc: true });
+    await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization).expect(200);
+    fake.die();
+
+    const status = await request(app)
+      .get(`/api/v1/bots/${botId}/browser`)
+      .set(authorization)
+      .expect(200);
+    expect(status.body.data).toMatchObject({ active: false, mode: null, driver: null });
+    // Nothing is left to resize or drive: the panel offers to open a new one.
+    await request(app)
+      .post(`/api/v1/bots/${botId}/browser/resize`)
+      .set(authorization)
+      .send({ width: 900, height: 700 })
+      .expect(404);
+    expect(fake.resizes).toEqual([]);
   });
 
   it("flips the driver and back", async () => {

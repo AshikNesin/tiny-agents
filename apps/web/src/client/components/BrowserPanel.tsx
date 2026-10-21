@@ -7,22 +7,37 @@
  * a VM the browser is headless: the bot can use it, but there is no display
  * to stream, so the panel says so instead of showing a view.
  *
- * Takeover is explicit: the viewer is view-only while the agent drives, and
- * "Take control" flips the server's driver flag, which also pauses the
- * agent's browser tools. "Release" hands the browser back; the agent
- * continues from the tab the owner left in front.
+ * The panel is one card: a header (title, connection status, view tools and
+ * the hand-off control) over the viewport. Takeover is explicit: the viewer is
+ * view-only while the agent drives, and "Take control" flips the server's
+ * driver flag, which also pauses the agent's browser tools. "Release control"
+ * hands the browser back; the agent continues from the tab the owner left in
+ * front.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Bot as BotIcon,
   ClipboardPaste,
   Globe,
   LoaderCircle,
   Maximize2,
   Minimize2,
+  MonitorOff,
+  MousePointerClick,
   RotateCcw,
   X,
 } from "lucide-react";
-import { Button, StatusBadge } from "@groot/ui";
+import {
+  Button,
+  Card,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  LoadingSpinner,
+  Text,
+  monoClass,
+} from "@groot/ui";
+import { cn } from "@groot/shell/lib/utils";
 import { toast } from "sonner";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
@@ -52,6 +67,22 @@ function readStoredWidth(): number {
     return clampWidth(DEFAULT_WIDTH);
   }
 }
+
+/** The header is the container: tool labels show once it is wide enough for them. */
+const toolLabel = "hidden @xl:inline";
+/** Below that width a labelled tool shrinks to a square icon button. */
+const toolButton = "@max-xl:w-7 @max-xl:px-0";
+/** The hand-off control is the panel's main action, so it keeps its label longer. */
+const handoffLabel = "hidden @md:inline";
+const handoffButton = "@max-md:w-7 @max-md:px-0";
+/**
+ * An optional part of the status line. Its separator belongs to it, so a part
+ * squeezed out by a narrow header takes the separator along; narrower than
+ * that the line is just the connection.
+ */
+const statusPart = "min-w-0 truncate before:pr-1.5 before:content-['·'] @max-md:hidden";
+/** Keeps a state's explanation to a readable line length, even in full screen. */
+const noteClass = "mx-auto block max-w-sm";
 
 export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [status, setStatus] = useState<BrowserStatus | null>(null);
@@ -176,24 +207,31 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
   };
 
   const connection = (() => {
-    if (starting) return { status: "pending", label: "Starting" };
-    if (!mode) return { status: "cancelled", label: "Closed" };
-    if (mode === "headless") return { status: "cancelled", label: "Headless" };
-    if (vncState === "live") return { status: "success", label: "Live" };
+    if (starting) return { label: "Starting", dot: "animate-pulse bg-muted-foreground" };
+    if (!mode) return { label: "Closed", dot: "bg-muted-foreground" };
+    if (mode === "headless") return { label: "Headless", dot: "bg-muted-foreground" };
+    if (vncState === "live") return { label: "Live", dot: "bg-success" };
     return {
-      status: "warning",
       label: vncState === "connecting" ? "Connecting" : "Reconnecting",
+      dot: "animate-pulse bg-warning",
     };
   })();
+  // The streamed Chrome has its own address bar, so the agent's last URL goes
+  // while the owner drives.
+  const url = mode && !(mode === "vnc" && humanDrives) ? status?.url : null;
 
+  // The panel itself is the full-screen element: its box has to be the whole
+  // screen, with nothing around the card, so the viewport (and the remote
+  // window fitted to it) fills the display.
   const sizing = fullscreen
-    ? "fixed inset-0 z-40 w-full"
-    : "fixed inset-0 z-40 md:static md:z-auto md:h-full md:w-(--browser-panel-width) md:shrink-0 md:border-l";
+    ? "fixed inset-0 z-40 w-full bg-background"
+    : "fixed inset-0 z-40 bg-background md:static md:z-auto md:h-full md:w-(--browser-panel-width) md:shrink-0 md:bg-transparent md:p-2 md:pl-0";
+  const surface = fullscreen ? "rounded-none ring-0" : "max-md:rounded-none max-md:ring-0";
 
   return (
     <div
       ref={panelRef}
-      className={`bg-background relative flex flex-col ${sizing}`}
+      className={cn("relative flex flex-col", sizing)}
       style={{ "--browser-panel-width": `${width}px` } as React.CSSProperties}
       data-testid="browser-panel"
     >
@@ -208,139 +246,183 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
         />
       )}
 
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <StatusBadge status={connection.status} label={connection.label} />
-        <span className="truncate text-xs text-muted-foreground" data-testid="browser-url">
-          {mode === "vnc" && humanDrives ? "" : (status?.url ?? "")}
-        </span>
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          {mode === "vnc" && humanDrives && (
+      <Card size="sm" className={cn("min-h-0 flex-1 gap-0 py-0", surface)}>
+        <header className="@container flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <CardTitle>Browser</CardTitle>
+            <Text variant="meta" className="flex min-w-0 items-center gap-1.5" aria-live="polite">
+              <span className={cn("size-1.5 shrink-0 rounded-full", connection.dot)} aria-hidden />
+              <span className="shrink-0 font-medium text-foreground">{connection.label}</span>
+              {mode && (
+                <span className={statusPart} data-testid="browser-driver">
+                  {humanDrives ? "You drive" : `${bot.name} drives`}
+                </span>
+              )}
+              {url && (
+                <span className={cn(statusPart, "flex-1")} data-testid="browser-url">
+                  {url}
+                </span>
+              )}
+            </Text>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            {mode === "vnc" &&
+              (humanDrives ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className={handoffButton}
+                  onClick={() => void setDriver("agent")}
+                  aria-label="Release control"
+                  title={`Hand the browser back to ${bot.name}`}
+                  data-testid="browser-release"
+                >
+                  <BotIcon />
+                  <span className={handoffLabel}>Release control</span>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className={handoffButton}
+                  onClick={() => void setDriver("human")}
+                  aria-label="Take control"
+                  title={`Click and type in the browser yourself. ${bot.name} waits.`}
+                  data-testid="browser-takeover"
+                >
+                  <MousePointerClick />
+                  <span className={handoffLabel}>Take control</span>
+                </Button>
+              ))}
+            {mode === "vnc" && humanDrives && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={toolButton}
+                onClick={pasteClipboard}
+                aria-label="Paste from your clipboard"
+                title="Paste from your clipboard"
+                data-testid="browser-paste"
+              >
+                <ClipboardPaste />
+                <span className={toolLabel}>Paste</span>
+              </Button>
+            )}
+            {mode === "vnc" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={toolButton}
+                onClick={toggleFullscreen}
+                aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+                title={fullscreen ? "Exit full screen" : "Full screen"}
+                data-testid="browser-fullscreen"
+              >
+                {fullscreen ? <Minimize2 /> : <Maximize2 />}
+                <span className={toolLabel}>{fullscreen ? "Exit full screen" : "Full screen"}</span>
+              </Button>
+            )}
+            <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
             <Button
               variant="ghost"
-              size="icon-xs"
-              onClick={pasteClipboard}
-              aria-label="Paste from your clipboard"
-              title="Paste from your clipboard"
-              data-testid="browser-paste"
+              size="icon-sm"
+              onClick={() => void resetProfile()}
+              aria-label="Reset browser profile"
+              title="Close the browser and wipe its profile"
+              data-testid="browser-reset"
             >
-              <ClipboardPaste className="size-3.5" />
+              <RotateCcw className="size-3.5" />
             </Button>
-          )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onClose}
+              aria-label="Close browser panel"
+              title="Close panel"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </header>
+
+        <div className="relative min-h-0 flex-1 overflow-hidden" data-testid="browser-viewport">
           {mode === "vnc" && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={toggleFullscreen}
-              aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-              title={fullscreen ? "Exit full screen" : "Full screen"}
-              data-testid="browser-fullscreen"
-            >
-              {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-            </Button>
+            <VncView ref={vncRef} botId={bot.id} interactive={humanDrives} onState={setVncState} />
           )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => void resetProfile()}
-            aria-label="Reset browser profile"
-            title="Close the browser and wipe its profile"
-            data-testid="browser-reset"
-          >
-            <RotateCcw className="size-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon-xs" onClick={onClose} aria-label="Close browser panel">
-            <X className="size-3.5" />
-          </Button>
-        </div>
-      </div>
+          {mode === "vnc" && vncState !== "live" && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs text-muted-foreground">
+              <LoaderCircle className="size-3.5 animate-spin" />
+              {vncState === "connecting" ? "Connecting to the browser…" : "Reconnecting…"}
+            </div>
+          )}
 
-      <div className="relative flex-1 overflow-hidden" data-testid="browser-viewport">
-        {mode === "vnc" && (
-          <VncView ref={vncRef} botId={bot.id} interactive={humanDrives} onState={setVncState} />
-        )}
-        {mode === "headless" && (
-          <div
-            className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
-            data-testid="browser-headless"
-          >
-            <Globe className="size-4 text-muted-foreground" />
-            <p className="text-sm">No live view for this browser.</p>
-            <p className="max-w-xs text-xs text-muted-foreground">
-              {bot.name} is using a headless browser on this server. Point SANDBOX_HOST at a VM to
-              watch it and take control.
-            </p>
-          </div>
-        )}
+          {mode === "headless" && (
+            <div className="h-full" data-testid="browser-headless">
+              <EmptyState
+                icon={MonitorOff}
+                title="No live view for this browser."
+                description={
+                  <span className={noteClass}>
+                    {bot.name} is using a headless browser on this server. Point{" "}
+                    <span className={monoClass}>SANDBOX_HOST</span> at a VM to watch it and take
+                    control.
+                  </span>
+                }
+                className="h-full py-6"
+              />
+            </div>
+          )}
 
-        {mode === "vnc" && vncState !== "live" && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs text-muted-foreground">
-            <LoaderCircle className="size-3.5 animate-spin" />
-            {vncState === "connecting" ? "Connecting to the browser…" : "Reconnecting…"}
-          </div>
-        )}
-
-        {!mode && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            {starting ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                <p className="text-sm">
-                  {status?.phase === "installing"
-                    ? "Setting up the browser on the VM"
-                    : "Starting the browser"}
-                </p>
-                <p className="max-w-xs text-xs text-muted-foreground">
+          {!mode && starting && (
+            <EmptyState
+              icon={Globe}
+              title={
+                status?.phase === "installing"
+                  ? "Setting up the browser on the VM"
+                  : "Starting the browser"
+              }
+              description={
+                <span className={noteClass}>
                   {status?.phase === "installing"
                     ? "First run only: installing Chrome and the display server. This takes a few minutes."
                     : "This takes a few seconds."}
-                </p>
-              </>
-            ) : (
-              <>
-                <Globe className="size-4 text-muted-foreground" />
-                {status?.error ? (
-                  <p className="max-w-sm text-xs text-destructive" data-testid="browser-error">
-                    {status.error}
-                  </p>
-                ) : (
-                  <p className="text-sm">No browser is open.</p>
-                )}
+                </span>
+              }
+              action={<LoadingSpinner size="sm" />}
+              className="h-full py-6"
+            />
+          )}
+          {!mode && !starting && status?.error && (
+            <ErrorState
+              title="Couldn't open the browser"
+              description={
+                <span className={cn(noteClass, "break-words")} data-testid="browser-error">
+                  {status.error}
+                </span>
+              }
+              action={
                 <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
-                  {status?.error ? "Try again" : "Open browser"}
+                  Try again
                 </Button>
-                <p className="max-w-xs text-xs text-muted-foreground">
-                  The browser also opens when {bot.name} first uses it.
-                </p>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 border-t px-3 py-2">
-        {humanDrives ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => void setDriver("agent")}
-            data-testid="browser-release"
-          >
-            Release to {bot.name}
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => void setDriver("human")}
-            disabled={mode !== "vnc"}
-            data-testid="browser-takeover"
-          >
-            Take control
-          </Button>
-        )}
-        <span className="truncate text-xs text-muted-foreground" data-testid="browser-driver">
-          {humanDrives ? "You drive" : `${bot.name} drives`}
-        </span>
-      </div>
+              }
+              className="h-full py-6"
+            />
+          )}
+          {!mode && !starting && !status?.error && (
+            <EmptyState
+              icon={Globe}
+              title="No browser is open."
+              description={`The browser also opens when ${bot.name} first uses it.`}
+              action={
+                <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
+                  Open browser
+                </Button>
+              }
+              className="h-full py-6"
+            />
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

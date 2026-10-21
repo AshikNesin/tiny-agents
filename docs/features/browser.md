@@ -44,6 +44,13 @@ the agent can browse, but there is nothing to stream (the panel says so)
   idle-closed after 10 minutes (`BROWSER_IDLE_MINUTES`; an open viewer counts
   as activity), `DELETE /bots/:id/browser/profile` wipes the profile for a
   fresh identity. Concurrent opens of the same bot share one launch.
+- **A dead browser is dropped, not kept.** If Chrome goes away (killed, the VM
+  restarted, the CDP link lost), the session reports it
+  (`BrowserSession.onDisconnect`) and `browser.ts` removes it from the live
+  table: the panel's status turns inactive ("Closed"), agent tools that were
+  waiting on the owner are released, and the next browser tool call opens a
+  fresh browser. Without this a dead session kept answering "active" while
+  every resize and tool call quietly did nothing.
 
 ## The viewer
 
@@ -51,18 +58,42 @@ the agent can browse, but there is nothing to stream (the panel says so)
 (lazy-loaded; pinned to an exact version because `lib/novnc.ts` patches a
 private method).
 
+The panel is one card (`Card` from `@groot/ui`): a header over the viewport.
+The header has the title, a status line, and the tools. The status line is a
+dot and label (Live, Connecting, Reconnecting, Starting, Headless, Closed),
+then who is driving ("Surfer drives", "You drive") and the agent's current
+URL (hidden while you drive, since the streamed Chrome has its own address
+bar). The tools are Take control or Release control, Paste (while you drive),
+Full screen, then Reset and Close as icons. The header is a container: Paste
+and Full screen show their label when it is at least 36rem wide, the hand-off
+button and the driver and URL parts of the status line from 28rem. Below that
+the buttons shrink to icons and the status line is just the connection, so the
+panel works from its 360 px minimum up. On a phone the panel is a full-screen
+overlay; on desktop it is an inset card beside the chat.
+The closed, starting, headless and failed states use `EmptyState` and
+`ErrorState`, with a spinner overlay on the viewport while connecting.
+
 - **Sharp on Retina.** The remote desktop is requested at `BROWSER_SCALE` x the
   panel size and Chrome runs with `--force-device-scale-factor` to match, so
   text is real pixels instead of an upscaled blur.
-- **Fits its box.** A `ResizeObserver` (500 ms debounce) posts the panel size
-  to `/browser/resize`, which resizes the Chrome window through CDP
-  (`Browser.setWindowBounds`). The panel width is draggable and remembered in
-  `localStorage`.
+- **Fits its box.** A `ResizeObserver` (150 ms debounce) posts the viewport
+  size to `/browser/resize`, which resizes the Chrome window through CDP
+  (`Browser.setWindowBounds`). Only one request is out at a time; if the box
+  changed meanwhile, the viewer refits to the latest size afterwards, so the
+  last size always wins. A failed fit is retried twice, a second apart:
+  entering full screen has no later resize to repair it. Chrome will not draw a
+  window narrower than 500 CSS px, so a narrower viewer (the 360 px panel, a
+  phone) asks for a 500 px window of its own shape and noVNC scales it down
+  instead of cropping it (`lib/remote-window.ts`). The panel width is
+  draggable and remembered in `localStorage`.
 - **Full screen.** The header button calls `requestFullscreen()` on the panel
   and, where supported, locks keys (`navigator.keyboard.lock`) so Esc and
-  browser shortcuts reach the remote Chrome.
+  browser shortcuts reach the remote Chrome. In full screen the panel drops
+  its padding, radius and ring, so the viewport (and the Chrome window fitted
+  to it) is the whole screen. Esc goes to the remote Chrome, so leave with the
+  "Exit full screen" button.
 - **Take control.** The viewer starts view-only. "Take control" enables input
-  and focus; "Release" hands the browser back to the bot. On a Mac, Cmd
+  and focus; "Release control" hands the browser back to the bot. On a Mac, Cmd
   shortcuts are sent as Ctrl shortcuts to the remote Linux Chrome.
 - **Clipboard.** Text copied in the remote Chrome lands on your clipboard.
   "Paste" (or Cmd+V on a Mac while driving) sends your clipboard to the remote
@@ -71,8 +102,8 @@ private method).
   Reset closes the browser, wipes the profile and returns to "Open browser".
 
 Without a VNC display (local fallback, no `SANDBOX_HOST`) the panel shows
-"No live view for this browser" with the current URL, and "Take control" is
-disabled.
+"No live view for this browser" with the current URL, and Take control, Paste
+and Full screen are not offered.
 
 ## First run on a VM
 
@@ -105,15 +136,15 @@ picks a display and ports, and drops it as soon as Chrome answers.
 
 ## API
 
-| Method | Path                                  | Description                                                              |
-| ------ | ------------------------------------- | ------------------------------------------------------------------------ |
-| GET    | `/api/v1/bots/:id/browser`            | `{ active, url, driver, mode, scale, starting, phase, error }`           |
-| POST   | `/api/v1/bots/:id/browser/start`      | open the browser now (returns at once; poll the status above)            |
-| POST   | `/api/v1/bots/:id/browser/vnc-ticket` | `{ path, scale }`: one-time ticket for the VNC WebSocket (409 if no VNC) |
-| GET    | `/api/v1/bots/:id/browser/vnc`        | WebSocket upgrade, RFB bytes over binary frames (needs `?ticket=`)       |
-| POST   | `/api/v1/bots/:id/browser/resize`     | `{ width, height }` in CSS pixels (320 to 4096 by 240 to 4096)           |
-| POST   | `/api/v1/bots/:id/browser/driver`     | `{ driver: "agent" \| "human" }`                                         |
-| DELETE | `/api/v1/bots/:id/browser/profile`    | close + wipe the profile                                                 |
+| Method | Path                                  | Description                                                                                                                   |
+| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/bots/:id/browser`            | `{ active, url, driver, mode, scale, starting, phase, error }`                                                                |
+| POST   | `/api/v1/bots/:id/browser/start`      | open the browser now (returns at once; poll the status above)                                                                 |
+| POST   | `/api/v1/bots/:id/browser/vnc-ticket` | `{ path, scale }`: one-time ticket for the VNC WebSocket (409 if no VNC)                                                      |
+| GET    | `/api/v1/bots/:id/browser/vnc`        | WebSocket upgrade, RFB bytes over binary frames (needs `?ticket=`)                                                            |
+| POST   | `/api/v1/bots/:id/browser/resize`     | `{ width, height }` in CSS pixels (320 to 4096 by 240 to 4096); 502 if the window could not be resized, 404 without a session |
+| POST   | `/api/v1/bots/:id/browser/driver`     | `{ driver: "agent" \| "human" }`                                                                                              |
+| DELETE | `/api/v1/bots/:id/browser/profile`    | close + wipe the profile                                                                                                      |
 
 `mode` is `"vnc"` or `"headless"` (no live view). `phase` is `"installing"` or
 `"starting"` while a launch is in flight.
@@ -170,3 +201,20 @@ dial must buffer the socket's first bytes or CDP's opening HTTP request is
 lost; and handshakes occasionally stall, so a channel dial retries once. SSH
 connection errors are always handled: an unhandled `error` event on an ssh2
 client would crash the server.
+
+The local CDP forwarder (`createForwardingServer`) must be a raw `node:net`
+server. Playwright reaches it with one HTTP request and then upgrades to a
+WebSocket that stays open for the life of the session. An `http.Server` puts
+the connection under its header timeout (60 s), so it cut the CDP link about a
+minute after the last tool call: the browser kept running on the VM, the
+viewer kept streaming it, but the agent's side was dead, and a resize
+(full screen after a pause) silently did nothing. `browser-transports.test.ts`
+guards this.
+
+`createWindowResizer` fits the Chrome window and keeps the window's DevTools
+session between resizes, so a resize is one round trip instead of four
+(attach, look up the window, set it, detach). That is the difference between
+about 0.4 s and 1.4 s on a link with a 300 ms round trip, and the Chrome window
+is what lags behind the screen when you enter or leave full screen. It looks the
+window up again when the first tab changes or the held session has gone stale,
+and runs resizes one at a time, in order.
