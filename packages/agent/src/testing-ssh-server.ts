@@ -20,8 +20,12 @@ import { EventEmitter } from "node:events";
 import ssh2 from "ssh2";
 // default-interop: a plain-node child (durability tests) can't resolve ssh2's
 // named exports through cjs-module-lexer, but the default export works everywhere
-const { Server: SshServer } = ssh2;
+const { Server: SshServer, Client: Ssh2Client } = ssh2;
 type Connection = import("ssh2").Connection;
+// Tests live outside packages/agent, where @types/ssh2 does not resolve; the
+// fixture is the boundary, so it hands them a typed client and channel types.
+export { Ssh2Client };
+export type { ClientChannel, ExecOptions } from "ssh2";
 // The server-side exec stream lives in ssh2's runtime but not its types; a
 // FakePty needs the reverse direction wired onto it.
 type SftpServerStream = EventEmitter & Record<string, any>;
@@ -70,10 +74,10 @@ export function fakePty(command: string, info: PtyRequestInfo): FakePty {
     cols: info.cols,
     rows: info.rows,
     written: [],
+    resizes: [],
     setWindow(cols, rows) {
       p.cols = cols;
       p.rows = rows;
-      p.serverStream?.setWindow(rows, cols);
     },
     emit(data) {
       p.serverStream?.write(data);
@@ -98,6 +102,13 @@ export interface FakePty {
   rows: number;
   /** Bytes the client sent into the pty, in order. */
   written: Buffer[];
+  /** Window changes the client requested, in order (server-observed). */
+  resizes: Array<{ cols: number; rows: number }>;
+  /**
+   * Set the pty's recorded geometry. SSH's window-change is a client→server
+   * request only — a server cannot push a resize at the client over the
+   * wire — so this updates what the fake reports and sends nothing.
+   */
   setWindow(cols: number, rows: number): void;
   /** Push output to the client as if the remote program had printed it. */
   emit(data: string | Buffer): void;
@@ -137,6 +148,7 @@ export function startFakeSandboxServer(
     client.on("session", (accept) => {
       const session = accept();
       let sessionPty: PtyRequestInfo | null = null;
+      let boundPty: FakePty | null = null;
       // A pty attach (terminal feature) is interactive: the pty request
       // arrives as its own event before exec, and the exec stream only
       // becomes readable once both are accepted. Without a pty handler the
@@ -150,6 +162,15 @@ export function startFakeSandboxServer(
         };
         acceptPty();
       });
+      // A client terminal resize is a channel request, not data; ssh2 only
+      // routes it when a listener exists (wantReply is false, so the
+      // accept/reject arguments are undefined and must not be called).
+      session.on("window-change", (_accept, _reject, info: import("ssh2").WindowChangeInfo) => {
+        if (!boundPty) return;
+        boundPty.cols = info.cols;
+        boundPty.rows = info.rows;
+        boundPty.resizes.push({ cols: info.cols, rows: info.rows });
+      });
       session.on("exec", (acceptExec, reject, info) => {
         execCalls.push(info.command);
         if (sessionPty && pty) {
@@ -158,6 +179,7 @@ export function startFakeSandboxServer(
           const stream = acceptExec();
           const bound = fake as BoundFakePty;
           bound.serverStream = stream;
+          boundPty = fake;
           stream.on("data", (data: Buffer) => fake.written.push(data));
           stream.once("close", () => fake.end());
           return;
