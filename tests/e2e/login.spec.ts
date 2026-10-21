@@ -26,5 +26,11 @@ test.describe("Login page", () => {
 
     // Should stay on login page
     await expect(page).toHaveURL(/.*login.*/);
+
+    // The toast maps the 401 to human wording, not the raw Axios message
+    // (friction issue #33).
+    const toast = page.getByText("Invalid email or password.");
+    await expect(toast).toBeVisible();
+    await expect(page.getByText(/Request failed with status code/)).toHaveCount(0);
   });
 });

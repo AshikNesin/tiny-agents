@@ -198,7 +198,7 @@ export function AddConnectionDialog({
                 <SelectTrigger className="w-full" aria-label="Authentication type">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-72">
                   {AUTH_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}

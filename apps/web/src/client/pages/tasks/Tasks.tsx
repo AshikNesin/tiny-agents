@@ -113,7 +113,10 @@ export function Tasks() {
     try {
       await tasksApi.create({
         title,
-        ...(dueToday ? { dueAt: new Date(todayEnd).toISOString() } : {}),
+        // Quick-add on the Upcoming tab defaults to tomorrow EOD (friction
+        // #36): an undated task lands in no bucket and renders an empty
+        // metadata row. Tomorrow keeps it visibly "upcoming" with a date.
+        ...(!dueToday ? { dueAt: new Date(todayEnd + 86_400_000).toISOString() } : {}),
       });
       setQuick("");
       await refresh();
@@ -188,7 +191,7 @@ export function Tasks() {
           <Input
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
-            placeholder={tab === "today" ? "Add a task for today" : "Add a task"}
+            placeholder={tab === "today" ? "Add a task for today" : "Add a task for tomorrow"}
             maxLength={300}
             aria-label="New task title"
           />
@@ -419,7 +422,7 @@ function TaskEditor({
                   <SelectTrigger aria-label="Task status">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-h-72">
                     {STATUS_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}
@@ -437,7 +440,7 @@ function TaskEditor({
                   <SelectTrigger aria-label="Task priority">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-h-72">
                     {PRIORITY_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}

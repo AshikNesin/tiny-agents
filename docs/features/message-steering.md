@@ -5,13 +5,13 @@ durably joins (or follows) the running reply, and it survives reloads.
 
 ## Behavior
 
-| Input                          | Effect                                                    |
-| ------------------------------ | --------------------------------------------------------- |
+| Input                          | Effect                                                                |
+| ------------------------------ | --------------------------------------------------------------------- |
 | Enter / send button while busy | Steer: placed after the current tool round, the run continues with it |
-| Alt+Enter while busy           | Follow-up: placed when the reply ends, starts the next run |
-| Send while idle                | Placed immediately (`whenBusy` is ignored by pi-durable)   |
-| The x on a queued bubble       | Withdraws the held message (idempotent; 409 once placed)   |
-| Stop button                    | Aborts the reply and withdraws every held message           |
+| Alt+Enter while busy           | Follow-up: placed when the reply ends, starts the next run            |
+| Send while idle                | Placed immediately (`whenBusy` is ignored by pi-durable)              |
+| The x on a queued bubble       | Withdraws the held message (idempotent; 409 once placed)              |
+| Stop button                    | Aborts the reply and withdraws every held message                     |
 
 ## Architecture
 

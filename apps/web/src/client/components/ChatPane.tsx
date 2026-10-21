@@ -170,12 +170,39 @@ function ChatPaneBody({
   const queued = chat?.queued ?? [];
   const busy = chat?.busy ?? false;
 
+  // Auto-open the Browser panel the first time the bot drives its browser in
+  // this conversation view (friction #37): the empty state promises it, and
+  // nothing else surfaces live browsing. Tool events arrive on the running
+  // assistant turn; a ref guards so one run opens it once, and an explicit
+  // close by the owner stays closed until the next run.
+  const autoOpenedForRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (browserOpen) return;
+    const runningBrowserTool = messages.some(
+      (m) =>
+        m.role === "assistant" &&
+        m.toolCalls?.some((c) => c.name.startsWith("browser_") && c.status === "running"),
+    );
+    if (!runningBrowserTool) return;
+    const runKey = `${bot.conversationId}:${messages.length}`;
+    if (autoOpenedForRun.current === runKey) return;
+    autoOpenedForRun.current = runKey;
+    setBrowserOpen(true);
+  }, [messages, browserOpen, bot.conversationId]);
+
   // Read/unread split (issue #3): messages older than the frozen pre-open
   // marker are read; the rest arrived while the owner was away. The first
   // unread gets the "New messages" divider above it, and read items are the
   // scroller's anchors — `last-anchor` opens on the newest read message
   // (WhatsApp-style), with the unread block peeking in below it.
   const unreadFrom = chat?.unreadFrom ?? null;
+  // Only bot replies count as unread (friction #32): your own sent messages
+  // land below the marker too, but a "New messages" flag above something
+  // you wrote yourself reads as a glitch. The divider goes above the first
+  // unread assistant message; read anchors keep including user messages.
+  const firstAssistantUnreadIndex = messages.findIndex(
+    (m) => m.role === "assistant" && m.createdAt > (unreadFrom ?? 0),
+  );
   const firstUnreadIndex = messages.findIndex((m) => m.createdAt > (unreadFrom ?? 0));
   const isRead = (i: number) => firstUnreadIndex === -1 || i < firstUnreadIndex;
 
@@ -440,7 +467,7 @@ function ChatPaneBody({
             className="chat-header-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-4"
           />
           <MessageScroller className="h-full">
-            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-5 py-4">
+            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
               <MessageScrollerContent className="space-y-4">
                 {messages.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
@@ -468,7 +495,7 @@ function ChatPaneBody({
                           {formatDayDivider(message.createdAt)}
                         </div>
                       )}
-                      {firstUnreadIndex === i && (
+                      {firstAssistantUnreadIndex === i && (
                         <div
                           data-testid="unread-divider"
                           className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
@@ -628,7 +655,7 @@ function ChatPaneBody({
                 }
                 rows={1}
                 disabled={!gatewayConfigured || !modelKnown}
-                className="placeholder:text-fg-tertiary field-sizing-content max-h-[25rem] min-h-[2.75rem] w-full resize-none bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
+                className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
               />
               <div className="flex items-center justify-between px-2.5 pb-2.5">
                 <Button
@@ -731,7 +758,7 @@ function ChatPaneBody({
 function QueuedMessageView({ item, onCancel }: { item: QueuedMessage; onCancel: () => void }) {
   return (
     <Message align="end" data-testid="queued-bubble" data-mode={item.mode}>
-      <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
+      <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
         {item.attachments && item.attachments.length > 0 && (
           <MessageAttachments attachments={item.attachments} />
         )}

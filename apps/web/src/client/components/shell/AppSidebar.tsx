@@ -20,6 +20,7 @@ import {
 import { cn } from "@groot/shell/lib/utils";
 import { ThemeMenu } from "@groot/shell/components/Layout";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
@@ -223,6 +224,7 @@ export function AppSidebar() {
                 variant="destructive"
                 onSelect={() => {
                   void logout();
+                  toast.success("Signed out", { description: "You have been logged out safely." });
                   navigate("/login");
                 }}
               >

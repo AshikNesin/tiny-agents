@@ -27,6 +27,7 @@ import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { isTheme, type Theme, useTheme } from "@groot/shell/lib/theme";
+import { toast } from "sonner";
 import {
   MoreHorizontal,
   LogOut,
@@ -148,6 +149,7 @@ export function Layout({
 
   const handleLogout = () => {
     logout();
+    toast.success("Signed out", { description: "You have been logged out safely." });
     navigate("/login");
   };
 

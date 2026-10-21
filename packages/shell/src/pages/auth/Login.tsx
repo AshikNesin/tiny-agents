@@ -22,6 +22,21 @@ const loginSchema = z.object({
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
+/** A 401 from the login endpoint is always "wrong credentials" for the
+ * person typing; network-level wording ("Request failed with status code
+ * 401") is for logs, not toasts. Anything else keeps its message. */
+function loginErrorDescription(error: unknown, fallback: string): string {
+  if (error && typeof error === "object") {
+    const maybe = error as { response?: { status?: number }; message?: string };
+    if (maybe.response?.status === 401) return "Invalid email or password.";
+    if (maybe.message && !maybe.message.startsWith("Request failed with status code")) {
+      return maybe.message;
+    }
+    return "Could not reach the server. Check your connection and try again.";
+  }
+  return fallback;
+}
+
 const FEATURES = [
   { icon: Zap, title: "Built for speed", desc: "Express + React with HMR out of the box." },
   {
@@ -52,7 +67,7 @@ export function Login() {
     } catch (error) {
       console.error("Login failed:", error);
       toast.error("Login Failed", {
-        description: error instanceof Error ? error.message : "Invalid credentials",
+        description: loginErrorDescription(error, "Invalid credentials"),
       });
     }
   };
@@ -64,7 +79,7 @@ export function Login() {
     } catch (error) {
       console.error("Passkey sign-in failed:", error);
       toast.error("Passkey Sign-In Failed", {
-        description: error instanceof Error ? error.message : "Passkey authentication failed",
+        description: loginErrorDescription(error, "Passkey authentication failed"),
       });
     }
   };
@@ -129,7 +144,7 @@ export function Login() {
       </div>
 
       {/* Right: brand panel. */}
-      <div className="relative hidden overflow-hidden bg-primary lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:px-16">
+      <div className="bg-primary dark:bg-card relative hidden overflow-hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:px-16">
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{
@@ -137,18 +152,24 @@ export function Login() {
             backgroundSize: "32px 32px",
           }}
         />
-        <div className="relative max-w-md text-primary-foreground">
+        <div className="text-primary-foreground dark:text-foreground relative max-w-md">
           <h2 className={displayClass}>{tagline}</h2>
-          <p className="mt-3 text-sm text-primary-foreground/70">{description}</p>
+          <p className="text-primary-foreground/70 dark:text-foreground/70 mt-3 text-sm">
+            {description}
+          </p>
           <ul className="mt-8 space-y-4">
             {features.map((f) => (
               <li key={f.title} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10">
-                  <f.icon className="size-4 text-primary-foreground" />
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10 dark:bg-foreground/10">
+                  <f.icon className="text-primary-foreground dark:text-foreground size-4" />
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-primary-foreground">{f.title}</p>
-                  <p className="text-sm text-primary-foreground/60">{f.desc}</p>
+                  <p className="text-primary-foreground dark:text-foreground text-sm font-medium">
+                    {f.title}
+                  </p>
+                  <p className="text-primary-foreground/60 dark:text-foreground/60 text-sm">
+                    {f.desc}
+                  </p>
                 </div>
               </li>
             ))}

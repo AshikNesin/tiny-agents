@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
@@ -198,7 +198,10 @@ function ToolDetailBlock({
       <CodeBlockHeader>
         <CodeBlockTitle>{title}</CodeBlockTitle>
       </CodeBlockHeader>
-      <CodeBlockContent wrap className="max-h-64">
+      <CodeBlockContent
+        wrap
+        className="max-h-64 overflow-y-auto overscroll-contain [scrollbar-width:auto] [scrollbar-gutter:stable]"
+      >
         {lines.map((line, i) => (
           <CodeBlockLine key={i}>{line}</CodeBlockLine>
         ))}
@@ -224,6 +227,7 @@ function ToolRow({
   botName: string;
 }) {
   const summary = summarizeArgs(call);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const extra = STATUS_TEXT[call.status];
   const argsJson = JSON.stringify(call.args, null, 2);
   const detail =
@@ -297,9 +301,21 @@ function ToolRow({
   return (
     <Trace className="gap-1">
       {detail ? (
-        <TraceCollapsible>
+        <TraceCollapsible
+          onOpenChange={(open) => {
+            // Expanding mid-transcript must bring the detail into view
+            // (friction #38): with long histories the opened block can be
+            // hundreds of px off-screen, which reads as "click did nothing".
+            if (!open) return;
+            requestAnimationFrame(() =>
+              contentRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+            );
+          }}
+        >
           <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
-          <TraceCollapsibleContent className="space-y-2">{detail}</TraceCollapsibleContent>
+          <TraceCollapsibleContent className="space-y-2">
+            <div ref={contentRef}>{detail}</div>
+          </TraceCollapsibleContent>
         </TraceCollapsible>
       ) : (
         line
@@ -372,7 +388,7 @@ export function ChatMessageView({
         {/* content-visibility on the scroller item breaks percentage
             max-widths, so the pill is capped by the flex parent chain
             instead of a nested wrapper. */}
-        <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
+        <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
           {message.attachments && message.attachments.length > 0 && (
             <MessageAttachments attachments={message.attachments} />
           )}
@@ -412,7 +428,7 @@ function PeerCard({
     // in a labeled muted bubble.
     return (
       <Message align="end" className="group">
-        <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1">
+        <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
           <p className="text-muted-foreground px-1 text-right text-xs">
             You · in {peer.hostName}&apos;s chat
           </p>
@@ -490,7 +506,7 @@ export function PeerIncomingCard({
       <div className="flex min-w-0 items-center gap-2">
         <div
           data-slot="reply-card"
-          className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
+          className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
         >
           <Streamdown>{text}</Streamdown>
         </div>
@@ -546,7 +562,7 @@ function assistantView(
           <div className="flex min-w-0 items-center gap-2">
             <div
               data-slot="reply-card"
-              className="bg-bubble chat-md min-w-0 max-w-[80%] rounded-3xl px-4 py-2"
+              className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
             >
               <Streamdown>{message.text}</Streamdown>
               {message.status === "error" && (

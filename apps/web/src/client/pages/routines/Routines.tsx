@@ -650,7 +650,7 @@ function RoutineEditor({
                 <SelectTrigger aria-label="Bot" className="w-full">
                   <SelectValue placeholder={bots === null ? "Loading bots…" : "Pick a bot"} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-72">
                   {(bots ?? []).map((bot) => (
                     <SelectItem key={bot.id} value={bot.id}>
                       {bot.name}
@@ -719,7 +719,7 @@ function RoutineEditor({
                       <SelectTrigger aria-label="Day of week" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" className="max-h-72">
                         {DAYS_OF_WEEK.map((day, index) => (
                           <SelectItem key={day} value={String(index)}>
                             {day}
@@ -823,7 +823,7 @@ function TimeSelect({
         <SelectTrigger aria-label={label} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper" className="max-h-72">
           {TIME_OPTIONS.map((time) => (
             <SelectItem key={time} value={time}>
               {time}

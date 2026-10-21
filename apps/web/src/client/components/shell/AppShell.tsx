@@ -1,8 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bot, MessageSquare, Plus } from "lucide-react";
+import { Bot, LogOut, MessageSquare, Monitor, Moon, Plus, Settings, Sun } from "lucide-react";
 import { Layout } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
+import { useAuthStore } from "@groot/shell/store/auth";
+import { useTheme } from "@groot/shell/lib/theme";
+import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import type { Bot as BotRow } from "../../lib/bots-api";
@@ -32,6 +35,8 @@ export function AppShell() {
   const editingBot = useUiStore((s) => s.editingBot);
   const markSaved = useUiStore((s) => s.markSaved);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
+  const logout = useAuthStore((s) => s.logout);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     void loadBots();
@@ -70,10 +75,46 @@ export function AppShell() {
             icon: item.icon,
             onSelect: () => navigate(item.to),
           })),
+          { label: "Settings", icon: Settings, onSelect: () => navigate("/settings") },
+        ],
+      },
+      {
+        heading: "Theme",
+        items: [
+          {
+            label: theme === "light" ? "Light ✓" : "Light",
+            icon: Sun,
+            onSelect: () => setTheme("light"),
+          },
+          {
+            label: theme === "dark" ? "Dark ✓" : "Dark",
+            icon: Moon,
+            onSelect: () => setTheme("dark"),
+          },
+          {
+            label: theme === "system" ? "System ✓" : "System",
+            icon: Monitor,
+            onSelect: () => setTheme("system"),
+          },
+        ],
+      },
+      {
+        heading: "Account",
+        items: [
+          {
+            label: "Log out",
+            icon: LogOut,
+            variant: "destructive",
+            onSelect: () => {
+              void logout();
+              toast.success("Signed out", { description: "You have been logged out safely." });
+              navigate("/login");
+            },
+          },
         ],
       },
     ];
-  }, [bots, navigate, openCreateBot]);
+  }, [bots, navigate, openCreateBot, theme, setTheme, logout]);
 
   const onSaved = (bot: BotRow) => {
     void loadBots();

@@ -507,7 +507,7 @@ function MemoryEditor({
               <SelectTrigger aria-label="Category" className="w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="max-h-72">
                 {CATEGORY_ORDER.map((c) => (
                   <SelectItem key={c} value={c}>
                     {CATEGORY_LABELS[c]}
