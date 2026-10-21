@@ -403,7 +403,7 @@ function ChatPaneBody({
           <button
             type="button"
             onClick={() => setConfirmReset(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-lg"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground hidden size-6 shrink-0 items-center justify-center rounded-lg md:flex"
             aria-label="Start a new chat"
           >
             <Plus className="size-4" />
@@ -411,7 +411,7 @@ function ChatPaneBody({
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto shrink-0 rounded-xl"
+            className="ml-auto hidden shrink-0 rounded-xl md:inline-flex"
             onClick={() => setBrowserOpen((v) => !v)}
             aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
             data-testid="browser-toggle"
