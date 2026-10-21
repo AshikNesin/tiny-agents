@@ -82,6 +82,12 @@ supported; they do not expose the tool.
 
 ## API
 
+The Memory page's add/edit form only asks for text and category, not a
+“Forgets after” date. Manual additions have no expiry. Editing preserves an
+existing automatic expiry; restoring an expired memory clears the past
+expiry so it can stay active. Capture can still expire temporary facts, and
+the API retains `until` support for compatibility.
+
 - `GET /api/v1/bots/:id/memories?includeArchived=` — list (default hides
   archived and expired)
 - `POST /api/v1/bots/:id/memories` — manual add (`source: manual`)

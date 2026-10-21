@@ -36,7 +36,6 @@ import {
   CATEGORY_ORDER,
   type BotListEntry,
   type MemoryCategory,
-  type MemoryInput,
   type MemoryRecord,
 } from "../../lib/bots-api";
 
@@ -417,13 +416,6 @@ function MemoryRow({
 
 const INACTIVE_STATUSES: ReadonlySet<string> = new Set(["superseded", "archived", "expired"]);
 
-/** ISO instant → datetime-local value in the browser's timezone. */
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function MemoryEditor({
   editor,
   onOpenChange,
@@ -435,7 +427,6 @@ function MemoryEditor({
 }) {
   const [text, setText] = useState("");
   const [category, setCategory] = useState<MemoryCategory>("preference");
-  const [until, setUntil] = useState("");
   const [restore, setRestore] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -452,8 +443,6 @@ function MemoryEditor({
     setLoadedKey(key);
     setText(editor.memory?.text ?? "");
     setCategory(editor.memory?.category ?? "preference");
-    // datetime-local wants local wall time; the wire wants an instant.
-    setUntil(editor.memory?.until ? toLocalInput(editor.memory.until) : "");
     setRestore(editor.memory !== null && INACTIVE_STATUSES.has(editor.memory.status));
   }, [editor, loadedKey]);
 
@@ -461,26 +450,24 @@ function MemoryEditor({
     if (!editor || !text.trim()) return;
     setSaving(true);
     const trimmed = text.trim();
-    // A restore with the old (past) deadline would flip straight back to
-    // expired, so restoring drops a deadline that is already past.
-    let nextUntil = until ? new Date(until).toISOString() : null;
-    if (restore && nextUntil && new Date(nextUntil) <= new Date()) nextUntil = null;
     try {
       if (editor.memory) {
+        // Restored memories must not immediately expire again. Ordinary edits
+        // leave any automatically captured expiry unchanged.
+        const clearExpiry =
+          restore && editor.memory.until !== null && new Date(editor.memory.until) <= new Date();
         await botsApi.updateMemory(editor.memory.id, {
           text: trimmed,
           category,
-          until: nextUntil,
+          ...(clearExpiry ? { until: null } : {}),
           ...(restore ? { restore: true } : {}),
         });
         toast.success("Memory saved");
       } else {
-        const input: MemoryInput = {
+        await botsApi.createMemory(editor.botId, {
           text: trimmed,
           category,
-          ...(until ? { until: new Date(until).toISOString() } : {}),
-        };
-        await botsApi.createMemory(editor.botId, input);
+        });
         toast.success("Memory added");
       }
       await onSaved();
@@ -528,16 +515,6 @@ function MemoryEditor({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="memory-until">Forgets after</Label>
-            <Input
-              id="memory-until"
-              type="datetime-local"
-              value={until}
-              onChange={(e) => setUntil(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">Optional. Leave empty to keep forever.</p>
           </div>
           {canRestore && (
             <label className="flex items-center gap-2 text-sm">

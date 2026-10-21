@@ -150,6 +150,8 @@ describe("Memory page", () => {
     await user.click(within(section).getByRole("button", { name: /add memory/i }));
 
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByLabelText(/forgets? after/i)).toBeNull();
+    expect(within(dialog).queryByText(/leave empty to keep forever/i)).toBeNull();
     await user.type(within(dialog).getByLabelText("Memory"), "Prefers dark mode");
     await user.click(within(dialog).getByRole("combobox", { name: "Category" }));
     await user.click(await screen.findByRole("option", { name: "Habits" }));
@@ -162,8 +164,10 @@ describe("Memory page", () => {
     });
   });
 
-  it("edits a memory and sends the patch by memory id", async () => {
-    loadPage({ b1: [memory({ id: "m1", botId: "b1" })] });
+  it("edits a memory without changing its automatically captured expiry", async () => {
+    loadPage({
+      b1: [memory({ id: "m1", botId: "b1", until: "2099-11-01T00:00:00.000Z" })],
+    });
     mount();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
@@ -174,6 +178,7 @@ describe("Memory page", () => {
     );
 
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByLabelText(/forgets? after/i)).toBeNull();
     const field = within(dialog).getByLabelText("Memory");
     await user.clear(field);
     await user.type(field, "Prefers TypeScript strictly");
@@ -183,8 +188,49 @@ describe("Memory page", () => {
     expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
       text: "Prefers TypeScript strictly",
       category: "preference",
-      until: null,
     });
+  });
+
+  it("clears a past expiry when restoring an expired memory", async () => {
+    loadPage({
+      b1: [memory({ id: "m1", botId: "b1", status: "expired", until: "2020-01-01T00:00:00.000Z" })],
+    });
+    mount();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(await screen.findByRole("button", { name: /Edit memory/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("checkbox", { name: "Restore to active" }).checked).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "Save", exact: true }));
+
+    await waitFor(() =>
+      expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
+        text: "Prefers TypeScript over JavaScript",
+        category: "preference",
+        restore: true,
+        until: null,
+      }),
+    );
+  });
+
+  it("preserves expiry when editing an expired memory without restoring it", async () => {
+    loadPage({
+      b1: [memory({ id: "m1", botId: "b1", status: "expired", until: "2020-01-01T00:00:00.000Z" })],
+    });
+    mount();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(await screen.findByRole("button", { name: /Edit memory/ }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Restore to active" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save", exact: true }));
+
+    await waitFor(() =>
+      expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
+        text: "Prefers TypeScript over JavaScript",
+        category: "preference",
+      }),
+    );
   });
 
   it("confirms before deleting and never re-adds", async () => {
