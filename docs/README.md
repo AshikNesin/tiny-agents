@@ -36,6 +36,7 @@ feature docs as you need them.
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn/FIDO2 passwordless authentication             |
 | [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output             |
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: chat image/file attachments, vision paths |
+| [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM              |
 | [`kv.md`](./kv.md)                                                           | Keyv key-value storage (SQLite or Postgres backend)    |
 
 ## Reference
@@ -66,6 +67,7 @@ feature docs as you need them.
 | `/api/v1/jobs`     | Background job management      | JWT                      |
 | `/api/v1/storage`  | S3 file operations             | JWT                      |
 | `/api/v1/settings` | App key-value settings         | JWT                      |
+| `/api/v1/terminal` | Sandbox VM terminal tabs       | JWT                      |
 | `GET /health`      | Health probe                   | None                     |
 
 ## Architecture decision records
