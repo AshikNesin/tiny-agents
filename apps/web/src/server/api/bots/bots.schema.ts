@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const toolkits = z.array(z.string().min(1).max(64)).max(50);
 const toolPermissions = z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"]));
+/** "shared": the browser every such bot uses (shared logins); "own": one of its own. */
+const browserProfile = z.enum(["shared", "own"]);
 
 export const createBotSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -15,6 +17,7 @@ export const createBotSchema = z.object({
   toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
+  browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),
 });
@@ -27,6 +30,7 @@ export const updateBotSchema = z.object({
   toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
+  browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),
 });

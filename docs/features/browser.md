@@ -8,7 +8,7 @@ that must never reach the model.
 ## Architecture
 
 ```
-One browser per bot, one profile dir per bot (remote: on the VM; local: ./data/browser-profiles/<id>)
+One browser per profile, one tab per bot (profile dirs: on the VM remotely; local: ./data/browser-profiles/<profile>)
 
 Remote (SANDBOX_HOST set — production):
 VM: Xtigervnc (private X display, localhost only)
@@ -43,7 +43,7 @@ the agent can browse, but there is nothing to stream (the panel says so)
 - Sessions: lazy start on the first browser tool call or "Open browser",
   idle-closed after 10 minutes (`BROWSER_IDLE_MINUTES`; an open viewer counts
   as activity), `DELETE /bots/:id/browser/profile` wipes the profile for a
-  fresh identity. Concurrent opens of the same bot share one launch.
+  fresh identity. Concurrent opens of the same profile share one launch.
 - **A dead browser is dropped, not kept.** If Chrome goes away (killed, the VM
   restarted, the CDP link lost), the session reports it
   (`BrowserSession.onDisconnect`) and `browser.ts` removes it from the live
@@ -51,6 +51,35 @@ the agent can browse, but there is nothing to stream (the panel says so)
   waiting on the owner are released, and the next browser tool call opens a
   fresh browser. Without this a dead session kept answering "active" while
   every resize and tool call quietly did nothing.
+
+## Profiles
+
+Bots share one browser profile by default (`shared`), so a site the owner
+signs into once is signed in for every bot. A bot that needs separate logins
+(a second account, a clean identity) is set to its own profile in the bot
+dialog (Tools, Browser, "Browser profile": Shared or Own); that is the
+`browserProfile` column on the bot (`"shared"` or `"own"`).
+
+- **One Chrome per profile.** Chrome locks its profile directory, so the bots
+  on a profile share one browser: the profile key names the browser and its
+  directory (`shared`, or `bot-<id>` for a bot's own). The app maps a bot to
+  its `BrowserTarget` (profile and tab) in `browser.targets.ts`; the toolkit
+  resolves tool calls through `resolveTarget`, since a tool call knows its
+  conversation, not its bot.
+- **A tab per bot.** The first bot in a browser gets its first tab, later bots
+  a new tab each (`BrowserSession.openTab`), keyed by bot id, so "New chat"
+  keeps the bot's tab. A tab the owner closes is replaced by a tab no other bot
+  holds (or a new one); after a takeover only the bot whose panel released
+  control adopts the tab left in front.
+- **The acting bot's tab comes to the front** (`focus`) when another bot acted
+  last, so the live view shows whoever is working and Chrome does not throttle
+  a background tab. Opening the panel (start, VNC ticket) brings that bot's tab
+  forward. Nothing is refocused while the owner drives.
+- **Shared controls.** Take control, the live view and Reset act on the whole
+  browser: while the owner drives, every bot on it waits, and resetting the
+  shared profile signs every bot on it out (the panel asks first and says so).
+- Changing a bot's profile takes effect on its next browser call; its old tab
+  stays in the shared browser until that browser idles out.
 
 ## The viewer
 
@@ -116,8 +145,9 @@ per VM). `STACK_VERSION` in `browser-vm-setup.ts` names a marker file
 
 ## Several bots at once
 
-Every bot gets its own Xtigervnc display and Chrome on the VM, so any number
-of bots can have a live browser at the same time. Only the launches take
+Every profile gets its own Xtigervnc display and Chrome on the VM, so the
+shared browser and any number of bots' own browsers can be live at the same
+time. Only the launches take
 turns: the launch script holds `~/.tiny-agents/browser-launch.lock` while it
 picks a display and ports, and drops it as soon as Chrome answers.
 
@@ -138,7 +168,7 @@ picks a display and ports, and drops it as soon as Chrome answers.
 
 | Method | Path                                  | Description                                                                                                                   |
 | ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/bots/:id/browser`            | `{ active, url, driver, mode, scale, starting, phase, error }`                                                                |
+| GET    | `/api/v1/bots/:id/browser`            | `{ active, profile, url, driver, mode, scale, starting, phase, error }`                                                       |
 | POST   | `/api/v1/bots/:id/browser/start`      | open the browser now (returns at once; poll the status above)                                                                 |
 | POST   | `/api/v1/bots/:id/browser/vnc-ticket` | `{ path, scale }`: one-time ticket for the VNC WebSocket (409 if no VNC)                                                      |
 | GET    | `/api/v1/bots/:id/browser/vnc`        | WebSocket upgrade, RFB bytes over binary frames (needs `?ticket=`)                                                            |
@@ -147,7 +177,10 @@ picks a display and ports, and drops it as soon as Chrome answers.
 | DELETE | `/api/v1/bots/:id/browser/profile`    | close + wipe the profile                                                                                                      |
 
 `mode` is `"vnc"` or `"headless"` (no live view). `phase` is `"installing"` or
-`"starting"` while a launch is in flight.
+`"starting"` while a launch is in flight. `profile` is `"shared"` or `"own"`;
+`active` is the bot's browser (on the shared profile, possibly opened by
+another bot) and `url` is the bot's own tab, `null` until it has one.
+`start` and `vnc-ticket` also open the bot's tab and bring it to the front.
 
 ## Security rules
 

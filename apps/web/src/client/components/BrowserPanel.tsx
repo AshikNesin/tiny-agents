@@ -39,6 +39,7 @@ import {
 } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
 import { toast } from "sonner";
+import { useConfirm } from "@groot/ui/primitives";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
 import { VncView, type VncHandle, type VncState } from "./browser/VncView";
@@ -91,6 +92,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
   const [fullscreen, setFullscreen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const vncRef = useRef<VncHandle>(null);
+  const confirm = useConfirm();
 
   const humanDrives = status?.driver === "human";
   const starting = Boolean(status?.starting);
@@ -162,11 +164,27 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
     }
   };
 
+  // Bots share one browser profile unless set to their own, so a reset can
+  // sign every one of them out: say which before wiping.
+  const sharedProfile = status?.profile !== "own";
   const resetProfile = async () => {
+    const ok = await confirm({
+      title: sharedProfile ? "Reset the shared browser?" : "Reset this bot's browser?",
+      description: sharedProfile
+        ? "This closes the browser that every bot on the shared profile uses and deletes its cookies and logins, so all of those bots are signed out of every site."
+        : "This closes the browser and deletes its cookies and logins.",
+      confirmLabel: "Reset",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await botsApi.browserResetProfile(bot.id);
       setStatus((s) => (s ? { ...s, active: false, url: null, driver: null, mode: null } : s));
-      toast.success("Browser profile wiped; the next session starts fresh.");
+      toast.success(
+        sharedProfile
+          ? "Shared browser wiped; the next session starts fresh."
+          : "Browser profile wiped; the next session starts fresh.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to reset");
     }
@@ -328,7 +346,11 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
               size="icon-sm"
               onClick={() => void resetProfile()}
               aria-label="Reset browser profile"
-              title="Close the browser and wipe its profile"
+              title={
+                sharedProfile
+                  ? "Close the shared browser and wipe its profile (every bot on it)"
+                  : "Close the browser and wipe its profile"
+              }
               data-testid="browser-reset"
             >
               <RotateCcw className="size-3.5" />

@@ -36,6 +36,7 @@ import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createVisionStore } from "../uploads/uploads.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
+import { browserTargetForConversation } from "./browser.targets";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -67,10 +68,12 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
     }),
-    // Browser (issue #24): one Chrome per bot profile, lazy, idle-closed;
-    // on the sandbox VM the owner also gets a VNC-streamed desktop.
+    // Browser (issue #24): one Chrome per profile (shared by default, or the
+    // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
+    // owner also gets a VNC-streamed desktop.
     createBrowserToolkit({
       profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
+      resolveTarget: browserTargetForConversation,
       idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
       scale: Number(env.BROWSER_SCALE) === 1 ? 1 : 2,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,

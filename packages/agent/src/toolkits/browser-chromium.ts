@@ -65,37 +65,48 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
  * The page-level session every chromium transport shares: navigation with
  * the redirect guard and ref snapshot/click/type.
  * `teardown.close` disposes the transport-specific resources around the
- * page (local context vs a remote chromium + tunnel).
+ * page (local context vs a remote chromium + tunnel). `openTab` gives
+ * another agent a tab of its own in the same browser; `claimed` is the set
+ * of tabs agents hold, shared by every tab session of one browser.
  */
 export function pageSession(
   initialPage: Page,
   open: OpenBrowserOptions,
   teardown: {
-    close: () => Promise<void>;
+    /** Gets the tab the session holds at close (it follows the owner's tabs). */
+    close: (current: Page) => Promise<void>;
     /** Subscribe to the browser dying; see `BrowserSession.onDisconnect`. */
     onDisconnect?: (listener: () => void) => void;
     vnc?: BrowserVnc;
     wipeProfile?: () => Promise<void>;
   },
+  claimed: Set<Page> = new Set(),
 ): BrowserSession {
   // The tab the agent drives. With a streamed desktop the owner can open
   // and close tabs, so this follows them (see `follow`).
   let page = initialPage;
   let closing = false;
+  claimed.add(page);
 
   const switchTo = async (next: Page) => {
     if (next === page) return;
+    claimed.delete(page);
+    claimed.add(next);
     page = next;
     follow(next);
   };
 
-  // When the current tab closes, move to the most recent remaining tab; a
-  // closed-out browser gets a fresh blank one so the agent never holds a
-  // dead page.
+  // When the current tab closes, move to the most recent tab no other agent
+  // holds; with none left the agent gets a fresh blank one, so it never
+  // holds a dead page.
   const follow = (target: Page) => {
     target.once("close", () => {
       if (closing || page !== target) return;
-      const remaining = target.context().pages();
+      claimed.delete(target);
+      const remaining = target
+        .context()
+        .pages()
+        .filter((p) => !claimed.has(p));
       const next = remaining[remaining.length - 1];
       void (next ? switchTo(next) : target.context().newPage().then(switchTo)).catch(() => {});
     });
@@ -110,9 +121,20 @@ export function pageSession(
         if (!closing) listener();
       }),
     adoptActiveTab: async () => {
+      // Another agent's tab stays theirs, even if the owner left it in front.
       const visible = await visiblePage(page.context().pages());
-      if (visible) await switchTo(visible);
+      if (visible && (visible === page || !claimed.has(visible))) await switchTo(visible);
     },
+    openTab: async () => {
+      const tab = await page.context().newPage();
+      return pageSession(
+        tab,
+        open,
+        { close: (current) => current.close().catch(() => {}) },
+        claimed,
+      );
+    },
+    focus: () => page.bringToFront(),
     url: () => page.url(),
     navigate: async (url) => {
       // Redirect guard: validate every hop of the redirect chain. Route
@@ -143,7 +165,8 @@ export function pageSession(
     }),
     close: async () => {
       closing = true;
-      await teardown.close();
+      claimed.delete(page);
+      await teardown.close(page);
     },
   };
   return session;
@@ -180,7 +203,7 @@ async function snapshotOf(page: Page): Promise<string> {
       const describe = (el) => {
         const tag = el.tagName.toLowerCase();
         const name = (el.getAttribute("aria-label") || el.textContent || "")
-          .replace(/s+/g, " ")
+          .replace(/\\s+/g, " ")
           .trim()
           .slice(0, 80);
         const parts = [

@@ -20,7 +20,7 @@ import {
 } from "../../../packages/agent/src/toolkits/browser";
 
 const BOT = "bot-vnc";
-const CONVERSATION = 7001;
+const TARGET = { profile: "shared", tab: BOT };
 
 function fakeVm() {
   const received: Buffer[] = [];
@@ -64,14 +64,14 @@ async function openLive(openStream?: () => Promise<Duplex>) {
   resetBrowserSessionsForTests();
   await acquire(
     { transport: async () => session(openStream), profilesDir: "/tmp/ta-vnc-profiles" },
-    CONVERSATION,
+    TARGET,
   );
 }
 
 const ticketPath = (ticket: string, bot = BOT) =>
   `/api/v1/bots/${bot}/browser/vnc?ticket=${encodeURIComponent(ticket)}`;
 
-const mint = (bot = BOT) => issueVncTicket({ userId: 1, botId: bot, conversationId: CONVERSATION });
+const mint = (bot = BOT) => issueVncTicket({ userId: 1, botId: bot, target: TARGET });
 
 /** A raw upgrade request: reports the HTTP status of a rejection, or 101. */
 function rawUpgrade(port: number, path: string, headers: Record<string, string> = {}) {
@@ -132,7 +132,7 @@ describe("VNC tickets", () => {
     expect(redeemVncTicket(ticket, BOT)).toMatchObject({
       userId: 1,
       botId: BOT,
-      conversationId: CONVERSATION,
+      target: TARGET,
     });
     expect(redeemVncTicket(ticket, BOT)).toBeUndefined();
   });

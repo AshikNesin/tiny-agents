@@ -22,6 +22,7 @@ import { metaLabelClass } from "@groot/ui/typography";
 import {
   botsApi,
   type Bot,
+  type BrowserProfile,
   type CapabilityInfo,
   type ModelInfo,
   type ToolPermission,
@@ -74,6 +75,7 @@ export function BotDialog({
   const [toolPermissions, setToolPermissions] = useState<Record<string, ToolPermission>>({});
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
+  const [browserProfile, setBrowserProfile] = useState<BrowserProfile>("shared");
 
   useEffect(() => {
     if (!open) return;
@@ -85,6 +87,7 @@ export function BotDialog({
     setToolPermissions(bot?.toolPermissions ?? {});
     setSelectedSkills(bot?.skillIds ?? []);
     setSelectedConnections(bot?.connectionIds ?? []);
+    setBrowserProfile(bot?.browserProfile ?? "shared");
   }, [open, bot, defaultModelId, models]);
 
   useEffect(() => {
@@ -133,6 +136,7 @@ export function BotDialog({
         toolPermissions,
         skillIds: selectedSkills,
         connectionIds: selectedConnections,
+        browserProfile,
       };
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
@@ -251,6 +255,37 @@ export function BotDialog({
     );
   };
 
+  // Bots share one browser (and its sign-ins) unless one needs its own.
+  const browserProfileRow = (
+    <div className="flex items-center gap-3 py-1.5 pl-8">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">Browser profile</p>
+        <p className="text-muted-foreground text-xs">
+          {browserProfile === "shared"
+            ? "Signed in where your other bots are."
+            : "A browser of its own, with separate sign-ins."}
+        </p>
+      </div>
+      <ToggleGroup
+        type="single"
+        value={browserProfile}
+        onValueChange={(next: string) => {
+          if (next) setBrowserProfile(next as BrowserProfile);
+        }}
+        spacing={0}
+        size="sm"
+        aria-label="Browser profile"
+      >
+        <ToggleGroupItem value="shared" className="text-xs">
+          Shared
+        </ToggleGroupItem>
+        <ToggleGroupItem value="own" className="text-xs">
+          Own
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+
   const tools = (
     <div className="space-y-4">
       <p className="text-muted-foreground text-xs">
@@ -281,6 +316,7 @@ export function BotDialog({
             </div>
             {enabled && (
               <div className="border-border/60 border-t px-3 pb-3 pt-1">
+                {toolkit.id === "browser" && !toolkit.setupHint && browserProfileRow}
                 {toolkit.setupHint ? null : toolkit.tools.map(toolRow)}
               </div>
             )}

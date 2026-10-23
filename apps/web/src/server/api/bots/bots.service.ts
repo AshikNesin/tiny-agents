@@ -52,6 +52,8 @@ export interface BotRow {
   memoryCapturedThrough: Date | null;
   /** Set while the bot is pinned to the top of the sidebar. */
   pinnedAt: Date | null;
+  /** "shared" (the default browser profile) or "own". */
+  browserProfile: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -284,6 +286,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       toolkits: JSON.stringify(toolkits),
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+      ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },
   });
   if (data.skillIds || data.connectionIds) {
@@ -372,6 +375,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.systemPrompt !== undefined ? { systemPrompt } : {}),
       ...(data.modelId !== undefined ? { modelId } : {}),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+      ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },
   });
   return getBot(id);

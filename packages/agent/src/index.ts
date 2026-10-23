@@ -80,18 +80,21 @@ export {
   browserProfilesDir,
   closeAllBrowserSessions,
   closeBrowserSession,
+  conversationBrowserTarget,
   createBrowserToolkit,
   setDriver,
   startBrowserSession,
   getLiveBrowserSession,
-  liveBrowserConversations,
+  liveBrowserProfiles,
   type BrowserToolkitOptions,
   type BrowserSession,
   type BrowserTransport,
   type BrowserDriver,
   type BrowserPhase,
+  type BrowserTarget,
   type BrowserVnc,
   type LiveBrowserSession,
+  type LiveBrowserTab,
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";
 export {

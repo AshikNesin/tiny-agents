@@ -18,7 +18,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { config } from "@groot/core/config";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
-import { getLiveBrowserSession } from "@tiny-agents/agent";
+import { getLiveBrowserSession, type BrowserTarget } from "@tiny-agents/agent";
 
 const TICKET_TTL_MS = 60_000;
 const MAX_VIEWERS_PER_BOT = 4;
@@ -31,7 +31,8 @@ const PATH = /^\/api\/v1\/bots\/([^/]+)\/browser\/vnc$/;
 interface Ticket {
   userId: number;
   botId: string;
-  conversationId: number;
+  /** The bot's browser (its profile) and tab. */
+  target: BrowserTarget;
   expiresAt: number;
 }
 
@@ -105,7 +106,7 @@ export function attachBrowserVnc(
 ): { close(): void } {
   const wss = new WebSocketServer({ noServer: true });
   const originAllowed = options.isOriginAllowed ?? isOriginAllowed;
-  const viewers = new Map<number, number>();
+  const viewers = new Map<string, number>();
 
   httpServer.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://internal");
@@ -122,19 +123,19 @@ export function attachBrowserVnc(
     const ticket = redeemVncTicket(url.searchParams.get("ticket") ?? "", botId);
     if (!ticket) return reject(socket, "401 Unauthorized");
 
-    const live = getLiveBrowserSession(ticket.conversationId);
+    const live = getLiveBrowserSession(ticket.target);
     const vnc = live?.session.vnc;
     if (!live || !vnc) return reject(socket, "404 Not Found");
-    if ((viewers.get(ticket.conversationId) ?? 0) >= MAX_VIEWERS_PER_BOT) {
+    if ((viewers.get(botId) ?? 0) >= MAX_VIEWERS_PER_BOT) {
       return reject(socket, "429 Too Many Requests");
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      viewers.set(ticket.conversationId, (viewers.get(ticket.conversationId) ?? 0) + 1);
-      void bridge(ws, vnc.openStream, ticket.conversationId, botId).finally(() => {
-        const left = (viewers.get(ticket.conversationId) ?? 1) - 1;
-        if (left > 0) viewers.set(ticket.conversationId, left);
-        else viewers.delete(ticket.conversationId);
+      viewers.set(botId, (viewers.get(botId) ?? 0) + 1);
+      void bridge(ws, vnc.openStream, ticket.target, botId).finally(() => {
+        const left = (viewers.get(botId) ?? 1) - 1;
+        if (left > 0) viewers.set(botId, left);
+        else viewers.delete(botId);
       });
     });
   });
@@ -150,7 +151,7 @@ export function attachBrowserVnc(
 async function bridge(
   ws: WebSocket,
   openStream: () => Promise<Duplex>,
-  conversationId: number,
+  target: BrowserTarget,
   botId: string,
 ): Promise<void> {
   let stream: Duplex;
@@ -173,7 +174,7 @@ async function bridge(
       ws.ping();
       // An open viewer counts as activity: the idle sweeper must not close
       // a browser someone is watching.
-      const live = getLiveBrowserSession(conversationId);
+      const live = getLiveBrowserSession(target);
       if (live) live.lastActivity = Date.now();
     }, PING_INTERVAL_MS);
     ws.on("pong", () => {
