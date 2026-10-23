@@ -1,4 +1,11 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+  Navigate,
+  Outlet,
+  Route,
+  RouterProvider,
+  createBrowserRouter,
+  createRoutesFromElements,
+} from "react-router-dom";
 import { useEffect } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react-router";
 import { useAuthStore } from "@groot/shell/store/auth";
@@ -59,6 +66,53 @@ const SHELL_CONFIG: ShellConfig = {
   },
 };
 
+/** Providers that need the router (nuqs reads and writes the URL). */
+function Root() {
+  return (
+    <NuqsAdapter>
+      <GrootUIProvider>
+        <ShellProvider config={SHELL_CONFIG}>
+          <Outlet />
+        </ShellProvider>
+      </GrootUIProvider>
+    </NuqsAdapter>
+  );
+}
+
+// A data router, so pages can hold navigation while they have unsaved edits
+// (useBlocker).
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<Root />}>
+      <Route path="/login" element={<Login />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/" element={<Navigate to="/chats" replace />} />
+        <Route path="/chats" element={<ChatWorkspace />} />
+        <Route path="/chats/:botId" element={<ChatWorkspace />} />
+        <Route path="/tasks" element={<Tasks />} />
+        <Route path="/terminal" element={<TerminalPage />} />
+        <Route path="/routines" element={<Routines />} />
+        <Route path="/skills" element={<SkillsPage />} />
+        <Route path="/skills/:id" element={<SkillsPage />} />
+        <Route path="/memory" element={<MemoryPage />} />
+        <Route path="/connections" element={<ConnectionsPage />} />
+        <Route path="/connections/:id" element={<ConnectionsPage />} />
+        <Route path="/storage" element={<Storage />} />
+        <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Route>,
+  ),
+);
+
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
 
@@ -66,43 +120,7 @@ function App() {
     checkAuth();
   }, [checkAuth]);
 
-  return (
-    <BrowserRouter>
-      <NuqsAdapter>
-        <GrootUIProvider>
-          <ShellProvider config={SHELL_CONFIG}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <AppShell />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/" element={<Navigate to="/chats" replace />} />
-                <Route path="/chats" element={<ChatWorkspace />} />
-                <Route path="/chats/:botId" element={<ChatWorkspace />} />
-                <Route path="/tasks" element={<Tasks />} />
-                <Route path="/terminal" element={<TerminalPage />} />
-                <Route path="/routines" element={<Routines />} />
-                <Route path="/skills" element={<SkillsPage />} />
-                <Route path="/skills/:id" element={<SkillsPage />} />
-                <Route path="/memory" element={<MemoryPage />} />
-                <Route path="/connections" element={<ConnectionsPage />} />
-                <Route path="/connections/:id" element={<ConnectionsPage />} />
-                <Route path="/storage" element={<Storage />} />
-                <Route path="/jobs" element={<Jobs />} />
-                <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />
-                <Route path="/settings" element={<Settings />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </ShellProvider>
-        </GrootUIProvider>
-      </NuqsAdapter>
-    </BrowserRouter>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;

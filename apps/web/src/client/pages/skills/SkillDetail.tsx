@@ -37,6 +37,7 @@ import { Streamdown } from "streamdown";
 import { skillsApi, type Skill } from "../../lib/skills-api";
 import { botsApi, type BotListEntry } from "../../lib/bots-api";
 import { SkillFileList } from "../../components/skills/SkillFileList";
+import { LeaveGuard } from "../../components/LeaveGuard";
 
 export function SkillDetail({ id }: { id: string }) {
   const navigate = useNavigate();
@@ -186,6 +187,8 @@ export function SkillDetail({ id }: { id: string }) {
         </>
       }
     >
+      {/* Deleting navigates away on purpose; nothing left to keep. */}
+      <LeaveGuard when={dirty && !deleting} />
       <Card>
         <CardHeader>
           <CardTitle>Details</CardTitle>
