@@ -77,7 +77,6 @@ export function BotDialog({
 
   useEffect(() => {
     if (!open) return;
-    setConfirmingDelete(false);
     setName(bot?.name ?? "");
     setDescription(bot?.description ?? "");
     setSystemPrompt(bot?.systemPrompt ?? "");
@@ -151,6 +150,7 @@ export function BotDialog({
     setDeleting(true);
     try {
       await botsApi.remove(bot.id);
+      setConfirmingDelete(false);
       onOpenChange(false);
       onDeleted?.(bot);
     } catch (error) {
@@ -356,7 +356,14 @@ export function BotDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // A dismissed dialog reopens on its form, never on the confirmation.
+        if (!next) setConfirmingDelete(false);
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>

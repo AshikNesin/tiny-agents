@@ -96,7 +96,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
   const [staged, setStaged] = useState<StagedItem[]>([]);
-  const [stopping, setStopping] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
@@ -119,14 +119,27 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   // the message. With nothing typed the same button stops the reply, so
   // the composer never shows two competing round buttons.
   const showStop = busy && !hasDraft;
+  // The stop spinner lasts until the server confirms the run ended: a
+  // request left over from an earlier run means nothing once busy drops.
+  const stopping = stopRequested && busy;
   const canSend = enabled && !uploading && (text.trim().length > 0 || readyAttachments.length > 0);
 
   useEffect(() => writeDraft(bot.id, text), [bot.id, text]);
 
-  // The stop spinner lasts until the server confirms the run ended.
+  // Object URLs pin their files in memory; release whatever is still staged
+  // when the composer goes away (switching bots with an image attached).
+  const stagedRef = useRef(staged);
   useEffect(() => {
-    if (!busy) setStopping(false);
-  }, [busy]);
+    stagedRef.current = staged;
+  }, [staged]);
+  useEffect(
+    () => () => {
+      for (const item of stagedRef.current) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+    },
+    [],
+  );
 
   // Land in the composer when a chat opens, on a physical keyboard only:
   // on touch, focusing would pop the on-screen keyboard over the chat.
@@ -211,11 +224,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const stop = async () => {
     if (!busy || stopping) return;
-    setStopping(true);
+    setStopRequested(true);
     try {
       await onStop();
     } catch {
-      setStopping(false);
+      setStopRequested(false);
     }
   };
 

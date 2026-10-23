@@ -27,7 +27,7 @@ import { MessageAttachments } from "./Attachments";
 import { formatDayDivider } from "../lib/day-divider";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage, QueuedMessage } from "../lib/chat-types";
+import type { ChatMessage, PendingMessage, QueuedMessage } from "../lib/chat-types";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -37,6 +37,12 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "./ui/message-scroller";
+
+// Stable empties for a chat that has not connected yet: a fresh `[]` per
+// render would re-run every effect that depends on the transcript.
+const NO_MESSAGES: ChatMessage[] = [];
+const NO_PENDING: PendingMessage[] = [];
+const NO_QUEUED: QueuedMessage[] = [];
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -144,9 +150,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     if (unread) markRead(bot.id);
   }, [markRead, unread, bot.id]);
 
-  const messages = chat?.messages ?? [];
-  const pending = chat?.pending ?? [];
-  const queued = chat?.queued ?? [];
+  const messages = chat?.messages ?? NO_MESSAGES;
+  const pending = chat?.pending ?? NO_PENDING;
+  const queued = chat?.queued ?? NO_QUEUED;
   const busy = chat?.busy ?? false;
   const loaded = chat?.loaded ?? false;
   // Brief stream hiccups reconnect on their own; only a drop that lasts
