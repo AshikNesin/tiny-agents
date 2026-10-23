@@ -109,8 +109,7 @@ test.describe("Chats — new chat", () => {
     await expect(page.getByText(/Echo: old message/i).first()).toBeVisible({ timeout: 20_000 });
 
     // New chat: the transcript must clear and stay cleared.
-    await page.getByRole("button", { name: "Bot menu" }).click();
-    await page.getByRole("menuitem", { name: /new chat/i }).click();
+    await page.getByRole("button", { name: "Start a new chat" }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page.getByText("old message")).toHaveCount(0);
     await expect(page.getByText(/Echo: old message/i)).toHaveCount(0);

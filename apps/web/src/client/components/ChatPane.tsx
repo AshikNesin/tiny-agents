@@ -1,25 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type DragEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Globe,
-  Menu,
-  MessageSquarePlus,
-  MoreHorizontal,
-  Paperclip,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@groot/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +52,12 @@ function useSettled(active: boolean, ms: number): boolean {
   return active && settled;
 }
 
+/** ⌘⇧O on Apple keyboards, Ctrl+Shift+O elsewhere (ChatGPT's new-chat chord). */
+const NEW_CHAT_SHORTCUT =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? "⇧⌘O"
+    : "Ctrl+Shift+O";
+
 /**
  * The bot is working with nothing on screen to show it: waiting on the
  * first token, or between tool rounds. A streaming reply, a running tool
@@ -88,7 +75,6 @@ interface ChatPaneProps {
   models: ModelInfo[];
   gatewayConfigured: boolean;
   onEditBot: () => void;
-  onBotDeleted: () => void;
   onBotReset: (bot: Bot) => void;
 }
 
@@ -109,15 +95,7 @@ export function ChatPane(props: ChatPaneProps) {
   );
 }
 
-function ChatPaneBody({
-  bot,
-  models,
-  gatewayConfigured,
-  onEditBot,
-  onBotDeleted,
-  onBotReset,
-}: ChatPaneProps) {
-  const navigate = useNavigate();
+function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }: ChatPaneProps) {
   const chat = useBotsStore((s) => s.chats[bot.id]);
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
@@ -125,13 +103,10 @@ function ChatPaneBody({
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
-  const togglePin = useBotsStore((s) => s.togglePin);
-  const pinned = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.pinnedAt) != null;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const composerRef = useRef<ChatComposerHandle>(null);
@@ -179,6 +154,19 @@ function ChatPaneBody({
   const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
   const showLoading = useSettled(!loaded && messages.length === 0, 300);
   const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
+  // A fresh conversation has nothing to start over from.
+  const canReset = messages.length > 0 || pending.length > 0 || queued.length > 0;
+
+  // ⇧⌘O / Ctrl+Shift+O asks for a new chat from anywhere in the pane.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.key.toLowerCase() !== "o") return;
+      e.preventDefault();
+      if (canReset) setConfirmReset(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canReset]);
 
   // Auto-open the Browser panel the first time the bot drives its browser in
   // this conversation view (friction #37): the empty state promises it, and
@@ -336,17 +324,6 @@ function ChatPaneBody({
     }
   };
 
-  const doDelete = async () => {
-    setConfirmDelete(false);
-    try {
-      await botsApi.remove(bot.id);
-      onBotDeleted();
-      navigate("/chats", { replace: true });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete bot");
-    }
-  };
-
   const doReset = async () => {
     setConfirmReset(false);
     try {
@@ -374,8 +351,9 @@ function ChatPaneBody({
             Drop files to attach
           </div>
         )}
-        {/* Header: bot identity on the left (click edits), browser toggle and
-          the ⋯ menu on the right. Floats on the page background, no border. */}
+        {/* Header: the bot's name opens its settings (profile, tools,
+            skills, delete); the right side holds two quiet icons. Floats on
+            the page background, no border. */}
         <header className="flex h-14 shrink-0 items-center gap-1 px-3">
           <Button
             variant="ghost"
@@ -389,52 +367,41 @@ function ChatPaneBody({
           <button
             type="button"
             onClick={onEditBot}
-            className="text-foreground hover:bg-accent flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
+            className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
             aria-label={`Edit ${bot.name}`}
+            title="Bot settings"
           >
             <BotAvatar name={bot.name} className="size-5" />
             <span className="truncate">{bot.name}</span>
+            <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
           </button>
-          <button
-            type="button"
-            onClick={() => setConfirmReset(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground hidden size-6 shrink-0 items-center justify-center rounded-lg md:flex"
-            aria-label="Start a new chat"
-          >
-            <Plus className="size-4" />
-          </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto hidden shrink-0 rounded-xl md:inline-flex"
-            onClick={() => setBrowserOpen((v) => !v)}
-            aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
-            data-testid="browser-toggle"
-          >
-            <Globe className="size-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Bot menu">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
-                {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-                {pinned ? "Unpin" : "Pin"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
-                <MessageSquarePlus className="size-4" /> New chat
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onEditBot}>
-                <Pencil className="size-4" /> Edit bot
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                <Trash2 className="size-4" /> Delete bot
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="ml-auto flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`text-muted-foreground hover:text-foreground hidden rounded-xl md:inline-flex ${
+                browserOpen ? "bg-accent text-foreground" : ""
+              }`}
+              onClick={() => setBrowserOpen((v) => !v)}
+              aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
+              aria-pressed={browserOpen}
+              title="Browser"
+              data-testid="browser-toggle"
+            >
+              <Globe className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground rounded-xl"
+              onClick={() => setConfirmReset(true)}
+              disabled={!canReset}
+              aria-label="Start a new chat"
+              title={`New chat (${NEW_CHAT_SHORTCUT})`}
+            >
+              <SquarePen className="size-4" />
+            </Button>
+          </div>
         </header>
 
         {/* Warnings */}
@@ -614,24 +581,6 @@ function ChatPaneBody({
               Cancel
             </Button>
             <Button onClick={doReset}>New chat</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete {bot.name}?</DialogTitle>
-            <DialogDescription>
-              The bot is removed from the app. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Delete
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

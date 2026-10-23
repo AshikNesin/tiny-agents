@@ -89,7 +89,6 @@ function renderPane() {
         models={[model]}
         gatewayConfigured
         onEditBot={() => {}}
-        onBotDeleted={() => {}}
         onBotReset={() => {}}
       />
     </BrowserRouter>,
@@ -333,5 +332,37 @@ describe("ChatPane transcript — loading and activity", () => {
     });
     expect(screen.getByText("live")).toBeInTheDocument();
     expect(screen.queryByTestId("unread-divider")).toBeNull();
+  });
+});
+
+describe("ChatPane header", () => {
+  it("keeps the header to the name and two quiet icons, no overflow menu", () => {
+    seedStore();
+    renderPane();
+    expect(screen.getByRole("button", { name: "Edit Host Bot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start a new chat" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bot menu" })).toBeNull();
+  });
+
+  it("disables new chat on an empty conversation and confirms it otherwise", async () => {
+    seedStore();
+    useBotsStore.getState().connectChat("host");
+    useBotsStore.getState().applyChatEvent("host", {
+      type: "snapshot",
+      state: { messages: [], busy: false },
+    } as never);
+    renderPane();
+    const newChat = screen.getByRole("button", { name: "Start a new chat" });
+    expect(newChat).toBeDisabled();
+
+    act(() =>
+      useBotsStore.getState().applyChatEvent("host", {
+        type: "upsert",
+        message: { id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 },
+      }),
+    );
+    expect(newChat).toBeEnabled();
+    await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
+    expect(await screen.findByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
   });
 });

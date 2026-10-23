@@ -75,7 +75,6 @@ function renderPane() {
         models={[model]}
         gatewayConfigured
         onEditBot={() => {}}
-        onBotDeleted={() => {}}
         onBotReset={() => {}}
       />
     </BrowserRouter>,

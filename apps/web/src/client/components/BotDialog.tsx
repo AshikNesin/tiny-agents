@@ -38,6 +38,8 @@ interface BotDialogProps {
   /** Existing bot to edit; omitted = create. */
   bot?: Bot | null;
   onSaved: (bot: Bot) => void;
+  /** Edit mode only: the bot was deleted from the dialog. */
+  onDeleted?: (bot: Bot) => void;
 }
 
 function defaultPermission(tool: CapabilityInfo["tools"][number]): ToolPermission {
@@ -55,12 +57,15 @@ export function BotDialog({
   defaultModelId,
   bot,
   onSaved,
+  onDeleted,
 }: BotDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelId, setModelId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
@@ -72,6 +77,7 @@ export function BotDialog({
 
   useEffect(() => {
     if (!open) return;
+    setConfirmingDelete(false);
     setName(bot?.name ?? "");
     setDescription(bot?.description ?? "");
     setSystemPrompt(bot?.systemPrompt ?? "");
@@ -137,6 +143,20 @@ export function BotDialog({
       toast.error(error instanceof Error ? error.message : "Failed to save bot");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!bot) return;
+    setDeleting(true);
+    try {
+      await botsApi.remove(bot.id);
+      onOpenChange(false);
+      onDeleted?.(bot);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete bot");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -371,14 +391,45 @@ export function BotDialog({
           <DialogBody className="space-y-4">{profile}</DialogBody>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={save} disabled={saving || !name.trim() || !modelId}>
-            {saving ? "Saving…" : bot ? "Save changes" : "Create bot"}
-          </Button>
-        </DialogFooter>
+        {confirmingDelete && bot ? (
+          // Inline confirmation in place of the footer: no stacked dialog.
+          <DialogFooter className="items-center sm:justify-between">
+            <p className="text-destructive text-sm">Delete {bot.name}? This cannot be undone.</p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={remove} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete bot"}
+              </Button>
+            </div>
+          </DialogFooter>
+        ) : (
+          <DialogFooter className={bot ? "sm:justify-between" : undefined}>
+            {bot && (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={saving}
+              >
+                Delete bot
+              </Button>
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={save} disabled={saving || !name.trim() || !modelId}>
+                {saving ? "Saving…" : bot ? "Save changes" : "Create bot"}
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

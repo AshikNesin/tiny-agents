@@ -123,6 +123,12 @@ export function AppShell() {
     if (!editingBot) navigate(`/chats/${bot.id}`);
   };
 
+  const onDeleted = (bot: BotRow) => {
+    useBotsStore.getState().resetChat(bot.id);
+    void loadBots();
+    if (pathname === `/chats/${bot.id}`) navigate("/chats", { replace: true });
+  };
+
   const inChats = pathname === "/chats" || pathname.startsWith("/chats/");
 
   return (
@@ -146,6 +152,7 @@ export function AppShell() {
         defaultModelId={defaultModel}
         bot={editingBot}
         onSaved={onSaved}
+        onDeleted={onDeleted}
       />
     </div>
   );
