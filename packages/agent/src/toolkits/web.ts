@@ -164,7 +164,9 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     kind: "toolkit",
     name: "Web",
     description: "Search and read web pages",
-    extension: defineExtension({ name: "web", tools: [webSearch, webFetch] }),
+    // Every bot has the web toolkit; until it is configured it offers the
+    // model nothing rather than tools that can only fail.
+    extension: defineExtension({ name: "web", tools: configured ? [webSearch, webFetch] : [] }),
     tools: [
       {
         name: "web_search",

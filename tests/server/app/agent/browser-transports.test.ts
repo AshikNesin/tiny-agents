@@ -325,3 +325,112 @@ describe("window resizer", () => {
     );
   });
 });
+
+describe("page session tabs (shared profiles)", () => {
+  const open = { viewportWidth: 1280, viewportHeight: 800 };
+
+  /** A browser context of stub tabs named p0, p1, ...; `visible` is the tab in front. */
+  function fakeContext() {
+    const pages: { name: string; closed: boolean }[] = [];
+    let visible = "";
+    const context = {
+      pages: () => pages.filter((p) => !p.closed),
+      newPage: async () => make(),
+    };
+    function make() {
+      const handlers: (() => void)[] = [];
+      const page = {
+        name: `p${pages.length}`,
+        closed: false,
+        once: (_event: string, handler: () => void) => void handlers.push(handler),
+        context: () => context,
+        url: () => page.name,
+        bringToFront: vi.fn(async () => {}),
+        evaluate: async () => (page.name === visible ? "visible" : "hidden"),
+        close: async () => {
+          page.closed = true;
+          handlers.splice(0).forEach((handler) => handler());
+        },
+      };
+      pages.push(page);
+      return page as typeof page & Page;
+    }
+    return { make, context, show: (name: string) => (visible = name) };
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("moves an agent whose tab closed to a tab no other agent holds", async () => {
+    const chrome = fakeContext();
+    const first = pageSession(chrome.make(), open, { close: async () => {} });
+    const second = await first.openTab!(); // p1, another agent's
+    const spare = chrome.make(); // p2, a tab the owner opened
+    await (chrome.context.pages()[0] as unknown as Page).close();
+    await settle();
+    expect(first.url()).toBe("p2");
+    expect(second.url()).toBe("p1");
+
+    await spare.close(); // nothing unclaimed is left: a fresh tab
+    await settle();
+    expect(first.url()).toBe("p3");
+  });
+
+  it("does not adopt another agent's tab the owner left in front", async () => {
+    const chrome = fakeContext();
+    const first = pageSession(chrome.make(), open, { close: async () => {} });
+    const second = await first.openTab!();
+    chrome.show("p1");
+    await first.adoptActiveTab!();
+    expect(first.url()).toBe("p0");
+    await second.adoptActiveTab!();
+    expect(second.url()).toBe("p1");
+  });
+
+  it("closes only its own tab, and brings it to the front on focus", async () => {
+    const chrome = fakeContext();
+    const browserClose = vi.fn(async () => {});
+    const first = pageSession(chrome.make(), open, { close: browserClose });
+    const second = await first.openTab!();
+    await second.focus!();
+    const [p0, p1] = chrome.context.pages() as unknown as { bringToFront: () => void }[];
+    expect(p1!.bringToFront).toHaveBeenCalledTimes(1);
+    expect(p0!.bringToFront).not.toHaveBeenCalled();
+
+    await second.close();
+    expect(chrome.context.pages().map((p) => (p as unknown as { name: string }).name)).toEqual([
+      "p0",
+    ]);
+    expect(browserClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("page snapshot", () => {
+  it("collapses whitespace in element names without dropping letters", async () => {
+    // The snapshot runs in the page as source text; run it against a tiny DOM.
+    const element = (tag: string, text: string, children: unknown[] = []) => ({
+      tagName: tag.toUpperCase(),
+      textContent: text,
+      children,
+      attributes: {} as Record<string, string>,
+      getAttribute(name: string) {
+        return this.attributes[name] ?? null;
+      },
+      setAttribute(name: string, value: string) {
+        this.attributes[name] = value;
+      },
+    });
+    const body = element("body", "", [element("button", "Sign   in\n  to settings")]);
+    const page = {
+      once: () => undefined,
+      evaluate: async (script: string) =>
+        new Function("document", `return (${script.trim()})`)({ body }) as string,
+    } as unknown as Page;
+    const session = pageSession(
+      page,
+      { viewportWidth: 1, viewportHeight: 1 },
+      {
+        close: async () => {},
+      },
+    );
+    expect(await session.snapshot()).toContain('button "Sign in to settings" [ref=e2]');
+  });
+});

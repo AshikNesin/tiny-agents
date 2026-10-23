@@ -111,8 +111,9 @@ describe("browser routes", () => {
     setAgentRuntimeForTests(agentRuntime as never);
   });
   const app = buildApp();
-  let conversationId: number;
   let botId: string;
+  /** New bots use the shared browser profile, in a tab of their own. */
+  let target: { profile: string; tab: string };
   let fake: ReturnType<typeof fakeSession>;
 
   // Installs the fake as the live session for this bot (headless or VNC).
@@ -121,7 +122,7 @@ describe("browser routes", () => {
     fake = fakeSession(options);
     await acquire(
       { transport: async () => fake.session, profilesDir: "/tmp/ta-route-profiles" },
-      conversationId,
+      target,
     );
   }
 
@@ -133,7 +134,7 @@ describe("browser routes", () => {
       .send({ name: "B", modelId: "m", systemPrompt: "" })
       .expect(201);
     botId = response.body.data.id;
-    conversationId = Number(response.body.data.conversationId);
+    target = { profile: "shared", tab: botId };
     resetVncTicketsForTests();
     await openFake();
   });
@@ -151,6 +152,7 @@ describe("browser routes", () => {
       .expect(200);
     expect(r.body.data).toEqual({
       active: false,
+      profile: "shared",
       url: null,
       driver: null,
       mode: null,
@@ -196,8 +198,8 @@ describe("browser routes", () => {
       .set(authorization)
       .expect(200);
     expect(r.body.data).toEqual({ starting: true });
-    await vi.waitFor(() => expect(getLiveBrowserSession(conversationId)).toBeDefined());
-    expect(getLiveBrowserSession(conversationId)?.session).toBe(next.session);
+    await vi.waitFor(() => expect(getLiveBrowserSession(target)).toBeDefined());
+    expect(getLiveBrowserSession(target)?.session).toBe(next.session);
   });
 
   it("surfaces why a requested start failed", async () => {
@@ -237,7 +239,7 @@ describe("browser routes", () => {
       .expect(200);
     const second = new URL(again.body.data.path, "http://internal").searchParams.get("ticket")!;
     expect(second).not.toBe(ticket);
-    expect(redeemVncTicket(second, botId)).toMatchObject({ botId, conversationId });
+    expect(redeemVncTicket(second, botId)).toMatchObject({ botId, target });
     expect(redeemVncTicket(second, botId)).toBeUndefined(); // single use
   });
 
@@ -324,14 +326,14 @@ describe("browser routes", () => {
       .send({ driver: "human" })
       .expect(200);
     expect(take.body.data.driver).toBe("human");
-    expect(getLiveBrowserSession(conversationId)?.driver).toBe("human");
+    expect(getLiveBrowserSession(target)?.driver).toBe("human");
     const release = await request(app)
       .post(`/api/v1/bots/${botId}/browser/driver`)
       .set(authorization)
       .send({ driver: "agent" })
       .expect(200);
     expect(release.body.data.driver).toBe("agent");
-    expect(getLiveBrowserSession(conversationId)?.driver).toBe("agent");
+    expect(getLiveBrowserSession(target)?.driver).toBe("agent");
   });
 
   it("404s driver flip when no session exists", async () => {
@@ -348,8 +350,80 @@ describe("browser routes", () => {
       .delete(`/api/v1/bots/${botId}/browser/profile`)
       .set(authorization)
       .expect(200);
-    expect(getLiveBrowserSession(conversationId)).toBeUndefined();
+    expect(getLiveBrowserSession(target)).toBeUndefined();
     expect(fake.wipes).toEqual(["wipe"]);
+  });
+
+  it("gives bots on the shared profile one browser, each with its own tab", async () => {
+    resetBrowserSessionsForTests();
+    const tabs: string[] = [];
+    const tab = (url: string): BrowserSession => ({ ...fakeSession().session, url: () => url });
+    const browser: BrowserSession = {
+      ...fakeSession({ vnc: true }).session,
+      url: () => "https://first.example/",
+      openTab: async () => {
+        tabs.push("opened");
+        return tab("about:blank");
+      },
+    };
+    let launches = 0;
+    createBrowserToolkit({
+      transport: async () => {
+        launches += 1;
+        return browser;
+      },
+      profilesDir: "/tmp/ta-route-profiles",
+    });
+    const second = await request(app)
+      .post("/api/v1/bots")
+      .set(authorization)
+      .send({ name: "C", modelId: "m", systemPrompt: "" })
+      .expect(201);
+    const otherId: string = second.body.data.id;
+
+    for (const id of [botId, otherId]) {
+      await request(app).post(`/api/v1/bots/${id}/browser/start`).set(authorization).expect(200);
+      await vi.waitFor(() => expect(getLiveBrowserSession(target)?.tabs.has(id)).toBe(true));
+    }
+    expect(launches).toBe(1);
+    expect(tabs).toEqual(["opened"]);
+    const first = await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization);
+    const other = await request(app).get(`/api/v1/bots/${otherId}/browser`).set(authorization);
+    expect(first.body.data).toMatchObject({
+      active: true,
+      profile: "shared",
+      url: "https://first.example/",
+    });
+    expect(other.body.data).toMatchObject({ active: true, profile: "shared", url: "about:blank" });
+  });
+
+  it("gives a bot set to its own profile a browser of its own", async () => {
+    await request(app)
+      .patch(`/api/v1/bots/${botId}`)
+      .set(authorization)
+      .send({ browserProfile: "own" })
+      .expect(200);
+    const own = { profile: `bot-${botId}`, tab: botId };
+    const ownFake = fakeSession();
+    createBrowserToolkit({
+      transport: async () => ownFake.session,
+      profilesDir: "/tmp/ta-route-profiles",
+    });
+
+    const before = await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization);
+    expect(before.body.data).toMatchObject({ active: false, profile: "own" });
+    await request(app).post(`/api/v1/bots/${botId}/browser/start`).set(authorization).expect(200);
+    await vi.waitFor(() => expect(getLiveBrowserSession(own)?.session).toBe(ownFake.session));
+
+    // Resetting it wipes only its own profile; the shared browser stays up.
+    await request(app)
+      .delete(`/api/v1/bots/${botId}/browser/profile`)
+      .set(authorization)
+      .expect(200);
+    expect(ownFake.wipes).toEqual(["wipe"]);
+    expect(fake.wipes).toEqual([]);
+    expect(getLiveBrowserSession(own)).toBeUndefined();
+    expect(getLiveBrowserSession(target)).toBeDefined();
   });
 
   it("requires auth", async () => {

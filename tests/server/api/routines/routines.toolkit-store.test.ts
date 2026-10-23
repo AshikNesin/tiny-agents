@@ -27,7 +27,7 @@ const CONVERSATION = 7;
 
 async function seedBot(name = "Bot", conversationId = String(CONVERSATION)) {
   return prisma.bot.create({
-    data: { name, modelId: "m1", conversationId, toolkits: "[]" },
+    data: { name, modelId: "m1", conversationId },
   });
 }
 

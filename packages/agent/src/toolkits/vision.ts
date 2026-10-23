@@ -100,6 +100,8 @@ export function createVisionToolkit(store: VisionStore, transcriber: Transcriber
     kind: "toolkit",
     name: "Vision",
     description: "See attached images through a vision model (for models without native vision)",
+    // On exactly when the bot's model cannot see images itself.
+    auto: true,
     extension: defineExtension({
       name: "vision",
       tools: [seeImage],

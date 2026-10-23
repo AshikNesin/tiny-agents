@@ -22,6 +22,7 @@ import { metaLabelClass } from "@groot/ui/typography";
 import {
   botsApi,
   type Bot,
+  type BrowserProfile,
   type CapabilityInfo,
   type ModelInfo,
   type ToolPermission,
@@ -70,10 +71,10 @@ export function BotDialog({
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
-  const [toolkits, setToolkits] = useState<string[]>([]);
   const [toolPermissions, setToolPermissions] = useState<Record<string, ToolPermission>>({});
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
+  const [browserProfile, setBrowserProfile] = useState<BrowserProfile>("shared");
 
   useEffect(() => {
     if (!open) return;
@@ -81,10 +82,10 @@ export function BotDialog({
     setDescription(bot?.description ?? "");
     setSystemPrompt(bot?.systemPrompt ?? "");
     setModelId(bot?.modelId ?? defaultModelId ?? models[0]?.id ?? "");
-    setToolkits(bot?.toolkits ?? []);
     setToolPermissions(bot?.toolPermissions ?? {});
     setSelectedSkills(bot?.skillIds ?? []);
     setSelectedConnections(bot?.connectionIds ?? []);
+    setBrowserProfile(bot?.browserProfile ?? "shared");
   }, [open, bot, defaultModelId, models]);
 
   useEffect(() => {
@@ -112,8 +113,16 @@ export function BotDialog({
       .catch(() => undefined);
   }, [open]);
 
+  // Every bot has every toolkit; the app switches the automatic ones (vision,
+  // tool search, today's date) on its own, so they are not shown.
   const toolkitsList = useMemo(
-    () => capabilities.filter((capability) => capability.kind === "toolkit"),
+    () =>
+      capabilities.filter(
+        (capability) =>
+          capability.kind === "toolkit" &&
+          !capability.auto &&
+          (capability.tools.length > 0 || capability.setupHint),
+      ),
     [capabilities],
   );
 
@@ -129,10 +138,10 @@ export function BotDialog({
         description: description.trim(),
         systemPrompt,
         modelId,
-        toolkits,
         toolPermissions,
         skillIds: selectedSkills,
         connectionIds: selectedConnections,
+        browserProfile,
       };
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
@@ -251,42 +260,62 @@ export function BotDialog({
     );
   };
 
+  // Bots share one browser (and its sign-ins) unless one needs its own.
+  const browserProfileRow = (
+    <div className="flex items-center gap-3 py-1.5 pl-8">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">Browser profile</p>
+        <p className="text-muted-foreground text-xs">
+          {browserProfile === "shared"
+            ? "Signed in where your other bots are."
+            : "A browser of its own, with separate sign-ins."}
+        </p>
+      </div>
+      <ToggleGroup
+        type="single"
+        value={browserProfile}
+        onValueChange={(next: string) => {
+          if (next) setBrowserProfile(next as BrowserProfile);
+        }}
+        spacing={0}
+        size="sm"
+        aria-label="Browser profile"
+      >
+        <ToggleGroupItem value="shared" className="text-xs">
+          Shared
+        </ToggleGroupItem>
+        <ToggleGroupItem value="own" className="text-xs">
+          Own
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+
   const tools = (
     <div className="space-y-4">
       <p className="text-muted-foreground text-xs">
-        Tools run <strong>Allow</strong> unattended, <strong>Ask</strong> waits for your approval,
-        <strong> Off</strong> hides them from the bot.
+        Every bot has these tools. <strong>Allow</strong> runs a tool unattended,{" "}
+        <strong>Ask</strong> waits for your approval, <strong>Off</strong> hides it from this bot.
       </p>
-      {toolkitsList.map((toolkit) => {
-        const enabled = toolkits.includes(toolkit.id);
-        return (
-          <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
-            <div className="flex cursor-pointer items-center gap-3 p-3.5">
-              <Wrench className="text-muted-foreground size-4" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{toolkit.name}</p>
-                <p className="text-muted-foreground truncate text-xs">
-                  {toolkit.setupHint ?? toolkit.description}
-                </p>
-              </div>
-              <Switch
-                checked={enabled}
-                onCheckedChange={(checked) =>
-                  setToolkits((current) =>
-                    checked ? [...current, toolkit.id] : current.filter((id) => id !== toolkit.id),
-                  )
-                }
-                aria-label={`Enable ${toolkit.name}`}
-              />
+      {toolkitsList.map((toolkit) => (
+        <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
+          <div className="flex items-center gap-3 p-3.5">
+            <Wrench className="text-muted-foreground size-4" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{toolkit.name}</p>
+              <p className="text-muted-foreground truncate text-xs">
+                {toolkit.setupHint ?? toolkit.description}
+              </p>
             </div>
-            {enabled && (
-              <div className="border-border/60 border-t px-3 pb-3 pt-1">
-                {toolkit.setupHint ? null : toolkit.tools.map(toolRow)}
-              </div>
-            )}
           </div>
-        );
-      })}
+          {!toolkit.setupHint && (
+            <div className="border-border/60 border-t px-3 pb-3 pt-1">
+              {toolkit.id === "browser" && browserProfileRow}
+              {toolkit.tools.map(toolRow)}
+            </div>
+          )}
+        </div>
+      ))}
       {connections.length > 0 && (
         <div>
           <p className={`${metaLabelClass} mb-1.5`}>Connections</p>

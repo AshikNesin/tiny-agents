@@ -8,6 +8,10 @@
  * to the viewer. Keystrokes travel inside the VNC stream and are never
  * logged. A browser without a VM (local dev, CI) is headless: the agent can
  * use it, but there is nothing to stream, so `mode` reports `headless`.
+ *
+ * A bot's browser is its profile's (`browser.targets.ts`): bots on the shared
+ * profile share one browser, each in its own tab, so taking control, the live
+ * view and "Reset" act on that shared browser.
  */
 import { z } from "zod";
 import { createRouter } from "@groot/core/utils/router.utils";
@@ -21,7 +25,9 @@ import {
   setDriver,
   startBrowserSession,
 } from "@tiny-agents/agent";
+import type { BrowserTarget } from "@tiny-agents/agent";
 import * as botsService from "./bots.service";
+import { browserTargetForBot, SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { issueVncTicket } from "./browser.vnc";
 
 const router = createRouter();
@@ -35,25 +41,26 @@ const resizeSchema = z.object({
   height: z.number().int().min(240).max(4096),
 });
 
-async function botConversation(id: string): Promise<number> {
-  const bot = await botsService.getBot(id);
-  return Number(bot.conversationId);
+async function botTarget(id: string): Promise<BrowserTarget> {
+  return browserTargetForBot(await botsService.getBot(id));
 }
 
-function requireSession(conversationId: number) {
-  const live = getLiveBrowserSession(conversationId);
+function requireSession(target: BrowserTarget) {
+  const live = getLiveBrowserSession(target);
   if (!live) throw Boom.notFound("No browser session for this bot yet.");
   return live;
 }
 
 router.get("/bots/:id/browser", async (req) => {
   const id = parseStringParam(req.params.id, "id");
-  const conversationId = await botConversation(id);
-  const live = getLiveBrowserSession(conversationId);
-  const opening = browserOpenState(conversationId);
+  const target = await botTarget(id);
+  const live = getLiveBrowserSession(target);
+  const opening = browserOpenState(target);
   return {
     active: Boolean(live),
-    url: live?.session.url() ?? null,
+    // "shared" when other bots use this browser (and its logins) too.
+    profile: target.profile === SHARED_BROWSER_PROFILE ? "shared" : "own",
+    url: live?.tabs.get(target.tab)?.url() ?? null,
     driver: live?.driver ?? null,
     mode: live ? (live.session.vnc ? "vnc" : "headless") : null,
     scale: live?.session.vnc?.scale ?? null,
@@ -69,27 +76,26 @@ router.get("/bots/:id/browser", async (req) => {
 // follows the status route.
 router.post("/bots/:id/browser/start", async (req) => {
   const id = parseStringParam(req.params.id, "id");
-  const conversationId = await botConversation(id);
-  if (!getLiveBrowserSession(conversationId)) {
-    startBrowserSession(conversationId).catch(() => {
-      // The failure is reported by the status route (`error`).
-    });
-  }
+  const target = await botTarget(id);
+  // Also when the browser is live: a bot on the shared profile may not have
+  // its tab yet, and this brings its tab to the front of the live view.
+  startBrowserSession(target).catch(() => {
+    // The failure is reported by the status route (`error`).
+  });
   return { starting: true };
 });
 
 router.post("/bots/:id/browser/vnc-ticket", async (req) => {
   const id = parseStringParam(req.params.id, "id");
-  const conversationId = await botConversation(id);
-  const live = requireSession(conversationId);
+  const target = await botTarget(id);
+  const live = requireSession(target);
   if (!live.session.vnc) {
     throw Boom.conflict("This browser is headless and has no live view.");
   }
-  const ticket = issueVncTicket({
-    userId: req.user!.userId,
-    botId: id,
-    conversationId,
-  });
+  // The viewer opens on this bot's tab (made now if the bot has none yet in
+  // a shared browser); the stream still works if that fails.
+  await startBrowserSession(target).catch(() => {});
+  const ticket = issueVncTicket({ userId: req.user!.userId, botId: id, target });
   live.lastActivity = Date.now();
   return {
     // Relative so the client keeps the page's scheme and host behind proxies.
@@ -101,8 +107,7 @@ router.post("/bots/:id/browser/vnc-ticket", async (req) => {
 router.post("/bots/:id/browser/resize", async (req) => {
   const id = parseStringParam(req.params.id, "id");
   const body = await parseBody(req, resizeSchema);
-  const conversationId = await botConversation(id);
-  const live = requireSession(conversationId);
+  const live = requireSession(await botTarget(id));
   if (!live.session.vnc) throw Boom.conflict("This browser cannot be resized.");
   try {
     await live.session.vnc.resize(body.width, body.height);
@@ -116,22 +121,20 @@ router.post("/bots/:id/browser/resize", async (req) => {
 router.post("/bots/:id/browser/driver", async (req) => {
   const id = parseStringParam(req.params.id, "id");
   const body = await parseBody(req, driverSchema);
-  const conversationId = await botConversation(id);
-  requireSession(conversationId);
-  await setDriver(conversationId, body.driver);
-  if (body.driver === "human") {
-    const live = getLiveBrowserSession(conversationId);
-    live!.lastActivity = Date.now();
-  }
+  const target = await botTarget(id);
+  const live = requireSession(target);
+  await setDriver(target, body.driver);
+  if (body.driver === "human") live.lastActivity = Date.now();
   return { driver: body.driver };
 });
 
 router.delete("/bots/:id/browser/profile", async (req) => {
   const id = parseStringParam(req.params.id, "id");
-  const conversationId = await botConversation(id);
-  await closeBrowserSession(conversationId, { wipeProfile: true });
+  const target = await botTarget(id);
+  // On the shared profile this signs every bot that uses it out.
+  await closeBrowserSession(target, { wipeProfile: true });
   const { rmSync } = await import("node:fs");
-  rmSync(`${browserProfilesDir()}/${conversationId}`, { recursive: true, force: true });
+  rmSync(`${browserProfilesDir()}/${target.profile}`, { recursive: true, force: true });
   return { reset: true };
 });
 

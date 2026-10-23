@@ -130,6 +130,28 @@ async function run(
 }
 
 describe("routines toolkit", () => {
+  it("turns 'in N minutes' into a one-time instant, so the bot needs no clock", async () => {
+    const store = memoryStore();
+    const now = () => new Date("2026-10-23T10:00:00.000Z");
+    const routines = createRoutinesToolkit(store, { now });
+    await run(routines, "create_routine", {
+      name: "stretch",
+      prompt: "Remind me to stretch.",
+      schedule: { kind: "in", minutes: 30 },
+    });
+    const [created] = [...store.rows.values()];
+    expect(created!.schedule).toEqual({ kind: "once", at: "2026-10-23T10:30:00.000Z" });
+
+    await run(routines, "update_routine", {
+      id: created!.id,
+      schedule: { kind: "in", minutes: 90 },
+    });
+    expect(created!.schedule).toEqual({ kind: "once", at: "2026-10-23T11:30:00.000Z" });
+    // Other schedules pass through untouched.
+    await run(routines, "update_routine", { id: created!.id, name: "stretch break" });
+    expect(created!.schedule).toEqual({ kind: "once", at: "2026-10-23T11:30:00.000Z" });
+  });
+
   it("create_routine keys on the durable tool task and echoes the confirmation card", async () => {
     const store = memoryStore();
     const routines = createRoutinesToolkit(store);

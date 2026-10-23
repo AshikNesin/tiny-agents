@@ -67,7 +67,6 @@ describe("BotDialog", () => {
       description: "",
       systemPrompt: "",
       modelId: "test-model",
-      toolkits: [],
       toolPermissions: {},
       skillIds: [],
       connectionIds: [],

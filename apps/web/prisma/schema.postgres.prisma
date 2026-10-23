@@ -41,8 +41,6 @@ model Bot {
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())
   lastMessagePreview String?
-  /// JSON array of enabled built-in toolkit ids, e.g. ["tasks", "web"] (issue #1 D2).
-  toolkits           String    @default("[]")
   /// JSON object: tool name → "allow" | "ask" | "off"; tools without an entry use their default.
   toolPermissions    String    @default("{}")
   skills             BotSkill[]
@@ -63,6 +61,8 @@ model Bot {
   memoryCapturedThrough DateTime?
   /// Set when the owner pins the bot to the top of the sidebar; pinned bots sort by this, oldest first.
   pinnedAt           DateTime?
+  /// Browser profile: "shared" (one browser, and its logins, for every such bot) or "own" (a browser of its own).
+  browserProfile     String    @default("shared")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

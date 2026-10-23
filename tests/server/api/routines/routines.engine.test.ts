@@ -75,7 +75,7 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
 
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
   const bot = await prisma.bot.create({
-    data: { name: "Bot", modelId: "m1", conversationId: "7", toolkits: "[]" },
+    data: { name: "Bot", modelId: "m1", conversationId: "7" },
   });
   const routine = await prisma.routine.create({
     data: {

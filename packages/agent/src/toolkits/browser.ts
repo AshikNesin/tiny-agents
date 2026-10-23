@@ -10,8 +10,10 @@
  * - Secrets never enter model context: the owner types them into the real
  *   page during takeover; no tool result ever echoes typed input values.
  *
- * Sessions are per-profile (per bot in the app), lazy, idle-closed, and the
- * transport is a narrow port (`BrowserTransport`) so tests substitute fakes.
+ * Sessions are per profile, lazy, idle-closed, and the transport is a narrow
+ * port (`BrowserTransport`) so tests substitute fakes. Several agents can
+ * share one profile (the app's default): they share that one browser, and
+ * so its logins, each in a tab of its own (`BrowserTarget`).
  */
 import type { Duplex } from "node:stream";
 import { Type } from "@earendil-works/pi-ai";
@@ -46,12 +48,36 @@ export interface BrowserVnc {
   resize(width: number, height: number): Promise<void>;
 }
 
+/**
+ * Where a browser call runs: the profile names the browser (one Chrome per
+ * profile directory, since Chrome locks it), the tab names the agent's own
+ * tab inside it. Agents with different tabs on one profile share its logins
+ * without trampling each other's pages.
+ */
+export interface BrowserTarget {
+  profile: string;
+  tab: string;
+}
+
+/** The mapping without an app resolver: a browser of its own per conversation. */
+export function conversationBrowserTarget(conversationId: number): BrowserTarget {
+  return { profile: String(conversationId), tab: String(conversationId) };
+}
+
 /** What the toolkit and the live-view routes need from a live browser. */
 export interface BrowserSession {
   /** Present when the browser runs on a VNC-served display. */
   vnc?: BrowserVnc;
   /** Follow the tab the owner left in front (after a takeover). */
   adoptActiveTab?(): Promise<void>;
+  /**
+   * Open another agent's tab in this browser (a shared profile). Its
+   * `close()` closes only that tab. Transports that cannot leave it out, and
+   * the agents then share the one tab.
+   */
+  openTab?(): Promise<BrowserSession>;
+  /** Bring this tab to the front, where the live view (and the owner) sees it. */
+  focus?(): Promise<void>;
   /** Delete the persisted profile; called after `close()` on reset. */
   wipeProfile?(): Promise<void>;
   /**
@@ -81,6 +107,11 @@ export type BrowserDriver = "agent" | "human";
 export interface BrowserToolkitOptions {
   /** Profiles root; one directory per profile key. Default `./data/browser-profiles`. */
   profilesDir?: string;
+  /**
+   * Which profile and tab a conversation's tool calls use. Default
+   * `conversationBrowserTarget`: a browser of its own per conversation.
+   */
+  resolveTarget?: (conversationId: number) => BrowserTarget | Promise<BrowserTarget>;
   /** Idle close in minutes (default 10). */
   idleMinutes?: number;
   /** Comma-separated hosts exempt from the private-address block. */
@@ -95,12 +126,25 @@ export interface BrowserToolkitOptions {
   scale?: number;
 }
 
+/** One live browser (a profile): shared by every agent whose target names it. */
 export interface LiveBrowserSession {
+  /** The browser itself; closing it closes every tab. Also the first agent's tab. */
   session: BrowserSession;
+  /** Each agent's tab, by `BrowserTarget.tab`. */
+  tabs: Map<string, BrowserSession>;
+  /** The owner drives the whole browser, so takeover pauses every agent in it. */
   driver: BrowserDriver;
   lastActivity: number;
   /** This session's idle close window (ms), from the toolkit options. */
   idleMs: number;
+  /** The tab last brought to the front, so agents only refocus on a change. */
+  front?: string;
+}
+
+/** An agent's tab in a live browser: what the tools act on. */
+export interface LiveBrowserTab {
+  browser: LiveBrowserSession;
+  session: BrowserSession;
 }
 
 const fail = (text: string): ToolExecutionResult => ({
@@ -190,7 +234,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
           replay: "safe",
           execute: async (_args, api) => {
             try {
-              const s = await acquire(options, Number(api.conversationId));
+              const s = await readTurn(options, Number(api.conversationId));
               const text = await s.session.snapshot();
               const capped = text.length > 20_000 ? text.slice(0, 20_000) + "\n…(truncated)" : text;
               return { output: [{ type: "text", text: capped }] };
@@ -301,7 +345,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
           replay: "safe",
           execute: async (_args, api) => {
             try {
-              const s = await acquire(options, Number(api.conversationId));
+              const s = await readTurn(options, Number(api.conversationId));
               const shot = await s.session.screenshot();
               return {
                 output: [
@@ -322,7 +366,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
 
 // ---------------------------------------------------------------------------
 // Session manager: lazy open, idle close, driver arbitration. One instance
-// per toolkit; the app creates one toolkit per server process.
+// per toolkit; the app creates one toolkit per server process. Browsers are
+// keyed by profile, and each agent gets its own tab in its profile's browser.
 // ---------------------------------------------------------------------------
 
 const live = new Map<string, LiveBrowserSession>();
@@ -331,46 +376,84 @@ const opening = new Map<
   string,
   { promise: Promise<LiveBrowserSession>; readonly phase: BrowserPhase }
 >();
-/** Last open failure per session, surfaced by the status route until the next attempt. */
+/** In-flight tab opens per browser, by tab key, so one agent never gets two tabs. */
+const tabsOpening = new WeakMap<LiveBrowserSession, Map<string, Promise<BrowserSession>>>();
+/** Last open failure per profile, surfaced by the status route until the next attempt. */
 const openErrors = new Map<string, string>();
 let sweeper: ReturnType<typeof setInterval> | undefined;
 
+/** The live browser for `target.profile`, opening it if needed, and the agent's tab in it. */
 export async function acquire(
   options: BrowserToolkitOptions,
-  conversationId: number,
-): Promise<LiveBrowserSession> {
-  const key = String(conversationId);
-  touchActivity();
-  let entry = live.get(key);
-  if (!entry) {
-    let pending = opening.get(key);
-    if (!pending) {
-      let phase: BrowserPhase = "starting";
-      const promise = openSession(options, key, (next) => {
-        phase = next;
-      })
-        .then((opened) => {
-          live.set(key, opened);
-          openErrors.delete(key);
-          return opened;
-        })
-        .catch((error: unknown) => {
-          openErrors.set(key, describe(error));
-          throw error;
-        })
-        .finally(() => opening.delete(key));
-      pending = {
-        promise,
-        get phase() {
-          return phase;
-        },
-      };
-      opening.set(key, pending);
-    }
-    entry = await pending.promise;
-  }
+  target: BrowserTarget,
+): Promise<LiveBrowserTab> {
+  const entry = await acquireBrowser(options, target.profile);
+  const tab = await tabIn(entry, target.tab);
   entry.lastActivity = Date.now();
-  return entry;
+  return { browser: entry, session: tab };
+}
+
+async function acquireBrowser(
+  options: BrowserToolkitOptions,
+  profile: string,
+): Promise<LiveBrowserSession> {
+  touchActivity();
+  const entry = live.get(profile);
+  if (entry) return entry;
+  let pending = opening.get(profile);
+  if (!pending) {
+    let phase: BrowserPhase = "starting";
+    const promise = openSession(options, profile, (next) => {
+      phase = next;
+    })
+      .then((opened) => {
+        live.set(profile, opened);
+        openErrors.delete(profile);
+        return opened;
+      })
+      .catch((error: unknown) => {
+        openErrors.set(profile, describe(error));
+        throw error;
+      })
+      .finally(() => opening.delete(profile));
+    pending = {
+      promise,
+      get phase() {
+        return phase;
+      },
+    };
+    opening.set(profile, pending);
+  }
+  return pending.promise;
+}
+
+/**
+ * The agent's tab: the browser's first tab goes to the first agent, later
+ * agents get a new tab each (or share the first where the transport cannot
+ * open tabs).
+ */
+async function tabIn(entry: LiveBrowserSession, key: string): Promise<BrowserSession> {
+  const existing = entry.tabs.get(key);
+  if (existing) return existing;
+  if (entry.tabs.size === 0 || !entry.session.openTab) {
+    entry.tabs.set(key, entry.session);
+    return entry.session;
+  }
+  let pending = tabsOpening.get(entry)?.get(key);
+  if (!pending) {
+    const inFlight = tabsOpening.get(entry) ?? new Map<string, Promise<BrowserSession>>();
+    tabsOpening.set(entry, inFlight);
+    pending = entry.session
+      .openTab()
+      .then((tab) => {
+        // A browser closed meanwhile took the tab with it; don't record it.
+        if ([...live.values()].includes(entry)) entry.tabs.set(key, tab);
+        return tab;
+      })
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, pending);
+  }
+  return pending;
 }
 
 async function openSession(
@@ -378,6 +461,7 @@ async function openSession(
   key: string,
   onPhase: (phase: BrowserPhase) => void,
 ): Promise<LiveBrowserSession> {
+  if (!/^[\w-]+$/.test(key)) throw new Error(`Invalid browser profile "${key}".`);
   const root = options.profilesDir ?? "./data/browser-profiles";
   const dir = `${root.replace(/\/$/, "")}/${key}`;
   const { mkdirSync } = await import("node:fs");
@@ -393,6 +477,7 @@ async function openSession(
   });
   const entry: LiveBrowserSession = {
     session,
+    tabs: new Map(),
     driver: "agent",
     lastActivity: Date.now(),
     idleMs: (options.idleMinutes ?? 10) * 60_000,
@@ -414,23 +499,25 @@ function dropDeadSession(key: string, entry: LiveBrowserSession): void {
 }
 
 /**
- * Open the session without a tool call, for the owner's "Open browser"
- * button. Resolves once the browser is up; the first run on a fresh VM
- * installs the stack and can take minutes, so routes should not await it.
+ * Open the browser and the agent's tab without a tool call, for the owner's
+ * "Open browser" button. Resolves once the browser is up; the first run on a
+ * fresh VM installs the stack and can take minutes, so routes should not
+ * await it. The tab comes to the front, so the viewer shows this agent's page.
  */
-export function startBrowserSession(conversationId: number): Promise<LiveBrowserSession> {
-  openErrors.delete(String(conversationId));
-  return acquire(toolkitOptions, conversationId);
+export async function startBrowserSession(target: BrowserTarget): Promise<LiveBrowserTab> {
+  openErrors.delete(target.profile);
+  const tab = await acquire(toolkitOptions, target);
+  await bringToFront(tab, target.tab);
+  return tab;
 }
 
-/** What the status route reports for a session that is not live (yet). */
+/** What the status route reports for a browser that is not live (yet). */
 export function browserOpenState(
-  conversationId: number,
+  target: BrowserTarget,
 ): { opening: true; phase: BrowserPhase } | { opening: false; error?: string } {
-  const key = String(conversationId);
-  const pending = opening.get(key);
+  const pending = opening.get(target.profile);
   if (pending) return { opening: true, phase: pending.phase };
-  return { opening: false, error: openErrors.get(key) };
+  return { opening: false, error: openErrors.get(target.profile) };
 }
 
 /**
@@ -468,12 +555,29 @@ export function resetBrowserSessionsForTests(): void {
   openErrors.clear();
 }
 
+async function targetOf(options: BrowserToolkitOptions, conversationId: number) {
+  return (options.resolveTarget ?? conversationBrowserTarget)(conversationId);
+}
+
+/** Read tools: the agent's tab, brought to the front unless the owner drives. */
+async function readTurn(
+  options: BrowserToolkitOptions,
+  conversationId: number,
+): Promise<LiveBrowserTab> {
+  const target = await targetOf(options, conversationId);
+  const tab = await acquire(options, target);
+  await bringToFront(tab, target.tab);
+  return tab;
+}
+
 /** Action tools wait here while the human drives, then re-check. */
 async function withDriverTurn(
   options: BrowserToolkitOptions,
   conversationId: number,
-): Promise<LiveBrowserSession> {
-  const entry = await acquire(options, conversationId);
+): Promise<LiveBrowserTab> {
+  const target = await targetOf(options, conversationId);
+  const tab = await acquire(options, target);
+  const entry = tab.browser;
   const bound = options.humanDriverWaitMs ?? 10 * 60_000;
   const waited = Date.now();
   while (entry.driver === "human" && Date.now() - waited < bound) {
@@ -484,32 +588,52 @@ async function withDriverTurn(
       "The owner is driving the browser; wait and retry, or continue without the browser.",
     );
   }
-  return entry;
-}
-
-/** Called by the app's routes: flip the driver, wake waiters by polling. */
-export async function setDriver(conversationId: number, driver: BrowserDriver): Promise<void> {
-  const entry = live.get(String(conversationId));
-  if (!entry) return;
-  const released = entry.driver === "human" && driver === "agent";
-  entry.driver = driver;
-  // The owner may have opened or switched tabs while driving; the agent
-  // continues from whichever tab they left in front.
-  if (released) await entry.session.adoptActiveTab?.().catch(() => {});
+  await bringToFront(tab, target.tab);
+  return tab;
 }
 
 /**
- * Close and remove a session: later calls open fresh. With `wipeProfile` the
- * persisted profile (cookies, logins) goes too.
+ * Show the agent's tab when several agents share the browser: the live view
+ * follows whoever acts, and Chrome throttles a tab that is in the background.
+ * Never while the owner drives (their tab stays in front).
+ */
+async function bringToFront({ browser, session }: LiveBrowserTab, key: string): Promise<void> {
+  if (browser.driver === "human" || browser.front === key) return;
+  browser.front = key;
+  if (browser.tabs.size > 1) await session.focus?.().catch(() => {});
+}
+
+/**
+ * Called by the app's routes: flip the driver of the target's browser (every
+ * agent in it waits while the owner drives), wake waiters by polling.
+ */
+export async function setDriver(target: BrowserTarget, driver: BrowserDriver): Promise<void> {
+  const entry = live.get(target.profile);
+  if (!entry) return;
+  const released = entry.driver === "human" && driver === "agent";
+  entry.driver = driver;
+  if (!released) return;
+  // The owner may have opened or switched tabs while driving; the agent
+  // they hand back to continues from whichever tab they left in front.
+  entry.front = undefined;
+  const tab = entry.tabs.get(target.tab);
+  if (!tab) return;
+  await tab.adoptActiveTab?.().catch(() => {});
+  entry.front = target.tab;
+}
+
+/**
+ * Close and remove the target's browser (every tab in it): later calls open
+ * fresh. With `wipeProfile` the persisted profile (cookies, logins) goes too.
  */
 export async function closeBrowserSession(
-  conversationId: number,
+  target: BrowserTarget,
   options: { wipeProfile?: boolean } = {},
 ): Promise<void> {
-  const entry = live.get(String(conversationId));
+  const entry = live.get(target.profile);
   if (entry) {
     entry.driver = "agent"; // release any blocked action tools
-    live.delete(String(conversationId));
+    live.delete(target.profile);
     await entry.session.close();
     if (options.wipeProfile) await entry.session.wipeProfile?.();
   }
@@ -527,12 +651,14 @@ export function browserProfilesDir(): string {
   return profilesRoot ?? "./data/browser-profiles";
 }
 
-export function getLiveBrowserSession(conversationId: number): LiveBrowserSession | undefined {
-  return live.get(String(conversationId));
+/** The live browser for the target's profile, whether or not the agent has a tab in it yet. */
+export function getLiveBrowserSession(target: BrowserTarget): LiveBrowserSession | undefined {
+  return live.get(target.profile);
 }
 
-export function liveBrowserConversations(): number[] {
-  return [...live.keys()].map(Number);
+/** Profiles with a live browser. */
+export function liveBrowserProfiles(): string[] {
+  return [...live.keys()];
 }
 
 function touchActivity() {

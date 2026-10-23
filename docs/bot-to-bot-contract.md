@@ -90,7 +90,7 @@ chat] {text}` … the host's own submit gets the text unchanged.
 
 ### 4. Agent runtime additions (packages/agent/src/runtime.ts)
 
-None. The toolkit installs like `tasks`/`web`/`time` via `capabilities` at
+None. The toolkit installs like `tasks`/`web` via `capabilities` at
 open time; conversations select it with `configure`.
 
 ### 5. Client (apps/web/src/client)

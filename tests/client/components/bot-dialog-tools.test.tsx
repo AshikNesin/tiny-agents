@@ -2,14 +2,17 @@
  * @vitest-environment jsdom
  *
  * BotDialog Tools tab: the per-tool Allow/Ask/Off segmented control must
- * actually change the permission on click (regression repro).
+ * actually change the permission on click (regression repro). Every bot
+ * has every toolkit, so there are no toolkit switches, and the automatic
+ * capabilities are not shown. The Browser toolkit offers the shared or the
+ * bot's own browser profile.
  */
 import React from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { BotDialog } from "@/components/BotDialog";
-import type { Bot, ModelInfo } from "@/lib/bots-api";
+import { botsApi, type Bot, type ModelInfo } from "@/lib/bots-api";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -21,8 +24,32 @@ vi.mock("@/lib/bots-api", () => ({
         description: "Create and manage your tasks",
         tools: [{ name: "tasks.add", label: "Added task", description: "Create a task" }],
       },
+      {
+        id: "browser",
+        kind: "toolkit",
+        name: "Browser",
+        description: "A real browser the bot drives",
+        tools: [{ name: "browser_navigate", label: "Opened a page", description: "Open a URL" }],
+      },
+      {
+        id: "vision",
+        kind: "toolkit",
+        name: "Vision",
+        description: "See attached images",
+        auto: true,
+        tools: [{ name: "see_image", label: "Looked at an image", description: "See an image" }],
+      },
+      { id: "today", kind: "toolkit", name: "Today", description: "Date", auto: true, tools: [] },
+      {
+        id: "web",
+        kind: "toolkit",
+        name: "Web",
+        description: "Search and read web pages",
+        setupHint: "Set CLOUDFLARE_API_KEY to enable web search.",
+        tools: [{ name: "web_search", label: "Searched the web", description: "Search" }],
+      },
     ]),
-    update: vi.fn(),
+    update: vi.fn(async (_id: string, payload: object) => ({ ...payload })),
     create: vi.fn(),
   },
 }));
@@ -50,7 +77,6 @@ const bot = {
   description: "",
   systemPrompt: "",
   modelId: "m1",
-  toolkits: ["tasks"],
   toolPermissions: {},
   skillIds: [],
   connectionIds: [],
@@ -80,5 +106,44 @@ describe("BotDialog tool permissions", () => {
     await user.click(off);
     expect(off).toHaveAttribute("data-state", "on");
     expect(ask).toHaveAttribute("data-state", "off");
+  });
+});
+
+describe("BotDialog tools list", () => {
+  it("lists every toolkit without switches and hides the automatic ones", async () => {
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+
+    expect(await screen.findByText("Opened a page")).toBeInTheDocument();
+    expect(screen.getByText("Added task")).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: /^Enable / })).toBeNull();
+    expect(screen.queryByText("Vision")).toBeNull();
+    expect(screen.queryByText("Today")).toBeNull();
+    // A toolkit that still needs setup says how, and offers no tools yet.
+    expect(screen.getByText("Set CLOUDFLARE_API_KEY to enable web search.")).toBeInTheDocument();
+    expect(screen.queryByText("Searched the web")).toBeNull();
+  });
+});
+
+describe("BotDialog browser profile", () => {
+  it("defaults to the shared profile and saves a switch to the bot's own", async () => {
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+    const group = await screen.findByRole("radiogroup", { name: "Browser profile" });
+    expect(within(group).getByRole("radio", { name: "Shared" })).toHaveAttribute(
+      "data-state",
+      "on",
+    );
+    await user.click(within(group).getByRole("radio", { name: "Own" }));
+    expect(screen.getByText("A browser of its own, with separate sign-ins.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(botsApi.update).toHaveBeenCalledWith(
+      "b1",
+      expect.objectContaining({ browserProfile: "own" }),
+    );
   });
 });

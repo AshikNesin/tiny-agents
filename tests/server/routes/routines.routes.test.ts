@@ -82,7 +82,7 @@ function buildApp(): Express {
 
 async function seedBot(): Promise<string> {
   const bot = await prisma.bot.create({
-    data: { name: "Helper", modelId: "m1", conversationId: "100", toolkits: "[]" },
+    data: { name: "Helper", modelId: "m1", conversationId: "100" },
   });
   return bot.id;
 }

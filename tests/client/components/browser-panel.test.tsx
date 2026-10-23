@@ -7,8 +7,9 @@
  * canvas needs a real browser (covered by the live check against the VM).
  */
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
@@ -53,6 +54,9 @@ const bot: Bot = {
   unread: false,
   replying: false,
 } as unknown as Bot;
+
+/** The panel confirms a reset through the app's confirm dialog. */
+const render = (ui: React.ReactElement) => rtlRender(<ConfirmProvider>{ui}</ConfirmProvider>);
 
 const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
   active: true,
@@ -498,14 +502,29 @@ describe("BrowserPanel", () => {
   });
 
   it("reset closes the browser and returns to the closed state", async () => {
-    const api = mockApi(vncStatus());
+    const api = mockApi(vncStatus({ profile: "own" }));
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
 
     api.set(vncStatus({ active: false, url: null, driver: null, mode: null }));
     fireEvent.click(screen.getByTestId("browser-reset"));
+    expect(await screen.findByText("Reset this bot's browser?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     await waitFor(() => expect(api.reset).toHaveBeenCalledWith("b1"));
     expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
     await waitFor(() => expect(latestRfb().disconnect).toHaveBeenCalled());
+  });
+
+  it("warns that resetting the shared browser signs every bot on it out", async () => {
+    const api = mockApi(vncStatus({ profile: "shared" }));
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    fireEvent.click(screen.getByTestId("browser-reset"));
+    expect(await screen.findByText("Reset the shared browser?")).toBeInTheDocument();
+    expect(screen.getByText(/every bot on the shared profile/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Reset the shared browser?")).toBeNull());
+    expect(api.reset).not.toHaveBeenCalled();
   });
 });

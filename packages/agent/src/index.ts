@@ -35,7 +35,7 @@ export {
   type TaskStatus,
   type TaskPriority,
 } from "./toolkits/tasks";
-export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
+export { createTodayCapability, type TodayOptions } from "./toolkits/today";
 export {
   createSandboxToolkit,
   createMemoryHostKeyStore,
@@ -80,18 +80,21 @@ export {
   browserProfilesDir,
   closeAllBrowserSessions,
   closeBrowserSession,
+  conversationBrowserTarget,
   createBrowserToolkit,
   setDriver,
   startBrowserSession,
   getLiveBrowserSession,
-  liveBrowserConversations,
+  liveBrowserProfiles,
   type BrowserToolkitOptions,
   type BrowserSession,
   type BrowserTransport,
   type BrowserDriver,
   type BrowserPhase,
+  type BrowserTarget,
   type BrowserVnc,
   type LiveBrowserSession,
+  type LiveBrowserTab,
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";
 export {

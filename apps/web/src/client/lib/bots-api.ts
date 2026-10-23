@@ -50,12 +50,13 @@ export interface Bot {
   lastReadAt: string | null;
   lastActivityAt: string;
   lastMessagePreview: string | null;
-  toolkits: string[];
   toolPermissions: Record<string, ToolPermission>;
   skillIds: string[];
   connectionIds: string[];
   /** Memory capture + injection switch (issue #22). */
   memoryEnabled: boolean;
+  /** `shared`: the browser (and logins) every such bot uses; `own`: a browser of its own. */
+  browserProfile: BrowserProfile;
   pinnedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +87,8 @@ export interface CapabilityInfo {
   description: string;
   tools: ToolInfo[];
   setupHint?: string;
+  /** Switched on and off by the app itself; not shown in a bot's settings. */
+  auto?: boolean;
 }
 
 export interface BotInput {
@@ -93,12 +96,14 @@ export interface BotInput {
   description?: string;
   systemPrompt?: string;
   modelId: string;
-  toolkits?: string[];
   toolPermissions?: Record<string, ToolPermission>;
   skillIds?: string[];
   connectionIds?: string[];
   memoryEnabled?: boolean;
+  browserProfile?: BrowserProfile;
 }
+
+export type BrowserProfile = "shared" | "own";
 
 export const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
@@ -226,6 +231,9 @@ export const botsApi = {
 /** Live browser session state for a bot (issue #24). */
 export interface BrowserStatus {
   active: boolean;
+  /** Whether the bot uses the shared browser (other bots too) or its own. */
+  profile?: BrowserProfile;
+  /** The bot's own tab; null until it has one. */
   url: string | null;
   driver: "agent" | "human" | null;
   /** `vnc`: a streamed desktop with a full Chrome UI; `headless`: usable by the bot, no live view. */
