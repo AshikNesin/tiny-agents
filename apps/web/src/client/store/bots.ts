@@ -55,10 +55,17 @@ function attachmentIds(message: { attachments?: { uploadId: string }[] }): strin
   return (message.attachments ?? []).map((a) => a.uploadId).sort();
 }
 
+/**
+ * Whether a confirmed user message is the optimistic echo of `pending`. By
+ * request id when the server recorded one: it annotates attachment sends'
+ * text (file notes, see_image hints), so their text never matches the
+ * echo's. Plain sends keep their text verbatim and match on it.
+ */
 function echoMatches(
-  pending: { text: string; attachments?: { uploadId: string }[] },
-  message: { text: string; attachments?: { uploadId: string }[] },
+  pending: { id: string; text: string; attachments?: { uploadId: string }[] },
+  message: { text: string; requestId?: string; attachments?: { uploadId: string }[] },
 ): boolean {
+  if (message.requestId) return message.requestId === pending.id;
   return (
     pending.text.trim() === message.text.trim() &&
     attachmentIds(pending).join(",") === attachmentIds(message).join(",")
@@ -318,9 +325,14 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         return;
       }
       if (typed.busy) {
+        // A tool waiting for approval pauses a busy run: the count arrives
+        // here, mid-run, and the badge must not wait for the reply to end.
+        const { approvals } = typed;
         set((state) => ({
           bots: state.bots.map((bot) =>
-            bot.conversationId === typed.conversation ? { ...bot, replying: true } : bot,
+            bot.conversationId === typed.conversation
+              ? { ...bot, replying: true, ...(approvals !== undefined ? { approvals } : {}) }
+              : bot,
           ),
         }));
         return;

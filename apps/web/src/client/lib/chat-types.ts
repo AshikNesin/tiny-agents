@@ -42,6 +42,8 @@ export interface ChatMessage {
   text: string;
   /** Attachments the user sent with this message (issue #17). */
   attachments?: AttachmentRef[];
+  /** The send's request id, when the server recorded one (attachment and peer sends). */
+  requestId?: string;
   /** Trusted cross-bot attribution (delivery pipeline only; renders as a card). */
   peer?: import("@tiny-agents/agent").ChatMessage["peer"];
   /** Tool calls this assistant turn made, in order. */

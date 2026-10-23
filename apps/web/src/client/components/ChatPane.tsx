@@ -250,9 +250,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     // fails the echo is withdrawn and the text returns to the composer.
     const echo = {
       id: crypto.randomUUID(),
-      // Exactly the submitted body: the store dedupes the optimistic echo
-      // against the confirmed row by text, so any transformation here
-      // leaves both visible (cubic: doubled mention echo).
+      // Exactly the submitted body: the store dedupes a plain echo against
+      // the confirmed row by text (attachment sends by request id), so any
+      // transformation here leaves both visible (cubic: doubled mention echo).
       text: body,
       createdAt: Date.now(),
       ...(attachments.length > 0 ? { attachments } : {}),

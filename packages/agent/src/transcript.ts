@@ -79,6 +79,13 @@ export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
   return undefined;
 }
 
+/** The submit request id stored in a `chat.user` entry's data. */
+function requestIdOf(entry: EntryRecord): string | undefined {
+  if (entry.kind !== CHAT_USER_ENTRY) return undefined;
+  const requestId = record(entry.data)?.requestId;
+  return typeof requestId === "string" && requestId ? requestId : undefined;
+}
+
 /** Attachment refs stored in a `chat.user` entry's data (validated at upload). */
 export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
@@ -343,11 +350,13 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     if (entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) {
       const attachments = attachmentsOf(entry);
       const peer = peerOf(entry);
+      const requestId = requestIdOf(entry);
       out.push({
         id: `e${entry.id}`,
         role: "user",
         text: textOf(message.content),
         ...(attachments ? { attachments } : {}),
+        ...(requestId ? { requestId } : {}),
         ...(peer ? { peer } : {}),
         status: "done",
         createdAt: message.timestamp ?? 0,

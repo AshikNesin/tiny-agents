@@ -1,6 +1,7 @@
 /**
- * Bot CRUD + chat actions over Prisma, backed by the AgentRuntime for every
- * durable-conversation side effect (create/configure/submit/abort/reset).
+ * Bot CRUD + chat actions over Prisma. Everything that touches a bot's
+ * durable conversation (create, reconcile, submit) goes through
+ * `bots.conversation.ts`; this module adds the row bookkeeping around it.
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
@@ -8,54 +9,23 @@ import { logger } from "@groot/core/logger";
 import {
   AgentRuntime,
   ApprovalNotPendingError,
-  MCP_DEFER_THRESHOLD,
   sanitizePeerText,
   stripPeerEnvelope,
   type AttachmentRef,
-  type BotAgentConfig,
-  type ToolPermission,
 } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
-import { modelImage } from "../uploads/uploads.service";
-
-/** Cached vision lookup over the live model catalog (rebuilt per call site). */
-function modelSeesImages(modelId: string): boolean {
-  try {
-    return Boolean(
-      getAgentRuntime()
-        .listModels()
-        .find((m) => m.id === modelId)?.vision,
-    );
-  } catch {
-    return false; // runtime not open (tests without a fake): treat as text-only
-  }
-}
-
-/** The `Bot` row as Prisma returns it (model defined in apps/web/prisma). */
-export interface BotRow {
-  id: string;
-  name: string;
-  description: string;
-  systemPrompt: string;
-  modelId: string;
-  conversationId: string;
-  lastReadAt: Date | null;
-  lastActivityAt: Date;
-  lastMessagePreview: string | null;
-  /** JSON object: tool name → permission. */
-  toolPermissions: string;
-  /** Memory capture + injection switch (issue #22). */
-  memoryEnabled: boolean;
-  /** Transcript watermark: owner turns captured through this instant. */
-  memoryCapturedThrough: Date | null;
-  /** Set while the bot is pinned to the top of the sidebar. */
-  pinnedAt: Date | null;
-  /** "shared" (the default browser profile) or "own". */
-  browserProfile: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import {
+  findBotRow,
+  startBotConversation,
+  submitToBot,
+  reconcileBotConversation,
+  toBot,
+  type Bot,
+  type BotRow,
+} from "./bots.conversation";
 import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
+
+export type { Bot } from "./bots.conversation";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -65,125 +35,12 @@ export type BotAgentRuntime = Pick<
   | "abort"
   | "withdraw"
   | "hasModel"
+  | "listModels"
   | "busyConversations"
   | "listCapabilities"
   | "pendingApprovals"
   | "decideApproval"
 >;
-
-/** The bot as the API returns it: capability columns parsed, skills and connections by id. */
-export type Bot = Omit<BotRow, "toolPermissions"> & {
-  toolPermissions: Record<string, ToolPermission>;
-  skillIds: string[];
-  connectionIds: string[];
-  /** Capability ids of the bot's connections (`mcp:<slug>`). */
-  connectionCapabilities: string[];
-};
-
-type BotWithLinks = BotRow & {
-  skills?: { skillId: string }[];
-  connections?: { connectionId: string; connection: { slug: string; toolsCache: string } }[];
-};
-
-export const withLinks = {
-  skills: { select: { skillId: true } },
-  connections: {
-    select: { connectionId: true, connection: { select: { slug: true, toolsCache: true } } },
-  },
-} as const;
-
-/** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */
-export function connectionCapabilityId(slug: string): string {
-  return `mcp:${slug}`;
-}
-
-function parseJson<T>(raw: string, fallback: T): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-export function toBot(row: BotWithLinks): Bot {
-  const { skills, connections, ...bot } = row;
-  return {
-    ...bot,
-    toolPermissions: parseJson<Record<string, ToolPermission>>(row.toolPermissions, {}),
-    skillIds: skills?.map((link) => link.skillId) ?? [],
-    connectionIds: connections?.map((link) => link.connectionId) ?? [],
-    connectionCapabilities:
-      connections?.map((link) => connectionCapabilityId(link.connection.slug)) ?? [],
-  };
-}
-
-function toolCount(cache: string): number {
-  try {
-    return (JSON.parse(cache) as unknown[]).length;
-  } catch {
-    return 0;
-  }
-}
-
-/** slug → cached tool count for a bot's enabled connections. */
-export function connectionToolCounts(bot: {
-  connections?: { connection: { slug: string; toolsCache: string } }[];
-}): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const link of bot.connections ?? []) {
-    counts[link.connection.slug] = toolCount(link.connection.toolsCache);
-  }
-  return counts;
-}
-
-/**
- * The built-in toolkits every bot gets. There is no per-bot selection: a bot
- * is shaped by its tool permissions (Off removes a tool from the model), and
- * effectful tools ask the owner before they run.
- */
-export const BOT_TOOLKITS = [
-  "tasks",
-  "routines",
-  "web",
-  "sandbox",
-  "browser",
-  "bots",
-  "skills",
-  "memory",
-  "today",
-] as const;
-
-/**
- * What the bot's durable conversation runs with: persona, model and
- * capabilities: every built-in toolkit, its connections, and the automatic
- * ones (vision for text-only models, tool search for large connections).
- */
-export function agentConfig(
-  bot: Pick<Bot, "modelId" | "systemPrompt" | "toolPermissions"> & {
-    connectionCapabilities?: string[];
-    /** Tools cached per enabled connection (slug → count), for the deferral threshold. */
-    connectionToolCounts?: Record<string, number>;
-  },
-): BotAgentConfig {
-  const largeServer = Object.values(bot.connectionToolCounts ?? {}).some(
-    (count) => count > MCP_DEFER_THRESHOLD,
-  );
-  // The see_image side-call is only for models without native vision.
-  const seesImages = modelSeesImages(bot.modelId);
-  return {
-    modelId: bot.modelId,
-    systemPrompt: bot.systemPrompt,
-    capabilities: {
-      enabled: [
-        ...BOT_TOOLKITS,
-        ...(seesImages ? [] : ["vision"]),
-        ...(bot.connectionCapabilities ?? []),
-        ...(largeServer ? ["tool-search"] : []),
-      ],
-      permissions: bot.toolPermissions,
-    },
-  };
-}
 
 function runtime(): BotAgentRuntime {
   return getAgentRuntime();
@@ -244,14 +101,8 @@ export async function listBots(rt: BotAgentRuntime = runtime()) {
   );
 }
 
-async function findBot(id: string): Promise<BotWithLinks> {
-  const bot = await prisma.bot.findUnique({ where: { id }, include: withLinks });
-  if (!bot) throw Boom.notFound("Bot not found");
-  return bot;
-}
-
 export async function getBot(id: string): Promise<Bot> {
-  return toBot(await findBot(id));
+  return toBot(await findBotRow(id));
 }
 
 export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
@@ -259,12 +110,9 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
   const toolPermissions = data.toolPermissions ?? {};
-  const conversationId = await rt.createConversation(
-    agentConfig({
-      modelId: data.modelId,
-      systemPrompt: data.systemPrompt,
-      toolPermissions,
-    }),
+  const conversationId = await startBotConversation(
+    { modelId: data.modelId, systemPrompt: data.systemPrompt, toolPermissions },
+    rt,
   );
   // If the row insert fails the durable conversation is left orphaned — the
   // same end state as bot deletion, which Phase 2 cleanup will sweep.
@@ -274,7 +122,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       description: data.description,
       systemPrompt: data.systemPrompt,
       modelId: data.modelId,
-      conversationId: String(conversationId),
+      conversationId,
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
@@ -282,7 +130,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
   });
   if (data.skillIds || data.connectionIds) {
     await setLinks(row.id, data.skillIds, data.connectionIds);
-    return reconfigure(row.id, rt);
+    return reconcileBotConversation(row.id, rt);
   }
   return getBot(row.id);
 }
@@ -313,59 +161,27 @@ async function setLinks(botId: string, skillIds?: string[], connectionIds?: stri
   }
 }
 
-/** Re-apply a bot's stored configuration to its conversation (after link changes). */
-export async function reconfigure(
-  id: string,
-  rt: Pick<BotAgentRuntime, "configure"> = runtime(),
-): Promise<Bot> {
-  const row = await findBot(id);
-  const bot = toBot(row);
-  await rt.configure(
-    Number(bot.conversationId),
-    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
-  );
-  return bot;
-}
-
 export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRuntime = runtime()) {
-  const row = await findBot(id);
-  const bot = toBot(row);
-  const modelId = data.modelId ?? bot.modelId;
-  const systemPrompt = data.systemPrompt ?? bot.systemPrompt;
-  if (data.modelId !== undefined && !rt.hasModel(modelId)) {
-    throw Boom.badRequest(`Unknown model "${modelId}"`);
+  await findBotRow(id);
+  if (data.modelId !== undefined && !rt.hasModel(data.modelId)) {
+    throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
-  const toolPermissions = data.toolPermissions ?? bot.toolPermissions;
   await setLinks(id, data.skillIds, data.connectionIds);
-  const after = data.connectionIds ? await findBot(id) : null;
-  const links = after ?? row;
-  await rt.configure(
-    Number(bot.conversationId),
-    agentConfig({
-      modelId,
-      systemPrompt,
-      toolPermissions,
-      connectionCapabilities: after
-        ? toBot(after).connectionCapabilities
-        : bot.connectionCapabilities,
-      connectionToolCounts: connectionToolCounts(links),
-    }),
-  );
   await prisma.bot.update({
     where: { id },
     data: {
       ...(data.toolPermissions !== undefined
-        ? { toolPermissions: JSON.stringify(toolPermissions) }
+        ? { toolPermissions: JSON.stringify(data.toolPermissions) }
         : {}),
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.description !== undefined ? { description: data.description } : {}),
-      ...(data.systemPrompt !== undefined ? { systemPrompt } : {}),
-      ...(data.modelId !== undefined ? { modelId } : {}),
+      ...(data.systemPrompt !== undefined ? { systemPrompt: data.systemPrompt } : {}),
+      ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },
   });
-  return getBot(id);
+  return reconcileBotConversation(id, rt);
 }
 
 /**
@@ -383,7 +199,7 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
 }
 
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
-  const bot = await findBot(id);
+  const bot = await findBotRow(id);
   // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
   // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
@@ -402,28 +218,21 @@ export async function sendMessage(
   },
   rt: BotAgentRuntime = runtime(),
 ) {
-  const row = await findBot(id);
-  const bot = toBot(row);
-  // The durable conversation keeps the config from its last configure;
-  // sends must reconcile it, or drift (a model that gained vision, a toolkit
-  // edited in the row, a connection added) silently strands old selections.
-  await rt.configure(
-    Number(bot.conversationId),
-    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
+  const { bot, attachments } = await submitToBot(
+    id,
+    {
+      requestId: input.requestId,
+      text: input.text,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+      ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
+    },
+    rt,
   );
-  const send = await resolveSend(bot, input);
-  await rt.submit(Number(bot.conversationId), {
-    requestId: input.requestId,
-    text: send.text,
-    ...(send.images ? { images: send.images } : {}),
-    ...(send.attachments ? { attachments: send.attachments } : {}),
-    ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
-  });
   await prisma.bot.update({
     where: { id },
     data: {
       lastActivityAt: new Date(),
-      lastMessagePreview: previewOf(input.text, send.attachments).slice(0, 120),
+      lastMessagePreview: previewOf(input.text, attachments).slice(0, 120),
     },
   });
   if (input.mentions && input.mentions.length > 0) {
@@ -444,88 +253,6 @@ function previewOf(text: string, attachments: AttachmentRef[] | undefined): stri
     : `[File] ${first.name}`;
 }
 
-/** One send's resolved content: blocks for the model, refs for the entry. */
-interface ResolvedSend {
-  text: string;
-  images?: { data: string; mimeType: string }[];
-  attachments?: AttachmentRef[];
-}
-
-/**
- * Resolve a send's attachments (issue #17). Vision models get inline image
- * blocks; text-only models get a see_image note per image and file metadata
- * lines, so every model can reason about what arrived. Unknown upload ids
- * reject the send before anything durable happens.
- */
-async function resolveSend(
-  bot: Bot,
-  input: { text: string; attachments?: string[] },
-): Promise<ResolvedSend> {
-  const ids = input.attachments ?? [];
-  if (ids.length === 0) return { text: input.text };
-  if (new Set(ids).size !== ids.length) throw Boom.badRequest("Duplicate attachment id");
-
-  const rows = await prisma.upload.findMany({ where: { id: { in: ids } } });
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const missing = ids.find((uploadId) => !byId.get(uploadId));
-  if (missing) throw Boom.notFound(`Unknown attachment "${missing}"`);
-
-  const attachments: AttachmentRef[] = ids.map((uploadId) => {
-    const row = byId.get(uploadId)!;
-    return {
-      uploadId,
-      kind: row.kind === "image" ? "image" : "file",
-      name: row.name,
-      mimeType: row.mimeType,
-      size: row.size,
-      ...(row.width !== null && row.height !== null
-        ? { width: row.width, height: row.height }
-        : {}),
-    };
-  });
-
-  const images = attachments.filter((a) => a.kind === "image");
-  const files = attachments.filter((a) => a.kind === "file");
-  const text = input.text.trim();
-
-  // Vision path: inline image blocks, the refs ride the entry.
-  if (images.length > 0 && modelSeesImages(bot.modelId)) {
-    const blocks: { data: string; mimeType: string }[] = [];
-    for (const image of images) {
-      const prepared = await modelImage(image.uploadId);
-      if (prepared) blocks.push({ data: prepared.data, mimeType: prepared.mimeType });
-    }
-    if (blocks.length > 0) {
-      return { text, images: blocks, attachments };
-    }
-    // Preparation failed for every image (swept storage): fall through to notes.
-  }
-
-  // Text-model path (or storage loss): describe attachments as text lines.
-  const lines: string[] = [];
-  for (const image of images) {
-    const size = image.width && image.height ? `, ${image.width}x${image.height}` : "";
-    lines.push(`[image attached: ${image.name}${size} (${image.uploadId})]`);
-  }
-  for (const file of files) {
-    lines.push(
-      `[file attached: ${file.name}, ${file.mimeType}, ${Math.round(file.size / 1024)} KB]`,
-    );
-  }
-  const notes =
-    lines.length > 0
-      ? `${lines.join("\n")}${
-          images.length > 0 && !modelSeesImages(bot.modelId)
-            ? "\n(The owner attached image(s); call see_image with an id above to view.)"
-            : ""
-        }`
-      : "";
-  return {
-    text: text ? `${text}\n\n${notes}` : notes.replace(/^\n+/, ""),
-    attachments,
-  };
-}
-
 /** The text a tagged bot receives: enough context to answer in-place. */
 function mentionText(ownerContext: string, text: string): string {
   return `${ownerContext} ${text}`;
@@ -544,35 +271,31 @@ async function deliverMentions(
 ): Promise<void> {
   const targets = await prisma.bot.findMany({
     where: { id: { in: input.mentions ?? [] }, NOT: { id: host.id } },
-    include: withLinks,
+    select: { id: true },
   });
   if (targets.length === 0) return;
   const ownerContext = `[From the owner, in ${host.name}'s chat]`;
-  for (const targetRow of targets) {
-    const target = toBot(targetRow);
+  for (const target of targets) {
+    const requestId = `mention-${input.requestId}-${target.id}`;
     try {
-      const existing = await prisma.botMessage.findUnique({
-        where: { requestId: `mention-${input.requestId}-${target.id}` },
-      });
+      const existing = await prisma.botMessage.findUnique({ where: { requestId } });
       if (existing) continue;
-      // Same reconciliation as the host's send: the target's durable config
-      // must not be staler than its row (stale vision toolkit, link drift).
-      await rt.configure(
-        Number(target.conversationId),
-        agentConfig({ ...target, connectionToolCounts: connectionToolCounts(targetRow) }),
+      await submitToBot(
+        target.id,
+        {
+          requestId,
+          text: mentionText(ownerContext, sanitizePeerText(input.text)),
+          peer: { kind: "mention", hostName: host.name },
+        },
+        rt,
       );
-      await rt.submit(Number(target.conversationId), {
-        requestId: `mention-${input.requestId}-${target.id}`,
-        text: mentionText(ownerContext, sanitizePeerText(input.text)),
-        peer: { kind: "mention", hostName: host.name },
-      });
       await prisma.botMessage.create({
         data: {
           fromBotId: null,
           toBotId: target.id,
           replyToBotId: host.id,
           kind: "mention",
-          requestId: `mention-${input.requestId}-${target.id}`,
+          requestId,
           text: input.text,
           deliveredAt: new Date(),
         },
@@ -602,29 +325,26 @@ export async function withdrawMessage(id: string, input: { requestId: string }) 
 }
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
-  const row = await findBot(id);
-  const bot = toBot(row);
+  const old = await findBotRow(id);
   // Fresh conversation; the old one stays in agent.db, hidden (PRD §5.1),
   // and any reply still running there is stopped.
-  const conversationId = await rt.createConversation(
-    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(row) }),
-  );
+  const conversationId = await startBotConversation(id, rt);
   await prisma.bot.update({
     where: { id },
     data: {
-      conversationId: String(conversationId),
+      conversationId,
       lastReadAt: new Date(),
       lastMessagePreview: null,
       lastActivityAt: new Date(),
     },
   });
-  await retireConversation(rt, bot.conversationId);
+  await retireConversation(rt, old.conversationId);
   return getBot(id);
 }
 
 /** Pin or unpin a bot. Row-only: unlike `updateBot` it never reconfigures the conversation. */
 export async function setPinned(id: string, pinned: boolean) {
-  const row = await findBot(id);
+  const row = await findBotRow(id);
   // Re-pinning an already pinned bot keeps its place in the pinned group.
   const pinnedAt = pinned ? (row.pinnedAt ?? new Date()) : null;
   await prisma.bot.update({ where: { id }, data: { pinnedAt } });
@@ -632,7 +352,7 @@ export async function setPinned(id: string, pinned: boolean) {
 }
 
 export async function markRead(id: string) {
-  await findBot(id);
+  await findBotRow(id);
   await prisma.bot.update({ where: { id }, data: { lastReadAt: new Date() } });
   return getBot(id);
 }
@@ -646,22 +366,17 @@ export async function decideApproval(
   input: { taskId: number; decision: "approved" | "denied"; alwaysAllow?: string },
   rt: BotAgentRuntime = runtime(),
 ) {
-  const row = await findBot(id);
-  const bot = toBot(row);
-  const conversation = Number(bot.conversationId);
+  const bot = toBot(await findBotRow(id));
   if (input.decision === "approved" && input.alwaysAllow) {
     const toolPermissions = { ...bot.toolPermissions, [input.alwaysAllow]: "allow" as const };
-    await rt.configure(
-      conversation,
-      agentConfig({ ...bot, toolPermissions, connectionToolCounts: connectionToolCounts(row) }),
-    );
     await prisma.bot.update({
       where: { id },
       data: { toolPermissions: JSON.stringify(toolPermissions) },
     });
+    await reconcileBotConversation(id, rt);
   }
   try {
-    await rt.decideApproval(conversation, input.taskId, input.decision);
+    await rt.decideApproval(Number(bot.conversationId), input.taskId, input.decision);
   } catch (error) {
     if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
     throw error;

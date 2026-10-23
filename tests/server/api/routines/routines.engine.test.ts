@@ -13,7 +13,7 @@ import {
   type RoutineFirePayload,
 } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import { createRoutinesCompletionWatcher } from "../../../../apps/web/src/server/api/routines/routines.watcher";
-import type { AgentRuntime } from "@tiny-agents/agent";
+import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 
 let jobCounter = 0;
 const sentJobs: { name: string; data: unknown }[] = [];
@@ -31,35 +31,16 @@ vi.mock("@groot/jobs/server/client", () => ({
   jobQueueReady: () => true,
 }));
 
-/** Assistant messages the watcher's chat snapshot will carry. */
-let chatReplies: { text: string; createdAt: number }[] = [];
+/** Finished replies the runtime reports for the bot's conversation. */
+let chatReplies: FinishedReply[] = [];
 
 function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
-  const emptyChat = { messages: [], busy: false };
   return {
     createConversation: vi.fn(),
     configure: vi.fn().mockResolvedValue(undefined),
     submit: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn(),
-    watchChat: vi.fn(async (_ref: number, listener: (events: unknown[]) => void) => {
-      await listener([
-        {
-          type: "snapshot",
-          state: {
-            busy: false,
-            ...emptyChat,
-            messages: chatReplies.map((reply, index) => ({
-              id: `m${index}`,
-              role: "assistant",
-              text: reply.text,
-              createdAt: reply.createdAt,
-              status: "done",
-            })),
-          },
-        },
-      ]);
-      return { initial: emptyChat, stop: async () => undefined };
-    }),
+    finishedReplies: vi.fn(async () => chatReplies),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
     lastMessage: vi.fn().mockResolvedValue(undefined),
@@ -267,12 +248,29 @@ describe("routine-fire dispatch", () => {
     expect(notice).toBeTruthy();
     expect(String(notice?.[0])).toBe("7");
   });
+
+  it("a model removed from the catalog pauses the routine instead of retrying", async () => {
+    // The reconcile before submit is where a vanished model throws
+    // (ModelNotFoundError); it must take the same fail-once path as submit.
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    const failing = fakeRuntime({
+      configure: vi.fn().mockRejectedValue(new Error('Unknown model "m1"')),
+    });
+    setAgentRuntimeForTests(failing);
+    await expect(dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME)).resolves.toBeUndefined();
+    const run = await prisma.routineRun.findUnique({
+      where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor: SLOT } },
+    });
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toContain("Unknown model");
+    expect((await prisma.routine.findUnique({ where: { id: routine.id } }))?.enabled).toBe(false);
+  });
 });
 
 describe("completion watcher", () => {
   let runtime: ReturnType<typeof fakeRuntime>;
 
-  function chatWith(replies: { text: string; createdAt: number }[]) {
+  function chatWith(replies: FinishedReply[]) {
     chatReplies = replies;
   }
 
@@ -318,7 +316,9 @@ describe("completion watcher", () => {
     const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
     const submittedAt = run!.submittedAt!;
 
-    chatWith([{ text: "⚠ Model error: gateway down", createdAt: submittedAt.getTime() + 1000 }]);
+    chatWith([
+      { text: "", createdAt: submittedAt.getTime() + 1000, error: "Model error: gateway down" },
+    ]);
     const watcher = createRoutinesCompletionWatcher(runtime);
     await watcher.resolveConversation(7);
 

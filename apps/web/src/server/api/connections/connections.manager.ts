@@ -25,7 +25,7 @@ import {
   type McpToolInfo,
   type McpTransportKind,
 } from "@tiny-agents/agent";
-import { reconfigure, connectionCapabilityId } from "../bots/bots.service";
+import { connectionCapabilityId, reconcileBotConversation } from "../bots/bots.conversation";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { decryptSecret, SecretsKeyMissingError } from "./secrets";
 
@@ -38,7 +38,10 @@ export interface ConnectionLiveState {
 
 type ConnectionRow = NonNullable<Awaited<ReturnType<typeof prisma.connection.findUnique>>>;
 
-type ManagedRuntime = Pick<AgentRuntime, "installCapability" | "uninstallCapability" | "configure">;
+type ManagedRuntime = Pick<
+  AgentRuntime,
+  "installCapability" | "uninstallCapability" | "configure" | "listModels"
+>;
 
 interface Live extends ConnectionLiveState {
   connection?: McpConnection;
@@ -213,7 +216,7 @@ export class ConnectionManager {
     const links = await prisma.botConnection.findMany({ where: { connectionId: id } });
     for (const link of links) {
       try {
-        if (this.#runtime) await reconfigure(link.botId, this.#runtime);
+        if (this.#runtime) await reconcileBotConversation(link.botId, this.#runtime);
       } catch (error) {
         logger.warn({ error, botId: link.botId }, "Failed to re-apply bot capabilities");
       }

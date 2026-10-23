@@ -7,7 +7,7 @@ import { generateToken } from "@groot/core/utils/jwt.utils";
 import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
-import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.service";
+import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { ApprovalNotPendingError } from "../../../packages/agent/src/runtime";
 
 /**

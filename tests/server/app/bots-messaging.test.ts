@@ -32,6 +32,7 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
     }),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
+    finishedReplies: vi.fn().mockResolvedValue([]),
     lastMessage: vi.fn().mockResolvedValue(undefined),
     onActivity: vi.fn().mockReturnValue(() => undefined),
     listModels: vi
@@ -179,6 +180,26 @@ describe("messaging store (issues #13, #15, #16)", () => {
     expect(submitted.text).toContain("[attribute-stripped line]");
   });
 
+  it("reconciles the target's durable config before a bot-to-bot delivery", async () => {
+    // Same rule as owner sends and mentions: message_bot must not submit
+    // under a selection staler than the target's row.
+    await seedBot("Sender", "1");
+    await seedBot("Target", "2");
+    const store = createBotMessagingStore(runtime);
+    await store.deliver({
+      conversationId: 1,
+      toName: "Target",
+      text: "ping",
+      requestId: "reconcile-1",
+      sourceKey: "sk-reconcile-1",
+    });
+    const configure = vi.mocked(runtime.configure);
+    expect(configure).toHaveBeenCalledWith(2, expect.objectContaining({ modelId: "m1" }));
+    expect(configure.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(runtime.submit).mock.invocationCallOrder[0]!,
+    );
+  });
+
   it("reports busy roster entries and a queued receipt (issue #15)", async () => {
     await seedBot("Sender", "1");
     await seedBot("Busy Bot", "2");
@@ -273,23 +294,7 @@ describe("relay", () => {
         deliveredAt: new Date(answered - 5_000),
       },
     });
-    runtime.watchChat.mockImplementation(
-      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
-        await listener([
-          {
-            type: "snapshot",
-            state: {
-              messages: [
-                { id: "u1", role: "user", text: "hello", createdAt: answered - 2_000 },
-                { id: "a1", role: "assistant", text: "Here is my answer", createdAt: answered },
-              ],
-              busy: false,
-            },
-          },
-        ]);
-        return { initial: { messages: [], busy: false }, stop: async () => undefined };
-      },
-    );
+    runtime.finishedReplies.mockResolvedValue([{ text: "Here is my answer", createdAt: answered }]);
     const relay = createBotRelay(runtime);
     const relayed = await relay.relayForBot(guest.id);
     expect(relayed).toBe(1);
@@ -321,7 +326,7 @@ describe("relay", () => {
         deliveredAt: new Date(),
       },
     });
-    runtime.lastMessage.mockResolvedValue(undefined);
+    runtime.finishedReplies.mockResolvedValue([]);
     const relay = createBotRelay(runtime);
     expect(await relay.relayForBot(guest.id)).toBe(0);
     const row = await prisma.botMessage.findUnique({ where: { requestId: "r2" } });
@@ -344,34 +349,15 @@ describe("relay", () => {
       },
     });
     // Another chat went idle (the host finished first), so the sweep looks
-    // at the guest while its reply is still streaming.
-    let busy = true;
-    runtime.watchChat.mockImplementation(
-      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
-        await listener([
-          {
-            type: "snapshot",
-            state: {
-              messages: [
-                {
-                  id: busy ? "live" : "e2",
-                  role: "assistant",
-                  text: busy ? "Here is my" : "Here is my whole answer",
-                  createdAt: delivered + 1_000,
-                },
-              ],
-              busy,
-            },
-          },
-        ]);
-        return { initial: { messages: [], busy }, stop: async () => undefined };
-      },
-    );
+    // at the guest while its reply is still streaming: nothing is finished.
+    runtime.finishedReplies.mockResolvedValue([]);
     const relay = createBotRelay(runtime);
     expect(await relay.relayForBot(guest.id)).toBe(0);
     expect(runtime.submit).not.toHaveBeenCalled();
 
-    busy = false;
+    runtime.finishedReplies.mockResolvedValue([
+      { text: "Here is my whole answer", createdAt: delivered + 1_000 },
+    ]);
     expect(await relay.relayForBot(guest.id)).toBe(1);
     expect(runtime.submit).toHaveBeenCalledWith(
       1,
@@ -395,31 +381,36 @@ describe("relay", () => {
     });
     // The guest's last reply predates the delivery: a restart sweep must
     // not present it as the answer.
-    runtime.watchChat.mockImplementation(
-      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
-        await listener([
-          {
-            type: "snapshot",
-            state: {
-              messages: [
-                {
-                  id: "old",
-                  role: "assistant",
-                  text: "Old reply before the mention",
-                  createdAt: Date.now() - 60_000,
-                },
-              ],
-              busy: false,
-            },
-          },
-        ]);
-        return { initial: { messages: [], busy: false }, stop: async () => undefined };
-      },
-    );
+    runtime.finishedReplies.mockResolvedValue([
+      { text: "Old reply before the mention", createdAt: Date.now() - 60_000 },
+    ]);
     const relay = createBotRelay(runtime);
     expect(await relay.relayForBot(guest.id)).toBe(0);
     const row = await prisma.botMessage.findUnique({ where: { requestId: "r3" } });
     expect(row?.answeredAt).toBeNull();
+  });
+
+  it("does not relay a model error as an answer", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    const delivered = Date.now() - 5_000;
+    await prisma.botMessage.create({
+      data: {
+        fromBotId: null,
+        toBotId: guest.id,
+        replyToBotId: host.id,
+        kind: "mention",
+        requestId: "r-error",
+        text: "hello",
+        deliveredAt: new Date(delivered),
+      },
+    });
+    runtime.finishedReplies.mockResolvedValue([
+      { text: "", createdAt: delivered + 1_000, error: "Provider unavailable" },
+    ]);
+    const relay = createBotRelay(runtime);
+    expect(await relay.relayForBot(guest.id)).toBe(0);
+    expect(runtime.submit).not.toHaveBeenCalled();
   });
 
   it("gives each of two queued deliveries its own reply, in order", async () => {
@@ -442,33 +433,10 @@ describe("relay", () => {
         },
       });
     }
-    runtime.watchChat.mockImplementation(
-      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
-        await listener([
-          {
-            type: "snapshot",
-            state: {
-              messages: [
-                {
-                  id: "a1",
-                  role: "assistant",
-                  text: "Answer to question one",
-                  createdAt: deliveredAt.getTime() + 1_000,
-                },
-                {
-                  id: "a2",
-                  role: "assistant",
-                  text: "Answer to question two",
-                  createdAt: deliveredAt.getTime() + 2_000,
-                },
-              ],
-              busy: false,
-            },
-          },
-        ]);
-        return { initial: { messages: [], busy: false }, stop: async () => undefined };
-      },
-    );
+    runtime.finishedReplies.mockResolvedValue([
+      { text: "Answer to question one", createdAt: deliveredAt.getTime() + 1_000 },
+      { text: "Answer to question two", createdAt: deliveredAt.getTime() + 2_000 },
+    ]);
     const relay = createBotRelay(runtime);
     expect(await relay.relayForBot(guest.id)).toBe(2);
     const texts = runtime.submit.mock.calls.map((call: unknown[]) => call[1] as { text: string });

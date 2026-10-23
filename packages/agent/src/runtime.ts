@@ -60,6 +60,7 @@ import type {
   ChatState,
   ChatSubscription,
   ConversationRef,
+  FinishedReply,
   LastMessage,
   ModelInfo,
   QueuedMessage,
@@ -506,6 +507,7 @@ export class AgentRuntime {
               entry: {
                 kind: CHAT_USER_ENTRY,
                 data: {
+                  requestId: input.requestId,
                   ...(input.peer ? { peer: input.peer } : {}),
                   ...(input.attachments?.length
                     ? {
@@ -593,6 +595,32 @@ export class AgentRuntime {
       }
     }
     return undefined;
+  }
+
+  /**
+   * The conversation's finished assistant replies, oldest first. Empty while
+   * a reply is running: one still streaming (or paused between tool rounds)
+   * is not finished, and the caller's next idle reads it whole. A reply that
+   * ended in a model error carries `error`; replies with neither text nor an
+   * error (tool-call rounds) are left out.
+   */
+  async finishedReplies(ref: ConversationRef): Promise<FinishedReply[]> {
+    const subscription = await this.watchChat(ref, () => undefined);
+    await subscription.stop();
+    const state = subscription.initial;
+    if (state.busy) return [];
+    const replies: FinishedReply[] = [];
+    for (const message of state.messages) {
+      if (message.role !== "assistant" || message.status === "streaming") continue;
+      const error = message.status === "error" ? message.error : undefined;
+      if (!message.text && error === undefined) continue;
+      replies.push({
+        text: message.text,
+        createdAt: message.createdAt,
+        ...(error !== undefined ? { error } : {}),
+      });
+    }
+    return replies;
   }
 
   /**

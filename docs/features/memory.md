@@ -32,7 +32,7 @@ trigger, 24-byte owner-text trivial threshold (UTF-8 bytes, excluding role label
 The `memory` capability (`packages/agent/src/toolkits/memory.ts`) renders one
 prompt section through the store-adapter pattern (`memories.store.ts`):
 active, unexpired rows in fixed category order then createdAt ascending.
-`agentConfig()` enables it beside `skills` on every send, so the block always
+`bots.conversation.ts` enables it beside `skills` on every submit, so the block always
 reflects the current set. It renders `undefined` when memory is off or empty
 (zero prompt delta), and its content only changes when memories change, so
 provider prompt caching survives between captures.

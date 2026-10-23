@@ -7,13 +7,13 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
-import type { AgentRuntime, ChatState } from "@tiny-agents/agent";
+import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 
 export const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
 
 /** Minimal runtime surface the watcher needs (the full AgentRuntime satisfies it). */
-export type RoutinesRuntime = Pick<AgentRuntime, "onActivity" | "isBusy" | "watchChat">;
+export type RoutinesRuntime = Pick<AgentRuntime, "onActivity" | "isBusy" | "finishedReplies">;
 
 export interface RoutinesCompletionWatcher {
   /** Resolve awaiting runs of one conversation (used on idle transitions). */
@@ -35,11 +35,11 @@ function preview(text: string, max: number): string {
  * all belong to the same run, hence the newest in the window.
  */
 export function matchingReply(
-  replies: { text: string; createdAt: number }[],
+  replies: FinishedReply[],
   floorMs: number,
   untilMs?: number,
-): { text: string; createdAt: number } | undefined {
-  let match: { text: string; createdAt: number } | undefined;
+): FinishedReply | undefined {
+  let match: FinishedReply | undefined;
   for (const reply of replies) {
     if (reply.createdAt <= floorMs) continue;
     if (untilMs !== undefined && reply.createdAt > untilMs) break;
@@ -61,33 +61,14 @@ async function awaitingRunsWithBot() {
 }
 
 export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCompletionWatcher {
-  async function assistantReplies(conversationId: number) {
-    const replies: { text: string; createdAt: number }[] = [];
-    const sub = await rt.watchChat(conversationId, (events) => {
-      for (const event of events) {
-        if (event.type !== "snapshot") continue;
-        for (const message of (event.state as ChatState).messages) {
-          if (message.role !== "assistant" || !message.text) continue;
-          replies.push({ text: message.text, createdAt: message.createdAt });
-        }
-      }
-    });
-    await sub.stop();
-    return replies;
-  }
-
-  async function resolveRun(
-    runId: string,
-    reply: { text: string; createdAt: number },
-  ): Promise<void> {
-    const failed = reply.text.trimStart().startsWith("⚠");
-    if (failed) {
+  async function resolveRun(runId: string, reply: FinishedReply): Promise<void> {
+    if (reply.error !== undefined) {
       await prisma.routineRun.update({
         where: { id: runId },
         data: {
           status: "failed",
           finishedAt: new Date(),
-          error: preview(reply.text, ERROR_PREVIEW_CHARS),
+          error: preview(reply.error, ERROR_PREVIEW_CHARS),
         },
       });
       return;
@@ -115,7 +96,7 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
       (row) => row.conversationId === conversationId,
     );
     if (runs.length === 0) return 0;
-    const replies = await assistantReplies(conversationId);
+    const replies = await rt.finishedReplies(conversationId);
     // One reply answers one run, oldest first: each match raises the floor so
     // a second queued run on the same bot waits for its own later reply, and
     // stops before the next run's submit so it cannot steal that answer (the
