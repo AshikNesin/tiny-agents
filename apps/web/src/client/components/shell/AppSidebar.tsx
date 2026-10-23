@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/shell/lib/utils";
-import { ThemeMenu } from "@groot/shell/components/Layout";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
@@ -245,7 +244,6 @@ export function AppSidebar() {
                 ),
               )}
               <DropdownMenuSeparator />
-              <ThemeMenu />
               <DropdownMenuItem
                 variant="destructive"
                 onSelect={() => {
