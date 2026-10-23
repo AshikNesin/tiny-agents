@@ -27,28 +27,12 @@ import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV, type AppNavItem } from "./nav";
 import { BotsSection } from "./BotsSection";
+import { openFeedback } from "../../lib/feedback";
 
 const NAV: AppNavItem[] = [{ label: "Chats", icon: MessageSquare, to: "/chats" }, ...PRIMARY_NAV];
 
 const HEADER_ICON =
   "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
-
-/**
- * Opens the FeedbackBee panel (index.html embed). Its floating launcher is
- * hidden while the sidebar is on screen (app.css), so the account menu
- * clicks it instead.
- */
-function openFeedback() {
-  const launcher = document.querySelector<HTMLButtonElement>(".fbx-launch");
-  if (!launcher) {
-    toast.error("Feedback isn't available right now");
-    return;
-  }
-  // A pointer-style click (detail 1), not `.click()` (detail 0, which the
-  // embed treats as keyboard and focuses the note even on touch, popping
-  // the on-screen keyboard over the page).
-  launcher.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
-}
 
 /** ⌘K on Apple keyboards, Ctrl+K elsewhere. */
 const SEARCH_SHORTCUT =
