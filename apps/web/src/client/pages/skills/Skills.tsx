@@ -77,14 +77,17 @@ function SkillsList() {
         </>
       }
     >
-      <Input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search skills"
-        aria-label="Search skills"
-        maxLength={200}
-      />
+      {/* Search earns its place once there is something to search. */}
+      {skills !== null && skills.length > 0 && (
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search skills"
+          aria-label="Search skills"
+          maxLength={200}
+        />
+      )}
 
       {loadError ? (
         <ErrorState
@@ -104,12 +107,6 @@ function SkillsList() {
             icon={Sparkles}
             title="No skills yet"
             description="Write a skill from scratch, or paste a SKILL.md to import one."
-            action={
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="size-4" />
-                New skill
-              </Button>
-            }
           />
         ) : (
           <EmptyState

@@ -62,7 +62,7 @@ test.describe("Routines", () => {
     await expect(page.getByRole("heading", { name: "Routines" })).toBeVisible();
 
     // Editor: interval schedule of 15 minutes with a live preview.
-    // (Two "New routine" buttons exist on the empty page: header + empty state.)
+    // The empty page has one "New routine" button, in the header.
     await page
       .getByRole("button", { name: /new routine/i })
       .first()

@@ -190,14 +190,51 @@ export function Routines() {
         />
       ) : routines === null ? (
         <SkeletonList rows={4} leading="circle" secondaryLine />
+      ) : routines.length === 0 ? (
+        // One calm empty state: Upcoming and Recent runs have nothing to
+        // say until a routine exists. The header holds the action.
+        <EmptyState
+          icon={Repeat}
+          title="No routines yet"
+          description="Schedule a bot to run a prompt on a schedule, or just once."
+        />
       ) : (
         <>
-          <Section title="Upcoming" meta="next 5 across all routines">
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No scheduled runs. Enabled routines show their next run here.
-              </p>
-            ) : (
+          <Section
+            title="Schedules"
+            meta={`${routines.length} total · ${routines.filter((r) => r.enabled).length} enabled`}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              {routines.map((routine) => (
+                <RoutineCard
+                  key={routine.id}
+                  routine={routine}
+                  busy={
+                    busyId !== null &&
+                    (busyId === routine.id + "run" ||
+                      busyId === routine.id + "remove" ||
+                      busyId === routine.id + "toggle")
+                  }
+                  onEdit={() => {
+                    setEditing(routine);
+                    setEditorOpen(true);
+                  }}
+                  onDelete={() => void remove(routine)}
+                  onRunNow={() => void runNow(routine)}
+                  onToggle={(enabled) =>
+                    void act(
+                      routine.id,
+                      () => routinesApi.update(routine.id, { enabled }),
+                      "toggle",
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </Section>
+
+          {upcoming.length > 0 && (
+            <Section title="Upcoming" meta="next 5 across all routines">
               <Card className="divide-y overflow-hidden p-0">
                 <ul role="list">
                   {upcoming.map((routine) => (
@@ -216,69 +253,11 @@ export function Routines() {
                   ))}
                 </ul>
               </Card>
-            )}
-          </Section>
+            </Section>
+          )}
 
-          <Section
-            title="Schedules"
-            meta={`${routines.length} total · ${routines.filter((r) => r.enabled).length} enabled`}
-          >
-            {routines.length === 0 ? (
-              <EmptyState
-                icon={Repeat}
-                title="No routines yet"
-                description="Schedule a bot to run a prompt on a schedule, or just once."
-                action={
-                  <Button
-                    onClick={() => {
-                      setEditing(null);
-                      setEditorOpen(true);
-                    }}
-                  >
-                    <Plus className="size-4" />
-                    New routine
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {routines.map((routine) => (
-                  <RoutineCard
-                    key={routine.id}
-                    routine={routine}
-                    busy={
-                      busyId !== null &&
-                      (busyId === routine.id + "run" ||
-                        busyId === routine.id + "remove" ||
-                        busyId === routine.id + "toggle")
-                    }
-                    onEdit={() => {
-                      setEditing(routine);
-                      setEditorOpen(true);
-                    }}
-                    onDelete={() => void remove(routine)}
-                    onRunNow={() => void runNow(routine)}
-                    onToggle={(enabled) =>
-                      void act(
-                        routine.id,
-                        () => routinesApi.update(routine.id, { enabled }),
-                        "toggle",
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title="Recent executions">
-            {runs === null ? (
-              <SkeletonList rows={3} leading="square" />
-            ) : runs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No runs yet. "Run now" fires a routine immediately and records it here.
-              </p>
-            ) : (
+          {runs !== null && runs.length > 0 && (
+            <Section title="Recent runs">
               <Card className="divide-y overflow-hidden p-0">
                 <ul role="list">
                   {runs.map((run) => (
@@ -318,8 +297,8 @@ export function Routines() {
                   ))}
                 </ul>
               </Card>
-            )}
-          </Section>
+            </Section>
+          )}
         </>
       )}
 

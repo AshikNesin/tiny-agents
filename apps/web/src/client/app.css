@@ -121,10 +121,18 @@
 }
 
 /* The FeedbackBee launcher (index.html embed) floats bottom-right, which on
-   phones lands on the chat composer's send button. While a chat is open,
-   lift it above the composer, and hide it while typing, when the composer
-   grows and the on-screen keyboard is up. */
+   phones covers page content and lands on the chat composer's send button.
+   Shrink it there; while a chat is open, lift it above the composer and
+   hide it while typing, when the composer grows and the keyboard is up. */
 @media (max-width: 767px) {
+  /* Phones: a smaller, quieter launcher so it covers less of every page. */
+  body .fbx-launch {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    opacity: 0.85;
+  }
   body:has([data-slot="chat-composer"]) .fbx-launch {
     bottom: calc(env(safe-area-inset-bottom) + 124px);
   }

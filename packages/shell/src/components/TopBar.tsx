@@ -81,7 +81,12 @@ export function TopBar({
   const { pageChrome } = useShellConfig();
   const sidebarChrome = pageChrome === "sidebar";
   return (
-    <header className={cn("flex w-full items-center gap-3 pt-4 pb-2", sidebarChrome && "md:pt-10")}>
+    <header
+      className={cn(
+        "flex w-full flex-wrap items-center gap-3 pt-4 pb-2",
+        sidebarChrome && "md:pt-10",
+      )}
+    >
       <Button
         variant="outline"
         size="icon"

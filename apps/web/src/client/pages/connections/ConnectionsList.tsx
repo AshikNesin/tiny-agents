@@ -109,7 +109,6 @@ export function ConnectionsList() {
           icon={Plug}
           title="No connections yet"
           description="Any remote MCP server works — add one to give your bots its tools."
-          action={<Button onClick={() => setAddOpen(true)}>Add connection</Button>}
         />
       ) : (
         <>
