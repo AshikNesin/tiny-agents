@@ -4,7 +4,6 @@ import {
   Bot,
   ChevronsUpDown,
   LogOut,
-  MessageSquare,
   MessageSquareHeart,
   PanelLeftClose,
   PanelLeftOpen,
@@ -25,11 +24,9 @@ import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { PRIMARY_NAV, SECONDARY_NAV, type AppNavItem } from "./nav";
+import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 import { BotsSection } from "./BotsSection";
 import { openFeedback } from "../../lib/feedback";
-
-const NAV: AppNavItem[] = [{ label: "Chats", icon: MessageSquare, to: "/chats" }, ...PRIMARY_NAV];
 
 const HEADER_ICON =
   "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
@@ -94,7 +91,8 @@ function NavRow({
 
 /**
  * Persistent left sidebar (Grok-style): search and collapse icons up top,
- * the everyday nav (Chats, Tasks, Terminal), the Bots section, and the
+ * the everyday nav (Tasks, Terminal), the Bots section (the way into
+ * chats; /chats itself opens the last bot), and the
  * account menu, which also holds the set-up-and-forget pages (Routines,
  * Skills, Memory, Connections, Settings). Desktop collapses to an icon rail (persisted); on mobile it is
  * an off-canvas drawer driven by `mobileOpen`.
@@ -191,7 +189,7 @@ export function AppSidebar() {
           aria-label="Primary"
           className={cn("space-y-0.5 px-2.5 pb-2", rail && "md:flex md:flex-col md:items-center")}
         >
-          {NAV.map((item) => (
+          {PRIMARY_NAV.map((item) => (
             <NavRow
               key={item.to}
               icon={item.icon}

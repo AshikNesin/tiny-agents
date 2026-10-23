@@ -124,16 +124,16 @@ chrome on mobile only (`pageChrome: "sidebar"` hides the back button and profile
 
 ### 6.3 Routes & screens
 
-| Route / screen  | Contents                                                                                                           |
-| --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                            |
-| `/`             | Redirects to `/chats`.                                                                                             |
-| `/chats`        | Desktop: sidebar + empty chat pane ("Pick a bot or create one"). Mobile: the Bots section full-screen.             |
-| `/chats/:botId` | Desktop: sidebar + open chat. Mobile: chat full-screen; the hamburger opens the sidebar drawer.                    |
-| Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                 |
-| Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt) — not OpenMausBot's multi-section wizard. |
-| Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                              |
-| Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                            |
+| Route / screen  | Contents                                                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/login`        | groot's login page: email/password + **"Sign in with passkey"** button.                                                           |
+| `/`             | Redirects to `/chats`.                                                                                                            |
+| `/chats`        | Desktop: opens the last-opened bot (else the sidebar's top bot). Mobile: the Bots section full-screen. No bots: create-first-bot. |
+| `/chats/:botId` | Desktop: sidebar + open chat. Mobile: chat full-screen; the hamburger opens the sidebar drawer.                                   |
+| Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                                |
+| Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt) — not OpenMausBot's multi-section wizard.                |
+| Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                                             |
+| Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                                           |
 
 ### 6.4 Mobile
 

@@ -1,17 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { botsApi, type Bot as BotRow } from "../../lib/bots-api";
-import { BotAvatar } from "../../components/BotAvatar";
+import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { ChatPane } from "../../components/ChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
 
+/** Desktop layout (the sidebar is on screen), tracked live across resizes. */
+const DESKTOP_QUERY = "(min-width: 768px)";
+function subscribeDesktop(onChange: () => void) {
+  if (typeof window.matchMedia !== "function") return () => {};
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function isDesktop(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_QUERY).matches;
+}
+
 /**
- * Chat area beside the sidebar (PRD §6.2): the open bot's chat, or an empty
- * state. On mobile with no bot open it is the full-screen bot list.
+ * Chat area beside the sidebar (PRD §6.2): the open bot's chat. `/chats` is
+ * not a page of its own on desktop, where the sidebar already lists the
+ * bots: it opens the last-opened bot (else the sidebar's top one). On
+ * mobile with no bot open it is the full-screen bot list, the app's home.
+ * With no bots at all it is the "create your first bot" screen everywhere.
  */
 export function ChatWorkspace() {
   const { botId } = useParams();
@@ -59,6 +74,22 @@ export function ChatWorkspace() {
   }, [currentId, currentConversation, savedTick]);
 
   const noBots = bots.length === 0 && !loading;
+  const desktop = useSyncExternalStore(subscribeDesktop, isDesktop, () => false);
+  const loaded = !loading && bots.length > 0;
+
+  useEffect(() => {
+    if (currentId) rememberLastBot(currentId);
+  }, [currentId]);
+
+  // Desktop never rests on a bare /chats: land in a conversation. A link to
+  // a bot that no longer exists goes to that landing bot on desktop, and
+  // back to the bot list on phones, which keep /chats as their home.
+  useEffect(() => {
+    if (!loaded || currentId) return;
+    if (!desktop && !botId) return;
+    const target = desktop ? landingBotId(bots) : null;
+    navigate(target ? `/chats/${target}` : "/chats", { replace: true });
+  }, [loaded, currentId, desktop, botId, bots, navigate]);
 
   return (
     <div className="h-full min-h-0">
@@ -91,54 +122,24 @@ export function ChatWorkspace() {
               </div>
             </div>
           )}
-          <div
-            className={
-              noBots
-                ? "flex h-full flex-col items-center justify-center gap-4 p-6 text-center"
-                : "hidden h-full flex-col items-center justify-center gap-4 p-6 text-center md:flex"
-            }
-          >
-            {noBots ? (
-              <>
-                <div className="bg-muted text-foreground flex size-14 items-center justify-center rounded-2xl">
-                  <Bot className="size-7" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Create your first bot</h2>
-                  <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-                    Every contact here is an AI agent you chat with — pick a persona and a model,
-                    and it remembers the whole conversation.
-                  </p>
-                </div>
-                <Button onClick={openCreateBot}>
-                  <Bot className="size-4" />
-                  Create your first bot
-                </Button>
-              </>
-            ) : (
-              /* Featured bot: the most recent contact as a shortcut, kept
-                 small and muted so it reads as an empty state, not as an
-                 open conversation whose composer failed to load. */
-              <button
-                type="button"
-                onClick={() => bots[0] && navigate(`/chats/${bots[0].id}`)}
-                className="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl px-8 py-4 text-center"
-              >
-                {bots[0] && (
-                  <BotAvatar
-                    name={bots[0].name}
-                    className="size-20 opacity-80 transition-transform group-hover:scale-105"
-                  />
-                )}
-                <span className="text-muted-foreground text-sm font-medium">
-                  {bots[0]?.name ?? "Pick a bot or create one"}
-                </span>
-                <span className="text-muted-foreground/70 text-xs">
-                  Select a bot to start chatting, or create one.
-                </span>
-              </button>
-            )}
-          </div>
+          {noBots && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+              <div className="bg-muted text-foreground flex size-14 items-center justify-center rounded-2xl">
+                <Bot className="size-7" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Create your first bot</h2>
+                <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+                  Every contact here is an AI agent you chat with — pick a persona and a model, and
+                  it remembers the whole conversation.
+                </p>
+              </div>
+              <Button onClick={openCreateBot}>
+                <Bot className="size-4" />
+                Create your first bot
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
