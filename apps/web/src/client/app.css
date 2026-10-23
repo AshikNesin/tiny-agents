@@ -119,3 +119,42 @@
 .chat-header-fade {
   background: linear-gradient(to bottom, var(--background) 0%, var(--background) 60%, transparent);
 }
+
+/* FeedbackBee (index.html embed). The panel opens as a centered modal over
+   a dimmed backdrop (lib/feedback.ts closes it on an outside click). Inside
+   the app the floating launcher is hidden and "Send feedback" in the
+   sidebar's account menu opens it; signed-out pages keep the launcher,
+   smaller on phones. */
+body .fbx-panel,
+body .fbx-qa {
+  /* Centered by insets + auto margins, not a transform: the embed animates
+     transform, and it sets an inline bottom while the on-screen keyboard is
+     up, which then keeps the panel centered in the visible area. */
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  transform-origin: center;
+}
+/* The backdrop steps away with the panel while a screenshot or recording
+   runs, so it never ends up in the capture, and returns for the screenshot
+   review card that follows. */
+body:has(.fbx-panel.fbx-open:not(.fbx-away))::after,
+body:has(.fbx-qa)::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147482999;
+  background: rgb(0 0 0 / 0.5);
+}
+body:has(aside[aria-label="Sidebar"]) .fbx-launch {
+  display: none;
+}
+@media (max-width: 767px) {
+  body .fbx-launch {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    opacity: 0.85;
+  }
+}

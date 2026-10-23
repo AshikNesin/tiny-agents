@@ -4,7 +4,7 @@ test.describe("App settings (authenticated)", () => {
   test.beforeEach(async ({ page }) => {
     // Login before each test
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await page.waitForURL(/\/(chats|tasks)/);

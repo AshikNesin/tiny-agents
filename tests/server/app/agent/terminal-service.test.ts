@@ -157,6 +157,25 @@ describe("terminal service (unit)", () => {
     expect(await service.status()).toMatchObject({ kind: "unreachable" });
     await expect(service.create(80, 24)).rejects.toBeInstanceOf(TerminalUnreachableError);
   });
+
+  it("describes an unreachable sandbox once, not nested", async () => {
+    const service = createTerminalService({
+      transport: {
+        exec: async () => {
+          throw new Error("getaddrinfo ENOTFOUND tiny-agents-vm");
+        },
+        pty: async () => {
+          throw new Error("getaddrinfo ENOTFOUND tiny-agents-vm");
+        },
+      },
+    });
+    const { status } = await service.list();
+    expect(status).toEqual({
+      kind: "unreachable",
+      message:
+        "Cannot reach the sandbox (getaddrinfo ENOTFOUND tiny-agents-vm). Is it online and on the tailnet?",
+    });
+  });
 });
 
 describe("terminal service (integration: real ssh2 client + fake SSH server)", () => {

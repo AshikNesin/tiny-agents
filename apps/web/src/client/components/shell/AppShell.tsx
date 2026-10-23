@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Bot, LogOut, MessageSquare, Monitor, Moon, Plus, Settings, Sun } from "lucide-react";
 import { Layout } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
@@ -123,6 +123,14 @@ export function AppShell() {
     if (!editingBot) navigate(`/chats/${bot.id}`);
   };
 
+  const onDeleted = (bot: BotRow) => {
+    useBotsStore.getState().resetChat(bot.id);
+    void loadBots();
+    if (matchPath("/chats/:botId", pathname)?.params.botId === bot.id) {
+      navigate("/chats", { replace: true });
+    }
+  };
+
   const inChats = pathname === "/chats" || pathname.startsWith("/chats/");
 
   return (
@@ -146,6 +154,7 @@ export function AppShell() {
         defaultModelId={defaultModel}
         bot={editingBot}
         onSaved={onSaved}
+        onDeleted={onDeleted}
       />
     </div>
   );

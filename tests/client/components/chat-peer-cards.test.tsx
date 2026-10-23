@@ -221,7 +221,7 @@ describe("PeerIncomingCard", () => {
 
   it("shows the replying pulse while streaming", () => {
     render(<PeerIncomingCard name="Radar" text="hello" streaming />);
-    expect(screen.getByText("replying…")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "replying…" })).toBeInTheDocument();
   });
 
   // cubic: failure state renders like every other card, not silently dropped.

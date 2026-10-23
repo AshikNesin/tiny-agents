@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
@@ -29,7 +29,6 @@ import { MessageAttachments } from "./Attachments";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
-import type { Bot } from "../lib/bots-api";
 
 /** Round hover action beside a bubble; always visible on touch, where there is no hover. */
 function CopyButton({ text }: { text: string }) {
@@ -58,14 +57,47 @@ function CopyButton({ text }: { text: string }) {
 export const USER_PILL =
   "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-3xl px-4 py-3 text-[15px] leading-[22.5px] wrap-break-word";
 
-/** Thinking block: an AI Elements Reasoning step — open while streaming. */
+/**
+ * Three bouncing dots: the bot is working but has nothing to show yet
+ * (waiting on the first token, or between tool rounds).
+ */
+export function TypingIndicator({ label = "thinking" }: { label?: string }) {
+  return (
+    <span
+      role="status"
+      aria-label={`${label}…`}
+      data-testid="typing-indicator"
+      className="bg-bubble inline-flex h-9 items-center gap-1 rounded-3xl px-4"
+    >
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="bg-muted-foreground/60 size-1.5 animate-bounce rounded-full motion-reduce:animate-pulse"
+          style={{ animationDelay: `${i * 150}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Thinking block: an AI Elements Reasoning step. Open (and shimmering)
+ * while the model reasons, folded away once it finishes so the reply is
+ * what remains on screen.
+ */
 function Reasoning({ text, running }: { text: string; running: boolean }) {
   const [open, setOpen] = useState(running);
+  const wasRunning = useRef(running);
+  useEffect(() => {
+    if (wasRunning.current !== running) setOpen(running);
+    wasRunning.current = running;
+  }, [running]);
   return (
     <TraceCollapsible open={open} onOpenChange={setOpen} className="mb-2">
       <TraceCollapsibleTrigger>
-        <TraceLine>
-          <TraceTitle>Reasoning</TraceTitle>
+        <TraceLine status={running ? "running" : undefined}>
+          <TraceTitle>{running ? "Thinking…" : "Reasoning"}</TraceTitle>
         </TraceLine>
       </TraceCollapsibleTrigger>
       <TraceCollapsibleContent>
@@ -96,6 +128,13 @@ const STATUS_TEXT: Partial<Record<ChatToolCall["status"], string>> = {
 function formatDuration(ms: number): string {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
+
+/** Tool states whose row already shows the bot at work (or waiting on you). */
+export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
+  "pending",
+  "running",
+  "awaiting_approval",
+]);
 
 /** Map our tool status onto the trace step status. */
 function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pending" | undefined {
@@ -512,12 +551,7 @@ export function PeerIncomingCard({
         </div>
         <CopyButton text={text} />
       </div>
-      {streaming && (
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 px-1 text-xs">
-          <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-          replying…
-        </span>
-      )}
+      {streaming && <TypingIndicator label="replying" />}
       {failed && (
         <p className="text-destructive px-1 text-xs">
           {error ?? "This delivery was not answered."}
@@ -580,12 +614,14 @@ function assistantView(
             {message.text && <CopyButton text={message.text} />}
           </div>
         )}
-        {streaming && !message.text && (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5 px-1 text-xs">
-            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-            thinking…
-          </span>
-        )}
+        {/* Nothing visible yet: dots, unless a running tool row or the
+            reasoning block already shows the bot at work. */}
+        {streaming &&
+          !message.text &&
+          !message.reasoning &&
+          !message.toolCalls?.some((c) => ACTIVE_TOOL_STATUSES.has(c.status)) && (
+            <TypingIndicator />
+          )}
       </div>
     </Message>
   );

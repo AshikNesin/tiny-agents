@@ -63,6 +63,12 @@ describe("ChatMessageView reply card", () => {
   });
 
   it("shows the thinking pulse for a streaming turn with no text yet", () => {
+    render(<ChatMessageView message={msg({ status: "streaming" })} {...base} />);
+    expect(screen.getByRole("status", { name: "thinking…" })).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="reply-card"]')).not.toBeInTheDocument();
+  });
+
+  it("lets a running tool row stand in for the thinking pulse", () => {
     render(
       <ChatMessageView
         message={msg({
@@ -72,7 +78,7 @@ describe("ChatMessageView reply card", () => {
         {...base}
       />,
     );
-    expect(screen.getByText("thinking…")).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "thinking…" })).not.toBeInTheDocument();
     expect(document.querySelector('[data-slot="reply-card"]')).not.toBeInTheDocument();
   });
 

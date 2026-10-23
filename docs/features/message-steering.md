@@ -11,12 +11,18 @@ durably joins (or follows) the running reply, and it survives reloads.
 | Alt+Enter while busy           | Follow-up: placed when the reply ends, starts the next run            |
 | Send while idle                | Placed immediately (`whenBusy` is ignored by pi-durable)              |
 | The x on a queued bubble       | Withdraws the held message (idempotent; 409 once placed)              |
-| Stop button                    | Aborts the reply and withdraws every held message                     |
+| Stop button / Esc while busy   | Aborts the reply and withdraws every held message                     |
+
+The composer has **one** round action button: while the bot replies and
+nothing is typed it is Stop (a spinner until the run ends); as soon as there
+is text or an attachment it is Send, labelled "Steer the reply". Keyboard
+hints for Enter / Alt+Enter / Esc fade in as one quiet line under the composer while busy,
+on devices with a physical keyboard (fine pointer) only.
 
 ## Architecture
 
 ```
-composer (always live) → POST /bots/:id/messages { whenBusy: "steer" | "followUp" }
+ChatComposer (always live) → ChatPane.send → POST /bots/:id/messages { whenBusy: "steer" | "followUp" }
   → AgentRuntime.submit(whenBusy) → pi-durable pi.inbox (durable queue)
   → inbox_update event → #refreshQueued (InboxDoc + inspect() records)
   → SSE { type: "queued", items } → store drops the matching optimistic echo

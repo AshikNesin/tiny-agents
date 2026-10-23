@@ -21,7 +21,6 @@ export function ChatWorkspace() {
   const loading = useBotsStore((s) => s.loading);
   const models = useBotsStore((s) => s.models);
   const gatewayConfigured = useBotsStore((s) => s.gatewayConfigured);
-  const loadBots = useBotsStore((s) => s.loadBots);
   const openCreateBot = useUiStore((s) => s.openCreateBot);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
@@ -70,7 +69,6 @@ export function ChatWorkspace() {
           models={models}
           gatewayConfigured={gatewayConfigured}
           onEditBot={() => void openEditBot(fullBot.id)}
-          onBotDeleted={() => void loadBots()}
           onBotReset={(fresh) => setFullBot(fresh)}
         />
       ) : (

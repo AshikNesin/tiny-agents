@@ -75,7 +75,6 @@ function renderPane() {
         models={[model]}
         gatewayConfigured
         onEditBot={() => {}}
-        onBotDeleted={() => {}}
         onBotReset={() => {}}
       />
     </BrowserRouter>,
@@ -87,6 +86,8 @@ const user = userEvent.setup();
 
 beforeEach(() => {
   sendMock.mockClear();
+  // The composer keeps unsent drafts per bot; start every test blank.
+  localStorage.clear();
 });
 
 describe("ChatPane mention wiring", () => {

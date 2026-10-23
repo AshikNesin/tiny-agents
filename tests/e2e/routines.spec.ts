@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
-  await page.getByLabel(/email/i).fill("demo@example.com");
+  await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
   await page.getByLabel(/password/i).fill("demo@example.com");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await expect(page).toHaveURL(/\/chats$/);
@@ -62,7 +62,7 @@ test.describe("Routines", () => {
     await expect(page.getByRole("heading", { name: "Routines" })).toBeVisible();
 
     // Editor: interval schedule of 15 minutes with a live preview.
-    // (Two "New routine" buttons exist on the empty page: header + empty state.)
+    // The empty page has one "New routine" button, in the header.
     await page
       .getByRole("button", { name: /new routine/i })
       .first()

@@ -35,14 +35,11 @@ export function PageLayout({
 }: PageLayoutProps) {
   return (
     <PageContainer maxWidth={maxWidth} className={className}>
-      <TopBar title={title}>{titleAdornment}</TopBar>
+      <TopBar title={title} actions={actions}>
+        {titleAdornment}
+      </TopBar>
       {breadcrumb && <div className="mb-4">{breadcrumb}</div>}
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          {description && <div className="text-muted-foreground text-sm">{description}</div>}
-        </div>
-        {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
-      </div>
+      {description && <div className="text-muted-foreground mt-1 text-sm">{description}</div>}
       <div className="mt-6 space-y-6">{children}</div>
     </PageContainer>
   );

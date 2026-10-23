@@ -281,14 +281,19 @@ function BotMemorySection({
             <Plus className="size-3.5" />
             Add memory
           </Button>
-          <Switch
-            checked={memoryEnabled ?? true}
-            disabled={busy}
-            onCheckedChange={onToggle}
-            aria-label={
-              memoryEnabled ? `Turn off memory for ${bot.name}` : `Turn on memory for ${bot.name}`
-            }
-          />
+          {/* A bare switch beside "Add memory" read as unlabeled; say what
+              it controls. */}
+          <label className="text-muted-foreground flex items-center gap-2 text-xs">
+            <span aria-hidden>{(memoryEnabled ?? true) ? "On" : "Off"}</span>
+            <Switch
+              checked={memoryEnabled ?? true}
+              disabled={busy}
+              onCheckedChange={onToggle}
+              aria-label={
+                memoryEnabled ? `Turn off memory for ${bot.name}` : `Turn on memory for ${bot.name}`
+              }
+            />
+          </label>
         </div>
       </div>
       {!memoryEnabled && (

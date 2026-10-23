@@ -1,27 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  ArrowUp,
-  Globe,
-  Menu,
-  MessageSquarePlus,
-  MoreHorizontal,
-  Paperclip,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Square,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Fragment, useEffect, useRef, useState, type DragEvent } from "react";
+import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@groot/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -32,21 +11,23 @@ import {
 } from "@groot/ui/dialog";
 import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
-import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
-import { ChatMessageView, USER_PILL, type ToolLabels } from "./ChatMessageView";
-import { MessageAttachments, StagedAttachment, type StagedItem } from "./Attachments";
 import {
-  MentionAutocomplete,
-  type MentionAutocompleteHandle,
-  type MentionableBot,
-} from "./MentionAutocomplete";
+  ACTIVE_TOOL_STATUSES,
+  ChatMessageView,
+  TypingIndicator,
+  USER_PILL,
+  type ToolLabels,
+} from "./ChatMessageView";
+import { ChatComposer, type ChatComposerHandle, type ComposerSubmission } from "./ChatComposer";
+import { MessageAttachments } from "./Attachments";
 import { formatDayDivider } from "../lib/day-divider";
 import { Message } from "./ui/message";
-import type { QueuedMessage } from "../lib/chat-types";
+import { Spinner } from "./ui/spinner";
+import type { ChatMessage, PendingMessage, QueuedMessage } from "../lib/chat-types";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -57,13 +38,42 @@ import {
   useMessageScroller,
 } from "./ui/message-scroller";
 
+// Stable empties for a chat that has not connected yet: a fresh `[]` per
+// render would re-run every effect that depends on the transcript.
+const NO_MESSAGES: ChatMessage[] = [];
+const NO_PENDING: PendingMessage[] = [];
+const NO_QUEUED: QueuedMessage[] = [];
+
+/** True once `active` has held for `ms`: hides sub-second flickers. */
+function useSettled(active: boolean, ms: number): boolean {
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setSettled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSettled(true), ms);
+    return () => window.clearTimeout(timer);
+  }, [active, ms]);
+  return active && settled;
+}
+
+/** ⌘⇧O on Apple keyboards, Ctrl+Shift+O elsewhere (ChatGPT's new-chat chord). */
+const NEW_CHAT_SHORTCUT =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? "⇧⌘O"
+    : "Ctrl+Shift+O";
+
 /**
- * Primary-pointer media query (pointer: coarse = touch, e.g. phones and
- * tablets). On such devices Enter inserts a newline and only the send
- * button sends — Enter-to-send is a physical-keyboard affordance (issue #1).
+ * The bot is working with nothing on screen to show it: waiting on the
+ * first token, or between tool rounds. A streaming reply, a running tool
+ * row or an approval card already says so on its own.
  */
-function prefersCoarsePointer(): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+function awaitingFirstOutput(messages: ChatMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant") return true;
+  if (last.status === "streaming") return false;
+  return !last.toolCalls?.some((call) => ACTIVE_TOOL_STATUSES.has(call.status));
 }
 
 interface ChatPaneProps {
@@ -71,7 +81,6 @@ interface ChatPaneProps {
   models: ModelInfo[];
   gatewayConfigured: boolean;
   onEditBot: () => void;
-  onBotDeleted: () => void;
   onBotReset: (bot: Bot) => void;
 }
 
@@ -92,15 +101,7 @@ export function ChatPane(props: ChatPaneProps) {
   );
 }
 
-function ChatPaneBody({
-  bot,
-  models,
-  gatewayConfigured,
-  onEditBot,
-  onBotDeleted,
-  onBotReset,
-}: ChatPaneProps) {
-  const navigate = useNavigate();
+function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }: ChatPaneProps) {
   const chat = useBotsStore((s) => s.chats[bot.id]);
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
@@ -108,30 +109,14 @@ function ChatPaneBody({
   const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
-  const togglePin = useBotsStore((s) => s.togglePin);
-  const pinned = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.pinnedAt) != null;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const [text, setText] = useState("");
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [caret, setCaret] = useState(0);
-  const [mentionClosed, setMentionClosed] = useState(false);
-  const [staged, setStaged] = useState<StagedItem[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const pasteCount = useRef(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mentionRef = useRef<MentionAutocompleteHandle>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
-  const coarsePointer = useMemo(prefersCoarsePointer, []);
-
-  const roster = useBotsStore((s) => s.bots);
-  const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
-  // The overlay follows the caret inside the mention token, so it needs
-  // the caret on every keystroke; `mentionClosed` covers Escape.
-  const mention = activeMentionToken(text, caret);
-  const mentionOpen = mention !== null && !mentionClosed;
 
   // (Re)connect whenever the bot's conversation changes: a new chat
   // (resetChat dropped the cached state) moves the bot to a fresh
@@ -165,10 +150,29 @@ function ChatPaneBody({
     if (unread) markRead(bot.id);
   }, [markRead, unread, bot.id]);
 
-  const messages = chat?.messages ?? [];
-  const pending = chat?.pending ?? [];
-  const queued = chat?.queued ?? [];
+  const messages = chat?.messages ?? NO_MESSAGES;
+  const pending = chat?.pending ?? NO_PENDING;
+  const queued = chat?.queued ?? NO_QUEUED;
   const busy = chat?.busy ?? false;
+  const loaded = chat?.loaded ?? false;
+  // Brief stream hiccups reconnect on their own; only a drop that lasts
+  // gets the notice. The first connection is "loading", not "reconnecting".
+  const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
+  const showLoading = useSettled(!loaded && messages.length === 0, 300);
+  const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
+  // A fresh conversation has nothing to start over from.
+  const canReset = messages.length > 0 || pending.length > 0 || queued.length > 0;
+
+  // ⇧⌘O / Ctrl+Shift+O asks for a new chat from anywhere in the pane.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.key.toLowerCase() !== "o") return;
+      e.preventDefault();
+      if (canReset) setConfirmReset(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canReset]);
 
   // Auto-open the Browser panel the first time the bot drives its browser in
   // this conversation view (friction #37): the empty state promises it, and
@@ -200,74 +204,43 @@ function ChatPaneBody({
   // land below the marker too, but a "New messages" flag above something
   // you wrote yourself reads as a glitch. The divider goes above the first
   // unread assistant message; read anchors keep including user messages.
-  const firstAssistantUnreadIndex = messages.findIndex(
-    (m) => m.role === "assistant" && m.createdAt > (unreadFrom ?? 0),
-  );
+  // The target is fixed by the first fresh snapshot of this visit: replies
+  // that stream in while the chat is open are read as they arrive, so a
+  // reply to what you just sent never gets flagged as "new".
+  const [dividerId, setDividerId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!loaded || dividerId !== undefined) return;
+    const first = messages.find((m) => m.role === "assistant" && m.createdAt > (unreadFrom ?? 0));
+    setDividerId(first?.id ?? null);
+  }, [loaded, dividerId, messages, unreadFrom]);
   const firstUnreadIndex = messages.findIndex((m) => m.createdAt > (unreadFrom ?? 0));
   const isRead = (i: number) => firstUnreadIndex === -1 || i < firstUnreadIndex;
+  // Read anchors only place the chat as it opens. The scroller treats
+  // anchors as user turns and re-targets them whenever the transcript's
+  // children are swapped (an echo replaced by its confirmed row), which
+  // yanked the view back up to an old read message while a reply streamed
+  // instead of following it. Two frames after the first render with
+  // messages the initial position is applied; from then on autoScroll
+  // alone keeps the newest message pinned.
+  const [anchoring, setAnchoring] = useState(true);
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    if (!anchoring || !hasMessages) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setAnchoring(false));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [anchoring, hasMessages]);
 
-  const modelKnown = models.some((m) => m.id === bot.modelId);
   const model = models.find((m) => m.id === bot.modelId);
-  const uploading = staged.some((item) => item.status === "uploading");
-  const readyAttachments = staged.filter((item) => item.status === "done" && item.ref);
-  // Busy no longer blocks sending (steering, issue #9): the server queues the
-  // message and the send button stays live beside Stop.
-  const canSend =
-    gatewayConfigured &&
-    modelKnown &&
-    !uploading &&
-    (text.trim().length > 0 || readyAttachments.length > 0);
+  const composerEnabled = gatewayConfigured && model !== undefined;
 
-  const stageFiles = (files: FileList | File[]) => {
-    const limit = 10 - staged.length;
-    if (limit <= 0) {
-      toast.error("Up to 10 attachments per message");
-      return;
-    }
-    for (const file of Array.from(files).slice(0, limit)) {
-      const key = crypto.randomUUID();
-      const isImage = file.type.startsWith("image/");
-      const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
-      const name = file.name || `pasted-image-${++pasteCount.current}.png`;
-      setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
-      botsApi
-        .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
-        .then(({ ref }) =>
-          setStaged((current) =>
-            current.map((item) => (item.key === key ? { ...item, status: "done", ref } : item)),
-          ),
-        )
-        .catch((error) => {
-          setStaged((current) =>
-            current.map((item) =>
-              item.key === key
-                ? {
-                    ...item,
-                    status: "error",
-                    error: error instanceof Error ? error.message : "Upload failed",
-                  }
-                : item,
-            ),
-          );
-        });
-    }
-  };
-
-  const unstage = (item: StagedItem) => {
-    setStaged((current) => current.filter((candidate) => candidate.key !== item.key));
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    if (item.ref) void botsApi.deleteUpload(item.ref.uploadId).catch(() => undefined);
-  };
-
-  const send = async (whenBusy: "steer" | "followUp" = "steer") => {
-    const body = text.trim();
-    if (!canSend || (!body && readyAttachments.length === 0)) return;
-    const attachmentRefs = readyAttachments.map((item) => item.ref!);
-    setText("");
-    setStaged([]);
-    setMentionClosed(false);
-    for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    const mentions = mentionedBotIds(body, mentionCandidates, bot.id);
+  /** Rejects when the server refused, so the composer restores the draft. */
+  const send = async ({ body, attachments, mentions, whenBusy }: ComposerSubmission) => {
     // Keep the just-sent message visible: the reader may be scrolled up in
     // the history, and sending is an explicit jump-to-now (issue #2a).
     scroller.scrollToEnd({ behavior: "auto" });
@@ -282,7 +255,7 @@ function ChatPaneBody({
       // leaves both visible (cubic: doubled mention echo).
       text: body,
       createdAt: Date.now(),
-      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
     };
     applyChatEvent(bot.id, { type: "pending-add", message: echo });
     try {
@@ -291,33 +264,57 @@ function ChatPaneBody({
         echo.id,
         body,
         mentions,
-        attachmentRefs.map((a) => a.uploadId),
+        attachments.map((a) => a.uploadId),
         whenBusy,
       );
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
       toast.error(error instanceof Error ? error.message : "Failed to send");
-      setText(body);
-      setStaged(
-        attachmentRefs.map((ref, i) => ({
-          key: crypto.randomUUID(),
-          name: ref.name,
-          status: "done" as const,
-          ref,
-          previewUrl: ref.kind === "image" ? botsApi.uploadUrl(ref.uploadId) : undefined,
-          ...(i === -1 ? {} : {}),
-        })),
-      );
+      throw error;
     }
   };
 
   const stop = async () => {
     try {
       await botsApi.abort(bot.id);
-    } catch {
+    } catch (error) {
       toast.error("Failed to stop the reply");
+      throw error;
     }
   };
+
+  // Drop files anywhere on the conversation to attach them. dragenter and
+  // dragleave fire for every child crossed, so a depth counter tells when
+  // the pointer really left the pane.
+  const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
+  const dropHandlers = composerEnabled
+    ? {
+        onDragEnter: (e: DragEvent) => {
+          if (!isFileDrag(e)) return;
+          e.preventDefault();
+          dragDepth.current += 1;
+          setDragging(true);
+        },
+        onDragOver: (e: DragEvent) => {
+          if (!isFileDrag(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        },
+        onDragLeave: (e: DragEvent) => {
+          if (!isFileDrag(e)) return;
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDragging(false);
+        },
+        onDrop: (e: DragEvent) => {
+          if (!isFileDrag(e)) return;
+          e.preventDefault();
+          dragDepth.current = 0;
+          setDragging(false);
+          if (e.dataTransfer.files.length > 0)
+            composerRef.current?.stageFiles(e.dataTransfer.files);
+        },
+      }
+    : {};
 
   /** Withdraw a queued/steering message: the x on its bubble. */
   const cancelQueued = async (item: QueuedMessage) => {
@@ -330,17 +327,6 @@ function ChatPaneBody({
       toast.error(
         error instanceof Error && error.message ? error.message : "Failed to cancel the message",
       );
-    }
-  };
-
-  const doDelete = async () => {
-    setConfirmDelete(false);
-    try {
-      await botsApi.remove(bot.id);
-      onBotDeleted();
-      navigate("/chats", { replace: true });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete bot");
     }
   };
 
@@ -359,28 +345,21 @@ function ChatPaneBody({
     }
   };
 
-  const insertMention = (chosen: MentionableBot) => {
-    if (!mention) return;
-    const insertion = `@${chosen.name} `;
-    const next = text.slice(0, mention.start) + insertion + text.slice(caret);
-    setText(next);
-    // Restore the caret after the trailing space once React re-renders the
-    // textarea (it would otherwise land at the very end of the text).
-    const target = mention.start + insertion.length;
-    setCaret(target);
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.selectionStart = target;
-        textareaRef.current.selectionEnd = target;
-      }
-    });
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        {/* Header: bot identity on the left (click edits), browser toggle and
-          the ⋯ menu on the right. Floats on the page background, no border. */}
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col" {...dropHandlers}>
+        {dragging && (
+          <div
+            className="border-ring bg-background/80 text-foreground pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed text-sm font-medium backdrop-blur-sm"
+            data-testid="drop-overlay"
+          >
+            <Paperclip className="text-muted-foreground size-6" />
+            Drop files to attach
+          </div>
+        )}
+        {/* Header: the bot's name opens its settings (profile, tools,
+            skills, delete); the right side holds two quiet icons. Floats on
+            the page background, no border. */}
         <header className="flex h-14 shrink-0 items-center gap-1 px-3">
           <Button
             variant="ghost"
@@ -394,61 +373,42 @@ function ChatPaneBody({
           <button
             type="button"
             onClick={onEditBot}
-            className="text-foreground hover:bg-accent flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
+            className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
             aria-label={`Edit ${bot.name}`}
+            title="Bot settings"
           >
             <BotAvatar name={bot.name} className="size-5" />
             <span className="truncate">{bot.name}</span>
+            <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
           </button>
-          <button
-            type="button"
-            onClick={() => setConfirmReset(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground hidden size-6 shrink-0 items-center justify-center rounded-lg md:flex"
-            aria-label="Start a new chat"
-          >
-            <Plus className="size-4" />
-          </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto hidden shrink-0 rounded-xl md:inline-flex"
-            onClick={() => setBrowserOpen((v) => !v)}
-            aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
-            data-testid="browser-toggle"
-          >
-            <Globe className="size-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-xl" aria-label="Bot menu">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
-                {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-                {pinned ? "Unpin" : "Pin"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
-                <MessageSquarePlus className="size-4" /> New chat
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onEditBot}>
-                <Pencil className="size-4" /> Edit bot
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                <Trash2 className="size-4" /> Delete bot
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-
-        {/* Stream health: the transcript is frozen while disconnected */}
-        {chat && !chat.connected && (
-          <div className="text-muted-foreground flex items-center gap-2 px-4 py-1.5 text-xs">
-            <span className="bg-muted-foreground/60 size-1.5 animate-pulse rounded-full" />
-            Reconnecting…
+          <div className="ml-auto flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`text-muted-foreground hover:text-foreground hidden rounded-xl md:inline-flex ${
+                browserOpen ? "bg-accent text-foreground" : ""
+              }`}
+              onClick={() => setBrowserOpen((v) => !v)}
+              aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
+              aria-pressed={browserOpen}
+              title="Browser"
+              data-testid="browser-toggle"
+            >
+              <Globe className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground rounded-xl"
+              onClick={() => setConfirmReset(true)}
+              disabled={!canReset}
+              aria-label="Start a new chat"
+              title={`New chat (${NEW_CHAT_SHORTCUT})`}
+            >
+              <SquarePen className="size-4" />
+            </Button>
           </div>
-        )}
+        </header>
 
         {/* Warnings */}
         {!gatewayConfigured && (
@@ -466,10 +426,28 @@ function ChatPaneBody({
             aria-hidden="true"
             className="chat-header-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-4"
           />
+          {/* Stream health: the transcript is frozen while disconnected. A
+              floating pill, so the transcript does not shift under it. */}
+          {reconnecting && (
+            <div
+              role="status"
+              className="bg-background/90 text-muted-foreground absolute top-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm"
+            >
+              <Spinner className="size-3" aria-hidden />
+              Reconnecting…
+            </div>
+          )}
+          {/* First load: outside the scroller content, which must hold only
+              transcript rows for the initial positioning to apply. */}
+          {showLoading && (
+            <div className="text-muted-foreground absolute inset-0 flex items-center justify-center">
+              <Spinner className="size-5" />
+            </div>
+          )}
           <MessageScroller className="h-full">
             <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
               <MessageScrollerContent className="space-y-4">
-                {messages.length === 0 && pending.length === 0 && (
+                {loaded && messages.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                     <BotAvatar name={bot.name} className="size-20" />
                     <div className="max-w-sm">
@@ -495,7 +473,7 @@ function ChatPaneBody({
                           {formatDayDivider(message.createdAt)}
                         </div>
                       )}
-                      {firstAssistantUnreadIndex === i && (
+                      {dividerId === message.id && (
                         <div
                           data-testid="unread-divider"
                           className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
@@ -505,7 +483,10 @@ function ChatPaneBody({
                           <span className="bg-border h-px flex-1" aria-hidden="true" />
                         </div>
                       )}
-                      <MessageScrollerItem messageId={message.id} scrollAnchor={isRead(i)}>
+                      <MessageScrollerItem
+                        messageId={message.id}
+                        scrollAnchor={anchoring && isRead(i)}
+                      >
                         <ChatMessageView
                           message={message}
                           botName={bot.name}
@@ -516,6 +497,13 @@ function ChatPaneBody({
                     </Fragment>
                   );
                 })}
+                {showTyping && (
+                  <MessageScrollerItem messageId="typing">
+                    <Message>
+                      <TypingIndicator label={`${bot.name} is typing`} />
+                    </Message>
+                  </MessageScrollerItem>
+                )}
                 {/* Messages the server holds behind (or steering into) the
                   running reply (issue #9). They render in queue order between
                   the transcript and the in-flight echoes; placement turns
@@ -570,141 +558,16 @@ function ChatPaneBody({
           </MessageScroller>
         </div>
 
-        {/* Composer - Grok-style: a single rounded pill with the send/stop
-          button inside on the right. Status (model, warnings) sits above the
-          pill so the input surface stays clean. */}
-        <div className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4">
-          {gatewayConfigured && !modelKnown && (
-            <div className="mx-auto mb-2 flex max-w-[752px] items-center justify-center gap-2">
-              <p className="text-muted-foreground truncate text-center text-xs">
-                {bot.modelId} is no longer in the model catalog
-              </p>
-              <Button variant="link" size="sm" className="h-6 px-1.5 text-xs" onClick={onEditBot}>
-                Choose a model
-              </Button>
-            </div>
-          )}
-          <div className="relative mx-auto max-w-[752px]">
-            {staged.length > 0 && (
-              <div
-                className="mb-2 flex flex-wrap justify-end gap-1.5 px-1"
-                data-testid="staged-strip"
-              >
-                {staged.map((item) => (
-                  <StagedAttachment
-                    key={item.key}
-                    attachment={item}
-                    onRemove={() => unstage(item)}
-                  />
-                ))}
-              </div>
-            )}
-            {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
-              <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
-                {model.name} reads images with the see_image tool
-              </p>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov"
-              onChange={(e) => {
-                if (e.target.files?.length) stageFiles(e.target.files);
-                e.target.value = "";
-              }}
-              aria-label="Attach files"
-              data-testid="file-input"
-            />
-            <div className="bg-composer border-input focus-within:border-ring relative overflow-hidden rounded-3xl border">
-              <textarea
-                ref={textareaRef}
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  setCaret(e.target.selectionStart ?? e.target.value.length);
-                  setMentionClosed(false);
-                }}
-                onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-                onClick={() => setMentionClosed(false)}
-                onBlur={() => setMentionClosed(true)}
-                onPaste={(e) => {
-                  const files = Array.from(e.clipboardData?.files ?? []);
-                  if (files.length > 0) {
-                    e.preventDefault();
-                    stageFiles(files);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (mentionRef.current?.handleKeyDown(e)) return;
-                  // Enter sends only on a physical keyboard (fine pointer).
-                  // On touch (pointer: coarse) Enter inserts a newline and the
-                  // send button is the only way to send (issue #1). While a
-                  // reply runs, Enter steers it and Alt+Enter queues a
-                  // follow-up for afterwards (issue #9).
-                  if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
-                    e.preventDefault();
-                    void send(e.altKey ? "followUp" : "steer");
-                  }
-                }}
-                placeholder={
-                  mentionCandidates.length > 0
-                    ? `Message ${bot.name} (type @ to tag another bot)`
-                    : `Message ${bot.name}`
-                }
-                rows={1}
-                disabled={!gatewayConfigured || !modelKnown}
-                className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
-              />
-              <div className="flex items-center justify-between px-2.5 pb-2.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!gatewayConfigured || !modelKnown || staged.length >= 10}
-                  aria-label="Attach files"
-                  className="text-muted-foreground size-10 rounded-full"
-                >
-                  <Paperclip className="size-5" />
-                </Button>
-                <div className="flex items-center gap-1.5">
-                  {/* While replying, Stop and Send live side by side: a send
-                    steers the running reply (issue #9), Alt+Enter queues a
-                    follow-up for after it. */}
-                  {busy && (
-                    <Button
-                      size="icon"
-                      onClick={stop}
-                      aria-label="Stop generating"
-                      className="size-10 rounded-full"
-                    >
-                      <Square className="size-4 fill-current" />
-                    </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    onClick={() => void send("steer")}
-                    disabled={!canSend}
-                    aria-label={busy ? "Steer the reply" : "Send message"}
-                    className="size-10 rounded-full disabled:opacity-30"
-                  >
-                    <ArrowUp className="size-5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-            {mentionOpen && mention && (
-              <MentionAutocomplete
-                ref={mentionRef}
-                bots={mentionCandidates}
-                query={mention.query}
-                onSelect={insertMention}
-                onClose={() => setMentionClosed(true)}
-              />
-            )}
-          </div>
-        </div>
+        <ChatComposer
+          ref={composerRef}
+          bot={bot}
+          model={model}
+          gatewayConfigured={gatewayConfigured}
+          busy={busy}
+          onSend={send}
+          onStop={stop}
+          onEditBot={onEditBot}
+        />
       </div>
       {/* Browser live view (issue #24): beside the conversation on desktop,
           full-screen overlay on mobile. */}
@@ -724,24 +587,6 @@ function ChatPaneBody({
               Cancel
             </Button>
             <Button onClick={doReset}>New chat</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete {bot.name}?</DialogTitle>
-            <DialogDescription>
-              The bot is removed from the app. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Delete
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

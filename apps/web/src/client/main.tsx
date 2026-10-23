@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
 import App from "./App";
+import { installFeedbackDismiss } from "./lib/feedback";
 import "@groot/shell/index.css";
 import "streamdown/styles.css";
 import "./app.css";
@@ -11,6 +12,8 @@ import "./app.css";
 setDefaultTheme("dark");
 // Apply before first render — no theme flash.
 initTheme();
+// The FeedbackBee panel closes on an outside click, like the app's modals.
+installFeedbackDismiss();
 
 const queryClient = new QueryClient({
   defaultOptions: {

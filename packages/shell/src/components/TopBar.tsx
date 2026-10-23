@@ -71,17 +71,30 @@ export function ProfileButton({ className }: { className?: string }) {
 export function TopBar({
   title,
   children,
+  actions,
   backTo,
 }: {
   title: string;
+  /** Inline after the title (e.g. a status badge). */
   children?: ReactNode;
+  /**
+   * Page actions. They follow the profile circle in the DOM, so on phones,
+   * where they wrap to a row of their own under the title row, focus order
+   * matches what is on screen; on desktop they close the title row.
+   */
+  actions?: ReactNode;
   backTo?: string;
 }) {
   const navigate = useNavigate();
   const { pageChrome } = useShellConfig();
   const sidebarChrome = pageChrome === "sidebar";
   return (
-    <header className={cn("flex w-full items-center gap-3 pt-4 pb-2", sidebarChrome && "md:pt-10")}>
+    <header
+      className={cn(
+        "flex w-full flex-wrap items-center gap-3 pt-4 pb-2",
+        sidebarChrome && "md:pt-10",
+      )}
+    >
       <Button
         variant="outline"
         size="icon"
@@ -101,6 +114,11 @@ export function TopBar({
       </h1>
       {children}
       <ProfileButton className={cn(sidebarChrome && "md:hidden")} />
+      {actions && (
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap">
+          {actions}
+        </div>
+      )}
     </header>
   );
 }

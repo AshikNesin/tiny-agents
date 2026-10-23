@@ -74,6 +74,9 @@ const fail = (text: string): ToolExecutionResult => ({
 /** One readable line per error: connection failures must not be stack traces. */
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  // Errors can pass through more than one layer that describes them; wrap
+  // once, or the UI reads "Cannot reach the sandbox (Cannot reach …)".
+  if (message.startsWith("Cannot reach the sandbox")) return message;
   return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH/.test(message)
     ? `Cannot reach the sandbox (${message}). Is it online and on the tailnet?`
     : message;

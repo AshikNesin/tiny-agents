@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot,
   ChevronsUpDown,
   LogOut,
   MessageSquare,
+  MessageSquareHeart,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -18,16 +20,23 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/shell/lib/utils";
-import { ThemeMenu } from "@groot/shell/components/Layout";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { APP_NAV, type AppNavItem } from "./nav";
+import { PRIMARY_NAV, SECONDARY_NAV, type AppNavItem } from "./nav";
 import { BotsSection } from "./BotsSection";
+import { openFeedback } from "../../lib/feedback";
 
-const NAV: AppNavItem[] = [{ label: "Chats", icon: MessageSquare, to: "/chats" }, ...APP_NAV];
+const NAV: AppNavItem[] = [{ label: "Chats", icon: MessageSquare, to: "/chats" }, ...PRIMARY_NAV];
+
+const HEADER_ICON =
+  "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
+
+/** ⌘K on Apple keyboards, Ctrl+K elsewhere. */
+const SEARCH_SHORTCUT =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl+K";
 
 const NAV_ROW =
   "flex h-9 items-center gap-2 rounded-xl px-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
@@ -84,8 +93,10 @@ function NavRow({
 }
 
 /**
- * Persistent left sidebar (Grok-style): nav rows, the Bots section, and the
- * account menu. Desktop collapses to an icon rail (persisted); on mobile it is
+ * Persistent left sidebar (Grok-style): search and collapse icons up top,
+ * the everyday nav (Chats, Tasks, Terminal), the Bots section, and the
+ * account menu, which also holds the set-up-and-forget pages (Routines,
+ * Skills, Memory, Connections, Settings). Desktop collapses to an icon rail (persisted); on mobile it is
  * an off-canvas drawer driven by `mobileOpen`.
  */
 export function AppSidebar() {
@@ -100,6 +111,13 @@ export function AppSidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  // How "Send feedback" was chosen, so the panel opens the matching way.
+  const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
+  const pointerOnFeedback = useRef(false);
+  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  // A page that lives in the account menu still shows where you are: the
+  // account row reads as selected while one of them is open.
+  const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
   const activeBotId = matchPath("/chats/:botId", pathname)?.params.botId ?? null;
   const rail = collapsed;
   const closeDrawer = () => setMobileOpen(false);
@@ -126,8 +144,9 @@ export function AppSidebar() {
       >
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center justify-between px-3",
-            rail && "md:justify-center",
+            "flex h-14 shrink-0 items-center gap-1 px-3",
+            // Rail: collapse above search, centered in the narrow column.
+            rail && "md:h-auto md:flex-col-reverse md:gap-1 md:py-3",
           )}
         >
           <Link
@@ -135,7 +154,7 @@ export function AppSidebar() {
             onClick={closeDrawer}
             aria-label="tiny-agents"
             className={cn(
-              "text-foreground hover:bg-sidebar-accent flex size-8 items-center justify-center rounded-xl",
+              "text-foreground hover:bg-sidebar-accent mr-auto flex size-8 items-center justify-center rounded-xl",
               rail && "md:hidden",
             )}
           >
@@ -143,9 +162,22 @@ export function AppSidebar() {
           </Link>
           <button
             type="button"
+            onClick={() => {
+              closeDrawer();
+              toggleCommandPalette();
+            }}
+            aria-label="Search"
+            title={`Search (${SEARCH_SHORTCUT})`}
+            className={HEADER_ICON}
+          >
+            <Search className="size-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hidden size-8 items-center justify-center rounded-xl md:flex"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(HEADER_ICON, "hidden md:flex")}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" />
@@ -159,15 +191,6 @@ export function AppSidebar() {
           aria-label="Primary"
           className={cn("space-y-0.5 px-2.5 pb-2", rail && "md:flex md:flex-col md:items-center")}
         >
-          <NavRow
-            icon={Search}
-            label="Search"
-            rail={rail}
-            onClick={() => {
-              closeDrawer();
-              toggleCommandPalette();
-            }}
-          />
           {NAV.map((item) => (
             <NavRow
               key={item.to}
@@ -175,7 +198,7 @@ export function AppSidebar() {
               label={item.label}
               rail={rail}
               to={item.to}
-              active={pathname === item.to || pathname.startsWith(`${item.to}/`)}
+              active={isActive(item.to)}
               onClick={closeDrawer}
             />
           ))}
@@ -194,7 +217,8 @@ export function AppSidebar() {
                 aria-label="Account and navigation"
                 title={rail ? accountName : undefined}
                 className={cn(
-                  "hover:bg-sidebar-accent flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                  "flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                  inMenuPage ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
                   rail && "md:size-10 md:justify-center md:px-0",
                 )}
               >
@@ -209,17 +233,49 @@ export function AppSidebar() {
                 />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-56">
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              className="w-56"
+              onCloseAutoFocus={(e) => {
+                // Open the feedback panel once the menu has closed, and keep
+                // the menu from pulling focus back to its trigger, so typing
+                // goes straight into the panel's note.
+                const request = feedbackRequested.current;
+                if (!request) return;
+                feedbackRequested.current = null;
+                e.preventDefault();
+                openFeedback({ keyboard: request === "keyboard" });
+              }}
+            >
+              {[...SECONDARY_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
+                (item) => (
+                  <DropdownMenuItem
+                    key={item.to}
+                    onSelect={() => {
+                      closeDrawer();
+                      navigate(item.to);
+                    }}
+                    aria-current={isActive(item.to) ? "page" : undefined}
+                    className={cn(isActive(item.to) && "bg-accent")}
+                  >
+                    <item.icon className="size-4" /> {item.label}
+                  </DropdownMenuItem>
+                ),
+              )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
+                onPointerDown={() => {
+                  pointerOnFeedback.current = true;
+                }}
                 onSelect={() => {
                   closeDrawer();
-                  navigate("/settings");
+                  feedbackRequested.current = pointerOnFeedback.current ? "pointer" : "keyboard";
+                  pointerOnFeedback.current = false;
                 }}
               >
-                <SettingsIcon className="size-4" /> Settings
+                <MessageSquareHeart className="size-4" /> Send feedback
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <ThemeMenu />
               <DropdownMenuItem
                 variant="destructive"
                 onSelect={() => {

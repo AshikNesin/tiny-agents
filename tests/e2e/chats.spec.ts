@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Chats", () => {
   test("create a bot and chat with a streamed reply that survives a refresh", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -52,7 +52,7 @@ test.describe("Chats", () => {
     page,
   }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -77,7 +77,7 @@ test.describe("Chats", () => {
 test.describe("Chats — new chat", () => {
   test("starting a new chat clears the current transcript", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -109,8 +109,7 @@ test.describe("Chats — new chat", () => {
     await expect(page.getByText(/Echo: old message/i).first()).toBeVisible({ timeout: 20_000 });
 
     // New chat: the transcript must clear and stay cleared.
-    await page.getByRole("button", { name: "Bot menu" }).click();
-    await page.getByRole("menuitem", { name: /new chat/i }).click();
+    await page.getByRole("button", { name: "Start a new chat" }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page.getByText("old message")).toHaveCount(0);
     await expect(page.getByText(/Echo: old message/i)).toHaveCount(0);
@@ -120,7 +119,7 @@ test.describe("Chats — new chat", () => {
 test.describe("Chats — attachments (issue #17)", () => {
   test("attach an image, send, render, survive reload", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -176,7 +175,7 @@ test.describe("Chats — attachments (issue #17)", () => {
 
   test("image-only send works without text", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -219,7 +218,7 @@ test.describe("Chats — steering (issue #9)", () => {
     page,
   }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -244,16 +243,19 @@ test.describe("Chats — steering (issue #9)", () => {
       .click();
 
     // A long message streams slowly (the faux model runs at 6 tokens/s), so
-    // the bot is verifiably busy — the send button stays live and steers.
+    // the bot is verifiably busy. With nothing typed the one action button
+    // is Stop; typing turns it into Steer — never both at once.
     const longMessage = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ");
     const composer = page.getByPlaceholder(/(?:ask|message) steer bot/i);
     await composer.fill(longMessage);
     await composer.press("Enter");
-    await expect(page.getByRole("button", { name: "Steer the reply" })).toBeVisible({
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible({
       timeout: 15_000,
     });
 
     await composer.fill("steer this");
+    await expect(page.getByRole("button", { name: "Steer the reply" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
     await composer.press("Enter");
     const bubble = page.getByTestId("queued-bubble");
     await expect(bubble).toBeVisible({ timeout: 15_000 });
