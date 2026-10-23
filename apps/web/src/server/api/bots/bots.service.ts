@@ -25,8 +25,6 @@ import {
 } from "./bots.conversation";
 import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 
-export type { Bot } from "./bots.conversation";
-
 export type BotAgentRuntime = Pick<
   AgentRuntime,
   | "createConversation"

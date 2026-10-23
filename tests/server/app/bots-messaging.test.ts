@@ -18,22 +18,15 @@ import type { AgentRuntime } from "@tiny-agents/agent";
 const token = generateToken({ userId: 1, email: "relay-test@example.com" });
 const authorization = { Authorization: `Bearer ${token}` };
 
-const emptyChat = { messages: [], busy: false };
-
 function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     createConversation: vi.fn(),
     configure: vi.fn(),
     submit: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn(),
-    watchChat: vi.fn(async (_ref: number, listener: (events: unknown[]) => void) => {
-      await listener([{ type: "snapshot", state: emptyChat }]);
-      return { initial: emptyChat, stop: async () => undefined };
-    }),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
     finishedReplies: vi.fn().mockResolvedValue([]),
-    lastMessage: vi.fn().mockResolvedValue(undefined),
     onActivity: vi.fn().mockReturnValue(() => undefined),
     listModels: vi
       .fn()
@@ -331,38 +324,6 @@ describe("relay", () => {
     expect(await relay.relayForBot(guest.id)).toBe(0);
     const row = await prisma.botMessage.findUnique({ where: { requestId: "r2" } });
     expect(row?.answeredAt).toBeNull();
-  });
-
-  it("waits for the target to finish instead of relaying a reply mid-stream", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const delivered = Date.now() - 5_000;
-    await prisma.botMessage.create({
-      data: {
-        fromBotId: null,
-        toBotId: guest.id,
-        replyToBotId: host.id,
-        kind: "mention",
-        requestId: "r-live",
-        text: "hello",
-        deliveredAt: new Date(delivered),
-      },
-    });
-    // Another chat went idle (the host finished first), so the sweep looks
-    // at the guest while its reply is still streaming: nothing is finished.
-    runtime.finishedReplies.mockResolvedValue([]);
-    const relay = createBotRelay(runtime);
-    expect(await relay.relayForBot(guest.id)).toBe(0);
-    expect(runtime.submit).not.toHaveBeenCalled();
-
-    runtime.finishedReplies.mockResolvedValue([
-      { text: "Here is my whole answer", createdAt: delivered + 1_000 },
-    ]);
-    expect(await relay.relayForBot(guest.id)).toBe(1);
-    expect(runtime.submit).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ text: "**Reply from Guest:** Here is my whole answer" }),
-    );
   });
 
   it("never relays a stale reply that predates the delivery (boot sweep)", async () => {

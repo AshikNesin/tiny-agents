@@ -43,7 +43,6 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
     finishedReplies: vi.fn(async () => chatReplies),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
-    lastMessage: vi.fn().mockResolvedValue(undefined),
     onActivity: vi.fn().mockReturnValue(() => undefined),
     listModels: vi.fn().mockReturnValue([]),
     hasModel: vi.fn().mockReturnValue(true),

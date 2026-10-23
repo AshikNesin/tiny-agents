@@ -63,7 +63,7 @@ type BotWithLinks = BotRow & {
   connections?: ConnectionLink[];
 };
 
-export const withLinks = {
+const withLinks = {
   skills: { select: { skillId: true } },
   connections: {
     select: { connectionId: true, connection: { select: { slug: true, toolsCache: true } } },
@@ -126,7 +126,7 @@ export type BotConversationRuntime = Pick<
 >;
 
 /** Whether the bot's model reads image blocks natively (else the see_image side-call). */
-export function modelSeesImages(rt: Pick<AgentRuntime, "listModels">, modelId: string): boolean {
+function modelSeesImages(rt: Pick<AgentRuntime, "listModels">, modelId: string): boolean {
   try {
     return Boolean(rt.listModels().find((m) => m.id === modelId)?.vision);
   } catch {

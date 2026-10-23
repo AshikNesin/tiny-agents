@@ -57,7 +57,6 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
     }),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
-    lastMessage: vi.fn().mockResolvedValue(undefined),
     onActivity: vi.fn().mockReturnValue(() => undefined),
     listModels: vi
       .fn()

@@ -101,7 +101,6 @@ const agentRuntime = {
   listModels: vi.fn(() => [
     { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
   ]),
-  lastMessage: vi.fn(async () => undefined),
   busyConversations: vi.fn(() => []),
   listCapabilities: vi.fn(() => []),
 };
