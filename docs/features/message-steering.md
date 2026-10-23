@@ -16,7 +16,7 @@ durably joins (or follows) the running reply, and it survives reloads.
 The composer has **one** round action button: while the bot replies and
 nothing is typed it is Stop (a spinner until the run ends); as soon as there
 is text or an attachment it is Send, labelled "Steer the reply". Keyboard
-hints for Enter / Alt+Enter / Esc sit in the composer toolbar while busy.
+hints for Enter / Alt+Enter / Esc fade in as one quiet line under the composer while busy.
 
 ## Architecture
 

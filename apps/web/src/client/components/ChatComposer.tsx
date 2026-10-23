@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type MouseEvent,
-  type ReactNode,
 } from "react";
 import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -245,7 +244,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   return (
     <div
       data-slot="chat-composer"
-      className="px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4"
+      // A physical keyboard gets a taller bottom gutter that holds the
+      // keyboard hint line, so the composer never moves when it appears.
+      className={`px-3 pt-2 md:px-4 ${
+        coarsePointer
+          ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      }`}
     >
       {gatewayConfigured && !modelKnown && (
         <div className="mx-auto mb-2 flex max-w-[752px] items-center justify-center gap-2">
@@ -346,20 +351,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             >
               <Paperclip className="size-5" />
             </Button>
-            {/* Keyboard hints while a reply runs, in the toolbar's free
-                  space so nothing shifts when they appear. */}
-            <p
-              className="text-muted-foreground/80 hidden min-w-0 flex-1 truncate text-center text-xs sm:block"
-              aria-hidden={!busy || coarsePointer}
-              data-testid="composer-hint"
-            >
-              {busy && !coarsePointer && (
-                <>
-                  <Kbd>Enter</Kbd> steers · <Kbd>Alt</Kbd>+<Kbd>Enter</Kbd> queues for after ·{" "}
-                  <Kbd>Esc</Kbd> stops
-                </>
-              )}
-            </p>
             <div className="ml-auto shrink-0">
               {showStop ? (
                 <Button
@@ -393,6 +384,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             </div>
           </div>
         </div>
+        {/* Keyboard hints while a reply runs: one quiet line under the
+            pill, fading in and out inside the reserved gutter. */}
+        {!coarsePointer && (
+          <p
+            aria-hidden={!busy}
+            data-testid="composer-hint"
+            className={`text-muted-foreground/60 pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
+              busy ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            Enter to steer · Alt+Enter to queue · Esc to stop
+          </p>
+        )}
         {mentionOpen && mention && (
           <MentionAutocomplete
             ref={mentionRef}
@@ -406,7 +410,3 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     </div>
   );
 });
-
-function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="font-sans font-medium">{children}</kbd>;
-}
