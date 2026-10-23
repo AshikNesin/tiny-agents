@@ -111,7 +111,9 @@ export function AppSidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
-  const feedbackRequested = useRef(false);
+  // How "Send feedback" was chosen, so the panel opens the matching way.
+  const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
+  const pointerOnFeedback = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   // A page that lives in the account menu still shows where you are: the
   // account row reads as selected while one of them is open.
@@ -239,10 +241,11 @@ export function AppSidebar() {
                 // Open the feedback panel once the menu has closed, and keep
                 // the menu from pulling focus back to its trigger, so typing
                 // goes straight into the panel's note.
-                if (!feedbackRequested.current) return;
-                feedbackRequested.current = false;
+                const request = feedbackRequested.current;
+                if (!request) return;
+                feedbackRequested.current = null;
                 e.preventDefault();
-                openFeedback();
+                openFeedback({ keyboard: request === "keyboard" });
               }}
             >
               {[...SECONDARY_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
@@ -262,9 +265,13 @@ export function AppSidebar() {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                onPointerDown={() => {
+                  pointerOnFeedback.current = true;
+                }}
                 onSelect={() => {
                   closeDrawer();
-                  feedbackRequested.current = true;
+                  feedbackRequested.current = pointerOnFeedback.current ? "pointer" : "keyboard";
+                  pointerOnFeedback.current = false;
                 }}
               >
                 <MessageSquareHeart className="size-4" /> Send feedback

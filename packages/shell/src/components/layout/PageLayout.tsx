@@ -35,16 +35,8 @@ export function PageLayout({
 }: PageLayoutProps) {
   return (
     <PageContainer maxWidth={maxWidth} className={className}>
-      <TopBar title={title}>
+      <TopBar title={title} actions={actions}>
         {titleAdornment}
-        {/* Actions share the title row on desktop; on phones they wrap to
-            a row of their own under it instead of squeezing beside a
-            multi-line description. */}
-        {actions && (
-          <div className="order-last flex w-full flex-wrap items-center gap-2 md:order-none md:w-auto md:flex-nowrap">
-            {actions}
-          </div>
-        )}
       </TopBar>
       {breadcrumb && <div className="mb-4">{breadcrumb}</div>}
       {description && <div className="text-muted-foreground mt-1 text-sm">{description}</div>}

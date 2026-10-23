@@ -2,6 +2,7 @@
 "@groot/shell": patch
 ---
 
-`PageLayout` puts page actions in the title row on desktop; on phones they
-wrap to their own row under the title instead of squeezing beside a
-multi-line description. `TopBar` now wraps its children.
+`PageLayout` passes page actions to the new `TopBar` `actions` slot: they
+close the title row on desktop and wrap to their own row under it on
+phones, instead of squeezing beside a multi-line description. The slot
+follows the profile circle in the DOM, so focus order matches the layout.

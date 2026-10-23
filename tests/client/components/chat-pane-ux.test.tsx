@@ -81,11 +81,11 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
   });
 }
 
-function renderPane() {
+function renderPane(bot: Bot = HOST) {
   render(
     <BrowserRouter>
       <ChatPane
-        bot={HOST}
+        bot={bot}
         models={[model]}
         gatewayConfigured
         onEditBot={() => {}}
@@ -246,6 +246,13 @@ describe("ChatPane composer — one action button", () => {
     await user.type(composer, "half-written thought");
     cleanup();
 
+    // Another bot starts blank and keeps its own draft.
+    const other = { ...HOST, id: "other", conversationId: "c2", name: "Other Bot" };
+    const otherComposer = renderPane(other);
+    expect(otherComposer.value).toBe("");
+    await user.type(otherComposer, "a different thought");
+    cleanup();
+
     const again = renderPane();
     expect(again.value).toBe("half-written thought");
     await user.type(again, "{Enter}");
@@ -253,6 +260,8 @@ describe("ChatPane composer — one action button", () => {
     cleanup();
 
     expect(renderPane().value).toBe("");
+    cleanup();
+    expect(renderPane(other).value).toBe("a different thought");
   });
 });
 

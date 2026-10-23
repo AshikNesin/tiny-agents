@@ -8,17 +8,21 @@ import { toast } from "sonner";
 
 const panel = () => document.querySelector<HTMLElement>(".fbx-panel");
 
-/** Opens the panel by clicking the embed's (possibly hidden) launcher. */
-export function openFeedback() {
+/**
+ * Opens the panel by clicking the embed's (possibly hidden) launcher.
+ * `keyboard` mirrors how the user got here: the embed focuses the note for
+ * keyboard activation, and on touch leaves focus alone for a pointer one.
+ */
+export function openFeedback({ keyboard = false }: { keyboard?: boolean } = {}) {
   const launcher = document.querySelector<HTMLButtonElement>(".fbx-launch");
   if (!launcher) {
     toast.error("Feedback isn't available right now");
     return;
   }
-  // A pointer-style click (detail 1), not `.click()` (detail 0, which the
-  // embed treats as keyboard and focuses the note even on touch, popping
-  // the on-screen keyboard over the page).
-  launcher.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+  // The embed reads `detail === 0` as keyboard activation (focus the note);
+  // a pointer-style click (detail 1) on touch must not pop the on-screen
+  // keyboard over the page.
+  launcher.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: keyboard ? 0 : 1 }));
 }
 
 /**

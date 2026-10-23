@@ -23,7 +23,7 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src"],
+  "include": ["src", "../../packages/shell/src"],
   "exclude": ["src/server"],
   "references": []
 }

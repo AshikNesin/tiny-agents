@@ -114,15 +114,16 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const enabled = gatewayConfigured && modelKnown;
   const uploading = staged.some((item) => item.status === "uploading");
   const readyAttachments = staged.filter((item) => item.status === "done" && item.ref);
-  const hasDraft = text.trim().length > 0 || staged.length > 0;
+  const canSend = enabled && !uploading && (text.trim().length > 0 || readyAttachments.length > 0);
   // Busy no longer blocks sending (steering, issue #9): the server queues
-  // the message. With nothing typed the same button stops the reply, so
-  // the composer never shows two competing round buttons.
-  const showStop = busy && !hasDraft;
+  // the message. Whenever there is nothing sendable (nothing typed, or an
+  // attachment still uploading) the same button stops the reply, so the
+  // composer never shows two competing round buttons and Stop is never
+  // hidden behind a disabled Send.
+  const showStop = busy && !canSend;
   // The stop spinner lasts until the server confirms the run ended: a
   // request left over from an earlier run means nothing once busy drops.
   const stopping = stopRequested && busy;
-  const canSend = enabled && !uploading && (text.trim().length > 0 || readyAttachments.length > 0);
 
   useEffect(() => writeDraft(bot.id, text), [bot.id, text]);
 
@@ -161,11 +162,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
       botsApi
         .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
-        .then(({ ref }) =>
+        .then(({ ref }) => {
+          // Removed (or sent without it) while uploading: nothing will ever
+          // reference this upload, so delete it instead of leaking it.
+          if (!stagedRef.current.some((item) => item.key === key)) {
+            void botsApi.deleteUpload(ref.uploadId).catch(() => undefined);
+            return;
+          }
           setStaged((current) =>
             current.map((item) => (item.key === key ? { ...item, status: "done", ref } : item)),
-          ),
-        )
+          );
+        })
         .catch((error) => {
           setStaged((current) =>
             current.map((item) =>
@@ -207,17 +214,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         whenBusy,
       });
     } catch {
-      // The pane already toasted; hand the message back for another try.
-      setText(body);
-      setStaged(
-        attachments.map((ref) => ({
+      // The pane already toasted; hand the message back for another try,
+      // ahead of anything typed or attached while the send was in flight.
+      setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
+      setStaged((current) => [
+        ...attachments.map((ref) => ({
           key: crypto.randomUUID(),
           name: ref.name,
           status: "done" as const,
           ref,
           previewUrl: ref.kind === "image" ? botsApi.uploadUrl(ref.uploadId) : undefined,
         })),
-      );
+        ...current,
+      ]);
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
