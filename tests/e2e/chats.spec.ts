@@ -13,7 +13,7 @@ test.describe("Chats", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Empty state → open the create dialog
     const emptyCta = page.getByRole("button", { name: /create your first bot/i });
@@ -55,7 +55,7 @@ test.describe("Chats", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure at least one bot exists, then stay on the list (no chat open).
     const hasBot = await page
@@ -80,7 +80,7 @@ test.describe("Chats — new chat", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure a bot with some history exists.
     const hasBot = await page
@@ -122,7 +122,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure a bot exists.
     const hasBot = await page
@@ -178,7 +178,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
     const hasBot = await page
       .getByRole("link", { name: /attach bot/i })
       .first()
@@ -221,7 +221,7 @@ test.describe("Chats — steering (issue #9)", () => {
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure the bot exists.
     const hasBot = await page

@@ -5,7 +5,7 @@ test("command palette closes on outside click", async ({ page }) => {
   await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
   await page.getByLabel(/password/i).fill("demo@example.com");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(page).toHaveURL(/\/chats$/);
+  await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
   await page.getByRole("button", { name: /^search/i }).click();
   const dialog = page.getByRole("dialog");

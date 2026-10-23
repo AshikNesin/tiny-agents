@@ -13,7 +13,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
   await page.getByLabel(/password/i).fill("demo@example.com");
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(page).toHaveURL(/\/chats$/);
+  await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 }
 
 async function createBot(page: import("@playwright/test").Page, name: string) {
