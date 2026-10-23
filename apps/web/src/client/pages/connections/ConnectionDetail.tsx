@@ -166,7 +166,7 @@ export function ConnectionDetail({ id }: { id: string }) {
 
   if (loadError) {
     return (
-      <PageLayout title="Connections" maxWidth="4xl">
+      <PageLayout title="Connections" maxWidth="4xl" backTo="/connections">
         <EmptyState
           icon={Wrench}
           title="Couldn't load connection"
@@ -190,7 +190,7 @@ export function ConnectionDetail({ id }: { id: string }) {
 
   if (!connection) {
     return (
-      <PageLayout title="Connections" maxWidth="4xl">
+      <PageLayout title="Connections" maxWidth="4xl" backTo="/connections">
         <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
       </PageLayout>
     );
@@ -221,6 +221,7 @@ export function ConnectionDetail({ id }: { id: string }) {
       titleAdornment={<ConnectionStatusBadge status={connection.status} />}
       breadcrumb={breadcrumb}
       maxWidth="4xl"
+      backTo="/connections"
     >
       <Card>
         <CardHeader>

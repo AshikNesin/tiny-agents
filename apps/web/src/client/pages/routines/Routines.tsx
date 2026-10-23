@@ -4,6 +4,7 @@
  * next-3-runs preview. All times render in IST; there is no timezone picker.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import {
@@ -45,6 +46,8 @@ import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { Switch } from "../../components/ui/switch";
 import { botsApi, type BotListEntry } from "../../lib/bots-api";
+import { landingBotId } from "../../lib/last-bot";
+import { markdownToPlainText } from "../../lib/plain-text";
 import { routinesApi, type Routine, type RoutineRun, type Schedule } from "../../lib/routines-api";
 import {
   MAX_INTERVAL_MINUTES,
@@ -101,6 +104,7 @@ export function Routines() {
   const [editing, setEditing] = useState<Routine | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const confirm = useConfirm();
+  const navigate = useNavigate();
 
   const refresh = useCallback(async () => {
     try {
@@ -154,9 +158,14 @@ export function Routines() {
     }
   };
 
+  // A run posts into the bot's chat, so point there.
   const runNow = (routine: Routine) =>
-    act(routine.id, () => routinesApi.runNow(routine.id), "run").then(() => {
-      toast.success("Run started");
+    act(routine.id, () => routinesApi.runNow(routine.id), "run").then((ok) => {
+      if (!ok) return;
+      toast.success("Run started", {
+        description: `${routine.botName} replies in its chat.`,
+        action: { label: "Open chat", onClick: () => navigate(`/chats/${routine.botId}`) },
+      });
     });
 
   return (
@@ -233,7 +242,8 @@ export function Routines() {
             </div>
           </Section>
 
-          {upcoming.length > 0 && (
+          {/* With one routine its card already says when it runs next. */}
+          {routines.length > 1 && upcoming.length > 0 && (
             <Section title="Upcoming" meta="next 5 across all routines">
               <Card className="divide-y overflow-hidden p-0">
                 <ul role="list">
@@ -276,14 +286,14 @@ export function Routines() {
                           {run.trigger}
                         </Badge>
                       </div>
-                      <p className="w-full text-xs text-muted-foreground">
+                      <p className="line-clamp-2 w-full text-xs text-muted-foreground">
                         {formatIst(run.scheduledFor)}
                         {durationSeconds(run) !== null &&
                           ` · took ${formatDuration(durationSeconds(run)!)}`}
                         {run.output && (
                           <>
                             {" · "}
-                            <span className="align-middle">{run.output}</span>
+                            <span className="align-middle">{markdownToPlainText(run.output)}</span>
                           </>
                         )}
                         {run.error && (
@@ -394,7 +404,7 @@ const SCHEDULE_TABS: { value: ScheduleKind; label: string }[] = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
   { value: "interval", label: "Interval" },
-  { value: "cron", label: "Custom cron" },
+  { value: "cron", label: "Cron" },
 ];
 
 const TZ = TZ_IST;
@@ -542,7 +552,12 @@ function RoutineEditor({
     if (!open) return;
     void botsApi
       .list()
-      .then((list) => setBots(list.length > 0 ? list : []))
+      .then((list) => {
+        setBots(list);
+        // A new routine starts on the bot you chat with most recently.
+        const pick = landingBotId(list);
+        if (pick) setForm((current) => (current.botId ? current : { ...current, botId: pick }));
+      })
       .catch(() => setBots([]));
   }, [open]);
 
@@ -585,8 +600,8 @@ function RoutineEditor({
       toast.error("Create a bot first");
       return;
     }
-    if (!form.botId || !form.name.trim() || !form.prompt.trim()) {
-      toast.error("Bot, name, and prompt are required");
+    if (!form.botId || !form.prompt.trim()) {
+      toast.error("Pick a bot and write a prompt");
       return;
     }
     if (!compiled.schedule) {
@@ -597,7 +612,7 @@ function RoutineEditor({
     try {
       const base = {
         botId: form.botId,
-        name: form.name.trim(),
+        name: form.name.trim() || nameFromPrompt(form.prompt),
         prompt: form.prompt.trim(),
         schedule: compiled.schedule,
       };
@@ -639,31 +654,34 @@ function RoutineEditor({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="routine-name">Name</Label>
-              <Input
-                id="routine-name"
-                value={form.name}
-                maxLength={MAX_NAME_CHARS}
-                onChange={(e) => set("name", e.target.value)}
-                placeholder="e.g. weekday-digest"
-              />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="routine-prompt">Prompt</Label>
               <Textarea
                 id="routine-prompt"
                 rows={4}
+                className="min-h-24"
                 value={form.prompt}
                 maxLength={MAX_PROMPT_CHARS}
                 onChange={(e) => set("prompt", e.target.value)}
                 placeholder="What should the bot do each run?"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="routine-name">
+                Name <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="routine-name"
+                value={form.name}
+                maxLength={MAX_NAME_CHARS}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder={nameFromPrompt(form.prompt) || "e.g. Morning digest"}
+              />
+            </div>
 
             <div className="space-y-2">
               <Label>Schedule</Label>
               <Tabs value={form.kind} onValueChange={(v) => set("kind", v as ScheduleKind)}>
-                <TabsList className="flex w-full flex-wrap">
+                <TabsList className="flex w-full">
                   {SCHEDULE_TABS.map((tab) => (
                     <TabsTrigger key={tab.value} value={tab.value}>
                       {tab.label}
@@ -776,7 +794,7 @@ function RoutineEditor({
           </Button>
           <Button
             onClick={() => void save()}
-            disabled={saving || !compiled.schedule || !form.name.trim() || !form.prompt.trim()}
+            disabled={saving || !compiled.schedule || !form.botId || !form.prompt.trim()}
           >
             {routine ? "Save" : "Create"}
           </Button>
@@ -819,7 +837,8 @@ function defaultForm(): EditorForm {
     botId: "",
     name: "",
     prompt: "",
-    kind: "interval",
+    // Daily is the common case; an interval re-runs the bot all day long.
+    kind: "daily",
     onceAt: defaultOnceInput(),
     dailyTime: DEFAULT_IST_TIME,
     weeklyDay: "1",
@@ -827,4 +846,13 @@ function defaultForm(): EditorForm {
     intervalMinutes: "30",
     cronExpr: "",
   };
+}
+
+/** A routine's default name: the prompt's first line, cut at a word. */
+function nameFromPrompt(prompt: string): string {
+  const line = prompt.trim().split("\n")[0] ?? "";
+  if (line.length <= 40) return line;
+  const cut = line.slice(0, 40);
+  const space = cut.lastIndexOf(" ");
+  return `${space > 20 ? cut.slice(0, space) : cut}…`;
 }

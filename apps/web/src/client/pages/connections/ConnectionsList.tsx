@@ -117,9 +117,11 @@ export function ConnectionsList() {
               <ConnectionRows connections={groups.attention} />
             </Section>
           )}
-          <Section title="Connected" meta={String(groups.connected.length)}>
-            <ConnectionRows connections={groups.connected} />
-          </Section>
+          {groups.connected.length > 0 && (
+            <Section title="Connected" meta={String(groups.connected.length)}>
+              <ConnectionRows connections={groups.connected} />
+            </Section>
+          )}
         </>
       )}
 

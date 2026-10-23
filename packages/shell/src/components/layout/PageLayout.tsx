@@ -13,6 +13,8 @@ interface PageLayoutProps {
   titleAdornment?: ReactNode;
   className?: string;
   maxWidth?: "full" | "7xl" | "6xl" | "5xl" | "4xl";
+  /** Parent page for the phone back button (detail pages). */
+  backTo?: string;
 }
 
 /**
@@ -32,14 +34,20 @@ export function PageLayout({
   titleAdornment,
   className,
   maxWidth = "5xl",
+  backTo,
 }: PageLayoutProps) {
+  const subtitle =
+    breadcrumb || description ? (
+      <>
+        {breadcrumb && <div className={description ? "mb-3" : undefined}>{breadcrumb}</div>}
+        {description && <div className="text-muted-foreground text-sm">{description}</div>}
+      </>
+    ) : null;
   return (
     <PageContainer maxWidth={maxWidth} className={className}>
-      <TopBar title={title} actions={actions}>
+      <TopBar title={title} actions={actions} subtitle={subtitle} backTo={backTo}>
         {titleAdornment}
       </TopBar>
-      {breadcrumb && <div className="mb-4">{breadcrumb}</div>}
-      {description && <div className="text-muted-foreground mt-1 text-sm">{description}</div>}
       <div className="mt-6 space-y-6">{children}</div>
     </PageContainer>
   );

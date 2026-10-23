@@ -28,6 +28,13 @@ export interface ShellConfig {
    * sidebar, so TopBar drops both from md up and keeps title + actions.
    */
   pageChrome?: "floating" | "sidebar";
+  /**
+   * Opens the app's own navigation (e.g. its sidebar as a phone drawer).
+   * With `pageChrome: "sidebar"`, phones then get one menu button where the
+   * back button and profile circle were, so every page navigates the same
+   * way. Pages that set `backTo` keep their back button.
+   */
+  openNav?: () => void;
   login?: {
     tagline?: string;
     description?: string;

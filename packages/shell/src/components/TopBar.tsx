@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, Settings as SettingsIcon } from "lucide-react";
+import { ArrowLeft, LogOut, Menu, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   DropdownMenu,
@@ -72,22 +72,27 @@ export function TopBar({
   title,
   children,
   actions,
+  subtitle,
   backTo,
 }: {
   title: string;
   /** Inline after the title (e.g. a status badge). */
   children?: ReactNode;
   /**
-   * Page actions. They follow the profile circle in the DOM, so on phones,
-   * where they wrap to a row of their own under the title row, focus order
-   * matches what is on screen; on desktop they close the title row.
+   * Page actions. They close the title row on desktop; on phones they wrap
+   * to a row of their own under the subtitle, so the page reads title,
+   * what it is, then what you can do (DOM order matches on both).
    */
   actions?: ReactNode;
+  /** Breadcrumb and description, under the title row. */
+  subtitle?: ReactNode;
+  /** A parent page: phones show a back button to it instead of the menu. */
   backTo?: string;
 }) {
   const navigate = useNavigate();
-  const { pageChrome } = useShellConfig();
+  const { pageChrome, openNav } = useShellConfig();
   const sidebarChrome = pageChrome === "sidebar";
+  const menuChrome = sidebarChrome && !!openNav;
   return (
     <header
       className={cn(
@@ -95,25 +100,40 @@ export function TopBar({
         sidebarChrome && "md:pt-10",
       )}
     >
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn("rounded-full", sidebarChrome && "md:hidden")}
-        onClick={() => navigate(backTo ?? "/chats")}
-        aria-label="Back"
-      >
-        <ArrowLeft className="size-5" />
-      </Button>
+      {menuChrome && !backTo ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-ml-2 md:hidden"
+          onClick={openNav}
+          aria-label="Open menu"
+        >
+          <Menu className="size-5" />
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn("rounded-full", sidebarChrome && "md:hidden")}
+          onClick={() => navigate(backTo ?? "/chats")}
+          aria-label="Back"
+        >
+          <ArrowLeft className="size-5" />
+        </Button>
+      )}
       <h1
         className={cn(
           "min-w-0 flex-1 truncate text-lg font-semibold",
-          sidebarChrome && "md:text-2xl",
+          // Tall as the action buttons, so the title sits at the same height
+          // on every page, with or without actions.
+          sidebarChrome && "md:text-2xl md:leading-9",
         )}
       >
         {title}
       </h1>
       {children}
-      <ProfileButton className={cn(sidebarChrome && "md:hidden")} />
+      {!menuChrome && <ProfileButton className={cn(sidebarChrome && "md:hidden")} />}
+      {subtitle && <div className="w-full md:order-last">{subtitle}</div>}
       {actions && (
         <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap">
           {actions}

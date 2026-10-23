@@ -1,0 +1,122 @@
+/**
+ * Tasks page: quick-add files a task under the tab it was typed in, due
+ * dates read as days ("Today", "Tomorrow") rather than end-of-day clock
+ * times, and completing a task offers an undo.
+ */
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
+import { MemoryRouter } from "react-router-dom";
+import { GrootUIProvider } from "@groot/ui";
+import { Tasks } from "@/pages/tasks/Tasks";
+import type { Task } from "@/lib/tasks-api";
+
+const listMock = vi.fn();
+const createMock = vi.fn();
+const updateMock = vi.fn();
+const toastSuccess = vi.fn();
+
+vi.mock("@/lib/tasks-api", () => ({
+  tasksApi: {
+    list: (...args: unknown[]) => listMock(...args),
+    create: (...args: unknown[]) => createMock(...args),
+    update: (...args: unknown[]) => updateMock(...args),
+    remove: vi.fn(),
+  },
+}));
+
+vi.mock("sonner", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("sonner")>()),
+  toast: Object.assign(vi.fn(), {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: vi.fn(),
+  }),
+}));
+
+function endOfDay(offsetDays: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function task(overrides: Partial<Task>): Task {
+  return {
+    id: "t1",
+    title: "Water the plants",
+    description: "",
+    status: "todo",
+    priority: "medium",
+    dueAt: endOfDay(0).toISOString(),
+    completedAt: null,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function mount() {
+  return render(
+    <MemoryRouter>
+      <GrootUIProvider>
+        <Tasks />
+      </GrootUIProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("Tasks page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createMock.mockResolvedValue(task({}));
+    updateMock.mockResolvedValue(task({}));
+  });
+
+  it("files a task added on Today as due today, so it stays on Today", async () => {
+    listMock.mockResolvedValue([]);
+    const user = userEvent.setup();
+    mount();
+
+    await user.type(await screen.findByLabelText("New task title"), "Call mom{Enter}");
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    const { title, dueAt } = createMock.mock.calls[0][0] as { title: string; dueAt: string };
+    expect(title).toBe("Call mom");
+    expect(new Date(dueAt).getTime()).toBe(endOfDay(0).getTime());
+  });
+
+  it("shows end-of-day due dates as a day, without a clock time", async () => {
+    listMock.mockResolvedValue([
+      task({}),
+      task({ id: "t2", title: "Pay rent", dueAt: endOfDay(1).toISOString() }),
+    ]);
+    const user = userEvent.setup();
+    mount();
+
+    expect(await screen.findByText("Today")).toBeTruthy();
+    await user.click(screen.getByRole("tab", { name: /Upcoming/ }));
+    expect(await screen.findByText("Tomorrow")).toBeTruthy();
+    expect(screen.queryByText(/11:59/)).toBeNull();
+  });
+
+  it("offers an undo that restores the task after completing it", async () => {
+    listMock.mockResolvedValue([task({ status: "in_progress" })]);
+    const user = userEvent.setup();
+    mount();
+
+    await user.click(await screen.findByRole("button", { name: 'Complete "Water the plants"' }));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    expect(updateMock).toHaveBeenCalledWith("t1", { status: "done" });
+    const [, options] = toastSuccess.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(options.action.label).toBe("Undo");
+    options.action.onClick();
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenLastCalledWith("t1", { status: "in_progress" }),
+    );
+  });
+});

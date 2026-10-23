@@ -58,15 +58,32 @@ const PRIORITY_CLASSES: Record<Task["priority"], string> = {
   urgent: "text-destructive",
 };
 
+function startOfLocalDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** "Today", "Tomorrow, 3:00 PM", "Oct 30": the day first, a time only if one was set. */
 function formatDue(iso: string): string {
   const d = new Date(iso);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-    ...(d.getHours() || d.getMinutes() ? { hour: "numeric", minute: "2-digit" } : {}),
-  });
+  const now = new Date();
+  // Quick-add files tasks at the end of a day (23:59): a date, no time.
+  const allDay =
+    (d.getHours() === 23 && d.getMinutes() === 59) || (!d.getHours() && !d.getMinutes());
+  const days = Math.round((startOfLocalDay(d) - startOfLocalDay(now)) / 86_400_000);
+  const day =
+    days === 0
+      ? "Today"
+      : days === 1
+        ? "Tomorrow"
+        : days === -1
+          ? "Yesterday"
+          : d.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+            });
+  if (allDay) return day;
+  return `${day}, ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
 function toLocalInput(iso: string | null): string {
@@ -113,10 +130,10 @@ export function Tasks() {
     try {
       await tasksApi.create({
         title,
-        // Quick-add on the Upcoming tab defaults to tomorrow EOD (friction
-        // #36): an undated task lands in no bucket and renders an empty
-        // metadata row. Tomorrow keeps it visibly "upcoming" with a date.
-        ...(!dueToday ? { dueAt: new Date(todayEnd + 86_400_000).toISOString() } : {}),
+        // Quick-add files the task where it was typed: today's tab due end
+        // of today, Upcoming due end of tomorrow (friction #36). An undated
+        // to-do counts as upcoming, so Today must not leave it undated.
+        dueAt: new Date(dueToday ? todayEnd : todayEnd + 86_400_000).toISOString(),
       });
       setQuick("");
       await refresh();
@@ -132,6 +149,20 @@ export function Tasks() {
     try {
       await tasksApi.update(task.id, { status });
       await refresh();
+      // Completing drops the row from the list; make that one tap to take back.
+      if (status === "done") {
+        toast.success("Task completed", {
+          description: task.title,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void tasksApi
+                .update(task.id, { status: task.status })
+                .then(refresh)
+                .catch(() => toast.error("Couldn't undo")),
+          },
+        });
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update task");
       await refresh();
@@ -391,7 +422,7 @@ function TaskEditor({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit task</DialogTitle>
-            <DialogDescription>Changes apply immediately.</DialogDescription>
+            <DialogDescription>Update the details, then save.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
