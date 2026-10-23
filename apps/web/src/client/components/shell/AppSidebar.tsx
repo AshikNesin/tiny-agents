@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bot,
   ChevronsUpDown,
   LogOut,
   MessageSquareHeart,
@@ -26,6 +25,7 @@ import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 import { BotsSection } from "./BotsSection";
+import { BrandMark } from "./BrandMark";
 import { openFeedback } from "../../lib/feedback";
 
 const HEADER_ICON =
@@ -156,7 +156,7 @@ export function AppSidebar() {
               rail && "md:hidden",
             )}
           >
-            <Bot className="size-5" />
+            <BrandMark className="size-5" />
           </Link>
           <button
             type="button"
