@@ -119,3 +119,19 @@
 .chat-header-fade {
   background: linear-gradient(to bottom, var(--background) 0%, var(--background) 60%, transparent);
 }
+
+/* The FeedbackBee launcher (index.html embed) floats bottom-right, which on
+   phones lands on the chat composer's send button. While a chat is open,
+   lift it above the composer, and hide it while typing, when the composer
+   grows and the on-screen keyboard is up. */
+@media (max-width: 767px) {
+  body:has([data-slot="chat-composer"]) .fbx-launch {
+    bottom: calc(env(safe-area-inset-bottom) + 124px);
+  }
+  body:has([data-slot="chat-composer"]) .fbx-panel {
+    bottom: calc(env(safe-area-inset-bottom) + 184px);
+  }
+  body:has([data-slot="chat-composer"] textarea:focus) .fbx-launch {
+    display: none;
+  }
+}

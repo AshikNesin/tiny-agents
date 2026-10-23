@@ -244,16 +244,19 @@ test.describe("Chats — steering (issue #9)", () => {
       .click();
 
     // A long message streams slowly (the faux model runs at 6 tokens/s), so
-    // the bot is verifiably busy — the send button stays live and steers.
+    // the bot is verifiably busy. With nothing typed the one action button
+    // is Stop; typing turns it into Steer — never both at once.
     const longMessage = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ");
     const composer = page.getByPlaceholder(/(?:ask|message) steer bot/i);
     await composer.fill(longMessage);
     await composer.press("Enter");
-    await expect(page.getByRole("button", { name: "Steer the reply" })).toBeVisible({
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible({
       timeout: 15_000,
     });
 
     await composer.fill("steer this");
+    await expect(page.getByRole("button", { name: "Steer the reply" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
     await composer.press("Enter");
     const bubble = page.getByTestId("queued-bubble");
     await expect(bubble).toBeVisible({ timeout: 15_000 });

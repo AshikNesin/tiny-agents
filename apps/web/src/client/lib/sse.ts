@@ -13,7 +13,12 @@ export interface SseConnection {
 export function subscribeSse(
   path: string,
   onEvent: (event: unknown) => void,
-  opts: { signal?: AbortSignal; onOpen?: () => void } = {},
+  opts: {
+    signal?: AbortSignal;
+    onOpen?: () => void;
+    /** An open stream ended or a connect attempt threw; a retry follows. */
+    onDrop?: () => void;
+  } = {},
 ): SseConnection {
   const controller = new AbortController();
   const externalSignal = opts.signal;
@@ -39,6 +44,9 @@ export function subscribeSse(
           if (response.status === 401 || response.status === 403) return;
         } else {
           opts.onOpen?.();
+          // A healthy connection resets the backoff: the next drop retries
+          // quickly instead of inheriting the last outage's 10s delay.
+          delayMs = 1500;
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -69,6 +77,7 @@ export function subscribeSse(
         // aborted or network error
       }
       if (controller.signal.aborted) return;
+      opts.onDrop?.();
       // Reconnect with backoff; server resends a fresh snapshot.
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       delayMs = Math.min(delayMs * 2, 10_000);

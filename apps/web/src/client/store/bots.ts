@@ -75,6 +75,7 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         ...event.state,
         queued: event.state.queued ?? [],
         connected: true,
+        loaded: true,
         pending: state.pending.filter(
           (p) =>
             !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)) &&
@@ -217,6 +218,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
           queued: [],
           pending: [],
           connected: false,
+          loaded: false,
           unreadFrom: Number.isNaN(unreadFrom) ? null : unreadFrom,
         },
       },
@@ -236,6 +238,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
                   queued: [],
                   pending: [],
                   connected: false,
+                  loaded: false,
                   unreadFrom: null,
                 }),
                 connected: false,
@@ -246,7 +249,10 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         }
         get().applyChatEvent(botId, typed);
       },
-      { onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }) },
+      {
+        onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
+        onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
+      },
     );
     chatConnections.set(botId, connection);
   },
@@ -254,6 +260,14 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   disconnectChat: (botId) => {
     chatConnections.get(botId)?.close();
     chatConnections.delete(botId);
+    // The cached transcript keeps rendering on the next visit, but it is
+    // stale until that visit's first snapshot arrives.
+    set((s) => {
+      const chat = s.chats[botId];
+      return chat
+        ? { chats: { ...s.chats, [botId]: { ...chat, connected: false, loaded: false } } }
+        : {};
+    });
   },
 
   resetChat: (botId) => {
@@ -277,6 +291,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
             queued: [],
             pending: [],
             connected: false,
+            loaded: false,
             unreadFrom: null,
           },
           event,
