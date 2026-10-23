@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot,
   ChevronsUpDown,
   LogOut,
   MessageSquare,
+  MessageSquareHeart,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -30,6 +32,23 @@ const NAV: AppNavItem[] = [{ label: "Chats", icon: MessageSquare, to: "/chats" }
 
 const HEADER_ICON =
   "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
+
+/**
+ * Opens the FeedbackBee panel (index.html embed). Its floating launcher is
+ * hidden while the sidebar is on screen (app.css), so the account menu
+ * clicks it instead.
+ */
+function openFeedback() {
+  const launcher = document.querySelector<HTMLButtonElement>(".fbx-launch");
+  if (!launcher) {
+    toast.error("Feedback isn't available right now");
+    return;
+  }
+  // A pointer-style click (detail 1), not `.click()` (detail 0, which the
+  // embed treats as keyboard and focuses the note even on touch, popping
+  // the on-screen keyboard over the page).
+  launcher.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+}
 
 /** ⌘K on Apple keyboards, Ctrl+K elsewhere. */
 const SEARCH_SHORTCUT =
@@ -108,6 +127,7 @@ export function AppSidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  const feedbackRequested = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   // A page that lives in the account menu still shows where you are: the
   // account row reads as selected while one of them is open.
@@ -227,7 +247,20 @@ export function AppSidebar() {
                 />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-56">
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              className="w-56"
+              onCloseAutoFocus={(e) => {
+                // Open the feedback panel once the menu has closed, and keep
+                // the menu from pulling focus back to its trigger, so typing
+                // goes straight into the panel's note.
+                if (!feedbackRequested.current) return;
+                feedbackRequested.current = false;
+                e.preventDefault();
+                openFeedback();
+              }}
+            >
               {[...SECONDARY_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
                 (item) => (
                   <DropdownMenuItem
@@ -244,6 +277,14 @@ export function AppSidebar() {
                 ),
               )}
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  closeDrawer();
+                  feedbackRequested.current = true;
+                }}
+              >
+                <MessageSquareHeart className="size-4" /> Send feedback
+              </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
                 onSelect={() => {

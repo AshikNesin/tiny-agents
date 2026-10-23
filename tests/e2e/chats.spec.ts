@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Chats", () => {
   test("create a bot and chat with a streamed reply that survives a refresh", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -52,7 +52,7 @@ test.describe("Chats", () => {
     page,
   }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -77,7 +77,7 @@ test.describe("Chats", () => {
 test.describe("Chats — new chat", () => {
   test("starting a new chat clears the current transcript", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -119,7 +119,7 @@ test.describe("Chats — new chat", () => {
 test.describe("Chats — attachments (issue #17)", () => {
   test("attach an image, send, render, survive reload", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -175,7 +175,7 @@ test.describe("Chats — attachments (issue #17)", () => {
 
   test("image-only send works without text", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);
@@ -218,7 +218,7 @@ test.describe("Chats — steering (issue #9)", () => {
     page,
   }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("demo@example.com");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats$/);

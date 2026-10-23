@@ -120,26 +120,25 @@
   background: linear-gradient(to bottom, var(--background) 0%, var(--background) 60%, transparent);
 }
 
-/* The FeedbackBee launcher (index.html embed) floats bottom-right, which on
-   phones covers page content and lands on the chat composer's send button.
-   Shrink it there; while a chat is open, lift it above the composer and
-   hide it while typing, when the composer grows and the keyboard is up. */
+/* FeedbackBee (index.html embed). Inside the app its floating launcher is
+   hidden and "Send feedback" in the sidebar's account menu opens the panel,
+   which then rises from the bottom-left beside that menu. Signed-out pages
+   (no sidebar) keep the launcher, smaller on phones. */
+body:has(aside[aria-label="Sidebar"]) .fbx-launch {
+  display: none;
+}
+body:has(aside[aria-label="Sidebar"]) .fbx-panel {
+  left: max(12px, env(safe-area-inset-left));
+  right: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform-origin: bottom left;
+}
 @media (max-width: 767px) {
-  /* Phones: a smaller, quieter launcher so it covers less of every page. */
   body .fbx-launch {
     width: 40px;
     height: 40px;
     border-radius: 14px;
     bottom: max(16px, env(safe-area-inset-bottom));
     opacity: 0.85;
-  }
-  body:has([data-slot="chat-composer"]) .fbx-launch {
-    bottom: calc(env(safe-area-inset-bottom) + 124px);
-  }
-  body:has([data-slot="chat-composer"]) .fbx-panel {
-    bottom: calc(env(safe-area-inset-bottom) + 184px);
-  }
-  body:has([data-slot="chat-composer"] textarea:focus) .fbx-launch {
-    display: none;
   }
 }
