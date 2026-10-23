@@ -25,12 +25,15 @@ import { ConnectionsPage } from "./pages/connections/Connections";
 import { TerminalPage } from "./pages/terminal";
 import { AppShell } from "./components/shell/AppShell";
 import { APP_NAV } from "./components/shell/nav";
+import { useUiStore } from "./store/ui";
 
 /** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: Bot, to: "/chats" },
-  // Desktop navigation lives in the sidebar; this menu only shows on mobile.
+  // Desktop navigation lives in the sidebar, which phones open as a drawer.
   pageChrome: "sidebar",
+  // Phones open the same sidebar as a drawer from every page's menu button.
+  openNav: () => useUiStore.getState().setMobileOpen(true),
   nav: [...APP_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }],
   login: {
     tagline: "Your team of always-on agents.",

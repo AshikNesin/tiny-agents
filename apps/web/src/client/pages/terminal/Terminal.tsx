@@ -406,43 +406,50 @@ export function TerminalPage() {
     );
   })();
 
+  const sandboxDown = status?.kind === "unreachable" || status?.kind === "tmux-missing";
+
   return (
     <PageLayout
       title="Terminal"
       description="Shells on the sandbox VM. Tabs keep running when you leave."
       maxWidth="full"
       actions={
-        <>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-pressed={keysOpen}
-            aria-label={keysOpen ? "Hide keys panel" : "Show keys panel"}
-            title={keysOpen ? "Hide keys panel" : "Show keys panel"}
-            onClick={toggleKeys}
-            disabled={!active}
-            className="text-muted-foreground hover:text-foreground"
-            data-testid="terminal-keys-toggle"
-          >
-            <Keyboard className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleFullscreen}
-            disabled={!active}
-            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-            title={fullscreen ? "Exit full screen" : "Full screen"}
-            className="text-muted-foreground hover:text-foreground"
-            data-testid="terminal-fullscreen"
-          >
-            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-          </Button>
-          <Button onClick={() => void create()} disabled={creating} data-testid="terminal-create">
-            <Plus />
-            New tab
-          </Button>
-        </>
+        // Nothing to act on while the sandbox is down or tmux is missing.
+        sandboxDown ? undefined : (
+          <>
+            {active && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-pressed={keysOpen}
+                  aria-label={keysOpen ? "Hide keys panel" : "Show keys panel"}
+                  title={keysOpen ? "Hide keys panel" : "Show keys panel"}
+                  onClick={toggleKeys}
+                  className="text-muted-foreground hover:text-foreground"
+                  data-testid="terminal-keys-toggle"
+                >
+                  <Keyboard className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={toggleFullscreen}
+                  aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+                  title={fullscreen ? "Exit full screen" : "Full screen"}
+                  className="text-muted-foreground hover:text-foreground"
+                  data-testid="terminal-fullscreen"
+                >
+                  {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              </>
+            )}
+            <Button onClick={() => void create()} disabled={creating} data-testid="terminal-create">
+              <Plus />
+              New tab
+            </Button>
+          </>
+        )
       }
     >
       {body}

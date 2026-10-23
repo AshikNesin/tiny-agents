@@ -68,7 +68,7 @@ test.describe("Bot to bot", () => {
     // activity as replies land, and a bare /relay guest/ match also hits the
     // host rows quoting the guest's reply in their preview.
     await page
-      .getByRole("button", { name: /^Relay Guest/ })
+      .getByRole("link", { name: /^Relay Guest/ })
       .first()
       .click();
     await expect(page.getByRole("button", { name: /edit relay guest/i })).toBeVisible({

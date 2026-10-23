@@ -18,13 +18,21 @@ export function relayText(fromName: string, text: string): string {
   return `**Reply from ${fromName}:** ${text}`;
 }
 
-/** Assistant replies of a transcript, oldest first, with their createdAt. */
+/**
+ * Finished assistant replies of a transcript, oldest first, with their
+ * createdAt. None while the conversation is still busy: sweeps run whenever
+ * any chat goes idle, and a reply still streaming (or one paused between
+ * tool rounds) must not be relayed half-written. The target's own idle
+ * triggers the sweep that relays it whole.
+ */
 async function assistantReplies(rt: AgentRuntime, conversationId: number) {
   const replies: { text: string; createdAt: number }[] = [];
   const sub = await rt.watchChat(conversationId, (events) => {
     for (const event of events) {
       if (event.type !== "snapshot") continue;
-      for (const message of (event.state as ChatState).messages) {
+      const state = event.state as ChatState;
+      if (state.busy) continue;
+      for (const message of state.messages) {
         if (message.role !== "assistant") continue;
         if (message.text) replies.push({ text: message.text, createdAt: message.createdAt });
       }

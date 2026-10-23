@@ -103,7 +103,7 @@ export function ImportSkillDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import</DialogTitle>
+          <DialogTitle>Import skill</DialogTitle>
           <DialogDescription>
             {preview
               ? "Review the parsed skill before installing."

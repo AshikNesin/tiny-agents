@@ -78,7 +78,7 @@ export function SkillDetail({ id }: { id: string }) {
 
   if (loadError) {
     return (
-      <PageLayout title="Skill" maxWidth="4xl">
+      <PageLayout title="Skill" maxWidth="4xl" backTo="/skills">
         <ErrorState
           title="Couldn't load skill"
           description={loadError}
@@ -97,7 +97,7 @@ export function SkillDetail({ id }: { id: string }) {
 
   if (!skill) {
     return (
-      <PageLayout title="Skill" maxWidth="4xl">
+      <PageLayout title="Skill" maxWidth="4xl" backTo="/skills">
         <p className="text-muted-foreground py-8 text-center text-sm">Loading…</p>
       </PageLayout>
     );
@@ -167,9 +167,9 @@ export function SkillDetail({ id }: { id: string }) {
   return (
     <PageLayout
       title={skill.name}
-      description={skill.description}
       breadcrumb={breadcrumb}
       maxWidth="4xl"
+      backTo="/skills"
       actions={
         <>
           <Button
@@ -213,44 +213,6 @@ export function SkillDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="edit">
-            <TabsList>
-              <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-            <TabsContent value="edit" className="mt-4">
-              <Textarea
-                id="skill-body"
-                rows={14}
-                value={form.body}
-                onChange={(e) => setForm({ ...form, body: e.target.value })}
-                aria-label="Skill instructions (markdown)"
-                placeholder="Write the skill's instructions in markdown…"
-                className="font-mono"
-              />
-            </TabsContent>
-            <TabsContent value="preview" className="mt-4">
-              <div className="min-h-36 rounded-lg border p-4 text-sm">
-                {form.body.trim() ? (
-                  <Streamdown>{form.body}</Streamdown>
-                ) : (
-                  <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      <Section title="Files" meta={`${skill.files.length} bundled`}>
-        <SkillFileList files={skill.files} />
-      </Section>
-
       <Section title="Used by bots" meta={bots ? `${usedBy} of ${bots.length}` : undefined}>
         {bots === null ? (
           <p className="text-muted-foreground py-4 text-center text-sm">Loading…</p>
@@ -260,6 +222,11 @@ export function SkillDetail({ id }: { id: string }) {
           </p>
         ) : (
           <div className="space-y-2">
+            {usedBy === 0 && (
+              <p className="text-muted-foreground text-sm">
+                No bot loads this skill yet. Tick the bots that should have it.
+              </p>
+            )}
             {bots.map((bot) => {
               const enabled = skill.botIds.includes(bot.id);
               return (
@@ -285,6 +252,44 @@ export function SkillDetail({ id }: { id: string }) {
             })}
           </div>
         )}
+      </Section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Instructions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="edit">
+            <TabsList>
+              <TabsTrigger value="edit">Edit</TabsTrigger>
+              <TabsTrigger value="preview">Preview</TabsTrigger>
+            </TabsList>
+            <TabsContent value="edit" className="mt-4">
+              <Textarea
+                id="skill-body"
+                rows={14}
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                aria-label="Skill instructions (markdown)"
+                placeholder="Write the skill's instructions in markdown…"
+                className="min-h-72 font-mono"
+              />
+            </TabsContent>
+            <TabsContent value="preview" className="mt-4">
+              <div className="min-h-72 rounded-lg border p-4 text-sm">
+                {form.body.trim() ? (
+                  <Streamdown>{form.body}</Streamdown>
+                ) : (
+                  <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <Section title="Files" meta={`${skill.files.length} bundled`}>
+        <SkillFileList files={skill.files} />
       </Section>
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>

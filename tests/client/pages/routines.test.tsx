@@ -102,7 +102,7 @@ function pickBot(user: ReturnType<typeof userEvent.setup>) {
 
 async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await pickBot(user);
-  await user.type(screen.getByLabelText("Name"), "e2e-routine");
+  await user.type(screen.getByLabelText(/^Name/), "e2e-routine");
   await user.type(screen.getByLabelText("Prompt"), "say the thing");
 }
 
@@ -112,13 +112,14 @@ describe("Routines page", () => {
   });
 
   it("renders upcoming runs, schedule cards, and recent executions in IST", async () => {
-    loadPage();
+    loadPage([routine, { ...routine, id: "r2", name: "evening-digest" }]);
     mount();
 
     // Upcoming + card next-run + run row all render the same IST instant.
     expect(await screen.findAllByText("Wed, 21 Oct 2026, 09:00 IST")).not.toHaveLength(0);
     expect(screen.getAllByText("morning-digest").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Helper Bot · At 09:00, Monday through Friday").length).toBe(2);
+    // Two cards plus their two Upcoming rows.
+    expect(screen.getAllByText("Helper Bot · At 09:00, Monday through Friday").length).toBe(4);
     // Card + run row both show the routine's state.
     expect(screen.getByText(/took 1m 4s/)).toBeTruthy();
     expect(screen.getByText("succeeded")).toBeTruthy();
@@ -132,6 +133,7 @@ describe("Routines page", () => {
     await user.click(await screen.findByRole("button", { name: /new routine/i }));
 
     await fillBasics(user);
+    await user.click(screen.getByRole("tab", { name: "Interval" }));
     const minutes = await screen.findByLabelText(/interval minutes/i);
     await user.clear(minutes);
     await user.type(minutes, "15");
@@ -225,5 +227,38 @@ describe("Routines page", () => {
 
     await user.click(await screen.findByRole("button", { name: /run now/i }));
     await waitFor(() => expect(runNowMock).toHaveBeenCalledWith("r1"));
+  });
+
+  it("skips the Upcoming list when one routine's card already shows its next run", async () => {
+    loadPage();
+    mount();
+
+    expect(await screen.findAllByText("morning-digest")).not.toHaveLength(0);
+    expect(screen.queryByText("Upcoming")).toBeNull();
+    expect(screen.getAllByText("Helper Bot · At 09:00, Monday through Friday")).toHaveLength(1);
+  });
+
+  it("starts a new routine daily on the only bot and names it from the prompt", async () => {
+    loadPage();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    mount();
+    await user.click(await screen.findByRole("button", { name: /new routine/i }));
+
+    expect(screen.getByRole("tab", { name: "Daily" }).getAttribute("aria-selected")).toBe("true");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Bot" }).textContent).toContain("Helper Bot"),
+    );
+    await user.type(
+      screen.getByLabelText("Prompt"),
+      "Summarize what changed in my repos overnight and flag anything urgent",
+    );
+    await user.click(screen.getByRole("button", { name: "Create", exact: true }));
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][0]).toMatchObject({
+      botId: "b1",
+      name: "Summarize what changed in my repos…",
+      schedule: { kind: "cron" },
+    });
   });
 });

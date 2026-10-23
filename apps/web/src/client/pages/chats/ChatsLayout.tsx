@@ -107,7 +107,7 @@ export function ChatWorkspace() {
           {/* Mobile, nothing open: the bot list is the screen (messenger flow). */}
           {!noBots && (
             <div className="flex h-full flex-col md:hidden">
-              <div className="flex h-14 shrink-0 items-center gap-2 px-3">
+              <div className="flex shrink-0 items-center gap-3 px-3 pt-4 pb-2">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -116,6 +116,7 @@ export function ChatWorkspace() {
                 >
                   <Menu className="size-5" />
                 </Button>
+                <h1 className="text-lg font-semibold">Chats</h1>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto pb-4">
                 <BotsSection bots={bots} activeId={null} />

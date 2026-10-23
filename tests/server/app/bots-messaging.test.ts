@@ -328,6 +328,57 @@ describe("relay", () => {
     expect(row?.answeredAt).toBeNull();
   });
 
+  it("waits for the target to finish instead of relaying a reply mid-stream", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    const delivered = Date.now() - 5_000;
+    await prisma.botMessage.create({
+      data: {
+        fromBotId: null,
+        toBotId: guest.id,
+        replyToBotId: host.id,
+        kind: "mention",
+        requestId: "r-live",
+        text: "hello",
+        deliveredAt: new Date(delivered),
+      },
+    });
+    // Another chat went idle (the host finished first), so the sweep looks
+    // at the guest while its reply is still streaming.
+    let busy = true;
+    runtime.watchChat.mockImplementation(
+      async (_ref: number, listener: (events: unknown[]) => Promise<void> | void) => {
+        await listener([
+          {
+            type: "snapshot",
+            state: {
+              messages: [
+                {
+                  id: busy ? "live" : "e2",
+                  role: "assistant",
+                  text: busy ? "Here is my" : "Here is my whole answer",
+                  createdAt: delivered + 1_000,
+                },
+              ],
+              busy,
+            },
+          },
+        ]);
+        return { initial: { messages: [], busy }, stop: async () => undefined };
+      },
+    );
+    const relay = createBotRelay(runtime);
+    expect(await relay.relayForBot(guest.id)).toBe(0);
+    expect(runtime.submit).not.toHaveBeenCalled();
+
+    busy = false;
+    expect(await relay.relayForBot(guest.id)).toBe(1);
+    expect(runtime.submit).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ text: "**Reply from Guest:** Here is my whole answer" }),
+    );
+  });
+
   it("never relays a stale reply that predates the delivery (boot sweep)", async () => {
     const host = await seedBot("Host", "1");
     const guest = await seedBot("Guest", "2");

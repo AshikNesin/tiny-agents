@@ -47,6 +47,8 @@ interface BotsState {
 
 let activityConnection: { close(): void } | null = null;
 const chatConnections = new Map<string, { close(): void }>();
+/** Sequence of `loadBots` calls; a response from an older call is dropped. */
+let botsRequest = 0;
 
 /** Attachment ids of a message, for echo matching (empty texts collide). */
 function attachmentIds(message: { attachments?: { uploadId: string }[] }): string[] {
@@ -142,11 +144,17 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   models: [],
 
   loadBots: async () => {
+    // Loads overlap (mount, a create, activity events). Only the newest
+    // may land: an older list answering last would drop a bot that was just
+    // created, and the chat route would treat its link as stale.
+    const request = ++botsRequest;
     set({ loading: true, error: null });
     try {
       const bots = await botsApi.list();
+      if (request !== botsRequest) return;
       set({ bots, loading: false });
     } catch (error) {
+      if (request !== botsRequest) return;
       set({
         loading: false,
         error: error instanceof Error ? error.message : "Failed to load bots",
