@@ -50,7 +50,6 @@ export interface Bot {
   lastReadAt: string | null;
   lastActivityAt: string;
   lastMessagePreview: string | null;
-  toolkits: string[];
   toolPermissions: Record<string, ToolPermission>;
   skillIds: string[];
   connectionIds: string[];
@@ -88,6 +87,8 @@ export interface CapabilityInfo {
   description: string;
   tools: ToolInfo[];
   setupHint?: string;
+  /** Switched on and off by the app itself; not shown in a bot's settings. */
+  auto?: boolean;
 }
 
 export interface BotInput {
@@ -95,7 +96,6 @@ export interface BotInput {
   description?: string;
   systemPrompt?: string;
   modelId: string;
-  toolkits?: string[];
   toolPermissions?: Record<string, ToolPermission>;
   skillIds?: string[];
   connectionIds?: string[];

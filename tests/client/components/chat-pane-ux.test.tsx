@@ -54,7 +54,6 @@ const HOST: Bot = {
   lastReadAt: null,
   lastActivityAt: new Date().toISOString(),
   lastMessagePreview: null,
-  toolkits: [],
   toolPermissions: {},
   skillIds: [],
   connectionIds: [],

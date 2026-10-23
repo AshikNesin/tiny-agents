@@ -20,3 +20,4 @@ that the code alone cannot show.
 | 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md) | reinstated by 0003 |
 | 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                        | reverted by 0003   |
 | 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)               | accepted           |
+| 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)           | accepted           |

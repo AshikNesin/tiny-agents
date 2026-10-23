@@ -1,10 +1,10 @@
 /**
  * Capabilities: what a bot can be given (issue #1 D2). A capability is one
  * pi-durable extension plus the metadata the app shows for it — a built-in
- * toolkit (`tasks`, `web`, `time`), the bot's skills, or a remote MCP
- * connection. Every capability is off by default; each bot selects the ones
- * it may use and a permission per tool (D3): `allow` runs it, `ask` waits for
- * the owner's approval, `off` removes it from the model.
+ * toolkit (`tasks`, `web`, `browser`), the bot's skills, or a remote MCP
+ * connection. The app gives every bot every built-in toolkit; the owner
+ * shapes a bot with a permission per tool (D3): `allow` runs it, `ask` waits
+ * for the owner's approval, `off` removes it from the model.
  */
 import { defineExtension } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
@@ -34,6 +34,11 @@ export interface CapabilityInfo {
   tools: ToolInfo[];
   /** Why the capability can't run yet (missing configuration); absent when ready. */
   setupHint?: string;
+  /**
+   * Switched on and off by the app itself (by model or by connection), never
+   * a choice in a bot's settings.
+   */
+  auto?: boolean;
 }
 
 export interface Capability extends CapabilityInfo {
@@ -70,6 +75,7 @@ export function createToolSearchCapability(): Capability {
     kind: "toolkit",
     name: "Tool search",
     description: "Finds tools of large connections on demand",
+    auto: true,
     extension: defineExtension({ ...createToolSearchExtension(), name: "tool-search" }),
     tools: [
       {

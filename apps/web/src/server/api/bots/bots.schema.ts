@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-const toolkits = z.array(z.string().min(1).max(64)).max(50);
 const toolPermissions = z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"]));
 /** "shared": the browser every such bot uses (shared logins); "own": one of its own. */
 const browserProfile = z.enum(["shared", "own"]);
@@ -14,7 +13,6 @@ export const createBotSchema = z.object({
     .optional()
     .default(""),
   modelId: z.string().min(1, "Model is required"),
-  toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
   browserProfile: browserProfile.optional(),
@@ -27,7 +25,6 @@ export const updateBotSchema = z.object({
   description: z.string().trim().max(200).optional(),
   systemPrompt: z.string().max(24_576, "System prompt is too long (max ~24 KB)").optional(),
   modelId: z.string().min(1, "Model is required").optional(),
-  toolkits: toolkits.optional(),
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
   browserProfile: browserProfile.optional(),

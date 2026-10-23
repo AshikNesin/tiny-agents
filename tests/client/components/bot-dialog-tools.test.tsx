@@ -2,8 +2,10 @@
  * @vitest-environment jsdom
  *
  * BotDialog Tools tab: the per-tool Allow/Ask/Off segmented control must
- * actually change the permission on click (regression repro), and the
- * Browser toolkit offers the shared or the bot's own browser profile.
+ * actually change the permission on click (regression repro). Every bot
+ * has every toolkit, so there are no toolkit switches, and the automatic
+ * capabilities are not shown. The Browser toolkit offers the shared or the
+ * bot's own browser profile.
  */
 import React from "react";
 import { render, screen, within } from "@testing-library/react";
@@ -28,6 +30,23 @@ vi.mock("@/lib/bots-api", () => ({
         name: "Browser",
         description: "A real browser the bot drives",
         tools: [{ name: "browser_navigate", label: "Opened a page", description: "Open a URL" }],
+      },
+      {
+        id: "vision",
+        kind: "toolkit",
+        name: "Vision",
+        description: "See attached images",
+        auto: true,
+        tools: [{ name: "see_image", label: "Looked at an image", description: "See an image" }],
+      },
+      { id: "today", kind: "toolkit", name: "Today", description: "Date", auto: true, tools: [] },
+      {
+        id: "web",
+        kind: "toolkit",
+        name: "Web",
+        description: "Search and read web pages",
+        setupHint: "Set CLOUDFLARE_API_KEY to enable web search.",
+        tools: [{ name: "web_search", label: "Searched the web", description: "Search" }],
       },
     ]),
     update: vi.fn(async (_id: string, payload: object) => ({ ...payload })),
@@ -58,7 +77,6 @@ const bot = {
   description: "",
   systemPrompt: "",
   modelId: "m1",
-  toolkits: ["tasks"],
   toolPermissions: {},
   skillIds: [],
   connectionIds: [],
@@ -91,16 +109,29 @@ describe("BotDialog tool permissions", () => {
   });
 });
 
+describe("BotDialog tools list", () => {
+  it("lists every toolkit without switches and hides the automatic ones", async () => {
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+
+    expect(await screen.findByText("Opened a page")).toBeInTheDocument();
+    expect(screen.getByText("Added task")).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: /^Enable / })).toBeNull();
+    expect(screen.queryByText("Vision")).toBeNull();
+    expect(screen.queryByText("Today")).toBeNull();
+    // A toolkit that still needs setup says how, and offers no tools yet.
+    expect(screen.getByText("Set CLOUDFLARE_API_KEY to enable web search.")).toBeInTheDocument();
+    expect(screen.queryByText("Searched the web")).toBeNull();
+  });
+});
+
 describe("BotDialog browser profile", () => {
   it("defaults to the shared profile and saves a switch to the bot's own", async () => {
     const user = userEvent.setup();
     render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
 
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
-    // The choice only shows once the bot has the browser.
-    expect(screen.queryByRole("radiogroup", { name: "Browser profile" })).toBeNull();
-    await user.click(await screen.findByRole("switch", { name: "Enable Browser" }));
-
     const group = await screen.findByRole("radiogroup", { name: "Browser profile" });
     expect(within(group).getByRole("radio", { name: "Shared" })).toHaveAttribute(
       "data-state",
@@ -112,7 +143,7 @@ describe("BotDialog browser profile", () => {
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     expect(botsApi.update).toHaveBeenCalledWith(
       "b1",
-      expect.objectContaining({ browserProfile: "own", toolkits: ["tasks", "browser"] }),
+      expect.objectContaining({ browserProfile: "own" }),
     );
   });
 });

@@ -50,7 +50,7 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
 
 async function seedBot(name: string, conversationId: string) {
   return prisma.bot.create({
-    data: { name, modelId: "m1", conversationId, toolkits: "[]" },
+    data: { name, modelId: "m1", conversationId },
   });
 }
 

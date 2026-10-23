@@ -7,6 +7,7 @@ import { generateToken } from "@groot/core/utils/jwt.utils";
 import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
+import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.service";
 import { ApprovalNotPendingError } from "../../../packages/agent/src/runtime";
 
 /**
@@ -220,8 +221,9 @@ describe("Bots API routes", () => {
     expect(agentRuntime.createConversation).toHaveBeenCalledWith({
       modelId: createPayload.modelId,
       systemPrompt: createPayload.systemPrompt,
-      // New bots start with no toolkits (issue #1 D2); skills only lists assigned ones.
-      capabilities: { enabled: ["skills", "memory", "vision"], permissions: {} },
+      // Every bot has every built-in toolkit (ADR 0004), plus the vision
+      // side-call for a text-only model.
+      capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
     });
 
     const bot = await prisma.bot.findUnique({ where: { id: response.body.data.id } });
@@ -266,7 +268,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).toHaveBeenCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Use bullet points.",
-      capabilities: { enabled: ["skills", "memory", "vision"], permissions: {} },
+      capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
     });
     await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
       name: "Edited helper",
@@ -456,7 +458,7 @@ describe("Bots API routes", () => {
     expect(activityListeners.size).toBe(0);
   });
 
-  it("lists capabilities and stores a bot's toolkits and tool permissions", async () => {
+  it("gives every bot every toolkit and stores its tool permissions", async () => {
     const app = buildApp();
     const caps = await request(app).get("/api/v1/capabilities").set(authorization).expect(200);
     expect(caps.body.data.capabilities.map((c: { id: string }) => c.id)).toEqual(["tasks", "web"]);
@@ -464,16 +466,15 @@ describe("Bots API routes", () => {
     const created = await request(app)
       .post("/api/v1/bots")
       .set(authorization)
+      // A client still sending the old toolkit list is not refused; it is ignored.
       .send({ ...createPayload, toolkits: ["web"], toolPermissions: { web_fetch: "ask" } })
       .expect(201);
-    expect(created.body.data).toMatchObject({
-      toolkits: ["web"],
-      toolPermissions: { web_fetch: "ask" },
-    });
+    expect(created.body.data).toMatchObject({ toolPermissions: { web_fetch: "ask" } });
+    expect(created.body.data).not.toHaveProperty("toolkits");
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({
         capabilities: {
-          enabled: ["web", "skills", "memory", "vision"],
+          enabled: [...BOT_TOOLKITS, "vision"],
           permissions: { web_fetch: "ask" },
         },
       }),
@@ -482,23 +483,17 @@ describe("Bots API routes", () => {
     const patched = await request(app)
       .patch(`/api/v1/bots/${created.body.data.id}`)
       .set(authorization)
-      .send({ toolkits: ["tasks", "web"] })
+      .send({ toolPermissions: { web_fetch: "off" } })
       .expect(200);
-    expect(patched.body.data.toolkits).toEqual(["tasks", "web"]);
+    expect(patched.body.data.toolPermissions).toEqual({ web_fetch: "off" });
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(100, {
       modelId: "known-model",
       systemPrompt: "Be precise.",
       capabilities: {
-        enabled: ["tasks", "web", "skills", "memory", "vision"],
-        permissions: { web_fetch: "ask" },
+        enabled: [...BOT_TOOLKITS, "vision"],
+        permissions: { web_fetch: "off" },
       },
     });
-
-    await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send({ ...createPayload, toolkits: ["nope"] })
-      .expect(400);
   });
 
   it("answers approvals, with 'always allow' switching the tool to allow", async () => {
@@ -514,7 +509,7 @@ describe("Bots API routes", () => {
       100,
       expect.objectContaining({
         capabilities: {
-          enabled: ["skills", "memory", "vision"],
+          enabled: [...BOT_TOOLKITS, "vision"],
           permissions: { send_email: "allow" },
         },
       }),
@@ -662,10 +657,10 @@ describe("Bots API routes", () => {
   });
 });
 
-it("drops a stale vision toolkit when the model gained native vision", async () => {
-  // Saved in the text-only era; the model now sees images inline. The
-  // side-call's prompt section would order see_image calls with ids that
-  // no longer reach the model (production: fabricated upload_ ULIDs).
+it("leaves the vision side-call out for a model with native vision", async () => {
+  // The side-call's prompt section would order see_image calls with ids
+  // that never reach a model that sees images inline (production:
+  // fabricated upload_ ULIDs).
   const bot = await prisma.bot.create({
     data: {
       id: "stalevision",
@@ -673,7 +668,6 @@ it("drops a stale vision toolkit when the model gained native vision", async () 
       systemPrompt: "You help.",
       modelId: "vision-model",
       conversationId: "777",
-      toolkits: '["tasks", "vision"]',
     },
   });
   await request(buildApp())
@@ -684,6 +678,6 @@ it("drops a stale vision toolkit when the model gained native vision", async () 
   expect(agentRuntime.configure).toHaveBeenCalledWith(777, {
     modelId: "vision-model",
     systemPrompt: "You help.",
-    capabilities: { enabled: ["tasks", "skills", "memory"], permissions: {} },
+    capabilities: { enabled: [...BOT_TOOLKITS], permissions: {} },
   });
 });

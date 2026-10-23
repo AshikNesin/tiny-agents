@@ -42,8 +42,6 @@ export interface BotRow {
   lastReadAt: Date | null;
   lastActivityAt: Date;
   lastMessagePreview: string | null;
-  /** JSON array of enabled toolkit ids. */
-  toolkits: string;
   /** JSON object: tool name → permission. */
   toolPermissions: string;
   /** Memory capture + injection switch (issue #22). */
@@ -74,8 +72,7 @@ export type BotAgentRuntime = Pick<
 >;
 
 /** The bot as the API returns it: capability columns parsed, skills and connections by id. */
-export type Bot = Omit<BotRow, "toolkits" | "toolPermissions"> & {
-  toolkits: string[];
+export type Bot = Omit<BotRow, "toolPermissions"> & {
   toolPermissions: Record<string, ToolPermission>;
   skillIds: string[];
   connectionIds: string[];
@@ -112,7 +109,6 @@ export function toBot(row: BotWithLinks): Bot {
   const { skills, connections, ...bot } = row;
   return {
     ...bot,
-    toolkits: parseJson<string[]>(row.toolkits, []),
     toolPermissions: parseJson<Record<string, ToolPermission>>(row.toolPermissions, {}),
     skillIds: skills?.map((link) => link.skillId) ?? [],
     connectionIds: connections?.map((link) => link.connectionId) ?? [],
@@ -141,12 +137,29 @@ export function connectionToolCounts(bot: {
 }
 
 /**
+ * The built-in toolkits every bot gets. There is no per-bot selection: a bot
+ * is shaped by its tool permissions (Off removes a tool from the model), and
+ * effectful tools ask the owner before they run.
+ */
+export const BOT_TOOLKITS = [
+  "tasks",
+  "routines",
+  "web",
+  "sandbox",
+  "browser",
+  "bots",
+  "skills",
+  "memory",
+  "today",
+] as const;
+
+/**
  * What the bot's durable conversation runs with: persona, model and
- * capabilities — its toolkits and connections, plus `skills` (always
- * selected: it lists only the bot's assigned skills, and `save_skill` asks).
+ * capabilities: every built-in toolkit, its connections, and the automatic
+ * ones (vision for text-only models, tool search for large connections).
  */
 export function agentConfig(
-  bot: Pick<Bot, "modelId" | "systemPrompt" | "toolkits" | "toolPermissions"> & {
+  bot: Pick<Bot, "modelId" | "systemPrompt" | "toolPermissions"> & {
     connectionCapabilities?: string[];
     /** Tools cached per enabled connection (slug → count), for the deferral threshold. */
     connectionToolCounts?: Record<string, number>;
@@ -155,19 +168,14 @@ export function agentConfig(
   const largeServer = Object.values(bot.connectionToolCounts ?? {}).some(
     (count) => count > MCP_DEFER_THRESHOLD,
   );
+  // The see_image side-call is only for models without native vision.
   const seesImages = modelSeesImages(bot.modelId);
   return {
     modelId: bot.modelId,
     systemPrompt: bot.systemPrompt,
     capabilities: {
       enabled: [
-        // The see_image side-call is only for models without native vision;
-        // a stale `vision` entry saved while the model was text-only is
-        // dropped here (its prompt section orders calls with ids that no
-        // longer reach the model once images go inline).
-        ...bot.toolkits.filter((id) => !seesImages || id !== "vision"),
-        "skills",
-        "memory",
+        ...BOT_TOOLKITS,
         ...(seesImages ? [] : ["vision"]),
         ...(bot.connectionCapabilities ?? []),
         ...(largeServer ? ["tool-search"] : []),
@@ -175,19 +183,6 @@ export function agentConfig(
       permissions: bot.toolPermissions,
     },
   };
-}
-
-/** Reject toolkit ids the runtime doesn't know (typos, removed toolkits). */
-function checkToolkits(rt: BotAgentRuntime, toolkits: string[] | undefined): void {
-  if (!toolkits) return;
-  const known = new Set(
-    rt
-      .listCapabilities()
-      .filter((capability) => capability.kind === "toolkit")
-      .map((capability) => capability.id),
-  );
-  const unknown = toolkits.filter((id) => !known.has(id));
-  if (unknown.length > 0) throw Boom.badRequest(`Unknown toolkit "${unknown[0]}"`);
 }
 
 function runtime(): BotAgentRuntime {
@@ -263,14 +258,11 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
   if (!rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
-  checkToolkits(rt, data.toolkits);
-  const toolkits = data.toolkits ?? [];
   const toolPermissions = data.toolPermissions ?? {};
   const conversationId = await rt.createConversation(
     agentConfig({
       modelId: data.modelId,
       systemPrompt: data.systemPrompt,
-      toolkits,
       toolPermissions,
     }),
   );
@@ -283,7 +275,6 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       systemPrompt: data.systemPrompt,
       modelId: data.modelId,
       conversationId: String(conversationId),
-      toolkits: JSON.stringify(toolkits),
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
@@ -344,8 +335,6 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   if (data.modelId !== undefined && !rt.hasModel(modelId)) {
     throw Boom.badRequest(`Unknown model "${modelId}"`);
   }
-  checkToolkits(rt, data.toolkits);
-  const toolkits = data.toolkits ?? bot.toolkits;
   const toolPermissions = data.toolPermissions ?? bot.toolPermissions;
   await setLinks(id, data.skillIds, data.connectionIds);
   const after = data.connectionIds ? await findBot(id) : null;
@@ -355,7 +344,6 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
     agentConfig({
       modelId,
       systemPrompt,
-      toolkits,
       toolPermissions,
       connectionCapabilities: after
         ? toBot(after).connectionCapabilities
@@ -366,7 +354,6 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   await prisma.bot.update({
     where: { id },
     data: {
-      ...(data.toolkits !== undefined ? { toolkits: JSON.stringify(toolkits) } : {}),
       ...(data.toolPermissions !== undefined
         ? { toolPermissions: JSON.stringify(toolPermissions) }
         : {}),

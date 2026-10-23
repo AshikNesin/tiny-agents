@@ -77,36 +77,47 @@ const nameSchema = Type.String({ minLength: 1, maxLength: 80 });
 const promptSchema = Type.String({ minLength: 1, maxLength: 20_000 });
 const idSchema = Type.String({ minLength: 1 });
 
-const scheduleSchema = Type.Unsafe<RoutineSchedule>(
+/** What a tool call may pass: a stored schedule, or "in N minutes" resolved at call time. */
+type ScheduleInput = RoutineSchedule | { kind: "in"; minutes: number };
+
+// The schedule guidance lives here, once, rather than in each tool's description.
+const scheduleSchema = Type.Unsafe<ScheduleInput>(
   Type.Union([
+    Type.Object({
+      kind: Type.Literal("in"),
+      minutes: Type.Integer({
+        minimum: 1,
+        maximum: 10_080,
+        description: "One time, this many minutes from now (reminders: in 30 minutes)",
+      }),
+    }),
     Type.Object({
       kind: Type.Literal("once"),
       at: Type.String({
         format: "date-time",
-        description: "ISO datetime with an explicit offset, e.g. 2026-11-01T09:00:00+05:30",
+        description:
+          "One time, ISO datetime with an explicit offset, e.g. 2026-11-01T09:00:00+05:30",
       }),
     }),
     Type.Object({
       kind: Type.Literal("cron"),
       expr: Type.String({
         description:
-          "5-field cron (minute hour day-of-month month day-of-week), interpreted in IST",
+          'Recurring, 5-field cron in IST (minute hour day-of-month month day-of-week), e.g. "0 9 * * 1-5" for weekdays at 09:00',
       }),
     }),
     Type.Object({
       kind: Type.Literal("interval"),
-      minutes: Type.Integer({ minimum: 15, maximum: 1440 }),
+      minutes: Type.Integer({ minimum: 15, maximum: 1440, description: "Every N minutes" }),
     }),
   ]),
 );
 
-const SCHEDULE_DOC =
-  'Schedule object, all times IST (UTC+05:30): {"kind":"once","at":"2026-11-01T09:00:00+05:30"} ' +
-  '(one time, always carry the +05:30 offset), {"kind":"cron","expr":"0 9 * * 1-5"} ' +
-  "(recurring; 5-field cron: minute hour day-of-month month day-of-week, no seconds field), or " +
-  '{"kind":"interval","minutes":30} (every 30 minutes; 15 to 1440). Compact forms work: ' +
-  '"*/30 * * * *" is every 30 minutes, "0 9 * * 1-5" is weekdays at 09:00. Schedules may not fire ' +
-  "more often than every 15 minutes.";
+/** A relative schedule becomes a one-time instant, so the model never needs the clock. */
+function resolveSchedule(schedule: ScheduleInput, now: () => Date): RoutineSchedule {
+  if (schedule.kind !== "in") return schedule;
+  return { kind: "once", at: new Date(now().getTime() + schedule.minutes * 60_000).toISOString() };
+}
 
 const ok = (text: string): ToolExecutionResult => ({
   output: [{ type: "text", text }],
@@ -153,16 +164,17 @@ const notFound = (id: string) => fail(`No routine with id "${id}".`);
  * apps/web routines.toolkit-store.ts). The tools are created per extension
  * so they close over the store.
  */
-export function createRoutinesExtension(store: RoutineStore): Extension {
+export function createRoutinesExtension(
+  store: RoutineStore,
+  options: { now?: () => Date } = {},
+): Extension {
+  const now = options.now ?? (() => new Date());
   const createRoutine = defineTool({
     name: "create_routine",
     description:
-      "Create a routine: a standing instruction that this bot runs a prompt on a schedule, " +
-      "firing into this chat. Use it when the owner asks for reminders or recurring work " +
-      "(every weekday at 9am, in 30 minutes, every Friday 6pm). " +
-      SCHEDULE_DOC +
-      " The result is a confirmation card with the schedule in plain English and the next " +
-      "3 fire times in IST; show it to the owner so they can confirm what was parsed.",
+      "Create a routine: this bot runs the prompt on a schedule and replies in this chat. " +
+      "Use it for reminders and recurring work (in 30 minutes, every weekday at 9am). " +
+      "Show the owner the returned card so they can confirm the schedule.",
     parameters: Type.Object({
       name: nameSchema,
       prompt: promptSchema,
@@ -172,14 +184,18 @@ export function createRoutinesExtension(store: RoutineStore): Extension {
     execute: async (args, api, context) =>
       attempt(async () => {
         const idempotencyKey = await toolIdempotencyKey(api, context);
-        const routine = await store.create(Number(api.conversationId), { idempotencyKey, ...args });
+        const routine = await store.create(Number(api.conversationId), {
+          idempotencyKey,
+          ...args,
+          schedule: resolveSchedule(args.schedule, now),
+        });
         return ok(`Created routine ${confirmationCard(routine)}`);
       }),
   });
 
   const listRoutines = defineTool({
     name: "list_routines",
-    description: "List the owner's routines with their schedule sentence and next run in IST.",
+    description: "List the owner's routines with their schedules and next runs.",
     parameters: Type.Object({}),
     replay: "safe",
     execute: async (_args, api) =>
@@ -192,21 +208,19 @@ export function createRoutinesExtension(store: RoutineStore): Extension {
   const updateRoutine = defineTool({
     name: "update_routine",
     description:
-      "Update a routine by id: name, prompt, schedule, or enabled (all optional; omit what stays). " +
-      "Set enabled to false to pause a routine or true to resume it. " +
-      SCHEDULE_DOC +
-      " Returns the updated confirmation card with the next 3 fire times in IST.",
+      "Update a routine by id; omit the fields that stay. enabled false pauses it, true resumes it.",
     parameters: Type.Object({
       id: idSchema,
       name: Type.Optional(nameSchema),
       prompt: Type.Optional(promptSchema),
       schedule: Type.Optional(scheduleSchema),
-      enabled: Type.Optional(Type.Boolean({ description: "false pauses, true resumes" })),
+      enabled: Type.Optional(Type.Boolean()),
     }),
     replay: "safe",
     execute: async (args, api) =>
       attempt(async () => {
-        const { id, ...input } = args;
+        const { id, schedule, ...rest } = args;
+        const input = schedule ? { ...rest, schedule: resolveSchedule(schedule, now) } : rest;
         const routine = await store.update(Number(api.conversationId), id, input);
         return routine ? ok(`Updated routine ${confirmationCard(routine)}`) : notFound(id);
       }),
@@ -234,9 +248,7 @@ export function createRoutinesExtension(store: RoutineStore): Extension {
 
   const runRoutineNow = defineTool({
     name: "run_routine_now",
-    description:
-      "Run a routine once immediately, without waiting for its schedule. " +
-      "Use when the owner wants to test a routine or asks for its result now.",
+    description: "Run a routine once now, e.g. to test it.",
     parameters: Type.Object({ id: idSchema }),
     replay: "safe",
     execute: async (args, api) =>
@@ -255,13 +267,16 @@ export function createRoutinesExtension(store: RoutineStore): Extension {
 }
 
 /** The `routines` toolkit: schedule this bot from chat (issue #18 phase C). */
-export function createRoutinesToolkit(store: RoutineStore): Capability {
+export function createRoutinesToolkit(
+  store: RoutineStore,
+  options: { now?: () => Date } = {},
+): Capability {
   return {
     id: "routines",
     kind: "toolkit",
     name: "Routines",
     description: "Schedule recurring or one-time routines for the owner",
-    extension: createRoutinesExtension(store),
+    extension: createRoutinesExtension(store, options),
     tools: [
       { name: "create_routine", label: "Created routine", description: "Create a routine" },
       {

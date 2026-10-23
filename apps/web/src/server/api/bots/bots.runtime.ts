@@ -18,7 +18,7 @@ import {
   createSandboxToolkit,
   createSkillsCapability,
   createTasksToolkit,
-  createTimeToolkit,
+  createTodayCapability,
   createTranscriber,
   createVisionToolkit,
   createWebToolkit,
@@ -59,7 +59,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       gatewayId: unquote(env.CLOUDFLARE_GATEWAY_ID),
       apiBase: unquote(env.CLOUDFLARE_API_BASE_URL),
     }),
-    createTimeToolkit({ timeZone: unquote(env.TZ) }),
+    createTodayCapability({ timeZone: unquote(env.TZ) }),
     // Default host is the verified MagicDNS name (issue #19 runbook); the
     // env var exists to override — e.g. the Tailscale IP if MagicDNS breaks.
     createSandboxToolkit({

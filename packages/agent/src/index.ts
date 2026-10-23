@@ -35,7 +35,7 @@ export {
   type TaskStatus,
   type TaskPriority,
 } from "./toolkits/tasks";
-export { createTimeToolkit, type TimeToolkitOptions } from "./toolkits/time";
+export { createTodayCapability, type TodayOptions } from "./toolkits/today";
 export {
   createSandboxToolkit,
   createMemoryHostKeyStore,

@@ -40,8 +40,6 @@ model Bot {
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())
   lastMessagePreview String?
-  /// JSON array of enabled built-in toolkit ids, e.g. ["tasks", "web"] (issue #1 D2).
-  toolkits           String    @default("[]")
   /// JSON object: tool name → "allow" | "ask" | "off"; tools without an entry use their default.
   toolPermissions    String    @default("{}")
   skills             BotSkill[]

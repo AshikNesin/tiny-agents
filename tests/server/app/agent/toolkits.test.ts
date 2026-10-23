@@ -1,9 +1,9 @@
-/** Built-in toolkits (issue #1 D15/D16): web search/fetch via Cloudflare (faked), time. */
+/** Built-in toolkits (issue #1 D15/D16): web search/fetch via Cloudflare (faked), today's date. */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
-import { createTimeToolkit } from "../../../../packages/agent/src/toolkits/time";
+import { createTodayCapability } from "../../../../packages/agent/src/toolkits/today";
 import { checkPublicUrl, createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
 
 async function run(capability: Capability, name: string, args: Record<string, unknown>) {
@@ -72,20 +72,27 @@ describe("web toolkit", () => {
     expect(() => checkPublicUrl("file:///etc/passwd")).toThrow(/http/);
     const web = createWebToolkit({});
     expect(web.setupHint).toMatch(/CLOUDFLARE_API_KEY/);
-    expect(await run(web, "web_search", { query: "x" })).toMatchObject({ isError: true });
+    // Every bot has the toolkit: unconfigured, it offers the model no tools.
+    expect(web.extension.tools).toEqual([]);
   });
 });
 
-describe("time toolkit", () => {
-  it("formats the current time in the owner's zone or a requested one", async () => {
-    const time = createTimeToolkit({
-      timeZone: "Asia/Kolkata",
-      now: () => new Date("2026-10-18T12:00:00Z"),
-    });
-    expect((await run(time, "current_time", {})).text).toContain("5:30:00 PM");
-    expect((await run(time, "current_time", { timeZone: "UTC" })).text).toContain("12:00:00 PM");
-    expect(await run(time, "current_time", { timeZone: "Mars/Base" })).toMatchObject({
-      isError: true,
-    });
+describe("today capability", () => {
+  const render = (today: Capability) =>
+    today.extension.sections![0]!.render({ conversationId: 1 } as never, BACKGROUND_CONTEXT);
+
+  it("puts today's date in the owner's zone in the prompt, with no tools", async () => {
+    const late = new Date("2026-10-23T20:00:00Z"); // already the 24th in India
+    const today = createTodayCapability({ timeZone: "Asia/Kolkata", now: () => late });
+    expect(today.extension.tools ?? []).toEqual([]);
+    expect(today.auto).toBe(true);
+    expect(await render(today)).toBe("Today is Saturday, 24 October 2026 (Asia/Kolkata).");
+    const utc = createTodayCapability({ timeZone: "UTC", now: () => late });
+    expect(await render(utc)).toBe("Today is Friday, 23 October 2026 (UTC).");
+  });
+
+  it("falls back to UTC for an unknown zone", async () => {
+    const today = createTodayCapability({ timeZone: "Mars/Base", now: () => new Date(0) });
+    expect(await render(today)).toContain("(UTC)");
   });
 });
