@@ -4,7 +4,6 @@
  * VM sees (the strings are the frozen contract with tmux 3.4), byte flow
  * through fake ptys, and the fresh-connection-per-attach invariant.
  */
-import { Duplex } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryHostKeyStore } from "../../../../packages/agent/src/toolkits/sandbox";
 import {
@@ -20,7 +19,6 @@ import {
   SessionBusyError,
   TerminalUnreachableError,
   TmuxMissingError,
-  type PtyStream,
 } from "../../../../packages/agent/src/terminal/terminal";
 import { createSsh2TerminalTransport } from "../../../../packages/agent/src/terminal/terminal-ssh2";
 import {
@@ -30,7 +28,6 @@ import {
 } from "../../../../packages/agent/src/terminal/tmux";
 
 const name = (n: number) => `ta-term-${n}` as SessionName;
-const id = (session: string) => session.slice("ta-term-".length);
 
 type ExecReply = { stdout?: string; stderr?: string; exitCode?: number };
 
@@ -90,48 +87,6 @@ function fakeTmuxVm() {
       for (const k of Object.keys(busy)) delete busy[k];
     },
   };
-}
-
-/** The service's PtyStream over a FakePty: what the fake server hands back. */
-class FakePtyStream extends Duplex implements PtyStream {
-  constructor(readonly fake: FakePty) {
-    super({});
-    let resolveDone!: (value: { exitCode: number | null }) => void;
-    this.done = new Promise((resolve) => {
-      resolveDone = resolve;
-    });
-    let buffered: Buffer[] = [];
-    let opened = false;
-    // The ssh2 stream binds after the handler returns; queue until then.
-    const flush = () => {
-      for (const b of buffered) this.push(b);
-      buffered = [];
-    };
-    this.fake.emit = (data) => void data; // replaced once the real bind lands
-    queueMicrotask(() => {
-      opened = true;
-      flush();
-    });
-    void opened;
-    void buffered;
-  }
-  declare readonly done: Promise<{ exitCode: number | null }>;
-  setWindow(rows: number, cols: number): void {
-    this.fake.setWindow(cols, rows);
-  }
-  override _read(): void {}
-  override _write(
-    chunk: Buffer,
-    _encoding: BufferEncoding,
-    callback: (error?: Error | null) => void,
-  ): void {
-    this.fake.emit(chunk);
-    callback();
-  }
-  override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
-    this.fake.end();
-    callback(error);
-  }
 }
 
 describe("terminal service (unit)", () => {

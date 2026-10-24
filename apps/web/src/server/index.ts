@@ -120,15 +120,15 @@ async function main() {
     .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections"));
 
   // Bot-to-bot relay (issue #12): a bot that finished replying may owe an
-  // answer to another bot's chat. Sweeping at boot also picks up deliveries
+  // answer to another bot's chat. The boot sweep picks up deliveries
   // interrupted by a restart.
   const relay = createBotRelay(runtime);
   runtime.onActivity(async (change) => {
     if (change.busy) return;
     try {
-      await relay.sweep();
+      await relay.relayForConversation(change.conversation);
     } catch {
-      // Sweeps are best-effort; the next idle retries unanswered rows.
+      // Relays are best-effort; the next idle retries unanswered rows.
     }
   });
   void relay.sweep().catch(() => undefined);
@@ -153,11 +153,7 @@ async function main() {
             hasModel: (id) => runtime.hasModel(id),
             modelId: captureModelId,
           },
-          readTranscript: async (id) => {
-            const sub = await runtime.watchChat(id, () => undefined);
-            await sub.stop();
-            return sub.initial.messages;
-          },
+          readTranscript: async (id) => (await runtime.readChat(id)).messages,
         }),
     });
   }

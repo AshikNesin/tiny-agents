@@ -7,16 +7,13 @@
  * deterministically from the durable tool task (same key as `tasks`), so a
  * replay recomputes both and the store's unique columns dedupe the row.
  */
-import type { Context } from "@earendil-works/chord";
 import {
   defineExtension,
   defineTool,
-  ProviderDoc,
   section,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
-import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { toolIdempotencyKey } from "./tasks";
 import { CUSTODY_RULE, sanitizePeerText } from "./peer-text";

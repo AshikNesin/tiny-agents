@@ -408,7 +408,6 @@ describe("Bots API routes", () => {
     const openUntilEnded = (path: string) =>
       new Promise<string>((resolveEnd, rejectEnd) => {
         let text = "";
-        let ended = false;
         let counted = false;
         const timer = setTimeout(() => rejectEnd(new Error(`${path} never ended`)), 3_000);
         request(app)
@@ -428,7 +427,6 @@ describe("Bots API routes", () => {
               }
             });
             response.on("end", () => {
-              ended = true;
               clearTimeout(timer);
               resolveEnd(text);
               callback(null, "");

@@ -20,7 +20,7 @@ by default. The toolkit switch was a second, redundant layer.
 ## Decision
 
 - Every bot gets every built-in toolkit (`BOT_TOOLKITS` in
-  `bots.service.ts`); the `toolkits` column is dropped. A bot is shaped only
+  `bots.conversation.ts`); the `toolkits` column is dropped. A bot is shaped only
   by tool permissions. MCP connections stay a per-bot choice.
 - Automatic capabilities (`auto: true`: vision, tool search, today's date)
   are not shown in the bot's settings.

@@ -1,6 +1,6 @@
 /** Attachment UI (issue #17): composer staging chips and transcript rendering. */
 import { useState } from "react";
-import { Download, FileText, ImageIcon, Loader2, X } from "lucide-react";
+import { Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
 

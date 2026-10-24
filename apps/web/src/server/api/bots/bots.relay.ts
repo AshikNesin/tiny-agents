@@ -56,6 +56,8 @@ export function matchReplies<
 export interface BotRelay {
   /** Relay finished replies for every unanswered delivery of this target bot. */
   relayForBot(botId: string): Promise<number>;
+  /** The same for the bot behind a conversation that just went idle (the activity feed). */
+  relayForConversation(conversationId: number): Promise<number>;
   /** Sweep every bot with unanswered deliveries (boot, tests). */
   sweep(): Promise<number>;
 }
@@ -131,6 +133,18 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     return relayed;
   }
 
+  async function relayForConversation(conversationId: number): Promise<number> {
+    const pending = await prisma.botMessage.findFirst({
+      where: {
+        deliveredAt: { not: null },
+        answeredAt: null,
+        to: { conversationId: String(conversationId) },
+      },
+      select: { toBotId: true },
+    });
+    return pending ? relayForBot(pending.toBotId) : 0;
+  }
+
   async function sweep(): Promise<number> {
     const pending = await prisma.botMessage.findMany({
       where: { deliveredAt: { not: null }, answeredAt: null },
@@ -142,5 +156,5 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     return relayed;
   }
 
-  return { relayForBot, sweep };
+  return { relayForBot, relayForConversation, sweep };
 }

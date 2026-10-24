@@ -19,7 +19,6 @@ interface MemoryStore extends BotMessagingStore {
   invocations: { toName: string; text: string; requestId: string; sourceKey: string }[];
   /** Rows the "unique requestId column" accepted: one per real delivery. */
   deliveries: string[];
-  roster: { name: string; description: string }[];
   nextResult: {
     delivered: boolean;
     reason?: "unknown_bot" | "self" | "loop" | "budget";
@@ -36,7 +35,6 @@ function memoryStore(
   return {
     invocations,
     deliveries,
-    roster,
     nextResult,
     async deliver(input) {
       invocations.push(input);

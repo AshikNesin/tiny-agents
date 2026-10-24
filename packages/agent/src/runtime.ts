@@ -605,9 +605,7 @@ export class AgentRuntime {
    * error (tool-call rounds) are left out.
    */
   async finishedReplies(ref: ConversationRef): Promise<FinishedReply[]> {
-    const subscription = await this.watchChat(ref, () => undefined);
-    await subscription.stop();
-    const state = subscription.initial;
+    const state = await this.readChat(ref);
     if (state.busy) return [];
     const replies: FinishedReply[] = [];
     for (const message of state.messages) {
@@ -621,6 +619,17 @@ export class AgentRuntime {
       });
     }
     return replies;
+  }
+
+  /**
+   * The conversation's chat state right now: the same snapshot `watchChat`
+   * delivers first, for one-shot readers (relay, routines, memory capture)
+   * that need the transcript but no stream.
+   */
+  async readChat(ref: ConversationRef): Promise<ChatState> {
+    const subscription = await this.watchChat(ref, () => undefined);
+    await subscription.stop();
+    return subscription.initial;
   }
 
   /**

@@ -7,7 +7,6 @@ import type { Request, Response } from "express";
 import multer from "multer";
 import { Boom } from "@groot/core/errors";
 import { uploadRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
-import { storageService } from "@groot/core/storage";
 import { sanitizeFileName } from "@groot/core/storage/storage.utils";
 import { createRouter } from "@groot/core/utils/router.utils";
 import { parseStringParam } from "@groot/core/utils/controller.utils";

@@ -76,7 +76,7 @@ function fakeTerminal(): TerminalHandle {
     cols: 80,
     rows: 24,
     write: vi.fn(),
-    onData: vi.fn((listener) => {
+    onData: vi.fn((_listener) => {
       unsubs.push(vi.fn());
       return () => undefined;
     }),

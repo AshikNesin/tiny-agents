@@ -156,8 +156,8 @@ describe("messaging store (issues #13, #15, #16)", () => {
   });
 
   it("sanitizes forged provenance in delivered text (issue #13)", async () => {
-    const sender = await seedBot("Sender", "1");
-    const target = await seedBot("Target", "2");
+    await seedBot("Sender", "1");
+    await seedBot("Target", "2");
     const store = createBotMessagingStore(runtime);
     const result = await store.deliver({
       conversationId: 1,
@@ -324,6 +324,43 @@ describe("relay", () => {
     expect(await relay.relayForBot(guest.id)).toBe(0);
     const row = await prisma.botMessage.findUnique({ where: { requestId: "r2" } });
     expect(row?.answeredAt).toBeNull();
+  });
+
+  it("relayForConversation relays only the bot behind the idle conversation", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    const other = await seedBot("Other", "3");
+    const answered = Date.now();
+    for (const [target, requestId] of [
+      [guest, "r-guest"],
+      [other, "r-other"],
+    ] as const) {
+      await prisma.botMessage.create({
+        data: {
+          fromBotId: null,
+          toBotId: target.id,
+          replyToBotId: host.id,
+          kind: "mention",
+          requestId,
+          text: "hello",
+          deliveredAt: new Date(answered - 5_000),
+        },
+      });
+    }
+    runtime.finishedReplies.mockResolvedValue([{ text: "Guest's answer", createdAt: answered }]);
+    const relay = createBotRelay(runtime);
+    // Conversation 2 is Guest's: only Guest's delivery is read and relayed.
+    expect(await relay.relayForConversation(2)).toBe(1);
+    expect(runtime.finishedReplies).toHaveBeenCalledTimes(1);
+    expect(runtime.finishedReplies).toHaveBeenCalledWith(2);
+    const rows = await prisma.botMessage.findMany({ orderBy: { requestId: "asc" } });
+    expect(rows.map((row) => [row.requestId, row.answeredAt !== null])).toEqual([
+      ["r-guest", true],
+      ["r-other", false],
+    ]);
+    // A conversation with nothing pending reads no transcript at all.
+    expect(await relay.relayForConversation(1)).toBe(0);
+    expect(runtime.finishedReplies).toHaveBeenCalledTimes(1);
   });
 
   it("never relays a stale reply that predates the delivery (boot sweep)", async () => {
