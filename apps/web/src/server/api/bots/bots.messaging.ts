@@ -7,6 +7,7 @@
 import { prisma } from "@groot/core/database";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
+import { submitToBot } from "./bots.conversation";
 
 /** Same shape as the ledger kinds (schema.sqlite.prisma BotMessage.kind). */
 type DeliverReason = "unknown_bot" | "self" | "loop" | "budget";
@@ -86,11 +87,15 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
       // and the submit below is deduped by pi-durable itself (the early
       // return above is the replay path).
       const queued = rt.isBusy(Number(target.conversationId));
-      await rt.submit(Number(target.conversationId), {
-        requestId: input.requestId,
-        text: botToBotText(sender.name, sanitizePeerText(input.text)),
-        peer: { kind: "message", name: sender.name },
-      });
+      await submitToBot(
+        target.id,
+        {
+          requestId: input.requestId,
+          text: botToBotText(sender.name, sanitizePeerText(input.text)),
+          peer: { kind: "message", name: sender.name },
+        },
+        rt,
+      );
       await prisma.botMessage.create({
         data: {
           fromBotId: sender.id,

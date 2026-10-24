@@ -16,7 +16,12 @@ import {
   type ChatState,
   type RawChat,
 } from "../../../../packages/agent/src/index";
-import { openTestRuntime, TEST_MODEL, TEST_MODEL_2 } from "../../../../packages/agent/src/testing";
+import {
+  fauxAssistantMessage,
+  openTestRuntime,
+  TEST_MODEL,
+  TEST_MODEL_2,
+} from "../../../../packages/agent/src/testing";
 
 const TEST_TIMEOUT_MS = 8_000;
 
@@ -591,6 +596,72 @@ describe("AgentRuntime", () => {
         role: "assistant",
         text: `Echo: message ${turns - 1}`,
       });
+      await chat.stop();
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("reports finished replies only once the conversation is idle", async () => {
+    const runtime = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 5 });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      await runtime.submit(ref, { requestId: "finished-1", text: "slow one" });
+      await waitUntil(() => runtime.isBusy(ref), "the reply to start");
+      expect(await runtime.finishedReplies(ref)).toEqual([]);
+
+      await waitUntil(() => !runtime.isBusy(ref), "the reply to finish");
+      const replies = await runtime.finishedReplies(ref);
+      expect(replies).toEqual([{ text: "Echo: slow one", createdAt: expect.any(Number) }]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("reports a model error as a finished reply carrying the error", async () => {
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      respondWith: () => ({
+        ...fauxAssistantMessage([]),
+        stopReason: "error" as const,
+        errorMessage: "Provider unavailable",
+      }),
+    });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      await runtime.submit(ref, { requestId: "error-1", text: "hello" });
+      await waitUntil(
+        async () => (await runtime.finishedReplies(ref)).length > 0,
+        "the failed reply to settle",
+      );
+      expect(await runtime.finishedReplies(ref)).toEqual([
+        { text: "", createdAt: expect.any(Number), error: "Provider unavailable" },
+      ]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("carries the request id of an attachment send on its user message", async () => {
+    const runtime = await openTestRuntime({ storePath: ":memory:" });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      const chat = await observeChat(runtime, ref);
+      await runtime.submit(ref, {
+        requestId: "with-file",
+        text: "see this\n\n[file attached: notes.txt, text/plain, 1 KB]",
+        attachments: [
+          { uploadId: "u1", kind: "file", name: "notes.txt", mimeType: "text/plain", size: 900 },
+        ],
+      });
+      await runtime.submit(ref, { requestId: "plain", text: "and this" });
+      await waitUntil(
+        () => chat.state().messages.filter((m) => m.role === "user").length === 2,
+        "both sends to land",
+      );
+      const users = chat.state().messages.filter((m) => m.role === "user");
+      expect(users[0]).toMatchObject({ requestId: "with-file" });
+      expect(users[1]?.requestId).toBeUndefined();
       await chat.stop();
     } finally {
       await runtime.close();

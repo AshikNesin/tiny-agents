@@ -9,6 +9,11 @@ export default defineConfig({
     include: ["tests/server/**/*.test.ts"],
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
+    // Every file shares one test database and most reset whole tables
+    // (bots, routines, ledger rows) between tests, so files running side by
+    // side delete each other's rows. One file at a time keeps runs
+    // deterministic on both engines.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

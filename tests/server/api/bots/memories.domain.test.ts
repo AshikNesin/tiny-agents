@@ -90,9 +90,12 @@ describe("renderMemoryBlock", () => {
   });
 
   it("renders the until date as a suffix", () => {
-    const block = renderMemoryBlock([
-      { ...base, text: "Is in Goa until Friday", until: "2026-10-23T18:00:00.000Z" },
-    ])!;
+    // A fixed clock: against the real one this memory expires and renders nothing.
+    const now = new Date("2026-10-20T00:00:00.000Z");
+    const block = renderMemoryBlock(
+      [{ ...base, text: "Is in Goa until Friday", until: "2026-10-23T18:00:00.000Z" }],
+      now,
+    )!;
     expect(block).toContain("(until 2026-10-23)");
   });
 });

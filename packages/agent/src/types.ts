@@ -82,6 +82,13 @@ export interface ChatMessage {
   /** Attachments the user sent with this message (user role only). */
   attachments?: AttachmentRef[];
   /**
+   * The `submit` request id, when the entry recorded one (user role only:
+   * sends with attachments or peer attribution). The server may annotate
+   * such a message's text, so clients confirm their optimistic echo by this
+   * id rather than by text.
+   */
+  requestId?: string;
+  /**
    * Trusted attribution for a cross-bot delivery (user role only): set by
    * the delivery pipeline, never by the owner's composer. A text that merely
    * looks like an envelope has no `peer` and renders as a plain bubble —
@@ -148,6 +155,15 @@ export interface LastMessage {
   role: "user" | "assistant";
   text: string;
   createdAt: number;
+}
+
+/** An assistant reply that finished (see `AgentRuntime.finishedReplies`). */
+export interface FinishedReply {
+  /** The reply's text; often empty when it ended in a model error. */
+  text: string;
+  createdAt: number;
+  /** Set when the reply ended in a model error: the provider's message. */
+  error?: string;
 }
 
 /** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */

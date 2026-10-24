@@ -14,7 +14,7 @@ import type { JobHandler } from "@groot/jobs/server/error-handler";
 import { z } from "zod";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { agentConfig, connectionToolCounts, toBot, withLinks } from "../bots/bots.service";
+import { submitToBot } from "../bots/bots.conversation";
 import {
   composeRoutinePrompt,
   nextOccurrence,
@@ -106,7 +106,7 @@ export async function dispatchOccurrence(
   const scheduledFor = new Date(payload.scheduledFor);
   const routine = await prisma.routine.findUnique({
     where: { id: payload.routineId },
-    include: { bot: { include: withLinks } },
+    include: { bot: { select: { id: true, conversationId: true } } },
   });
   // Missing routine (deleted bot cascades or routine delete): the queued job
   // is an orphan; ack and drop.
@@ -156,23 +156,22 @@ export async function dispatchOccurrence(
   }
 
   const runtime = getAgentRuntime();
-  const bot = toBot(routine.bot);
-  // Same reconciliation as every other submit path: the durable conversation
-  // must not run a config staler than the bot row.
-  await runtime.configure(
-    Number(bot.conversationId),
-    agentConfig({ ...bot, connectionToolCounts: connectionToolCounts(routine.bot) }),
-  );
+  const bot = routine.bot;
   let submitted = true;
   try {
-    await runtime.submit(Number(bot.conversationId), {
-      requestId: runRequestId(routine.id, scheduledFor),
-      text: composeRoutinePrompt(routine.name, routine.prompt, scheduledFor, lateMinutes),
-    });
+    await submitToBot(
+      bot.id,
+      {
+        requestId: runRequestId(routine.id, scheduledFor),
+        text: composeRoutinePrompt(routine.name, routine.prompt, scheduledFor, lateMinutes),
+      },
+      runtime,
+    );
   } catch (error) {
     // Auth and configuration failures (model gone, gateway missing) must not
     // retry in a loop: the run fails once, the routine pauses, and a notice
-    // lands in the bot's chat (PRD 5.5).
+    // lands in the bot's chat (PRD 5.5). A model removed from the catalog
+    // fails the reconcile step, so it lands here too.
     submitted = false;
     await prisma.routineRun.upsert({
       where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
@@ -243,6 +242,7 @@ async function pauseAfterSubmitFailure(
     where: { id: routine.id },
     data: { enabled: false, nextRunAt: null, pendingJobId: null },
   });
+  // A plain submit, not submitToBot: reconciling is what may just have failed.
   try {
     await runtime.submit(Number(conversationId), {
       requestId: `routine-paused:${routine.id}:${Date.now()}`,

@@ -83,11 +83,6 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
 }
 
 /**
- * The sandbox's TOFU host-key pins, one per host, persisted through the app's
- * KV (the `keyv` table) so a restart remembers what it trusted on first connect.
- */
-/** One KV-backed TOFU store per process; memory fallback keeps tests key-free. */
-/**
  * Browser transport for the deploy model: chromium runs on the sandbox VM
  * (SANDBOX_HOST over Tailscale SSH), not in this container. With
  * BROWSER_EXECUTABLE_PATH set we drive that local binary instead (dev on
@@ -107,6 +102,11 @@ function browserTransport(env: Env) {
   return createChromiumTransport();
 }
 
+/**
+ * The sandbox's TOFU host-key pins, one per host, persisted through the app's
+ * KV (the `keyv` table) so a restart remembers what it trusted on first
+ * connect. The memory fallback keeps tests key-free.
+ */
 function kvHostKeyStore(): HostKeyStore {
   try {
     const kv = createNamespaceKv("SANDBOX");
@@ -166,17 +166,23 @@ export function agentRuntimeReady(): boolean {
 export async function openAgentRuntime(
   options: Parameters<typeof AgentRuntime.open>[0],
 ): Promise<AgentRuntime> {
-  // The messaging toolkit needs the runtime itself (it submits into target
-  // conversations), so capabilities resolve after open. installCapability
-  // registers it; bots select it by name on their next configure.
   const instance = await AgentRuntime.open({
     ...options,
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
+  return finishOpen(instance, options.env);
+}
+
+/**
+ * The wiring every boot shares once the runtime is open, whichever models it
+ * runs on. The messaging toolkit needs the runtime itself (it submits into
+ * target conversations) and the vision side-call binds to the registry the
+ * runtime opened with, so both install after open; bots select them by name
+ * on their next configure.
+ */
+function finishOpen(instance: AgentRuntime, env: Env = process.env): AgentRuntime {
   instance.installCapability(botsCapability(instance));
-  // The vision side-call binds to the registry the runtime opened with
-  // (built internally when the caller passed none).
-  instance.installCapability(visionCapability(instance, instance.models, options.env));
+  instance.installCapability(visionCapability(instance, instance.models, env));
   runtime = instance;
   ready = true;
   return instance;
@@ -247,16 +253,12 @@ export async function openFauxAgentRuntime(
     models,
     provider: "faux",
     lockWaitMs: 5_000,
-    capabilities: builtinCapabilities(),
+    capabilities: builtinCapabilities(env),
     settings: { retry: { enabled: false } },
     // The .env allowlist names real gateway custom models that don't exist
     // in the faux registry — without this override /models returns an empty
     // catalog and e2e cannot create bots.
-    env: { ...process.env, GATEWAY_MODEL_ALLOWLIST: "" },
+    env: { ...env, GATEWAY_MODEL_ALLOWLIST: "" },
   });
-  instance.installCapability(botsCapability(instance));
-  instance.installCapability(visionCapability(instance, models));
-  runtime = instance;
-  ready = true;
-  return instance;
+  return finishOpen(instance, env);
 }

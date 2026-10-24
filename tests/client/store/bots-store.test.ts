@@ -232,6 +232,59 @@ describe("bots store — attachment echoes (issue #17)", () => {
     });
     expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
   });
+
+  it("clears a file send's echo by request id although the server annotated its text", () => {
+    const botId = "bot-file";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    const attachments = [
+      { uploadId: "fff", kind: "file", name: "notes.txt", mimeType: "text/plain", size: 5 },
+    ];
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "echo-d", text: "see this", createdAt: 1, attachments },
+    });
+    // resolveSend appends a metadata line for every file: the text differs.
+    emit(botId, {
+      type: "upsert",
+      message: {
+        id: "e3",
+        role: "user",
+        text: "see this\n\n[file attached: notes.txt, text/plain, 0 KB]",
+        requestId: "echo-d",
+        status: "done",
+        createdAt: 1,
+        attachments,
+      },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
+  });
+
+  it("a recorded request id only confirms its own echo", () => {
+    const botId = "bot-same-text";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    const attachments = [
+      { uploadId: "ggg", kind: "file", name: "a.txt", mimeType: "text/plain", size: 5 },
+    ];
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "echo-e", text: "again", createdAt: 1, attachments },
+    });
+    emit(botId, {
+      type: "upsert",
+      message: {
+        id: "e4",
+        role: "user",
+        text: "again",
+        requestId: "some-other-send",
+        status: "done",
+        createdAt: 1,
+        attachments,
+      },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending.map((p) => p.id)).toEqual(["echo-e"]);
+  });
 });
 
 describe("bots store — queued messages while busy (issue #9)", () => {
@@ -290,5 +343,39 @@ describe("bots store — queued messages while busy (issue #9)", () => {
     const chat = useBotsStore.getState().chats[botId]!;
     expect(chat.queued).toEqual([]);
     expect(chat.messages.some((message) => message.id === "e5")).toBe(true);
+  });
+});
+
+describe("bots store — activity feed", () => {
+  beforeEach(() => {
+    listeners.clear();
+    useBotsStore.getState().disconnectActivity();
+  });
+
+  it("updates the approvals badge while the bot is still replying", () => {
+    useBotsStore.setState({
+      bots: [
+        {
+          id: "b1",
+          conversationId: "7",
+          name: "Bot",
+          description: "",
+          modelId: "m",
+          lastMessagePreview: null,
+          lastActivityAt: "2026-10-23T00:00:00.000Z",
+          lastReadAt: null,
+          unread: false,
+          replying: false,
+          approvals: 0,
+          pinnedAt: null,
+        },
+      ],
+    });
+    useBotsStore.getState().connectActivity();
+    const onEvent = listeners.get("/api/v1/events")!;
+    onEvent({ type: "activity", conversation: "7", busy: true, approvals: 0 });
+    // A tool call now waits for the owner: same busy run, new count.
+    onEvent({ type: "activity", conversation: "7", busy: true, approvals: 1 });
+    expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: true, approvals: 1 });
   });
 });

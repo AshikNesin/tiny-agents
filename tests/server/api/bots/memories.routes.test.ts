@@ -20,7 +20,6 @@ const agentRuntime = {
     .mockResolvedValue({ initial: { messages: [], busy: false }, stop: async () => undefined }),
   isBusy: vi.fn().mockReturnValue(false),
   busyConversations: vi.fn().mockReturnValue([]),
-  lastMessage: vi.fn().mockResolvedValue(undefined),
   onActivity: vi.fn().mockReturnValue(() => undefined),
   listModels: vi.fn().mockReturnValue([
     {

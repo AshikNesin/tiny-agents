@@ -10,8 +10,8 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
-import { sanitizePeerText, type AgentRuntime, type ChatState } from "@tiny-agents/agent";
-import { agentConfig, connectionToolCounts, toBot, withLinks } from "./bots.service";
+import { sanitizePeerText, type AgentRuntime } from "@tiny-agents/agent";
+import { submitToBot } from "./bots.conversation";
 
 /** How a relayed reply is presented inside the receiving transcript. */
 export function relayText(fromName: string, text: string): string {
@@ -19,27 +19,13 @@ export function relayText(fromName: string, text: string): string {
 }
 
 /**
- * Finished assistant replies of a transcript, oldest first, with their
- * createdAt. None while the conversation is still busy: sweeps run whenever
- * any chat goes idle, and a reply still streaming (or one paused between
- * tool rounds) must not be relayed half-written. The target's own idle
- * triggers the sweep that relays it whole.
+ * Replies a delivery can be answered with: finished assistant replies that
+ * carry text, oldest first. None while the target is still busy (see
+ * `finishedReplies`); its own idle triggers the sweep that relays it whole.
  */
-async function assistantReplies(rt: AgentRuntime, conversationId: number) {
-  const replies: { text: string; createdAt: number }[] = [];
-  const sub = await rt.watchChat(conversationId, (events) => {
-    for (const event of events) {
-      if (event.type !== "snapshot") continue;
-      const state = event.state as ChatState;
-      if (state.busy) continue;
-      for (const message of state.messages) {
-        if (message.role !== "assistant") continue;
-        if (message.text) replies.push({ text: message.text, createdAt: message.createdAt });
-      }
-    }
-  });
-  await sub.stop();
-  return replies;
+async function assistantReplies(rt: Pick<AgentRuntime, "finishedReplies">, conversationId: number) {
+  const replies = await rt.finishedReplies(conversationId);
+  return replies.filter((reply) => reply.text);
 }
 
 /**
@@ -92,23 +78,21 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
     }
     const host = await prisma.bot.findUnique({
       where: { id: row.replyToBotId },
-      include: withLinks,
+      select: { id: true },
     });
     if (!host) {
       await markAnswered(row.id, replyCreatedAt);
       return true;
     }
-    // Same reconciliation as sends and mentions: the host's durable config
-    // must not be staler than its row before it answers.
-    await rt.configure(
-      Number(host.conversationId),
-      agentConfig({ ...toBot(host), connectionToolCounts: connectionToolCounts(host) }),
+    await submitToBot(
+      host.id,
+      {
+        requestId: `botmsg-reply-${row.id}`,
+        text: relayText(fromName, sanitizePeerText(replyText)),
+        peer: { kind: "reply", name: fromName },
+      },
+      rt,
     );
-    await rt.submit(Number(host.conversationId), {
-      requestId: `botmsg-reply-${row.id}`,
-      text: relayText(fromName, sanitizePeerText(replyText)),
-      peer: { kind: "reply", name: fromName },
-    });
     await markAnswered(row.id, replyCreatedAt);
     return true;
   }

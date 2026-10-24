@@ -61,7 +61,7 @@ The split is per send, from the model catalog's `input` modality
 - Vision models receive the image inline as image blocks in the user message.
   No transcription loss, no extra call.
 - Text-only models receive note lines (`[image attached: name, WxH (id)]`) and
-  the auto-included `vision` toolkit (`agentConfig`, same force-include as
+  the auto-included `vision` toolkit (`bots.conversation.ts`, same force-include as
   `skills`; self-adjusts on model switch). `see_image(uploadId, question?)`
   side-calls a vision-capable transcriber and returns the text. Fail-open:
   upstream errors return `isError` with the reason; the bot keeps its turn.
@@ -74,10 +74,11 @@ first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
 `VISION_API_KEY`. Empty answers retry once. None available: the tool errors
 and the bot says so.
 
-Every submit path (send, mention delivery, bot-to-bot relay) reconciles the
-bot's durable config from its row first, and `agentConfig` drops a stale
+Every submit path (send, mention delivery, bot-to-bot message and relay,
+routine fire) goes through `submitToBot` in `bots.conversation.ts`, which
+reconciles the bot's durable config from its row first and drops a stale
 `vision` toolkit when the model sees images inline; editing a bot or
-answering an approval reconfigures too. A durable conversation can never run
+answering an approval reconciles too. A durable conversation can never run
 a selection older than its row.
 
 Custom models declare their input modality at registration: `vision: true`

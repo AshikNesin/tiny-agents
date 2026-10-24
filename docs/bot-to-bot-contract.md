@@ -69,9 +69,13 @@ On `runtime.onActivity` idle transitions (a conversation stopped replying):
 
 1. Find `deliveredAt != null AND answeredAt = null` rows where `toBotId` just
    finished a reply.
-2. Read the target's `lastMessage` (assistant text). If none, leave pending.
+2. Read the target's `finishedReplies` (none while it is still busy) and
+   match each row to the first reply with text created after its delivery.
+   If none, leave pending.
 3. Submit `**Reply from {targetName}:** {text}` into `replyToBotId`'s
-   conversation with requestId `botmsg-reply-{rowId}`; then set `answeredAt`.
+   conversation through `submitToBot` (`bots.conversation.ts`, which
+   reconciles the host first) with requestId `botmsg-reply-{rowId}`; then
+   set `answeredAt`.
 4. Relay rows (`kind="relay"`) never relay again. Only `send` and `mention`
    kinds produce relays.
 
@@ -90,8 +94,9 @@ chat] {text}` … the host's own submit gets the text unchanged.
 
 ### 4. Agent runtime additions (packages/agent/src/runtime.ts)
 
-None. The toolkit installs like `tasks`/`web` via `capabilities` at
-open time; conversations select it with `configure`.
+`finishedReplies(ref)` for the relay (step 2). The toolkit installs like
+`tasks`/`web` via `capabilities` at open time; conversations select it with
+`configure`.
 
 ### 5. Client (apps/web/src/client)
 

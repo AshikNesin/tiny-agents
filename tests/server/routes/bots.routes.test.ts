@@ -7,16 +7,12 @@ import { generateToken } from "@groot/core/utils/jwt.utils";
 import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
-import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.service";
+import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { ApprovalNotPendingError } from "../../../packages/agent/src/runtime";
 
 /**
- * Expected runtime seam for route tests:
- * `bots.runtime.ts` exports `getAgentRuntime()`, `setAgentRuntimeForTests(mock)`,
- * and `agentRuntimeReady()`. The setter receives this app-shaped runtime mock.
- *
- * The Bot model/migration is being built in parallel. Until it lands, this suite
- * correctly fails because both the runtime seam and `bots` table do not exist.
+ * Route tests run against an app-shaped runtime fake installed through
+ * `setAgentRuntimeForTests()` (bots.runtime.ts), with the real Prisma test DB.
  */
 
 const token = generateToken({ userId: 1, email: "bots-test@example.com" });
@@ -60,7 +56,6 @@ const agentRuntime = {
   ),
   isBusy: vi.fn().mockReturnValue(false),
   busyConversations: vi.fn().mockReturnValue([]),
-  lastMessage: vi.fn().mockResolvedValue(undefined),
   onActivity: vi.fn((listener: (change: { conversation: number; busy: boolean }) => void) => {
     activityListeners.add(listener);
     listener({ conversation: 100, busy: true });
@@ -162,7 +157,6 @@ describe("Bots API routes", () => {
       (modelId: string) => modelId === "known-model" || modelId === "vision-model",
     );
     agentRuntime.isBusy.mockReturnValue(false);
-    agentRuntime.lastMessage.mockResolvedValue(undefined);
     agentRuntime.listModels.mockReturnValue(models);
     agentRuntime.watchChat.mockImplementation(async (_ref, listener) => {
       await listener([{ type: "snapshot", state: emptyChat }]);

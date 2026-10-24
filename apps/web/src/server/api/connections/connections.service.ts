@@ -6,7 +6,8 @@
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
 import { checkPublicUrl, connectMcp, mcpToolName, type McpTransportKind } from "@tiny-agents/agent";
-import { reconfigure } from "../bots/bots.service";
+import { reconcileBotConversation } from "../bots/bots.conversation";
+import { getAgentRuntime } from "../bots/bots.runtime";
 import { getConnectionManager, parseTools, type ConnectionStatus } from "./connections.manager";
 import { encryptJson, encryptSecret, hasSecretsKey } from "./secrets";
 import type {
@@ -99,7 +100,7 @@ async function setBots(connectionId: string, botIds: string[]): Promise<void> {
     prisma.botConnection.createMany({ data: bots.map((bot) => ({ botId: bot.id, connectionId })) }),
   ]);
   const affected = new Set([...before.map((link) => link.botId), ...bots.map((bot) => bot.id)]);
-  for (const botId of affected) await reconfigure(botId);
+  for (const botId of affected) await reconcileBotConversation(botId, getAgentRuntime());
 }
 
 /** Wait for the first connect attempt, but never longer than `ms`. */
@@ -174,7 +175,7 @@ export async function remove(id: string): Promise<void> {
   const connection = await get(id);
   await getConnectionManager().remove(id, connection.slug);
   await prisma.connection.delete({ where: { id } });
-  for (const botId of connection.botIds) await reconfigure(botId);
+  for (const botId of connection.botIds) await reconcileBotConversation(botId, getAgentRuntime());
 }
 
 export async function reconnect(id: string): Promise<ConnectionDTO> {
