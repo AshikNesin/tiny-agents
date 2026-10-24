@@ -19,24 +19,19 @@ import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Login } from "@groot/shell/pages/auth/Login";
 import { GrootUIProvider } from "@groot/ui";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
-import {
-  Bot,
-  BotMessageSquare,
-  History,
-  Settings as SettingsIcon,
-  ShieldCheck,
-} from "lucide-react";
+import { BotMessageSquare, History, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 import { SkillsPage } from "./pages/skills/Skills";
 import { MemoryPage } from "./pages/memory";
 import { ConnectionsPage } from "./pages/connections/Connections";
 import { TerminalPage } from "./pages/terminal";
 import { AppShell } from "./components/shell/AppShell";
+import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV } from "./components/shell/nav";
 import { useUiStore } from "./store/ui";
 
 /** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
-  brand: { label: "tiny-agents", icon: Bot, to: "/chats" },
+  brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
   // Desktop navigation lives in the sidebar, which phones open as a drawer.
   pageChrome: "sidebar",
   // Phones open the same sidebar as a drawer from every page's menu button.
