@@ -325,13 +325,19 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         return;
       }
       if (typed.busy) {
-        // A tool waiting for approval pauses a busy run: the count arrives
-        // here, mid-run, and the badge must not wait for the reply to end.
-        const { approvals } = typed;
+        // A tool waiting for approval or answers pauses a busy run: the
+        // counts arrive here, mid-run, and the badge must not wait for the
+        // reply to end.
+        const { approvals, questions } = typed;
         set((state) => ({
           bots: state.bots.map((bot) =>
             bot.conversationId === typed.conversation
-              ? { ...bot, replying: true, ...(approvals !== undefined ? { approvals } : {}) }
+              ? {
+                  ...bot,
+                  replying: true,
+                  ...(approvals !== undefined ? { approvals } : {}),
+                  ...(questions !== undefined ? { questions } : {}),
+                }
               : bot,
           ),
         }));

@@ -9,6 +9,7 @@ import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
 import {
+  answerQuestionsSchema,
   approvalSchema,
   createBotSchema,
   pinBotSchema,
@@ -56,6 +57,7 @@ router.get("/events", async (req: Request, res: Response) => {
       conversation: String(change.conversation),
       busy: change.busy,
       approvals: change.approvals,
+      questions: change.questions,
     });
   });
   // Connection status (connected / needs sign-in / error) for the
@@ -156,6 +158,15 @@ router.post("/bots/:id/approvals/:taskId", async (req: Request) => {
   const payload = parseBody(req, approvalSchema);
   await botsService.decideApproval(id, { taskId, ...payload });
   return { decided: payload.decision };
+});
+
+router.post("/bots/:id/questions/:taskId", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const taskId = Number(parseStringParam(req.params.taskId, "taskId"));
+  if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
+  const payload = parseBody(req, answerQuestionsSchema);
+  await botsService.answerQuestions(id, { taskId, answers: payload.answers ?? null });
+  return payload.answers ? { answered: true } : { dismissed: true };
 });
 
 router.post("/bots/:id/pin", async (req: Request) => {

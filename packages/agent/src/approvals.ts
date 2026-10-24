@@ -7,18 +7,13 @@
  * - A conversation's `tiny.permissions` document lists the tools that run
  *   without asking (written by `AgentRuntime.configure`). A conversation
  *   without the document predates permissions and runs everything.
- * - A tool that must ask creates its task-scoped `tiny.approval` document,
- *   publishes `{ approval: "pending" }` details (the chat renders the card from
- *   them) and waits on the document until the host writes a decision
- *   (`AgentRuntime.decideApproval`). pi-durable 1.3 cannot park a task until an
- *   external event, so the call stays running while it waits; after a restart
- *   the gate re-runs (it is `replay: "safe"`), finds the same document and keeps
- *   waiting — or acts on a decision already recorded.
+ * - A tool that must ask waits on its task-scoped `tiny.approval` document
+ *   (`waitForOwner`, see `waiting.ts`), publishing `{ approval: "pending" }`
+ *   details the chat renders the card from, until the host writes a decision
+ *   (`AgentRuntime.decideApproval`).
  * - The side effect itself keeps the wrapped tool's replay policy: for a tool
  *   that is not replay-safe, a durable memo records that the effect started, so
  *   a crash during it reports "interrupted" instead of running it twice.
- *
- * Revisit once pi-durable ships an external wake/resume (`Harness.wake()`).
  */
 import type { Context } from "@earendil-works/chord";
 import {
@@ -28,6 +23,7 @@ import {
   type ToolExecutionResult,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
+import { waitForOwner, type WaitTracker } from "./waiting";
 
 /** Which tools of the conversation run without asking. */
 export const PermissionsDoc = defineDoc<{ allow: string[] }>({
@@ -49,59 +45,14 @@ export const ApprovalDoc = defineDoc<{ status: "pending" | ApprovalDecision }>({
   initial: () => ({ status: "pending" }),
 });
 
-/** In-memory index of calls waiting for approval, per conversation (rebuilt as gates re-run after a restart). */
-export class ApprovalTracker {
-  readonly #pending = new Map<number, Set<number>>();
-  readonly #listeners = new Set<(conversation: number, count: number) => void>();
-
-  count(conversation: number): number {
-    return this.#pending.get(conversation)?.size ?? 0;
-  }
-
-  conversations(): number[] {
-    return [...this.#pending.keys()];
-  }
-
-  onChange(listener: (conversation: number, count: number) => void): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  }
-
-  add(conversation: number, task: number): void {
-    const set = this.#pending.get(conversation) ?? new Set();
-    if (set.has(task)) return;
-    set.add(task);
-    this.#pending.set(conversation, set);
-    this.#emit(conversation);
-  }
-
-  remove(conversation: number, task: number): void {
-    const set = this.#pending.get(conversation);
-    if (!set?.delete(task)) return;
-    if (set.size === 0) this.#pending.delete(conversation);
-    this.#emit(conversation);
-  }
-
-  #emit(conversation: number): void {
-    const count = this.count(conversation);
-    for (const listener of this.#listeners) {
-      try {
-        listener(conversation, count);
-      } catch {
-        // listeners must not break gates
-      }
-    }
-  }
-}
-
 const text = (value: string) => [{ type: "text" as const, text: value }];
 
 /** Wrap every tool of an extension in the approval gate. */
-export function gateExtension(extension: Extension, tracker: ApprovalTracker): Extension {
+export function gateExtension(extension: Extension, tracker: WaitTracker): Extension {
   return { ...extension, tools: extension.tools?.map((tool) => gateTool(tool, tracker)) };
 }
 
-export function gateTool(tool: ToolRegistration, tracker: ApprovalTracker): ToolRegistration {
+export function gateTool(tool: ToolRegistration, tracker: WaitTracker): ToolRegistration {
   return {
     ...tool,
     replay: "safe",
@@ -146,35 +97,9 @@ async function mustAsk(name: string, api: ToolExecutionApi, context: Context): P
 
 async function waitForDecision(
   api: ToolExecutionApi,
-  tracker: ApprovalTracker,
+  tracker: WaitTracker,
   context: Context,
 ): Promise<ApprovalDecision> {
-  const conversation = Number(api.conversationId);
-  const task = Number(api.taskId);
-  await api.commit(async (tx) => {
-    await tx.doc(ApprovalDoc, api.taskId);
-  }, context);
-  const watch = await api.watchDoc(ApprovalDoc, api.taskId, context);
-  if (!watch) throw new Error("approval document missing");
-  const decided = (value: { status: string } | null) =>
-    value && value.status !== "pending" ? (value.status as ApprovalDecision) : undefined;
-  const already = decided(watch.value);
-  if (already) {
-    await watch.stop();
-    return already;
-  }
-  tracker.add(conversation, task);
-  try {
-    await api.details({ approval: "pending" }, context);
-    return await new Promise<ApprovalDecision>((resolve, reject) => {
-      watch.start(async (value) => {
-        const decision = decided(value);
-        if (decision) resolve(decision);
-      });
-      void watch.closed.then((end) => reject(new Error(`approval wait ended: ${end.reason}`)));
-    });
-  } finally {
-    tracker.remove(conversation, task);
-    await watch.stop();
-  }
+  const doc = await waitForOwner(api, tracker, ApprovalDoc, { approval: "pending" }, context);
+  return doc.status as ApprovalDecision;
 }

@@ -21,7 +21,8 @@ pnpm dev          # http://localhost:3000 (demo@example.com / demo@example.com)
 Set `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`
 (and optionally `DEFAULT_MODEL`) for real inference. Without them the app
 runs but shows a banner and disables sending. For UI/flow work without the
-gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model.
+gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model (send
+`/ask` to see a bot's questions for you).
 
 ## Layout
 

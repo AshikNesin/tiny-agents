@@ -3,6 +3,7 @@
  * `apiClient` unwraps the { success, data } envelope.
  */
 import { apiClient } from "@groot/shell/lib/api";
+import type { OwnerAnswer } from "./chat-types";
 
 export interface ModelInfo {
   id: string;
@@ -36,6 +37,8 @@ export interface BotListEntry {
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */
   approvals: number;
+  /** Questions (ask_owner calls) waiting for the owner's answers. */
+  questions: number;
   /** ISO time the owner pinned the bot; null when not pinned. */
   pinnedAt: string | null;
 }
@@ -210,6 +213,9 @@ export const botsApi = {
     decision: "approved" | "denied",
     alwaysAllow?: string,
   ) => apiClient.post(`/bots/${id}/approvals/${taskId}`, { decision, alwaysAllow }),
+  /** Answer a bot's questions (one answer per question), or dismiss them with `null`. */
+  answerQuestions: (id: string, taskId: number, answers: OwnerAnswer[] | null) =>
+    apiClient.post(`/bots/${id}/questions/${taskId}`, answers ? { answers } : { dismissed: true }),
   browserStatus: (id: string) => apiClient.get<BrowserStatus>(`/bots/${id}/browser`),
   browserDriver: (id: string, driver: "agent" | "human") =>
     apiClient.post(`/bots/${id}/browser/driver`, { driver }),

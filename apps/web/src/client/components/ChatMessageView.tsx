@@ -26,6 +26,7 @@ import {
   TraceTitle,
 } from "./ui/trace";
 import { MessageAttachments } from "./Attachments";
+import { AskedQuestions, QuestionCard } from "./QuestionCard";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
@@ -120,6 +121,7 @@ function summarizeArgs(call: ChatToolCall): string {
 
 const STATUS_TEXT: Partial<Record<ChatToolCall["status"], string>> = {
   awaiting_approval: "waiting for your approval",
+  awaiting_answer: "waiting for your answers",
   interrupted: "interrupted by a restart",
   aborted: "stopped",
   denied: "denied by you",
@@ -134,6 +136,7 @@ export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set
   "pending",
   "running",
   "awaiting_approval",
+  "awaiting_answer",
 ]);
 
 /** Map our tool status onto the trace step status. */
@@ -148,6 +151,7 @@ function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pen
     case "interrupted":
       return "error";
     case "awaiting_approval":
+    case "awaiting_answer":
       return "pending";
     case "done":
       return undefined;
@@ -157,6 +161,7 @@ function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pen
 function statusIcon(call: ChatToolCall) {
   switch (call.status) {
     case "awaiting_approval":
+    case "awaiting_answer":
       return <Clock className="text-primary size-3.5" />;
     case "denied":
     case "aborted":
@@ -252,7 +257,8 @@ function ToolDetailBlock({
 /**
  * One tool call as an AI Elements Tool step: a TraceLine with the call's
  * status, expanding to its arguments and result. Awaiting calls show the
- * approval card instead (issue #1 D3/D4).
+ * approval card instead (issue #1 D3/D4), and a bot's questions for the
+ * owner their questionnaire.
  */
 function ToolRow({
   call,
@@ -304,6 +310,21 @@ function ToolRow({
 
   if (call.status === "awaiting_approval" && call.taskId !== undefined) {
     return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
+  }
+
+  // ask_owner: the questionnaire while it waits, then the questions and answers.
+  if (call.questions) {
+    if (call.status === "awaiting_answer" && call.taskId !== undefined) {
+      return (
+        <QuestionCard
+          call={{ ...call, taskId: call.taskId, questions: call.questions }}
+          botId={botId}
+          botName={botName}
+        />
+      );
+    }
+    const note = STATUS_TEXT[call.status] ?? (call.answers ? undefined : "dismissed by you");
+    return <AskedQuestions call={call} note={note} />;
   }
 
   // message_bot row: Grok's centered handoff line that opens the thread.

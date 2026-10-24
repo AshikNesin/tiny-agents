@@ -7,6 +7,8 @@ import type {
   ChatState,
   ChatToolCall,
   ChatToolStatus,
+  OwnerAnswer,
+  OwnerQuestion,
   QueuedMessage,
 } from "./types";
 
@@ -153,6 +155,20 @@ function sourcesOf(details: unknown): ChatToolCall["sources"] {
   return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
 }
 
+/** An `ask_owner` call's details (under `result` when the approval gate asked first). */
+function questionsOf(
+  details: unknown,
+): Pick<ChatToolCall, "questions" | "answers"> & { pending: boolean } {
+  const own = record(details);
+  const value = own?.question !== undefined ? own : record(own?.result);
+  if (!value || !Array.isArray(value.questions)) return { pending: false };
+  return {
+    pending: value.question === "pending",
+    questions: value.questions as OwnerQuestion[],
+    ...(Array.isArray(value.answers) ? { answers: value.answers as OwnerAnswer[] } : {}),
+  };
+}
+
 function resultStatus(result: ToolResult): ChatToolStatus {
   const details = record(result.message.details);
   if (details?.approval === "denied") return "denied";
@@ -180,6 +196,7 @@ function toolCallView(
     const details = record(message.details);
     const approval = details?.approval;
     const sources = sourcesOf(message.details);
+    const { questions, answers } = questionsOf(message.details);
     return {
       ...base,
       status: resultStatus(result),
@@ -187,15 +204,25 @@ function toolCallView(
       ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
       ...(approval === "approved" || approval === "denied" ? { approval } : {}),
       ...(sources ? { sources } : {}),
+      ...(questions ? { questions } : {}),
+      ...(answers ? { answers } : {}),
     };
   }
   if (slot) {
     const waiting = record(slot.details)?.approval === "pending";
+    const asked = questionsOf(slot.details);
     return {
       ...base,
-      status: waiting ? "awaiting_approval" : slot.status === "running" ? "running" : "pending",
+      status: waiting
+        ? "awaiting_approval"
+        : asked.pending
+          ? "awaiting_answer"
+          : slot.status === "running"
+            ? "running"
+            : "pending",
       ...(slot.taskId !== undefined ? { taskId: slot.taskId } : {}),
       ...(slot.output ? { output: clip(slot.output) } : {}),
+      ...(asked.pending ? { questions: asked.questions } : {}),
     };
   }
   // No result and no live slot: still queued in a busy run, or cut off for good.

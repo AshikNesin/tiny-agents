@@ -37,6 +37,7 @@ export type ChatToolStatus =
   | "pending"
   | "running"
   | "awaiting_approval"
+  | "awaiting_answer"
   | "done"
   | "error"
   | "denied"
@@ -59,6 +60,30 @@ export interface ChatToolCall {
   approval?: "approved" | "denied";
   /** Pages the call searched or read (web tools). */
   sources?: { url: string; title: string }[];
+  /** `ask_owner` calls: the questions the bot asked the owner. */
+  questions?: OwnerQuestion[];
+  /**
+   * `ask_owner` calls: the owner's answers, one per question. Absent while the
+   * call waits, and when the owner dismissed the questions.
+   */
+  answers?: OwnerAnswer[];
+}
+
+/** One question a bot asks the owner (`ask_owner`). */
+export interface OwnerQuestion {
+  question: string;
+  /** Context shown under the question. */
+  description?: string;
+  /** Answers to pick from; none: an open question, answered in the owner's own words. */
+  options?: { label: string; description?: string }[];
+  /** The owner may pick several options. */
+  multiple?: boolean;
+}
+
+/** The owner's answer to one question: options they picked and/or their own words. Both empty: skipped. */
+export interface OwnerAnswer {
+  selected: string[];
+  text?: string;
 }
 
 /** An image or file attached to a user message (issue #17). */
@@ -149,6 +174,8 @@ export interface ActivityChange {
   busy: boolean;
   /** Tool calls waiting for the owner's approval. */
   approvals: number;
+  /** `ask_owner` calls waiting for the owner's answers. */
+  questions: number;
 }
 
 export interface LastMessage {

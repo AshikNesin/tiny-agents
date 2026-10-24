@@ -64,6 +64,9 @@ const agentRuntime = {
   listCapabilities: vi.fn().mockReturnValue([]),
   pendingApprovals: vi.fn().mockReturnValue(0),
   decideApproval: vi.fn().mockResolvedValue(undefined),
+  pendingQuestions: vi.fn().mockReturnValue(0),
+  answerQuestions: vi.fn().mockResolvedValue(undefined),
+  dismissQuestions: vi.fn().mockResolvedValue(undefined),
   attachmentIds: vi.fn().mockResolvedValue([]),
   close: vi.fn().mockResolvedValue(undefined),
 };

@@ -2,7 +2,8 @@
  * @tiny-agents/agent — the only module in tiny-agents that touches pi-durable.
  *
  * Everything the app needs (durable bot conversations, chat streams, bot
- * activity, the gateway model catalog, capabilities and approvals) is exposed
+ * activity, the gateway model catalog, capabilities, approvals and questions
+ * for the owner) is exposed
  * through app-shaped types so pi-durable API churn stays contained here.
  * Child-only package: excluded from groot sync via
  * `.groot/boilerplate-sync.json` `additional_exclusions`.
@@ -12,6 +13,7 @@ export {
   ApprovalNotPendingError,
   ConversationNotFoundError,
   ModelNotFoundError,
+  QuestionNotPendingError,
   type AgentRuntimeOptions,
 } from "./runtime";
 export { StoreLockedError, acquireStoreLock, type StoreLock } from "./lock";
@@ -27,6 +29,7 @@ export {
   type ToolPermission,
 } from "./capabilities";
 export type { ApprovalDecision } from "./approvals";
+export { ASK_OWNER, InvalidAnswersError, MAX_ANSWER_TEXT } from "./toolkits/questions";
 export {
   createTasksExtension,
   createTasksToolkit,

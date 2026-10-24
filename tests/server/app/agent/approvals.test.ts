@@ -140,8 +140,10 @@ async function open(
 describe("capabilities and approvals", () => {
   it("lists installed capabilities without their extensions", async () => {
     const runtime = await open({ sent: [] }, callThenReport("read_inbox", {}));
+    // The runtime brings its own `questions` capability (ask_owner) after the given ones.
     expect(runtime.listCapabilities()).toEqual([
       expect.objectContaining({ id: "mail", kind: "toolkit", name: "Mail" }),
+      expect.objectContaining({ id: "questions", kind: "toolkit" }),
     ]);
     expect(runtime.listCapabilities()[0]).not.toHaveProperty("extension");
   });
@@ -184,7 +186,7 @@ describe("capabilities and approvals", () => {
     expect(waiting.taskId).toEqual(expect.any(Number));
     expect(mailer.sent).toEqual([]);
     expect(runtime.pendingApprovals(ref)).toBe(1);
-    expect(activity).toContainEqual({ conversation: ref, busy: true, approvals: 1 });
+    expect(activity).toContainEqual({ conversation: ref, busy: true, approvals: 1, questions: 0 });
 
     await runtime.decideApproval(ref, waiting.taskId!, "approved");
     expect(await until(() => finalText(events), "reply")).toBe("Sent to ana@x.dev");

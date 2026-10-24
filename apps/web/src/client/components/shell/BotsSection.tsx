@@ -14,15 +14,26 @@ import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 
-/** Trailing state of a row: approvals > replying > unread. */
+/** What the bot is waiting on the owner for, e.g. "1 awaiting approval, 2 questions for you". */
+function waitingLabel({ approvals, questions }: BotListEntry): string {
+  return [
+    approvals > 0 ? `${approvals} awaiting approval` : "",
+    questions > 0 ? `${questions} ${questions === 1 ? "question" : "questions"} for you` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** Trailing state of a row: waiting on the owner (approvals, questions) > replying > unread. */
 function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
-  if (bot.approvals > 0) {
+  const waiting = bot.approvals + bot.questions;
+  if (waiting > 0) {
     return (
       <span
-        aria-label={`${bot.approvals} awaiting approval`}
+        aria-label={waitingLabel(bot)}
         className="bg-primary text-primary-foreground flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs"
       >
-        {bot.approvals}
+        {waiting}
       </span>
     );
   }

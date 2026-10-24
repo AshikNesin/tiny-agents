@@ -26,13 +26,7 @@ import {
   type ToolSlot,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import {
-  ApprovalDoc,
-  ApprovalTracker,
-  gateExtension,
-  PermissionsDoc,
-  type ApprovalDecision,
-} from "./approvals";
+import { ApprovalDoc, gateExtension, PermissionsDoc, type ApprovalDecision } from "./approvals";
 import {
   capabilityInfo,
   effectivePermission,
@@ -42,6 +36,13 @@ import {
 } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
+import {
+  checkAnswers,
+  createQuestionsCapability,
+  InvalidAnswersError,
+  QuestionsDoc,
+  storedQuestions,
+} from "./toolkits/questions";
 import {
   attachmentsOf,
   chatState,
@@ -63,9 +64,11 @@ import type {
   FinishedReply,
   LastMessage,
   ModelInfo,
+  OwnerAnswer,
   QueuedMessage,
   WithdrawOutcome,
 } from "./types";
+import { WaitTracker } from "./waiting";
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
@@ -94,6 +97,14 @@ export class ApprovalNotPendingError extends Error {
   constructor(taskId: number) {
     super(`Tool call ${taskId} is not waiting for approval`);
     this.name = "ApprovalNotPendingError";
+  }
+}
+
+/** The questions were already answered or dismissed, or their call ended. */
+export class QuestionNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for answers`);
+    this.name = "QuestionNotPendingError";
   }
 }
 
@@ -153,7 +164,8 @@ export class AgentRuntime {
   readonly #chats = new Set<ChatSubscription>();
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
   readonly #registry: Registry;
-  readonly #approvals: ApprovalTracker;
+  readonly #approvals: WaitTracker;
+  readonly #questions: WaitTracker;
   readonly #capabilities = new Map<string, Capability>();
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
@@ -170,7 +182,8 @@ export class AgentRuntime {
     provider: string,
     lock: StoreLock | undefined,
     registry: Registry,
-    approvals: ApprovalTracker,
+    approvals: WaitTracker,
+    questions: WaitTracker,
     capabilities: readonly Capability[],
     envSource: Readonly<Record<string, string | undefined>> = process.env,
   ) {
@@ -180,15 +193,11 @@ export class AgentRuntime {
     this.#lock = lock;
     this.#registry = registry;
     this.#approvals = approvals;
+    this.#questions = questions;
     for (const capability of capabilities) this.#capabilities.set(capability.id, capability);
     this.#env = { ...envSource };
-    approvals.onChange((conversation, approvalCount) => {
-      this.#emitActivity({
-        conversation,
-        busy: this.#busy.has(conversation),
-        approvals: approvalCount,
-      });
-    });
+    approvals.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
+    questions.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
   }
 
   /**
@@ -214,11 +223,15 @@ export class AgentRuntime {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createGatewayModels(envSource);
       const registry = createRegistry();
-      const approvals = new ApprovalTracker();
+      const approvals = new WaitTracker();
+      const questions = new WaitTracker();
+      // Questions for the owner wait on a document this runtime answers, so
+      // the runtime brings their capability; conversations select it by id.
+      const capabilities = [...(options.capabilities ?? []), createQuestionsCapability(questions)];
       for (const extension of options.extensions ?? []) registry.install(extension);
       // Capabilities must be installed before resume(): interrupted calls of
-      // their tools (e.g. a pending approval) re-run against them.
-      for (const capability of options.capabilities ?? []) {
+      // their tools (e.g. a pending approval or question) re-run against them.
+      for (const capability of capabilities) {
         registry.install(gateExtension(capability.extension, approvals));
       }
       harness = await Harness.open(
@@ -238,7 +251,8 @@ export class AgentRuntime {
         lock,
         registry,
         approvals,
-        options.capabilities ?? [],
+        questions,
+        capabilities,
         envSource,
       );
       runtime = opened;
@@ -461,6 +475,72 @@ export class AgentRuntime {
         throw new ApprovalNotPendingError(taskId);
       }
       throw error;
+    }
+  }
+
+  /** `ask_owner` calls of the conversation waiting for the owner's answers. */
+  pendingQuestions(ref: ConversationRef): number {
+    return this.#questions.count(ref);
+  }
+
+  /**
+   * Answer an `ask_owner` call (`taskId` from the chat's tool call), one
+   * answer per question, or dismiss its questions with `null`. Throws
+   * `QuestionNotPendingError` when it was already answered or has ended, and
+   * `InvalidAnswersError` when the answers do not fit the questions.
+   */
+  async answerQuestions(
+    ref: ConversationRef,
+    taskId: number,
+    answers: OwnerAnswer[] | null,
+  ): Promise<void> {
+    const id = taskId as TaskId;
+    try {
+      await this.#harness.commit(async (tx) => {
+        const task = await tx.task(id);
+        if (
+          !task ||
+          Number(task.conversationId) !== ref ||
+          task.kind !== "pi.tool" ||
+          task.state.status === "terminal" ||
+          task.state.status === "completing"
+        ) {
+          throw new QuestionNotPendingError(taskId);
+        }
+        // Another tool's task has no questions (and the throw rolls back the
+        // document this read would create).
+        const doc = await tx.doc(QuestionsDoc, id);
+        if (doc.status !== "pending" || doc.questions.length === 0) {
+          throw new QuestionNotPendingError(taskId);
+        }
+        if (answers) {
+          doc.answers = checkAnswers(storedQuestions(doc), answers) as unknown as JsonValue[];
+          doc.status = "answered";
+        } else {
+          doc.status = "dismissed";
+        }
+      }, ctx);
+    } catch (error) {
+      if (error instanceof QuestionNotPendingError || error instanceof InvalidAnswersError) {
+        throw error;
+      }
+      // A terminal task's documents are sealed: the call already ended.
+      if (error instanceof Error && /terminal/i.test(error.message)) {
+        throw new QuestionNotPendingError(taskId);
+      }
+      throw error;
+    }
+  }
+
+  /** Dismiss every question of the conversation still waiting (the owner wrote in the chat instead). */
+  async dismissQuestions(ref: ConversationRef): Promise<void> {
+    for (const taskId of this.#questions.tasks(ref)) {
+      try {
+        await this.answerQuestions(ref, taskId, null);
+      } catch (error) {
+        // Answered or ended meanwhile: nothing left to dismiss.
+        if (!(error instanceof QuestionNotPendingError)) throw error;
+      }
     }
   }
 
@@ -741,14 +821,17 @@ export class AgentRuntime {
       for (const ref of next) if (!this.#busy.has(ref)) changed.push(ref);
       for (const ref of this.#busy) if (!next.has(ref)) changed.push(ref);
       this.#busy = next;
-      for (const ref of changed) {
-        this.#emitActivity({
-          conversation: ref,
-          busy: next.has(ref),
-          approvals: this.#approvals.count(ref),
-        });
-      }
+      for (const ref of changed) this.#emitActivity(this.#activity(ref));
     });
+  }
+
+  #activity(ref: ConversationRef): ActivityChange {
+    return {
+      conversation: ref,
+      busy: this.#busy.has(ref),
+      approvals: this.#approvals.count(ref),
+      questions: this.#questions.count(ref),
+    };
   }
 
   #emitActivity(change: ActivityChange): void {
