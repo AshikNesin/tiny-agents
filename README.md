@@ -11,6 +11,15 @@ conversations (survive refreshes, crashes, redeploys) and the
 See `PRD.md` for the full spec. Phase 1: create bots, chat with streamed
 replies, durability as a first-class property.
 
+## Demo
+
+[![Watch the tiny-agents demo (1:39)](docs/demo/poster.jpg)](docs/demo/tiny-agents-demo.mp4)
+
+A 1:39 tour: bots that ask before they act, a live browser (Google Flights,
+Chennai → Bangalore), a real terminal on the sandbox VM, routines, and
+conversations that survive a refresh. Recorded from the real app with scripted
+chat replies; see [`scripts/demo/`](scripts/demo/README.md) to re-record it.
+
 ## Development
 
 ```sh
