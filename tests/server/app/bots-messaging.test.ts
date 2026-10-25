@@ -37,6 +37,9 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
     listCapabilities: vi.fn().mockReturnValue([]),
     pendingApprovals: vi.fn().mockReturnValue(0),
     decideApproval: vi.fn(),
+    pendingQuestions: vi.fn().mockReturnValue(0),
+    answerQuestions: vi.fn(),
+    dismissQuestions: vi.fn(),
     installCapability: vi.fn(),
     ...overrides,
   } as unknown as AgentRuntime;

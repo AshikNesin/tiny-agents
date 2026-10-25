@@ -71,6 +71,7 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
         unread: false,
         replying: false,
         approvals: 0,
+        questions: 0,
         pinnedAt: null,
         lastReadAt: opts.lastReadAt ?? null,
       },

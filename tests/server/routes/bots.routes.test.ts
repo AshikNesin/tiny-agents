@@ -8,7 +8,11 @@ import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
-import { ApprovalNotPendingError } from "../../../packages/agent/src/runtime";
+import {
+  ApprovalNotPendingError,
+  QuestionNotPendingError,
+} from "../../../packages/agent/src/runtime";
+import { InvalidAnswersError } from "../../../packages/agent/src/toolkits/questions";
 
 /**
  * Route tests run against an app-shaped runtime fake installed through
@@ -69,6 +73,9 @@ const agentRuntime = {
   ]),
   pendingApprovals: vi.fn().mockReturnValue(0),
   decideApproval: vi.fn().mockResolvedValue(undefined),
+  pendingQuestions: vi.fn().mockReturnValue(0),
+  answerQuestions: vi.fn().mockResolvedValue(undefined),
+  dismissQuestions: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -517,6 +524,72 @@ describe("Bots API routes", () => {
       .expect(409);
   });
 
+  it("answers or dismisses a bot's questions", async () => {
+    const bot = await createBot();
+    const app = buildApp();
+    const path = `/api/v1/bots/${bot.id}/questions/7`;
+    const answers = [{ selected: ["Postgres"] }, { selected: [], text: "Ship it Friday" }];
+
+    const answered = await request(app).post(path).set(authorization).send({ answers }).expect(200);
+    expect(answered.body.data).toEqual({ answered: true });
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, answers);
+    const dismissed = await request(app)
+      .post(path)
+      .set(authorization)
+      .send({ dismissed: true })
+      .expect(200);
+    expect(dismissed.body.data).toEqual({ dismissed: true });
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, null);
+
+    // Neither or both, and malformed answers, never reach the runtime.
+    agentRuntime.answerQuestions.mockClear();
+    for (const body of [
+      {},
+      { answers, dismissed: true },
+      { answers: [] },
+      { answers: [{ selected: "Postgres" }] },
+    ]) {
+      await request(app).post(path).set(authorization).send(body).expect(400);
+    }
+    await request(app)
+      .post(`/api/v1/bots/${bot.id}/questions/zero`)
+      .set(authorization)
+      .send({ dismissed: true })
+      .expect(400);
+    expect(agentRuntime.answerQuestions).not.toHaveBeenCalled();
+
+    agentRuntime.answerQuestions.mockRejectedValueOnce(new QuestionNotPendingError(7));
+    await request(app).post(path).set(authorization).send({ answers }).expect(409);
+    agentRuntime.answerQuestions.mockRejectedValueOnce(
+      new InvalidAnswersError("Expected 3 answer(s), got 2"),
+    );
+    await request(app).post(path).set(authorization).send({ answers }).expect(400);
+  });
+
+  it("an owner message dismisses the questions the bot is waiting on", async () => {
+    const bot = await createBot();
+    const app = buildApp();
+    const path = `/api/v1/bots/${bot.id}/messages`;
+    await request(app)
+      .post(path)
+      .set(authorization)
+      .send({ requestId: "no-questions-id", text: "Hello" })
+      .expect(200);
+    expect(agentRuntime.dismissQuestions).not.toHaveBeenCalled();
+
+    agentRuntime.pendingQuestions.mockReturnValueOnce(1);
+    await request(app)
+      .post(path)
+      .set(authorization)
+      .send({ requestId: "answer-in-chat-id", text: "Use SQLite", whenBusy: "steer" })
+      .expect(200);
+    expect(agentRuntime.dismissQuestions).toHaveBeenCalledWith(100);
+    // Submitted first, so the message joins the reply the dismissal resumes.
+    expect(agentRuntime.submit.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      agentRuntime.dismissQuestions.mock.invocationCallOrder[0],
+    );
+  });
+
   it("marks a bot as read", async () => {
     const bot = await createBot();
 
@@ -604,6 +677,8 @@ describe("Bots API routes", () => {
       },
     });
 
+    // Listed newest first: the unread bot has two questions waiting.
+    agentRuntime.pendingQuestions.mockReturnValueOnce(2).mockReturnValueOnce(0);
     const response = await request(buildApp()).get("/api/v1/bots").set(authorization).expect(200);
 
     expect(response.body).toMatchObject({
@@ -614,12 +689,15 @@ describe("Bots API routes", () => {
           conversationId: "301",
           lastMessagePreview: "A fresh assistant reply",
           unread: true,
+          approvals: 0,
+          questions: 2,
         }),
         expect.objectContaining({
           name: "Read bot",
           conversationId: "302",
           lastMessagePreview: "Older reply",
           unread: false,
+          questions: 0,
         }),
       ]),
     });

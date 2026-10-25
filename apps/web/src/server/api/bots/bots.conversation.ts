@@ -85,6 +85,7 @@ export const BOT_TOOLKITS = [
   "skills",
   "memory",
   "today",
+  "questions",
 ] as const;
 
 /** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */

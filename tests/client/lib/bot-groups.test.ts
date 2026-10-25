@@ -15,6 +15,7 @@ function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
     unread: false,
     replying: false,
     approvals: 0,
+    questions: 0,
     pinnedAt: null,
     ...overrides,
   };

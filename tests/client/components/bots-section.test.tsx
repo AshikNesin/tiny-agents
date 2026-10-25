@@ -35,6 +35,7 @@ function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
     unread: false,
     replying: false,
     approvals: 0,
+    questions: 0,
     pinnedAt: null,
     ...overrides,
   };
@@ -93,13 +94,20 @@ describe("BotsSection", () => {
     expect(screen.getByRole("link", { name: "Bot a" })).not.toHaveAttribute("aria-current");
   });
 
-  it("shows approvals, replying and unread states", () => {
+  it("shows approvals, questions, replying and unread states", () => {
     renderSection([
       bot("a", { approvals: 2 }),
       bot("b", { replying: true }),
       bot("c", { unread: true }),
+      bot("d", { questions: 1, replying: true }),
+      bot("e", { approvals: 1, questions: 2 }),
     ]);
     expect(screen.getByLabelText("2 awaiting approval")).toBeInTheDocument();
+    // Waiting on the owner outranks replying; both kinds add up in one badge.
+    expect(screen.getByLabelText("1 question for you")).toHaveTextContent("1");
+    expect(screen.getByLabelText("1 awaiting approval, 2 questions for you")).toHaveTextContent(
+      "3",
+    );
     expect(screen.getByRole("status", { name: "Replying" })).toBeInTheDocument();
     expect(screen.getByLabelText("Unread")).toBeInTheDocument();
   });

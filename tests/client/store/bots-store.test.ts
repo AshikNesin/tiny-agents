@@ -352,7 +352,7 @@ describe("bots store — activity feed", () => {
     useBotsStore.getState().disconnectActivity();
   });
 
-  it("updates the approvals badge while the bot is still replying", () => {
+  it("updates the approvals and questions badge while the bot is still replying", () => {
     useBotsStore.setState({
       bots: [
         {
@@ -367,6 +367,7 @@ describe("bots store — activity feed", () => {
           unread: false,
           replying: false,
           approvals: 0,
+          questions: 0,
           pinnedAt: null,
         },
       ],
@@ -377,5 +378,8 @@ describe("bots store — activity feed", () => {
     // A tool call now waits for the owner: same busy run, new count.
     onEvent({ type: "activity", conversation: "7", busy: true, approvals: 1 });
     expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: true, approvals: 1 });
+    // The bot asks the owner questions: same run, its own count.
+    onEvent({ type: "activity", conversation: "7", busy: true, approvals: 0, questions: 2 });
+    expect(useBotsStore.getState().bots[0]).toMatchObject({ approvals: 0, questions: 2 });
   });
 });

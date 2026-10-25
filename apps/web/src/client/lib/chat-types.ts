@@ -1,12 +1,17 @@
 /** Chat stream shapes shared by the SSE client and the UI. Mirrors
  * `@tiny-agents/agent` ChatEvent/ChatState (server sends them verbatim).
  * Client-only additions live here: `connected`, `loaded`, `pending`, `unreadFrom`. */
+import type { OwnerAnswer, OwnerQuestion } from "@tiny-agents/agent";
+
+export type { OwnerAnswer, OwnerQuestion };
+
 export type ChatMessageStatus = "done" | "streaming" | "stopped" | "error" | "unanswered";
 
 export type ChatToolStatus =
   | "pending"
   | "running"
   | "awaiting_approval"
+  | "awaiting_answer"
   | "done"
   | "error"
   | "denied"
@@ -24,6 +29,10 @@ export interface ChatToolCall {
   taskId?: number;
   approval?: "approved" | "denied";
   sources?: { url: string; title: string }[];
+  /** ask_owner calls: the questions the bot asked. */
+  questions?: OwnerQuestion[];
+  /** ask_owner calls: the owner's answers; absent while waiting and once dismissed. */
+  answers?: OwnerAnswer[];
 }
 
 export interface AttachmentRef {
@@ -103,7 +112,13 @@ export interface ChatState {
 
 export type ActivityEvent =
   | { type: "activity"; busy: string[] }
-  | { type: "activity"; conversation: string; busy: boolean; approvals?: number };
+  | {
+      type: "activity";
+      conversation: string;
+      busy: boolean;
+      approvals?: number;
+      questions?: number;
+    };
 
 export type ChatEvent =
   | { type: "snapshot"; state: ChatState }

@@ -26,8 +26,13 @@ import {
   type Capability,
   type HostKeyStore,
 } from "@tiny-agents/agent";
-import type { Context as PiContext } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText, TEST_MODEL } from "@tiny-agents/agent/testing";
+import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
+import {
+  fauxAssistantMessage,
+  fauxText,
+  fauxToolCall,
+  TEST_MODEL,
+} from "@tiny-agents/agent/testing";
 import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { createNamespaceKv } from "@groot/core/kv";
 import { taskStore } from "../tasks/task.store";
@@ -202,6 +207,27 @@ export function setAgentRuntimeForTests(fake: AgentRuntime): void {
   ready = true;
 }
 
+/** A faux bot's ask_owner call on "/ask": a single-choice, a multiple-choice and an open question. */
+const FAUX_ASK: ToolCall["arguments"] = {
+  questions: [
+    {
+      question: "Which stack should the project use?",
+      options: [
+        { label: "React", description: "With Vite and Tailwind" },
+        { label: "Svelte" },
+        { label: "Plain HTML" },
+      ],
+    },
+    {
+      question: "Which extras do you want?",
+      description: "Pick as many as you like.",
+      options: [{ label: "Auth" }, { label: "Dark mode" }, { label: "Tests" }],
+      multiple: true,
+    },
+    { question: "Anything else I should know?" },
+  ],
+};
+
 /**
  * Faux-provider runtime for dev/E2E boots (TINY_AGENTS_FAUX=1): real durable
  * machinery, scripted replies, no network and no gateway keys.
@@ -209,6 +235,9 @@ export function setAgentRuntimeForTests(fake: AgentRuntime): void {
  * TINY_AGENTS_FAUX_TOKENS_PER_SECOND streams the scripted echoes at that many
  * tokens per second instead of instantly, giving e2e a real busy window to
  * steer or queue into. Unset (or non-numeric) streams instantly.
+ *
+ * A message starting with "/ask" makes the bot ask the owner sample questions
+ * (ask_owner); the answers it gets back are echoed like any text.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -218,19 +247,26 @@ export async function openFauxAgentRuntime(
   const { createModels } = await import("@earendil-works/pi-ai/models");
   const { fauxProvider } = await import("@earendil-works/pi-ai/providers/faux");
 
+  const textOf = (message: PiContext["messages"][number]) =>
+    typeof message.content === "string"
+      ? message.content
+      : message.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b as { text: string }).text)
+          .join("");
   const echo = (context: PiContext) => {
+    const last = context.messages.at(-1);
+    if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(`Echo: ${textOf(last)}`));
     let text = "";
     for (let i = context.messages.length - 1; i >= 0; i--) {
       const message = context.messages[i];
       if (message.role !== "user") continue;
-      text =
-        typeof message.content === "string"
-          ? message.content
-          : message.content
-              .filter((b) => b.type === "text")
-              .map((b) => (b as { text: string }).text)
-              .join("");
+      text = textOf(message);
       break;
+    }
+    if (text.startsWith("/ask")) {
+      const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
+      return { ...ask, stopReason: "toolUse" as const };
     }
     return fauxAssistantMessage(fauxText(`Echo: ${text}`));
   };

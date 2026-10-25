@@ -9,9 +9,12 @@ import { logger } from "@groot/core/logger";
 import {
   AgentRuntime,
   ApprovalNotPendingError,
+  InvalidAnswersError,
+  QuestionNotPendingError,
   sanitizePeerText,
   stripPeerEnvelope,
   type AttachmentRef,
+  type OwnerAnswer,
 } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 import {
@@ -38,6 +41,9 @@ export type BotAgentRuntime = Pick<
   | "listCapabilities"
   | "pendingApprovals"
   | "decideApproval"
+  | "pendingQuestions"
+  | "answerQuestions"
+  | "dismissQuestions"
 >;
 
 function runtime(): BotAgentRuntime {
@@ -59,10 +65,16 @@ export interface BotListEntry {
   replying: boolean;
   /** Tool calls waiting for the owner's approval. */
   approvals: number;
+  /** Questions (ask_owner calls) waiting for the owner's answers. */
+  questions: number;
   pinnedAt: Date | null;
 }
 
-function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotListEntry {
+function toListEntry(
+  bot: BotRow,
+  replying: boolean,
+  waiting: { approvals: number; questions: number },
+): BotListEntry {
   return {
     id: bot.id,
     conversationId: bot.conversationId,
@@ -74,7 +86,7 @@ function toListEntry(bot: BotRow, replying: boolean, approvals: number): BotList
     lastReadAt: bot.lastReadAt,
     unread: isUnread(bot),
     replying,
-    approvals,
+    ...waiting,
     pinnedAt: bot.pinnedAt,
   };
 }
@@ -90,13 +102,13 @@ function isUnread(
 export async function listBots(rt: BotAgentRuntime = runtime()) {
   const bots = await prisma.bot.findMany({ orderBy: { lastActivityAt: "desc" } });
   const busy = new Set(rt.busyConversations());
-  return bots.map((bot) =>
-    toListEntry(
-      bot,
-      busy.has(Number(bot.conversationId)),
-      rt.pendingApprovals(Number(bot.conversationId)),
-    ),
-  );
+  return bots.map((bot) => {
+    const ref = Number(bot.conversationId);
+    return toListEntry(bot, busy.has(ref), {
+      approvals: rt.pendingApprovals(ref),
+      questions: rt.pendingQuestions(ref),
+    });
+  });
 }
 
 export async function getBot(id: string): Promise<Bot> {
@@ -235,6 +247,15 @@ export async function sendMessage(
   });
   if (input.mentions && input.mentions.length > 0) {
     await deliverMentions(bot, input, rt);
+  }
+  // Questions the bot is waiting on block its reply, so the message would
+  // only queue behind them: writing in the chat instead dismisses them, and
+  // the bot reads the message right after (a steer joins the same reply).
+  const ref = Number(bot.conversationId);
+  if (rt.pendingQuestions(ref) > 0) {
+    await rt.dismissQuestions(ref).catch((error: unknown) => {
+      logger.warn({ error, botId: id }, "Failed to dismiss questions after an owner message");
+    });
   }
 }
 
@@ -377,6 +398,25 @@ export async function decideApproval(
     await rt.decideApproval(Number(bot.conversationId), input.taskId, input.decision);
   } catch (error) {
     if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
+    throw error;
+  }
+}
+
+/**
+ * Answer a bot's questions for the owner (one answer per question), or
+ * dismiss them with `null`.
+ */
+export async function answerQuestions(
+  id: string,
+  input: { taskId: number; answers: OwnerAnswer[] | null },
+  rt: BotAgentRuntime = runtime(),
+) {
+  const bot = await getBot(id);
+  try {
+    await rt.answerQuestions(Number(bot.conversationId), input.taskId, input.answers);
+  } catch (error) {
+    if (error instanceof QuestionNotPendingError) throw Boom.conflict(error.message);
+    if (error instanceof InvalidAnswersError) throw Boom.badRequest(error.message);
     throw error;
   }
 }

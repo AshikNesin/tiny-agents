@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ANSWER_TEXT } from "@tiny-agents/agent";
 
 const toolPermissions = z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"]));
 /** "shared": the browser every such bot uses (shared logins); "own": one of its own. */
@@ -40,6 +41,24 @@ export const approvalSchema = z.object({
   alwaysAllow: z.string().min(1).max(128).optional(),
 });
 
+const ownerAnswer = z.object({
+  /** Labels of the options the owner picked. */
+  selected: z.array(z.string().min(1).max(100)).max(6),
+  /** The owner's own words. */
+  text: z.string().max(MAX_ANSWER_TEXT).optional(),
+});
+
+/** The owner's answers to a bot's questions (one per question), or their dismissal. */
+export const answerQuestionsSchema = z
+  .object({
+    answers: z.array(ownerAnswer).min(1).max(4).optional(),
+    dismissed: z.literal(true).optional(),
+  })
+  .refine((data) => (data.answers === undefined) !== (data.dismissed === undefined), {
+    message: "Send either answers or dismissed",
+    path: ["answers"],
+  });
+
 export const sendMessageSchema = z
   .object({
     requestId: z.string().min(8, "requestId is required").max(128),
@@ -66,3 +85,4 @@ export type CreateBotDTO = z.infer<typeof createBotSchema>;
 export type UpdateBotDTO = z.infer<typeof updateBotSchema>;
 export type SendMessageDTO = z.infer<typeof sendMessageSchema>;
 export type ApprovalDTO = z.infer<typeof approvalSchema>;
+export type AnswerQuestionsDTO = z.infer<typeof answerQuestionsSchema>;

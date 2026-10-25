@@ -25,6 +25,10 @@ _Avoid_: dispatch, forward
 An assistant reply of a conversation that is no longer busy, with its text and, if the model failed, its error. Relays and routine runs are answered only by finished replies.
 _Avoid_: last message, answer
 
+**Question**:
+A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply waits until the owner answers or dismisses it; writing in the chat instead dismisses it.
+_Avoid_: prompt, form, survey
+
 **Echo**:
 The optimistic copy of an owner's send shown until the server confirms it. It is confirmed by request id when the entry recorded one, otherwise by text.
 _Avoid_: pending message, ghost bubble

@@ -50,6 +50,7 @@ const bot: Bot = {
   lastActivityAt: "",
   lastMessagePreview: null,
   approvals: 0,
+  questions: 0,
   pinnedAt: null,
   unread: false,
   replying: false,
