@@ -1,0 +1,16 @@
+# Demo-only "sandbox VM" sshd: localhost only, keyless like the tailnet setup.
+# setup-vm.sh starts it with -h <generated host key>.
+Port 2222
+ListenAddress 127.0.0.1
+PermitRootLogin no
+AllowUsers exedev
+PasswordAuthentication yes
+PermitEmptyPasswords yes
+KbdInteractiveAuthentication no
+UsePAM no
+AllowTcpForwarding yes
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp internal-sftp
+PidFile /run/sshd-demo.pid

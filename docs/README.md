@@ -47,6 +47,7 @@ feature docs as you need them.
 | [`examples/api-requests.md`](./examples/api-requests.md) | Copy-ready `curl` recipes for every endpoint        |
 | [`sync-guide.md`](./sync-guide.md)                       | Keeping child projects in sync with the boilerplate |
 | [`sentry-source-maps.md`](./sentry-source-maps.md)       | Source map uploads for readable Sentry traces       |
+| [`../scripts/demo/README.md`](../scripts/demo/README.md) | tiny-agents: the demo video and how to re-record it |
 | [`CHANGELOG.md`](./CHANGELOG.md)                         | Documentation changes over time                     |
 
 ## Tech stack at a glance
