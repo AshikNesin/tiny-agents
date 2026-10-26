@@ -35,11 +35,8 @@ Sentry.init({
   // Environment for filtering in Sentry (production, development, etc.)
   environment: env.NODE_ENV,
 
-  // Setting this option to true will send default PII data to Sentry
-  // For example, automatic IP address collection on events
-  sendDefaultPii: true,
-  // https://sentry.io/product/logs/
-  enableLogs: true,
+  // Sentry 11 collects default user info without `sendDefaultPii`. The Pino
+  // integration sends logs without `enableLogs`.
   integrations: [
     // https://docs.sentry.io/platforms/javascript/guides/node/configuration/integrations/pino/
     Sentry.pinoIntegration(),

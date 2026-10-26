@@ -3,7 +3,7 @@
  * for "sent message not showing in UI" (echo before server confirm, SSE
  * reconnect instead of give-up, visible Reconnecting banner).
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const listeners = new Map<string, (event: unknown) => void>();
 const openCallbacks: Array<() => void> = [];

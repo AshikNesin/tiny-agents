@@ -88,7 +88,7 @@ On `runtime.onActivity` idle transitions (a conversation stopped replying):
 - For each mention id ≠ host: create a `kind="mention"` row (fromBotId null,
   replyToBotId = host id) and deliver with requestId
   `mention-{hostRequestId}-{botId}`, text `[From the owner, in {hostName}'s
-chat] {text}` … the host's own submit gets the text unchanged.
+  chat] {text}` … the host's own submit gets the text unchanged.
 - Tagged bot sees the same `[From the owner, in {hostName}'s chat] {text}`
   prefix — one mention format everywhere (the model-facing custody line).
 
@@ -111,7 +111,7 @@ chat] {text}` … the host's own submit gets the text unchanged.
   stored text for the model (issue #13 custody) and is stripped for the card;
   cards are drawn only when the `peer` metadata is present.
   relays (`**Reply from X:**`) and message_bot deliveries (`**Message from X
-(bot):**`) as a peer-avatar card with a "reply relayed into this chat" /
+  (bot):**`) as a peer-avatar card with a "reply relayed into this chat" /
   "messaged you" marker, owner mentions (`[From the owner, in Y's chat]`) as
   the owner's bubble with a "You · in Y's chat" label. The stored text and
   everything the model reads is unchanged (issue #13 custody). The

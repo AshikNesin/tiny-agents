@@ -18,7 +18,7 @@ This file is intentionally brief. Detailed guidance lives in `docs/` — start a
   `tests/kit-consumers/consumer.tsx`, which imports every public subpath, so a
   removal breaks CI until the fixture and this policy are deliberately revised.
 - **Schema changes are Prisma-only.** Never hand-write SQL or run `prisma db
-push`. Use `pnpm db:migrate:create` → `pnpm prisma migrate dev`, and edit
+  push`. Use `pnpm db:migrate:create` → `pnpm prisma migrate dev`, and edit
   **both** `schema.sqlite.prisma` and `schema.postgres.prisma` (a unit test
   enforces parity).
 - **Only `packages/core/src/database/client.ts` may create the Prisma client.**

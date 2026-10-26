@@ -19,7 +19,23 @@ trustPolicy: no-downgrade
 # advisories. Scoped to this exact version only; remove once a later release
 # restores provenance.
 trustPolicyExclude:
-  - prisma@7.10.0
+  # prisma@7.10.1 (CLI only) was published without a trusted publisher /
+  # provenance attestation, same publish-token incident as 7.10.0 (see the
+  # 7.10.0-integration-fix-prisma-publish-token dist-tag). @prisma/client and
+  # the adapters at 7.10.1 are unaffected. The CLI `latest` tag is the
+  # pre-release 8.0.0-rc.27, which has no matching @prisma/client, so the CLI
+  # stays on this 7.10.1. Verified benign: `prev` dist-tag, published
+  # 2026-10-15 by prismabot, github.com/prisma/orm release 7.10.1 matches,
+  # registry signatures intact. Scoped to this exact version; remove once a
+  # later 7.x release restores provenance.
+  - prisma@7.10.1
+  # semver@6.3.1 (the last 6.x, published 2023-07-10) predates npm provenance.
+  # Later 7.x releases have attestations, so a fresh resolution of the 6.x
+  # line that @babel/core still depends on trips trustPolicy: no-downgrade.
+  # Verified benign: already in the previous lockfile, published by the npm
+  # CLI maintainers, registry signatures intact, git tag matches
+  # npm/node-semver@b717044 (release 6.3.1). Scoped to this exact version.
+  - semver@6.3.1
 
 # Non-interactive CI builders (Heroku): when a restored node_modules is
 # incompatible with the current store/lockfile, pnpm wants to purge and
@@ -34,9 +50,9 @@ packages:
   - "packages/*"
 
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@0.2.2
-  vite-plus: 0.2.2
-  vitest: 4.1.9
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+  vitest: 5.0.5
 
 onlyBuiltDependencies:
   - "@biomejs/biome"
@@ -63,9 +79,9 @@ overrides:
   # same URL works fine. A single pinned version guarantees one instance, so the
   # instanceof check always holds regardless of lockfile drift. Bump this in lock
   # step with `@groot/core`'s declared `pg` range.
-  pg: "8.22.0"
-  vite: "catalog:"
-  vitest: "catalog:"
+  pg: "8.23.1"
+  vite@*: "catalog:"
+  vitest@*: "catalog:"
 
 peerDependencyRules:
   allowAny:
