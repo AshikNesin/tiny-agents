@@ -111,14 +111,14 @@ boundary.
   `bg-background/80 backdrop-blur-sm`, an overlay, so the terminal's box
   never changes when it opens (no resize, no refit, the grid stays put).
   At `md+` it docks as a `w-44` static column with `border-l
-border-border/50`. Only the `md` crossing changes the terminal's column.
+  border-border/50`. Only the `md` crossing changes the terminal's column.
 - **Phones start collapsed.** First paint without a stored preference
   reads `matchMedia("(max-width: 767px)")`; `localStorage
-tiny-agents:terminal-keys` ("1"/"0") overrides forever after. Toggle is
+  tiny-agents:terminal-keys` ("1"/"0") overrides forever after. Toggle is
   the header Keyboard button (`terminal-keys-toggle`) or the panel's own
   chevron (`terminal-keys-collapse`); the panel unmounts when hidden.
 - **Full screen is CSS-first.** `terminal-region` swaps to `fixed inset-0
-z-40 p-2` (rounded/ring off, the terminal row already `flex-1`), and the
+  z-40 p-2` (rounded/ring off, the terminal row already `flex-1`), and the
   Fullscreen API is best-effort chrome-hiding on top; iOS Safari never
   fullscreens a div, so the class is the source of truth, and
   `fullscreenchange` only syncs the icon when the API works. Esc stays

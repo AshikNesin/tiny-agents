@@ -136,7 +136,7 @@ In production the server:
 - The Prisma client is generated automatically via `pnpm install` (`postinstall`
   runs `prisma generate`). The generated client embeds the datasource provider,
   so **switching engines requires regenerating the client** (`pnpm prisma
-generate`, or any `pnpm dev`/`pnpm test`).
+  generate`, or any `pnpm dev`/`pnpm test`).
 - Two schema files are kept in parity: `apps/web/prisma/schema.sqlite.prisma`
   and `apps/web/prisma/schema.postgres.prisma` (a test guards they stay in sync).
 - To evolve the schema: `pnpm db:migrate:create` (then `pnpm prisma migrate dev`

@@ -62,9 +62,9 @@ Customize detection rules and allowlists:
 ```toml
 [allowlist]
 paths = [
-    '''^\.env\.example$''',  # Allow example env files
-    '''^docs/''',            # Allow documentation
-    '''\.test\.''',          # Allow test files
+  '''^\.env\.example$''', # Allow example env files
+  '''^docs/''', # Allow documentation
+  '''\.test\.''', # Allow test files
 ]
 ```
 
