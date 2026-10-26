@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vite-plus/test";
 import { configureLogger } from "@groot/core/logger";
 import { prisma } from "@groot/core/database";
 import { createJobLogger, createJobLogStream } from "@groot/jobs/server/logger";

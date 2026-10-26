@@ -1,6 +1,6 @@
 import {
   type AuthenticationResponseJSON,
-  type AuthenticatorTransportFuture,
+  type AuthenticatorTransport,
   type GenerateAuthenticationOptionsOpts,
   type GenerateRegistrationOptionsOpts,
   type RegistrationResponseJSON,
@@ -24,7 +24,7 @@ const ORIGIN = config.passkey.origin;
 
 // `transports` is a Prisma `Json` column on both SQLite and Postgres, so it
 // round-trips as a JS array natively (typed as Prisma.JsonValue). At the
-// WebAuthn boundary we cast to `AuthenticatorTransportFuture[]`.
+// WebAuthn boundary we cast to `AuthenticatorTransport[]`.
 export interface PasskeyData {
   id: number;
   userId: number;
@@ -56,7 +56,7 @@ export async function generatePasskeyRegistrationOptions(
     excludeCredentials: existingCredentials.map((passkey) => ({
       id: passkey.credentialId,
       type: "public-key",
-      transports: passkey.transports as AuthenticatorTransportFuture[],
+      transports: passkey.transports as AuthenticatorTransport[],
     })),
     authenticatorSelection: {
       residentKey: "preferred",
@@ -96,7 +96,7 @@ export async function generatePasskeyAuthenticationOptions(userPasskeys: Passkey
     allowCredentials: userPasskeys.map((passkey) => ({
       id: passkey.credentialId,
       type: "public-key",
-      transports: passkey.transports as AuthenticatorTransportFuture[],
+      transports: passkey.transports as AuthenticatorTransport[],
     })),
     userVerification: "preferred",
   };
@@ -131,8 +131,8 @@ export async function verifyPasskeyAuthentication(
  * Convert authenticator transports to database format.
  * `transports` is a Json column, so the array is stored as-is.
  */
-export function serializeTransports(transports?: AuthenticatorTransportFuture[]): string[] {
-  return transports || [];
+export function serializeTransports(transports?: readonly string[]): string[] {
+  return transports ? [...transports] : [];
 }
 
 /**

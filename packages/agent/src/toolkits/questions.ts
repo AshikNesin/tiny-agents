@@ -40,6 +40,7 @@ export const QuestionsDoc = defineDoc<{
   version: 1,
   scope: "task",
   initial: () => ({ status: "pending", questions: [], answers: [] }),
+  checkpointWhen: () => false,
 });
 
 /** The answers do not fit the questions they answer. */

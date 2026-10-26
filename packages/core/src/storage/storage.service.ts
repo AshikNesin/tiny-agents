@@ -107,7 +107,7 @@ export async function bulkUpload(params: {
   );
 
   return {
-    uploadedFiles: result.uploaded.map((u) => u.key),
+    uploadedFiles: result.results.map((u) => u.key),
     failedFiles: (result.errors ?? []).map((e) => ({
       filePath: e.key,
       error: e.error.message,
@@ -143,7 +143,7 @@ export async function deleteFiles(params: {
     throw Boom.badRequest("No files specified for deletion");
   }
   const result = await files.delete(params.filePaths);
-  return { deletedCount: result.deleted.length };
+  return { deletedCount: result.results.length };
 }
 
 export async function getFileMetadata(params: { filePath: string }): Promise<{
@@ -226,7 +226,7 @@ export async function deleteFolder({
   const flush = async () => {
     if (!batch.length) return;
     const result = await files.delete(batch);
-    deletedCount += result.deleted.length;
+    deletedCount += result.results.length;
     batch.length = 0;
   };
 

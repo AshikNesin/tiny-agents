@@ -7,7 +7,7 @@
  * capabilities() is memoized per session (issue #7), so each test imports a
  * fresh module to start with an empty cache.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getMock = vi.fn();
 vi.mock("@groot/shell/lib/api", () => ({

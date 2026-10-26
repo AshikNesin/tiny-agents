@@ -33,6 +33,7 @@ export const PermissionsDoc = defineDoc<{ allow: string[] }>({
   history: "latest",
   fork: "current",
   initial: () => ({ allow: [] }),
+  checkpointWhen: () => false,
 });
 
 export type ApprovalDecision = "approved" | "denied";
@@ -43,6 +44,7 @@ export const ApprovalDoc = defineDoc<{ status: "pending" | ApprovalDecision }>({
   version: 1,
   scope: "task",
   initial: () => ({ status: "pending" }),
+  checkpointWhen: () => false,
 });
 
 const text = (value: string) => [{ type: "text" as const, text: value }];

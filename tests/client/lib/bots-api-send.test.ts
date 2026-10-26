@@ -3,7 +3,7 @@
  * `mentions` ids from the request body, so the POST must carry them
  * alongside requestId and text.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 const postMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("@groot/shell/lib/api", () => ({
