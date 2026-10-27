@@ -434,3 +434,110 @@ describe("page snapshot", () => {
     expect(await session.snapshot()).toContain('button "Sign in to settings" [ref=e2]');
   });
 });
+
+describe("page interaction", () => {
+  const open = { viewportWidth: 1280, viewportHeight: 800 };
+
+  /** A page whose locator records the calls `browser_click` / `browser_type` make. */
+  function pageWith(locator: Record<string, unknown>, mouse: Record<string, unknown> = {}) {
+    return {
+      once: () => undefined,
+      url: () => "https://example.com/form",
+      viewportSize: () => null,
+      locator: () => locator,
+      mouse,
+      keyboard: { press: vi.fn(async () => {}) },
+    } as unknown as Page;
+  }
+
+  it("clicks through the locator so the element is scrolled into view and hit-tested", async () => {
+    const calls: string[] = [];
+    const mouse = { click: vi.fn(async () => calls.push("mouse")) };
+    const session = pageSession(
+      pageWith(
+        {
+          count: async () => 1,
+          click: async () => {
+            calls.push("locator");
+          },
+        },
+        mouse,
+      ),
+      open,
+      { close: async () => {} },
+    );
+    expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
+    expect(calls).toEqual(["locator"]);
+  });
+
+  it("focuses a field with a real click, then inserts the whole string at once", async () => {
+    const calls: string[] = [];
+    const text = "a whole sentence, inserted in one go";
+    const session = pageSession(
+      pageWith({
+        count: async () => 1,
+        isEditable: async () => true,
+        click: async () => {
+          calls.push("click");
+        },
+        fill: async (value: string) => {
+          calls.push(`fill:${value}`);
+        },
+        type: async () => {
+          calls.push("type");
+        },
+      }),
+      open,
+      { close: async () => {} },
+    );
+    expect(await session.type("e2", text)).toEqual({ url: "https://example.com/form" });
+    expect(calls).toEqual(["click", `fill:${text}`]);
+  });
+
+  it("does not click a control that cannot take text", async () => {
+    const calls: string[] = [];
+    const session = pageSession(
+      pageWith({
+        count: async () => 1,
+        isEditable: async () => false,
+        click: async () => {
+          calls.push("click");
+        },
+        fill: async () => {
+          calls.push("fill");
+        },
+      }),
+      open,
+      { close: async () => {} },
+    );
+    await expect(session.type("e3", "hello")).rejects.toThrow("not an editable field");
+    expect(calls).toEqual([]);
+  });
+
+  it("parks the cursor in the page before a wheel scroll", async () => {
+    const moves: [number, number][] = [];
+    const wheels: number[] = [];
+    const session = pageSession(
+      pageWith(
+        {},
+        {
+          move: async (x: number, y: number) => {
+            moves.push([x, y]);
+          },
+          wheel: async (_x: number, y: number) => {
+            wheels.push(y);
+          },
+        },
+      ),
+      open,
+      { close: async () => {} },
+    );
+    await session.scroll("down", 600);
+    await session.scroll("up", 200);
+    expect(moves).toEqual([
+      [640, 400],
+      [640, 400],
+    ]);
+    expect(wheels).toEqual([600, -200]);
+  });
+});

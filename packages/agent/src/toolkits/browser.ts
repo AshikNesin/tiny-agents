@@ -245,7 +245,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         }),
         defineTool({
           name: "browser_click",
-          description: "Click an element by its ref from the last snapshot.",
+          description:
+            "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
           parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 12 }) }),
           replay: "unsafe",
           execute: async (args, api) => {
@@ -262,7 +263,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         defineTool({
           name: "browser_type",
           description:
-            "Type text into an element by ref. Never type credentials: ask the owner to take over instead.",
+            "Replace the text in an editable element by ref. The whole string is inserted at once. " +
+            "Never type credentials: ask the owner to take over instead.",
           parameters: Type.Object({
             ref: Type.String({ minLength: 2, maxLength: 12 }),
             text: Type.String({ minLength: 1, maxLength: 5000 }),

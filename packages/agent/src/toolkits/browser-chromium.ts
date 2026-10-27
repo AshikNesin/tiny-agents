@@ -24,6 +24,13 @@ const VM_HEADLESS_SHELL = "/headless-shell/headless-shell";
 /** Debian's apt chromium (installed via railpack aptPackages on deploys). */
 const DEBIAN_CHROMIUM = "/usr/bin/chromium";
 
+/**
+ * Bound for a click, fill, or key. Playwright's own default is "wait
+ * forever", so a covered element would hang until the tool call itself
+ * was killed. Long enough for a slow VM round trip and a few retries.
+ */
+const ACTION_TIMEOUT_MS = 15_000;
+
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
   // Prefer pre-provisioned system binaries: no download needed, and
@@ -156,8 +163,8 @@ export function pageSession(
     snapshot: () => snapshotOf(page),
     click: (ref) => clickRef(page, ref),
     type: (ref, text) => typeRef(page, ref, text),
-    press: (key) => page.keyboard.press(key),
-    scroll: (direction, amount) => page.mouse.wheel(0, direction === "down" ? amount : -amount),
+    press: (key) => page.keyboard.press(key, { timeout: ACTION_TIMEOUT_MS }),
+    scroll: (direction, amount) => scrollPage(page, open, direction, amount),
     screenshot: async () => ({
       // CSS scale: on a 2x desktop the default would double both dimensions
       // and the model would pay for pixels it cannot use.
@@ -241,15 +248,46 @@ async function locatorFor(page: Page, ref: string) {
 }
 
 async function clickRef(page: Page, ref: string) {
-  const box = await (await locatorFor(page, ref)).boundingBox();
-  if (!box) throw new Error(`Element ${ref} has no box to click.`);
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  const loc = await locatorFor(page, ref);
+  // Scrolls into view, waits until the element is stable and is the one
+  // under the cursor, then sends a real mouse click. A one-shot coordinate
+  // click misses anything below the fold and lands on whatever slid into
+  // that box. A DOM `.click()` would also skip React and Vue handlers.
+  await loc.click({ timeout: ACTION_TIMEOUT_MS });
   return { url: page.url() };
 }
 
 async function typeRef(page: Page, ref: string, text: string) {
   const loc = await locatorFor(page, ref);
-  await loc.fill("");
-  await loc.type(text, { delay: 10 });
+  // Refuse before the click: typing into a button would activate it.
+  if (!(await loc.isEditable({ timeout: ACTION_TIMEOUT_MS }))) {
+    throw new Error(
+      `Element ${ref} is not an editable field. Click it, or type into a text field from the snapshot.`,
+    );
+  }
+  // Headful Chrome delivers CDP text input to whichever surface has browser
+  // focus, often the address bar. DOM focus does not move that. A real click
+  // does, because the mouse event is aimed at the page. `fill` then sets the
+  // whole value in one insert. A key event per character is its own round
+  // trip on the VM link, and a sentence of them runs until the tool times out.
+  await loc.click({ timeout: ACTION_TIMEOUT_MS });
+  await loc.fill(text, { timeout: ACTION_TIMEOUT_MS });
   return { url: page.url() };
+}
+
+async function scrollPage(
+  page: Page,
+  open: OpenBrowserOptions,
+  direction: "up" | "down",
+  amount: number,
+) {
+  const viewport = page.viewportSize() ?? {
+    width: open.viewportWidth,
+    height: open.viewportHeight,
+  };
+  // A wheel event hits whatever is under the cursor. On the VM that cursor
+  // is often the address bar or a point left over from the last action, so
+  // park it in the page first.
+  await page.mouse.move(Math.floor(viewport.width / 2), Math.floor(viewport.height / 2));
+  await page.mouse.wheel(0, direction === "down" ? amount : -amount);
 }
