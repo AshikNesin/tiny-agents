@@ -404,88 +404,54 @@ describe("page session tabs (shared profiles)", () => {
 });
 
 describe("page snapshot", () => {
-  it("collapses whitespace in element names without dropping letters", async () => {
-    // The snapshot runs in the page as source text; run it against a tiny DOM.
-    const element = (tag: string, text: string, children: unknown[] = []) => ({
-      tagName: tag.toUpperCase(),
-      textContent: text,
-      children,
-      attributes: {} as Record<string, string>,
-      getAttribute(name: string) {
-        return this.attributes[name] ?? null;
-      },
-      setAttribute(name: string, value: string) {
-        this.attributes[name] = value;
-      },
-    });
-    const body = element("body", "", [element("button", "Sign   in\n  to settings")]);
+  it("reads Playwright's AI accessibility snapshot", async () => {
+    const seen: { selector?: string; mode?: string } = {};
     const page = {
       once: () => undefined,
-      evaluate: async (script: string) =>
-        new Function("document", `return (${script.trim()})`)({ body }) as string,
+      locator: (selector: string) => ({
+        ariaSnapshot: async (options: { mode?: string }) => {
+          seen.selector = selector;
+          seen.mode = options.mode;
+          return '- button "Sign in" [ref=e2]';
+        },
+      }),
     } as unknown as Page;
     const session = pageSession(
       page,
       { viewportWidth: 1, viewportHeight: 1 },
-      {
-        close: async () => {},
-      },
+      { close: async () => {} },
     );
-    expect(await session.snapshot()).toContain('button "Sign in to settings" [ref=e2]');
+    expect(await session.snapshot()).toContain("[ref=e2]");
+    expect(seen).toEqual({ selector: "body", mode: "ai" });
   });
 });
 
 describe("page interaction", () => {
   const open = { viewportWidth: 1280, viewportHeight: 800 };
 
-  /**
-   * Runs the page scripts against a tiny DOM and records the CDP-shaped
-   * calls that follow: one mouse click, one insert, or the slow fallback.
-   */
-  function harness(elements: Record<string, Record<string, unknown>>, hitRef = "self") {
+  /** Records the Playwright calls click and type make against a stub element. */
+  function harness(element: Record<string, unknown>) {
     const calls: string[] = [];
-    const byRef = elements;
-    const document = {
-      querySelector(selector: string) {
-        const ref = /data-ta-ref="([^"]+)"/.exec(selector)?.[1];
-        return (ref && byRef[ref]) || null;
-      },
-      elementFromPoint(): unknown {
-        return null;
-      },
-    };
-    // The script hit-tests after scrolling, so a "self" hit is whichever
-    // element was just scrolled into view.
-    let last: Record<string, unknown> | null = null;
-    for (const el of Object.values(byRef)) {
-      el.scrollIntoView = () => {
-        last = el;
-      };
-      el.contains = (node: unknown) => node === el;
-      el.getBoundingClientRect = () => ({ left: 10, top: 20, width: 100, height: 40 });
-      el.focus = () => undefined;
-      el.dispatchEvent = () => true;
-      el.getAttribute = (name: string) =>
-        (el.attributes as Record<string, string> | undefined)?.[name] ?? null;
-    }
-    document.elementFromPoint = () => {
-      if (hitRef === "none") return { contains: () => false };
-      if (hitRef === "self") return last;
-      return byRef[hitRef] ?? { contains: () => false };
-    };
-    const window = { innerWidth: 1280, innerHeight: 800, getSelection: () => null };
     const page = {
       once: () => undefined,
       url: () => "https://example.com/form",
       viewportSize: () => null,
-      evaluate: async (script: string) => {
-        calls.push("eval");
-        return new Function("document", "window", `return (${script.trim()})`)(document, window);
+      getByRef: (ref: string) => {
+        calls.push(`ref:${ref}`);
+        return {
+          evaluate: async (fn: (el: unknown) => string) => {
+            calls.push("eval");
+            return fn(element);
+          },
+          click: async () => {
+            calls.push("click");
+          },
+          fill: async (text: string) => {
+            calls.push(`fill:${text}`);
+          },
+        };
       },
       mouse: {
-        click: async (x: number, y: number) => {
-          calls.push(`click:${x},${y}`);
-        },
         move: async (x: number, y: number) => {
           calls.push(`move:${x},${y}`);
         },
@@ -494,23 +460,18 @@ describe("page interaction", () => {
         },
       },
       keyboard: {
-        insertText: async (text: string) => {
-          calls.push(`insert:${text}`);
+        type: async () => {
+          calls.push("key-type");
+        },
+        insertText: async () => {
+          calls.push("insert");
         },
         press: async () => {
           calls.push("press");
         },
       },
-      locator: () => ({
-        click: async () => {
-          calls.push("locator.click");
-        },
-        fill: async (text: string) => {
-          calls.push(`fill:${text}`);
-        },
-      }),
     } as unknown as Page;
-    return { calls, page, session: pageSession(page, open, { close: async () => {} }) };
+    return { calls, session: pageSession(page, open, { close: async () => {} }) };
   }
 
   const input = (type = "text", extra: Record<string, unknown> = {}) => ({
@@ -519,67 +480,62 @@ describe("page interaction", () => {
     disabled: false,
     readOnly: false,
     isContentEditable: false,
-    value: "old",
-    setSelectionRange() {
-      return undefined;
-    },
     ...extra,
   });
 
-  it("clicks a visible element with one mouse click at its center", async () => {
-    const { calls, session } = harness({ e2: input() });
+  it("clicks a ref through Playwright", async () => {
+    const { calls, session } = harness(input());
     expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["eval", "click:60,40"]);
+    expect(calls).toEqual(["ref:e2", "click"]);
   });
 
-  it("retries through the locator when the element is covered", async () => {
-    const { calls, session } = harness({ e2: input(), e9: input() }, "e9");
-    expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["eval", "locator.click"]);
-  });
-
-  it("focuses a text field, then inserts the whole string in one call", async () => {
+  it("clicks a text field, then fills the whole string in one call", async () => {
     const text = 'a whole sentence, "quoted"\nstill one insert';
-    const { calls, session } = harness({ e2: input() });
+    const { calls, session } = harness(input());
     expect(await session.type("e2", text)).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["eval", "click:60,40", "eval", `insert:${text}`]);
+    expect(calls).toEqual(["ref:e2", "eval", "click", `fill:${text}`]);
   });
 
-  it("writes a date field in the prepare round trip, without a click", async () => {
-    const field = input("date", { value: "" });
-    const { calls, session } = harness({ e4: field });
+  it("fills a date field without opening the picker", async () => {
+    const { calls, session } = harness(input("date"));
     expect(await session.type("e4", "2026-10-28")).toEqual({ url: "https://example.com/form" });
-    expect(field.value).toBe("2026-10-28");
-    expect(calls).toEqual(["eval"]);
+    expect(calls).toEqual(["ref:e4", "eval", "fill:2026-10-28"]);
   });
 
-  it("chooses a select option in the prepare round trip", async () => {
-    const options = [
-      { value: "a", label: "Alpha", textContent: "Alpha", selected: false },
-      { value: "b", label: "Beta", textContent: "Beta", selected: false },
-    ];
-    const field = {
+  it("fills a select without opening the dropdown", async () => {
+    const { calls, session } = harness({
       tagName: "SELECT",
       disabled: false,
       isContentEditable: false,
-      options,
-    };
-    const { calls, session } = harness({ e5: field });
+    });
     expect(await session.type("e5", "Beta")).toEqual({ url: "https://example.com/form" });
-    expect(options.map((option) => option.selected)).toEqual([false, true]);
-    expect(calls).toEqual(["eval"]);
+    expect(calls).toEqual(["ref:e5", "eval", "fill:Beta"]);
+  });
+
+  it("accepts a frame ref and fills that field", async () => {
+    const { calls, session } = harness(input());
+    await session.type("f1e3", "inside");
+    expect(calls).toEqual(["ref:f1e3", "eval", "click", "fill:inside"]);
   });
 
   it("does not click a control that cannot take text", async () => {
     const { calls, session } = harness({
-      e3: { tagName: "BUTTON", disabled: false, isContentEditable: false },
+      tagName: "BUTTON",
+      disabled: false,
+      isContentEditable: false,
     });
     await expect(session.type("e3", "hello")).rejects.toThrow("not an editable field");
-    expect(calls).toEqual(["eval"]);
+    expect(calls).toEqual(["ref:e3", "eval"]);
+  });
+
+  it("rejects a ref that is not from a snapshot", async () => {
+    const { calls, session } = harness(input());
+    await expect(session.click("nope!")).rejects.toThrow("Invalid ref");
+    expect(calls).toEqual([]);
   });
 
   it("parks the cursor in the page before a wheel scroll", async () => {
-    const { calls, session } = harness({});
+    const { calls, session } = harness(input());
     await session.scroll("down", 600);
     await session.scroll("up", 200);
     expect(calls).toEqual(["move:640,400", "wheel:600", "move:640,400", "wheel:-200"]);

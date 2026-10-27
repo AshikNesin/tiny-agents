@@ -165,6 +165,9 @@ describe("browser toolkit", () => {
     const bad = await run(tk, "browser_click", { ref: "nope!" });
     expect(bad.isError).toBe(true);
     expect(bad.text).toContain("Invalid ref");
+    const framed = await run(tk, "browser_click", { ref: "f1e3" });
+    expect(framed.isError).toBeUndefined();
+    expect(framed.text).toContain("f1e3");
   });
 
   it("action tools wait while the human drives, then proceed after release", async () => {
