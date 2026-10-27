@@ -2,4 +2,4 @@
 "@tiny-agents/agent": patch
 ---
 
-`browser_type` inserts the whole string in one step, after a real click moves keyboard focus into the page. It used to send one key event per character, which on the VM's CDP link timed out and could land in Chrome's address bar instead of the field. A click or a text field is one round trip that scrolls the target into view; date, color, range and select fields are written in that same call. The retrying Playwright click runs only when something covers the element. Scrolling parks the cursor in the page before the wheel event.
+`browser_snapshot` reads Playwright's accessibility snapshot, and click and type act on those refs. `browser_type` replaces a field in one step. A text field is clicked first so the text lands in the page on the VM's Chrome; date, color, range and select fields are filled directly. It used to send one key event per character, which timed out on the VM link and could land in the address bar.

@@ -228,8 +228,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         defineTool({
           name: "browser_snapshot",
           description:
-            "Snapshot the page's interactive elements as a tree with refs. Clicking and typing use these refs. " +
-            "Take a new snapshot whenever the page may have changed.",
+            "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). " +
+            "Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
           parameters: Type.Object({}),
           replay: "safe",
           execute: async (_args, api) => {
@@ -247,7 +247,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
           name: "browser_click",
           description:
             "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
-          parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 12 }) }),
+          parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 32 }) }),
           replay: "unsafe",
           execute: async (args, api) => {
             try {
@@ -266,7 +266,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             "Replace the text in an editable element by ref. The whole string is inserted at once. " +
             "Never type credentials: ask the owner to take over instead.",
           parameters: Type.Object({
-            ref: Type.String({ minLength: 2, maxLength: 12 }),
+            ref: Type.String({ minLength: 2, maxLength: 32 }),
             text: Type.String({ minLength: 1, maxLength: 5000 }),
           }),
           replay: "unsafe",
@@ -542,9 +542,9 @@ export function isBlockedPrivateUrl(raw: string, allowedPrivateHosts?: string): 
   }
 }
 
-/** Ref shape every transport must honor: `e` + digits from the last snapshot. */
+/** Ref from the last snapshot: `e12`, or `f1e12` for an element inside a frame. */
 export function assertRefShape(ref: string): void {
-  if (!/^e\d+$/.test(ref)) {
+  if (!/^(?:f\d+)?e\d+$/.test(ref)) {
     throw new Error(`Invalid ref "${ref}". Use a ref from the last snapshot.`);
   }
 }
