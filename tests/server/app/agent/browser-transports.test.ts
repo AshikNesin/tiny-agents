@@ -438,106 +438,150 @@ describe("page snapshot", () => {
 describe("page interaction", () => {
   const open = { viewportWidth: 1280, viewportHeight: 800 };
 
-  /** A page whose locator records the calls `browser_click` / `browser_type` make. */
-  function pageWith(locator: Record<string, unknown>, mouse: Record<string, unknown> = {}) {
-    return {
+  /**
+   * Runs the page scripts against a tiny DOM and records the CDP-shaped
+   * calls that follow: one mouse click, one insert, or the slow fallback.
+   */
+  function harness(elements: Record<string, Record<string, unknown>>, hitRef = "self") {
+    const calls: string[] = [];
+    const byRef = elements;
+    const document = {
+      querySelector(selector: string) {
+        const ref = /data-ta-ref="([^"]+)"/.exec(selector)?.[1];
+        return (ref && byRef[ref]) || null;
+      },
+      elementFromPoint(): unknown {
+        return null;
+      },
+    };
+    // The script hit-tests after scrolling, so a "self" hit is whichever
+    // element was just scrolled into view.
+    let last: Record<string, unknown> | null = null;
+    for (const el of Object.values(byRef)) {
+      el.scrollIntoView = () => {
+        last = el;
+      };
+      el.contains = (node: unknown) => node === el;
+      el.getBoundingClientRect = () => ({ left: 10, top: 20, width: 100, height: 40 });
+      el.focus = () => undefined;
+      el.dispatchEvent = () => true;
+      el.getAttribute = (name: string) =>
+        (el.attributes as Record<string, string> | undefined)?.[name] ?? null;
+    }
+    document.elementFromPoint = () => {
+      if (hitRef === "none") return { contains: () => false };
+      if (hitRef === "self") return last;
+      return byRef[hitRef] ?? { contains: () => false };
+    };
+    const window = { innerWidth: 1280, innerHeight: 800, getSelection: () => null };
+    const page = {
       once: () => undefined,
       url: () => "https://example.com/form",
       viewportSize: () => null,
-      locator: () => locator,
-      mouse,
-      keyboard: { press: vi.fn(async () => {}) },
-    } as unknown as Page;
-  }
-
-  it("clicks through the locator so the element is scrolled into view and hit-tested", async () => {
-    const calls: string[] = [];
-    const mouse = { click: vi.fn(async () => calls.push("mouse")) };
-    const session = pageSession(
-      pageWith(
-        {
-          count: async () => 1,
-          click: async () => {
-            calls.push("locator");
-          },
+      evaluate: async (script: string) => {
+        calls.push("eval");
+        return new Function("document", "window", `return (${script.trim()})`)(document, window);
+      },
+      mouse: {
+        click: async (x: number, y: number) => {
+          calls.push(`click:${x},${y}`);
         },
-        mouse,
-      ),
-      open,
-      { close: async () => {} },
-    );
-    expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["locator"]);
-  });
-
-  it("focuses a field with a real click, then inserts the whole string at once", async () => {
-    const calls: string[] = [];
-    const text = "a whole sentence, inserted in one go";
-    const session = pageSession(
-      pageWith({
-        count: async () => 1,
-        isEditable: async () => true,
+        move: async (x: number, y: number) => {
+          calls.push(`move:${x},${y}`);
+        },
+        wheel: async (_x: number, y: number) => {
+          calls.push(`wheel:${y}`);
+        },
+      },
+      keyboard: {
+        insertText: async (text: string) => {
+          calls.push(`insert:${text}`);
+        },
+        press: async () => {
+          calls.push("press");
+        },
+      },
+      locator: () => ({
         click: async () => {
-          calls.push("click");
+          calls.push("locator.click");
         },
-        fill: async (value: string) => {
-          calls.push(`fill:${value}`);
-        },
-        type: async () => {
-          calls.push("type");
+        fill: async (text: string) => {
+          calls.push(`fill:${text}`);
         },
       }),
-      open,
-      { close: async () => {} },
-    );
+    } as unknown as Page;
+    return { calls, page, session: pageSession(page, open, { close: async () => {} }) };
+  }
+
+  const input = (type = "text", extra: Record<string, unknown> = {}) => ({
+    tagName: "INPUT",
+    type,
+    disabled: false,
+    readOnly: false,
+    isContentEditable: false,
+    value: "old",
+    setSelectionRange() {
+      return undefined;
+    },
+    ...extra,
+  });
+
+  it("clicks a visible element with one mouse click at its center", async () => {
+    const { calls, session } = harness({ e2: input() });
+    expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
+    expect(calls).toEqual(["eval", "click:60,40"]);
+  });
+
+  it("retries through the locator when the element is covered", async () => {
+    const { calls, session } = harness({ e2: input(), e9: input() }, "e9");
+    expect(await session.click("e2")).toEqual({ url: "https://example.com/form" });
+    expect(calls).toEqual(["eval", "locator.click"]);
+  });
+
+  it("focuses a text field, then inserts the whole string in one call", async () => {
+    const text = 'a whole sentence, "quoted"\nstill one insert';
+    const { calls, session } = harness({ e2: input() });
     expect(await session.type("e2", text)).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["click", `fill:${text}`]);
+    expect(calls).toEqual(["eval", "click:60,40", "eval", `insert:${text}`]);
+  });
+
+  it("writes a date field in the prepare round trip, without a click", async () => {
+    const field = input("date", { value: "" });
+    const { calls, session } = harness({ e4: field });
+    expect(await session.type("e4", "2026-10-28")).toEqual({ url: "https://example.com/form" });
+    expect(field.value).toBe("2026-10-28");
+    expect(calls).toEqual(["eval"]);
+  });
+
+  it("chooses a select option in the prepare round trip", async () => {
+    const options = [
+      { value: "a", label: "Alpha", textContent: "Alpha", selected: false },
+      { value: "b", label: "Beta", textContent: "Beta", selected: false },
+    ];
+    const field = {
+      tagName: "SELECT",
+      disabled: false,
+      isContentEditable: false,
+      options,
+    };
+    const { calls, session } = harness({ e5: field });
+    expect(await session.type("e5", "Beta")).toEqual({ url: "https://example.com/form" });
+    expect(options.map((option) => option.selected)).toEqual([false, true]);
+    expect(calls).toEqual(["eval"]);
   });
 
   it("does not click a control that cannot take text", async () => {
-    const calls: string[] = [];
-    const session = pageSession(
-      pageWith({
-        count: async () => 1,
-        isEditable: async () => false,
-        click: async () => {
-          calls.push("click");
-        },
-        fill: async () => {
-          calls.push("fill");
-        },
-      }),
-      open,
-      { close: async () => {} },
-    );
+    const { calls, session } = harness({
+      e3: { tagName: "BUTTON", disabled: false, isContentEditable: false },
+    });
     await expect(session.type("e3", "hello")).rejects.toThrow("not an editable field");
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(["eval"]);
   });
 
   it("parks the cursor in the page before a wheel scroll", async () => {
-    const moves: [number, number][] = [];
-    const wheels: number[] = [];
-    const session = pageSession(
-      pageWith(
-        {},
-        {
-          move: async (x: number, y: number) => {
-            moves.push([x, y]);
-          },
-          wheel: async (_x: number, y: number) => {
-            wheels.push(y);
-          },
-        },
-      ),
-      open,
-      { close: async () => {} },
-    );
+    const { calls, session } = harness({});
     await session.scroll("down", 600);
     await session.scroll("up", 200);
-    expect(moves).toEqual([
-      [640, 400],
-      [640, 400],
-    ]);
-    expect(wheels).toEqual([600, -200]);
+    expect(calls).toEqual(["move:640,400", "wheel:600", "move:640,400", "wheel:-200"]);
   });
 });

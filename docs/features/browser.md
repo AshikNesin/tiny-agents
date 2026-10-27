@@ -34,19 +34,18 @@ the agent can browse, but there is nothing to stream (the panel says so)
   returns a ref-annotated element tree; actions take refs. Vision is the
   `browser_screenshot` fallback (CSS-pixel scale, so a 2x desktop does not
   double the image the model pays for).
-- Interaction follows the same rules as driving a real Chrome over CDP.
-  `browser_click` is a Playwright locator click: the element is scrolled
-  into view and the click is retried until that element is the one under
-  the cursor, so a layout shift cannot land it on a neighbor, and the
-  event is a real mouse click (a DOM click would skip React and Vue
-  handlers). `browser_type` clicks the field first, then sets the value
-  with `fill`. On the headful VM Chrome, CDP text input is delivered to
-  whichever surface has browser focus — often the address bar — and DOM
-  focus does not move that; the click does. The whole string goes in as
+- Interaction is one round trip to the page whenever that is enough.
+  `browser_click` scrolls the element into view and, when its center is
+  what is under the cursor, sends one mouse click. `browser_type` writes
+  date, color, range and select fields in that same round trip. A text
+  field gets that click — on the headful VM Chrome, CDP text input is
+  delivered to whichever surface has browser focus, often the address
+  bar, and the click moves it into the page — then the whole string in
   one insert. A key event per character is a round trip each over the VM
-  link and timed out on anything longer than a short phrase. Scrolling
-  moves the cursor into the page before the wheel event, so the wheel
-  does not hit the address bar.
+  link and timed out on anything longer than a short phrase. When
+  something covers the element, the action falls back to Playwright's
+  locator click, which retries until that element is the one under the
+  cursor. Scrolling parks the cursor in the page before the wheel event.
 - Driver flag: `setDriver(conversationId, "agent" | "human")`. Action tools
   wait (bounded) while the human drives; the next snapshot absorbs whatever
   the human did. When the owner releases control, the agent adopts the tab
