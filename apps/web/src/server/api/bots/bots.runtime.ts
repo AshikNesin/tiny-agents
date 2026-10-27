@@ -59,10 +59,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     createTasksToolkit(taskStore),
     createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({
-      accountId: unquote(env.CLOUDFLARE_ACCOUNT_ID),
-      apiToken: unquote(env.CLOUDFLARE_API_KEY),
-      gatewayId: unquote(env.CLOUDFLARE_GATEWAY_ID),
-      apiBase: unquote(env.CLOUDFLARE_API_BASE_URL),
+      apiKey: unquote(env.TINYFISH_API_KEY),
     }),
     createTodayCapability({ timeZone: unquote(env.TZ) }),
     // Default host is the verified MagicDNS name (issue #19 runbook); the

@@ -1,32 +1,30 @@
 /**
- * The `web` toolkit (issue #1 D16): search and read the web through the
- * Cloudflare account inference already uses — no new vendor.
- *
- * - `web_search` → Cloudflare Web Search API (default backend Ceramic),
- *   `POST /accounts/{id}/ai/websearch/`.
- * - `web_fetch` → Browser Rendering `/markdown`, which renders the page in
- *   Cloudflare's browser (JS-heavy pages work; nothing is fetched from here).
- *
- * Both need a Cloudflare API token with Workers AI Read, AI Gateway Read and
- * Browser Rendering Write (`CLOUDFLARE_API_KEY`) plus `CLOUDFLARE_ACCOUNT_ID`.
+ * The `web` toolkit: search and read public pages through TinyFish.
+ * Search (`GET https://api.search.tinyfish.ai`) and Fetch
+ * (`POST https://api.fetch.tinyfish.ai`) are free; a key is still required
+ * (`TINYFISH_API_KEY`, sent as `X-API-Key`). Until it is set, the toolkit
+ * offers the model no tools.
  */
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 
 export interface WebToolkitOptions {
-  accountId?: string;
-  apiToken?: string;
-  /** AI Gateway id: searches are logged/billed through it when set. */
-  gatewayId?: string;
+  /** TinyFish API key. Search and Fetch stay hidden without it. */
+  apiKey?: string;
   /** Override for tests. */
   fetch?: typeof fetch;
-  /** Alternate front door for the Cloudflare REST API (a proxy that injects the token). */
-  apiBase?: string;
+  /** Alternate Search API origin. */
+  searchBase?: string;
+  /** Alternate Fetch API origin. */
+  fetchBase?: string;
 }
 
 /** Longest page text handed to the model. */
 const MAX_PAGE_CHARS = 20_000;
+const SEARCH_TIMEOUT_MS = 30_000;
+/** Fetch's CDN ceiling is 120s; wait long enough to receive that error. */
+const FETCH_TIMEOUT_MS = 150_000;
 
 export type WebSource = { url: string; title: string };
 
@@ -64,53 +62,66 @@ export function checkPublicUrl(raw: string): URL {
   return url;
 }
 
+type TinyFishError = { code?: string; message?: string };
+
+function describeFailure(response: Response, json: unknown): string {
+  const error =
+    json && typeof json === "object" && "error" in json
+      ? (json as { error?: TinyFishError | string }).error
+      : undefined;
+  if (error && typeof error === "object" && error.message) {
+    const code = error.code ? ` (${error.code})` : "";
+    return `TinyFish ${response.status}${code}: ${error.message}`;
+  }
+  if (typeof error === "string" && error) return `TinyFish ${response.status}: ${error}`;
+  return `TinyFish ${response.status}: ${response.statusText || "request failed"}`;
+}
+
 export function createWebToolkit(options: WebToolkitOptions): Capability {
   const doFetch = options.fetch ?? fetch;
-  const base = (options.apiBase || "https://api.cloudflare.com/client/v4").replace(/\/+$/, "");
-  // An alternate front door (proxy) injects the token itself.
-  const configured = Boolean(options.accountId && (options.apiToken || options.apiBase));
+  const searchBase = (options.searchBase || "https://api.search.tinyfish.ai").replace(/\/+$/, "");
+  const fetchBase = (options.fetchBase || "https://api.fetch.tinyfish.ai").replace(/\/+$/, "");
+  const apiKey = options.apiKey?.trim() || undefined;
+  const configured = Boolean(apiKey);
 
-  async function cloudflare(path: string, body: unknown): Promise<unknown> {
-    const response = await doFetch(`${base}/accounts/${options.accountId}${path}`, {
-      method: "POST",
+  async function tinyfish(url: string, init: { method: string; body?: string; timeoutMs: number }) {
+    const response = await doFetch(url, {
+      method: init.method,
       headers: {
-        ...(options.apiToken ? { Authorization: `Bearer ${options.apiToken}` } : {}),
-        "Content-Type": "application/json",
+        ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      body: init.body,
+      signal: AbortSignal.timeout(init.timeoutMs),
     });
-    const json = (await response.json().catch(() => undefined)) as
-      | { success?: boolean; result?: unknown; errors?: { message?: string }[] }
-      | undefined;
-    if (!response.ok || json?.success === false) {
-      const message = json?.errors?.map((e) => e.message).join("; ") || response.statusText;
-      throw new Error(`Cloudflare ${response.status}: ${message}`);
-    }
-    return json?.result ?? json;
+    const json = (await response.json().catch(() => undefined)) as unknown;
+    if (!response.ok) throw new Error(describeFailure(response, json));
+    if (!json || typeof json !== "object")
+      throw new Error(`TinyFish ${response.status}: empty response`);
+    return json;
   }
 
-  const notConfigured = () =>
-    fail("Web tools are not configured: set CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID.");
+  const notConfigured = () => fail("Web tools are not configured: set TINYFISH_API_KEY.");
 
   const webSearch = defineTool({
     name: "web_search",
     description:
-      "Search the web. Returns the top results with title, URL and a description. Use web_fetch to read a result.",
+      "Search the web. Returns the top results with title, URL and a snippet. Use web_fetch to read a result.",
     parameters: Type.Object({
-      query: Type.String({ minLength: 1, maxLength: 1024 }),
+      query: Type.String({ minLength: 1, maxLength: 2000 }),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
     }),
     replay: "safe",
     execute: async (args) => {
       if (!configured) return notConfigured();
       try {
-        const result = (await cloudflare("/ai/websearch/", {
-          query: args.query,
-          limit: args.limit ?? 5,
-          ...(options.gatewayId ? { options: { gateway: { id: options.gatewayId } } } : {}),
-        })) as { items?: { url?: string; title?: string; description?: string }[] };
-        const items = (result.items ?? []).filter((item) => item.url);
+        const endpoint = new URL(searchBase);
+        endpoint.searchParams.set("query", args.query);
+        const result = (await tinyfish(endpoint.toString(), {
+          method: "GET",
+          timeoutMs: SEARCH_TIMEOUT_MS,
+        })) as { results?: { url?: string; title?: string; snippet?: string }[] };
+        const items = (result.results ?? []).filter((item) => item.url).slice(0, args.limit ?? 5);
         if (items.length === 0) return { output: [{ type: "text", text: "No results." }] };
         const sources: WebSource[] = items.map((item) => ({
           url: item.url!,
@@ -118,7 +129,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
         }));
         const text = items
           .map((item, i) =>
-            `${i + 1}. ${item.title ?? item.url}\n${item.url}\n${item.description ?? ""}`.trim(),
+            `${i + 1}. ${item.title ?? item.url}\n${item.url}\n${item.snippet ?? ""}`.trim(),
           )
           .join("\n\n");
         return { output: [{ type: "text", text }], details: { sources } };
@@ -142,16 +153,38 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
         return fail((error as Error).message);
       }
       try {
-        const result = await cloudflare("/browser-rendering/markdown", { url: url.href });
-        const markdown = typeof result === "string" ? result : JSON.stringify(result);
+        const result = (await tinyfish(fetchBase, {
+          method: "POST",
+          // ttl 0 skips TinyFish's cache so the page is the one live now.
+          body: JSON.stringify({ urls: [url.href], format: "markdown", ttl: 0 }),
+          timeoutMs: FETCH_TIMEOUT_MS,
+        })) as {
+          results?: {
+            url?: string;
+            final_url?: string;
+            title?: string | null;
+            text?: string | null;
+          }[];
+          errors?: { url?: string; error?: string; status?: number }[];
+        };
+        const page = result.results?.find((item) => item.text) ?? result.results?.[0];
+        const text = typeof page?.text === "string" ? page.text : "";
+        if (!text.trim()) {
+          const failure = result.errors?.[0];
+          const why = failure?.error
+            ? `${failure.error}${failure.status ? ` (${failure.status})` : ""}`
+            : "no page text";
+          return fail(`Fetch failed: ${why}`);
+        }
         const clipped =
-          markdown.length > MAX_PAGE_CHARS
-            ? `${markdown.slice(0, MAX_PAGE_CHARS)}\n\n[truncated: ${markdown.length - MAX_PAGE_CHARS} more characters]`
-            : markdown;
-        const title = markdown.match(/^title:\s*(.+)$/m)?.[1]?.trim() ?? url.href;
+          text.length > MAX_PAGE_CHARS
+            ? `${text.slice(0, MAX_PAGE_CHARS)}\n\n[truncated: ${text.length - MAX_PAGE_CHARS} more characters]`
+            : text;
+        const pageUrl = page?.final_url || url.href;
+        const title = page?.title?.trim() || pageUrl;
         return {
           output: [{ type: "text", text: clipped }],
-          details: { sources: [{ url: url.href, title }] },
+          details: { sources: [{ url: pageUrl, title }] },
         };
       } catch (error) {
         return fail(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -181,8 +214,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
         readOnly: true,
       },
     ],
-    ...(configured
-      ? {}
-      : { setupHint: "Set CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID to enable web search." }),
+    ...(configured ? {} : { setupHint: "Set TINYFISH_API_KEY to enable web search." }),
   };
 }
