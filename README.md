@@ -33,6 +33,11 @@ runs but shows a banner and disables sending. For UI/flow work without the
 gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model (send
 `/ask` to see a bot's questions for you).
 
+Web search and page reading use
+[TinyFish](https://www.tinyfish.ai/blog/search-and-fetch-are-now-free-for-every-agent-everywhere)
+(`TINYFISH_API_KEY`, from [agent.tinyfish.ai](https://agent.tinyfish.ai)).
+Search and Fetch are free; without the key those tools stay hidden.
+
 ## Layout
 
 - `packages/agent` — the only module that touches pi-durable (excluded from

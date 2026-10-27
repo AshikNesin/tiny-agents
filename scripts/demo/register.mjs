@@ -8,14 +8,24 @@ register("./hooks.mjs", import.meta.url);
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input.url;
-  if (/\/ai\/websearch\/?$/.test(url)) {
-    const body = JSON.parse(init?.body ?? "{}");
+  if (url.startsWith("https://api.search.tinyfish.ai")) {
+    const query = new URL(url).searchParams.get("query") ?? "";
+    const items = searchResults(query);
     await new Promise((r) => setTimeout(r, 1400));
     return new Response(
-      JSON.stringify({ success: true, result: { items: searchResults(body.query) } }),
-      {
-        headers: { "content-type": "application/json" },
-      },
+      JSON.stringify({
+        query,
+        results: items.map((item, i) => ({
+          position: i + 1,
+          site_name: new URL(item.url).hostname,
+          snippet: item.description,
+          title: item.title,
+          url: item.url,
+        })),
+        total_results: items.length,
+        page: 0,
+      }),
+      { headers: { "content-type": "application/json" } },
     );
   }
   return realFetch(input, init);

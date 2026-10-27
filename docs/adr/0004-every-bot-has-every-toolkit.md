@@ -28,7 +28,7 @@ by default. The toolkit switch was a second, redundant layer.
   owner's timezone (`today` capability), at day resolution so the prompt
   cache survives. Relative reminders use a `{ kind: "in", minutes }`
   schedule the routines tool resolves itself.
-- A toolkit that is not configured (web without Cloudflare keys) offers the
+- A toolkit that is not configured (web without its API key) offers the
   model no tools, so enabling it everywhere costs nothing.
 
 ## Consequences

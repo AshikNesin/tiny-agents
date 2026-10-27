@@ -1,4 +1,4 @@
-/** Built-in toolkits (issue #1 D15/D16): web search/fetch via Cloudflare (faked), today's date. */
+/** Built-in toolkits (issue #1 D15/D16): web search/fetch via TinyFish (faked), today's date. */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
@@ -17,63 +17,140 @@ async function run(capability: Capability, name: string, args: Record<string, un
   return { ...result, text };
 }
 
-function fakeCloudflare(result: unknown, calls: { url: string; body: unknown; auth: string }[]) {
+function fakeTinyFish(
+  result: unknown,
+  calls: { url: string; method: string; body: unknown; apiKey: string }[],
+  status = 200,
+) {
   return (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({
       url: String(url),
-      body: JSON.parse(String(init?.body)),
-      auth: new Headers(init?.headers).get("authorization") ?? "",
+      method: init?.method ?? "GET",
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      apiKey: new Headers(init?.headers).get("x-api-key") ?? "",
     });
-    return new Response(JSON.stringify({ success: true, result }), { status: 200 });
+    return new Response(JSON.stringify(result), { status, statusText: "Payment Required" });
   }) as typeof fetch;
 }
 
 describe("web toolkit", () => {
-  it("searches through the Cloudflare Web Search API and returns sources", async () => {
-    const calls: { url: string; body: unknown; auth: string }[] = [];
+  it("searches through TinyFish and returns sources", async () => {
+    const calls: { url: string; method: string; body: unknown; apiKey: string }[] = [];
     const web = createWebToolkit({
-      accountId: "acc",
-      apiToken: "tok",
-      gatewayId: "gw",
-      fetch: fakeCloudflare(
-        { items: [{ url: "https://a.dev", title: "A", description: "about a" }] },
+      apiKey: "tok",
+      fetch: fakeTinyFish(
+        {
+          query: "pi durable",
+          results: [
+            {
+              position: 1,
+              site_name: "a.dev",
+              title: "A",
+              url: "https://a.dev",
+              snippet: "about a",
+            },
+            {
+              position: 2,
+              site_name: "b.dev",
+              title: "B",
+              url: "https://b.dev",
+              snippet: "about b",
+            },
+          ],
+          total_results: 2,
+          page: 0,
+        },
         calls,
       ),
     });
-    const result = await run(web, "web_search", { query: "pi durable" });
+    const result = await run(web, "web_search", { query: "pi durable", limit: 1 });
     expect(calls[0]).toMatchObject({
-      url: "https://api.cloudflare.com/client/v4/accounts/acc/ai/websearch/",
-      body: { query: "pi durable", limit: 5, options: { gateway: { id: "gw" } } },
-      auth: "Bearer tok",
+      url: "https://api.search.tinyfish.ai/?query=pi+durable",
+      method: "GET",
+      apiKey: "tok",
     });
     expect(result.text).toContain("https://a.dev");
+    expect(result.text).not.toContain("https://b.dev");
     expect(result.details).toEqual({ sources: [{ url: "https://a.dev", title: "A" }] });
     expect(web.setupHint).toBeUndefined();
   });
 
-  it("reads a page as markdown through Browser Rendering", async () => {
-    const calls: { url: string; body: unknown; auth: string }[] = [];
+  it("reports TinyFish's error code when search is rejected", async () => {
     const web = createWebToolkit({
-      accountId: "acc",
-      apiToken: "tok",
-      fetch: fakeCloudflare("---\ntitle: Hello\n---\n# Hello", calls),
+      apiKey: "tok",
+      fetch: fakeTinyFish(
+        { error: { code: "FREE_ALLOWANCE_EXHAUSTED", message: "Daily free allowance used" } },
+        [],
+        402,
+      ),
+    });
+    const result = await run(web, "web_search", { query: "iroh" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("FREE_ALLOWANCE_EXHAUSTED");
+    expect(result.text).toContain("Daily free allowance used");
+  });
+
+  it("reads a page as markdown through TinyFish Fetch", async () => {
+    const calls: { url: string; method: string; body: unknown; apiKey: string }[] = [];
+    const web = createWebToolkit({
+      apiKey: "tok",
+      fetch: fakeTinyFish(
+        {
+          results: [
+            {
+              url: "https://hello.dev/",
+              final_url: "https://hello.dev/welcome",
+              title: "Hello",
+              text: "# Hello",
+            },
+          ],
+          errors: [],
+        },
+        calls,
+      ),
     });
     const result = await run(web, "web_fetch", { url: "https://hello.dev/" });
-    expect(calls[0].url).toBe(
-      "https://api.cloudflare.com/client/v4/accounts/acc/browser-rendering/markdown",
-    );
+    expect(calls[0]).toMatchObject({
+      url: "https://api.fetch.tinyfish.ai",
+      method: "POST",
+      body: { urls: ["https://hello.dev/"], format: "markdown", ttl: 0 },
+      apiKey: "tok",
+    });
     expect(result.text).toContain("# Hello");
-    expect(result.details).toEqual({ sources: [{ url: "https://hello.dev/", title: "Hello" }] });
+    expect(result.details).toEqual({
+      sources: [{ url: "https://hello.dev/welcome", title: "Hello" }],
+    });
+  });
+
+  it("reports a per-URL fetch failure", async () => {
+    const web = createWebToolkit({
+      apiKey: "tok",
+      fetch: fakeTinyFish(
+        { results: [], errors: [{ url: "https://hello.dev/", error: "bot_blocked" }] },
+        [],
+      ),
+    });
+    const result = await run(web, "web_fetch", { url: "https://hello.dev/" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("bot_blocked");
   });
 
   it("refuses private URLs and reports missing configuration", async () => {
     expect(() => checkPublicUrl("http://localhost:3000")).toThrow(/Private/);
     expect(() => checkPublicUrl("http://192.168.1.4")).toThrow(/Private/);
     expect(() => checkPublicUrl("file:///etc/passwd")).toThrow(/http/);
-    const web = createWebToolkit({});
-    expect(web.setupHint).toMatch(/CLOUDFLARE_API_KEY/);
+    const calls: { url: string }[] = [];
+    const web = createWebToolkit({
+      apiKey: "tok",
+      fetch: fakeTinyFish({}, calls),
+    });
+    const blocked = await run(web, "web_fetch", { url: "http://127.0.0.1/secret" });
+    expect(blocked.isError).toBe(true);
+    expect(calls).toEqual([]);
+    const unconfigured = createWebToolkit({});
+    expect(unconfigured.setupHint).toMatch(/TINYFISH_API_KEY/);
     // Every bot has the toolkit: unconfigured, it offers the model no tools.
-    expect(web.extension.tools).toEqual([]);
+    expect(unconfigured.extension.tools).toEqual([]);
   });
 });
 
