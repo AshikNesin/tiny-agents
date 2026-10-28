@@ -187,8 +187,18 @@ function FieldInput({
   );
 }
 
+/** A result's content blocks with ids; each call replaces the whole list, so it never reorders. */
+function contentBlocks(content: ToolCallResult["result"]["content"] = []) {
+  return content.map((block, position) => ({
+    id: `${position}-${block.type}`,
+    number: position + 1,
+    block,
+  }));
+}
+
 function CallResultView({ call }: { call: ToolCallResult }) {
   const { result } = call;
+  const blocks = contentBlocks(result.content);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -206,23 +216,23 @@ function CallResultView({ call }: { call: ToolCallResult }) {
           <TabsTrigger value="raw">Raw</TabsTrigger>
         </TabsList>
         <TabsContent value="content" className="space-y-2">
-          {(result.content ?? []).length === 0 && (
+          {blocks.length === 0 && (
             <p className="text-xs text-muted-foreground">The tool returned no content.</p>
           )}
-          {(result.content ?? []).map((block, index) =>
+          {blocks.map(({ id, number, block }) =>
             block.type === "text" && block.text !== undefined ? (
-              <pre key={index} className={codeBlockClass}>
+              <pre key={id} className={codeBlockClass}>
                 {prettyText(block.text)}
               </pre>
             ) : block.type === "image" && block.data && block.mimeType ? (
               <img
-                key={index}
+                key={id}
                 src={`data:${block.mimeType};base64,${block.data}`}
-                alt={`Result image ${index + 1}`}
+                alt={`Tool result ${number}`}
                 className="max-h-96 rounded-lg ring-1 ring-foreground/10"
               />
             ) : (
-              <pre key={index} className={codeBlockClass}>
+              <pre key={id} className={codeBlockClass}>
                 {pretty(block)}
               </pre>
             ),
