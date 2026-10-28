@@ -36,12 +36,17 @@ export type McpToolInfo = {
   title?: string;
   description?: string;
   inputSchema: Record<string, unknown>;
+  /** JSON Schema of `structuredContent`, when the server declares one. */
+  outputSchema?: Record<string, unknown>;
   readOnly?: boolean;
   idempotent?: boolean;
+  destructive?: boolean;
+  openWorld?: boolean;
 };
 
 export type McpCallResult = {
   content: { type: string; text?: string; data?: string; mimeType?: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 };
 
@@ -73,8 +78,11 @@ export function toToolInfo(tool: McpTool): McpToolInfo {
       : {}),
     ...(tool.description ? { description: tool.description } : {}),
     inputSchema: tool.inputSchema as Record<string, unknown>,
+    ...(tool.outputSchema ? { outputSchema: tool.outputSchema as Record<string, unknown> } : {}),
     ...(tool.annotations?.readOnlyHint ? { readOnly: true } : {}),
     ...(tool.annotations?.idempotentHint ? { idempotent: true } : {}),
+    ...(tool.annotations?.destructiveHint ? { destructive: true } : {}),
+    ...(tool.annotations?.openWorldHint ? { openWorld: true } : {}),
   };
 }
 

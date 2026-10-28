@@ -94,12 +94,16 @@ describe("MCP connections (header auth, streamable http)", () => {
   let mcpServer: TestMcpServer;
   let manager: ConnectionManager;
   let runtimeCalls: { install: string[]; uninstall: string[] };
+  let installed: Map<string, { tools: { name: string }[] }>;
+  let configured: number[];
 
   beforeEach(async () => {
     await prisma.botConnection.deleteMany();
     await prisma.connection.deleteMany();
     await prisma.bot.deleteMany();
     mcpServer = await startMcpServer();
+    installed = new Map();
+    configured = [];
     setAgentRuntimeForTests({
       configure: async () => undefined,
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
@@ -109,9 +113,12 @@ describe("MCP connections (header auth, streamable http)", () => {
     manager = new ConnectionManager();
     setConnectionManagerForTests(manager);
     await manager.start({
-      installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
+      installCapability: (capability: { id: string; tools: { name: string }[] }) => {
+        runtimeCalls.install.push(capability.id);
+        installed.set(capability.id, capability);
+      },
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
-      configure: async () => undefined,
+      configure: async (conversationId: number) => void configured.push(conversationId),
     } as never);
   });
 
@@ -216,6 +223,111 @@ describe("MCP connections (header auth, streamable http)", () => {
       .expect(200);
     expect(detail.body.data.botIds).toEqual([bot.id]);
     expect(await prisma.botConnection.count()).toBe(1);
+  }, 30_000);
+
+  it("shows a tool's schema and turns it off for every bot", async () => {
+    const app = buildApp();
+    const bot = await prisma.bot.create({
+      data: { name: "Ops", modelId: "m", conversationId: "951" },
+    });
+    const created = await request(app)
+      .post("/api/v1/connections")
+      .set(authorization)
+      .send({
+        name: "Demo",
+        url: mcpServer.url,
+        authType: "header",
+        headerName: "x-api-key",
+        secret: "secret123",
+        botIds: [bot.id],
+      })
+      .expect(201);
+    const id = created.body.data.id;
+    expect(created.body.data.tools[0]).toMatchObject({
+      name: "mcp__demo__echo",
+      serverName: "echo",
+      enabled: true,
+    });
+
+    const detail = await request(app)
+      .get(`/api/v1/connections/${id}/tools/echo`)
+      .set(authorization)
+      .expect(200);
+    expect(detail.body.data).toMatchObject({
+      name: "mcp__demo__echo",
+      readOnly: true,
+      enabled: true,
+      connection: { id, slug: "demo", status: "connected" },
+    });
+    expect(detail.body.data.inputSchema.properties).toHaveProperty("value");
+    await request(app).get(`/api/v1/connections/${id}/tools/nope`).set(authorization).expect(404);
+
+    configured = [];
+    const off = await request(app)
+      .patch(`/api/v1/connections/${id}/tools/echo`)
+      .set(authorization)
+      .send({ enabled: false })
+      .expect(200);
+    expect(off.body.data.enabled).toBe(false);
+    expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual(["mcp__demo__reset"]);
+    expect(configured).toContain(951);
+    const listed = await request(app).get(`/api/v1/connections/${id}`).set(authorization);
+    expect(
+      listed.body.data.tools.map((t: { serverName: string; enabled: boolean }) => [
+        t.serverName,
+        t.enabled,
+      ]),
+    ).toEqual([
+      ["echo", false],
+      ["reset", true],
+    ]);
+
+    // Reconnecting (a fresh tool listing) keeps it off.
+    await request(app).post(`/api/v1/connections/${id}/reconnect`).set(authorization).expect(200);
+    expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual(["mcp__demo__reset"]);
+
+    await request(app)
+      .patch(`/api/v1/connections/${id}/tools/echo`)
+      .set(authorization)
+      .send({ enabled: true })
+      .expect(200);
+    expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual([
+      "mcp__demo__echo",
+      "mcp__demo__reset",
+    ]);
+  }, 30_000);
+
+  it("calls a tool from the playground, even one turned off for bots", async () => {
+    const app = buildApp();
+    const created = await request(app)
+      .post("/api/v1/connections")
+      .set(authorization)
+      .send({
+        name: "Demo",
+        url: mcpServer.url,
+        authType: "header",
+        headerName: "x-api-key",
+        secret: "secret123",
+      })
+      .expect(201);
+    const id = created.body.data.id;
+    await request(app)
+      .patch(`/api/v1/connections/${id}/tools/echo`)
+      .set(authorization)
+      .send({ enabled: false })
+      .expect(200);
+    const called = await request(app)
+      .post(`/api/v1/connections/${id}/tools/echo/call`)
+      .set(authorization)
+      .send({ arguments: { value: "hi" } })
+      .expect(200);
+    expect(called.body.data.result.content).toEqual([{ type: "text", text: "echo:hi" }]);
+    expect(typeof called.body.data.durationMs).toBe("number");
+    await request(app)
+      .post(`/api/v1/connections/${id}/tools/nope/call`)
+      .set(authorization)
+      .send({})
+      .expect(404);
   }, 30_000);
 
   it("connects at start() from the database (boot path)", async () => {

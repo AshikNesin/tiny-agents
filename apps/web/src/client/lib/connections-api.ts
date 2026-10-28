@@ -4,10 +4,33 @@ import { apiClient } from "@groot/shell/lib/api";
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
 
 export interface ConnectionTool {
+  /** As bots see it: `mcp__<slug>__<tool>`. */
   name: string;
+  /** As the server names it; the id in tool URLs. */
+  serverName: string;
   label: string;
   description: string;
   readOnly: boolean;
+  /** Off: no bot gets the tool. */
+  enabled: boolean;
+}
+
+export interface ConnectionToolDetail extends ConnectionTool {
+  idempotent: boolean;
+  destructive: boolean;
+  openWorld: boolean;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  connection: Pick<Connection, "id" | "name" | "slug" | "status">;
+}
+
+export interface ToolCallResult {
+  result: {
+    content: { type: string; text?: string; data?: string; mimeType?: string }[];
+    structuredContent?: Record<string, unknown>;
+    isError?: boolean;
+  };
+  durationMs: number;
 }
 
 export interface Connection {
@@ -32,7 +55,7 @@ export type ConnectionSummary = Pick<Connection, "id" | "name" | "status"> & {
 
 export interface TestResult {
   transport: string;
-  tools: Omit<ConnectionTool, "name">[];
+  tools: Pick<ConnectionTool, "label" | "description" | "readOnly">[];
 }
 
 export const connectionsApi = {
@@ -57,6 +80,17 @@ export const connectionsApi = {
   reconnect: (id: string) => apiClient.post<Connection>(`/connections/${id}/reconnect`),
   authorize: (id: string) =>
     apiClient.post<{ authorizationUrl?: string }>(`/connections/${id}/authorize`),
+  getTool: (id: string, tool: string) =>
+    apiClient.get<ConnectionToolDetail>(`/connections/${id}/tools/${encodeURIComponent(tool)}`),
+  updateTool: (id: string, tool: string, input: { enabled: boolean }) =>
+    apiClient.patch<ConnectionToolDetail>(
+      `/connections/${id}/tools/${encodeURIComponent(tool)}`,
+      input,
+    ),
+  callTool: (id: string, tool: string, args: Record<string, unknown>) =>
+    apiClient.post<ToolCallResult>(`/connections/${id}/tools/${encodeURIComponent(tool)}/call`, {
+      arguments: args,
+    }),
   test: (input: { url: string; transport?: string; headerName?: string; secret?: string }) =>
     apiClient.post<TestResult>("/connections/test", input),
 };

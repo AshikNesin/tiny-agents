@@ -56,7 +56,10 @@ export type Bot = Omit<BotRow, "toolPermissions"> & {
   connectionCapabilities: string[];
 };
 
-type ConnectionLink = { connectionId: string; connection: { slug: string; toolsCache: string } };
+type ConnectionLink = {
+  connectionId: string;
+  connection: { slug: string; toolsCache: string; disabledTools: string };
+};
 
 type BotWithLinks = BotRow & {
   skills?: { skillId: string }[];
@@ -66,7 +69,10 @@ type BotWithLinks = BotRow & {
 const withLinks = {
   skills: { select: { skillId: true } },
   connections: {
-    select: { connectionId: true, connection: { select: { slug: true, toolsCache: true } } },
+    select: {
+      connectionId: true,
+      connection: { select: { slug: true, toolsCache: true, disabledTools: true } },
+    },
   },
 } as const;
 
@@ -153,7 +159,7 @@ function agentConfig(
 ): BotAgentConfig {
   const connections = bot.connections ?? [];
   const largeServer = connections.some(
-    (link) => toolCount(link.connection.toolsCache) > MCP_DEFER_THRESHOLD,
+    (link) => enabledToolCount(link.connection) > MCP_DEFER_THRESHOLD,
   );
   return {
     modelId: bot.modelId,
@@ -171,9 +177,13 @@ function agentConfig(
   };
 }
 
-function toolCount(cache: string): number {
-  const tools = parseJson<unknown>(cache, []);
-  return Array.isArray(tools) ? tools.length : 0;
+/** Tools the connection installs: the cached list minus those turned off. */
+function enabledToolCount(connection: ConnectionLink["connection"]): number {
+  const tools = parseJson<unknown>(connection.toolsCache, []);
+  const disabled = parseJson<unknown>(connection.disabledTools, []);
+  if (!Array.isArray(tools)) return 0;
+  const off = new Set(Array.isArray(disabled) ? disabled : []);
+  return tools.filter((tool: { name?: unknown }) => !off.has(tool?.name)).length;
 }
 
 function rowConfig(row: BotWithLinks, rt: Pick<AgentRuntime, "listModels">): BotAgentConfig {

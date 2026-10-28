@@ -6,9 +6,11 @@ import * as connectionsService from "./connections.service";
 import { getConnectionManager } from "./connections.manager";
 import { clientMetadata, clientMetadataUrl } from "./oauth";
 import {
+  callToolSchema,
   createConnectionSchema,
   testConnectionSchema,
   updateConnectionSchema,
+  updateToolSchema,
 } from "./connections.schema";
 
 /**
@@ -97,6 +99,29 @@ router.post("/connections/:id/reconnect", async (req: Request) => {
 
 router.post("/connections/:id/authorize", async (req: Request) => {
   return connectionsService.authorize(parseStringParam(req.params.id, "id"));
+});
+
+router.get("/connections/:id/tools/:tool", async (req: Request) => {
+  return connectionsService.getTool(
+    parseStringParam(req.params.id, "id"),
+    parseStringParam(req.params.tool, "tool"),
+  );
+});
+
+router.patch("/connections/:id/tools/:tool", async (req: Request) => {
+  return connectionsService.updateTool(
+    parseStringParam(req.params.id, "id"),
+    parseStringParam(req.params.tool, "tool"),
+    parseBody(req, updateToolSchema),
+  );
+});
+
+router.post("/connections/:id/tools/:tool/call", async (req: Request) => {
+  return connectionsService.callTool(
+    parseStringParam(req.params.id, "id"),
+    parseStringParam(req.params.tool, "tool"),
+    parseBody(req, callToolSchema),
+  );
 });
 
 export default router;

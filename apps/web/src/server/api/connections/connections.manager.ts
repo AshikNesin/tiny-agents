@@ -10,6 +10,8 @@
  *   configuration of the bots that use it (their permissions are per tool).
  * - A server that needs (re)authorization marks the connection
  *   "needs_auth" and withdraws its tools until the owner signs in (D11).
+ * - Tools the owner turned off on the connection are never installed, so no
+ *   bot sees them; the dashboard playground still calls them directly.
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
@@ -59,6 +61,16 @@ export function parseTools(raw: string): McpToolInfo[] {
     return Array.isArray(tools) ? tools : [];
   } catch {
     return [];
+  }
+}
+
+/** Server tool names the owner turned off for every bot. */
+export function parseDisabledTools(raw: string): Set<string> {
+  try {
+    const names = JSON.parse(raw) as unknown;
+    return new Set(Array.isArray(names) ? names.filter((n) => typeof n === "string") : []);
+  } catch {
+    return new Set();
   }
 }
 
@@ -191,7 +203,9 @@ export class ConnectionManager {
     if (changed) await this.reconfigureBots(id);
   }
 
-  #install(row: ConnectionRow, tools: McpToolInfo[]): void {
+  #install(row: ConnectionRow, allTools: McpToolInfo[]): void {
+    const disabled = parseDisabledTools(row.disabledTools);
+    const tools = allTools.filter((tool) => !disabled.has(tool.name));
     this.#runtime?.installCapability(
       createMcpCapability({
         slug: row.slug,
@@ -205,6 +219,18 @@ export class ConnectionManager {
     if (tools.length > MCP_DEFER_THRESHOLD) {
       this.#runtime?.installCapability(createToolSearchCapability());
     }
+  }
+
+  /**
+   * Re-install from the cached tool list after the owner turned tools on or
+   * off, then re-apply the bots that use the connection. A connection waiting
+   * for sign-in stays withdrawn.
+   */
+  async reinstall(id: string): Promise<void> {
+    const row = await prisma.connection.findUnique({ where: { id } });
+    if (!row) return;
+    if (this.status(id).status !== "needs_auth") this.#install(row, parseTools(row.toolsCache));
+    await this.reconfigureBots(id);
   }
 
   #withdraw(slug: string): void {
