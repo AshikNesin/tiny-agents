@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Bot, LogIn, RefreshCw, Trash2, Wrench } from "lucide-react";
+import { ArrowLeft, Bot, ChevronRight, LogIn, RefreshCw, Trash2, Wrench } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -33,6 +33,7 @@ import { botsApi, type BotListEntry } from "../../lib/bots-api";
 import { connectionsApi, type Connection } from "../../lib/connections-api";
 import { subscribeSse } from "../../lib/sse";
 import { BotAvatar } from "../../components/BotAvatar";
+import { Switch } from "../../components/ui/switch";
 import {
   ConnectionStatusBadge,
   authDescription,
@@ -44,6 +45,12 @@ interface OauthMessage {
   type?: string;
   id?: string;
   error?: string;
+}
+
+function toolsMeta(tools: Connection["tools"]): string {
+  const count = tools.length === 1 ? "1 tool" : `${tools.length} tools`;
+  const off = tools.filter((tool) => !tool.enabled).length;
+  return off === 0 ? count : `${count} · ${off} off`;
 }
 
 function toolsEmptyDescription(connection: Connection): string {
@@ -151,6 +158,20 @@ export function ConnectionDetail({ id }: { id: string }) {
     }
   };
 
+  const toggleTool = async (serverName: string, enabled: boolean) => {
+    if (!connection) return;
+    const tools = connection.tools.map((tool) =>
+      tool.serverName === serverName ? { ...tool, enabled } : tool,
+    );
+    setConnection({ ...connection, tools });
+    try {
+      await connectionsApi.updateTool(id, serverName, { enabled });
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to update tool"));
+      await refresh();
+    }
+  };
+
   const remove = async () => {
     setRemoving(true);
     try {
@@ -252,7 +273,8 @@ export function ConnectionDetail({ id }: { id: string }) {
 
       <Section
         title="Tools"
-        meta={connection.tools.length === 1 ? "1 tool" : `${connection.tools.length} tools`}
+        description="Tools turned off here are hidden from every bot. Open a tool for its schema and a playground."
+        meta={toolsMeta(connection.tools)}
       >
         {connection.tools.length === 0 ? (
           <EmptyState
@@ -265,15 +287,33 @@ export function ConnectionDetail({ id }: { id: string }) {
             <ul role="list">
               {connection.tools.map((tool) => (
                 <li key={tool.name} className={listRowClass}>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{tool.label}</p>
-                    {tool.description && (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {tool.description}
+                  <Link
+                    to={`/connections/${id}/tools/${encodeURIComponent(tool.serverName)}`}
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "truncate text-sm font-medium",
+                          tool.enabled ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {tool.label}
                       </p>
-                    )}
-                  </div>
-                  {tool.readOnly && <Badge variant="outline">read-only</Badge>}
+                      {tool.description && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {tool.description}
+                        </p>
+                      )}
+                    </div>
+                    {tool.readOnly && <Badge variant="outline">read-only</Badge>}
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                  <Switch
+                    checked={tool.enabled}
+                    onCheckedChange={(checked) => void toggleTool(tool.serverName, checked)}
+                    aria-label={`Let bots use ${tool.label}`}
+                  />
                 </li>
               ))}
             </ul>

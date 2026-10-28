@@ -98,6 +98,7 @@ const router = createBrowserRouter(
         <Route path="/memory" element={<MemoryPage />} />
         <Route path="/connections" element={<ConnectionsPage />} />
         <Route path="/connections/:id" element={<ConnectionsPage />} />
+        <Route path="/connections/:id/tools/:tool" element={<ConnectionsPage />} />
         <Route path="/storage" element={<Storage />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />

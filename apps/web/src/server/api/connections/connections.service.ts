@@ -5,15 +5,29 @@
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
-import { checkPublicUrl, connectMcp, mcpToolName, type McpTransportKind } from "@tiny-agents/agent";
+import {
+  checkPublicUrl,
+  connectMcp,
+  mcpToolName,
+  type McpCallResult,
+  type McpToolInfo,
+  type McpTransportKind,
+} from "@tiny-agents/agent";
 import { reconcileBotConversation } from "../bots/bots.conversation";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { getConnectionManager, parseTools, type ConnectionStatus } from "./connections.manager";
+import {
+  getConnectionManager,
+  parseDisabledTools,
+  parseTools,
+  type ConnectionStatus,
+} from "./connections.manager";
 import { encryptJson, encryptSecret, hasSecretsKey } from "./secrets";
 import type {
+  CallToolDTO,
   CreateConnectionDTO,
   TestConnectionDTO,
   UpdateConnectionDTO,
+  UpdateToolDTO,
 } from "./connections.schema";
 
 export interface ConnectionDTO {
@@ -25,20 +39,56 @@ export interface ConnectionDTO {
   authType: string;
   headerName: string | null;
   hasSecret: boolean;
-  /** Tools as bots see them (`mcp__<slug>__<tool>`), from the last listing. */
-  tools: { name: string; label: string; description: string; readOnly: boolean }[];
+  /** The server's tools from the last listing, including those turned off. */
+  tools: ConnectionToolDTO[];
   botIds: string[];
   status: ConnectionStatus;
   error?: string;
   createdAt: Date;
 }
 
+export interface ConnectionToolDTO {
+  /** As bots see it: `mcp__<slug>__<tool>`. */
+  name: string;
+  /** As the server names it; the id in tool routes. */
+  serverName: string;
+  label: string;
+  description: string;
+  readOnly: boolean;
+  /** Off: no bot gets the tool, whatever its own permissions say. */
+  enabled: boolean;
+}
+
+/** One tool with everything the server declared about it. */
+export interface ConnectionToolDetailDTO extends ConnectionToolDTO {
+  idempotent: boolean;
+  destructive: boolean;
+  openWorld: boolean;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  connection: Pick<ConnectionDTO, "id" | "name" | "slug" | "status">;
+}
+
 type Row = NonNullable<Awaited<ReturnType<typeof prisma.connection.findUnique>>> & {
   bots: { botId: string }[];
 };
 
+type ConnectionRow = Pick<Row, "slug" | "disabledTools">;
+
+function toToolDTO(row: ConnectionRow, tool: McpToolInfo, disabled: Set<string>) {
+  return {
+    name: mcpToolName(row.slug, tool.name),
+    serverName: tool.name,
+    label: tool.title ?? tool.name,
+    description: tool.description ?? "",
+    readOnly: Boolean(tool.readOnly),
+    enabled: !disabled.has(tool.name),
+  };
+}
+
 function toDTO(row: Row): ConnectionDTO {
   const live = getConnectionManager().status(row.id);
+  const disabled = parseDisabledTools(row.disabledTools);
   return {
     id: row.id,
     name: row.name,
@@ -48,12 +98,7 @@ function toDTO(row: Row): ConnectionDTO {
     authType: row.authType,
     headerName: row.headerName,
     hasSecret: Boolean(row.secretEnc),
-    tools: parseTools(row.toolsCache).map((tool) => ({
-      name: mcpToolName(row.slug, tool.name),
-      label: tool.title ?? tool.name,
-      description: tool.description ?? "",
-      readOnly: Boolean(tool.readOnly),
-    })),
+    tools: parseTools(row.toolsCache).map((tool) => toToolDTO(row, tool, disabled)),
     botIds: row.bots.map((link) => link.botId),
     status: live.status,
     ...(live.error ? { error: live.error } : {}),
@@ -182,6 +227,73 @@ export async function reconnect(id: string): Promise<ConnectionDTO> {
   await get(id);
   await settle(id);
   return get(id);
+}
+
+async function findTool(id: string, serverName: string) {
+  const row = await prisma.connection.findUnique({ where: { id } });
+  if (!row) throw Boom.notFound("Connection not found");
+  const tool = parseTools(row.toolsCache).find((candidate) => candidate.name === serverName);
+  if (!tool) throw Boom.notFound("Tool not found");
+  return { row, tool };
+}
+
+export async function getTool(id: string, serverName: string): Promise<ConnectionToolDetailDTO> {
+  const { row, tool } = await findTool(id, serverName);
+  return {
+    ...toToolDTO(row, tool, parseDisabledTools(row.disabledTools)),
+    idempotent: Boolean(tool.idempotent),
+    destructive: Boolean(tool.destructive),
+    openWorld: Boolean(tool.openWorld),
+    inputSchema:
+      tool.inputSchema && typeof tool.inputSchema === "object"
+        ? tool.inputSchema
+        : { type: "object" },
+    ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+    connection: {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: getConnectionManager().status(row.id).status,
+    },
+  };
+}
+
+/** Turn a tool on or off for every bot using the connection. */
+export async function updateTool(
+  id: string,
+  serverName: string,
+  data: UpdateToolDTO,
+): Promise<ConnectionToolDetailDTO> {
+  const { row } = await findTool(id, serverName);
+  const disabled = parseDisabledTools(row.disabledTools);
+  if (disabled.has(serverName) === !data.enabled) return getTool(id, serverName);
+  if (data.enabled) disabled.delete(serverName);
+  else disabled.add(serverName);
+  await prisma.connection.update({
+    where: { id },
+    data: { disabledTools: JSON.stringify([...disabled].sort()) },
+  });
+  await getConnectionManager().reinstall(id);
+  return getTool(id, serverName);
+}
+
+/**
+ * Playground: call a tool on the live connection as the owner. Works for
+ * tools turned off for bots, so the owner can try one before turning it on.
+ */
+export async function callTool(
+  id: string,
+  serverName: string,
+  data: CallToolDTO,
+): Promise<{ result: McpCallResult; durationMs: number }> {
+  await findTool(id, serverName);
+  const started = Date.now();
+  try {
+    const result = await getConnectionManager().call(id, serverName, data.arguments);
+    return { result, durationMs: Date.now() - started };
+  } catch (error) {
+    throw Boom.badRequest(`Call failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /** Start the OAuth sign-in: the consent URL to open, or none when already authorized. */

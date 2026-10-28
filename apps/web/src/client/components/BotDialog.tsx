@@ -106,7 +106,7 @@ export function BotDialog({
             id,
             name,
             status,
-            toolCount: tools.length,
+            toolCount: tools.filter((tool) => tool.enabled).length,
           })),
         ),
       )

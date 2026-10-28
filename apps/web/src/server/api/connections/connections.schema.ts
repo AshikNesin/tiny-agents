@@ -42,6 +42,14 @@ export const testConnectionSchema = z.object({
   secret: secret.optional(),
 });
 
+export const updateToolSchema = z.object({ enabled: z.boolean() });
+
+export const callToolSchema = z.object({
+  arguments: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
 export type CreateConnectionDTO = z.infer<typeof createConnectionSchema>;
 export type UpdateConnectionDTO = z.infer<typeof updateConnectionSchema>;
 export type TestConnectionDTO = z.infer<typeof testConnectionSchema>;
+export type UpdateToolDTO = z.infer<typeof updateToolSchema>;
+export type CallToolDTO = z.infer<typeof callToolSchema>;

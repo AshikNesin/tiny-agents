@@ -135,24 +135,26 @@ model BotSkill {
 
 /// A remote MCP server (issue #1 D8–D13). One account per connection.
 model Connection {
-  id         String          @id @default(cuid())
-  name       String
+  id            String          @id @default(cuid())
+  name          String
   /// Capability id suffix (`mcp:<slug>`) and tool name prefix; immutable.
-  slug       String          @unique
-  url        String
-  transport  String          @default("streamable-http") // streamable-http | sse
-  authType   String          @default("none") // none | header | oauth
+  slug          String          @unique
+  url           String
+  transport     String          @default("streamable-http") // streamable-http | sse
+  authType      String          @default("none") // none | header | oauth
   /// Header carrying `secretEnc` for header auth (e.g. Authorization, x-api-key).
-  headerName String?
+  headerName    String?
   /// AES-GCM (SECRETS_KEY) encrypted header value.
-  secretEnc  String?
+  secretEnc     String?
   /// AES-GCM (SECRETS_KEY) encrypted OAuth state: client registration, tokens, PKCE verifier.
-  oauthEnc   String?
+  oauthEnc      String?
   /// JSON array of the server's tools as last listed: [{ name, title, description, readOnly }].
-  toolsCache String          @default("[]")
-  bots       BotConnection[]
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  toolsCache    String          @default("[]")
+  /// JSON array of server tool names turned off for every bot; tools the server adds later start on.
+  disabledTools String          @default("[]")
+  bots          BotConnection[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@map("connections")
 }
