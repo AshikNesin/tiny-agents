@@ -75,13 +75,17 @@ export function classifierFromModels(
  * `CLOUDFLARE_ACCOUNT_ID`.
  */
 export function createClassifier(env: Env = process.env): Classifier | undefined {
-  const apiKey = unquote(env.CLASSIFIER_API_KEY) ?? unquote(env.CLOUDFLARE_API_KEY);
+  const credential = unquote(env.CLASSIFIER_API_KEY) ?? unquote(env.CLOUDFLARE_API_KEY);
   const accountId = unquote(env.CLOUDFLARE_ACCOUNT_ID);
-  if (!apiKey || !accountId) return undefined;
+  if (!credential || !accountId) return undefined;
   const modelId = unquote(env.CLASSIFIER_MODEL) ?? DEFAULT_CLASSIFIER_MODEL;
-  const values: Env = { CLOUDFLARE_API_KEY: apiKey, CLOUDFLARE_ACCOUNT_ID: accountId };
+  // The Workers AI provider reads these names; the key may come from CLASSIFIER_API_KEY.
+  const values = new Map([
+    ["CLOUDFLARE_API_KEY", credential],
+    ["CLOUDFLARE_ACCOUNT_ID", accountId],
+  ]);
   const models = createModels({
-    authContext: { env: async (name) => values[name], fileExists: async () => false },
+    authContext: { env: async (name) => values.get(name), fileExists: async () => false },
   });
   models.setProvider(cloudflareWorkersAIProvider());
   const model = models.getModelOfType("classifier", CLASSIFIER_PROVIDER, modelId);
