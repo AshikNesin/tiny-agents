@@ -6,6 +6,7 @@ import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { botsApi, type Bot as BotRow } from "../../lib/bots-api";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
+import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
 
@@ -40,6 +41,7 @@ export function ChatWorkspace() {
   const openEditBot = useUiStore((s) => s.openEditBot);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const savedTick = useUiStore((s) => s.savedTick);
+  useFocusParam();
 
   const [fullBot, setFullBot] = useState<BotRow | null>(null);
 

@@ -8,6 +8,8 @@
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
+import { notifyRoutineRun } from "../notifications/notifications.wiring";
+import type { RoutineRunRef } from "../notifications/notifications.events";
 
 export const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
@@ -52,42 +54,48 @@ async function awaitingRunsWithBot() {
   const rows = await prisma.routineRun.findMany({
     where: { status: "awaiting" },
     orderBy: { scheduledFor: "asc" },
-    include: { routine: { select: { bot: { select: { conversationId: true } } } } },
+    include: {
+      routine: {
+        select: { name: true, bot: { select: { id: true, name: true, conversationId: true } } },
+      },
+    },
   });
   return rows.map((row) => ({
     run: row,
     conversationId: Number(row.routine.bot.conversationId),
+    ref: {
+      runId: row.id,
+      routineName: row.routine.name,
+      bot: { id: row.routine.bot.id, name: row.routine.bot.name },
+    } satisfies RoutineRunRef,
   }));
 }
 
 export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCompletionWatcher {
-  async function resolveRun(runId: string, reply: FinishedReply): Promise<void> {
+  async function resolveRun(ref: RoutineRunRef, reply: FinishedReply): Promise<void> {
     if (reply.error !== undefined) {
+      const error = preview(reply.error, ERROR_PREVIEW_CHARS);
       await prisma.routineRun.update({
-        where: { id: runId },
-        data: {
-          status: "failed",
-          finishedAt: new Date(),
-          error: preview(reply.error, ERROR_PREVIEW_CHARS),
-        },
+        where: { id: ref.runId },
+        data: { status: "failed", finishedAt: new Date(), error },
       });
+      notifyRoutineRun(ref, { status: "failed", error });
       return;
     }
+    const output = preview(reply.text, OUTPUT_PREVIEW_CHARS);
     await prisma.routineRun.update({
-      where: { id: runId },
-      data: {
-        status: "succeeded",
-        finishedAt: new Date(),
-        output: preview(reply.text, OUTPUT_PREVIEW_CHARS),
-      },
+      where: { id: ref.runId },
+      data: { status: "succeeded", finishedAt: new Date(), output },
     });
+    notifyRoutineRun(ref, { status: "succeeded", output });
   }
 
-  async function markInterrupted(runId: string): Promise<void> {
+  async function markInterrupted(ref: RoutineRunRef): Promise<void> {
     await prisma.routineRun.update({
-      where: { id: runId },
+      where: { id: ref.runId },
       data: { status: "failed", finishedAt: new Date(), error: "interrupted" },
     });
+    notifyRoutineRun(ref, { status: "failed", error: "Interrupted by a server restart." });
   }
 
   async function resolveConversation(conversationId: number): Promise<number> {
@@ -113,7 +121,7 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
       if (!reply) continue;
       floor = reply.createdAt;
       try {
-        await resolveRun(run.id, reply);
+        await resolveRun(runs[i].ref, reply);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Failed to resolve an awaiting routine run");
@@ -125,13 +133,13 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
   async function bootSweep(): Promise<number> {
     let resolved = 0;
     const rows = await awaitingRunsWithBot();
-    for (const { run, conversationId } of rows) {
+    for (const { run, conversationId, ref } of rows) {
       // Idle at boot means the interrupted reply never arrives: the server
       // restarted between submit and completion. A busy conversation may
       // still be finishing its turn; the idle listener resolves it later.
       if (rt.isBusy(conversationId)) continue;
       try {
-        await markInterrupted(run.id);
+        await markInterrupted(ref);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Boot sweep failed to resolve an awaiting run");

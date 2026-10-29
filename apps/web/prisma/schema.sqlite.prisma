@@ -341,6 +341,39 @@ model RoutineRun {
   @@map("routine_runs")
 }
 
+/// One push notification the app accepted (issue #57): metadata only, never the
+/// message body. Backs dedupe across restarts and the Settings log; pruned
+/// after 30 days.
+model NotificationLog {
+  id         String    @id @default(cuid())
+  /// "approval.requested", "routine.failed", ...
+  event      String
+  /// needs_input | notify | security | system
+  category   String
+  /// "pushover"
+  channel    String
+  dedupeKey  String
+  botId      String?
+  /// The rendered (already scrubbed) title.
+  title      String
+  /// App path only, e.g. /chats/abc.
+  url        String?
+  priority   Int
+  /// queued | sent | failed | suppressed | cancelled
+  status     String
+  /// throttled | quiet_hours | disabled | duplicate | over_quota | invalid_credentials | invalid_input | transient
+  reason     String?
+  /// Pushover `request` id.
+  providerId String?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  sentAt     DateTime?
+
+  @@index([dedupeKey, createdAt])
+  @@index([createdAt])
+  @@map("notification_log")
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique

@@ -8,7 +8,7 @@
 import { prisma } from "@groot/core/database";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
-import { notificationService } from "@groot/core/notification/notification.service";
+import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
 import { connectConfig, primaryBackend, readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
@@ -475,12 +475,11 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
     outcome: "deleted",
     reason: options.purge ? "deleted in the backend" : "unlinked only",
   });
-  void notificationService
-    .sendNotification({
-      title: "Vault item deleted",
-      message: `${row.label} (${row.handle}) was ${options.purge ? "deleted" : "unlinked"} in the Vault UI.`,
-    })
-    .catch(() => undefined);
+  notifyVaultAlert(
+    "deleted",
+    "Vault item deleted",
+    `${row.label} (${row.handle}) was ${options.purge ? "deleted" : "unlinked"} in the Vault UI.`,
+  );
   return { deleted: true };
 }
 
@@ -505,12 +504,11 @@ export async function reveal(handle: string, field: ValueField, purpose: "reveal
     outcome: purpose === "copy" ? "copied" : "revealed",
   });
   if (purpose === "reveal") {
-    void notificationService
-      .sendNotification({
-        title: "Vault value revealed",
-        message: `The ${field.replace(/_/g, " ")} of ${row.label} (${row.handle}) was revealed in the Vault UI.`,
-      })
-      .catch(() => undefined);
+    notifyVaultAlert(
+      "revealed",
+      "Vault value revealed",
+      `The ${field.replace(/_/g, " ")} of ${row.label} (${row.handle}) was revealed in the Vault UI.`,
+    );
   }
   return { field, value };
 }

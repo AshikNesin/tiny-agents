@@ -24,6 +24,7 @@ import type {
   ChatEvent,
   ChatState,
   ChatToolCall,
+  WaitEvent,
 } from "../../../../packages/agent/src/types";
 
 const QUESTIONS = [
@@ -273,6 +274,50 @@ describe("ask_owner", () => {
     await runtime.decideApproval(ref, waiting.taskId!, "approved");
     expect(await until(() => finalText(events), "reply")).toBe("Sent to ana@x.dev");
     expect(sent).toEqual(["ana@x.dev"]);
+  }, 15_000);
+
+  it("reports each waiting call through onWait, with its tool and no arguments", async () => {
+    const sent: string[] = [];
+    const runtime = await open(askThenReport(QUESTIONS, "send_email"), {
+      capabilities: [mailCapability(sent)],
+    });
+    const waits: WaitEvent[] = [];
+    runtime.onWait((event) => waits.push(event));
+    const { ref, events } = await start(runtime, ["mail", "questions"]);
+    const waiting = await waitingCall(events, "awaiting_approval");
+    expect(waits).toEqual([
+      {
+        kind: "approval",
+        change: "added",
+        conversation: ref,
+        task: waiting.taskId,
+        tool: "send_email",
+      },
+    ]);
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    await until(() => waits.length === 2, "removed");
+    expect(waits[1]).toEqual({
+      kind: "approval",
+      change: "removed",
+      conversation: ref,
+      task: waiting.taskId,
+    });
+
+    const asker = await open();
+    const questions: WaitEvent[] = [];
+    asker.onWait((event) => questions.push(event));
+    const second = await start(asker);
+    const asked = await waitingCall(second.events);
+    expect(questions).toEqual([
+      {
+        kind: "question",
+        change: "added",
+        conversation: second.ref,
+        task: asked.taskId,
+        tool: "ask_owner",
+        preview: "Which database?",
+      },
+    ]);
   }, 15_000);
 
   it("stopping the reply ends the wait", async () => {

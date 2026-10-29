@@ -17,6 +17,7 @@ import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
+import notificationRoutes from "@groot/core/notification/notification.routes";
 
 // Feature job registrations
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
@@ -54,6 +55,7 @@ export function registerRoutes(app: Express): void {
   protectedRouter.use("/jobs", jobRoutes);
   protectedRouter.use("/storage", storageRoutes);
   protectedRouter.use("/settings", appSettingsRoutes);
+  protectedRouter.use("/notifications", notificationRoutes);
 
   app.use("/api/v1", jwtAuthMiddleware, protectedRouter);
 }

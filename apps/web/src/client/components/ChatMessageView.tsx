@@ -438,13 +438,24 @@ function ToolRow({
       </div>
     ) : null;
 
+  // data-waiting: what a notification's ?focus= link scrolls to (focus-param.ts).
   if (call.status === "awaiting_approval" && call.taskId !== undefined) {
     if (call.vault) {
       return (
-        <VaultApprovalCard call={{ ...call, vault: call.vault }} botId={botId} botName={botName} />
+        <div data-waiting={`approval:${call.taskId}`}>
+          <VaultApprovalCard
+            call={{ ...call, vault: call.vault }}
+            botId={botId}
+            botName={botName}
+          />
+        </div>
       );
     }
-    return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
+    return (
+      <div data-waiting={`approval:${call.taskId}`}>
+        <ApprovalCard call={call} label={label} botId={botId} botName={botName} />
+      </div>
+    );
   }
 
   if (call.status === "awaiting_credentials" && call.taskId !== undefined && call.credentials) {
@@ -457,11 +468,13 @@ function ToolRow({
   if (call.questions) {
     if (call.status === "awaiting_answer" && call.taskId !== undefined) {
       return (
-        <QuestionCard
-          call={{ ...call, taskId: call.taskId, questions: call.questions }}
-          botId={botId}
-          botName={botName}
-        />
+        <div data-waiting={`question:${call.taskId}`}>
+          <QuestionCard
+            call={{ ...call, taskId: call.taskId, questions: call.questions }}
+            botId={botId}
+            botName={botName}
+          />
+        </div>
       );
     }
     const note = STATUS_TEXT[call.status] ?? (call.answers ? undefined : "dismissed by you");

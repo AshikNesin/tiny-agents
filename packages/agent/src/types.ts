@@ -216,6 +216,26 @@ export interface ActivityChange {
   questions: number;
 }
 
+/**
+ * A tool call starting or stopping to wait on the owner (see
+ * `AgentRuntime.onWait`). Calls re-run after a restart are added again.
+ */
+export interface WaitEvent {
+  kind: "approval" | "question";
+  change: "added" | "removed";
+  conversation: ConversationRef;
+  /** The waiting call's task id (what the approval/questions routes take). */
+  task: number;
+  /** The tool that waits (added only). */
+  tool?: string;
+  /** Owner-facing text such as the first question (added only; untrusted model text). */
+  preview?: string;
+  /** What a vault call wants to use or a credential request wants (added only). */
+  subject?: string;
+  /** Epoch ms when the wait expires, for calls that expire (added only). */
+  expiresAt?: number;
+}
+
 export interface LastMessage {
   role: "user" | "assistant";
   text: string;

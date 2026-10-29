@@ -8,6 +8,7 @@ import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
+import { watchBot } from "./bots.viewers";
 import {
   answerQuestionsSchema,
   approvalSchema,
@@ -82,6 +83,8 @@ router.get("/bots/:id/stream", async (req: Request, res: Response) => {
   try {
     const bot = await botsService.getBot(id);
     const heartbeat = initSse(res);
+    const unwatch = watchBot(bot.id);
+    res.on("close", unwatch);
     subscription = await getAgentRuntime().watchChat(Number(bot.conversationId), (events) => {
       for (const event of events) writeSse(res, event);
     });
