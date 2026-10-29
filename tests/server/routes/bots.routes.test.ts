@@ -495,6 +495,41 @@ describe("Bots API routes", () => {
     });
   });
 
+  it("stores the auto-review switch and hands it to the conversation only when on", async () => {
+    const app = buildApp();
+    const created = await request(app)
+      .post("/api/v1/bots")
+      .set(authorization)
+      .send(createPayload)
+      .expect(201);
+    expect(created.body.data.autoReview).toBe(false);
+    const off = { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} };
+    expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ capabilities: off }),
+    );
+
+    const on = await request(app)
+      .patch(`/api/v1/bots/${created.body.data.id}`)
+      .set(authorization)
+      .send({ autoReview: true })
+      .expect(200);
+    expect(on.body.data.autoReview).toBe(true);
+    expect(agentRuntime.configure).toHaveBeenLastCalledWith(
+      100,
+      expect.objectContaining({ capabilities: { ...off, autoReview: true } }),
+    );
+
+    await request(app)
+      .patch(`/api/v1/bots/${created.body.data.id}`)
+      .set(authorization)
+      .send({ autoReview: false })
+      .expect(200);
+    expect(agentRuntime.configure).toHaveBeenLastCalledWith(
+      100,
+      expect.objectContaining({ capabilities: off }),
+    );
+  });
+
   it("answers approvals, with 'always allow' switching the tool to allow", async () => {
     const bot = await createBot();
     const app = buildApp();

@@ -34,7 +34,8 @@ export interface ChatToolCall {
   output?: string;
   durationMs?: number;
   taskId?: number;
-  approval?: "approved" | "denied";
+  /** `auto`: auto-review approved the call, no card was shown. */
+  approval?: "approved" | "denied" | "auto";
   sources?: { url: string; title: string }[];
   /** ask_owner calls: the questions the bot asked. */
   questions?: OwnerQuestion[];

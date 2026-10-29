@@ -18,6 +18,10 @@
  *   #56): decided once per call before anything runs, it may refuse the call,
  *   ask even where the tool is allowed, add to the card, offer a standing
  *   grant for the conversation and let the approval expire.
+ * - With a reviewer (auto-review, issue #65), a call that would ask the owner
+ *   is first judged by a classifier for the tools the conversation's
+ *   permissions list under `review`; an approval skips the card. Vault calls
+ *   always ask. The verdict is memoized, so a replay never re-asks.
  * - Every result leaves the gate scrubbed of registered secret values.
  */
 import type { Context } from "@earendil-works/chord";
@@ -30,10 +34,14 @@ import {
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
 import { secretRedactor } from "./redact";
+import { ownerMessages, type GateReview, type ReviewVerdict } from "./reviewer";
 import { waitForOwner, type WaitTracker } from "./waiting";
 
-/** Which tools of the conversation run without asking. */
-export const PermissionsDoc = defineDoc<{ allow: string[] }>({
+/**
+ * Which tools of the conversation run without asking (`allow`), and which of
+ * the asking ones auto-review may approve (`review`, absent when it is off).
+ */
+export const PermissionsDoc = defineDoc<{ allow: string[]; review?: string[] }>({
   kind: "tiny.permissions",
   version: 1,
   scope: "conversation",
@@ -117,11 +125,22 @@ function scrubResult(result: ToolExecutionResult): ToolExecutionResult {
 }
 
 /** Wrap every tool of an extension in the approval gate. */
-export function gateExtension(extension: Extension, tracker: WaitTracker): Extension {
-  return { ...extension, tools: extension.tools?.map((tool) => gateTool(tool, tracker)) };
+export function gateExtension(
+  extension: Extension,
+  tracker: WaitTracker,
+  review?: GateReview,
+): Extension {
+  return {
+    ...extension,
+    tools: extension.tools?.map((tool) => gateTool(tool, tracker, review)),
+  };
 }
 
-export function gateTool(tool: ToolRegistration, tracker: WaitTracker): ToolRegistration {
+export function gateTool(
+  tool: ToolRegistration,
+  tracker: WaitTracker,
+  review?: GateReview,
+): ToolRegistration {
   const hooks = gateHooks.get(tool);
   return {
     ...tool,
@@ -137,7 +156,13 @@ export function gateTool(tool: ToolRegistration, tracker: WaitTracker): ToolRegi
         plan ? plan.ask : await mustAsk(tool.name, api, context),
         context,
       );
-      if (ask) {
+      // Vault uses always reach the owner: their policy, not the classifier, decides.
+      const verdict =
+        ask && review && !plan?.details?.vault
+          ? await reviewOnce(tool.name, review, args, api, context)
+          : undefined;
+      const auto = verdict?.approve === true;
+      if (ask && !auto) {
         const decision = await waitForDecision(api, tracker, tool.name, context, plan);
         if (decision !== "approved") {
           await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
@@ -166,16 +191,27 @@ export function gateTool(tool: ToolRegistration, tracker: WaitTracker): ToolRegi
               `Tool ${tool.name} was interrupted by a restart and may have partially run.`,
             ),
             isError: true,
-            details: { interrupted: true, ...(ask ? { approval: "approved" } : {}) },
+            details: {
+              interrupted: true,
+              ...(ask ? { approval: auto ? "auto" : "approved" } : {}),
+            },
           };
         }
         await api.memo("gate:effect", true, context);
       }
       const result = scrubResult(await tool.execute(args, api, context));
       // The pending card's details must not outlive the decision.
-      return ask
-        ? { ...result, details: { approval: "approved", result: result.details ?? null } }
-        : result;
+      if (!ask) return result;
+      return {
+        ...result,
+        details: auto
+          ? {
+              approval: "auto",
+              review: verdict as unknown as JsonObject,
+              result: result.details ?? null,
+            }
+          : { approval: "approved", result: result.details ?? null },
+      };
     },
   };
 }
@@ -193,6 +229,35 @@ async function planOnce(
   const plan = await hooks.plan(args as never, api, context, toolAsks);
   const json = JSON.parse(JSON.stringify(plan)) as JsonObject;
   return (await api.memo("gate:plan", json, context)) as unknown as GatePlan;
+}
+
+/**
+ * Auto-review a call that would ask, once: `undefined` when the conversation
+ * does not let auto-review approve this tool or no owner message is in reach
+ * (the card shows as before). A verdict is memoized before it is acted on.
+ */
+async function reviewOnce(
+  name: string,
+  review: GateReview,
+  args: unknown,
+  api: ToolExecutionApi,
+  context: Context,
+): Promise<ReviewVerdict | undefined> {
+  const stored = await api.memo<JsonObject>("gate:review", context);
+  if (stored) return stored as unknown as ReviewVerdict;
+  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
+  if (!permissions?.review?.includes(name)) return undefined;
+  const messages = ownerMessages(await review.recentEntries(Number(api.conversationId)));
+  if (!messages) return undefined;
+  const { instructions } = await api.agent(context);
+  const verdict = await review.reviewer({
+    tool: name,
+    args,
+    instructions,
+    ownerMessages: messages,
+  });
+  const json = JSON.parse(JSON.stringify(verdict)) as JsonObject;
+  return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
 }
 
 async function mustAsk(name: string, api: ToolExecutionApi, context: Context): Promise<boolean> {

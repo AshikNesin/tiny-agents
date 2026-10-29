@@ -12,9 +12,11 @@ import {
   createBotsToolkit,
   createBrowserToolkit,
   createChromiumTransport,
+  createClassifier,
   createRemoteCdpTransport,
   createMemoryCapability,
   createMemoryHostKeyStore,
+  createReviewer,
   createRoutinesToolkit,
   createSandboxToolkit,
   createSkillsCapability,
@@ -29,6 +31,7 @@ import {
   type BotMessagingStore,
   type Capability,
   type HostKeyStore,
+  type Reviewer,
 } from "@tiny-agents/agent";
 import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
 import {
@@ -39,7 +42,7 @@ import {
 } from "@tiny-agents/agent/testing";
 import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { createNamespaceKv } from "@groot/core/kv";
-import { setScrubber } from "@groot/core/logger";
+import { logger, setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
@@ -202,6 +205,21 @@ export function agentRuntimeReady(): boolean {
   return ready;
 }
 
+/**
+ * Auto-review's reviewer (issue #65): Clef on Workers AI unless
+ * CLASSIFIER_MODEL names another classifier. Without its credentials bots
+ * that turn auto-review on keep every approval card.
+ */
+function autoReviewer(env: Env = process.env): Reviewer | undefined {
+  const classifier = createClassifier(env);
+  if (!classifier) return undefined;
+  return createReviewer(classifier, {
+    // Scores and outcome only: never the call's arguments.
+    onReview: ({ tool, verdict, durationMs }) =>
+      logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
+  });
+}
+
 /** Boot: open the runtime (exclusive store lock + Harness resume). */
 export async function openAgentRuntime(
   options: Parameters<typeof AgentRuntime.open>[0],
@@ -209,6 +227,7 @@ export async function openAgentRuntime(
   const instance = await AgentRuntime.open({
     ...options,
     approvalTracker: ownerWaits,
+    reviewer: options.reviewer ?? autoReviewer(options.env),
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
   return finishOpen(instance, options.env);

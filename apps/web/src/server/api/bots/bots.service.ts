@@ -121,7 +121,12 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
   }
   const toolPermissions = data.toolPermissions ?? {};
   const conversationId = await startBotConversation(
-    { modelId: data.modelId, systemPrompt: data.systemPrompt, toolPermissions },
+    {
+      modelId: data.modelId,
+      systemPrompt: data.systemPrompt,
+      toolPermissions,
+      autoReview: data.autoReview,
+    },
     rt,
   );
   // If the row insert fails the durable conversation is left orphaned — the
@@ -135,6 +140,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       conversationId,
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+      ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },
   });
@@ -188,6 +194,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.systemPrompt !== undefined ? { systemPrompt: data.systemPrompt } : {}),
       ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+      ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },
   });
