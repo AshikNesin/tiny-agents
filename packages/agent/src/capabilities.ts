@@ -50,6 +50,8 @@ export interface CapabilitySelection {
   enabled: string[];
   /** Tool name → permission; tools without an entry use their default. */
   permissions: Record<string, ToolPermission>;
+  /** Auto-review (issue #65): a classifier may approve `ask` calls before the owner is asked. */
+  autoReview?: boolean;
 }
 
 export function defaultPermission(tool: ToolInfo): ToolPermission {

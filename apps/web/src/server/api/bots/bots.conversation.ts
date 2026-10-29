@@ -41,6 +41,8 @@ export interface BotRow {
   toolPermissions: string;
   /** Memory capture + injection switch (issue #22). */
   memoryEnabled: boolean;
+  /** Auto-review switch (issue #65). */
+  autoReview: boolean;
   /** Transcript watermark: owner turns captured through this instant. */
   memoryCapturedThrough: Date | null;
   /** Set while the bot is pinned to the top of the sidebar. */
@@ -152,6 +154,7 @@ export interface BotDraft {
   modelId: string;
   systemPrompt: string;
   toolPermissions: Record<string, ToolPermission>;
+  autoReview?: boolean;
 }
 
 /**
@@ -179,6 +182,7 @@ function agentConfig(
         ...(largeServer ? ["tool-search"] : []),
       ],
       permissions: bot.toolPermissions,
+      ...(bot.autoReview ? { autoReview: true } : {}),
     },
   };
 }

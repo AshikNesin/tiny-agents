@@ -58,6 +58,8 @@ export interface Bot {
   connectionIds: string[];
   /** Memory capture + injection switch (issue #22). */
   memoryEnabled: boolean;
+  /** Auto-review (issue #65): a classifier may approve "ask" tool calls. */
+  autoReview: boolean;
   /** `shared`: the browser (and logins) every such bot uses; `own`: a browser of its own. */
   browserProfile: BrowserProfile;
   pinnedAt: string | null;
@@ -140,6 +142,7 @@ export interface BotInput {
   skillIds?: string[];
   connectionIds?: string[];
   memoryEnabled?: boolean;
+  autoReview?: boolean;
   browserProfile?: BrowserProfile;
 }
 

@@ -58,8 +58,8 @@ export interface ChatToolCall {
   durationMs?: number;
   /** Durable tool task id: what approval decisions address. */
   taskId?: number;
-  /** Set once the owner answered an approval for this call. */
-  approval?: "approved" | "denied";
+  /** Set once the owner answered an approval for this call; `auto`: auto-review approved it. */
+  approval?: "approved" | "denied" | "auto";
   /** Epoch ms after which a pending approval or credential request expires. */
   expiresAt?: number;
   /** Vault sinks: the item and target the approval card shows (never a value). */

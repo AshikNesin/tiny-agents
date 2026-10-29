@@ -77,6 +77,7 @@ import type {
   WithdrawOutcome,
 } from "./types";
 import { WaitTracker } from "./waiting";
+import { REVIEW_ENTRY_LOOKBACK, type GateReview, type Reviewer } from "./reviewer";
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
@@ -145,6 +146,12 @@ export interface AgentRuntimeOptions {
    * waits on the owner itself (credential requests), so they count as approvals.
    */
   approvalTracker?: WaitTracker;
+  /**
+   * Auto-review (issue #65): judges calls that would ask the owner, for
+   * conversations whose capabilities turn it on. Without one, every such
+   * call shows its approval card.
+   */
+  reviewer?: Reviewer;
   /** Raw extensions installed as-is (tests). Selected by conversations that never chose capabilities. */
   extensions?: readonly Extension[];
   /** Non-fatal errors pi-durable reports (hooks, listeners, …). */
@@ -188,6 +195,7 @@ export class AgentRuntime {
   readonly #approvals: WaitTracker;
   readonly #questions: WaitTracker;
   readonly #capabilities = new Map<string, Capability>();
+  #review: GateReview | undefined;
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
   #closed = false;
@@ -252,8 +260,25 @@ export class AgentRuntime {
       for (const extension of options.extensions ?? []) registry.install(extension);
       // Capabilities must be installed before resume(): interrupted calls of
       // their tools (e.g. a pending approval or question) re-run against them.
+      // Auto-review reads the owner's messages through the Harness opened below.
+      const review: GateReview | undefined = options.reviewer
+        ? {
+            reviewer: options.reviewer,
+            recentEntries: async (id) => {
+              const conversation = await harness?.conversation(id as ConversationId, ctx);
+              if (!conversation) return [];
+              const page = await conversation.entries(
+                { order: "descending" },
+                REVIEW_ENTRY_LOOKBACK,
+                undefined,
+                ctx,
+              );
+              return page.items;
+            },
+          }
+        : undefined;
       for (const capability of capabilities) {
-        registry.install(gateExtension(capability.extension, approvals));
+        registry.install(gateExtension(capability.extension, approvals, review));
       }
       harness = await Harness.open(
         storage,
@@ -276,6 +301,7 @@ export class AgentRuntime {
         capabilities,
         envSource,
       );
+      opened.#review = review;
       runtime = opened;
       harness.closed.then((end) => {
         if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
@@ -358,8 +384,10 @@ export class AgentRuntime {
     await this.#harness.commit(async (tx) => {
       await configureAgent(tx, ref as ConversationId, change);
       if (config.capabilities) {
-        const doc = await tx.doc(PermissionsDoc, ref as ConversationId);
-        doc.allow = this.#allowedTools(config.capabilities);
+        this.#setPermissions(
+          await tx.doc(PermissionsDoc, ref as ConversationId),
+          config.capabilities,
+        );
       }
     }, ctx);
   }
@@ -409,10 +437,31 @@ export class AgentRuntime {
     );
   }
 
+  /** Tools that would ask and auto-review may approve (never `askOnly` ones). */
+  #reviewableTools(selection: CapabilitySelection): string[] {
+    if (!selection.autoReview) return [];
+    return this.#selected(selection).flatMap((capability) =>
+      capability.tools
+        .filter(
+          (tool) => !tool.askOnly && effectivePermission(tool, selection.permissions) === "ask",
+        )
+        .map((tool) => tool.name),
+    );
+  }
+
+  #setPermissions(
+    doc: { allow: string[]; review?: string[] },
+    selection: CapabilitySelection,
+  ): void {
+    doc.allow = this.#allowedTools(selection);
+    const review = this.#reviewableTools(selection);
+    if (review.length > 0) doc.review = review;
+    else delete doc.review;
+  }
+
   async #writePermissions(ref: ConversationRef, selection: CapabilitySelection): Promise<void> {
     await this.#harness.commit(async (tx) => {
-      const doc = await tx.doc(PermissionsDoc, ref as ConversationId);
-      doc.allow = this.#allowedTools(selection);
+      this.#setPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), selection);
     }, ctx);
   }
 
@@ -429,7 +478,7 @@ export class AgentRuntime {
    */
   installCapability(capability: Capability): void {
     this.#capabilities.set(capability.id, capability);
-    this.#registry.install(gateExtension(capability.extension, this.#approvals));
+    this.#registry.install(gateExtension(capability.extension, this.#approvals, this.#review));
   }
 
   /** Withdraw a capability (connection removed or signed out). Bots keep it selected by name. */

@@ -245,7 +245,9 @@ function toolCallView(
       status: resultStatus(result),
       ...(output ? { output: clip(output) } : {}),
       ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
-      ...(approval === "approved" || approval === "denied" ? { approval } : {}),
+      ...(approval === "approved" || approval === "denied" || approval === "auto"
+        ? { approval }
+        : {}),
       ...(sources ? { sources } : {}),
       ...(questions ? { questions } : {}),
       ...(answers ? { answers } : {}),

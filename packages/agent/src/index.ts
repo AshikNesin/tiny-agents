@@ -31,6 +31,21 @@ export {
 } from "./capabilities";
 export type { ApprovalDecision } from "./approvals";
 export {
+  classifierFromModels,
+  createClassifier,
+  DEFAULT_CLASSIFIER_MODEL,
+  type Classifier,
+} from "./classifier";
+export {
+  createReviewer,
+  REVIEW_QUESTIONS,
+  REVIEW_THRESHOLDS,
+  type ReviewEvent,
+  type Reviewer,
+  type ReviewInput,
+  type ReviewVerdict,
+} from "./reviewer";
+export {
   GrantsDoc,
   SecretValue,
   VAULT_RULE,

@@ -75,6 +75,7 @@ export function BotDialog({
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
   const [browserProfile, setBrowserProfile] = useState<BrowserProfile>("shared");
+  const [autoReview, setAutoReview] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -86,6 +87,7 @@ export function BotDialog({
     setSelectedSkills(bot?.skillIds ?? []);
     setSelectedConnections(bot?.connectionIds ?? []);
     setBrowserProfile(bot?.browserProfile ?? "shared");
+    setAutoReview(bot?.autoReview ?? false);
   }, [open, bot, defaultModelId, models]);
 
   useEffect(() => {
@@ -142,6 +144,7 @@ export function BotDialog({
         skillIds: selectedSkills,
         connectionIds: selectedConnections,
         browserProfile,
+        autoReview,
       };
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
@@ -297,6 +300,16 @@ export function BotDialog({
         Every bot has these tools. <strong>Allow</strong> runs a tool unattended,{" "}
         <strong>Ask</strong> waits for your approval, <strong>Off</strong> hides it from this bot.
       </p>
+      <div className="bg-secondary/50 flex items-start gap-3 rounded-2xl p-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Auto-review</p>
+          <p className="text-muted-foreground text-xs">
+            A classifier approves low-risk Ask actions you clearly asked for, so they run without a
+            card. Anything else still asks you, and so do vault use and Ask (always) tools.
+          </p>
+        </div>
+        <Switch checked={autoReview} onCheckedChange={setAutoReview} aria-label="Auto-review" />
+      </div>
       {toolkitsList.map((toolkit) => (
         <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
           <div className="flex items-center gap-3 p-3.5">

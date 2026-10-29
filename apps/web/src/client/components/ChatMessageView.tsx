@@ -501,10 +501,11 @@ function ToolRow({
         )}
         {summary && call.name !== "load_skill" ? ` “${summary}”` : ""}
       </TraceTitle>
-      {(extra || call.approval === "approved") && (
+      {(extra || call.approval === "approved" || call.approval === "auto") && (
         <TraceDescription>
           {extra}
           {extra && call.approval === "approved" ? " · approved by you" : ""}
+          {call.approval === "auto" ? `${extra ? " · " : ""}auto-approved` : ""}
         </TraceDescription>
       )}
       {call.durationMs !== undefined && (
