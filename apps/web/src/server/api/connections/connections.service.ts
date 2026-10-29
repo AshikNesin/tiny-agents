@@ -39,6 +39,8 @@ export interface ConnectionDTO {
   authType: string;
   headerName: string | null;
   hasSecret: boolean;
+  /** Vault handle the header value is read from, when set. */
+  secretRef: string | null;
   /** The server's tools from the last listing, including those turned off. */
   tools: ConnectionToolDTO[];
   botIds: string[];
@@ -97,7 +99,8 @@ function toDTO(row: Row): ConnectionDTO {
     transport: row.transport,
     authType: row.authType,
     headerName: row.headerName,
-    hasSecret: Boolean(row.secretEnc),
+    hasSecret: Boolean(row.secretEnc || row.secretRef),
+    secretRef: row.secretRef,
     tools: parseTools(row.toolsCache).map((tool) => toToolDTO(row, tool, disabled)),
     botIds: row.bots.map((link) => link.botId),
     status: live.status,
@@ -197,7 +200,14 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
   if (data.url) checkUrl(data.url);
   if (data.secret) requireSecretsKey();
   const reconnect =
-    data.url !== undefined || data.secret !== undefined || data.headerName !== undefined;
+    data.url !== undefined ||
+    data.secret !== undefined ||
+    data.headerName !== undefined ||
+    data.secretRef !== undefined;
+  if (data.secretRef) {
+    const item = await prisma.vaultItem.findUnique({ where: { handle: data.secretRef } });
+    if (!item) throw Boom.badRequest(`No vault item "${data.secretRef}"`);
+  }
   await prisma.connection.update({
     where: { id },
     data: {
@@ -207,7 +217,10 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
         ? { headerName: data.headerName }
         : {}),
       ...(data.secret !== undefined && current.authType === "header"
-        ? { secretEnc: encryptSecret(data.secret) }
+        ? { secretEnc: encryptSecret(data.secret), secretRef: null }
+        : {}),
+      ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
+        ? { secretRef: data.secretRef }
         : {}),
     },
   });

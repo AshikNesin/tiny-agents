@@ -30,6 +30,7 @@ import {
 import { connectionCapabilityId, reconcileBotConversation } from "../bots/bots.conversation";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { decryptSecret, SecretsKeyMissingError } from "./secrets";
+import { resolveConnectionSecret } from "../vault/vault.service";
 
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
 
@@ -162,6 +163,11 @@ export class ConnectionManager {
   }
 
   async #auth(row: ConnectionRow, live: Live) {
+    if (row.authType === "header" && row.headerName && row.secretRef) {
+      return {
+        headers: { [row.headerName]: await resolveConnectionSecret(row.secretRef, row.slug) },
+      };
+    }
     if (row.authType === "header" && row.headerName && row.secretEnc) {
       return { headers: { [row.headerName]: decryptSecret(row.secretEnc) } };
     }

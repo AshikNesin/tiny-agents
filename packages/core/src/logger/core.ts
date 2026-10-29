@@ -1,4 +1,5 @@
 import pino, { type Logger, type LoggerOptions } from "pino";
+import { scrubText, scrubValue } from "./scrub";
 
 export interface LoggerRuntimeOptions {
   level: string;
@@ -27,6 +28,16 @@ function buildLoggerConfig(opts: LoggerRuntimeOptions): LoggerOptions {
     },
     formatters: {
       level: (label: string) => ({ level: label }),
+      log: (object: Record<string, unknown>) => scrubValue(object),
+    },
+    hooks: {
+      // Messages are not part of the object `formatters.log` sees.
+      logMethod(args, method) {
+        method.apply(
+          this,
+          args.map((arg) => (typeof arg === "string" ? scrubText(arg) : arg)) as typeof args,
+        );
+      },
     },
     serializers: {
       req: pino.stdSerializers.req,

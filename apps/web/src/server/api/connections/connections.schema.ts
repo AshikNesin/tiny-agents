@@ -30,8 +30,16 @@ export const updateConnectionSchema = z.object({
   name: z.string().trim().min(1).max(60).optional(),
   url: url.optional(),
   headerName: headerName.optional(),
-  /** Replaces the stored header value. */
+  /** Replaces the stored header value (and drops a vault reference). */
   secret: secret.optional(),
+  /** Vault handle holding the header value (issue #56); null goes back to the stored value. */
+  secretRef: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{0,47}$/)
+    .nullable()
+    .optional(),
   botIds: z.array(z.string()).max(200).optional(),
 });
 

@@ -67,13 +67,16 @@ export class WaitTracker {
 /**
  * Wait until the call's `doc` leaves `pending`, counted by `tracker` and
  * showing `details` meanwhile. `init` runs on the document in the commit that
- * creates it (and again on every re-run, so it must be idempotent).
+ * creates it (and again on every re-run, so it must be idempotent). A
+ * document whose `expiresAt` (epoch ms) passes while pending settles as
+ * `expired`, also when the deadline passed during a restart.
  */
 export async function waitForOwner<T extends JsonObject & { status: string }>(
   api: ToolExecutionApi,
   tracker: WaitTracker,
   doc: TaskDocToken<T>,
-  details: JsonValue,
+  /** Or derived from the document (e.g. to show its deadline). */
+  details: JsonValue | ((value: T) => JsonValue),
   context: Context,
   init?: (value: T) => void,
 ): Promise<T> {
@@ -92,17 +95,36 @@ export async function waitForOwner<T extends JsonObject & { status: string }>(
     await watch.stop();
     return already;
   }
+  const expiresAt = (watch.value as { expiresAt?: unknown } | null)?.expiresAt;
+  const expire = async () => {
+    await api.commit(async (tx) => {
+      const value = (await tx.doc(doc, api.taskId)) as T;
+      if (value.status === "pending") (value as { status: string }).status = "expired";
+    }, context);
+  };
+  if (typeof expiresAt === "number" && expiresAt <= Date.now()) {
+    await watch.stop();
+    await expire();
+    const value = await api.snapshot(doc, api.taskId, context);
+    return value as T;
+  }
   tracker.add(conversation, task);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await api.details(details, context);
+    await api.details(typeof details === "function" ? details(watch.value as T) : details, context);
     return await new Promise<T>((resolve, reject) => {
       watch.start(async (value) => {
         const response = settled(value);
         if (response) resolve(response);
       });
       void watch.closed.then((end) => reject(new Error(`owner wait ended: ${end.reason}`)));
+      if (typeof expiresAt === "number") {
+        timer = setTimeout(() => void expire().catch(reject), expiresAt - Date.now());
+        timer.unref?.();
+      }
     });
   } finally {
+    clearTimeout(timer);
     tracker.remove(conversation, task);
     await watch.stop();
   }

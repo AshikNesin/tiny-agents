@@ -152,6 +152,8 @@ model Connection {
   toolsCache    String          @default("[]")
   /// JSON array of server tool names turned off for every bot; tools the server adds later start on.
   disabledTools String          @default("[]")
+  /// Vault handle (`VaultItem.handle`) holding the header value; preferred over `secretEnc` when set.
+  secretRef     String?
   bots          BotConnection[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -169,6 +171,71 @@ model BotConnection {
   @@id([botId, connectionId])
   @@index([connectionId])
   @@map("bot_connections")
+}
+
+/// A reference to a secret held by a vault backend (issue #56). No secret values live here.
+model VaultItem {
+  id              String            @id @default(cuid())
+  /// Model-facing slug ("github"); the only name bots see.
+  handle          String            @unique
+  kind            String // login | card | identity | api_key
+  backend         String // onepassword-connect | local
+  /// Backend item id (Connect item id; the vault is pinned in env).
+  externalId      String
+  /// api_key: which field holds the key (default: the credential/password field).
+  field           String?
+  label           String
+  /// Login identifier: metadata the bot may type itself.
+  username        String?
+  /// JSON array of exact origins a login or card fills on.
+  originsJson     String            @default("[]")
+  /// JSON array of hosts an api_key header may go to.
+  hostsJson       String            @default("[]")
+  /// JSON {as:"header",name,format} for api_key injection.
+  injectJson      String?
+  /// JSON array of tools that may use it; [] = the kind's default.
+  toolsJson       String            @default("[]")
+  /// JSON array of bot ids that may use it; null = every bot.
+  botsJson        String?
+  approval        String            @default("per_conversation") // every_use | per_conversation | allowed
+  allowUnattended Boolean           @default(false)
+  whenToUse       String?
+  /// JSON {brand,last4,expiry}: display only.
+  cardMetaJson    String?
+  hasTotp         Boolean           @default(false)
+  disabled        Boolean           @default(false)
+  lastUsedAt      DateTime?
+  lastUsedBy      String?
+  events          VaultAuditEvent[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("vault_items")
+}
+
+/// Append-only audit of every vault use and Vault UI action. No values, ever.
+model VaultAuditEvent {
+  id             String     @id @default(cuid())
+  at             DateTime   @default(now())
+  itemId         String?
+  item           VaultItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  /// Kept when the item is deleted.
+  handle         String
+  botId          String?
+  conversationId Int?
+  taskId         Int?
+  /// Agent tool, "vault_ui" or "credential_request".
+  tool           String
+  /// Origin, host or redacted command.
+  target         String
+  /// used | approved_used | denied | expired | refused_* | backend_error | created | updated | deleted | revealed | copied | filled
+  outcome        String
+  reason         String?
+  unattended     Boolean    @default(false)
+
+  @@index([itemId, at])
+  @@index([at])
+  @@map("vault_audit_events")
 }
 
 model Upload {

@@ -40,7 +40,9 @@ export type ChatToolStatus =
   | "awaiting_answer"
   | "done"
   | "error"
+  | "awaiting_credentials"
   | "denied"
+  | "expired"
   | "interrupted"
   | "aborted";
 
@@ -58,6 +60,12 @@ export interface ChatToolCall {
   taskId?: number;
   /** Set once the owner answered an approval for this call. */
   approval?: "approved" | "denied";
+  /** Epoch ms after which a pending approval or credential request expires. */
+  expiresAt?: number;
+  /** Vault sinks: the item and target the approval card shows (never a value). */
+  vault?: ChatVaultUse;
+  /** `request_credentials` calls: the form the owner fills, and which keys were filled. */
+  credentials?: ChatCredentialRequest;
   /** Pages the call searched or read (web tools). */
   sources?: { url: string; title: string }[];
   /** `ask_owner` calls: the questions the bot asked the owner. */
@@ -67,6 +75,32 @@ export interface ChatToolCall {
    * call waits, and when the owner dismissed the questions.
    */
   answers?: OwnerAnswer[];
+}
+
+/** A vault use as its approval card shows it (issue #56). */
+export interface ChatVaultUse {
+  handle: string;
+  label: string;
+  kind: "login" | "card" | "identity" | "api_key";
+  tool: string;
+  target: string;
+  bot?: string;
+  card?: { brand: string; last4: string };
+  username?: string;
+  /** "Approve for this conversation" is offered. */
+  grantable: boolean;
+}
+
+/** A `request_credentials` call as the chat shows it: metadata only. */
+export interface ChatCredentialRequest {
+  status: "pending" | "filled" | "cancelled" | "expired";
+  origin: string;
+  title: string;
+  purpose: string;
+  fields: { key: string; label: string; type: string; required: boolean }[];
+  /** Keys the server filled. */
+  filled?: string[];
+  savedHandle?: string;
 }
 
 /** One question a bot asks the owner (`ask_owner`). */

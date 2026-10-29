@@ -28,6 +28,13 @@ import {
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { ApprovalDoc, gateExtension, PermissionsDoc, type ApprovalDecision } from "./approvals";
 import {
+  CredentialRequestDoc,
+  storedRequest,
+  type CredentialRequest,
+  type CredentialRequestOutcome,
+} from "./credentials";
+import { GrantsDoc } from "./vault";
+import {
   capabilityInfo,
   effectivePermission,
   type Capability,
@@ -100,6 +107,14 @@ export class ApprovalNotPendingError extends Error {
   }
 }
 
+/** The credential request was already answered, expired, or its call ended. */
+export class CredentialRequestNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for credentials`);
+    this.name = "CredentialRequestNotPendingError";
+  }
+}
+
 /** The questions were already answered or dismissed, or their call ended. */
 export class QuestionNotPendingError extends Error {
   constructor(taskId: number) {
@@ -124,6 +139,11 @@ export interface AgentRuntimeOptions {
    * behind the approval gate; selected per conversation by `configure()`.
    */
   capabilities?: readonly Capability[];
+  /**
+   * Counts calls waiting on the owner's approval. Pass one when a capability
+   * waits on the owner itself (credential requests), so they count as approvals.
+   */
+  approvalTracker?: WaitTracker;
   /** Raw extensions installed as-is (tests). Selected by conversations that never chose capabilities. */
   extensions?: readonly Extension[];
   /** Non-fatal errors pi-durable reports (hooks, listeners, …). */
@@ -223,7 +243,7 @@ export class AgentRuntime {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createGatewayModels(envSource);
       const registry = createRegistry();
-      const approvals = new WaitTracker();
+      const approvals = options.approvalTracker ?? new WaitTracker();
       const questions = new WaitTracker();
       // Questions for the owner wait on a document this runtime answers, so
       // the runtime brings their capability; conversations select it by id.
@@ -443,30 +463,28 @@ export class AgentRuntime {
   }
 
   /**
-   * Answer a gated tool call (`taskId` from the chat's tool call). Throws
+   * Answer a gated tool call (`taskId` from the chat's tool call). With
+   * `grant`, an approval also records the standing grant the card offered
+   * (a vault handle for the rest of the conversation). Throws
    * `ApprovalNotPendingError` when it was already answered or has ended.
    */
   async decideApproval(
     ref: ConversationRef,
     taskId: number,
     decision: ApprovalDecision,
+    options: { grant?: boolean } = {},
   ): Promise<void> {
     const id = taskId as TaskId;
     try {
       await this.#harness.commit(async (tx) => {
-        const task = await tx.task(id);
-        if (
-          !task ||
-          Number(task.conversationId) !== ref ||
-          task.kind !== "pi.tool" ||
-          task.state.status === "terminal" ||
-          task.state.status === "completing"
-        ) {
-          throw new ApprovalNotPendingError(taskId);
-        }
+        await this.#pendingTask(tx, ref, id, () => new ApprovalNotPendingError(taskId));
         const doc = await tx.doc(ApprovalDoc, id);
         if (doc.status !== "pending") throw new ApprovalNotPendingError(taskId);
         doc.status = decision;
+        if (decision === "approved" && options.grant && doc.grant) {
+          const grants = await tx.doc(GrantsDoc, ref as ConversationId);
+          if (!grants.grants.includes(doc.grant)) grants.grants.push(doc.grant);
+        }
       }, ctx);
     } catch (error) {
       if (error instanceof ApprovalNotPendingError) throw error;
@@ -474,6 +492,77 @@ export class AgentRuntime {
       if (error instanceof Error && /terminal/i.test(error.message)) {
         throw new ApprovalNotPendingError(taskId);
       }
+      throw error;
+    }
+  }
+
+  async #pendingTask(
+    tx: Parameters<Parameters<Harness["commit"]>[0]>[0],
+    ref: ConversationRef | undefined,
+    id: TaskId,
+    notPending: () => Error,
+  ): Promise<ConversationRef> {
+    const task = await tx.task(id);
+    if (
+      !task ||
+      (ref !== undefined && Number(task.conversationId) !== ref) ||
+      task.kind !== "pi.tool" ||
+      task.state.status === "terminal" ||
+      task.state.status === "completing"
+    ) {
+      throw notPending();
+    }
+    return Number(task.conversationId);
+  }
+
+  // ── Credential requests ───────────────────────────────────────────────
+
+  /**
+   * A `request_credentials` call still waiting for the owner, with its
+   * conversation. Throws `CredentialRequestNotPendingError` otherwise.
+   */
+  async credentialRequest(
+    taskId: number,
+  ): Promise<{ conversation: ConversationRef; request: CredentialRequest; expiresAt: number }> {
+    const id = taskId as TaskId;
+    const notPending = () => new CredentialRequestNotPendingError(taskId);
+    try {
+      return await this.#harness.commit(async (tx) => {
+        const conversation = await this.#pendingTask(tx, undefined, id, notPending);
+        // Another tool's task has no request (and the throw rolls back the
+        // document this read would create).
+        const doc = await tx.doc(CredentialRequestDoc, id);
+        if (doc.status !== "pending" || !doc.request) throw notPending();
+        if (doc.expiresAt <= Date.now()) throw notPending();
+        return {
+          conversation,
+          request: structuredClone(storedRequest(doc)!),
+          expiresAt: doc.expiresAt,
+        };
+      }, ctx);
+    } catch (error) {
+      if (error instanceof Error && /terminal/i.test(error.message)) throw notPending();
+      throw error;
+    }
+  }
+
+  /** Settle a credential request with the owner's outcome (never values). */
+  async settleCredentialRequest(taskId: number, outcome: CredentialRequestOutcome): Promise<void> {
+    const id = taskId as TaskId;
+    const notPending = () => new CredentialRequestNotPendingError(taskId);
+    try {
+      await this.#harness.commit(async (tx) => {
+        await this.#pendingTask(tx, undefined, id, notPending);
+        const doc = await tx.doc(CredentialRequestDoc, id);
+        if (doc.status !== "pending" || !doc.request) throw notPending();
+        doc.status = outcome.status;
+        if (outcome.status === "filled") {
+          doc.filled = [...outcome.filled];
+          doc.savedHandle = outcome.savedHandle ?? null;
+        }
+      }, ctx);
+    } catch (error) {
+      if (error instanceof Error && /terminal/i.test(error.message)) throw notPending();
       throw error;
     }
   }
