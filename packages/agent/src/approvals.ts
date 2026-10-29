@@ -256,7 +256,10 @@ async function reviewOnce(
     instructions,
     ownerMessages: messages,
   });
-  const json = JSON.parse(JSON.stringify(verdict)) as JsonObject;
+  // A verdict is flat JSON; only its unset fields must go before it is stored.
+  const json = Object.fromEntries(
+    Object.entries(verdict).filter(([, value]) => value !== undefined),
+  ) as JsonObject;
   return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
 }
 
