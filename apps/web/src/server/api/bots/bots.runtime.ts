@@ -273,7 +273,8 @@ const FAUX_ASK: ToolCall["arguments"] = {
  * steer or queue into. Unset (or non-numeric) streams instantly.
  *
  * A message starting with "/ask" makes the bot ask the owner sample questions
- * (ask_owner); the answers it gets back are echoed like any text.
+ * (ask_owner); the answers it gets back are echoed like any text. "/browse N"
+ * reads the browser page N times (browser_snapshot), one tool round each.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -292,14 +293,22 @@ export async function openFauxAgentRuntime(
           .join("");
   const echo = (context: PiContext) => {
     const last = context.messages.at(-1);
-    if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(`Echo: ${textOf(last)}`));
     let text = "";
+    let toolResults = 0;
     for (let i = context.messages.length - 1; i >= 0; i--) {
       const message = context.messages[i];
+      if (message.role === "toolResult") toolResults++;
       if (message.role !== "user") continue;
       text = textOf(message);
       break;
     }
+    // "/browse N" reads the page N times, one tool round each, then answers.
+    const browse = /^\/browse(?:\s+(\d+))?/.exec(text);
+    if (browse && toolResults < Math.min(Number(browse[1] ?? 1), 10)) {
+      const call = fauxAssistantMessage(fauxToolCall("browser_snapshot", {}));
+      return { ...call, stopReason: "toolUse" as const };
+    }
+    if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(`Echo: ${textOf(last)}`));
     if (text.startsWith("/ask")) {
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };

@@ -24,6 +24,7 @@ import {
 } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle, type ComposerSubmission } from "./ChatComposer";
 import { MessageAttachments } from "./Attachments";
+import { browserInUse, useBrowserPanel } from "../lib/browser-panel";
 import { formatDayDivider } from "../lib/day-divider";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
@@ -112,7 +113,6 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [toolLabels, setToolLabels] = useState<ToolLabels>({});
   const [confirmReset, setConfirmReset] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const composerRef = useRef<ChatComposerHandle>(null);
@@ -174,25 +174,11 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canReset]);
 
-  // Auto-open the Browser panel the first time the bot drives its browser in
-  // this conversation view (friction #37): the empty state promises it, and
-  // nothing else surfaces live browsing. Tool events arrive on the running
-  // assistant turn; a ref guards so one run opens it once, and an explicit
-  // close by the owner stays closed until the next run.
-  const autoOpenedForRun = useRef<string | null>(null);
-  useEffect(() => {
-    if (browserOpen) return;
-    const runningBrowserTool = messages.some(
-      (m) =>
-        m.role === "assistant" &&
-        m.toolCalls?.some((c) => c.name.startsWith("browser_") && c.status === "running"),
-    );
-    if (!runningBrowserTool) return;
-    const runKey = `${bot.conversationId}:${messages.length}`;
-    if (autoOpenedForRun.current === runKey) return;
-    autoOpenedForRun.current = runKey;
-    setBrowserOpen(true);
-  }, [messages, browserOpen, bot.conversationId]);
+  // The Browser panel opens itself the first time the bot drives its browser
+  // in this conversation (friction #37); once the owner closes it, it stays
+  // closed and the header toggle shows the activity instead.
+  const browserActive = browserInUse(messages);
+  const browser = useBrowserPanel(bot.conversationId, browserActive);
 
   // Read/unread split (issue #3): messages older than the frozen pre-open
   // marker are read; the rest arrived while the owner was away. The first
@@ -385,16 +371,31 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
             <Button
               variant="ghost"
               size="icon"
-              className={`text-muted-foreground hover:text-foreground hidden rounded-xl md:inline-flex ${
-                browserOpen ? "bg-accent text-foreground" : ""
+              className={`text-muted-foreground hover:text-foreground relative rounded-xl ${
+                browser.open ? "bg-accent text-foreground" : ""
               }`}
-              onClick={() => setBrowserOpen((v) => !v)}
-              aria-label={browserOpen ? "Close browser panel" : "Open browser panel"}
-              aria-pressed={browserOpen}
-              title="Browser"
+              onClick={browser.toggle}
+              aria-label={
+                browser.open
+                  ? "Close browser panel"
+                  : browserActive
+                    ? `Open browser panel, ${bot.name} is using the browser`
+                    : "Open browser panel"
+              }
+              aria-pressed={browser.open}
+              title={
+                browserActive && !browser.open ? `${bot.name} is using the browser` : "Browser"
+              }
               data-testid="browser-toggle"
             >
               <Globe className="size-4" />
+              {browserActive && !browser.open && (
+                <span
+                  className="bg-success absolute top-1.5 right-1.5 size-2 animate-pulse rounded-full"
+                  aria-hidden
+                  data-testid="browser-activity"
+                />
+              )}
             </Button>
             <Button
               variant="ghost"
@@ -571,7 +572,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       </div>
       {/* Browser live view (issue #24): beside the conversation on desktop,
           full-screen overlay on mobile. */}
-      {browserOpen && <BrowserPanel bot={bot} onClose={() => setBrowserOpen(false)} />}
+      {browser.open && <BrowserPanel bot={bot} onClose={browser.close} />}
 
       {/* Confirmations */}
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
