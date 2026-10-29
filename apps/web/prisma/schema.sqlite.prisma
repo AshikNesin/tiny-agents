@@ -255,6 +255,15 @@ model Upload {
   /// Storage key of the original bytes.
   storageKey String   @unique
   createdAt  DateTime @default(now())
+  /// SHA-256 of the original bytes (sandbox copies report it).
+  sha256        String?
+  /// Extraction (issue #58): none | pending | ready | failed | unsupported.
+  extractStatus String    @default("none")
+  /// Why extraction failed, or why the type can't be read.
+  extractError  String?
+  /// JSON ExtractMeta: format, pages, sheets, lines, entries, truncated, …
+  extractMeta   String?
+  extractedAt   DateTime?
 
   @@map("uploads")
 }

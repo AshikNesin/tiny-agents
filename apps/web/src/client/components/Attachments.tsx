@@ -3,12 +3,16 @@ import { useState } from "react";
 import { Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
+import { FilePreviewDialog, statusLabel, useUploadStatus } from "./FilePreview";
 
 function humanSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Placeholder until an upload has a ref: an image ref is never polled. */
+const NO_FILE: AttachmentRef = { uploadId: "", kind: "image", name: "", mimeType: "", size: 0 };
 
 /** One staged item in the composer: thumbnail (image) or chip (file). */
 export function StagedAttachment({
@@ -20,6 +24,9 @@ export function StagedAttachment({
 }) {
   const uploading = attachment.status === "uploading";
   const failed = attachment.status === "error";
+  // Once uploaded, a file shows its extraction state (issue #58).
+  const live = useUploadStatus(attachment.ref ?? NO_FILE);
+  const label = statusLabel(live);
   return (
     <div
       className={`bg-secondary/60 relative size-16 shrink-0 overflow-hidden rounded-xl border ${
@@ -38,10 +45,15 @@ export function StagedAttachment({
           <FileText className="text-muted-foreground size-5 shrink-0" />
           <span
             className="w-full truncate text-center text-[10px] leading-tight"
-            title={attachment.name}
+            title={live?.error ?? attachment.name}
           >
             {attachment.name}
           </span>
+          {label && (
+            <span className="text-muted-foreground w-full truncate text-center text-[10px] leading-tight">
+              {label}
+            </span>
+          )}
         </div>
       )}
       {uploading && (
@@ -79,9 +91,45 @@ export type StagedItem = {
   ref?: AttachmentRef;
 };
 
+/**
+ * A sent file: name, size and its live extraction state (issue #58). The
+ * chip opens the text-only preview; the icon downloads the original.
+ */
+function FileChip({ file, onOpen }: { file: AttachmentRef; onOpen: () => void }) {
+  const status = useUploadStatus(file);
+  const label = statusLabel(status);
+  const failed = status?.status === "failed";
+  return (
+    <div className="bg-secondary/60 flex max-w-72 items-center rounded-full text-xs">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="hover:bg-secondary flex min-h-9 min-w-0 items-center gap-2 rounded-l-full py-1.5 pr-1 pl-3"
+        title={status?.error ?? `${file.name} (${humanSize(file.size)})`}
+        aria-label={`Preview ${file.name}`}
+      >
+        <FileText className="text-muted-foreground size-3.5 shrink-0" />
+        <span className="truncate">{file.name}</span>
+        <span className={`shrink-0 ${failed ? "text-destructive" : "text-muted-foreground"}`}>
+          {label ?? humanSize(file.size)}
+        </span>
+      </button>
+      <a
+        href={botsApi.uploadUrl(file.uploadId)}
+        download={file.name}
+        className="hover:bg-secondary flex min-h-9 items-center rounded-r-full py-1.5 pr-3 pl-1.5"
+        aria-label={`Download ${file.name}`}
+      >
+        <Download className="text-muted-foreground size-3 shrink-0" />
+      </a>
+    </div>
+  );
+}
+
 /** Attachments on a transcript user message: thumbnails and file chips. */
 export function MessageAttachments({ attachments }: { attachments: AttachmentRef[] }) {
   const [enlarged, setEnlarged] = useState<AttachmentRef | null>(null);
+  const [preview, setPreview] = useState<AttachmentRef | null>(null);
   const images = attachments.filter((a) => a.kind === "image");
   const files = attachments.filter((a) => a.kind !== "image");
   return (
@@ -109,21 +157,11 @@ export function MessageAttachments({ attachments }: { attachments: AttachmentRef
       {files.length > 0 && (
         <div className="flex max-w-full flex-wrap justify-end gap-1.5">
           {files.map((file) => (
-            <a
-              key={file.uploadId}
-              href={botsApi.uploadUrl(file.uploadId)}
-              download={file.name}
-              className="bg-secondary/60 hover:bg-secondary flex max-w-64 items-center gap-2 rounded-full px-3 py-1.5 text-xs"
-              title={`${file.name} (${humanSize(file.size)})`}
-            >
-              <FileText className="text-muted-foreground size-3.5 shrink-0" />
-              <span className="truncate">{file.name}</span>
-              <span className="text-muted-foreground shrink-0">{humanSize(file.size)}</span>
-              <Download className="text-muted-foreground size-3 shrink-0" />
-            </a>
+            <FileChip key={file.uploadId} file={file} onOpen={() => setPreview(file)} />
           ))}
         </div>
       )}
+      <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
       {enlarged && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"

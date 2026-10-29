@@ -200,15 +200,21 @@ async function readAll(
   }
 }
 
-async function writeAtomic(s: SFTPWrapper, path: string, content: string): Promise<void> {
+async function writeAtomic(
+  s: SFTPWrapper,
+  path: string,
+  content: string | Uint8Array,
+): Promise<void> {
   {
     // temp name then rename: a crash mid-write never leaves a half file.
     // Random suffix: pid+ms collide for concurrent writes.
     const tmp = `${path}.ta-tmp-${process.pid}-${cryptoRandomSuffix()}`;
     try {
       await new Promise<void>((resolve, reject) =>
-        s.writeFile(tmp, Buffer.from(content, "utf8"), (e) =>
-          e ? reject(sftpError(e, tmp)) : resolve(),
+        s.writeFile(
+          tmp,
+          typeof content === "string" ? Buffer.from(content, "utf8") : Buffer.from(content),
+          (e) => (e ? reject(sftpError(e, tmp)) : resolve()),
         ),
       );
       await new Promise<void>((resolve, reject) =>

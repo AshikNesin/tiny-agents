@@ -119,6 +119,19 @@ export {
 } from "./terminal/tmux";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
+  createAttachmentsToolkit,
+  fence as fenceAttachment,
+  stripAttachmentNotes,
+  UNTRUSTED_RULE,
+  type AttachmentContent,
+  type AttachmentEntry,
+  type AttachmentSheet,
+  type AttachmentStatus,
+  type AttachmentStore,
+  type AttachmentSummary,
+  type AttachmentsToolkitOptions,
+} from "./toolkits/attachments";
+export {
   browserOpenState,
   browserProfilesDir,
   browserTabOrigin,

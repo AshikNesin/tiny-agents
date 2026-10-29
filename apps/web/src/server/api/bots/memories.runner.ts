@@ -4,7 +4,7 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
-import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
+import { GATEWAY_PROVIDER, stripAttachmentNotes } from "@tiny-agents/agent";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import {
   buildCapturePrompt,
@@ -49,7 +49,9 @@ export function captureWindow(
     }
     if (!ownerExchange) continue;
     if (m.createdAt <= since) continue;
-    const text = m.text.trim();
+    // Owner turns without attached files' text (issue #58): file content is
+    // never a source of memories.
+    const text = (m.role === "user" ? stripAttachmentNotes(m.text) : m.text).trim();
     if (!text) continue;
     if (m.role === "user") {
       lines.push(`Owner: ${text}`);

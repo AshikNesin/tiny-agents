@@ -70,7 +70,8 @@ export interface SandboxSession {
     path: string,
     options?: { maxBytes?: number },
   ): Promise<{ text: string; truncated: boolean }>;
-  writeFile(path: string, content: string): Promise<void>;
+  /** A string is written as UTF-8; bytes as they are. */
+  writeFile(path: string, content: string | Uint8Array): Promise<void>;
   close(): void;
 }
 

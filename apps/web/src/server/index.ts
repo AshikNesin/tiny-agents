@@ -12,6 +12,7 @@ import { configureLogger, logger } from "@groot/core/logger";
 import { registerRoutes, registerJobHandlers } from "./routes";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startNotifications } from "./api/notifications/notifications.wiring";
+import { extractionSweep } from "./api/uploads/uploads.extraction";
 import { systemStarted } from "./api/notifications/notifications.events";
 import { initJobQueue, stopJobQueue } from "@groot/jobs/server/client";
 import { startWorkers } from "@groot/jobs/server/worker";
@@ -140,6 +141,11 @@ async function main() {
   // Pushover credentials; never blocks the agent.
   const notifications = startNotifications(runtime);
   notificationService.start();
+
+  // Upload extraction (issue #58): files a restart interrupted extract again.
+  void extractionSweep().catch((error: unknown) =>
+    logger.warn({ error }, "Upload extraction sweep failed"),
+  );
 
   // Routines completion (issue #18 phase A): fired runs resolve when their
   // bot's conversation goes idle; the boot sweep marks runs interrupted by a

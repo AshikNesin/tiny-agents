@@ -36,7 +36,7 @@ feature docs as you need them.
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn/FIDO2 passwordless authentication             |
 | [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output             |
 | [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page |
-| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: chat image/file attachments, vision paths |
+| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files   |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions   |
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you      |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM              |

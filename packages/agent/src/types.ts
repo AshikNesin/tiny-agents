@@ -135,6 +135,8 @@ export interface AttachmentRef {
   /** Images only, after preparation. */
   width?: number;
   height?: number;
+  /** Files only: extraction state when the ref was made (issue #58; live state via the upload). */
+  status?: "none" | "pending" | "ready" | "failed" | "unsupported";
 }
 
 export interface ChatMessage {

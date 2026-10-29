@@ -2,9 +2,11 @@
  * Upload service (issue #17): validate, prepare and store chat attachments.
  *
  * One row per attachment is the single validated metadata source; bytes live
- * in files storage under chat/<uploadId>/{original,model}. Images get a
- * model-ready variant (EXIF-upright, resized, base64-bounded) prepared at
- * upload time so the send click never waits on Photon.
+ * in files storage under chat/<uploadId>/{original,model,extract.json}.
+ * Images get a model-ready variant (EXIF-upright, resized, base64-bounded)
+ * prepared at upload time so the send click never waits on Photon. Every
+ * other file is sniffed (issue #58: the stored MIME is what the bytes are)
+ * and queued for background extraction.
  */
 import { createHash } from "node:crypto";
 import { Boom } from "@groot/core/errors";
@@ -12,6 +14,9 @@ import { storageService } from "@groot/core/storage";
 import { prisma } from "@groot/core/database";
 import type { AttachmentRef } from "@tiny-agents/agent";
 import { imageSize, prepareImage, sniffImage } from "./uploads.prepare";
+import { extract } from "./uploads.extract";
+import { extractKey, forgetContent, queueExtraction } from "./uploads.extraction";
+import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 
 /** Max original sizes (issue #17 limits table). */
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -58,6 +63,9 @@ const ALLOWED_EXTENSIONS = new Set([
   "mp4",
   "webm",
   "mov",
+  "tsv",
+  // Code and plain text (issue #58): stored and read as text, never run.
+  ...TEXT_EXTENSIONS,
 ]);
 
 export interface StoredUpload {
@@ -79,7 +87,7 @@ function checkExtension(name: string): void {
   const ext = extensionOf(name);
   if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
     throw Boom.badRequest(
-      `Files of type ".${ext || "?"}" are not supported. Images, documents, archives and media are.`,
+      `Files of type ".${ext || "?"}" are not supported. Images, documents, text and code, archives and media are.`,
     );
   }
 }
@@ -107,6 +115,17 @@ export async function createUpload(
         ? "This file's contents are not a supported image."
         : "This looks like an image; save it with an image extension (.png, .jpg, .webp, .gif).",
     );
+  }
+
+  // Non-images: the bytes must be what the name says (and never a binary).
+  let sniffedFile: ReturnType<typeof sniffFile> | undefined;
+  if (!isImage) {
+    try {
+      sniffedFile = sniffFile(input.bytes, extensionOf(name));
+    } catch (error) {
+      if (error instanceof SniffError) throw Boom.unsupportedMediaType(error.message);
+      throw error;
+    }
   }
 
   const uploadId = createHash("sha256")
@@ -140,18 +159,34 @@ export async function createUpload(
     });
   }
 
+  // Types we can't read are settled now; the rest extract in the background.
+  const unreadable =
+    sniffedFile?.kind === "unsupported"
+      ? await extract({ bytes: new Uint8Array(), kind: "unsupported", name }, sniffedFile.mime)
+      : undefined;
   const row = await prisma.upload.create({
     data: {
       id: uploadId,
       kind: isImage ? "image" : "file",
       name,
-      mimeType: sniffed ?? input.mimeType,
+      mimeType: sniffed ?? sniffedFile?.mime ?? input.mimeType,
       size: input.bytes.length,
       ...(width !== undefined && height !== undefined ? { width, height } : {}),
       modelKey,
       storageKey: originalKey,
+      sha256: createHash("sha256").update(input.bytes).digest("hex"),
+      ...(isImage
+        ? {}
+        : unreadable && unreadable.status !== "ready"
+          ? {
+              extractStatus: unreadable.status,
+              extractError: unreadable.error,
+              extractedAt: new Date(),
+            }
+          : { extractStatus: "pending" }),
     },
   });
+  if (row.extractStatus === "pending") queueExtraction(row.id);
   return { ref: toRef(row) };
 }
 
@@ -163,6 +198,7 @@ function toRef(row: {
   size: number;
   width: number | null;
   height: number | null;
+  extractStatus?: string;
 }): AttachmentRef {
   return {
     uploadId: row.id,
@@ -171,6 +207,27 @@ function toRef(row: {
     mimeType: row.mimeType,
     size: row.size,
     ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
+    ...(row.kind === "file" && row.extractStatus
+      ? { status: row.extractStatus as NonNullable<AttachmentRef["status"]> }
+      : {}),
+  };
+}
+
+/** An upload's live extraction state, for chips and the preview drawer. */
+export async function uploadStatus(id: string) {
+  const row = await prisma.upload.findUnique({ where: { id } });
+  if (!row) throw Boom.notFound("Unknown upload");
+  // Uploads from before extraction existed are read on first request.
+  if (row.kind === "file" && row.extractStatus === "none") {
+    await prisma.upload.update({ where: { id }, data: { extractStatus: "pending" } });
+    queueExtraction(id);
+    row.extractStatus = "pending";
+  }
+  return {
+    ref: toRef(row),
+    status: row.extractStatus,
+    ...(row.extractError ? { error: row.extractError } : {}),
+    ...(row.extractMeta ? { meta: JSON.parse(row.extractMeta) as Record<string, unknown> } : {}),
   };
 }
 
@@ -204,12 +261,17 @@ export async function modelImage(
   };
 }
 
-/** Delete a staged upload (owner removed it before send). */
+/** Delete an upload: the row, the original and every derived artifact. */
 export async function deleteUpload(id: string): Promise<void> {
   const row = await prisma.upload.findUnique({ where: { id } });
   if (!row) throw Boom.notFound("Unknown upload");
   await prisma.upload.delete({ where: { id } });
-  const keys = [row.storageKey, ...(row.modelKey ? [row.modelKey] : [])];
+  forgetContent(id);
+  const keys = [
+    row.storageKey,
+    ...(row.modelKey ? [row.modelKey] : []),
+    ...(row.kind === "file" ? [extractKey(id)] : []),
+  ];
   try {
     await storageService.deleteFiles({ filePaths: keys });
   } catch {

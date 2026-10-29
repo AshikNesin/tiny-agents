@@ -49,8 +49,13 @@ export const externalPackages = [
  */
 export function esbuildOptions({ externals, plugins }) {
   return {
-    entryPoints: ["apps/web/src/server/index.ts"],
-    outfile: "dist/bundle.js",
+    // The upload extraction worker (issue #58) runs in its own thread, so it
+    // ships as its own file next to the bundle.
+    entryPoints: {
+      bundle: "apps/web/src/server/index.ts",
+      "uploads-extract-worker": "apps/web/src/server/api/uploads/uploads.extract.worker.ts",
+    },
+    outdir: "dist",
     bundle: true,
     platform: "node",
     format: "esm",
@@ -164,7 +169,10 @@ async function build() {
               project: process.env.SENTRY_PROJECT || pkgName,
               release,
               sourcemaps: {
-                filesToDeleteAfterUpload: ["dist/bundle.js.map"],
+                filesToDeleteAfterUpload: [
+                  "dist/bundle.js.map",
+                  "dist/uploads-extract-worker.js.map",
+                ],
               },
             }),
           ]
@@ -185,6 +193,7 @@ async function build() {
     // (react-doctor/artifact-env-leak). Idempotent — force:true is a no-op once
     // Sentry has already removed it.
     await fs.rm("dist/bundle.js.map", { force: true });
+    await fs.rm("dist/uploads-extract-worker.js.map", { force: true });
 
     // Write release.json for runtime release consistency
     if (release) {
