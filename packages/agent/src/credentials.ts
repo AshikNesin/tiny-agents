@@ -86,5 +86,16 @@ export const CREDENTIAL_REQUESTS_PER_HOUR = 3;
 /** How long the sheet stays open. */
 export const CREDENTIAL_REQUEST_TTL_MS = 10 * 60_000;
 
+/** What a credential request's push names: its title and the origin's host, never a value. */
+export function credentialSubject(request: Pick<CredentialRequest, "origin" | "title">): string {
+  let host = request.origin;
+  try {
+    host = new URL(request.origin).hostname.replace(/^www\./, "");
+  } catch {
+    // keep the stored origin as it is
+  }
+  return `${request.title} on ${host}`;
+}
+
 export const storedRequest = (doc: { request: JsonValue }) =>
   doc.request as unknown as CredentialRequest | null;

@@ -15,6 +15,7 @@ import { z } from "zod";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { submitToBot } from "../bots/bots.conversation";
+import { notifyRoutineRun } from "../notifications/notifications.wiring";
 import {
   composeRoutinePrompt,
   nextOccurrence,
@@ -106,7 +107,7 @@ export async function dispatchOccurrence(
   const scheduledFor = new Date(payload.scheduledFor);
   const routine = await prisma.routine.findUnique({
     where: { id: payload.routineId },
-    include: { bot: { select: { id: true, conversationId: true } } },
+    include: { bot: { select: { id: true, name: true, conversationId: true } } },
   });
   // Missing routine (deleted bot cascades or routine delete): the queued job
   // is an orphan; ack and drop.
@@ -136,7 +137,7 @@ export async function dispatchOccurrence(
   }
 
   if (!withinGrace(schedule, scheduledFor, now)) {
-    await prisma.routineRun.upsert({
+    const missed = await prisma.routineRun.upsert({
       where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
       create: {
         routineId: routine.id,
@@ -149,6 +150,10 @@ export async function dispatchOccurrence(
       },
       update: { status: "missed", finishedAt: now },
     });
+    notifyRoutineRun(
+      { runId: missed.id, routineName: routine.name, bot: routine.bot },
+      { status: "missed", error: `Started ${lateMinutes} min late, past the grace window.` },
+    );
     if (payload.trigger === "schedule" && routine.enabled) {
       await scheduleAfterOccurrence(routine, now, now);
     }
@@ -173,7 +178,7 @@ export async function dispatchOccurrence(
     // lands in the bot's chat (PRD 5.5). A model removed from the catalog
     // fails the reconcile step, so it lands here too.
     submitted = false;
-    await prisma.routineRun.upsert({
+    const failed = await prisma.routineRun.upsert({
       where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
       create: {
         routineId: routine.id,
@@ -187,6 +192,10 @@ export async function dispatchOccurrence(
       update: { status: "failed", finishedAt: now, error: submitError(error) },
     });
     await pauseAfterSubmitFailure(runtime, routine, bot.conversationId, error);
+    notifyRoutineRun(
+      { runId: failed.id, routineName: routine.name, bot: { id: bot.id, name: bot.name } },
+      { status: "paused", error: submitError(error) },
+    );
   }
 
   if (!submitted) return;

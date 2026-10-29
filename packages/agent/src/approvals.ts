@@ -138,7 +138,7 @@ export function gateTool(tool: ToolRegistration, tracker: WaitTracker): ToolRegi
         context,
       );
       if (ask) {
-        const decision = await waitForDecision(api, tracker, context, plan);
+        const decision = await waitForDecision(api, tracker, tool.name, context, plan);
         if (decision !== "approved") {
           await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
           return decision === "expired"
@@ -200,9 +200,29 @@ async function mustAsk(name: string, api: ToolExecutionApi, context: Context): P
   return permissions !== undefined && !permissions.allow.includes(name);
 }
 
+/**
+ * What a vault call's push names: the item and the target's host only (the
+ * phishing tell), never the full target or any value.
+ */
+function vaultSubject(plan: GatePlan | undefined): { subject?: string } {
+  const vault = plan?.details?.vault as { label?: unknown; target?: unknown } | undefined;
+  if (!vault || typeof vault.label !== "string") return {};
+  let host: string | undefined;
+  try {
+    host =
+      typeof vault.target === "string"
+        ? new URL(vault.target).hostname.replace(/^www\./, "")
+        : undefined;
+  } catch {
+    host = undefined;
+  }
+  return { subject: host ? `${vault.label} on ${host}` : vault.label };
+}
+
 async function waitForDecision(
   api: ToolExecutionApi,
   tracker: WaitTracker,
+  tool: string,
   context: Context,
   plan?: GatePlan,
 ): Promise<ApprovalDecision | "expired"> {
@@ -223,6 +243,7 @@ async function waitForDecision(
         value.expiresAt = Date.now() + plan.expiresInMs;
       }
     },
+    { tool, ...vaultSubject(plan) },
   );
   return doc.status as ApprovalDecision | "expired";
 }

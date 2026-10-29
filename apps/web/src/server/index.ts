@@ -11,6 +11,8 @@ import { config } from "@groot/core/config";
 import { configureLogger, logger } from "@groot/core/logger";
 import { registerRoutes, registerJobHandlers } from "./routes";
 import { notificationService } from "@groot/core/notification/notification.service";
+import { startNotifications } from "./api/notifications/notifications.wiring";
+import { systemStarted } from "./api/notifications/notifications.events";
 import { initJobQueue, stopJobQueue } from "@groot/jobs/server/client";
 import { startWorkers } from "@groot/jobs/server/worker";
 import { filesPromise } from "@groot/core/storage";
@@ -133,6 +135,12 @@ async function main() {
   });
   void relay.sweep().catch(() => undefined);
 
+  // Push notifications (issue #57): approvals, questions, failed or long
+  // runs and routine results reach the owner's phone. A no-op without
+  // Pushover credentials; never blocks the agent.
+  const notifications = startNotifications(runtime);
+  notificationService.start();
+
   // Routines completion (issue #18 phase A): fired runs resolve when their
   // bot's conversation goes idle; the boot sweep marks runs interrupted by a
   // restart as failed.
@@ -197,17 +205,8 @@ async function main() {
         logger.info("Job queue disabled (set jobs.enabled=true in config.yml to enable)");
       }
 
-      // Send server startup notification in production
-      if (isProd) {
-        try {
-          await notificationService.sendServerStartupNotification(
-            config.app.port,
-            env.NODE_ENV || "unknown",
-          );
-        } catch (error) {
-          logger.error({ error }, "Failed to send server startup notification");
-        }
-      }
+      // A silent startup ping in production.
+      if (isProd) notificationService.notify(systemStarted(env.NODE_ENV || "unknown"));
     },
     onShutdown: async () => {
       // End chat/activity streams first: they hold their HTTP connections
@@ -220,6 +219,8 @@ async function main() {
       // Disarm capture debounce timers before the runtime closes: a firing
       // timer would call into a closed store.
       stopMemoryCapture?.();
+      notifications.stop();
+      notificationService.stop();
       await getConnectionManager().close();
       await closeAgentRuntime();
       if (config.jobs.enabled) {

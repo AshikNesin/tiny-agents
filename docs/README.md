@@ -38,6 +38,7 @@ feature docs as you need them.
 | [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page |
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: chat image/file attachments, vision paths |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions   |
+| [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you      |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM              |
 | [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots  |
 | [`kv.md`](./kv.md)                                                           | Keyv key-value storage (SQLite or Postgres backend)    |

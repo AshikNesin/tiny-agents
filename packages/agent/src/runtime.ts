@@ -73,6 +73,7 @@ import type {
   ModelInfo,
   OwnerAnswer,
   QueuedMessage,
+  WaitEvent,
   WithdrawOutcome,
 } from "./types";
 import { WaitTracker } from "./waiting";
@@ -899,6 +900,19 @@ export class AgentRuntime {
   onActivity(listener: (change: ActivityChange) => void): () => void {
     this.#activityListeners.add(listener);
     return () => this.#activityListeners.delete(listener);
+  }
+
+  /**
+   * Each tool call that starts or stops waiting on the owner: approvals and
+   * questions. A call re-run after a restart is reported as added again.
+   */
+  onWait(listener: (event: WaitEvent) => void): () => void {
+    const offApprovals = this.#approvals.onTransition((t) => listener({ kind: "approval", ...t }));
+    const offQuestions = this.#questions.onTransition((t) => listener({ kind: "question", ...t }));
+    return () => {
+      offApprovals();
+      offQuestions();
+    };
   }
 
   async #watchActivity(): Promise<void> {

@@ -1,9 +1,10 @@
 import { AppSettings } from "@groot/shell/components/AppSettings";
+import { NotificationSettings } from "@groot/shell/components/NotificationSettings";
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { Settings as SettingsIcon, ShieldCheck } from "lucide-react";
+import { Bell, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 
 export function Settings() {
   return (
@@ -18,6 +19,10 @@ export function Settings() {
             <SettingsIcon className="size-4" />
             General
           </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <Bell className="size-4" />
+            Notifications
+          </TabsTrigger>
           <TabsTrigger value="security">
             <ShieldCheck className="size-4" />
             Security
@@ -29,6 +34,10 @@ export function Settings() {
             <ThemeSettings />
             <AppSettings />
           </div>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-6">
+          <NotificationSettings />
         </TabsContent>
 
         <TabsContent value="security" className="mt-6">

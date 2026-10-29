@@ -171,6 +171,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
         (value) => {
           if (value.questions.length === 0) value.questions = toJson(asked);
         },
+        { tool: ASK_OWNER, preview: asked[0]?.question },
       );
       const questions = storedQuestions(doc);
       if (doc.status === "dismissed") {

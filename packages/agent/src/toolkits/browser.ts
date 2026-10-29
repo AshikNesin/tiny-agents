@@ -29,6 +29,7 @@ import { gateApproved, withGatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
 import {
   CREDENTIAL_REQUEST_TTL_MS,
+  credentialSubject,
   CREDENTIAL_REQUESTS_PER_HOUR,
   CredentialRequestDoc,
   storedRequest,
@@ -1017,6 +1018,7 @@ function vaultTools(options: BrowserToolkitOptions) {
             value.expiresAt = Date.now() + CREDENTIAL_REQUEST_TTL_MS;
           }
         },
+        { tool: "request_credentials", subject: credentialSubject(stored) },
       );
       const result = {
         status: doc.status,

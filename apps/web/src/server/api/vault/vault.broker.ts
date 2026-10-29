@@ -6,8 +6,7 @@
  * conversation's latest user message. It never exposes a write.
  */
 import { prisma } from "@groot/core/database";
-import { env } from "@groot/core/env";
-import { notificationService } from "@groot/core/notification/notification.service";
+import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import type { AgentRuntime, VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import {
@@ -52,13 +51,13 @@ async function who(conversation: number, runtime: () => ChatReader): Promise<Use
   };
 }
 
-function appLink(path: string): string | undefined {
-  const origin = env.ORIGIN?.replace(/\/+$/, "");
-  return origin ? `${origin}${path}` : undefined;
-}
-
-async function notify(title: string, message: string): Promise<void> {
-  await notificationService.sendNotification({ title, message }).catch(() => undefined);
+/** The target's host only: a full URL can carry query secrets. */
+function hostOf(target: string): string {
+  try {
+    return new URL(target).hostname;
+  } catch {
+    return "a target";
+  }
 }
 
 export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): VaultBroker {
@@ -75,16 +74,12 @@ export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): 
       const context = await who(use.conversation, runtime);
       const plan = await planUse(use, context);
       const bot = context.botName ?? "A bot";
+      // Approvals push through the gate's wait (notifications.wiring.ts).
       if (plan.refused === "refused_origin") {
-        void notify(
+        notifyVaultAlert(
+          "refused",
           "Vault: refused fill",
-          `${bot} tried to use ${use.handle} on ${use.target}, which the item doesn't allow (possible prompt injection).`,
-        );
-      } else if (!plan.refused && plan.approve) {
-        const link = appLink("/chats");
-        void notify(
-          "Vault approval needed",
-          `${bot} wants to use ${plan.card.label} (${use.handle}) on ${use.target}.${link ? ` ${link}` : ""}`,
+          `${bot} tried to use ${use.handle} on ${hostOf(use.target)}, which the item doesn't allow (possible prompt injection).`,
         );
       }
       return plan;
@@ -109,11 +104,7 @@ export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): 
     },
     async requested(request) {
       const context = await who(request.conversation, runtime);
-      const link = appLink(`/vault/requests/${request.taskId}`);
-      void notify(
-        "Sign-in needed",
-        `${context.botName ?? "A bot"} needs you to ${request.title.toLowerCase()} on ${request.origin}.${link ? ` ${link}` : ""}`,
-      );
+      // The request's push goes out when its wait starts (notifications.wiring.ts).
       const origin = normalizeOrigin(request.origin);
       const saved = origin
         ? (await listFor({ ...(context.botId ? { botId: context.botId } : {}), origin })).find(
