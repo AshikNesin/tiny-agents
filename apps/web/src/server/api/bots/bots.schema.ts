@@ -39,6 +39,8 @@ export const approvalSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   /** Tool name to switch to `allow` for this bot along with approving. */
   alwaysAllow: z.string().min(1).max(128).optional(),
+  /** Vault approvals: approve this handle for the rest of the conversation. */
+  grant: z.boolean().optional(),
 });
 
 const ownerAnswer = z.object({

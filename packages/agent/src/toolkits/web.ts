@@ -2,12 +2,21 @@
  * The `web` toolkit: search and read public pages through TinyFish.
  * Search (`GET https://api.search.tinyfish.ai`) and Fetch
  * (`POST https://api.fetch.tinyfish.ai`) are free; a key is still required
- * (`TINYFISH_API_KEY`, sent as `X-API-Key`). Until it is set, the toolkit
- * offers the model no tools.
+ * (`TINYFISH_API_KEY`, sent as `X-API-Key`). Until it is set, search and
+ * fetch stay hidden.
+ *
+ * `http_request` (issue #56) is a request this server makes itself, never
+ * through TinyFish, so a vault API key (`auth: <handle>`) only ever reaches
+ * the hosts its item allows. Offered once the app gives the toolkit a vault.
  */
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import { gateApproved, withGatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
+import { hasGrant, VAULT_RULE, vaultGrant, type VaultBroker } from "../vault";
+import { safeMessage, vaultGatePlan } from "./vault";
 
 export interface WebToolkitOptions {
   /** TinyFish API key. Search and Fetch stay hidden without it. */
@@ -18,6 +27,10 @@ export interface WebToolkitOptions {
   searchBase?: string;
   /** Alternate Fetch API origin. */
   fetchBase?: string;
+  /** The vault broker: enables `http_request` and its `auth` handles. */
+  vault?: VaultBroker;
+  /** Resolve a hostname for the private-address check (tests). */
+  resolveHost?: (hostname: string) => Promise<string[]>;
 }
 
 /** Longest page text handed to the model. */
@@ -61,6 +74,47 @@ export function checkPublicUrl(raw: string): URL {
   if (privateHost) throw new Error("Private and local addresses can't be fetched.");
   return url;
 }
+
+/** True for loopback, private, link-local, CGNAT (Tailscale) and unspecified addresses. */
+export function isPrivateAddress(address: string): boolean {
+  const ip = address.replace(/^\[|\]$/g, "").toLowerCase();
+  if (isIP(ip) === 4) {
+    const [a, b] = ip.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  if (isIP(ip) === 6) {
+    const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return ip === "::" || ip === "::1" || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip);
+  }
+  return false;
+}
+
+const defaultResolve = async (hostname: string) =>
+  (await lookup(hostname, { all: true })).map((entry) => entry.address);
+
+/** Longest response body read, and the part handed to the model. */
+const MAX_HTTP_BYTES = 1_000_000;
+const HTTP_TIMEOUT_MS = 30_000;
+const MAX_REDIRECTS = 5;
+/** Headers the model may not set: the vault and the server own them. */
+const RESERVED_HEADERS = new Set([
+  "authorization",
+  "cookie",
+  "host",
+  "proxy-authorization",
+  "x-api-key",
+  "content-length",
+]);
 
 type TinyFishError = { code?: string; message?: string };
 
@@ -192,6 +246,176 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     },
   });
 
+  const resolveHost = options.resolveHost ?? defaultResolve;
+  /** The URL, checked again after DNS: a public name must not resolve to a private address. */
+  async function publicTarget(raw: string): Promise<URL> {
+    const url = checkPublicUrl(raw);
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    const addresses = isIP(host) ? [host] : await resolveHost(host).catch(() => []);
+    if (addresses.length === 0) throw new Error(`Could not resolve ${url.hostname}.`);
+    if (addresses.some(isPrivateAddress)) {
+      throw new Error("Private and local addresses can't be requested.");
+    }
+    return url;
+  }
+
+  const broker = options.vault;
+  const httpRequest = broker
+    ? withGatePlan(
+        defineTool({
+          name: "http_request",
+          description:
+            "Make an HTTP request from the server to a public API and read the response. " +
+            "To authenticate, pass `auth` with a vault handle (see vault_list): the server adds the " +
+            "key as a header, only for the hosts its item allows, and you never see it. " +
+            "Use web_fetch to read pages. " +
+            VAULT_RULE,
+          parameters: Type.Object({
+            url: Type.String({ minLength: 8, maxLength: 2000 }),
+            method: Type.Optional(
+              Type.Union(
+                ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].map((m) => Type.Literal(m)),
+              ),
+            ),
+            headers: Type.Optional(
+              Type.Record(Type.String({ maxLength: 100 }), Type.String({ maxLength: 2000 })),
+            ),
+            body: Type.Optional(Type.String({ maxLength: 100_000 })),
+            auth: Type.Optional(
+              Type.String({ minLength: 1, maxLength: 64, description: "Vault handle" }),
+            ),
+          }),
+          replay: "unsafe",
+          execute: async (args, api, context) => {
+            let url: URL;
+            try {
+              url = await publicTarget(args.url);
+            } catch (error) {
+              return fail((error as Error).message);
+            }
+            const headers: Record<string, string> = {};
+            for (const [name, value] of Object.entries(args.headers ?? {})) {
+              if (RESERVED_HEADERS.has(name.toLowerCase())) {
+                return fail(
+                  `The ${name} header can't be set; pass a vault handle as auth instead.`,
+                );
+              }
+              headers[name] = value;
+            }
+            const send = (auth?: { name: string; value: string }) =>
+              requestFollowingRedirects(url, args.method ?? "GET", headers, args.body, auth);
+            try {
+              const response = args.auth
+                ? await broker.use(
+                    {
+                      handle: args.auth,
+                      tool: "http_request",
+                      target: url.host,
+                      conversation: Number(api.conversationId),
+                      granted: await hasGrant(api, vaultGrant(args.auth), context),
+                      approved: await gateApproved(api, context),
+                    },
+                    ["value"],
+                    async (values, item) => {
+                      const inject = item.inject ?? {
+                        as: "header" as const,
+                        name: "Authorization",
+                        format: "Bearer {value}",
+                      };
+                      const value = values.value?.reveal() ?? "";
+                      return send({
+                        name: inject.name,
+                        value: inject.format.includes("{value}")
+                          ? inject.format.split("{value}").join(value)
+                          : value,
+                      });
+                    },
+                  )
+                : await send();
+              return response;
+            } catch (error) {
+              if (error instanceof Error && error.name === "HttpRequestError") {
+                return fail(error.message);
+              }
+              return fail(
+                args.auth ? safeMessage(error) : `Request failed: ${describeError(error)}`,
+              );
+            }
+          },
+        }),
+        vaultGatePlan(broker, true, async (args: { url: string; auth?: string }) => {
+          if (!args.auth) return undefined;
+          let host: string;
+          try {
+            host = new URL(args.url).host;
+          } catch {
+            return { refuse: `Not a valid URL: ${args.url}` };
+          }
+          return { handle: args.auth, tool: "http_request", target: host };
+        }),
+      )
+    : undefined;
+
+  /**
+   * One request with manual redirects: every hop is re-checked against the
+   * private-address rules, and the vault header is dropped on any hop that
+   * leaves the original host.
+   */
+  async function requestFollowingRedirects(
+    start: URL,
+    method: string,
+    headers: Record<string, string>,
+    body: string | undefined,
+    auth?: { name: string; value: string },
+  ): Promise<ToolExecutionResult> {
+    let url = start;
+    let currentMethod = method;
+    let currentBody = body;
+    for (let hop = 0; ; hop++) {
+      const sameHost = url.host === start.host;
+      const response = await doFetch(url.href, {
+        method: currentMethod,
+        headers: { ...headers, ...(auth && sameHost ? { [auth.name]: auth.value } : {}) },
+        body: currentMethod === "GET" || currentMethod === "HEAD" ? undefined : currentBody,
+        redirect: "manual",
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+      const location = response.headers.get("location");
+      if (response.status >= 300 && response.status < 400 && location) {
+        if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
+        try {
+          url = await publicTarget(new URL(location, url).href);
+        } catch (error) {
+          throw httpError(`Blocked redirect: ${(error as Error).message}`);
+        }
+        if (
+          response.status === 303 ||
+          ((response.status === 301 || response.status === 302) && currentMethod === "POST")
+        ) {
+          currentMethod = "GET";
+          currentBody = undefined;
+        }
+        continue;
+      }
+      const text = await readCapped(response);
+      const type = response.headers.get("content-type") ?? "";
+      const clipped =
+        text.length > MAX_PAGE_CHARS
+          ? `${text.slice(0, MAX_PAGE_CHARS)}\n\n[truncated: ${text.length - MAX_PAGE_CHARS} more characters]`
+          : text;
+      return {
+        output: [
+          {
+            type: "text",
+            text: `HTTP ${response.status} ${response.statusText}\n${type ? `content-type: ${type}\n` : ""}\n${clipped}`,
+          },
+        ],
+        ...(response.ok ? {} : { isError: true }),
+        details: { status: response.status, url: url.href },
+      };
+    }
+  }
+
   return {
     id: "web",
     kind: "toolkit",
@@ -199,7 +423,10 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     description: "Search and read web pages",
     // Every bot has the web toolkit; until it is configured it offers the
     // model nothing rather than tools that can only fail.
-    extension: defineExtension({ name: "web", tools: configured ? [webSearch, webFetch] : [] }),
+    extension: defineExtension({
+      name: "web",
+      tools: [...(configured ? [webSearch, webFetch] : []), ...(httpRequest ? [httpRequest] : [])],
+    }),
     tools: [
       {
         name: "web_search",
@@ -213,7 +440,45 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
         description: "Read a URL as markdown",
         readOnly: true,
       },
+      ...(httpRequest
+        ? [
+            {
+              name: "http_request",
+              label: "Called an API",
+              description: "Make an HTTP request, optionally with a vault API key",
+            },
+          ]
+        : []),
     ],
     ...(configured ? {} : { setupHint: "Set TINYFISH_API_KEY to enable web search." }),
   };
+}
+
+function httpError(message: string): Error {
+  const error = new Error(message);
+  error.name = "HttpRequestError";
+  return error;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The response body as text, reading at most MAX_HTTP_BYTES. */
+async function readCapped(response: Response): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.byteLength;
+    if (size >= MAX_HTTP_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      break;
+    }
+  }
+  return Buffer.concat(chunks).subarray(0, MAX_HTTP_BYTES).toString("utf8");
 }

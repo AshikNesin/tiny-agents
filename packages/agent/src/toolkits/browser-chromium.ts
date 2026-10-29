@@ -9,6 +9,7 @@ import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
 import type { Locator, Page } from "playwright-core";
 import { assertRefShape, isBlockedPrivateUrl } from "./browser";
+import { fillSecretFields, pageOrigin } from "./browser-fill";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser";
 
 export interface ChromiumTransportOptions {
@@ -161,6 +162,8 @@ export function pageSession(
       return { url: page.url(), status: response?.status() ?? null };
     },
     snapshot: () => snapshotOf(page),
+    origin: () => pageOrigin(page),
+    fillSecret: (fill) => fillSecretFields(page, fill),
     click: (ref) => clickRef(page, ref),
     type: (ref, text) => typeRef(page, ref, text),
     press: (key) => page.keyboard.press(key),

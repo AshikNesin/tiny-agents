@@ -1,0 +1,126 @@
+/**
+ * The app's `VaultBroker` (issue #56): what the agent toolkits are given.
+ * Tool calls know their conversation, not their bot, so this resolves the
+ * bot (for per-bot item scoping and the approval card) and whether the turn
+ * is unattended — a routine's prompt or another bot's message — from the
+ * conversation's latest user message. It never exposes a write.
+ */
+import { prisma } from "@groot/core/database";
+import { env } from "@groot/core/env";
+import { notificationService } from "@groot/core/notification/notification.service";
+import type { AgentRuntime, VaultBroker, VaultUse } from "@tiny-agents/agent";
+import { getAgentRuntime } from "../bots/bots.runtime";
+import {
+  audit,
+  findItem,
+  listFor,
+  normalizeOrigin,
+  planUse,
+  useItem,
+  type UseContext,
+} from "./vault.service";
+
+/** The label every routine prompt starts with (`composeRoutineLabel`). */
+const ROUTINE_PROMPT = /^\*\*Routine "/;
+
+type ChatReader = Pick<AgentRuntime, "readChat">;
+
+/**
+ * True when the conversation's latest user message is not the owner's own:
+ * a peer delivery (another bot, a relayed reply or a mention) or a routine.
+ * Unknown counts as unattended, which only ever refuses more.
+ */
+export async function isUnattended(conversation: number, runtime: ChatReader): Promise<boolean> {
+  try {
+    const state = await runtime.readChat(conversation);
+    const last = state.messages.findLast((message) => message.role === "user");
+    if (!last) return true;
+    return last.peer !== undefined || ROUTINE_PROMPT.test(last.text);
+  } catch {
+    return true;
+  }
+}
+
+async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
+  const bot = await prisma.bot.findUnique({
+    where: { conversationId: String(conversation) },
+    select: { id: true, name: true },
+  });
+  return {
+    ...(bot ? { botId: bot.id, botName: bot.name } : {}),
+    unattended: await isUnattended(conversation, runtime()),
+  };
+}
+
+function appLink(path: string): string | undefined {
+  const origin = env.ORIGIN?.replace(/\/+$/, "");
+  return origin ? `${origin}${path}` : undefined;
+}
+
+async function notify(title: string, message: string): Promise<void> {
+  await notificationService.sendNotification({ title, message }).catch(() => undefined);
+}
+
+export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): VaultBroker {
+  return {
+    async list(scope) {
+      const context = await who(scope.conversation, runtime);
+      return listFor({
+        ...(context.botId ? { botId: context.botId } : {}),
+        ...(scope.tool ? { tool: scope.tool } : {}),
+        ...(scope.origin ? { origin: scope.origin } : {}),
+      });
+    },
+    async plan(use) {
+      const context = await who(use.conversation, runtime);
+      const plan = await planUse(use, context);
+      const bot = context.botName ?? "A bot";
+      if (plan.refused === "refused_origin") {
+        void notify(
+          "Vault: refused fill",
+          `${bot} tried to use ${use.handle} on ${use.target}, which the item doesn't allow (possible prompt injection).`,
+        );
+      } else if (!plan.refused && plan.approve) {
+        const link = appLink("/chats");
+        void notify(
+          "Vault approval needed",
+          `${bot} wants to use ${plan.card.label} (${use.handle}) on ${use.target}.${link ? ` ${link}` : ""}`,
+        );
+      }
+      return plan;
+    },
+    async use(use, fields, sink) {
+      return useItem(use, await who(use.conversation, runtime), fields, sink);
+    },
+    async record(use: VaultUse, outcome, reason) {
+      const context = await who(use.conversation, runtime);
+      const row = await findItem(use.handle);
+      await audit({
+        ...(row ? { item: row } : {}),
+        handle: use.handle,
+        botId: context.botId,
+        conversationId: use.conversation,
+        tool: use.tool,
+        target: use.target,
+        outcome,
+        ...(reason ? { reason } : {}),
+        unattended: context.unattended,
+      });
+    },
+    async requested(request) {
+      const context = await who(request.conversation, runtime);
+      const link = appLink(`/vault/requests/${request.taskId}`);
+      void notify(
+        "Sign-in needed",
+        `${context.botName ?? "A bot"} needs you to ${request.title.toLowerCase()} on ${request.origin}.${link ? ` ${link}` : ""}`,
+      );
+      const origin = normalizeOrigin(request.origin);
+      const saved = origin
+        ? (await listFor({ ...(context.botId ? { botId: context.botId } : {}), origin })).find(
+            (item) => item.kind === "login",
+          )
+        : undefined;
+      return saved ? { savedHandle: saved.handle } : {};
+    },
+  };
+}

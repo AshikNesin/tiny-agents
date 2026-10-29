@@ -130,6 +130,8 @@ function createSession(client: ssh2.Client): SandboxSession {
         client.exec(command, (error, channel) => {
           if (error) return reject(new PreDispatchError(error.message, { cause: error }));
           collect(channel, options?.timeoutMs ?? 120_000).then(resolve, reject);
+          // Secrets for a confined command arrive here, never in the command line.
+          if (options?.stdin !== undefined) channel.end(options.stdin);
         });
       });
     },

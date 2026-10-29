@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { env } from "./env";
 import { config } from "./config";
+import { scrubValue } from "./logger/scrub";
 
 // Generate release version using SOURCE_VERSION (Heroku) or SENTRY_RELEASE env var
 // Must match the logic in scripts/build.mjs
@@ -43,6 +44,14 @@ Sentry.init({
     // https://docs.sentry.io/platforms/javascript/guides/node/configuration/integrations/zodErrors/
     Sentry.zodErrorsIntegration(),
   ],
+
+  // Values the app registered as secret never leave in an event; request
+  // bodies of the vault routes are dropped outright.
+  beforeSend(event) {
+    if (event.request?.url?.includes("/vault/")) delete event.request.data;
+    return scrubValue(event);
+  },
+  beforeBreadcrumb: (breadcrumb) => scrubValue(breadcrumb),
 });
 
 export { Sentry };

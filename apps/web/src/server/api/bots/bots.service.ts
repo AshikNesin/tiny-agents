@@ -382,7 +382,13 @@ export async function markRead(id: string) {
  */
 export async function decideApproval(
   id: string,
-  input: { taskId: number; decision: "approved" | "denied"; alwaysAllow?: string },
+  input: {
+    taskId: number;
+    decision: "approved" | "denied";
+    alwaysAllow?: string;
+    /** Vault cards: also grant the handle for the rest of the conversation. */
+    grant?: boolean;
+  },
   rt: BotAgentRuntime = runtime(),
 ) {
   const bot = toBot(await findBotRow(id));
@@ -395,7 +401,9 @@ export async function decideApproval(
     await reconcileBotConversation(id, rt);
   }
   try {
-    await rt.decideApproval(Number(bot.conversationId), input.taskId, input.decision);
+    const ref = Number(bot.conversationId);
+    if (input.grant) await rt.decideApproval(ref, input.taskId, input.decision, { grant: true });
+    else await rt.decideApproval(ref, input.taskId, input.decision);
   } catch (error) {
     if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
     throw error;

@@ -39,6 +39,7 @@ feature docs as you need them.
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: chat image/file attachments, vision paths |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions   |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM              |
+| [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots  |
 | [`kv.md`](./kv.md)                                                           | Keyv key-value storage (SQLite or Postgres backend)    |
 
 ## Reference
@@ -71,6 +72,7 @@ feature docs as you need them.
 | `/api/v1/storage`  | S3 file operations             | JWT                      |
 | `/api/v1/settings` | App key-value settings         | JWT                      |
 | `/api/v1/terminal` | Sandbox VM terminal tabs       | JWT                      |
+| `/api/v1/vault`    | Vault items, step-up, requests | JWT (+ step-up)          |
 | `GET /health`      | Health probe                   | None                     |
 
 ## Architecture decision records

@@ -6,11 +6,14 @@ import type {
   ChatMessage,
   ChatState,
   ChatToolCall,
+  ChatCredentialRequest,
   ChatToolStatus,
+  ChatVaultUse,
   OwnerAnswer,
   OwnerQuestion,
   QueuedMessage,
 } from "./types";
+import { secretRedactor } from "./redact";
 
 /** A tool call of the current round, as `pi.live` presents it. */
 export interface LiveTool {
@@ -141,7 +144,9 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function clip(text: string): string {
+/** Bounded, and scrubbed of vault values (a backstop: the gate already scrubbed results). */
+function clip(raw: string): string {
+  const text = secretRedactor.scrub(raw);
   return text.length > MAX_TOOL_OUTPUT ? `${text.slice(0, MAX_TOOL_OUTPUT)}…` : text;
 }
 
@@ -169,9 +174,46 @@ function questionsOf(
   };
 }
 
+/** A vault sink's card (on the pending details only). */
+function vaultOf(details: unknown): ChatVaultUse | undefined {
+  const vault = record(record(details)?.vault);
+  return vault && typeof vault.handle === "string" ? (vault as unknown as ChatVaultUse) : undefined;
+}
+
+/** A `request_credentials` call's details (under `result` when the approval gate asked first). */
+function credentialsOf(details: unknown): ChatCredentialRequest | undefined {
+  const own = record(details);
+  const value = own?.credentials !== undefined ? own : record(own?.result);
+  const request = record(value?.request);
+  if (!value || typeof value.credentials !== "string" || !request) return undefined;
+  return {
+    status: value.credentials as ChatCredentialRequest["status"],
+    origin: String(request.origin ?? ""),
+    title: String(request.title ?? ""),
+    purpose: String(request.purpose ?? ""),
+    fields: (Array.isArray(request.fields) ? request.fields : []).map((field) => {
+      const f = record(field) ?? {};
+      return {
+        key: String(f.key ?? ""),
+        label: String(f.label ?? ""),
+        type: String(f.type ?? "text"),
+        required: f.required === true,
+      };
+    }),
+    ...(Array.isArray(value.filled) ? { filled: value.filled.map(String) } : {}),
+    ...(typeof value.savedHandle === "string" ? { savedHandle: value.savedHandle } : {}),
+  };
+}
+
+function expiresAtOf(details: unknown): number | undefined {
+  const at = record(details)?.expiresAt;
+  return typeof at === "number" ? at : undefined;
+}
+
 function resultStatus(result: ToolResult): ChatToolStatus {
   const details = record(result.message.details);
   if (details?.approval === "denied") return "denied";
+  if (details?.approval === "expired" || details?.credentials === "expired") return "expired";
   if (details?.interrupted === true || result.codes.includes("interrupted")) return "interrupted";
   if (result.codes.includes("aborted")) return "aborted";
   return result.message.isError ? "error" : "done";
@@ -197,6 +239,7 @@ function toolCallView(
     const approval = details?.approval;
     const sources = sourcesOf(message.details);
     const { questions, answers } = questionsOf(message.details);
+    const credentials = credentialsOf(message.details);
     return {
       ...base,
       status: resultStatus(result),
@@ -206,23 +249,32 @@ function toolCallView(
       ...(sources ? { sources } : {}),
       ...(questions ? { questions } : {}),
       ...(answers ? { answers } : {}),
+      ...(credentials ? { credentials } : {}),
     };
   }
   if (slot) {
     const waiting = record(slot.details)?.approval === "pending";
     const asked = questionsOf(slot.details);
+    const credentials = credentialsOf(slot.details);
+    const vault = waiting ? vaultOf(slot.details) : undefined;
+    const expiresAt = expiresAtOf(slot.details);
     return {
       ...base,
       status: waiting
         ? "awaiting_approval"
         : asked.pending
           ? "awaiting_answer"
-          : slot.status === "running"
-            ? "running"
-            : "pending",
+          : credentials?.status === "pending"
+            ? "awaiting_credentials"
+            : slot.status === "running"
+              ? "running"
+              : "pending",
       ...(slot.taskId !== undefined ? { taskId: slot.taskId } : {}),
       ...(slot.output ? { output: clip(slot.output) } : {}),
       ...(asked.pending ? { questions: asked.questions } : {}),
+      ...(vault ? { vault } : {}),
+      ...(credentials ? { credentials } : {}),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
     };
   }
   // No result and no live slot: still queued in a busy run, or cut off for good.

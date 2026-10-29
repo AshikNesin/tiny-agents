@@ -12,6 +12,7 @@ export {
   AgentRuntime,
   ApprovalNotPendingError,
   ConversationNotFoundError,
+  CredentialRequestNotPendingError,
   ModelNotFoundError,
   QuestionNotPendingError,
   type AgentRuntimeOptions,
@@ -29,6 +30,45 @@ export {
   type ToolPermission,
 } from "./capabilities";
 export type { ApprovalDecision } from "./approvals";
+export {
+  GrantsDoc,
+  SecretValue,
+  VAULT_RULE,
+  VaultError,
+  vaultGrant,
+  type SecretField,
+  type SecretValues,
+  type VaultApproval,
+  type VaultBroker,
+  type VaultCard,
+  type VaultItemMeta,
+  type VaultKind,
+  type VaultOutcome,
+  type VaultPlan,
+  type VaultRefusal,
+  type VaultUse,
+} from "./vault";
+export { REDACTED, SecretRedactor, secretRedactor } from "./redact";
+export {
+  CREDENTIAL_REQUEST_TTL_MS,
+  SECRET_FIELD_TYPES,
+  type CredentialField,
+  type CredentialFieldType,
+  type CredentialRequest,
+  type CredentialRequestOutcome,
+} from "./credentials";
+export { WaitTracker } from "./waiting";
+export {
+  createVaultToolkit,
+  describeItem,
+  VAULT_APPROVAL_TTL_MS,
+  type VaultToolkitOptions,
+} from "./toolkits/vault";
+export {
+  OriginMismatchError,
+  type SecretFill,
+  type SecretFillField,
+} from "./toolkits/browser-fill";
 export { ASK_OWNER, InvalidAnswersError, MAX_ANSWER_TEXT } from "./toolkits/questions";
 export {
   createTasksExtension,
@@ -81,6 +121,9 @@ export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
   browserOpenState,
   browserProfilesDir,
+  browserTabOrigin,
+  fillSecretInBrowser,
+  normalizeCredentialRequest,
   closeAllBrowserSessions,
   closeBrowserSession,
   conversationBrowserTarget,
@@ -132,7 +175,12 @@ export {
   type SkillSummary,
 } from "./skills";
 export { createMemoryCapability, type MemoryLine, type MemoryStore } from "./toolkits/memory";
-export { createWebToolkit, checkPublicUrl, type WebToolkitOptions } from "./toolkits/web";
+export {
+  createWebToolkit,
+  checkPublicUrl,
+  isPrivateAddress,
+  type WebToolkitOptions,
+} from "./toolkits/web";
 export {
   connectMcp,
   createMcpCapability,

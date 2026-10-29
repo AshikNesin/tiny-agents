@@ -20,8 +20,11 @@ import {
   createTasksToolkit,
   createTodayCapability,
   createTranscriber,
+  createVaultToolkit,
   createVisionToolkit,
   createWebToolkit,
+  secretRedactor,
+  WaitTracker,
   type BotMessagingStore,
   type Capability,
   type HostKeyStore,
@@ -35,6 +38,7 @@ import {
 } from "@tiny-agents/agent/testing";
 import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { createNamespaceKv } from "@groot/core/kv";
+import { setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
@@ -42,6 +46,7 @@ import { createBotMessagingStore } from "./bots.messaging";
 import { createVisionStore } from "../uploads/uploads.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
+import { createVaultBroker } from "../vault/vault.broker";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -51,8 +56,17 @@ const unquote = (value: string | undefined) =>
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim() || undefined;
 
+/**
+ * Calls waiting on the owner's approval, shared by the runtime's approval
+ * gate and the browser's credential requests (one count per conversation).
+ */
+const ownerWaits = new WaitTracker();
+
 /** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
 export function builtinCapabilities(env: Env = process.env): Capability[] {
+  // Every value the vault resolves is scrubbed from logs and error reports too.
+  setScrubber((text) => secretRedactor.scrub(text));
+  const vault = createVaultBroker(getAgentRuntime);
   return [
     createSkillsCapability(skillStore),
     createMemoryCapability(memoryStore),
@@ -60,7 +74,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({
       apiKey: unquote(env.TINYFISH_API_KEY),
+      vault,
     }),
+    // Vault (issue #56): handles only; sinks live in the browser and web toolkits.
+    createVaultToolkit({ broker: vault }),
     createTodayCapability({ timeZone: unquote(env.TZ) }),
     // Default host is the verified MagicDNS name (issue #19 runbook); the
     // env var exists to override — e.g. the Tailscale IP if MagicDNS breaks.
@@ -69,6 +86,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
+      // Vault secrets as env vars for one command, confined to their hosts;
+      // with an allowlist, every command is confined to it (issue #56).
+      vault,
+      egressAllowlist: unquote(env.SANDBOX_EGRESS_ALLOWLIST),
     }),
     // Browser (issue #24): one Chrome per profile (shared by default, or the
     // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
@@ -80,6 +101,8 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       scale: Number(env.BROWSER_SCALE) === 1 ? 1 : 2,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
       transport: browserTransport(env),
+      vault,
+      ownerWaits,
     }),
   ];
 }
@@ -170,6 +193,7 @@ export async function openAgentRuntime(
 ): Promise<AgentRuntime> {
   const instance = await AgentRuntime.open({
     ...options,
+    approvalTracker: ownerWaits,
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
   });
   return finishOpen(instance, options.env);
@@ -286,6 +310,7 @@ export async function openFauxAgentRuntime(
     models,
     provider: "faux",
     lockWaitMs: 5_000,
+    approvalTracker: ownerWaits,
     capabilities: builtinCapabilities(env),
     settings: { retry: { enabled: false } },
     // The .env allowlist names real gateway custom models that don't exist

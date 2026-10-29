@@ -13,6 +13,7 @@ import terminalRoutes from "./api/terminal/terminal.routes";
 import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
+import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
 import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
@@ -48,6 +49,8 @@ export function registerRoutes(app: Express): void {
   protectedRouter.use(routinesRoutes);
   protectedRouter.use(skillsRoutes);
   protectedRouter.use(connectionsRoutes);
+  protectedRouter.use(vaultNoStore);
+  protectedRouter.use(vaultRoutes);
   protectedRouter.use("/jobs", jobRoutes);
   protectedRouter.use("/storage", storageRoutes);
   protectedRouter.use("/settings", appSettingsRoutes);
