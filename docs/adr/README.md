@@ -21,3 +21,4 @@ that the code alone cannot show.
 | 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                        | reverted by 0003   |
 | 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)               | accepted           |
 | 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)           | accepted           |
+| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)         | accepted           |

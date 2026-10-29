@@ -1,9 +1,14 @@
 /** Chat stream shapes shared by the SSE client and the UI. Mirrors
  * `@tiny-agents/agent` ChatEvent/ChatState (server sends them verbatim).
  * Client-only additions live here: `connected`, `loaded`, `pending`, `unreadFrom`. */
-import type { OwnerAnswer, OwnerQuestion } from "@tiny-agents/agent";
+import type {
+  ChatCredentialRequest,
+  ChatVaultUse,
+  OwnerAnswer,
+  OwnerQuestion,
+} from "@tiny-agents/agent";
 
-export type { OwnerAnswer, OwnerQuestion };
+export type { ChatCredentialRequest, ChatVaultUse, OwnerAnswer, OwnerQuestion };
 
 export type ChatMessageStatus = "done" | "streaming" | "stopped" | "error" | "unanswered";
 
@@ -12,9 +17,11 @@ export type ChatToolStatus =
   | "running"
   | "awaiting_approval"
   | "awaiting_answer"
+  | "awaiting_credentials"
   | "done"
   | "error"
   | "denied"
+  | "expired"
   | "interrupted"
   | "aborted";
 
@@ -33,6 +40,12 @@ export interface ChatToolCall {
   questions?: OwnerQuestion[];
   /** ask_owner calls: the owner's answers; absent while waiting and once dismissed. */
   answers?: OwnerAnswer[];
+  /** Epoch ms after which a pending approval or credential request expires. */
+  expiresAt?: number;
+  /** Vault sinks (issue #56): what the approval card shows, never a value. */
+  vault?: ChatVaultUse;
+  /** request_credentials calls: the sheet's form and which keys were filled. */
+  credentials?: ChatCredentialRequest;
 }
 
 export interface AttachmentRef {

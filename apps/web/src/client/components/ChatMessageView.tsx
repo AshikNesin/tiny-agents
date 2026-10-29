@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Ban, Check, Clock, Copy, ExternalLink, Sparkles } from "lucide-react";
+import { Ban, Check, Clock, Copy, ExternalLink, KeyRound, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
@@ -122,6 +123,8 @@ function summarizeArgs(call: ChatToolCall): string {
 const STATUS_TEXT: Partial<Record<ChatToolCall["status"], string>> = {
   awaiting_approval: "waiting for your approval",
   awaiting_answer: "waiting for your answers",
+  awaiting_credentials: "waiting for you to sign in",
+  expired: "nobody answered in time",
   interrupted: "interrupted by a restart",
   aborted: "stopped",
   denied: "denied by you",
@@ -137,6 +140,7 @@ export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set
   "running",
   "awaiting_approval",
   "awaiting_answer",
+  "awaiting_credentials",
 ]);
 
 /** Map our tool status onto the trace step status. */
@@ -147,11 +151,13 @@ function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pen
       return "running";
     case "error":
     case "denied":
+    case "expired":
     case "aborted":
     case "interrupted":
       return "error";
     case "awaiting_approval":
     case "awaiting_answer":
+    case "awaiting_credentials":
       return "pending";
     case "done":
       return undefined;
@@ -162,8 +168,10 @@ function statusIcon(call: ChatToolCall) {
   switch (call.status) {
     case "awaiting_approval":
     case "awaiting_answer":
+    case "awaiting_credentials":
       return <Clock className="text-primary size-3.5" />;
     case "denied":
+    case "expired":
     case "aborted":
     case "interrupted":
       return <Ban className="size-3.5" />;
@@ -220,6 +228,120 @@ function ApprovalCard({
           title={`Approve and stop asking about ${label}`}
         >
           Always allow
+        </Button>
+      </ItemActions>
+    </Item>
+  );
+}
+
+function minutesLeft(expiresAt: number | undefined): string | undefined {
+  if (expiresAt === undefined) return undefined;
+  const minutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+}
+
+const VAULT_VERB: Record<string, string> = {
+  browser_fill_secret: "fill",
+  browser_enter_code: "enter a code from",
+  http_request: "send",
+};
+
+/** A vault use's approval (issue #56): the item and where it goes, never the value. */
+function VaultApprovalCard({
+  call,
+  botId,
+  botName,
+}: {
+  call: ChatToolCall & { vault: NonNullable<ChatToolCall["vault"]> };
+  botId: string;
+  botName: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const { vault } = call;
+  const decide = async (decision: "approved" | "denied", grant?: boolean) => {
+    if (busy || call.taskId === undefined) return;
+    setBusy(true);
+    try {
+      await botsApi.decideApproval(botId, call.taskId, decision, undefined, grant);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to answer");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const what = vault.card ? `${vault.card.brand} ••${vault.card.last4}` : vault.label;
+  const verb = VAULT_VERB[vault.tool] ?? "use";
+  const where = vault.tool === "http_request" ? `to ${vault.target}` : `on ${vault.target}`;
+  const left = minutesLeft(call.expiresAt);
+  return (
+    <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
+      <ItemContent>
+        <ItemTitle>
+          <KeyRound className="size-4" />
+          {botName} wants to {verb} {what} {where}
+        </ItemTitle>
+        <ItemDescription>
+          {vault.username ? `As ${vault.username}. ` : ""}
+          The value goes straight{" "}
+          {vault.tool === "http_request" ? "into the request" : "into the page"}; {botName} never
+          sees it.
+          {left ? ` Expires in ${left}.` : ""}
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions className="flex flex-col items-stretch gap-1.5">
+        <Button size="xs" disabled={busy} onClick={() => decide("denied")}>
+          Deny
+        </Button>
+        <Button size="xs" variant="outline" disabled={busy} onClick={() => decide("approved")}>
+          Approve once
+        </Button>
+        {vault.grantable && (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => decide("approved", true)}
+            title={`Approve and stop asking about ${vault.handle} in this chat`}
+          >
+            For this chat
+          </Button>
+        )}
+      </ItemActions>
+    </Item>
+  );
+}
+
+/** A credential request (issue #56): opens the sheet where the owner types. */
+function CredentialRequestCard({
+  call,
+  botName,
+}: {
+  call: ChatToolCall & { credentials: NonNullable<ChatToolCall["credentials"]> };
+  botName: string;
+}) {
+  const { credentials } = call;
+  let host = credentials.origin;
+  try {
+    host = new URL(credentials.origin).host;
+  } catch {
+    // keep the raw origin
+  }
+  const left = minutesLeft(call.expiresAt);
+  return (
+    <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
+      <ItemContent>
+        <ItemTitle>
+          <KeyRound className="size-4" />
+          {botName} needs you on {host}
+        </ItemTitle>
+        <ItemDescription>
+          {credentials.title}. What you type is filled into the page and never shown to {botName}.
+          {left ? ` Expires in ${left}.` : ""}
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button size="xs" asChild>
+          <Link to={`/vault/requests/${call.taskId}`}>Open</Link>
         </Button>
       </ItemActions>
     </Item>
@@ -286,6 +408,7 @@ function ToolRow({
             destructive={
               call.status === "error" ||
               call.status === "denied" ||
+              call.status === "expired" ||
               call.status === "aborted" ||
               call.status === "interrupted"
             }
@@ -309,7 +432,18 @@ function ToolRow({
     ) : null;
 
   if (call.status === "awaiting_approval" && call.taskId !== undefined) {
+    if (call.vault) {
+      return (
+        <VaultApprovalCard call={{ ...call, vault: call.vault }} botId={botId} botName={botName} />
+      );
+    }
     return <ApprovalCard call={call} label={label} botId={botId} botName={botName} />;
+  }
+
+  if (call.status === "awaiting_credentials" && call.taskId !== undefined && call.credentials) {
+    return (
+      <CredentialRequestCard call={{ ...call, credentials: call.credentials }} botName={botName} />
+    );
   }
 
   // ask_owner: the questionnaire while it waits, then the questions and answers.

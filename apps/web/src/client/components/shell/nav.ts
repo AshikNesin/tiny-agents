@@ -1,5 +1,13 @@
 import type { LucideIcon } from "lucide-react";
-import { Brain, CalendarClock, ListTodo, Plug, Sparkles, SquareTerminal } from "lucide-react";
+import {
+  Brain,
+  CalendarClock,
+  KeyRound,
+  ListTodo,
+  Plug,
+  Sparkles,
+  SquareTerminal,
+} from "lucide-react";
 
 export interface AppNavItem {
   label: string;
@@ -19,6 +27,7 @@ export const SECONDARY_NAV: AppNavItem[] = [
   { label: "Skills", icon: Sparkles, to: "/skills" },
   { label: "Memory", icon: Brain, to: "/memory" },
   { label: "Connections", icon: Plug, to: "/connections" },
+  { label: "Vault", icon: KeyRound, to: "/vault" },
 ];
 
 /** Every destination besides Chats: the ⌘K palette and the mobile profile menu. */

@@ -212,7 +212,14 @@ export const botsApi = {
     taskId: number,
     decision: "approved" | "denied",
     alwaysAllow?: string,
-  ) => apiClient.post(`/bots/${id}/approvals/${taskId}`, { decision, alwaysAllow }),
+    /** Vault cards: approve this handle for the rest of the conversation. */
+    grant?: boolean,
+  ) =>
+    apiClient.post(`/bots/${id}/approvals/${taskId}`, {
+      decision,
+      ...(alwaysAllow ? { alwaysAllow } : {}),
+      ...(grant ? { grant } : {}),
+    }),
   /** Answer a bot's questions (one answer per question), or dismiss them with `null`. */
   answerQuestions: (id: string, taskId: number, answers: OwnerAnswer[] | null) =>
     apiClient.post(`/bots/${id}/questions/${taskId}`, answers ? { answers } : { dismissed: true }),

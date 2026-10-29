@@ -215,6 +215,10 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   owner can browse anywhere in the streamed Chrome, like any browser.
 - Typing a secret while you drive goes to Chrome as keystrokes. Tool results
   never echo typed text, and the bridge never logs the bytes it relays.
+- Bots sign in, enter 2FA codes and pay through the [vault](./vault.md):
+  `browser_fill_secret` and `browser_enter_code` fill a vault item on its exact
+  origin (checked again inside the page), and `request_credentials` has you
+  type into a sheet the server fills. The model never sees the values.
 - All agent action tools are approval-gated like every effectful capability
   (default ask, per-conversation always-allow).
 

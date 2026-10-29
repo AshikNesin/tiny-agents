@@ -360,9 +360,17 @@ export async function useItem<T>(
   const values: SecretValues = {};
   try {
     for (const field of wanted) {
-      const value = await backend.resolve(row.externalId, backendField(row, field));
-      secretRedactor.register(value);
-      values[field] = value;
+      try {
+        const value = await backend.resolve(row.externalId, backendField(row, field));
+        secretRedactor.register(value);
+        values[field] = value;
+      } catch (error) {
+        // A card without a saved security code still fills its number.
+        if (!(error instanceof BackendError && error.code === "missing_field")) throw error;
+      }
+    }
+    if (wanted.length > 0 && Object.keys(values).length === 0) {
+      throw new BackendError("missing_field", "none of the fields hold a value");
     }
   } catch (error) {
     const code = error instanceof BackendError ? error.code : "failed";

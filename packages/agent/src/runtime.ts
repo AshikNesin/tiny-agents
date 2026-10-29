@@ -536,7 +536,8 @@ export class AgentRuntime {
         if (doc.expiresAt <= Date.now()) throw notPending();
         return {
           conversation,
-          request: structuredClone(storedRequest(doc)!),
+          // A plain copy: the draft is a proxy that structuredClone can't copy.
+          request: JSON.parse(JSON.stringify(storedRequest(doc))) as CredentialRequest,
           expiresAt: doc.expiresAt,
         };
       }, ctx);

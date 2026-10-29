@@ -84,7 +84,12 @@ export function vaultGatePlan<TArgs>(
       try {
         use = await resolveUse(args, api, context);
       } catch (error) {
-        return { refuse: safeMessage(error), ask: false };
+        // Planning runs before any value is resolved: its errors (no page
+        // open, a browser that can't fill) are safe to show as they are.
+        return {
+          refuse: error instanceof Error ? error.message : safeMessage(error),
+          ask: false,
+        };
       }
       if (!use) return { ask: askWithoutUse && toolAsks };
       if ("refuse" in use) return { refuse: use.refuse, ask: false };

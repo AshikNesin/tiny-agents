@@ -23,6 +23,7 @@ import { BotMessageSquare, History, Settings as SettingsIcon, ShieldCheck } from
 import { SkillsPage } from "./pages/skills/Skills";
 import { MemoryPage } from "./pages/memory";
 import { ConnectionsPage } from "./pages/connections/Connections";
+import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
@@ -99,6 +100,10 @@ const router = createBrowserRouter(
         <Route path="/connections" element={<ConnectionsPage />} />
         <Route path="/connections/:id" element={<ConnectionsPage />} />
         <Route path="/connections/:id/tools/:tool" element={<ConnectionsPage />} />
+        <Route path="/vault" element={<VaultPage />} />
+        <Route path="/vault/new/:kind" element={<VaultPage />} />
+        <Route path="/vault/items/:handle" element={<VaultPage />} />
+        <Route path="/vault/requests/:taskId" element={<VaultPage />} />
         <Route path="/storage" element={<Storage />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />

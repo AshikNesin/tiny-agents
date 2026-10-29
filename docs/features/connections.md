@@ -45,3 +45,12 @@ Each tool in `GET /api/v1/connections/:id` also carries `serverName` and
 `enabled`. A call that fails before the tool runs (connection down, protocol
 error) answers 400 with the reason; a tool that runs and reports an error
 answers 200 with `result.isError: true`.
+
+## Header secrets from the vault
+
+A header-auth connection can read its header value from a [vault](./vault.md)
+item instead of the stored encrypted value: `PATCH /api/v1/connections/:id`
+with `{ "secretRef": "<handle>" }` (null goes back to the stored value;
+setting a new `secret` clears the reference). The value is resolved when the
+connection connects, audited, and scrubbed from logs; the item must allow the
+`mcp` tool (API keys do by default) and be switched on.

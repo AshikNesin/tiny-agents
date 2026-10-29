@@ -100,8 +100,8 @@ function fillInPage(first: Element | FillArgs, second?: FillArgs): FillResult {
       (el as HTMLInputElement).type !== "password",
     "cc-number": (_el, text) => /card.?num|cc.?num|cardnumber|card.?no\b|\bpan\b/.test(text),
     "cc-exp": (_el, text) => /exp/.test(text) && !/month|year|\bmm\b|\byy/.test(text),
-    "cc-exp-month": (_el, text) => /month|\bmm\b/.test(text),
-    "cc-exp-year": (_el, text) => /year|\byy/.test(text),
+    "cc-exp-month": (_el, text) => /month|\bmm\b/.test(text) && !/year|\byy/.test(text),
+    "cc-exp-year": (_el, text) => /year|\byy/.test(text) && !/month|\bmm\b/.test(text),
     "cc-csc": (_el, text) => /cvc|cvv|csc|security.?code|card.?code/.test(text),
     "cc-name": (_el, text) => /name.?on.?card|card.?holder|cc.?name|holder/.test(text),
   };
@@ -111,7 +111,12 @@ function fillInPage(first: Element | FillArgs, second?: FillArgs): FillResult {
     const candidates = [...document.querySelectorAll("input, select, textarea")].filter(usable);
     target =
       candidates.find((el) => tokensOf(el).includes(args.token)) ??
-      candidates.find((el) => heuristics[args.token]?.(el, describe(el)) ?? false) ??
+      // Heuristics only guess for fields that name no purpose of their own.
+      candidates.find(
+        (el) =>
+          tokensOf(el).every((token) => token === "on" || token === "off") &&
+          (heuristics[args.token]?.(el, describe(el)) ?? false),
+      ) ??
       null;
   }
   if (!target) return "missing";

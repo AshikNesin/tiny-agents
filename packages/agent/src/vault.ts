@@ -114,6 +114,8 @@ export interface VaultBroker {
   /**
    * Re-check policy, resolve `fields` and call `sink` with them; audited, and
    * every value is registered with the redactor first. Never returns a value.
+   * Fields the item has no value for are left out of `values` (a card without
+   * a saved security code); none at all is a `missing_field` error.
    * Throws `VaultError` (with a model-safe message) when refused or the
    * backend fails.
    */
