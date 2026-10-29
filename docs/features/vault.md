@@ -55,6 +55,7 @@ and "last used … by …".
 | `browser_enter_code`  | `browser` | ask     | 2FA: with a handle whose item has a TOTP seed, the server computes the code (RFC 6238) and fills it; otherwise it opens a credential request for one code.                                                                                              |
 | `request_credentials` | `browser` | allow   | Opens a credential request sheet (below). The owner's submit is the consent.                                                                                                                                                                            |
 | `http_request`        | `web`     | ask     | A request the server makes itself (never through TinyFish), with `auth: <handle>` added as a header only for the item's allowed hosts. Private addresses (also after DNS) are refused; the header is dropped on a redirect to another host.             |
+| `run_command`         | `sandbox` | ask     | With `secrets: [{handle, env}]`: each value is set as an env var for that one command. Every such call asks (full command on the card), and the command runs confined to the items' hosts (below).                                                      |
 
 MCP connections take a vault handle as their header value
 (`Connection.secretRef`, set with `PATCH /connections/:id { secretRef }`); it
@@ -90,6 +91,45 @@ Per item, set in the Vault UI:
 A turn counts as **unattended** when the conversation's latest user message
 is a routine's prompt or a delivery from another bot. When in doubt it counts
 as unattended, which only ever refuses more.
+
+## Sandbox commands and the egress allowlist
+
+`run_command` can hand a command vault values as env vars:
+`secrets: [{handle: "github", env: "GITHUB_TOKEN"}]` (up to 4). This is the
+one sink where model-written code holds the secret, so it is the strictest:
+
+- The item must list `run_command` in its tools (no kind has it by default)
+  and name the hosts the key may reach (**Sent only to**).
+- **Every call asks**, whatever the item's approval setting, and the card
+  shows the full command, the env vars and the hosts it may reach. Grants
+  don't apply; unattended runs are refused unless the item allows them.
+- A command that names a URL host outside those hosts is refused before
+  anyone is asked (a heuristic; the confinement below is the real control).
+- Values travel over the SSH channel's **stdin**, one line each, and are read
+  into the env vars inside the command's shell — never argv, a file or ssh
+  `AcceptEnv`. Multi-line values and detached commands are refused, and env
+  names like `PATH` or `LD_PRELOAD` are not allowed.
+- The command runs **confined**: in a transient systemd unit (`sudo
+  systemd-run`) with `NoNewPrivileges=yes` (so sudo no longer works inside
+  it), `IPAddressDeny=any` plus `IPAddressAllow=` the allowed hosts' current
+  addresses (no loopback, so no Chrome DevTools port; no tailnet, so no
+  Connect server), no unix sockets, and a read-only `/etc/hosts` holding only
+  the allowed names, so there is no DNS to tunnel through. Output is scrubbed
+  like every tool result.
+
+**Egress allowlist.** `SANDBOX_EGRESS_ALLOWLIST` (hostnames, IPs or CIDRs,
+comma-separated) confines **every** `run_command` the same way; commands with
+secrets may reach their items' hosts plus this list. Unset, only commands with
+secrets are confined. The browser and the terminal are not affected.
+
+Confinement needs **systemd and passwordless sudo** on the VM (the browser
+setup already needs sudo). When either is missing, a confined command fails
+with a clear message and never runs unconfined. Host addresses are resolved
+on the VM just before each run.
+
+Residual risk, accepted: the approved command can still write the value
+somewhere a later, unconfined command reads it. That is why every use shows
+the full command. Read it before approving.
 
 ## Credential requests
 
@@ -271,11 +311,10 @@ doesn't model (read-modify-write of the whole item).
 
 ## Limits (v1)
 
-- No sandbox env injection (`run_command` secrets) yet — that sink lets the
-  model control the code holding the secret, and is phase 3 of the design.
 - No passkeys/WebAuthn or push approvals on sites: the bot asks the owner to
   finish those during browser takeover.
 - No protection against a compromised destination site, or against code
   running as the app's own user.
-- Bitwarden, OpenBao and "fill from photo" are documented alternatives and
-  later work.
+- Deferred: Bitwarden (Secrets Manager / Password Manager), OpenBao and
+  Bitwarden Agent Access backends, "fill from photo" for cards, and
+  proxy-based credential injection for sandbox processes.

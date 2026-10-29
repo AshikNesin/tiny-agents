@@ -273,18 +273,25 @@ function VaultApprovalCard({
   const verb = VAULT_VERB[vault.tool] ?? "use";
   const where = vault.tool === "http_request" ? `to ${vault.target}` : `on ${vault.target}`;
   const left = minutesLeft(call.expiresAt);
+  const command = vault.tool === "run_command";
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
           <KeyRound className="size-4" />
-          {botName} wants to {verb} {what} {where}
+          {command
+            ? `${botName} wants to run a command with ${what}`
+            : `${botName} wants to ${verb} ${what} ${where}`}
         </ItemTitle>
+        {command && (
+          <pre className="bg-muted max-h-40 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap">
+            {vault.target}
+          </pre>
+        )}
         <ItemDescription>
-          {vault.username ? `As ${vault.username}. ` : ""}
-          The value goes straight{" "}
-          {vault.tool === "http_request" ? "into the request" : "into the page"}; {botName} never
-          sees it.
+          {command
+            ? `${(vault.env ?? []).join(", ")} ${vault.env?.length === 1 ? "is" : "are"} set for this command only, and it can reach only ${vault.hosts?.join(", ") || "nothing"}. ${botName} never sees the value, but the command can use it: check what it does.`
+            : `${vault.username ? `As ${vault.username}. ` : ""}The value goes straight ${vault.tool === "http_request" ? "into the request" : "into the page"}; ${botName} never sees it.`}
           {left ? ` Expires in ${left}.` : ""}
         </ItemDescription>
       </ItemContent>

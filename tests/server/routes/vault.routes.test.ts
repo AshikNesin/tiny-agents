@@ -295,6 +295,51 @@ describe("vault policy", () => {
   });
 });
 
+describe("sandbox command policy", () => {
+  async function createKey(handle: string, policy: Record<string, unknown>) {
+    const response = await request(app)
+      .post("/api/v1/vault/items")
+      .set(auth)
+      .set("X-Vault-Step-Up", await stepUp())
+      .send({
+        kind: "api_key",
+        title: handle,
+        values: { value: CANARY },
+        policy: { handle, ...policy },
+      });
+    expect(response.status).toBe(201);
+  }
+  const use = (handle: string) => ({
+    handle,
+    tool: "run_command",
+    target: "gh api user",
+    conversation: 1,
+    granted: true,
+  });
+
+  it("needs run_command listed and hosts named, and asks every time", async () => {
+    await createKey("gh", {
+      tools: ["run_command"],
+      hosts: ["api.github.com"],
+      approval: "allowed",
+    });
+    await createKey("gh-default", { hosts: ["api.github.com"] });
+    await createKey("gh-nohosts", { tools: ["run_command"] });
+    // Even an "allowed" item, already granted for the chat, asks for a command.
+    expect(await planUse(use("gh"), { unattended: false })).toMatchObject({
+      approve: true,
+      grantable: false,
+    });
+    expect(await planUse(use("gh-default"), { unattended: false })).toMatchObject({
+      refused: "refused_policy",
+    });
+    expect(await planUse(use("gh-nohosts"), { unattended: false })).toMatchObject({
+      refused: "refused_origin",
+      message: expect.stringMatching(/names no hosts/),
+    });
+  });
+});
+
 describe("card fills", () => {
   it("fill what the card has: a missing security code leaves the number usable", async () => {
     const token = await stepUp();

@@ -89,6 +89,10 @@ export interface ChatVaultUse {
   username?: string;
   /** "Approve for this conversation" is offered. */
   grantable: boolean;
+  /** `run_command`: the env vars the secrets go into. */
+  env?: string[];
+  /** `run_command`: everything the confined command may connect to. */
+  hosts?: string[];
 }
 
 /** A `request_credentials` call as the chat shows it: metadata only. */

@@ -111,7 +111,7 @@ export function PolicyForm({
         </Field>
       )}
 
-      {kind === "api_key" && (
+      {(kind === "api_key" || value.tools.includes("run_command")) && (
         <>
           <Field
             label="Sent only to"
@@ -129,36 +129,38 @@ export function PolicyForm({
               placeholder="api.example.com"
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Header" htmlFor={id("header")}>
-              <Input
-                id={id("header")}
-                value={value.inject?.name ?? ""}
-                onChange={(event) =>
-                  set("inject", {
-                    as: "header",
-                    name: event.target.value,
-                    format: value.inject?.format ?? "{value}",
-                  })
-                }
-                placeholder="Authorization"
-              />
-            </Field>
-            <Field label="Format" htmlFor={id("format")} hint="{value} is replaced by the key.">
-              <Input
-                id={id("format")}
-                value={value.inject?.format ?? ""}
-                onChange={(event) =>
-                  set("inject", {
-                    as: "header",
-                    name: value.inject?.name ?? "Authorization",
-                    format: event.target.value,
-                  })
-                }
-                placeholder="Bearer {value}"
-              />
-            </Field>
-          </div>
+          {kind === "api_key" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Header" htmlFor={id("header")}>
+                <Input
+                  id={id("header")}
+                  value={value.inject?.name ?? ""}
+                  onChange={(event) =>
+                    set("inject", {
+                      as: "header",
+                      name: event.target.value,
+                      format: value.inject?.format ?? "{value}",
+                    })
+                  }
+                  placeholder="Authorization"
+                />
+              </Field>
+              <Field label="Format" htmlFor={id("format")} hint="{value} is replaced by the key.">
+                <Input
+                  id={id("format")}
+                  value={value.inject?.format ?? ""}
+                  onChange={(event) =>
+                    set("inject", {
+                      as: "header",
+                      name: value.inject?.name ?? "Authorization",
+                      format: event.target.value,
+                    })
+                  }
+                  placeholder="Bearer {value}"
+                />
+              </Field>
+            </div>
+          )}
         </>
       )}
 
@@ -234,7 +236,7 @@ export function PolicyForm({
       <Field
         label="Tools"
         htmlFor={id("tools")}
-        hint={`Empty: ${defaultTools.join(", ") || "none"}.`}
+        hint={`Empty: ${defaultTools.join(", ") || "none"}. Add run_command to pass it to sandbox commands as an env var (every use asks; the command can reach only the hosts above).`}
       >
         <Input
           id={id("tools")}

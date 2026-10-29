@@ -50,8 +50,13 @@ volume must not leak them, and rotating one must not need an app change.
   doesn't defend against that.
 - Connect becomes a dependency for vault uses only: when it is down, uses
   fail closed and the rest of the app keeps working.
-- Sandbox env injection (`run_command` secrets) is deliberately left out of
-  v1: it is the one sink where model-chosen code holds the secret.
+- Sandbox env injection (`run_command` secrets) is the one sink where
+  model-written code holds the secret. It asks on every use with the full
+  command shown, and runs the command in a systemd unit the command can't
+  loosen (no privilege escalation, a kernel IP allowlist of the items' hosts,
+  no unix sockets, no DNS beyond them). A command can still write the value
+  where a later unconfined command reads it; the owner's review of the
+  command is the control for that.
 
 ## Alternatives considered
 

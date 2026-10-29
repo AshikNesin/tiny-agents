@@ -228,6 +228,8 @@ function targetAllowed(row: VaultItemRow, tool: string, target: string): boolean
       .map((h) => h.toLowerCase())
       .includes(target.toLowerCase());
   }
+  // Sandbox commands run confined to the item's hosts, so it must name some.
+  if (tool === "run_command") return parseList(row.hostsJson).length > 0;
   // MCP connections: the owner linked the item to the connection itself.
   return tool === "mcp";
 }
@@ -267,7 +269,9 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
       "refused_origin",
       BROWSER_TOOLS.has(use.tool)
         ? `Vault item \`${use.handle}\` only fills on ${parseList(row.originsJson).join(", ") || "no origin yet"}, not ${use.target}.`
-        : `Vault item \`${use.handle}\` may not be sent to ${use.target}.`,
+        : use.tool === "run_command"
+          ? `Vault item \`${use.handle}\` names no hosts a command may reach; the owner must add them on the Vault page.`
+          : `Vault item \`${use.handle}\` may not be sent to ${use.target}.`,
     );
   }
   if (who.unattended && (row.kind === "card" || !row.allowUnattended)) {
@@ -296,9 +300,11 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   };
   const meta = parseJson<{ brand: string; last4: string }>(row.cardMetaJson);
   if (meta) card.card = { brand: meta.brand, last4: meta.last4 };
+  // A sandbox command is code the model wrote holding the secret: every use asks.
+  const everyUse = approval === "every_use" || use.tool === "run_command";
   return {
-    approve: approval === "every_use" || (approval === "per_conversation" && !use.granted),
-    grantable: approval !== "every_use",
+    approve: everyUse || (approval === "per_conversation" && !use.granted),
+    grantable: !everyUse,
     unattended: who.unattended,
     card,
   };

@@ -86,6 +86,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
+      // Vault secrets as env vars for one command, confined to their hosts;
+      // with an allowlist, every command is confined to it (issue #56).
+      vault,
+      egressAllowlist: unquote(env.SANDBOX_EGRESS_ALLOWLIST),
     }),
     // Browser (issue #24): one Chrome per profile (shared by default, or the
     // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
