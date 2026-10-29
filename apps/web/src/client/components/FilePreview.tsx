@@ -31,22 +31,25 @@ export function useUploadStatus(attachment: AttachmentRef): UploadStatus | undef
     if (!isFile) return;
     let cancelled = false;
     let polls = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
+      if (++polls > MAX_POLLS) {
+        window.clearInterval(timer);
+        return;
+      }
       try {
         const next = await botsApi.uploadStatus(id);
         if (cancelled) return;
         setStatus(next);
-        if (next.status !== "pending" || ++polls >= MAX_POLLS) return;
+        if (next.status !== "pending") window.clearInterval(timer);
       } catch {
-        if (cancelled || ++polls >= MAX_POLLS) return;
+        // keep polling until the cap; the chip falls back to the size
       }
-      timer = setTimeout(() => void poll(), POLL_MS);
     };
+    const timer = window.setInterval(() => void poll(), POLL_MS);
     void poll();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      window.clearInterval(timer);
     };
   }, [id, isFile]);
   return status;
