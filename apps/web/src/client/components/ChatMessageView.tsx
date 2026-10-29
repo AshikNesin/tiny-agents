@@ -27,6 +27,7 @@ import {
   TraceTitle,
 } from "./ui/trace";
 import { MessageAttachments } from "./Attachments";
+import { ownerText } from "../lib/attachment-notes";
 import { AskedQuestions, QuestionCard } from "./QuestionCard";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
@@ -597,6 +598,7 @@ export function ChatMessageView({
         />
       );
     }
+    const text = ownerText(message.text, Boolean(message.attachments?.length));
     return (
       <Message align="end" className="group">
         {/* content-visibility on the scroller item breaks percentage
@@ -606,11 +608,11 @@ export function ChatMessageView({
           {message.attachments && message.attachments.length > 0 && (
             <MessageAttachments attachments={message.attachments} />
           )}
-          {message.text && (
+          {text && (
             <div className="flex max-w-full min-w-0 items-center gap-2">
-              <CopyButton text={message.text} />
+              <CopyButton text={text} />
               <div className={USER_PILL}>
-                <p className="whitespace-pre-wrap">{message.text}</p>
+                <p className="whitespace-pre-wrap">{text}</p>
               </div>
             </div>
           )}

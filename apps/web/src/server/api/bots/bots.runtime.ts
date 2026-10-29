@@ -8,6 +8,7 @@
  */
 import {
   AgentRuntime,
+  createAttachmentsToolkit,
   createBotsToolkit,
   createBrowserToolkit,
   createChromiumTransport,
@@ -43,7 +44,7 @@ import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
-import { createVisionStore } from "../uploads/uploads.store";
+import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -91,6 +92,20 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       vault,
       egressAllowlist: unquote(env.SANDBOX_EGRESS_ALLOWLIST),
     }),
+    // Attachments (issue #58): read, search and copy the files the owner
+    // attached. The store resolves ids through the live runtime, scoped to
+    // the asking conversation.
+    createAttachmentsToolkit(
+      createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
+      {
+        sandbox: {
+          host: unquote(env.SANDBOX_HOST) ?? "tiny-agents-vm",
+          port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
+          user: unquote(env.SANDBOX_USER),
+          hostKeys: kvHostKeyStore(),
+        },
+      },
+    ),
     // Browser (issue #24): one Chrome per profile (shared by default, or the
     // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
     // owner also gets a VNC-streamed desktop.

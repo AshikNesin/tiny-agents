@@ -73,7 +73,44 @@ export interface AttachmentRef {
   size: number;
   width?: number;
   height?: number;
+  /** Files: extraction state when the ref was made (issue #58). */
+  status?: UploadExtractStatus;
 }
+
+export type UploadExtractStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
+
+/** An upload's live extraction state (GET /uploads/:id). */
+export interface UploadStatus {
+  ref: AttachmentRef;
+  status: UploadExtractStatus;
+  error?: string;
+  meta?: {
+    format?: string;
+    pages?: number;
+    sheets?: number;
+    lines?: number;
+    entries?: number;
+    truncated?: boolean;
+  };
+}
+
+/** One page of extracted text for the read-only preview (GET /uploads/:id/text). */
+export type UploadText =
+  | { status: "ready"; format: string; page: number; pages: number; label: string; text: string }
+  | {
+      status: "ready";
+      format: string;
+      sheets: { name: string; hidden: boolean }[];
+      sheet: number;
+      rows: string[][];
+      totalRows: number;
+    }
+  | {
+      status: "ready";
+      format: string;
+      entries: { path: string; size: number; dir?: boolean; flag?: string }[];
+    }
+  | { status: Exclude<UploadExtractStatus, "ready">; error?: string };
 
 export interface ToolInfo {
   name: string;
@@ -201,6 +238,9 @@ export const botsApi = {
     return apiClient.postForm<{ ref: AttachmentRef }>("/uploads", form);
   },
   uploadUrl: (uploadId: string) => `/api/v1/uploads/${uploadId}/content`,
+  uploadStatus: (uploadId: string) => apiClient.get<UploadStatus>(`/uploads/${uploadId}`),
+  uploadText: (uploadId: string, params: { page?: number; sheet?: number } = {}) =>
+    apiClient.get<UploadText>(`/uploads/${uploadId}/text`, params),
   deleteUpload: (uploadId: string) => apiClient.delete(`/uploads/${uploadId}`),
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
