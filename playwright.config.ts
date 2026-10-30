@@ -27,9 +27,7 @@ export default defineConfig({
     // Migrations + seed run first so the demo user exists. The command inherits
     // DATABASE_URL from the environment, so e2e runs on the same
     // engine as the rest of the suite (SQLite by default).
-    // TINY_AGENTS_FAUX=1 (ambient env prefix; NOT a schema var — varlock
-    // would re-resolve and mask it) swaps the Cloudflare gateway for a
-    // scripted echo model: no network, no keys — e2e exercises the durable
+    // TINY_AGENTS_FAUX=1 swaps the Cloudflare gateway for a scripted echo model: no network, no keys — e2e exercises the durable
     // pipeline itself. The token speed keeps every reply busy for a real
     // window so steering/queueing tests can send mid-reply.
     command:

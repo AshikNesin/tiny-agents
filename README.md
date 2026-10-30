@@ -3,10 +3,9 @@
 A messenger-style app where every contact is an AI bot you chat with — built
 on [pi-durable](https://earendil.com/posts/pi-durable/) for durable
 conversations (survive refreshes, crashes, redeploys) and the
-[groot](https://github.com/AshikNesin/groot) boilerplate (Express 5 + React 19
-
-- Prisma/SQLite + JWT/passkey auth). All inference goes through Cloudflare AI
-  Gateway (provider keys live only in the gateway).
+[groot](https://github.com/AshikNesin/groot) boilerplate (Hono + React 19 +
+Drizzle/SQLite + JWT/passkey auth, Node only). All inference goes through
+Cloudflare AI Gateway (provider keys live only in the gateway).
 
 See `PRD.md` for the full spec. Phase 1: create bots, chat with streamed
 replies, durability as a first-class property.
@@ -27,6 +26,8 @@ pnpm install
 pnpm dev          # http://localhost:3000 (demo@example.com / demo@example.com)
 ```
 
+No `.env` is needed for development; `.env.example` lists every variable.
+
 Set `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`
 (and optionally `DEFAULT_MODEL`) for real inference. Without them the app
 runs but shows a banner and disables sending. For UI/flow work without the
@@ -45,8 +46,9 @@ Search and Fetch are free; without the key those tools stay hidden.
 - `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
   under `src/client`); everything else is the groot boilerplate, synced via
   `pnpm groot:sync` and never edited here
-- `app.db` (Prisma) and `agent.db` (pi-durable) are separate SQLite files;
-  the link is `Bot.conversationId`
+- `app.db` (Drizzle, schema in `apps/web/src/server/db/schema.ts`) and
+  `agent.db` (pi-durable) are separate SQLite files; the link is
+  `bots.conversationId`
 
 ## Testing
 
@@ -62,3 +64,15 @@ Coolify (Railpack, health check `/health`, one volume at `/app/data`, SQLite
 `DATABASE_URL=file:/app/data/app.db`, `AGENT_DB_PATH=/app/data/agent.db`).
 **Disable rolling updates** (consistent container naming) — pi-durable allows
 only one process per agent store. In-flight replies resume after boot.
+
+Migrations apply on boot. Uploads live next to the database
+(`/app/data/uploads`) unless `UPLOADS_DIR` is set. Production requires
+`JWT_SECRET_KEY` (≥ 32 chars), `ADMIN_AUTH_KEY`, `ORIGIN` and `RP_ID`; the
+server refuses the development defaults.
+
+**Upgrading from the Prisma build:** the first boot finds the old database,
+renames it to `app.db.prisma-backup-<time>` and copies every row into the new
+layout (bots, chats, vault items, routines, memories, users, passkeys,
+settings). Routines re-arm their next run. Passwords keep working: the first
+sign-in replaces the old bcrypt hash. Keep the backup until you have checked
+the app, then delete it.

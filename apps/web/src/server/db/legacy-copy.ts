@@ -160,9 +160,12 @@ export function convertRow(table: Table, row: Record<string, unknown>): Record<s
     }
     const mode = (column as { mode?: string }).mode;
     const sqlType = column.getSQLType().toLowerCase();
+    // JSON text columns are their own column type (no `mode`); Drizzle
+    // stringifies on insert, so hand them the parsed value.
+    const isJson = column.columnType === "SQLiteTextJson" || mode === "json";
     if (mode === "timestamp_ms" || mode === "timestamp") out[field] = toDate(value);
     else if (mode === "boolean") out[field] = toBoolean(value);
-    else if (mode === "json") out[field] = typeof value === "string" ? JSON.parse(value) : value;
+    else if (isJson) out[field] = typeof value === "string" ? JSON.parse(value) : value;
     else if (sqlType === "blob") out[field] = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
     else if (sqlType === "integer") out[field] = typeof value === "bigint" ? Number(value) : Number(value);
     else out[field] = value;

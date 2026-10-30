@@ -1,16 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Seed the local database with a demo user and a few todos. Idempotent.
- * On Cloudflare, create the first user through the admin API instead:
- *   curl -X POST https://<app>/api/v1/auth/users -H 'X-Admin-Auth-Key: ...' \
- *        -H 'content-type: application/json' -d '{"email":"...","password":"..."}'
+ * Seed the local database with the demo user. Idempotent. The task list
+ * starts empty (tasks replace groot's demo todos). A pre-Drizzle database is
+ * copied into the new layout first, as the server would on boot.
  */
 import { eq } from "drizzle-orm";
 import { bootstrap } from "@groot/core/bootstrap";
-import { createSqliteDb } from "@groot/core/database/node";
 import { db, users } from "@groot/core/database";
+import { uploadsRoot } from "@groot/core/storage/node";
 import { hashPassword } from "@groot/core/utils/password.utils";
-import { todos } from "../apps/web/src/server/db/schema";
+import { asCoreDatabase } from "../apps/web/src/server/db";
+import { openAppDatabase } from "../apps/web/src/server/db/legacy-copy";
 
 export const SEED_USER = {
   email: "demo@example.com",
@@ -22,7 +22,13 @@ async function main() {
   bootstrap({
     env: process.env,
     config: { logging: { level: "warn" } },
-    db: (env) => createSqliteDb(env.DATABASE_URL, { migrationsFolder: "apps/web/drizzle" }),
+    db: (env) =>
+      asCoreDatabase(
+        openAppDatabase(env.DATABASE_URL, {
+          migrationsFolder: "apps/web/drizzle",
+          uploadsRoot: uploadsRoot(env),
+        }),
+      ),
   });
 
   const [existing] = await db.select().from(users).where(eq(users.email, SEED_USER.email)).limit(1);
@@ -38,16 +44,7 @@ async function main() {
   }
   console.log(`   📧 Email:    ${SEED_USER.email}`);
   console.log(`   🔑 Password: ${SEED_USER.password}`);
-
-  const [anyTodo] = await db.select({ id: todos.id }).from(todos).limit(1);
-  if (!anyTodo) {
-    await db.insert(todos).values([
-      { title: "Learn Drizzle", completed: true },
-      { title: "Build an API", completed: false },
-      { title: "Write tests", completed: false },
-    ]);
-    console.log("   📝 Seeded 3 todos");
-  }
+  console.log("   📝 Task list starts empty (tasks replace demo todos)");
 }
 
 main().catch((error) => {
