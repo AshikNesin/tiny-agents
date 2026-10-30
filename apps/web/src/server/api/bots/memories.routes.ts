@@ -10,7 +10,10 @@ const router = new Hono<AppEnv>();
 router.get("/bots/:id/memories", async (c) => {
   const { includeArchived } = parseQuery(c, listMemoriesSchema);
   return ok(c, {
-    memories: await memoriesService.list(parseStringParam(c.req.param("id"), "id"), includeArchived),
+    memories: await memoriesService.list(
+      parseStringParam(c.req.param("id"), "id"),
+      includeArchived,
+    ),
   });
 });
 

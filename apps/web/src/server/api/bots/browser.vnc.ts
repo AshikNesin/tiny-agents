@@ -5,7 +5,7 @@
  * logs them (they include everything the owner types during a takeover).
  *
  * Browsers cannot set headers on a WebSocket, and the upgrade runs outside
- * the express stack, so the viewer first calls the authenticated
+ * the Hono app, so the viewer first calls the authenticated
  * `POST /bots/:id/browser/vnc-ticket` and presents the ticket here. Tickets
  * are opaque random strings (never a JWT: the session secret would also
  * verify them as login tokens), single-use, bound to one bot, and expire in

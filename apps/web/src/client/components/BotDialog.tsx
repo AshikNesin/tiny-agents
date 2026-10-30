@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { isAxiosError } from "axios";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import { Switch } from "./ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ModelSelector } from "./ai-elements/ModelSelector";
 import { toast } from "sonner";
+import { ApiError } from "@groot/shell/lib/api";
 import { ChevronRight, Search, Wrench } from "lucide-react";
 import { metaLabelClass } from "@groot/ui/typography";
 import {
@@ -180,7 +180,7 @@ export function BotDialog({
     } catch (error) {
       const message = errorMessage(error, "Failed to save bot");
       // A taken name shows under the Name field (on the Profile tab).
-      if (isAxiosError(error) && error.response?.status === 409) {
+      if (error instanceof ApiError && error.status === 409) {
         setNameError(message);
         setTab("profile");
       } else {

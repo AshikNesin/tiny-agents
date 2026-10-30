@@ -13,7 +13,8 @@
  * - Tools the owner turned off on the connection are never installed, so no
  *   bot sees them; the dashboard playground still calls them directly.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
+import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
   connectMcp,
@@ -27,6 +28,7 @@ import {
   type McpToolInfo,
   type McpTransportKind,
 } from "@tiny-agents/agent";
+import { botConnections, connections, db, type Connection } from "../../db";
 import { connectionCapabilityId, reconcileBotConversation } from "../bots/bots.conversation";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { decryptSecret, SecretsKeyMissingError } from "./secrets";
@@ -39,7 +41,10 @@ export interface ConnectionLiveState {
   error?: string;
 }
 
-type ConnectionRow = NonNullable<Awaited<ReturnType<typeof prisma.connection.findUnique>>>;
+type ConnectionRow = Connection;
+
+const findConnection = (id: string) =>
+  db.query.connections.findFirst({ where: eq(connections.id, id) });
 
 type ManagedRuntime = Pick<
   AgentRuntime,
@@ -84,7 +89,7 @@ export class ConnectionManager {
   /** Install cached capabilities and start connecting everything (non-blocking). */
   async start(runtime: ManagedRuntime): Promise<void> {
     this.#runtime = runtime;
-    const rows = await prisma.connection.findMany();
+    const rows = await db.select().from(connections);
     for (const row of rows) {
       const tools = parseTools(row.toolsCache);
       if (tools.length > 0) this.#install(row, tools);
@@ -116,7 +121,7 @@ export class ConnectionManager {
   }
 
   async #connect(id: string, live: Live): Promise<void> {
-    const row = await prisma.connection.findUnique({ where: { id } });
+    const row = await findConnection(id);
     if (!row || this.#closed) return;
     this.#set(id, { status: "connecting" });
     await live.connection?.close().catch(() => undefined);
@@ -138,10 +143,10 @@ export class ConnectionManager {
       live.attempt = 0;
       live.authorizationUrl = undefined;
       if (connection.transport !== row.transport) {
-        await prisma.connection.update({
-          where: { id },
-          data: { transport: connection.transport },
-        });
+        await db
+          .update(connections)
+          .set({ transport: connection.transport })
+          .where(eq(connections.id, id));
       }
       await this.#toolsChanged(id, connection.tools);
       this.#set(id, { status: "connected" });
@@ -196,14 +201,14 @@ export class ConnectionManager {
 
   /** Persist a new tool list, re-install the capability and re-apply affected bots. */
   async #toolsChanged(id: string, tools: McpToolInfo[]): Promise<void> {
-    const row = await prisma.connection.findUnique({ where: { id } });
+    const row = await findConnection(id);
     if (!row) return;
     const changed = JSON.stringify(parseTools(row.toolsCache)) !== JSON.stringify(tools);
     if (changed) {
-      await prisma.connection.update({
-        where: { id },
-        data: { toolsCache: JSON.stringify(tools) },
-      });
+      await db
+        .update(connections)
+        .set({ toolsCache: JSON.stringify(tools) })
+        .where(eq(connections.id, id));
     }
     this.#install(row, tools);
     if (changed) await this.reconfigureBots(id);
@@ -233,7 +238,7 @@ export class ConnectionManager {
    * for sign-in stays withdrawn.
    */
   async reinstall(id: string): Promise<void> {
-    const row = await prisma.connection.findUnique({ where: { id } });
+    const row = await findConnection(id);
     if (!row) return;
     if (this.status(id).status !== "needs_auth") this.#install(row, parseTools(row.toolsCache));
     await this.reconfigureBots(id);
@@ -245,7 +250,10 @@ export class ConnectionManager {
 
   /** Re-apply the configuration of every bot using the connection. */
   async reconfigureBots(id: string): Promise<void> {
-    const links = await prisma.botConnection.findMany({ where: { connectionId: id } });
+    const links = await db
+      .select()
+      .from(botConnections)
+      .where(eq(botConnections.connectionId, id));
     for (const link of links) {
       try {
         if (this.#runtime) await reconcileBotConversation(link.botId, this.#runtime);
@@ -270,7 +278,7 @@ export class ConnectionManager {
 
   /** Start an OAuth sign-in; returns the consent URL to open. */
   async authorize(id: string): Promise<string | undefined> {
-    const row = await prisma.connection.findUnique({ where: { id } });
+    const row = await findConnection(id);
     if (!row || row.authType !== "oauth") return undefined;
     const live = this.#entry(id);
     live.authorizationUrl = undefined;
@@ -289,7 +297,9 @@ export class ConnectionManager {
   async finishAuthorization(state: string, code: string): Promise<string> {
     const id = await connectionForState(state);
     if (!id) throw new Error("Unknown or expired sign-in");
-    const row = await prisma.connection.findUniqueOrThrow({ where: { id } });
+    const row = await findConnection(id);
+    // Prisma's findUniqueOrThrow (P2025 → 404).
+    if (!row) throw Boom.notFound("Record not found");
     const provider = createOAuthProvider(id, () => undefined);
     await mcpAuth(provider, { serverUrl: row.url, authorizationCode: code });
     await this.connect(id);

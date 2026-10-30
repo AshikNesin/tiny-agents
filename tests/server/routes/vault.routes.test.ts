@@ -5,22 +5,16 @@
  * database, in list/detail responses, or in the audit.
  */
 import bcrypt from "bcryptjs";
-import express, { type Express } from "express";
-import request from "supertest";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
+import { asc, eq, ne, sql } from "drizzle-orm";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
+import { hashPassword } from "@groot/core/utils/password.utils";
+import {
+  db,
+  users,
+  vaultAuditEvents,
+  vaultItems,
+} from "../../../apps/web/src/server/db";
 import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import {
   createLocalBackend,
@@ -46,17 +40,16 @@ import {
 import type { SecretFill } from "../../../packages/agent/src/toolkits/browser-fill";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
+import { api, createTestApp, type TestApp } from "../helpers";
+// TMP-UPLOADS-MOCK
+vi.mock("../../../apps/web/src/server/api/uploads/uploads.routes", async () => {
+  const { Hono } = await import("hono");
+  return { default: new Hono() };
+});
+// /TMP-UPLOADS-MOCK
 
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
-
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
-}
 
 function memoryStore(): LocalStore & { dump(): string } {
   const map = new Map<string, string>();
@@ -68,30 +61,25 @@ function memoryStore(): LocalStore & { dump(): string } {
   };
 }
 
-let app: Express;
-let auth: { Authorization: string };
+const app: TestApp = createTestApp();
+let token: string;
 let store: ReturnType<typeof memoryStore>;
 
 beforeAll(async () => {
-  await prisma.user.deleteMany({ where: { email: "vault-owner@example.com" } });
-  const user = await prisma.user.create({
-    data: {
+  const [user] = await db
+    .insert(users)
+    .values({
       email: "vault-owner@example.com",
-      password: await bcrypt.hash(PASSWORD, 4),
+      password: await hashPassword(PASSWORD),
       name: "Owner",
-    },
-  });
-  auth = { Authorization: `Bearer ${generateToken({ userId: user.id, email: user.email })}` };
-  app = buildApp();
-});
-
-afterAll(async () => {
-  await prisma.user.deleteMany({ where: { email: "vault-owner@example.com" } });
+    })
+    .returning();
+  token = await generateToken({ userId: user!.id, email: user!.email });
 });
 
 beforeEach(async () => {
-  await prisma.vaultAuditEvent.deleteMany();
-  await prisma.vaultItem.deleteMany();
+  await db.delete(vaultAuditEvents);
+  await db.delete(vaultItems);
   store = memoryStore();
   const local = createLocalBackend(store);
   setReadBackendsForTests(new Map([["local", local]]));
@@ -104,34 +92,47 @@ afterEach(() => {
   secretRedactor.clear();
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+type Data = any;
+
+/** An authenticated vault request; `stepUp` sends the step-up header. */
+function vault(
+  path: string,
+  init: { method?: string; json?: unknown; stepUp?: string } = {},
+) {
+  return api<Data>(app, `/api/v1/vault${path}`, {
+    method: init.method ?? "GET",
+    token,
+    ...(init.json !== undefined ? { json: init.json } : {}),
+    ...(init.stepUp ? { headers: { "X-Vault-Step-Up": init.stepUp } } : {}),
+  });
+}
+
 async function stepUp(): Promise<string> {
-  const response = await request(app)
-    .post("/api/v1/vault/step-up")
-    .set(auth)
-    .send({ password: PASSWORD });
+  const response = await vault("/step-up", { method: "POST", json: { password: PASSWORD } });
   expect(response.status).toBe(200);
   return response.body.data.token as string;
 }
 
-async function createGithub(token: string) {
-  return request(app)
-    .post("/api/v1/vault/items")
-    .set(auth)
-    .set("X-Vault-Step-Up", token)
-    .send({
+async function createGithub(stepUpToken: string) {
+  return vault("/items", {
+    method: "POST",
+    stepUp: stepUpToken,
+    json: {
       kind: "login",
       title: "GitHub",
       urls: ["https://github.com/login"],
       values: { username: "ana", password: CANARY },
       policy: { handle: "github" },
-    });
+    },
+  });
 }
 
 /** Everything a value could leak into: rows, audit, the list and detail responses. */
 async function assertNoCanary(): Promise<void> {
-  const rows = JSON.stringify(await prisma.vaultItem.findMany());
-  const events = JSON.stringify(await prisma.vaultAuditEvent.findMany());
-  const overview = JSON.stringify((await request(app).get("/api/v1/vault").set(auth)).body);
+  const rows = JSON.stringify(await db.select().from(vaultItems));
+  const events = JSON.stringify(await db.select().from(vaultAuditEvents));
+  const overview = JSON.stringify((await vault("")).body);
   expect(rows).not.toContain(CANARY);
   expect(events).not.toContain(CANARY);
   expect(overview).not.toContain(CANARY);
@@ -143,17 +144,34 @@ describe("vault routes", () => {
   it("refuses writes without step-up and a wrong password", async () => {
     const response = await createGithub("not-a-token");
     expect(response.status).toBe(403);
-    const wrong = await request(app)
-      .post("/api/v1/vault/step-up")
-      .set(auth)
-      .send({ password: "nope" });
+    const wrong = await vault("/step-up", { method: "POST", json: { password: "nope" } });
     expect(wrong.status).toBe(401);
-    expect(await prisma.vaultItem.count()).toBe(0);
+    expect(await db.$count(vaultItems)).toBe(0);
+  });
+
+  it("accepts the password of an account made before groot 3.0 (bcrypt hash)", async () => {
+    const [legacy] = await db
+      .insert(users)
+      .values({
+        email: "vault-legacy@example.com",
+        password: await bcrypt.hash(PASSWORD, 4),
+        name: "Legacy",
+      })
+      .returning();
+    const legacyToken = await generateToken({ userId: legacy!.id, email: legacy!.email });
+    const step = (password: string) =>
+      api(app, "/api/v1/vault/step-up", {
+        method: "POST",
+        json: { password },
+        token: legacyToken,
+      });
+    expect((await step(PASSWORD)).status).toBe(200);
+    expect((await step("nope")).status).toBe(401);
   });
 
   it("creates, lists, reveals and deletes with step-up; values never stored in the clear", async () => {
-    const token = await stepUp();
-    const created = await createGithub(token);
+    const grant = await stepUp();
+    const created = await createGithub(grant);
     expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({
       handle: "github",
@@ -164,60 +182,62 @@ describe("vault routes", () => {
       effectiveApproval: "per_conversation",
     });
 
-    const overview = await request(app).get("/api/v1/vault").set(auth);
-    expect(overview.headers["cache-control"]).toBe("no-store");
+    const overview = await vault("");
+    expect(overview.headers.get("cache-control")).toBe("no-store");
+    expect(overview.headers.get("pragma")).toBe("no-cache");
     expect(overview.body.data.items).toHaveLength(1);
 
-    const detail = await request(app).get("/api/v1/vault/items/github").set(auth);
+    const detail = await vault("/items/github");
     expect(detail.body.data.fields).toEqual(expect.arrayContaining(["username", "password"]));
     await assertNoCanary();
 
-    const noStepUp = await request(app)
-      .post("/api/v1/vault/items/github/reveal")
-      .set(auth)
-      .send({ field: "password" });
+    const noStepUp = await vault("/items/github/reveal", {
+      method: "POST",
+      json: { field: "password" },
+    });
     expect(noStepUp.status).toBe(403);
-    const revealed = await request(app)
-      .post("/api/v1/vault/items/github/reveal")
-      .set(auth)
-      .set("X-Vault-Step-Up", token)
-      .send({ field: "password" });
+    // Errors are no-store too.
+    expect(noStepUp.headers.get("cache-control")).toBe("no-store");
+    const revealed = await vault("/items/github/reveal", {
+      method: "POST",
+      stepUp: grant,
+      json: { field: "password" },
+    });
     expect(revealed.body.data).toEqual({ field: "password", value: CANARY });
-    expect(revealed.headers["cache-control"]).toBe("no-store");
+    expect(revealed.headers.get("cache-control")).toBe("no-store");
     await assertNoCanary();
 
-    const rotated = await request(app)
-      .patch("/api/v1/vault/items/github")
-      .set(auth)
-      .set("X-Vault-Step-Up", token)
-      .send({ field: "password", value: "rotated-canary" });
+    const rotated = await vault("/items/github", {
+      method: "PATCH",
+      stepUp: grant,
+      json: { field: "password", value: "rotated-canary" },
+    });
     expect(rotated.status).toBe(200);
 
-    const removed = await request(app)
-      .delete("/api/v1/vault/items/github?purge=true")
-      .set(auth)
-      .set("X-Vault-Step-Up", token);
+    const removed = await vault("/items/github?purge=true", { method: "DELETE", stepUp: grant });
     expect(removed.body.data).toEqual({ deleted: true });
-    const outcomes = (await prisma.vaultAuditEvent.findMany({ orderBy: { at: "asc" } })).map(
-      (e) => e.outcome,
-    );
+    const outcomes = (
+      await db
+        .select()
+        .from(vaultAuditEvents)
+        .orderBy(asc(vaultAuditEvents.at), sql`rowid`)
+    ).map((e) => e.outcome);
     expect(outcomes).toEqual(["created", "revealed", "updated", "deleted"]);
     expect(store.dump()).not.toContain("rotated-canary");
   });
 
   it("keeps cards at every_use and never unattended", async () => {
-    const token = await stepUp();
-    const created = await request(app)
-      .post("/api/v1/vault/items")
-      .set(auth)
-      .set("X-Vault-Step-Up", token)
-      .send({
+    const created = await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
         kind: "card",
         title: "Amex",
         urls: ["https://shop.example.com"],
         values: { card_number: "378282246310005", card_expiry: "12/2030", card_cvc: "1234" },
         policy: { handle: "amex", approval: "allowed", allowUnattended: true },
-      });
+      },
+    });
     expect(created.body.data).toMatchObject({
       effectiveApproval: "every_use",
       allowUnattended: false,
@@ -264,7 +284,7 @@ describe("vault policy", () => {
       refused: "refused_unattended",
     });
     const outcomes = (
-      await prisma.vaultAuditEvent.findMany({ where: { tool: { not: "vault_ui" } } })
+      await db.select().from(vaultAuditEvents).where(ne(vaultAuditEvents.tool, "vault_ui"))
     ).map((e) => e.outcome);
     expect(outcomes.sort()).toEqual(["refused_policy", "refused_unattended", "unknown_handle"]);
   });
@@ -297,16 +317,16 @@ describe("vault policy", () => {
 
 describe("sandbox command policy", () => {
   async function createKey(handle: string, policy: Record<string, unknown>) {
-    const response = await request(app)
-      .post("/api/v1/vault/items")
-      .set(auth)
-      .set("X-Vault-Step-Up", await stepUp())
-      .send({
+    const response = await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
         kind: "api_key",
         title: handle,
         values: { value: CANARY },
         policy: { handle, ...policy },
-      });
+      },
+    });
     expect(response.status).toBe(201);
   }
   const use = (handle: string) => ({
@@ -342,18 +362,17 @@ describe("sandbox command policy", () => {
 
 describe("card fills", () => {
   it("fill what the card has: a missing security code leaves the number usable", async () => {
-    const token = await stepUp();
-    await request(app)
-      .post("/api/v1/vault/items")
-      .set(auth)
-      .set("X-Vault-Step-Up", token)
-      .send({
+    await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
         kind: "card",
         title: "Visa",
         urls: ["https://shop.example.com"],
         values: { card_number: "4242424242424242", card_expiry: "01/2031" },
         policy: { handle: "visa" },
-      });
+      },
+    });
     const sink = vi.fn(async (values: Record<string, { reveal(): string }>) => Object.keys(values));
     const keys = await useItem(
       {
@@ -457,7 +476,9 @@ describe("credential request submit", () => {
       savedHandle: "hi-nesin-io",
     });
     expect(JSON.stringify(runtime.settleCredentialRequest.mock.calls)).not.toContain(CANARY);
-    const saved = await prisma.vaultItem.findUnique({ where: { handle: "hi-nesin-io" } });
+    const saved = await db.query.vaultItems.findFirst({
+      where: eq(vaultItems.handle, "hi-nesin-io"),
+    });
     expect(saved).toMatchObject({ kind: "login", username: "ana@example.com" });
     await assertNoCanary();
   });

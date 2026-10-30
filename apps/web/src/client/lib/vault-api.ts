@@ -4,10 +4,10 @@
  * and the token lives in this module's memory only — never storage — for
  * its five minutes.
  */
-import type { AxiosError } from "axios";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
-import { apiClient } from "@groot/shell/lib/api";
+import { ApiError, apiClient, type ApiResponse } from "@groot/shell/lib/api";
+import { useAuthStore } from "@groot/shell/store/auth";
 import { errorMessage } from "./errors";
 
 export type VaultKind = "login" | "card" | "identity" | "api_key";
@@ -193,6 +193,57 @@ async function confirmWithPasskey() {
   );
 }
 
+/**
+ * `apiClient` takes no per-request headers, so step-up calls go out on
+ * `fetch` the way it sends them: same base path, cookie and JSON body, a
+ * real mid-session 401 signs the owner out, and a non-2xx response throws
+ * the same `ApiError`. Like a DELETE through `apiClient`, a missing `data`
+ * comes back as `undefined` instead of throwing.
+ */
+async function requestWithStepUp<T>(
+  method: "post" | "put" | "patch" | "delete",
+  url: string,
+  data: unknown,
+  token: string,
+): Promise<T> {
+  // A 401 from before a logout / re-login must not clear the new session.
+  const generation = useAuthStore.getState().generation;
+  const headers = new Headers({ accept: "application/json", "X-Vault-Step-Up": token });
+  if (data !== undefined) headers.set("content-type", "application/json");
+  const response = await fetch(`/api/v1${url.startsWith("/") ? "" : "/"}${url}`, {
+    method: method.toUpperCase(),
+    headers,
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+  if (
+    response.status === 401 &&
+    window.location.pathname !== "/login" &&
+    generation === useAuthStore.getState().generation
+  ) {
+    useAuthStore.getState().clearAuth();
+  }
+  const text = await response.text();
+  let envelope: ApiResponse<T> | undefined;
+  try {
+    envelope = text ? (JSON.parse(text) as ApiResponse<T>) : undefined;
+  } catch {
+    envelope = undefined;
+  }
+  if (!response.ok) {
+    throw new ApiError({
+      status: response.status,
+      code: envelope?.error?.code ?? `HTTP_${response.status}`,
+      message:
+        envelope?.error?.message ??
+        (response.statusText || `Request failed with status ${response.status}`),
+      details: envelope?.error?.details,
+      url,
+    });
+  }
+  return envelope?.data as T;
+}
+
 /** A request that needs a fresh step-up token. */
 async function stepped<T>(
   method: "post" | "put" | "patch" | "delete",
@@ -201,15 +252,9 @@ async function stepped<T>(
 ): Promise<T> {
   if (!hasStepUp()) throw new StepUpRequiredError();
   try {
-    const response = await apiClient.client.request<{ data?: T; error?: { message?: string } }>({
-      method,
-      url,
-      data,
-      headers: { "X-Vault-Step-Up": stepUp!.token },
-    });
-    return response.data.data as T;
+    return await requestWithStepUp<T>(method, url, data, stepUp!.token);
   } catch (error) {
-    if ((error as AxiosError).response?.status === 403) {
+    if (error instanceof ApiError && error.status === 403) {
       setStepUp(undefined);
       throw new StepUpRequiredError();
     }

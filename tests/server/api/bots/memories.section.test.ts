@@ -6,7 +6,7 @@
  * The bot row is keyed to the conversation the runtime created, so the store
  * lookup the capability performs actually finds it.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
 import { afterAll, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,6 +25,7 @@ import {
 } from "../../../../apps/web/src/server/api/bots/memories.store";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
+import { bots, db, memories } from "../../../../apps/web/src/server/db";
 
 let agentDir: string | null = null;
 afterAll(async () => {
@@ -85,10 +86,11 @@ it(
         capabilities: { enabled: ["memory"], permissions: {} },
       };
       const conv = await rt.createConversation(config);
-      const bot = await prisma.bot.create({
-        data: { name: "Memory writer", modelId: "test-model", conversationId: String(conv) },
-      });
-      botId = bot.id;
+      const [bot] = await db
+        .insert(bots)
+        .values({ name: "Memory writer", modelId: "test-model", conversationId: String(conv) })
+        .returning();
+      botId = bot!.id;
       const messages = new Map<string, ChatMessage>();
       const watch = async (id: number) => {
         messages.clear();
@@ -113,7 +115,7 @@ it(
           .flatMap((m) => m.toolCalls ?? [])
           .find((tool) => tool.status === "awaiting_approval"),
       );
-      expect(await prisma.memory.count({ where: { botId } })).toBe(0);
+      expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
       await rt.decideApproval(conv, call.taskId!, "approved");
       await until(() =>
         [...messages.values()].find(
@@ -124,7 +126,10 @@ it(
       await first.stop();
 
       const fresh = await rt.createConversation(config);
-      await prisma.bot.update({ where: { id: botId }, data: { conversationId: String(fresh) } });
+      await db
+        .update(bots)
+        .set({ conversationId: String(fresh) })
+        .where(eq(bots.id, botId));
       const next = await watch(fresh);
       await rt.submit(fresh, { requestId: "recall", text: "What do you know about me?" });
       const reply = await until(() =>
@@ -146,9 +151,11 @@ it(
           .find((tool) => tool.name === "forget" && tool.status === "done"),
       );
       expect(done.output).toContain(text);
-      expect(await prisma.memory.findFirst({ where: { botId } })).toMatchObject({
-        status: "deleted",
-      });
+      expect(await db.query.memories.findFirst({ where: eq(memories.botId, botId) })).toMatchObject(
+        {
+          status: "deleted",
+        },
+      );
       const before = messages.size;
       await rt.submit(fresh, { requestId: "recall-2", text: "And now?" });
       const after = await until(() =>
@@ -160,7 +167,7 @@ it(
       await next.stop();
     } finally {
       await rt.close();
-      if (botId) await prisma.bot.delete({ where: { id: botId } });
+      if (botId) await db.delete(bots).where(eq(bots.id, botId));
     }
   },
 );
@@ -199,38 +206,33 @@ it("memory section injects active memories and the gates hold", { timeout: 15_00
     systemPrompt: "You are Verify.",
   });
   const conversationId = String(conv);
-  await prisma.bot.deleteMany({ where: { conversationId } });
+  await db.delete(bots).where(eq(bots.conversationId, conversationId));
 
-  const bot = await prisma.bot.create({
-    data: { name: "Verify", modelId: "m", conversationId },
+  const [bot] = await db
+    .insert(bots)
+    .values({ name: "Verify", modelId: "m", conversationId })
+    .returning();
+  await db.insert(memories).values({
+    botId: bot!.id,
+    text: "Prefers pnpm over npm",
+    category: "preference",
+    status: "active",
+    source: "manual",
   });
-  await prisma.memory.create({
-    data: {
-      botId: bot.id,
-      text: "Prefers pnpm over npm",
-      category: "preference",
-      status: "active",
-      source: "manual",
-    },
+  await db.insert(memories).values({
+    botId: bot!.id,
+    text: "Deleted fact",
+    category: "fact",
+    status: "deleted",
+    source: "manual",
   });
-  await prisma.memory.create({
-    data: {
-      botId: bot.id,
-      text: "Deleted fact",
-      category: "fact",
-      status: "deleted",
-      source: "manual",
-    },
-  });
-  await prisma.memory.create({
-    data: {
-      botId: bot.id,
-      text: "Expired fact",
-      category: "fact",
-      status: "active",
-      source: "manual",
-      until: new Date("2020-01-01"),
-    },
+  await db.insert(memories).values({
+    botId: bot!.id,
+    text: "Expired fact",
+    category: "fact",
+    status: "active",
+    source: "manual",
+    until: new Date("2020-01-01"),
   });
 
   await rt.configure(conv, {
@@ -249,11 +251,11 @@ it("memory section injects active memories and the gates hold", { timeout: 15_00
 
   const beforeToggle = await memoryStore.list(Number(conversationId));
   expect(beforeToggle.map((l) => l.text)).toEqual(["Prefers pnpm over npm"]);
-  await prisma.bot.update({ where: { id: bot.id }, data: { memoryEnabled: false } });
+  await db.update(bots).set({ memoryEnabled: false }).where(eq(bots.id, bot!.id));
   const afterToggle = await memoryStore.list(Number(conversationId));
   expect(afterToggle).toEqual([]);
 
   await rt.close();
-  await prisma.bot.delete({ where: { id: bot.id } });
-  await expect(prisma.memory.count({ where: { botId: bot.id } })).resolves.toBe(0);
+  await db.delete(bots).where(eq(bots.id, bot!.id));
+  await expect(db.$count(memories, eq(memories.botId, bot!.id))).resolves.toBe(0);
 });

@@ -9,7 +9,7 @@
  * or a CVC), audits the keys filled, and settles the request. Nothing typed
  * is stored outside the vault backend.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
   browserTabOrigin,
@@ -22,6 +22,7 @@ import {
   type CredentialRequest,
   type SecretFillField,
 } from "@tiny-agents/agent";
+import { bots, db, vaultItems } from "../../db";
 import { browserTargetForConversation } from "../bots/browser.targets";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { conversationOwner } from "../bots/bots.owner";
@@ -46,8 +47,11 @@ export async function requestView(taskId: number, runtime: RequestRuntime = getA
   const { conversation, request, expiresAt } = await pending(taskId, runtime);
   const owner = await conversationOwner(conversation);
   const bot = owner
-    ? await prisma.bot.findUnique({ where: { id: owner.botId }, select: { id: true, name: true } })
-    : null;
+    ? await db.query.bots.findFirst({
+        where: eq(bots.id, owner.botId),
+        columns: { id: true, name: true },
+      })
+    : undefined;
   const liveOrigin = await browserTabOrigin(await browserTargetForConversation(conversation));
   return {
     taskId,
@@ -96,7 +100,9 @@ function slug(host: string): string {
 async function freeHandle(base: string): Promise<string> {
   for (let n = 1; n < 100; n++) {
     const handle = n === 1 ? base : `${base}-${n}`;
-    if (!(await prisma.vaultItem.findUnique({ where: { handle } }))) return handle;
+    if (!(await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) }))) {
+      return handle;
+    }
   }
   throw Boom.conflict("No free handle for the saved item");
 }

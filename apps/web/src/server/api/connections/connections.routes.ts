@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
+import { Hono } from "hono";
+import type { AppContext, AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import { logger } from "@groot/core/logger";
 import * as connectionsService from "./connections.service";
@@ -21,24 +22,26 @@ import {
  * Authorization header. The callback is authorized by the `state` parameter,
  * which matches only a pending sign-in started by the connection's owner.
  */
-export const publicConnectionsRouter = createRouter();
+export const publicConnectionsRouter = new Hono<AppEnv>();
 
-publicConnectionsRouter.get(
-  "/connections/oauth/client-metadata.json",
-  async (_req: Request, res: Response) => {
-    res.json({ ...clientMetadata(), client_id: clientMetadataUrl() });
-    return undefined;
-  },
+publicConnectionsRouter.get("/connections/oauth/client-metadata.json", (c) =>
+  c.json({ ...clientMetadata(), client_id: clientMetadataUrl() }),
 );
+
+/** A query parameter given exactly once (a repeated one is ignored, as before). */
+function singleQuery(c: AppContext, name: string): string | undefined {
+  const values = c.req.queries(name);
+  return values?.length === 1 ? values[0] : undefined;
+}
 
 /**
  * OAuth redirect target. In the sign-in popup it reports back to the opener
  * and closes; opened as a full page (mobile) it returns to the connection.
  */
-publicConnectionsRouter.get("/connections/oauth/callback", async (req: Request, res: Response) => {
-  const code = typeof req.query.code === "string" ? req.query.code : undefined;
-  const state = typeof req.query.state === "string" ? req.query.state : undefined;
-  const denied = typeof req.query.error === "string" ? req.query.error : undefined;
+publicConnectionsRouter.get("/connections/oauth/callback", async (c) => {
+  const code = singleQuery(c, "code");
+  const state = singleQuery(c, "state");
+  const denied = singleQuery(c, "error");
   let id: string | undefined;
   let error = denied;
   if (!error && code && state) {
@@ -53,75 +56,70 @@ publicConnectionsRouter.get("/connections/oauth/callback", async (req: Request, 
   }
   const payload = JSON.stringify({ type: "tiny-agents:oauth", id, error }).replace(/</g, "\\u003c");
   const fallback = id ? `/connections/${encodeURIComponent(id)}` : "/connections";
-  res
-    .status(200)
-    .type("html")
-    .send(
-      `<!doctype html><meta charset="utf-8"><title>Signed in</title><script>` +
-        `if (window.opener) { window.opener.postMessage(${payload}, location.origin); window.close(); }` +
-        ` else { location.replace(${JSON.stringify(fallback)}); }` +
-        `</script>`,
-    );
-  return undefined;
-});
-
-const router = createRouter();
-
-router.get("/connections", async () => connectionsService.list());
-
-router.post("/connections/test", async (req: Request) => {
-  return connectionsService.test(parseBody(req, testConnectionSchema));
-});
-
-router.post("/connections", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createConnectionSchema);
-  res.status(201);
-  return connectionsService.create(payload);
-});
-
-router.get("/connections/:id", async (req: Request) => {
-  return connectionsService.get(parseStringParam(req.params.id, "id"));
-});
-
-router.patch("/connections/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return connectionsService.update(id, parseBody(req, updateConnectionSchema));
-});
-
-router.delete("/connections/:id", async (req: Request) => {
-  await connectionsService.remove(parseStringParam(req.params.id, "id"));
-  return { deleted: true };
-});
-
-router.post("/connections/:id/reconnect", async (req: Request) => {
-  return connectionsService.reconnect(parseStringParam(req.params.id, "id"));
-});
-
-router.post("/connections/:id/authorize", async (req: Request) => {
-  return connectionsService.authorize(parseStringParam(req.params.id, "id"));
-});
-
-router.get("/connections/:id/tools/:tool", async (req: Request) => {
-  return connectionsService.getTool(
-    parseStringParam(req.params.id, "id"),
-    parseStringParam(req.params.tool, "tool"),
+  return c.html(
+    `<!doctype html><meta charset="utf-8"><title>Signed in</title><script>` +
+      `if (window.opener) { window.opener.postMessage(${payload}, location.origin); window.close(); }` +
+      ` else { location.replace(${JSON.stringify(fallback)}); }` +
+      `</script>`,
+    200,
   );
 });
 
-router.patch("/connections/:id/tools/:tool", async (req: Request) => {
-  return connectionsService.updateTool(
-    parseStringParam(req.params.id, "id"),
-    parseStringParam(req.params.tool, "tool"),
-    parseBody(req, updateToolSchema),
+const router = new Hono<AppEnv>();
+
+router.get("/connections", async (c) => ok(c, await connectionsService.list()));
+
+router.post("/connections/test", async (c) => {
+  return ok(c, await connectionsService.test(await parseBody(c, testConnectionSchema)));
+});
+
+router.post("/connections", async (c) => {
+  const payload = await parseBody(c, createConnectionSchema);
+  return ok(c, await connectionsService.create(payload), 201);
+});
+
+router.get("/connections/:id", async (c) => {
+  return ok(c, await connectionsService.get(parseStringParam(c.req.param("id"), "id")));
+});
+
+router.patch("/connections/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await connectionsService.update(id, await parseBody(c, updateConnectionSchema)));
+});
+
+router.delete("/connections/:id", async (c) => {
+  await connectionsService.remove(parseStringParam(c.req.param("id"), "id"));
+  return ok(c, { deleted: true });
+});
+
+router.post("/connections/:id/reconnect", async (c) => {
+  return ok(c, await connectionsService.reconnect(parseStringParam(c.req.param("id"), "id")));
+});
+
+router.post("/connections/:id/authorize", async (c) => {
+  return ok(c, await connectionsService.authorize(parseStringParam(c.req.param("id"), "id")));
+});
+
+router.get("/connections/:id/tools/:tool", async (c) => {
+  return ok(
+    c,
+    await connectionsService.getTool(
+      parseStringParam(c.req.param("id"), "id"),
+      parseStringParam(c.req.param("tool"), "tool"),
+    ),
   );
 });
 
-router.post("/connections/:id/tools/:tool/call", async (req: Request) => {
-  return connectionsService.callTool(
-    parseStringParam(req.params.id, "id"),
-    parseStringParam(req.params.tool, "tool"),
-    parseBody(req, callToolSchema),
-  );
+router.patch("/connections/:id/tools/:tool", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const tool = parseStringParam(c.req.param("tool"), "tool");
+  return ok(c, await connectionsService.updateTool(id, tool, await parseBody(c, updateToolSchema)));
+});
+
+router.post("/connections/:id/tools/:tool/call", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const tool = parseStringParam(c.req.param("tool"), "tool");
+  return ok(c, await connectionsService.callTool(id, tool, await parseBody(c, callToolSchema)));
 });
 
 export default router;

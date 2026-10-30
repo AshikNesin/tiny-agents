@@ -4,32 +4,70 @@
  * state and re-install on tool changes, and the OAuth flow against a fake
  * authorization server.
  */
-import express, { type Express } from "express";
-import request from "supertest";
-import { createServer, type Server } from "node:http";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { createServer, type IncomingMessage, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { getRequestListener } from "@hono/node-server";
+import { Hono } from "hono";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
+import {
+  botConnections,
+  bots,
+  connections,
+  db,
+} from "../../../apps/web/src/server/db";
 import { McpServer, StreamableHTTPServerTransport } from "../../../packages/agent/src/testing";
 import {
   ConnectionManager,
   setConnectionManagerForTests,
 } from "../../../apps/web/src/server/api/connections/connections.manager";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
+import { api, createTestApp, type TestApp } from "../helpers";
+// TMP-UPLOADS-MOCK
+vi.mock("../../../apps/web/src/server/api/uploads/uploads.routes", async () => {
+  const { Hono } = await import("hono");
+  return { default: new Hono() };
+});
+// /TMP-UPLOADS-MOCK
 
-const authorization = {
-  Authorization: `Bearer ${generateToken({ userId: 1, email: "mcp@example.com" })}`,
-};
+let token: string;
+beforeAll(async () => {
+  token = await generateToken({ userId: 1, email: "mcp@example.com" });
+});
 
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+const buildApp = (): TestApp => createTestApp();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+type Data = any;
+
+/** An authenticated JSON request that must answer `status`; returns the envelope. */
+async function call(
+  app: TestApp,
+  path: string,
+  status: number,
+  init: { method?: string; json?: unknown } = {},
+) {
+  const response = await api<Data>(app, path, {
+    method: init.method ?? "GET",
+    token,
+    ...(init.json !== undefined ? { json: init.json } : {}),
+  });
+  expect(response.status, `${init.method ?? "GET"} ${path}: ${JSON.stringify(response.body)}`).toBe(status);
+  return response.body;
+}
+
+async function listen(handler: Parameters<typeof createServer>[0]) {
+  const server = createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return { server, port: (server.address() as AddressInfo).port };
+}
+
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : undefined;
 }
 
 interface TestMcpServer {
@@ -58,13 +96,22 @@ function buildMcp(name: string) {
 /** Stateless Streamable HTTP MCP server requiring `x-api-key: secret123`. */
 async function startMcpServer(): Promise<TestMcpServer> {
   const tokens = new Set<string>(["secret123"]);
-  const app = express();
-  app.use(express.json({ limit: "4mb" }));
-  app.post("/mcp", async (req, res) => {
-    if (!tokens.has(req.get("x-api-key") ?? "")) {
+  const { server, port } = await listen(async (req, res) => {
+    const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    if (path !== "/mcp") {
+      res.writeHead(404).end();
+      return;
+    }
+    if (req.method !== "POST") {
+      res.writeHead(405).end();
+      return;
+    }
+    if (!tokens.has(String(req.headers["x-api-key"] ?? ""))) {
       res
-        .status(401)
-        .json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
+        .writeHead(401, { "content-type": "application/json" })
+        .end(
+          JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }),
+        );
       return;
     }
     // Stateless: one server+transport per request, closed with the response.
@@ -75,19 +122,9 @@ async function startMcpServer(): Promise<TestMcpServer> {
     });
     res.on("close", () => void transport.close().catch(() => undefined));
     await mcp.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(req, res, await readJson(req));
   });
-  app.get("/mcp", (_req, res) => res.status(405).end());
-  app.delete("/mcp", (_req, res) => res.status(405).end());
-
-  const server = createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  return {
-    url: `http://127.0.0.1:${typeof address === "object" ? address.port : 0}/mcp`,
-    server,
-    tokens,
-  };
+  return { url: `http://127.0.0.1:${port}/mcp`, server, tokens };
 }
 
 describe("MCP connections (header auth, streamable http)", () => {
@@ -98,9 +135,9 @@ describe("MCP connections (header auth, streamable http)", () => {
   let configured: number[];
 
   beforeEach(async () => {
-    await prisma.botConnection.deleteMany();
-    await prisma.connection.deleteMany();
-    await prisma.bot.deleteMany();
+    await db.delete(botConnections);
+    await db.delete(connections);
+    await db.delete(bots);
     mcpServer = await startMcpServer();
     installed = new Map();
     configured = [];
@@ -127,153 +164,140 @@ describe("MCP connections (header auth, streamable http)", () => {
     setConnectionManagerForTests(undefined);
     setAgentRuntimeForTests(undefined as never);
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
-    await prisma.botConnection.deleteMany();
-    await prisma.connection.deleteMany();
-    await prisma.bot.deleteMany();
+    await db.delete(botConnections);
+    await db.delete(connections);
+    await db.delete(bots);
   });
 
   it("tests a server, saves it connected, and lists its tools", async () => {
     const app = buildApp();
-    const test = await request(app)
-      .post("/api/v1/connections/test")
-      .set(authorization)
-      .send({ url: mcpServer.url, headerName: "x-api-key", secret: "secret123" })
-      .expect(200);
+    const test = await call(app, "/api/v1/connections/test", 200, {
+      method: "POST",
+      json: { url: mcpServer.url, headerName: "x-api-key", secret: "secret123" },
+    });
     expect(
-      test.body.data.tools.map((t: { name: string; readOnly: boolean }) => [t.name, t.readOnly]),
+      test.data.tools.map((t: { name: string; readOnly: boolean }) => [t.name, t.readOnly]),
     ).toEqual([
       ["echo", true],
       ["reset", false],
     ]);
-    await request(app)
-      .post("/api/v1/connections/test")
-      .set(authorization)
-      .send({ url: mcpServer.url })
-      .expect(400);
+    await call(app, "/api/v1/connections/test", 400, {
+      method: "POST",
+      json: { url: mcpServer.url },
+    });
 
-    const created = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-      })
-      .expect(201);
-    expect(created.body.data).toMatchObject({
+      },
+    });
+    expect(created.data).toMatchObject({
       status: "connected",
       slug: "demo",
       authType: "header",
     });
-    expect(created.body.data.tools.map((t: { name: string }) => t.name)).toEqual([
+    expect(created.data.tools.map((t: { name: string }) => t.name)).toEqual([
       "mcp__demo__echo",
       "mcp__demo__reset",
     ]);
     expect(runtimeCalls.install).toContain("mcp:demo");
-    expect(created.body.data).not.toHaveProperty("secret");
+    expect(created.data).not.toHaveProperty("secret");
 
     // A bad secret is reported, not thrown away silently.
-    const bad = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const bad = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Bad",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "wrong",
-      })
-      .expect(201);
-    expect(bad.body.data.status).toBe("error");
+      },
+    });
+    expect(bad.data.status).toBe("error");
   }, 30_000);
 
   it("enables a connection for a bot and re-applies its capability config", async () => {
     const app = buildApp();
-    const bot = await prisma.bot.create({
-      data: { name: "Ops", modelId: "m", conversationId: "950" },
-    });
-    const created = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const [bot] = await db
+      .insert(bots)
+      .values({ name: "Ops", modelId: "m", conversationId: "950" })
+      .returning();
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-        botIds: [bot.id],
-      })
-      .expect(201);
-    const patched = await request(app)
-      .patch(`/api/v1/bots/${bot.id}`)
-      .set(authorization)
-      .send({ connectionIds: [] })
-      .expect(200);
-    expect(patched.body.data.connectionIds).toEqual([]);
-    await request(app)
-      .patch(`/api/v1/connections/${created.body.data.id}`)
-      .set(authorization)
-      .send({ botIds: [bot.id] })
-      .expect(200);
-    const detail = await request(app)
-      .get(`/api/v1/connections/${created.body.data.id}`)
-      .set(authorization)
-      .expect(200);
-    expect(detail.body.data.botIds).toEqual([bot.id]);
-    expect(await prisma.botConnection.count()).toBe(1);
+        botIds: [bot!.id],
+      },
+    });
+    const patched = await call(app, `/api/v1/bots/${bot!.id}`, 200, {
+      method: "PATCH",
+      json: { connectionIds: [] },
+    });
+    expect(patched.data.connectionIds).toEqual([]);
+    await call(app, `/api/v1/connections/${created.data.id}`, 200, {
+      method: "PATCH",
+      json: { botIds: [bot!.id] },
+    });
+    const detail = await call(app, `/api/v1/connections/${created.data.id}`, 200);
+    expect(detail.data.botIds).toEqual([bot!.id]);
+    expect(await db.$count(botConnections)).toBe(1);
   }, 30_000);
 
   it("shows a tool's schema and turns it off for every bot", async () => {
     const app = buildApp();
-    const bot = await prisma.bot.create({
-      data: { name: "Ops", modelId: "m", conversationId: "951" },
-    });
-    const created = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const [bot] = await db
+      .insert(bots)
+      .values({ name: "Ops", modelId: "m", conversationId: "951" })
+      .returning();
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-        botIds: [bot.id],
-      })
-      .expect(201);
-    const id = created.body.data.id;
-    expect(created.body.data.tools[0]).toMatchObject({
+        botIds: [bot!.id],
+      },
+    });
+    const id = created.data.id;
+    expect(created.data.tools[0]).toMatchObject({
       name: "mcp__demo__echo",
       serverName: "echo",
       enabled: true,
     });
 
-    const detail = await request(app)
-      .get(`/api/v1/connections/${id}/tools/echo`)
-      .set(authorization)
-      .expect(200);
-    expect(detail.body.data).toMatchObject({
+    const detail = await call(app, `/api/v1/connections/${id}/tools/echo`, 200);
+    expect(detail.data).toMatchObject({
       name: "mcp__demo__echo",
       readOnly: true,
       enabled: true,
       connection: { id, slug: "demo", status: "connected" },
     });
-    expect(detail.body.data.inputSchema.properties).toHaveProperty("value");
-    await request(app).get(`/api/v1/connections/${id}/tools/nope`).set(authorization).expect(404);
+    expect(detail.data.inputSchema.properties).toHaveProperty("value");
+    await call(app, `/api/v1/connections/${id}/tools/nope`, 404);
 
     configured = [];
-    const off = await request(app)
-      .patch(`/api/v1/connections/${id}/tools/echo`)
-      .set(authorization)
-      .send({ enabled: false })
-      .expect(200);
-    expect(off.body.data.enabled).toBe(false);
+    const off = await call(app, `/api/v1/connections/${id}/tools/echo`, 200, {
+      method: "PATCH",
+      json: { enabled: false },
+    });
+    expect(off.data.enabled).toBe(false);
     expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual(["mcp__demo__reset"]);
     expect(configured).toContain(951);
-    const listed = await request(app).get(`/api/v1/connections/${id}`).set(authorization);
+    const listed = await call(app, `/api/v1/connections/${id}`, 200);
     expect(
-      listed.body.data.tools.map((t: { serverName: string; enabled: boolean }) => [
+      listed.data.tools.map((t: { serverName: string; enabled: boolean }) => [
         t.serverName,
         t.enabled,
       ]),
@@ -283,14 +307,13 @@ describe("MCP connections (header auth, streamable http)", () => {
     ]);
 
     // Reconnecting (a fresh tool listing) keeps it off.
-    await request(app).post(`/api/v1/connections/${id}/reconnect`).set(authorization).expect(200);
+    await call(app, `/api/v1/connections/${id}/reconnect`, 200, { method: "POST" });
     expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual(["mcp__demo__reset"]);
 
-    await request(app)
-      .patch(`/api/v1/connections/${id}/tools/echo`)
-      .set(authorization)
-      .send({ enabled: true })
-      .expect(200);
+    await call(app, `/api/v1/connections/${id}/tools/echo`, 200, {
+      method: "PATCH",
+      json: { enabled: true },
+    });
     expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual([
       "mcp__demo__echo",
       "mcp__demo__reset",
@@ -299,50 +322,45 @@ describe("MCP connections (header auth, streamable http)", () => {
 
   it("calls a tool from the playground, even one turned off for bots", async () => {
     const app = buildApp();
-    const created = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-      })
-      .expect(201);
-    const id = created.body.data.id;
-    await request(app)
-      .patch(`/api/v1/connections/${id}/tools/echo`)
-      .set(authorization)
-      .send({ enabled: false })
-      .expect(200);
-    const called = await request(app)
-      .post(`/api/v1/connections/${id}/tools/echo/call`)
-      .set(authorization)
-      .send({ arguments: { value: "hi" } })
-      .expect(200);
-    expect(called.body.data.result.content).toEqual([{ type: "text", text: "echo:hi" }]);
-    expect(typeof called.body.data.durationMs).toBe("number");
-    await request(app)
-      .post(`/api/v1/connections/${id}/tools/nope/call`)
-      .set(authorization)
-      .send({})
-      .expect(404);
+      },
+    });
+    const id = created.data.id;
+    await call(app, `/api/v1/connections/${id}/tools/echo`, 200, {
+      method: "PATCH",
+      json: { enabled: false },
+    });
+    const called = await call(app, `/api/v1/connections/${id}/tools/echo/call`, 200, {
+      method: "POST",
+      json: { arguments: { value: "hi" } },
+    });
+    expect(called.data.result.content).toEqual([{ type: "text", text: "echo:hi" }]);
+    expect(typeof called.data.durationMs).toBe("number");
+    await call(app, `/api/v1/connections/${id}/tools/nope/call`, 404, {
+      method: "POST",
+      json: {},
+    });
   }, 30_000);
 
   it("connects at start() from the database (boot path)", async () => {
     const app = buildApp();
-    await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-      })
-      .expect(201);
+      },
+    });
     // A second manager, like a fresh boot: connects from rows alone.
     const fresh = new ConnectionManager();
     const installed: string[] = [];
@@ -353,7 +371,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     } as never);
     try {
       const deadline = Date.now() + 15_000;
-      while (fresh.status((await prisma.connection.findFirst())!.id).status !== "connected") {
+      while (fresh.status((await db.query.connections.findFirst())!.id).status !== "connected") {
         if (Date.now() > deadline) throw new Error("boot connect timed out");
         await new Promise((r) => setTimeout(r, 50));
       }
@@ -365,37 +383,34 @@ describe("MCP connections (header auth, streamable http)", () => {
 
   it("removes a connection and cleans up", async () => {
     const app = buildApp();
-    const created = await request(app)
-      .post("/api/v1/connections")
-      .set(authorization)
-      .send({
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
         name: "Demo",
         url: mcpServer.url,
         authType: "header",
         headerName: "x-api-key",
         secret: "secret123",
-      })
-      .expect(201);
-    await request(app)
-      .delete(`/api/v1/connections/${created.body.data.id}`)
-      .set(authorization)
-      .expect(200);
-    expect(await prisma.connection.count()).toBe(0);
+      },
+    });
+    const removed = await call(app, `/api/v1/connections/${created.data.id}`, 200, {
+      method: "DELETE",
+    });
+    expect(removed.data).toEqual({ deleted: true });
+    expect(await db.$count(connections)).toBe(0);
     expect(runtimeCalls.uninstall).toContain("mcp:demo");
   }, 30_000);
 });
 
 describe("MCP OAuth (fake authorization server)", () => {
   it("marks a 401 as needs_auth, and finishAuthorization exchanges the code", async () => {
-    await prisma.botConnection.deleteMany();
-    await prisma.connection.deleteMany();
+    await db.delete(botConnections);
+    await db.delete(connections);
 
     // Minimal OAuth pieces: discovery, registration, token.
-    const authApp = express();
-    authApp.use(express.json());
-    authApp.use(express.urlencoded({ extended: false }));
-    authApp.get("/.well-known/oauth-authorization-server", (_req, res) =>
-      res.json({
+    const authApp = new Hono();
+    authApp.get("/.well-known/oauth-authorization-server", (c) =>
+      c.json({
         issuer: `http://127.0.0.1:${authPort}`,
         authorization_endpoint: `http://127.0.0.1:${authPort}/authorize`,
         token_endpoint: `http://127.0.0.1:${authPort}/token`,
@@ -405,8 +420,8 @@ describe("MCP OAuth (fake authorization server)", () => {
         code_challenge_methods_supported: ["S256"],
       }),
     );
-    authApp.post("/register", (_req, res) =>
-      res.json({
+    authApp.post("/register", (c) =>
+      c.json({
         client_id: "client-1",
         client_name: "tiny-agents",
         redirect_uris: [
@@ -418,55 +433,52 @@ describe("MCP OAuth (fake authorization server)", () => {
       }),
     );
     const tokensIssued: Record<string, string> = {};
-    authApp.post("/token", (req, res) => {
-      const body = req.body ?? {};
+    authApp.post("/token", async (c) => {
+      const body = await c.req.parseBody();
       if (body.grant_type === "authorization_code") {
         tokensIssued.client = String(body.code);
-        res.json({
-          access_token: `at-${body.code}`,
+        return c.json({
+          access_token: `at-${String(body.code)}`,
           token_type: "Bearer",
           expires_in: 3600,
           refresh_token: "rt-1",
         });
-      } else if (body.grant_type === "refresh_token") {
-        res.json({
+      }
+      if (body.grant_type === "refresh_token") {
+        return c.json({
           access_token: "at-refreshed",
           token_type: "Bearer",
           expires_in: 3600,
           refresh_token: "rt-2",
         });
-      } else {
-        res.status(400).json({ error: "unsupported_grant_type" });
       }
+      return c.json({ error: "unsupported_grant_type" }, 400);
     });
-    const authServer = createServer(authApp);
-    await new Promise<void>((resolve) => authServer.listen(0, "127.0.0.1", resolve));
-    const authAddress = authServer.address();
-    const authPort = typeof authAddress === "object" ? authAddress.port : 0;
+    const { server: authServer, port: authPort } = await listen(getRequestListener(authApp.fetch));
     expect(authPort).toBeGreaterThan(0);
 
     // A server URL whose discovery points at the fake AS and always 401s
     // without a token; accept-token requests hit the AS's token endpoint only.
-    const resourceApp = express();
-    resourceApp.get("/.well-known/oauth-protected-resource", (_req, res) =>
-      res.json({
+    const resourceApp = new Hono();
+    resourceApp.get("/.well-known/oauth-protected-resource", (c) =>
+      c.json({
         resource: `http://127.0.0.1:${resourcePort}/mcp`,
         authorization_servers: [`http://127.0.0.1:${authPort}`],
       }),
     );
-    resourceApp.post("/mcp", (_req, res) => {
-      res
-        .status(401)
-        .set(
-          "WWW-Authenticate",
-          `Bearer resource_metadata="http://127.0.0.1:${resourcePort}/.well-known/oauth-protected-resource"`,
-        )
-        .json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
+    resourceApp.post("/mcp", (c) => {
+      c.header(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="http://127.0.0.1:${resourcePort}/.well-known/oauth-protected-resource"`,
+      );
+      return c.json(
+        { jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null },
+        401,
+      );
     });
-    const resourceServer = createServer(resourceApp);
-    await new Promise<void>((resolve) => resourceServer.listen(0, "127.0.0.1", resolve));
-    const resourceAddress = resourceServer.address();
-    const resourcePort = typeof resourceAddress === "object" ? resourceAddress.port : 0;
+    const { server: resourceServer, port: resourcePort } = await listen(
+      getRequestListener(resourceApp.fetch),
+    );
     const url = `http://127.0.0.1:${resourcePort}/mcp`;
 
     const manager = new ConnectionManager();
@@ -480,9 +492,12 @@ describe("MCP OAuth (fake authorization server)", () => {
     await manager.start(runtime);
 
     try {
-      const row = await prisma.connection.create({
-        data: { name: "Locked", slug: "locked", url, authType: "oauth" },
-      });
+      const row = (
+        await db
+          .insert(connections)
+          .values({ name: "Locked", slug: "locked", url, authType: "oauth" })
+          .returning()
+      )[0]!;
       // authorize() runs discovery + registration and captures the consent URL.
       const consent = await manager.authorize(row.id);
       expect(consent).toContain("authorize");
@@ -501,26 +516,34 @@ describe("MCP OAuth (fake authorization server)", () => {
       // route must still complete the exchange (regression: it used to sit
       // behind jwtAuthMiddleware and failed with UNAUTHORIZED "No token
       // provided").
-      const second = await prisma.connection.create({
-        data: { name: "Redirect", slug: "redirect", url, authType: "oauth" },
-      });
+      const second = (
+        await db
+          .insert(connections)
+          .values({ name: "Redirect", slug: "redirect", url, authType: "oauth" })
+          .returning()
+      )[0]!;
       const consent2 = await manager.authorize(second.id);
       expect(consent2).toContain("authorize");
       const state2 = decodeURIComponent(new URL(consent2!).searchParams.get("state")!);
       const app = buildApp();
-      const res = await request(app)
-        .get("/api/v1/connections/oauth/callback")
-        .query({ code: "route-code", state: state2, iss: "https://executor.sh/api/auth" })
-        .expect(200);
-      expect(res.text).toContain(`"id":"${second.id}"`);
-      expect(res.text).not.toContain("error");
+      const query = new URLSearchParams({
+        code: "route-code",
+        state: state2,
+        iss: "https://executor.sh/api/auth",
+      });
+      const res = await app.request(`/api/v1/connections/oauth/callback?${query}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/^text\/html/);
+      const text = await res.text();
+      expect(text).toContain(`"id":"${second.id}"`);
+      expect(text).not.toContain("error");
       expect(await manager.hasTokens(second.id)).toBe(true);
     } finally {
       await manager.close();
       setConnectionManagerForTests(undefined);
       await new Promise<void>((resolve) => resourceServer.close(() => resolve()));
       await new Promise<void>((resolve) => authServer.close(() => resolve()));
-      await prisma.connection.deleteMany();
+      await db.delete(connections);
     }
   }, 30_000);
 });

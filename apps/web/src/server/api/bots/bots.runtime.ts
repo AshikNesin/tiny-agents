@@ -1,7 +1,7 @@
 /**
  * The server's AgentRuntime singleton and its lifecycle.
  *
- * `apps/web/src/server/index.ts` opens the runtime at boot (before the HTTP
+ * `apps/web/src/server/entry.node.ts` opens the runtime at boot (before the HTTP
  * server accepts requests) and closes it in the graceful-shutdown hook. Route
  * modules read the instance through `getAgentRuntime()`; tests substitute a
  * fake via `setAgentRuntimeForTests()` instead of touching pi-durable.
@@ -146,7 +146,7 @@ function browserTransport(env: Env) {
 
 /**
  * The sandbox's TOFU host-key pins, one per host, persisted through the app's
- * KV (the `keyv` table) so a restart remembers what it trusted on first
+ * KV (the `kv` table) so a restart remembers what it trusted on first
  * connect. The memory fallback keeps tests key-free.
  */
 function kvHostKeyStore(): HostKeyStore {

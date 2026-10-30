@@ -5,7 +5,8 @@
  * is unattended — a routine run or another bot's message. It never exposes a
  * write.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
+import { bots, db } from "../../db";
 import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
@@ -24,8 +25,11 @@ import {
 async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
   const owner = await conversationOwner(conversation);
   const bot = owner
-    ? await prisma.bot.findUnique({ where: { id: owner.botId }, select: { id: true, name: true } })
-    : null;
+    ? await db.query.bots.findFirst({
+        where: eq(bots.id, owner.botId),
+        columns: { id: true, name: true },
+      })
+    : undefined;
   return {
     ...(bot ? { botId: bot.id, botName: bot.name } : {}),
     unattended: await isUnattended(conversation, runtime()),

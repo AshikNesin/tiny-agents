@@ -150,8 +150,7 @@ describe("notifications routes", () => {
     const sentAt = new Date();
     await store.update([first], { status: "sent", providerId: "req-1", attempts: 1, sentAt });
     await store.update([], { status: "failed" });
-    const [updated] = await store.list(1).then(() => store.list(5));
-    expect(updated!.id).toBe(second);
+    expect((await store.list(1)).map((r) => r.id)).toEqual([second]);
     const sent = (await store.list(5)).find((r) => r.id === first)!;
     expect(sent).toMatchObject({ status: "sent", providerId: "req-1", attempts: 1 });
     expect(sent.sentAt?.getTime()).toBe(sentAt.getTime());

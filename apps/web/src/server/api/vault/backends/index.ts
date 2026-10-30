@@ -3,7 +3,7 @@
  * Connect gets the READ-only token here; the read+write token is loaded only
  * by `vault.admin.service.ts`.
  */
-import { env } from "@groot/core/env";
+import { appEnv } from "../../../env";
 import { createConnectBackend } from "./onepassword-connect";
 import { createLocalBackend } from "./local";
 import type { BackendName, VaultBackend } from "./types";
@@ -21,6 +21,7 @@ const unquote = (value: string | undefined) =>
 
 /** Connect's host and pinned vault from env, or `undefined` when not configured. */
 export function connectConfig(): ConnectConfig | undefined {
+  const env = appEnv();
   const host = unquote(env.OP_CONNECT_HOST);
   const vaultId = unquote(env.OP_CONNECT_VAULT_ID);
   return host && vaultId ? { host, vaultId } : undefined;
@@ -38,7 +39,7 @@ export function readBackends(): Map<BackendName, VaultBackend> {
       "onepassword-connect",
       createConnectBackend({
         ...connect,
-        token: unquote(env.OP_CONNECT_TOKEN) ?? "",
+        token: unquote(appEnv().OP_CONNECT_TOKEN) ?? "",
         writable: false,
       }),
     );

@@ -1,14 +1,11 @@
-import express, { type Express } from "express";
-import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
+import { eq } from "drizzle-orm";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../../apps/web/src/server/routes";
 import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
+import { bots, db, memories } from "../../../../apps/web/src/server/db";
+import { api, createTestApp, type TestApp } from "../../helpers";
 
-const token = generateToken({ userId: 1, email: "memories-test@example.com" });
-const authorization = { Authorization: `Bearer ${token}` };
+const token = await generateToken({ userId: 1, email: "memories-test@example.com" });
 
 const agentRuntime = {
   createConversation: vi.fn().mockResolvedValue(200),
@@ -42,49 +39,61 @@ const agentRuntime = {
   close: vi.fn().mockResolvedValue(undefined),
 };
 
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+type MemoryList = { memories: Array<Record<string, unknown>> };
+
+async function seedBot(app: TestApp): Promise<string> {
+  const response = await api<{ id: string }>(app, "/api/v1/bots", {
+    method: "POST",
+    json: { name: "Memory bot", modelId: "known-model" },
+    token,
+  });
+  expect(response.status).toBe(201);
+  return response.body.data!.id;
 }
 
-async function seedBot(app: Express): Promise<string> {
-  const response = await request(app)
-    .post("/api/v1/bots")
-    .set(authorization)
-    .send({ name: "Memory bot", modelId: "known-model" })
-    .expect(201);
-  return response.body.data.id as string;
+function addMemory(app: TestApp, botId: string, json: Record<string, unknown>) {
+  return api<{ memory: { id: string } }>(app, `/api/v1/bots/${botId}/memories`, {
+    method: "POST",
+    json,
+    token,
+  });
+}
+
+function listMemories(app: TestApp, botId: string, query = "") {
+  return api<MemoryList>(app, `/api/v1/bots/${botId}/memories${query}`, { token });
+}
+
+function findBot(id: string) {
+  return db.query.bots.findFirst({ where: eq(bots.id, id) });
 }
 
 describe("Memories API routes", () => {
-  let app: Express;
+  let app: TestApp;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     setAgentRuntimeForTests(agentRuntime as never);
-    await prisma.memory.deleteMany();
-    await prisma.bot.deleteMany();
-    app = buildApp();
+    await db.delete(memories);
+    await db.delete(bots);
+    app = createTestApp();
   });
 
   it("creates a manual memory and lists it", async () => {
     const botId = await seedBot(app);
-    await request(app)
-      .post(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .send({ text: "Prefers TypeScript over JavaScript", category: "preference" })
-      .expect(201);
+    expect(
+      (
+        await addMemory(app, botId, {
+          text: "Prefers TypeScript over JavaScript",
+          category: "preference",
+        })
+      ).status,
+    ).toBe(201);
 
-    const list = await request(app)
-      .get(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .expect(200);
-    const memories = list.body.data.memories as Array<Record<string, unknown>>;
-    expect(memories).toHaveLength(1);
-    expect(memories[0]).toMatchObject({
+    const list = await listMemories(app, botId);
+    expect(list.status).toBe(200);
+    const rows = list.body.data!.memories;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
       text: "Prefers TypeScript over JavaScript",
       category: "preference",
       status: "active",
@@ -95,154 +104,136 @@ describe("Memories API routes", () => {
 
   it("rejects invalid category and over-length text at the boundary", async () => {
     const botId = await seedBot(app);
-    await request(app)
-      .post(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .send({ text: "x".repeat(301), category: "preference" })
-      .expect(400);
-    await request(app)
-      .post(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .send({ text: "ok", category: "vibe" })
-      .expect(400);
+    expect(
+      (await addMemory(app, botId, { text: "x".repeat(301), category: "preference" })).status,
+    ).toBe(400);
+    expect((await addMemory(app, botId, { text: "ok", category: "vibe" })).status).toBe(400);
   });
 
   it("edits a memory and tombstones on delete; deleted rows leave the default list", async () => {
     const botId = await seedBot(app);
-    const created = await request(app)
-      .post(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .send({ text: "Works at exe.dev", category: "fact" })
-      .expect(201);
-    const id = created.body.data.memory.id as string;
+    const created = await addMemory(app, botId, { text: "Works at exe.dev", category: "fact" });
+    expect(created.status).toBe(201);
+    const id = created.body.data!.memory.id;
 
-    await request(app)
-      .patch(`/api/v1/memories/${id}`)
-      .set(authorization)
-      .send({ text: "Works at exe.dev on Shelley" })
-      .expect(200);
+    const edited = await api(app, `/api/v1/memories/${id}`, {
+      method: "PATCH",
+      json: { text: "Works at exe.dev on Shelley" },
+      token,
+    });
+    expect(edited.status).toBe(200);
 
-    await request(app).delete(`/api/v1/memories/${id}`).set(authorization).expect(200);
+    const removed = await api(app, `/api/v1/memories/${id}`, { method: "DELETE", token });
+    expect(removed.status).toBe(200);
+    expect(removed.body.data).toEqual({ deleted: true });
 
-    const list = await request(app)
-      .get(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .expect(200);
-    expect(list.body.data.memories).toHaveLength(0);
+    const list = await listMemories(app, botId);
+    expect(list.status).toBe(200);
+    expect(list.body.data!.memories).toHaveLength(0);
 
-    const row = await prisma.memory.findUnique({ where: { id } });
+    const row = await db.query.memories.findFirst({ where: eq(memories.id, id) });
     expect(row?.status).toBe("deleted");
   });
 
   it("archives the oldest active rows past the budget", async () => {
     const botId = await seedBot(app);
     for (let i = 0; i < 101; i++) {
-      await request(app)
-        .post(`/api/v1/bots/${botId}/memories`)
-        .set(authorization)
-        .send({ text: `Fact number ${i}`, category: "fact" });
+      await addMemory(app, botId, { text: `Fact number ${i}`, category: "fact" });
     }
-    const list = await request(app)
-      .get(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .query({ includeArchived: "true" })
-      .expect(200);
-    const memories = list.body.data.memories as Array<Record<string, unknown>>;
-    expect(memories.filter((m) => m.status === "active")).toHaveLength(100);
-    expect(memories.filter((m) => m.status === "archived")).toHaveLength(1);
-    expect(memories.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
+    const list = await listMemories(app, botId, "?includeArchived=true");
+    expect(list.status).toBe(200);
+    const rows = list.body.data!.memories;
+    expect(rows.filter((m) => m.status === "active")).toHaveLength(100);
+    expect(rows.filter((m) => m.status === "archived")).toHaveLength(1);
+    expect(rows.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
   });
 
   it("flips expired rows out of the active list", async () => {
     const botId = await seedBot(app);
-    await prisma.memory.create({
-      data: {
-        botId,
-        text: "Is traveling this week",
-        category: "fact",
-        status: "active",
-        source: "manual",
-        until: new Date("2020-01-01T00:00:00.000Z"),
-      },
+    await db.insert(memories).values({
+      botId,
+      text: "Is traveling this week",
+      category: "fact",
+      status: "active",
+      source: "manual",
+      until: new Date("2020-01-01T00:00:00.000Z"),
     });
-    const list = await request(app)
-      .get(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .query({ includeArchived: "true" })
-      .expect(200);
-    const statuses = (list.body.data.memories as Array<Record<string, unknown>>).map(
-      (m) => m.status,
-    );
+    const list = await listMemories(app, botId, "?includeArchived=true");
+    expect(list.status).toBe(200);
+    const statuses = list.body.data!.memories.map((m) => m.status);
     expect(statuses).not.toContain("active");
     expect(statuses).toContain("expired");
   });
 
   it("treats the string 'false' as false for includeArchived", async () => {
     const botId = await seedBot(app);
-    await prisma.memory.create({
-      data: { botId, text: "Archived one", category: "fact", status: "archived", source: "manual" },
-    });
-    const list = await request(app)
-      .get(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .query({ includeArchived: "false" })
-      .expect(200);
-    expect(list.body.data.memories).toHaveLength(0);
+    await db
+      .insert(memories)
+      .values({
+        botId,
+        text: "Archived one",
+        category: "fact",
+        status: "archived",
+        source: "manual",
+      });
+    const list = await listMemories(app, botId, "?includeArchived=false");
+    expect(list.status).toBe(200);
+    expect(list.body.data!.memories).toHaveLength(0);
   });
 
   it("404s for a missing bot and a missing memory", async () => {
     const botId = await seedBot(app);
-    await request(app).get("/api/v1/bots/nope/memories").set(authorization).expect(404);
-    await request(app)
-      .post(`/api/v1/bots/${botId}/memories`)
-      .set(authorization)
-      .send({ text: "ok", category: "fact" })
-      .expect(201);
-    await request(app)
-      .patch("/api/v1/memories/nope")
-      .set(authorization)
-      .send({ text: "x" })
-      .expect(404);
+    expect((await listMemories(app, "nope")).status).toBe(404);
+    expect((await addMemory(app, botId, { text: "ok", category: "fact" })).status).toBe(201);
+    const missing = await api(app, "/api/v1/memories/nope", {
+      method: "PATCH",
+      json: { text: "x" },
+      token,
+    });
+    expect(missing.status).toBe(404);
   });
 
   it("toggles memoryEnabled through the existing bot update path", async () => {
     const botId = await seedBot(app);
-    const off = await request(app)
-      .patch(`/api/v1/bots/${botId}`)
-      .set(authorization)
-      .send({ memoryEnabled: false })
-      .expect(200);
-    expect(off.body.data.memoryEnabled).toBe(false);
-    const row = await prisma.bot.findUnique({ where: { id: botId } });
+    const off = await api<{ memoryEnabled: boolean }>(app, `/api/v1/bots/${botId}`, {
+      method: "PATCH",
+      json: { memoryEnabled: false },
+      token,
+    });
+    expect(off.status).toBe(200);
+    expect(off.body.data!.memoryEnabled).toBe(false);
+    const row = await findBot(botId);
     expect(row?.memoryEnabled).toBe(false);
   });
 
   it("starts capture from now when memory is turned back on", async () => {
     const botId = await seedBot(app);
     const old = new Date("2026-01-01T00:00:00.000Z");
-    await prisma.bot.update({
-      where: { id: botId },
-      data: { memoryEnabled: false, memoryCapturedThrough: old },
-    });
+    await db
+      .update(bots)
+      .set({ memoryEnabled: false, memoryCapturedThrough: old })
+      .where(eq(bots.id, botId));
     const before = Date.now();
-    await request(app)
-      .patch(`/api/v1/bots/${botId}`)
-      .set(authorization)
-      .send({ memoryEnabled: true })
-      .expect(200);
-    const row = await prisma.bot.findUnique({ where: { id: botId } });
+    const on = await api(app, `/api/v1/bots/${botId}`, {
+      method: "PATCH",
+      json: { memoryEnabled: true },
+      token,
+    });
+    expect(on.status).toBe(200);
+    const row = await findBot(botId);
     expect(row?.memoryEnabled).toBe(true);
     // What was said while memory was off is behind the watermark now.
     expect(row!.memoryCapturedThrough!.getTime()).toBeGreaterThanOrEqual(before);
 
     // Re-sending "on" while already on leaves the watermark alone.
     const stamped = row!.memoryCapturedThrough!.getTime();
-    await request(app)
-      .patch(`/api/v1/bots/${botId}`)
-      .set(authorization)
-      .send({ memoryEnabled: true })
-      .expect(200);
-    const again = await prisma.bot.findUnique({ where: { id: botId } });
+    const onAgain = await api(app, `/api/v1/bots/${botId}`, {
+      method: "PATCH",
+      json: { memoryEnabled: true },
+      token,
+    });
+    expect(onAgain.status).toBe(200);
+    const again = await findBot(botId);
     expect(again!.memoryCapturedThrough!.getTime()).toBe(stamped);
   });
 });

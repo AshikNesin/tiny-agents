@@ -1,5 +1,5 @@
 /**
- * Routine CRUD + lifecycle over Prisma. Thin: schedule math lives in
+ * Routine CRUD + lifecycle over Drizzle. Thin: schedule math lives in
  * routines.schedule.ts, dispatch in routines.jobs.ts. Every mutation that can
  * move nextRunAt reconciles the pending queue job (cancel the old, enqueue
  * the new), so the queue and the row never disagree.
@@ -8,11 +8,11 @@
  * pauses the routine through the same disarm path as a manual pause and
  * records why in `pausedReason`. Arming it again (resume) starts over.
  */
-import { prisma } from "@groot/core/database";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { cancelJob } from "@groot/jobs/server/queue";
-import { jobQueueReady } from "@groot/jobs/server/client";
+import { bots, db, routineRuns, routines } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
 import {
@@ -25,7 +25,7 @@ import {
 } from "./routines.schedule";
 import type { CreateRoutineDTO, UpdateRoutineDTO } from "./routines.schema";
 
-const routineWithBot = { bot: { select: { id: true, name: true, conversationId: true } } } as const;
+const routineWithBot = { bot: { columns: { id: true, name: true, conversationId: true } } } as const;
 
 type RoutineRow = {
   id: string;
@@ -66,9 +66,12 @@ function toApi(row: RoutineRow) {
 }
 
 async function findRoutine(id: string): Promise<RoutineRow> {
-  const row = await prisma.routine.findUnique({ where: { id }, include: routineWithBot });
+  const row = await db.query.routines.findFirst({
+    where: eq(routines.id, id),
+    with: routineWithBot,
+  });
   if (!row) throw Boom.notFound("Routine not found");
-  return row as RoutineRow;
+  return row;
 }
 
 async function cancelPendingJob(pendingJobId: string | null): Promise<void> {
@@ -95,48 +98,41 @@ async function retireConversation(conversationId: string | null): Promise<void> 
 }
 
 async function assertBotExists(botId: string): Promise<void> {
-  const bot = await prisma.bot.findUnique({ where: { id: botId }, select: { id: true } });
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.id, botId),
+    columns: { id: true },
+  });
   if (!bot) throw Boom.badRequest("Bot not found");
 }
 
-function assertQueueReady(): void {
-  if (!jobQueueReady()) {
-    throw Boom.unavailable(
-      "Job queue is disabled (set jobs.enabled=true in config.yml and restart) " +
-        "so scheduled routines cannot run",
-    );
-  }
-}
-
 /** Enable the chain: next occurrence from `from`, queued, handle stored.
- * Arming needs the queue; a boot without it (jobs.enabled false) fails with
- * how to fix instead of an internal error. Arming starts the blocked count
- * over: the owner resumed it, presumably having fixed what blocked it. */
+ * The queue is a table, so arming always succeeds; the worker runs the job
+ * when it comes due. Arming starts the blocked count over: the owner resumed
+ * it, presumably having fixed what blocked it. */
 async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<void> {
-  assertQueueReady();
   const now = new Date();
   const next = await enqueueOccurrence(id, schedule, from, now);
-  await prisma.routine.update({
-    where: { id },
-    data: { enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null },
-  });
+  await db
+    .update(routines)
+    .set({ enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null })
+    .where(eq(routines.id, id));
 }
 
 /** Disable the chain: cancel the queued job, clear the materialized slot. */
 async function disarmRoutine(id: string, pendingJobId: string | null): Promise<void> {
   await cancelPendingJob(pendingJobId);
-  await prisma.routine.update({
-    where: { id },
-    data: { enabled: false, nextRunAt: null, pendingJobId: null },
-  });
+  await db
+    .update(routines)
+    .set({ enabled: false, nextRunAt: null, pendingJobId: null })
+    .where(eq(routines.id, id));
 }
 
 export async function list(): Promise<ReturnType<typeof toApi>[]> {
-  const rows = await prisma.routine.findMany({
-    include: routineWithBot,
-    orderBy: [{ enabled: "desc" }, { nextRunAt: "asc" }, { createdAt: "desc" }],
+  const rows = await db.query.routines.findMany({
+    with: routineWithBot,
+    orderBy: [desc(routines.enabled), asc(routines.nextRunAt), desc(routines.createdAt)],
   });
-  return rows.map((row) => toApi(row as RoutineRow));
+  return rows.map((row) => toApi(row));
 }
 
 export async function get(id: string): Promise<ReturnType<typeof toApi>> {
@@ -160,26 +156,24 @@ function assertCanArm(schedule: Schedule): void {
 export async function create(input: CreateRoutineDTO): Promise<ReturnType<typeof toApi>> {
   await assertBotExists(input.botId);
   assertFutureOnce(input.schedule);
-  const count = await prisma.routine.count();
+  const count = await db.$count(routines);
   if (count >= MAX_ROUTINES) {
     throw Boom.badRequest(`Routine limit reached (${MAX_ROUTINES})`);
   }
-  // Precondition, not cleanup: a create that cannot arm must not leave a
-  // disabled orphan row behind when the arm step throws.
-  if (input.enabled) assertQueueReady();
-  const row = await prisma.routine.create({
-    data: {
+  const [row] = await db
+    .insert(routines)
+    .values({
       botId: input.botId,
       name: input.name,
       prompt: input.prompt,
       schedule: input.schedule,
       enabled: false, // armed below once the queue job exists
-    },
-  });
+    })
+    .returning({ id: routines.id });
   if (input.enabled) {
-    await armRoutine(row.id, input.schedule, new Date());
+    await armRoutine(row!.id, input.schedule, new Date());
   }
-  return get(row.id);
+  return get(row!.id);
 }
 
 export async function update(
@@ -190,9 +184,9 @@ export async function update(
   if (input.schedule !== undefined) assertFutureOnce(input.schedule);
   const botChanged = input.botId !== undefined && input.botId !== row.botId;
   if (botChanged) await assertBotExists(input.botId!);
-  await prisma.routine.update({
-    where: { id },
-    data: {
+  await db
+    .update(routines)
+    .set({
       ...(input.botId !== undefined ? { botId: input.botId } : {}),
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
@@ -200,15 +194,17 @@ export async function update(
       // The conversation runs with the old bot's persona and tools: the next
       // fire starts a fresh one for the new bot.
       ...(botChanged ? { conversationId: null } : {}),
-    },
-  });
+      // An `enabled`-only edit sets no field here; the row is still touched.
+      updatedAt: new Date(),
+    })
+    .where(eq(routines.id, id));
   if (botChanged) {
     await retireConversation(row.conversationId);
     // A run still awaiting its reply there never gets one now.
-    await prisma.routineRun.updateMany({
-      where: { routineId: id, status: "awaiting" },
-      data: { status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" },
-    });
+    await db
+      .update(routineRuns)
+      .set({ status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" })
+      .where(and(eq(routineRuns.routineId, id), eq(routineRuns.status, "awaiting")));
   }
   const scheduleChanged = input.schedule !== undefined;
   if (scheduleChanged || botChanged) {
@@ -221,16 +217,16 @@ export async function update(
     if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
     const wantsEnabled = input.enabled ?? row.enabled;
     if (wantsEnabled) {
-      await prisma.routine.update({
-        where: { id },
-        data: { pendingJobId: null, nextRunAt: null },
-      });
+      await db
+        .update(routines)
+        .set({ pendingJobId: null, nextRunAt: null })
+        .where(eq(routines.id, id));
       await armRoutine(id, schedule, new Date());
     } else {
-      await prisma.routine.update({
-        where: { id },
-        data: { pendingJobId: null, nextRunAt: null, enabled: false },
-      });
+      await db
+        .update(routines)
+        .set({ pendingJobId: null, nextRunAt: null, enabled: false })
+        .where(eq(routines.id, id));
     }
   } else if (input.enabled !== undefined) {
     if (input.enabled && !row.enabled) {
@@ -248,7 +244,7 @@ export async function update(
 export async function remove(id: string): Promise<void> {
   const row = await findRoutine(id);
   await cancelPendingJob(row.pendingJobId);
-  await prisma.routine.delete({ where: { id } });
+  await db.delete(routines).where(eq(routines.id, id));
   await retireConversation(row.conversationId);
 }
 
@@ -280,27 +276,32 @@ const PAUSED_REASON_CHARS = 500;
  * that is already paused (a manual run) only counts.
  */
 export async function recordBlockedRun(id: string, reason: string): Promise<string | null> {
-  const row = await prisma.routine.update({
-    where: { id },
-    data: { blockedStreak: { increment: 1 } },
-    select: { enabled: true, pendingJobId: true, blockedStreak: true },
-  });
+  const [row] = await db
+    .update(routines)
+    .set({ blockedStreak: sql`${routines.blockedStreak} + 1` })
+    .where(eq(routines.id, id))
+    .returning({
+      enabled: routines.enabled,
+      pendingJobId: routines.pendingJobId,
+      blockedStreak: routines.blockedStreak,
+    });
+  if (!row) throw Boom.notFound("Routine not found");
   if (!row.enabled || row.blockedStreak < BLOCKED_RUNS_BEFORE_PAUSE) return null;
   const pausedReason = `Paused after ${row.blockedStreak} blocked runs: ${reason}`.slice(
     0,
     PAUSED_REASON_CHARS,
   );
   await disarmRoutine(id, row.pendingJobId);
-  await prisma.routine.update({ where: { id }, data: { pausedReason } });
+  await db.update(routines).set({ pausedReason }).where(eq(routines.id, id));
   return pausedReason;
 }
 
 /** A run of the routine finished some other way: the blocked streak is broken. */
 export async function clearBlockedStreak(id: string): Promise<void> {
-  await prisma.routine.updateMany({
-    where: { id, blockedStreak: { gt: 0 } },
-    data: { blockedStreak: 0 },
-  });
+  await db
+    .update(routines)
+    .set({ blockedStreak: 0 })
+    .where(and(eq(routines.id, id), gt(routines.blockedStreak, 0)));
 }
 
 /** Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5). */
@@ -312,32 +313,35 @@ export async function runNow(id: string): Promise<{ runId: string }> {
     { routineId: row.id, scheduledFor: scheduledFor.toISOString(), trigger: "manual" },
     now,
   );
-  const run = await prisma.routineRun.findUnique({
-    where: { routineId_scheduledFor: { routineId: row.id, scheduledFor } },
-    select: { id: true },
+  const run = await db.query.routineRuns.findFirst({
+    where: and(eq(routineRuns.routineId, row.id), eq(routineRuns.scheduledFor, scheduledFor)),
+    columns: { id: true },
   });
   return { runId: run?.id ?? "" };
 }
 
 export async function listRuns(id: string, limit: number) {
   await findRoutine(id);
-  const rows = await prisma.routineRun.findMany({
-    where: { routineId: id },
-    orderBy: { scheduledFor: "desc" },
-    take: limit,
-  });
+  const rows = await db
+    .select()
+    .from(routineRuns)
+    .where(eq(routineRuns.routineId, id))
+    .orderBy(desc(routineRuns.scheduledFor))
+    .limit(limit);
   return rows;
 }
 
 export async function recentRuns(limit: number) {
-  const routineIds = await prisma.routine.findMany({
-    select: { id: true, name: true, bot: { select: { name: true } } },
+  const routineIds = await db.query.routines.findMany({
+    columns: { id: true, name: true },
+    with: { bot: { columns: { name: true } } },
   });
   const byId = new Map(routineIds.map((r) => [r.id, { name: r.name, botName: r.bot.name }]));
-  const rows = await prisma.routineRun.findMany({
-    orderBy: { scheduledFor: "desc" },
-    take: limit * 2,
-  });
+  const rows = await db
+    .select()
+    .from(routineRuns)
+    .orderBy(desc(routineRuns.scheduledFor))
+    .limit(limit * 2);
   return rows
     .filter((row) => byId.has(row.routineId))
     .map((row) => ({

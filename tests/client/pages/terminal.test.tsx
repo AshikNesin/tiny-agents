@@ -13,6 +13,7 @@ import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { TerminalPage } from "@/pages/terminal/Terminal";
 import { GrootUIProvider } from "@groot/ui";
+import { ApiError } from "@groot/shell/lib/api";
 import type { TerminalHandle } from "@/lib/xterm";
 import type { TerminalConnection } from "@/lib/terminal-ws";
 
@@ -255,12 +256,12 @@ describe("Terminal page", () => {
     listMock.mockResolvedValue(ready([session(1, "vim")]));
     removeMock
       .mockRejectedValueOnce(
-        Object.assign(new Error("Conflict"), {
-          isAxiosError: true,
-          response: {
-            status: 409,
-            data: { error: { message: "ta-term-1 is running vim.", details: { process: "vim" } } },
-          },
+        new ApiError({
+          status: 409,
+          code: "CONFLICT",
+          message: "ta-term-1 is running vim.",
+          details: { process: "vim" },
+          url: "/terminal/sessions/ta-term-1",
         }),
       )
       .mockResolvedValueOnce({ deleted: true });

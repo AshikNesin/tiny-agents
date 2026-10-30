@@ -6,8 +6,8 @@
  *
  * @vitest-environment jsdom
  */
-import axios, { type AxiosResponse } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { ApiError } from "@groot/shell/lib/api";
 
 const ticketMock = vi.fn();
 
@@ -193,9 +193,7 @@ describe("connectTerminal", () => {
 
   it("stops reconnecting when the tab is gone (404/409 on the ticket)", async () => {
     ticketMock.mockRejectedValueOnce(
-      new axios.AxiosError("gone", "404", undefined, undefined, {
-        status: 404,
-      } as AxiosResponse) as never,
+      new ApiError({ status: 404, code: "NOT_FOUND", message: "gone", url: "/terminal" }),
     );
     connect();
     await vi.advanceTimersByTimeAsync(60_000);

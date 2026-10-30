@@ -8,14 +8,17 @@
  * routine's conversation to approve it or fill in a sign-in), or one that
  * said so itself (`report_routine_blocked`). Three blocked runs in a row
  * pause the routine (routines.service.ts). A boot sweep marks runs whose
- * conversations are idle at startup as failed (interrupted by restart).
+ * conversations are idle at startup as failed (interrupted by restart), and
+ * armed routines whose fire job is gone are re-armed (routines.jobs.ts).
  * Each resolved run shows as a card in the chat.
  */
-import { prisma } from "@groot/core/database";
+import { asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
+import { db, routineRuns, type RoutineRun } from "../../db";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
+import { rearmRoutines } from "./routines.jobs";
 import { clearBlockedStreak, recordBlockedRun } from "./routines.service";
 
 export const OUTPUT_PREVIEW_CHARS = 2000;
@@ -124,16 +127,13 @@ export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): st
 }
 
 async function awaitingRunsWithBot() {
-  const rows = await prisma.routineRun.findMany({
-    where: { status: "awaiting" },
-    orderBy: { scheduledFor: "asc" },
-    include: {
+  const rows = await db.query.routineRuns.findMany({
+    where: eq(routineRuns.status, "awaiting"),
+    orderBy: asc(routineRuns.scheduledFor),
+    with: {
       routine: {
-        select: {
-          name: true,
-          conversationId: true,
-          bot: { select: { id: true, name: true, conversationId: true } },
-        },
+        columns: { name: true, conversationId: true },
+        with: { bot: { columns: { id: true, name: true, conversationId: true } } },
       },
     },
   });
@@ -147,6 +147,22 @@ async function awaitingRunsWithBot() {
       bot: { id: row.routine.bot.id, name: row.routine.bot.name },
     } satisfies RoutineRunRef,
   }));
+}
+
+/**
+ * Update one run row. Throws when it is gone (its routine was deleted
+ * meanwhile), so the caller skips the announcement, as Prisma's update did.
+ */
+async function updateRun(
+  id: string,
+  data: Partial<Pick<RoutineRun, "status" | "finishedAt" | "error" | "output">>,
+): Promise<void> {
+  const updated = await db
+    .update(routineRuns)
+    .set(data)
+    .where(eq(routineRuns.id, id))
+    .returning({ id: routineRuns.id });
+  if (updated.length === 0) throw new Error(`Routine run ${id} not found`);
 }
 
 export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCompletionWatcher {
@@ -174,10 +190,7 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
   ): Promise<void> {
     if (reply.error !== undefined) {
       const error = preview(reply.error, ERROR_PREVIEW_CHARS);
-      await prisma.routineRun.update({
-        where: { id: ref.runId },
-        data: { status: "failed", finishedAt: new Date(), error },
-      });
+      await updateRun(ref.runId, { status: "failed", finishedAt: new Date(), error });
       await clearBlockedStreak(routineId);
       announceRun(ref, { status: "failed", error });
       return;
@@ -189,27 +202,23 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
     ].filter((reason): reason is string => reason !== undefined);
     if (reasons.length > 0) {
       const error = preview(reasons.join(" "), ERROR_PREVIEW_CHARS);
-      await prisma.routineRun.update({
-        where: { id: ref.runId },
-        data: { status: "blocked", finishedAt: new Date(), error, output: output || null },
+      await updateRun(ref.runId, {
+        status: "blocked",
+        finishedAt: new Date(),
+        error,
+        output: output || null,
       });
       const pausedReason = await recordBlockedRun(routineId, error);
       announceRun(ref, { status: "blocked", error, pausedReason });
       return;
     }
-    await prisma.routineRun.update({
-      where: { id: ref.runId },
-      data: { status: "succeeded", finishedAt: new Date(), output },
-    });
+    await updateRun(ref.runId, { status: "succeeded", finishedAt: new Date(), output });
     await clearBlockedStreak(routineId);
     announceRun(ref, { status: "succeeded", output });
   }
 
   async function markInterrupted(ref: RoutineRunRef): Promise<void> {
-    await prisma.routineRun.update({
-      where: { id: ref.runId },
-      data: { status: "failed", finishedAt: new Date(), error: "interrupted" },
-    });
+    await updateRun(ref.runId, { status: "failed", finishedAt: new Date(), error: "interrupted" });
     announceRun(ref, { status: "failed", error: "Interrupted by a server restart." });
   }
 
@@ -269,8 +278,10 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
 }
 
 /**
- * Wire the watcher onto the runtime's activity feed and run the boot sweep.
- * Mirrors how index.ts wires bots.relay.ts.
+ * Wire the watcher onto the runtime's activity feed, run the boot sweep, and
+ * re-arm routines whose fire job is gone (the first boot after the move off
+ * the old job queue clears every handle). Mirrors how index.ts wires
+ * bots.relay.ts.
  */
 export function startRoutinesWatcher(rt: RoutinesRuntime): RoutinesCompletionWatcher {
   const watcher = createRoutinesCompletionWatcher(rt);
@@ -283,5 +294,8 @@ export function startRoutinesWatcher(rt: RoutinesRuntime): RoutinesCompletionWat
     }
   });
   void watcher.bootSweep().catch(() => undefined);
+  void rearmRoutines().catch((error: unknown) =>
+    logger.warn({ error }, "Failed to re-arm routines on boot"),
+  );
   return watcher;
 }

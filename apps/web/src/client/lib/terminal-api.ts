@@ -4,8 +4,8 @@
  * helper reads the error envelope the whole app's middleware emits
  * ({ success, error: { message, details } }).
  */
-import { isAxiosError } from "axios";
-import { apiClient } from "@groot/shell/lib/api";
+import { ApiError, apiClient } from "@groot/shell/lib/api";
+import { serverMessage } from "./errors";
 
 /** One tmux-backed tab on the sandbox VM. */
 export interface TerminalSession {
@@ -56,14 +56,11 @@ export const terminalApi = {
  * process name either in error.details.process or inside the message.
  */
 export function closeBlockedReason(error: unknown): TerminalCloseBlocked | null {
-  if (!isAxiosError(error)) return null;
-  if (error.response?.status !== 409) return null;
-  const payload = error.response.data as
-    | { error?: { message?: string; details?: { process?: unknown } } }
-    | undefined;
-  const envelope = payload?.error;
-  if (!envelope?.message) return null;
-  const processName =
-    typeof envelope.details?.process === "string" ? envelope.details.process : undefined;
-  return { message: envelope.message, process: processName };
+  if (!(error instanceof ApiError)) return null;
+  if (error.status !== 409) return null;
+  const message = serverMessage(error);
+  if (!message) return null;
+  const details = error.details as { process?: unknown } | undefined;
+  const processName = typeof details?.process === "string" ? details.process : undefined;
+  return { message, process: processName };
 }

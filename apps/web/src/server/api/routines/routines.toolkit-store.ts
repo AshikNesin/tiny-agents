@@ -13,7 +13,7 @@
  *   is a routine's own (issue #63); list stays open. The owner's chat is
  *   never one, so the owner can manage routines while a run is working.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
 import type {
   RoutineRecord,
   RoutineSchedule,
@@ -21,6 +21,7 @@ import type {
   RoutineUpdateInput,
 } from "@tiny-agents/agent";
 import { HttpError } from "@groot/core/errors";
+import { db, routines } from "../../db";
 import { conversationOwner, isRoutineConversation } from "../bots/bots.owner";
 import { describeSchedule, formatIst, parseSchedule, scheduleSchema } from "./routines.schedule";
 import * as service from "./routines.service";
@@ -68,8 +69,11 @@ export function createRoutineStore(): RoutineStore {
       // Exactly-once across pi-durable replays: the key is the durable tool
       // task's identity (unique per agent store, stable when the call reruns).
       const existing = input.idempotencyKey
-        ? await prisma.routine.findUnique({ where: { sourceKey: input.idempotencyKey } })
-        : null;
+        ? await db.query.routines.findFirst({
+            where: eq(routines.sourceKey, input.idempotencyKey),
+            columns: { id: true },
+          })
+        : undefined;
       if (existing) return toRecord(await service.get(existing.id));
       const schedule = checkedSchedule(input.schedule);
       try {
@@ -80,10 +84,10 @@ export function createRoutineStore(): RoutineStore {
           schedule,
           enabled: true,
         });
-        await prisma.routine.update({
-          where: { id: routine.id },
-          data: { sourceKey: input.idempotencyKey },
-        });
+        await db
+          .update(routines)
+          .set({ sourceKey: input.idempotencyKey })
+          .where(eq(routines.id, routine.id));
         return toRecord(routine);
       } catch (error) {
         throw new Error(reasonOf(error));
@@ -111,7 +115,10 @@ export function createRoutineStore(): RoutineStore {
 
     async remove(conversationId, id) {
       if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
-      const existing = await prisma.routine.findUnique({ where: { id }, select: { id: true } });
+      const existing = await db.query.routines.findFirst({
+        where: eq(routines.id, id),
+        columns: { id: true },
+      });
       if (!existing) return false;
       await service.remove(id);
       return true;

@@ -5,7 +5,8 @@
  * conversation to its bot goes through here: a routine's turn gets its
  * bot's skills, browser, memories and vault items like the chat does.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
+import { db, bots, routines } from "../../db";
 
 export interface ConversationOwner {
   botId: string;
@@ -18,20 +19,23 @@ export async function conversationOwner(
   conversation: number | string,
 ): Promise<ConversationOwner | undefined> {
   const ref = String(conversation);
-  const bot = await prisma.bot.findUnique({ where: { conversationId: ref }, select: { id: true } });
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.conversationId, ref),
+    columns: { id: true },
+  });
   if (bot) return { botId: bot.id };
-  const routine = await prisma.routine.findUnique({
-    where: { conversationId: ref },
-    select: { id: true, botId: true },
+  const routine = await db.query.routines.findFirst({
+    where: eq(routines.conversationId, ref),
+    columns: { id: true, botId: true },
   });
   return routine ? { botId: routine.botId, routineId: routine.id } : undefined;
 }
 
 /** Whether the conversation is a routine's: every turn in it is a routine run. */
 export async function isRoutineConversation(conversation: number | string): Promise<boolean> {
-  const routine = await prisma.routine.findUnique({
-    where: { conversationId: String(conversation) },
-    select: { id: true },
+  const routine = await db.query.routines.findFirst({
+    where: eq(routines.conversationId, String(conversation)),
+    columns: { id: true },
   });
-  return routine !== null;
+  return routine !== undefined;
 }

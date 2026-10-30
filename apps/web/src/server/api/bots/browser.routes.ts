@@ -13,9 +13,11 @@
  * profile share one browser, each in its own tab, so taking control, the live
  * view and "Reset" act on that shared browser.
  */
+import { Hono } from "hono";
 import { z } from "zod";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
+import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
 import {
   browserOpenState,
@@ -30,7 +32,7 @@ import * as botsService from "./bots.service";
 import { browserTargetForBot, SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { issueVncTicket } from "./browser.vnc";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
 const driverSchema = z.object({ driver: z.enum(["agent", "human"]) });
 
@@ -51,12 +53,12 @@ function requireSession(target: BrowserTarget) {
   return live;
 }
 
-router.get("/bots/:id/browser", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
+router.get("/bots/:id/browser", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
   const live = getLiveBrowserSession(target);
   const opening = browserOpenState(target);
-  return {
+  return ok(c, {
     active: Boolean(live),
     // "shared" when other bots use this browser (and its logins) too.
     profile: target.profile === SHARED_BROWSER_PROFILE ? "shared" : "own",
@@ -68,25 +70,25 @@ router.get("/bots/:id/browser", async (req) => {
     starting: opening.opening,
     phase: opening.opening ? opening.phase : null,
     error: !live && !opening.opening ? (opening.error ?? null) : null,
-  };
+  });
 });
 
 // Open the browser without a tool call. The first run on a fresh VM installs
 // Chrome and TigerVNC (minutes), so this returns at once and the client
 // follows the status route.
-router.post("/bots/:id/browser/start", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
+router.post("/bots/:id/browser/start", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
   // Also when the browser is live: a bot on the shared profile may not have
   // its tab yet, and this brings its tab to the front of the live view.
   startBrowserSession(target).catch(() => {
     // The failure is reported by the status route (`error`).
   });
-  return { starting: true };
+  return ok(c, { starting: true });
 });
 
-router.post("/bots/:id/browser/vnc-ticket", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
+router.post("/bots/:id/browser/vnc-ticket", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
   const live = requireSession(target);
   if (!live.session.vnc) {
@@ -95,18 +97,18 @@ router.post("/bots/:id/browser/vnc-ticket", async (req) => {
   // The viewer opens on this bot's tab (made now if the bot has none yet in
   // a shared browser); the stream still works if that fails.
   await startBrowserSession(target).catch(() => {});
-  const ticket = issueVncTicket({ userId: req.user!.userId, botId: id, target });
+  const ticket = issueVncTicket({ userId: requireUser(c).userId, botId: id, target });
   live.lastActivity = Date.now();
-  return {
+  return ok(c, {
     // Relative so the client keeps the page's scheme and host behind proxies.
     path: `/api/v1/bots/${encodeURIComponent(id)}/browser/vnc?ticket=${ticket}`,
     scale: live.session.vnc.scale,
-  };
+  });
 });
 
-router.post("/bots/:id/browser/resize", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
-  const body = await parseBody(req, resizeSchema);
+router.post("/bots/:id/browser/resize", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const body = await parseBody(c, resizeSchema);
   const live = requireSession(await botTarget(id));
   if (!live.session.vnc) throw Boom.conflict("This browser cannot be resized.");
   try {
@@ -115,27 +117,27 @@ router.post("/bots/:id/browser/resize", async (req) => {
     throw Boom.badGateway(error instanceof Error ? error.message : "Could not resize the browser.");
   }
   live.lastActivity = Date.now();
-  return { width: body.width, height: body.height };
+  return ok(c, { width: body.width, height: body.height });
 });
 
-router.post("/bots/:id/browser/driver", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
-  const body = await parseBody(req, driverSchema);
+router.post("/bots/:id/browser/driver", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const body = await parseBody(c, driverSchema);
   const target = await botTarget(id);
   const live = requireSession(target);
   await setDriver(target, body.driver);
   if (body.driver === "human") live.lastActivity = Date.now();
-  return { driver: body.driver };
+  return ok(c, { driver: body.driver });
 });
 
-router.delete("/bots/:id/browser/profile", async (req) => {
-  const id = parseStringParam(req.params.id, "id");
+router.delete("/bots/:id/browser/profile", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
   // On the shared profile this signs every bot that uses it out.
   await closeBrowserSession(target, { wipeProfile: true });
   const { rmSync } = await import("node:fs");
   rmSync(`${browserProfilesDir()}/${target.profile}`, { recursive: true, force: true });
-  return { reset: true };
+  return ok(c, { reset: true });
 });
 
 export default router;

@@ -187,11 +187,7 @@ export async function applyExtraction(
 }
 
 /** Bump the capture watermark; a missing bot throws (and rolls back a surrounding transaction). */
-function setWatermark(
-  handle: Pick<AppDatabase, "update">,
-  botId: string,
-  watermark: Date,
-): void {
+function setWatermark(handle: Pick<AppDatabase, "update">, botId: string, watermark: Date): void {
   const { changes } = handle
     .update(bots)
     .set({ memoryCapturedThrough: watermark })

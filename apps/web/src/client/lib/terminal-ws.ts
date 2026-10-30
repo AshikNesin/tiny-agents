@@ -5,7 +5,7 @@
  * stays in the page; this module owns the socket lifecycle so it can be
  * unit-tested without React.
  */
-import { isAxiosError } from "axios";
+import { ApiError } from "@groot/shell/lib/api";
 import { terminalApi } from "./terminal-api";
 
 export type TerminalConnectionState = "connecting" | "live" | "reconnecting" | "closed";
@@ -158,5 +158,5 @@ export function connectTerminal(
 
 /** True for HTTP statuses that mean "this tab no longer exists". */
 function isGone(error: unknown): boolean {
-  return isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 409);
+  return error instanceof ApiError && (error.status === 404 || error.status === 409);
 }

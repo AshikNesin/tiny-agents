@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
+import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
@@ -15,6 +15,7 @@ import {
   captureConversation,
   resolveCaptureModelId,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
+import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
 
 const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
 vi.mock("@groot/core/logger", () => ({
@@ -24,16 +25,21 @@ const botIds: string[] = [];
 afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  await prisma.bot.deleteMany({ where: { id: { in: botIds.splice(0) } } });
+  await db.delete(bots).where(inArray(bots.id, botIds.splice(0)));
 });
 
 async function seedBot(): Promise<{ botId: string; conversationId: number }> {
   const conv = conversationId();
-  const bot = await prisma.bot.create({
-    data: { name: "Cap", modelId: "m", conversationId: String(conv) },
-  });
-  botIds.push(bot.id);
-  return { botId: bot.id, conversationId: conv };
+  const [bot] = await db
+    .insert(bots)
+    .values({ name: "Cap", modelId: "m", conversationId: String(conv) })
+    .returning();
+  botIds.push(bot!.id);
+  return { botId: bot!.id, conversationId: conv };
+}
+
+function findBot(id: string) {
+  return db.query.bots.findFirst({ where: eq(bots.id, id) });
 }
 
 function sideCall(reply = fauxAssistantMessage([fauxText("[]")])) {
@@ -115,7 +121,7 @@ describe("applyExtraction", () => {
       through,
     );
     expect(result).toEqual({ created: 1, superseded: 0, skipped: 0 });
-    const bot = await prisma.bot.findUnique({ where: { id: botId } });
+    const bot = await findBot(botId);
     expect(bot?.memoryCapturedThrough?.toISOString()).toBe(through.toISOString());
   });
 
@@ -134,8 +140,8 @@ describe("applyExtraction", () => {
     expect(again.created).toBe(0);
     expect(again.skipped).toBe(1);
 
-    const row = await prisma.memory.findFirst({ where: { botId } });
-    await prisma.memory.update({ where: { id: row!.id }, data: { status: "deleted" } });
+    const row = await db.query.memories.findFirst({ where: eq(memories.botId, botId) });
+    await db.update(memories).set({ status: "deleted" }).where(eq(memories.id, row!.id));
     const afterTombstone = await applyExtraction(
       botId,
       [{ text: "Prefers pnpm", category: "preference", confidence: 0.9 }],
@@ -152,16 +158,17 @@ describe("applyExtraction", () => {
       [{ text: "Lives in Bangalore", category: "fact", confidence: 0.8 }],
       new Date(),
     );
-    const rowA = await prisma.memory.findFirst({ where: { botId: botA } });
-    const rowB = await prisma.memory.create({
-      data: {
+    const rowA = await db.query.memories.findFirst({ where: eq(memories.botId, botA) });
+    const [rowB] = await db
+      .insert(memories)
+      .values({
         botId: botB,
         text: "Other bot fact",
         category: "fact",
         status: "active",
         source: "manual",
-      },
-    });
+      })
+      .returning();
     expect(first.created).toBe(1);
 
     const result = await applyExtraction(
@@ -171,16 +178,16 @@ describe("applyExtraction", () => {
           text: "Lives in Chennai now",
           category: "fact",
           confidence: 0.9,
-          supersedesIds: [rowA!.id, rowB.id],
+          supersedesIds: [rowA!.id, rowB!.id],
         },
       ],
       new Date(),
     );
     expect(result.superseded).toBe(1);
-    const supersededRow = await prisma.memory.findUnique({ where: { id: rowA!.id } });
+    const supersededRow = await db.query.memories.findFirst({ where: eq(memories.id, rowA!.id) });
     expect(supersededRow?.status).toBe("superseded");
     expect(supersededRow?.supersededById).toBeTruthy();
-    const untouched = await prisma.memory.findUnique({ where: { id: rowB.id } });
+    const untouched = await db.query.memories.findFirst({ where: eq(memories.id, rowB!.id) });
     expect(untouched?.status).toBe("active");
   });
 
@@ -192,11 +199,19 @@ describe("applyExtraction", () => {
       confidence: 0.9,
     }));
     await applyExtraction(botId, extraction, new Date());
-    const active = await prisma.memory.count({ where: { botId, status: "active" } });
-    const archived = await prisma.memory.count({ where: { botId, status: "archived" } });
+    const active = await db.$count(
+      memories,
+      and(eq(memories.botId, botId), eq(memories.status, "active")),
+    );
+    const archived = await db.$count(
+      memories,
+      and(eq(memories.botId, botId), eq(memories.status, "archived")),
+    );
     expect(active).toBe(100);
     expect(archived).toBe(5);
-    const oldest = await prisma.memory.findFirst({ where: { botId, status: "archived" } });
+    const oldest = await db.query.memories.findFirst({
+      where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
+    });
     expect(oldest?.text).toBe("Fact 0");
   });
 });
@@ -302,7 +317,7 @@ describe("captureConversation skip rules", () => {
     });
     expect(call.models.completeSimple).toHaveBeenCalledOnce();
     expect(call.models.getModel).toHaveBeenCalledWith("cloudflare-ai-gateway", "m");
-    expect(await prisma.memory.findFirst({ where: { botId } })).toMatchObject({
+    expect(await db.query.memories.findFirst({ where: eq(memories.botId, botId) })).toMatchObject({
       text: "The owner prefers TypeScript, never JavaScript.",
       source: "capture",
       status: "active",
@@ -311,14 +326,14 @@ describe("captureConversation skip rules", () => {
 
   it("makes no model call when memory is disabled", async () => {
     const { botId, conversationId } = await seedBot();
-    await prisma.bot.update({ where: { id: botId }, data: { memoryEnabled: false } });
+    await db.update(bots).set({ memoryEnabled: false }).where(eq(bots.id, botId));
     const call = sideCall();
     await captureConversation(conversationId, {
       sideCall: call,
       readTranscript: async () => [{ role: "user", text: "x".repeat(300), createdAt: Date.now() }],
     });
     expect(call.models.completeSimple).not.toHaveBeenCalled();
-    const bot = await prisma.bot.findUnique({ where: { id: botId } });
+    const bot = await findBot(botId);
     expect(bot?.memoryCapturedThrough).toBeNull();
   });
 
@@ -330,13 +345,15 @@ describe("captureConversation skip rules", () => {
       readTranscript: async () => [{ role: "user", text: "hi", createdAt: Date.now() }],
     });
     expect(call.models.completeSimple).not.toHaveBeenCalled();
-    const bot = await prisma.bot.findUnique({ where: { conversationId: String(conversationId) } });
+    const bot = await db.query.bots.findFirst({
+      where: eq(bots.conversationId, String(conversationId)),
+    });
     expect(bot?.memoryCapturedThrough).not.toBeNull();
   });
 
   it("resolves a custom bot model even with an invalid capture override", async () => {
     const { botId, conversationId } = await seedBot();
-    await prisma.bot.update({ where: { id: botId }, data: { modelId: "custom:test/chat" } });
+    await db.update(bots).set({ modelId: "custom:test/chat" }).where(eq(bots.id, botId));
     const call = sideCall();
     await captureConversation(conversationId, {
       sideCall: { ...call, modelId: "unknown" },
@@ -364,15 +381,11 @@ describe("captureConversation skip rules", () => {
       expect.objectContaining({ errorMessage: "Provider unavailable", modelId: "m" }),
       expect.stringContaining("model failed"),
     );
-    expect(
-      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough,
-    ).toBeNull();
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
     call.models.completeSimple.mockResolvedValue(fauxAssistantMessage([fauxText("[]")]));
     await captureConversation(conversationId, deps);
     expect(call.models.completeSimple).toHaveBeenCalledTimes(2);
-    expect(
-      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough?.getTime(),
-    ).toBe(messages[0].createdAt);
+    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0].createdAt);
   });
 
   it("leaves malformed extractions uncommitted and skips peer-only windows", async () => {
@@ -384,9 +397,7 @@ describe("captureConversation skip rules", () => {
         { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
       ],
     });
-    expect(
-      (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough,
-    ).toBeNull();
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
     call.models.completeSimple.mockClear();
     await captureConversation(conversationId, {
       sideCall: call,
@@ -401,14 +412,12 @@ describe("captureConversation skip rules", () => {
   it("never captures a routine's conversation (issue #63): only the chat is a source", async () => {
     const { botId } = await seedBot();
     const routineConversation = conversationId();
-    await prisma.routine.create({
-      data: {
-        botId,
-        name: "Daily",
-        prompt: "News",
-        schedule: { kind: "interval", minutes: 60 },
-        conversationId: String(routineConversation),
-      },
+    await db.insert(routines).values({
+      botId,
+      name: "Daily",
+      prompt: "News",
+      schedule: { kind: "interval", minutes: 60 },
+      conversationId: String(routineConversation),
     });
     const call = sideCall();
     const readTranscript = vi.fn(async () => [
@@ -510,23 +519,21 @@ describe("startMemoryCapture debounce", () => {
 describe("captureConversation and removed memories", () => {
   it("shows the newest 30 deleted memories to the extractor, which then leaves them out", async () => {
     const { botId, conversationId } = await seedBot();
-    await prisma.memory.createMany({
-      data: Array.from({ length: 35 }, (_, i) => ({
+    await db.insert(memories).values(
+      Array.from({ length: 35 }, (_, i) => ({
         botId,
         text: `Removed fact ${String(i).padStart(2, "0")}.`,
         category: "fact",
         status: "deleted",
         updatedAt: new Date(Date.UTC(2026, 9, 1, 0, i)),
       })),
-    });
-    await prisma.memory.create({
-      data: {
-        botId,
-        text: "Owner prefers tea",
-        category: "preference",
-        status: "deleted",
-        updatedAt: new Date(Date.UTC(2026, 9, 2)),
-      },
+    );
+    await db.insert(memories).values({
+      botId,
+      text: "Owner prefers tea",
+      category: "preference",
+      status: "deleted",
+      updatedAt: new Date(Date.UTC(2026, 9, 2)),
     });
     // A scripted extractor that, like a model following the prompt, drops a
     // reworded fact the prompt lists as removed.
@@ -551,7 +558,9 @@ describe("captureConversation and removed memories", () => {
     expect(prompt).toContain("Removed fact 34.");
     expect(prompt).toContain("Removed fact 06.");
     expect(prompt).not.toContain("Removed fact 05.");
-    const active = await prisma.memory.findMany({ where: { botId, status: "active" } });
+    const active = await db.query.memories.findMany({
+      where: and(eq(memories.botId, botId), eq(memories.status, "active")),
+    });
     expect(active.map((m) => m.text)).toEqual(["The owner lives in Chennai."]);
   });
 });

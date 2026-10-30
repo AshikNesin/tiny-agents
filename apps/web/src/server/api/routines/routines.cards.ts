@@ -10,8 +10,9 @@
  * page. The bot's chat stream sends the thread's cards on connect and each
  * newly finished run as it lands (`onRoutineCard`).
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq, gte, lt, ne } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
+import { db, routineRuns, routines } from "../../db";
 import { notifyRoutineRun, type RoutineOutcome } from "../notifications/notifications.wiring";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 
@@ -40,14 +41,14 @@ type CardRow = {
   finishedAt: Date | null;
   output: string | null;
   error: string | null;
-  routine: { name: string };
+  routineName: string;
 };
 
 function toCard(row: CardRow & { finishedAt: Date }): RoutineRunCard {
   return {
     id: row.id,
     routineId: row.routineId,
-    routineName: row.routine.name,
+    routineName: row.routineName,
     status: row.status,
     trigger: row.trigger,
     scheduledFor: row.scheduledFor.toISOString(),
@@ -57,16 +58,18 @@ function toCard(row: CardRow & { finishedAt: Date }): RoutineRunCard {
   };
 }
 
-const cardSelect = {
-  id: true,
-  routineId: true,
-  status: true,
-  trigger: true,
-  scheduledFor: true,
-  finishedAt: true,
-  output: true,
-  error: true,
-  routine: { select: { name: true } },
+/** A run joined to its routine: the card's fields plus the bot it belongs to. */
+const cardColumns = {
+  id: routineRuns.id,
+  routineId: routineRuns.routineId,
+  status: routineRuns.status,
+  trigger: routineRuns.trigger,
+  scheduledFor: routineRuns.scheduledFor,
+  finishedAt: routineRuns.finishedAt,
+  output: routineRuns.output,
+  error: routineRuns.error,
+  routineName: routines.name,
+  botId: routines.botId,
 } as const;
 
 /**
@@ -80,13 +83,20 @@ export async function chatCards(
   limit = CHAT_CARDS,
   until?: Date,
 ): Promise<RoutineRunCard[]> {
-  const finishedAt = until ? { gte: since, lt: until } : { gte: since };
-  const rows = await prisma.routineRun.findMany({
-    where: { routine: { botId }, status: { not: "awaiting" }, finishedAt },
-    orderBy: { finishedAt: "desc" },
-    take: limit,
-    select: cardSelect,
-  });
+  const rows = await db
+    .select(cardColumns)
+    .from(routineRuns)
+    .innerJoin(routines, eq(routineRuns.routineId, routines.id))
+    .where(
+      and(
+        eq(routines.botId, botId),
+        ne(routineRuns.status, "awaiting"),
+        gte(routineRuns.finishedAt, since),
+        until ? lt(routineRuns.finishedAt, until) : undefined,
+      ),
+    )
+    .orderBy(desc(routineRuns.finishedAt))
+    .limit(limit);
   return rows.reverse().map((row) => toCard({ ...row, finishedAt: row.finishedAt! }));
 }
 
@@ -102,13 +112,15 @@ export function onRoutineCard(listener: CardListener): () => void {
 /** Send a run that just finished to the open chats of its bot. Best-effort. */
 export async function publishRunCard(runId: string): Promise<void> {
   try {
-    const row = await prisma.routineRun.findUnique({
-      where: { id: runId },
-      select: { ...cardSelect, routine: { select: { name: true, botId: true } } },
-    });
+    const [row] = await db
+      .select(cardColumns)
+      .from(routineRuns)
+      .innerJoin(routines, eq(routineRuns.routineId, routines.id))
+      .where(eq(routineRuns.id, runId))
+      .limit(1);
     if (!row || row.status === "awaiting" || !row.finishedAt) return;
     const card = toCard({ ...row, finishedAt: row.finishedAt });
-    for (const listener of listeners) listener(row.routine.botId, card);
+    for (const listener of listeners) listener(row.botId, card);
   } catch (error) {
     logger.warn({ error, runId }, "Failed to publish a routine run card");
   }
