@@ -109,7 +109,8 @@ describe("BotsSection", () => {
       "3",
     );
     expect(screen.getByRole("status", { name: "Replying" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Unread")).toBeInTheDocument();
+    // An inline span ignores size-2 and renders 0x0 (issue #71): the dot must be a block box.
+    expect(screen.getByLabelText("Unread")).toHaveClass("block", "size-2");
   });
 
   it("pins a bot from the row menu", async () => {

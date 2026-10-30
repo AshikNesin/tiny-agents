@@ -51,7 +51,7 @@ function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
     );
   }
   if (bot.unread && !active) {
-    return <span aria-label="Unread" className="bg-primary size-2 rounded-full" />;
+    return <span aria-label="Unread" className="bg-primary block size-2 shrink-0 rounded-full" />;
   }
   return null;
 }
