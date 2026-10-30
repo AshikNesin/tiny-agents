@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
 import App from "./App";
 import { installFeedbackDismiss } from "./lib/feedback";
+// Inter loads from JS, not from the shell CSS: an @import there is inlined by
+// Tailwind before Vite sees it, so the fonts' relative url()s were never
+// emitted and production served index.html in their place (issue #82).
+import "@fontsource-variable/inter";
 import "@groot/shell/index.css";
 import "streamdown/styles.css";
 import "./app.css";
