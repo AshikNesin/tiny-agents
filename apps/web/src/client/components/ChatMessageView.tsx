@@ -137,6 +137,15 @@ function formatDuration(ms: number): string {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** A human wait: "40s", "1m 40s", "2h 5m". */
+function formatWait(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
+  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
+}
+
 /** Tool states whose row already shows the bot at work (or waiting on you). */
 export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
   "pending",
@@ -511,7 +520,10 @@ function ToolRow({
         </TraceDescription>
       )}
       {call.durationMs !== undefined && (
-        <TraceDescription>{formatDuration(call.durationMs)}</TraceDescription>
+        <TraceDescription>
+          {formatDuration(call.durationMs)}
+          {call.waitedMs ? ` · waited ${formatWait(call.waitedMs)} for you` : ""}
+        </TraceDescription>
       )}
     </TraceLine>
   );

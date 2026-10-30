@@ -34,6 +34,8 @@ export interface ChatToolCall {
   status: ChatToolStatus;
   output?: string;
   durationMs?: number;
+  /** Time the call waited for the owner's approval (not part of durationMs). */
+  waitedMs?: number;
   taskId?: number;
   /** `auto`: auto-review approved the call, no card was shown; `refused`: nobody was there to ask. */
   approval?: "approved" | "denied" | "auto" | "refused";

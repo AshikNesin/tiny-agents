@@ -56,6 +56,8 @@ export interface ChatToolCall {
   /** Result text for the user (bounded). */
   output?: string;
   durationMs?: number;
+  /** Time the call waited for the owner's approval (not part of durationMs). */
+  waitedMs?: number;
   /** Durable tool task id: what approval decisions address. */
   taskId?: number;
   /**

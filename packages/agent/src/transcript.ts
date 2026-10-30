@@ -240,11 +240,17 @@ function toolCallView(
     const sources = sourcesOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
+    // The tool's clock includes any wait for the owner's approval: report
+    // the run and the wait apart.
+    const waitedMs = typeof details?.waitedMs === "number" ? details.waitedMs : undefined;
     return {
       ...base,
       status: resultStatus(result),
       ...(output ? { output: clip(output) } : {}),
-      ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+      ...(message.durationMs !== undefined
+        ? { durationMs: Math.max(0, message.durationMs - (waitedMs ?? 0)) }
+        : {}),
+      ...(waitedMs ? { waitedMs } : {}),
       ...(approval === "approved" ||
       approval === "denied" ||
       approval === "auto" ||
