@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, users, type User } from "../database";
 import { Boom } from "../errors";
 import { generateToken } from "../utils/jwt.utils";
-import { hashPassword, verifyPassword } from "../utils/password.utils";
+import { hashPassword, needsRehash, verifyPassword } from "../utils/password.utils";
 import type { CreateUserDTO, LoginDTO } from "./auth.schema";
 
 export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
@@ -32,6 +32,13 @@ export async function login(data: LoginDTO) {
   const isValid = await verifyPassword(data.password, user?.password ?? DUMMY_HASH);
   if (!user || !isValid) {
     throw Boom.unauthorized("Invalid email or password");
+  }
+  // Upgrade an old hash (bcrypt, or fewer iterations) now that we hold the password.
+  if (needsRehash(user.password)) {
+    await db
+      .update(users)
+      .set({ password: await hashPassword(data.password) })
+      .where(eq(users.id, user.id));
   }
 
   const token = await generateToken({ userId: user.id, email: user.email });

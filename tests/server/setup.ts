@@ -4,8 +4,8 @@
  * drive `runTick()` explicitly, silent logs.
  */
 import { bootstrap } from "@groot/core/bootstrap";
-import { createSqliteDb } from "@groot/core/database/node";
 import { memoryStorage } from "@groot/core/storage/memory";
+import { asCoreDatabase, createAppDb } from "../../apps/web/src/server/db";
 
 process.env.NODE_ENV = "test";
 // Connection-secret encryption needs a key in tests (unset in dev until
@@ -15,7 +15,8 @@ process.env.SECRETS_KEY ??= "test-only-secrets-key-not-for-production";
 bootstrap({
   env: { ...process.env, NODE_ENV: "test", DATABASE_URL: ":memory:" },
   config: { jobs: { enabled: false }, logging: { level: "silent" } },
-  db: createSqliteDb(":memory:", { migrationsFolder: "apps/web/drizzle" }),
+  // The app schema is attached so app code can use relational queries.
+  db: asCoreDatabase(createAppDb(":memory:", { migrationsFolder: "apps/web/drizzle" })),
   storage: memoryStorage(),
   prettyLogs: false,
 });

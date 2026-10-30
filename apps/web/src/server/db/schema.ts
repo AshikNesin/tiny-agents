@@ -1,0 +1,507 @@
+import { relations } from "drizzle-orm";
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  unique,
+} from "drizzle-orm/sqlite-core";
+import { timestamps } from "@groot/core/database/schema";
+import { createId } from "@groot/core/utils/id.utils";
+
+/**
+ * App-owned tables. This file is the single schema entry point for
+ * drizzle-kit (see `drizzle.config.ts`): it re-exports the core and jobs
+ * tables so one migration history covers everything.
+ *
+ * Field names match the Prisma models they replace (camelCase in code,
+ * snake_case columns), so the data copy from a pre-Drizzle database maps
+ * column to field by name (see `./legacy-copy.ts`). Text ids keep the cuid
+ * shape of the rows Prisma created.
+ */
+
+const id = () =>
+  text("id")
+    .primaryKey()
+    .$defaultFn(() => createId());
+
+const createdAt = () =>
+  integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date());
+
+const ms = (name: string) => integer(name, { mode: "timestamp_ms" });
+const bool = (name: string) => integer(name, { mode: "boolean" });
+
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: id(),
+    /** Max 300 chars. */
+    title: text("title").notNull(),
+    /** Notes, max 2000 chars. */
+    description: text("description").notNull().default(""),
+    /** todo | in_progress | done */
+    status: text("status").notNull().default("todo"),
+    /** low | medium | high | urgent */
+    priority: text("priority").notNull().default("medium"),
+    dueAt: ms("due_at"),
+    completedAt: ms("completed_at"),
+    /** Tool-call id that created this task: exactly-once across pi-durable replays. */
+    sourceKey: text("source_key").unique(),
+    ...timestamps,
+  },
+  (t) => [index("tasks_status_due_at_idx").on(t.status, t.dueAt)],
+);
+
+export const bots = sqliteTable("bots", {
+  id: id(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  systemPrompt: text("system_prompt").notNull().default(""),
+  modelId: text("model_id").notNull(),
+  conversationId: text("conversation_id").notNull().unique(),
+  /** When the current chat conversation started (bot create, "New chat"). Routine run cards older than it stay out of the chat. */
+  chatStartedAt: ms("chat_started_at")
+    .notNull()
+    .$defaultFn(() => new Date()),
+  lastReadAt: ms("last_read_at"),
+  lastActivityAt: ms("last_activity_at")
+    .notNull()
+    .$defaultFn(() => new Date()),
+  lastMessagePreview: text("last_message_preview"),
+  /** JSON object: tool name → "allow" | "ask" | "off"; tools without an entry use their default. */
+  toolPermissions: text("tool_permissions").notNull().default("{}"),
+  /** Memory capture + injection switch (issue #22). */
+  memoryEnabled: bool("memory_enabled").notNull().default(true),
+  /** Auto-review switch (issue #65): a classifier may approve "ask" tool calls. */
+  autoReview: bool("auto_review").notNull().default(false),
+  /** Transcript watermark: owner turns captured through this instant (issue #22). */
+  memoryCapturedThrough: ms("memory_captured_through"),
+  /** Set when the owner pins the bot to the top of the sidebar; pinned bots sort by this, oldest first. */
+  pinnedAt: ms("pinned_at"),
+  /** "shared" (one browser, and its logins, for every such bot) or "own" (a browser of its own). */
+  browserProfile: text("browser_profile").notNull().default("shared"),
+  ...timestamps,
+});
+
+/** Conversations a bot ran on before a "New chat" (past chats, issue #101). */
+export const botChats = sqliteTable(
+  "bot_chats",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** The retired durable conversation in agent.db. */
+    conversationId: text("conversation_id").notNull().unique(),
+    /** The bot's chatStartedAt while this was its chat. */
+    startedAt: ms("started_at").notNull(),
+    /** When "New chat" (or continuing another past chat) retired it. */
+    endedAt: ms("ended_at").notNull(),
+    /** Short title: the first owner message until the title side-call replaces it. */
+    title: text("title"),
+    /** Bot.lastMessagePreview when it was retired. */
+    lastMessagePreview: text("last_message_preview"),
+    messageCount: integer("message_count").notNull().default(0),
+  },
+  (t) => [index("bot_chats_bot_id_ended_at_idx").on(t.botId, t.endedAt)],
+);
+
+export const skills = sqliteTable("skills", {
+  id: id(),
+  /** Agent Skills name: lowercase-with-hyphens, unique in the library. */
+  name: text("name").notNull().unique(),
+  description: text("description").notNull(),
+  /** SKILL.md body (markdown, without frontmatter). */
+  body: text("body").notNull(),
+  /** JSON array of bundled files: [{ path, content }]. Text only; never executed. */
+  files: text("files").notNull().default("[]"),
+  /** manual | url | bot */
+  source: text("source").notNull().default("manual"),
+  sourceUrl: text("source_url"),
+  ...timestamps,
+});
+
+export const botMessages = sqliteTable(
+  "bot_messages",
+  {
+    id: id(),
+    /** Sender bot id; null when the owner tagged the target in another bot's chat (a mention). */
+    fromBotId: text("from_bot_id").references(() => bots.id, { onDelete: "cascade" }),
+    /** Receiving bot. */
+    toBotId: text("to_bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** Conversation that receives this message's answer (the host of a mention, or the sender). Null = only the owner. */
+    replyToBotId: text("reply_to_bot_id").references(() => bots.id, { onDelete: "cascade" }),
+    /** "send" (message_bot tool) | "mention" (owner @tag) | "relay" (relayed reply). */
+    kind: text("kind").notNull(),
+    /** Idempotency key of the durable submit (requestId of conversation.submit). */
+    requestId: text("request_id").notNull().unique(),
+    /** Durable tool-call id: exactly-once row create across pi-durable replays. */
+    sourceKey: text("source_key").unique(),
+    text: text("text").notNull(),
+    /** When the message was submitted into the target's durable conversation (pending → delivered). */
+    deliveredAt: ms("delivered_at"),
+    /** When the target's reply was relayed into replyToBotId's conversation (delivered → answered). */
+    answeredAt: ms("answered_at"),
+    /**
+     * Created-at of the assistant reply that answered this delivery. Correlates
+     * deliveries to replies so one reply never answers two rows (queued
+     * deliveries) and a reply older than the delivery never answers (stale boot sweep).
+     */
+    answerReplyAt: ms("answer_reply_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("bot_messages_to_bot_id_answered_at_idx").on(t.toBotId, t.answeredAt),
+    index("bot_messages_reply_to_bot_id_answered_at_idx").on(t.replyToBotId, t.answeredAt),
+  ],
+);
+
+export const botSkills = sqliteTable(
+  "bot_skills",
+  {
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    skillId: text("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.botId, t.skillId] }),
+    index("bot_skills_skill_id_idx").on(t.skillId),
+  ],
+);
+
+export const connections = sqliteTable("connections", {
+  id: id(),
+  name: text("name").notNull(),
+  /** Capability id suffix (`mcp:<slug>`) and tool name prefix; immutable. */
+  slug: text("slug").notNull().unique(),
+  url: text("url").notNull(),
+  /** streamable-http | sse */
+  transport: text("transport").notNull().default("streamable-http"),
+  /** none | header | oauth */
+  authType: text("auth_type").notNull().default("none"),
+  /** Header carrying `secretEnc` for header auth (e.g. Authorization, x-api-key). */
+  headerName: text("header_name"),
+  /** AES-GCM (SECRETS_KEY) encrypted header value. */
+  secretEnc: text("secret_enc"),
+  /** AES-GCM (SECRETS_KEY) encrypted OAuth state: client registration, tokens, PKCE verifier. */
+  oauthEnc: text("oauth_enc"),
+  /** JSON array of the server's tools as last listed: [{ name, title, description, readOnly }]. */
+  toolsCache: text("tools_cache").notNull().default("[]"),
+  /** JSON array of server tool names turned off for every bot; tools the server adds later start on. */
+  disabledTools: text("disabled_tools").notNull().default("[]"),
+  /** Vault handle (`vaultItems.handle`) holding the header value; preferred over `secretEnc` when set. */
+  secretRef: text("secret_ref"),
+  ...timestamps,
+});
+
+export const botConnections = sqliteTable(
+  "bot_connections",
+  {
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => connections.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.botId, t.connectionId] }),
+    index("bot_connections_connection_id_idx").on(t.connectionId),
+  ],
+);
+
+export const vaultItems = sqliteTable("vault_items", {
+  id: id(),
+  /** Model-facing slug ("github"); the only name bots see. */
+  handle: text("handle").notNull().unique(),
+  /** login | card | identity | api_key */
+  kind: text("kind").notNull(),
+  /** onepassword-connect | local */
+  backend: text("backend").notNull(),
+  /** Backend item id (Connect item id; the vault is pinned in env). */
+  externalId: text("external_id").notNull(),
+  /** api_key: which field holds the key (default: the credential/password field). */
+  field: text("field"),
+  label: text("label").notNull(),
+  /** Login identifier: metadata the bot may type itself. */
+  username: text("username"),
+  /** JSON array of exact origins a login or card fills on. */
+  originsJson: text("origins_json").notNull().default("[]"),
+  /** JSON array of hosts an api_key header may go to. */
+  hostsJson: text("hosts_json").notNull().default("[]"),
+  /** JSON {as:"header",name,format} for api_key injection. */
+  injectJson: text("inject_json"),
+  /** JSON array of tools that may use it; [] = the kind's default. */
+  toolsJson: text("tools_json").notNull().default("[]"),
+  /** JSON array of bot ids that may use it; null = every bot. */
+  botsJson: text("bots_json"),
+  /** every_use | per_conversation | allowed */
+  approval: text("approval").notNull().default("per_conversation"),
+  allowUnattended: bool("allow_unattended").notNull().default(false),
+  whenToUse: text("when_to_use"),
+  /** JSON {brand,last4,expiry}: display only. */
+  cardMetaJson: text("card_meta_json"),
+  hasTotp: bool("has_totp").notNull().default(false),
+  disabled: bool("disabled").notNull().default(false),
+  lastUsedAt: ms("last_used_at"),
+  lastUsedBy: text("last_used_by"),
+  ...timestamps,
+});
+
+export const vaultAuditEvents = sqliteTable(
+  "vault_audit_events",
+  {
+    id: id(),
+    at: ms("at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    itemId: text("item_id").references(() => vaultItems.id, { onDelete: "set null" }),
+    /** Kept when the item is deleted. */
+    handle: text("handle").notNull(),
+    botId: text("bot_id"),
+    conversationId: integer("conversation_id"),
+    taskId: integer("task_id"),
+    /** Agent tool, "vault_ui" or "credential_request". */
+    tool: text("tool").notNull(),
+    /** Origin, host or redacted command. */
+    target: text("target").notNull(),
+    /** used | approved_used | denied | expired | refused_* | backend_error | created | updated | deleted | revealed | copied | filled */
+    outcome: text("outcome").notNull(),
+    reason: text("reason"),
+    unattended: bool("unattended").notNull().default(false),
+  },
+  (t) => [
+    index("vault_audit_events_item_id_at_idx").on(t.itemId, t.at),
+    index("vault_audit_events_at_idx").on(t.at),
+  ],
+);
+
+export const uploads = sqliteTable("uploads", {
+  id: id(),
+  /** "image" | "file" */
+  kind: text("kind").notNull(),
+  /** Original filename, sanitized. */
+  name: text("name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  /** Original byte size. */
+  size: integer("size").notNull(),
+  /** Images only, after preparation. */
+  width: integer("width"),
+  height: integer("height"),
+  /** Storage key of the model-ready image variant (null for files). */
+  modelKey: text("model_key"),
+  /** Storage key of the original bytes. */
+  storageKey: text("storage_key").notNull().unique(),
+  createdAt: createdAt(),
+  /** SHA-256 of the original bytes (sandbox copies report it). */
+  sha256: text("sha256"),
+  /** Extraction (issue #58): none | pending | ready | failed | unsupported. */
+  extractStatus: text("extract_status").notNull().default("none"),
+  /** Why extraction failed, or why the type can't be read. */
+  extractError: text("extract_error"),
+  /** JSON ExtractMeta: format, pages, sheets, lines, entries, truncated, … */
+  extractMeta: text("extract_meta"),
+  extractedAt: ms("extracted_at"),
+});
+
+export const routines = sqliteTable(
+  "routines",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** Max 80 chars. */
+    name: text("name").notNull(),
+    /** Max 20k chars. */
+    prompt: text("prompt").notNull(),
+    /** Schedule union (once | cron | interval), parsed with Zod at every boundary. */
+    schedule: text("schedule", { mode: "json" }).$type<unknown>().notNull(),
+    /** Paused or terminal (a fired once) routines keep their row but schedule nothing. */
+    enabled: bool("enabled").notNull().default(true),
+    /** Next occurrence as an absolute UTC instant; null when disabled or terminal. */
+    nextRunAt: ms("next_run_at"),
+    /** The queued routine-fire job for nextRunAt (cancel/reschedule handle). */
+    pendingJobId: text("pending_job_id").unique(),
+    /** Durable tool-call id: exactly-once row create across pi-durable replays. */
+    sourceKey: text("source_key").unique(),
+    /** The routine's own durable conversation (issue #63): every run is submitted here, never into the bot's chat. Null until first fire. */
+    conversationId: text("conversation_id").unique(),
+    /** Runs in a row that ended blocked (issue #87); a run that finishes any other way, or arming the routine again, resets it. */
+    blockedStreak: integer("blocked_streak").notNull().default(0),
+    /** Why the app paused the routine itself (issue #87). Max 500 chars; cleared when it is armed again. */
+    pausedReason: text("paused_reason"),
+    ...timestamps,
+  },
+  (t) => [index("routines_enabled_next_run_at_idx").on(t.enabled, t.nextRunAt)],
+);
+
+export const memories = sqliteTable(
+  "memories",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** One self-contained third-person sentence, max 300 chars. */
+    text: text("text").notNull(),
+    /** preference | fact | goal | habit (Zod-validated at every boundary). */
+    category: text("category").notNull(),
+    /** active | superseded | archived | expired | deleted. Only `active` injects. */
+    status: text("status").notNull().default("active"),
+    /** capture | manual (source line on the Memory page). */
+    source: text("source").notNull().default("capture"),
+    /** Extraction confidence 0..1; null for manual entries. */
+    confidence: real("confidence"),
+    /** Optional expiry; null = no expiry. Expired rows stay rows, leave the prompt. */
+    until: ms("until"),
+    /** Set when a newer memory replaced this one (strike-through in the UI). */
+    supersededById: text("superseded_by_id"),
+    supersededAt: ms("superseded_at"),
+    ...timestamps,
+  },
+  (t) => [index("memories_bot_id_status_category_idx").on(t.botId, t.status, t.category)],
+);
+
+export const routineRuns = sqliteTable(
+  "routine_runs",
+  {
+    id: id(),
+    routineId: text("routine_id")
+      .notNull()
+      .references(() => routines.id, { onDelete: "cascade" }),
+    /** The occurrence this run represents (UTC instant). */
+    scheduledFor: ms("scheduled_for").notNull(),
+    /** awaiting | succeeded | blocked | failed | missed | cancelled (blocked: it finished but could not do its job, issue #87) */
+    status: text("status").notNull(),
+    /** schedule | manual */
+    trigger: text("trigger").notNull().default("schedule"),
+    /** pi-durable submit id: "routine:<routineId>:<scheduledFor ISO>". */
+    requestId: text("request_id").notNull().unique(),
+    submittedAt: ms("submitted_at"),
+    startedAt: ms("started_at"),
+    finishedAt: ms("finished_at"),
+    /** Reply preview, max 2000 chars. */
+    output: text("output"),
+    /** Failure or blocked reason, max 500 chars. */
+    error: text("error"),
+  },
+  (t) => [
+    unique("routine_runs_routine_id_scheduled_for_unique").on(t.routineId, t.scheduledFor),
+    index("routine_runs_status_idx").on(t.status),
+  ],
+);
+
+export * from "@groot/core/notification/notification.schema";
+
+// ── Relations (relational queries: `db.query.bots.findMany({ with: … })`) ──
+
+export const botsRelations = relations(bots, ({ many }) => ({
+  skills: many(botSkills),
+  connections: many(botConnections),
+  messagesFrom: many(botMessages, { relationName: "messagesFrom" }),
+  messagesTo: many(botMessages, { relationName: "messagesTo" }),
+  answersFor: many(botMessages, { relationName: "answersFor" }),
+  routines: many(routines),
+  memories: many(memories),
+  pastChats: many(botChats),
+}));
+
+export const botChatsRelations = relations(botChats, ({ one }) => ({
+  bot: one(bots, { fields: [botChats.botId], references: [bots.id] }),
+}));
+
+export const skillsRelations = relations(skills, ({ many }) => ({
+  bots: many(botSkills),
+}));
+
+export const botSkillsRelations = relations(botSkills, ({ one }) => ({
+  bot: one(bots, { fields: [botSkills.botId], references: [bots.id] }),
+  skill: one(skills, { fields: [botSkills.skillId], references: [skills.id] }),
+}));
+
+export const connectionsRelations = relations(connections, ({ many }) => ({
+  bots: many(botConnections),
+}));
+
+export const botConnectionsRelations = relations(botConnections, ({ one }) => ({
+  bot: one(bots, { fields: [botConnections.botId], references: [bots.id] }),
+  connection: one(connections, {
+    fields: [botConnections.connectionId],
+    references: [connections.id],
+  }),
+}));
+
+export const botMessagesRelations = relations(botMessages, ({ one }) => ({
+  bot: one(bots, {
+    fields: [botMessages.fromBotId],
+    references: [bots.id],
+    relationName: "messagesFrom",
+  }),
+  to: one(bots, {
+    fields: [botMessages.toBotId],
+    references: [bots.id],
+    relationName: "messagesTo",
+  }),
+  replyTo: one(bots, {
+    fields: [botMessages.replyToBotId],
+    references: [bots.id],
+    relationName: "answersFor",
+  }),
+}));
+
+export const vaultItemsRelations = relations(vaultItems, ({ many }) => ({
+  events: many(vaultAuditEvents),
+}));
+
+export const vaultAuditEventsRelations = relations(vaultAuditEvents, ({ one }) => ({
+  item: one(vaultItems, { fields: [vaultAuditEvents.itemId], references: [vaultItems.id] }),
+}));
+
+export const routinesRelations = relations(routines, ({ one, many }) => ({
+  bot: one(bots, { fields: [routines.botId], references: [bots.id] }),
+  runs: many(routineRuns),
+}));
+
+export const routineRunsRelations = relations(routineRuns, ({ one }) => ({
+  routine: one(routines, { fields: [routineRuns.routineId], references: [routines.id] }),
+}));
+
+export const memoriesRelations = relations(memories, ({ one, many }) => ({
+  bot: one(bots, { fields: [memories.botId], references: [bots.id] }),
+  supersededBy: one(memories, {
+    fields: [memories.supersededById],
+    references: [memories.id],
+    relationName: "supersession",
+  }),
+  superseding: many(memories, { relationName: "supersession" }),
+}));
+
+export type Task = typeof tasks.$inferSelect;
+export type Bot = typeof bots.$inferSelect;
+export type BotChat = typeof botChats.$inferSelect;
+export type Skill = typeof skills.$inferSelect;
+export type BotMessage = typeof botMessages.$inferSelect;
+export type BotSkill = typeof botSkills.$inferSelect;
+export type Connection = typeof connections.$inferSelect;
+export type BotConnection = typeof botConnections.$inferSelect;
+export type VaultItem = typeof vaultItems.$inferSelect;
+export type VaultAuditEvent = typeof vaultAuditEvents.$inferSelect;
+export type Upload = typeof uploads.$inferSelect;
+export type Routine = typeof routines.$inferSelect;
+export type Memory = typeof memories.$inferSelect;
+export type RoutineRun = typeof routineRuns.$inferSelect;
+
+export * from "@groot/core/database/schema";
+export * from "@groot/jobs/server/schema";

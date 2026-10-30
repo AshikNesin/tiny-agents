@@ -1,4 +1,5 @@
-import { prisma } from "@groot/core/database";
+import { asc, desc, eq } from "drizzle-orm";
+import { db, tasks } from "../../db";
 import { Boom } from "@groot/core/errors";
 import type { CreateTaskDTO, TaskStatus, UpdateTaskDTO } from "./task.schema";
 
@@ -50,37 +51,36 @@ function assertStatus(value: string): TaskStatus {
  * bots' agent tools go through this service so the two views never diverge.
  */
 export async function list(): Promise<TaskRow[]> {
-  const rows = await prisma.task.findMany({
-    orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
-  });
+  const rows = await db.select().from(tasks).orderBy(asc(tasks.dueAt), desc(tasks.createdAt));
   return rows.map(toApi);
 }
 
 export async function create(input: CreateTaskDTO): Promise<TaskRow> {
-  const row = await prisma.task.create({
-    data: {
+  const [row] = await db
+    .insert(tasks)
+    .values({
       title: input.title,
       description: input.description,
       status: input.status,
       priority: input.priority,
       dueAt: input.dueAt ?? null,
       completedAt: input.status === "done" ? new Date() : null,
-    },
-  });
-  return toApi(row);
+    })
+    .returning();
+  return toApi(row!);
 }
 
 async function find(id: string) {
-  const row = await prisma.task.findUnique({ where: { id } });
+  const row = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
   if (!row) throw Boom.notFound("Task not found");
   return row;
 }
 
 export async function update(id: string, input: UpdateTaskDTO): Promise<TaskRow> {
   await find(id);
-  const row = await prisma.task.update({
-    where: { id },
-    data: {
+  const [row] = await db
+    .update(tasks)
+    .set({
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
@@ -91,12 +91,13 @@ export async function update(id: string, input: UpdateTaskDTO): Promise<TaskRow>
       ...(input.status !== undefined
         ? { completedAt: input.status === "done" ? new Date() : null }
         : {}),
-    },
-  });
-  return toApi(row);
+    })
+    .where(eq(tasks.id, id))
+    .returning();
+  return toApi(row!);
 }
 
 export async function remove(id: string): Promise<void> {
   await find(id);
-  await prisma.task.delete({ where: { id } });
+  await db.delete(tasks).where(eq(tasks.id, id));
 }

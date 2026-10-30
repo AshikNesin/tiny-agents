@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import {
   fromBase64Url,
   timingSafeEqual,
@@ -12,6 +13,11 @@ import {
  * budget 10 ms of CPU per request on the free plan, so the count stays there).
  *
  * Stored format: `pbkdf2-sha256$<iterations>$<salt>$<hash>` (base64url).
+ *
+ * tiny-agents: users created before the move to groot 3.0 still have bcrypt
+ * hashes (`$2a$` / `$2b$`). `verifyPassword` accepts them so those logins keep
+ * working, and `needsRehash` reports them, so login replaces them with a
+ * PBKDF2 hash the first time the password is used.
  */
 
 const ALGORITHM = "pbkdf2-sha256";
@@ -38,6 +44,7 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (isLegacyBcrypt(stored)) return bcrypt.compare(password, stored);
   const [algorithm, iterations, salt, hash] = stored.split("$");
   if (algorithm !== ALGORITHM || !iterations || !salt || !hash) return false;
   const expected = fromBase64Url(hash);
@@ -49,4 +56,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
 export function needsRehash(stored: string): boolean {
   const [algorithm, iterations] = stored.split("$");
   return algorithm !== ALGORITHM || Number(iterations) !== ITERATIONS;
+}
+
+function isLegacyBcrypt(stored: string): boolean {
+  return /^\$2[aby]\$\d{2}\$/.test(stored);
 }

@@ -16,6 +16,11 @@ export interface CreateAppOptions {
   readiness?: () => string | undefined;
   /** Max JSON body size for API routes. Storage uploads set their own limit. */
   bodyLimitBytes?: number;
+  /**
+   * Path prefixes whose routes enforce their own body limit (multipart
+   * uploads), in addition to `/api/v1/storage/`.
+   */
+  ownBodyLimit?: string[];
 }
 
 let shuttingDown = false;
@@ -42,8 +47,9 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
       credentials: true,
     }),
   );
+  const ownLimit = ["/api/v1/storage/", ...(options.ownBodyLimit ?? [])];
   app.use("/api/*", (c, next) =>
-    c.req.path.startsWith("/api/v1/storage/") ? next() : limit(c, next),
+    ownLimit.some((prefix) => c.req.path.startsWith(prefix)) ? next() : limit(c, next),
   );
 
   const probe = () => {
