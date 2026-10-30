@@ -4,19 +4,14 @@
  * state and re-install on tool changes, and the OAuth flow against a fake
  * authorization server.
  */
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import { createServer, type IncomingMessage, type RequestListener, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import {
-  botConnections,
-  bots,
-  connections,
-  db,
-} from "../../../apps/web/src/server/db";
+import { botConnections, bots, connections, db } from "../../../apps/web/src/server/db";
 import { McpServer, StreamableHTTPServerTransport } from "../../../packages/agent/src/testing";
 import {
   ConnectionManager,
@@ -24,12 +19,6 @@ import {
 } from "../../../apps/web/src/server/api/connections/connections.manager";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
-// TMP-UPLOADS-MOCK
-vi.mock("../../../apps/web/src/server/api/uploads/uploads.routes", async () => {
-  const { Hono } = await import("hono");
-  return { default: new Hono() };
-});
-// /TMP-UPLOADS-MOCK
 
 let token: string;
 beforeAll(async () => {
@@ -38,7 +27,7 @@ beforeAll(async () => {
 
 const buildApp = (): TestApp => createTestApp();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
 
 /** An authenticated JSON request that must answer `status`; returns the envelope. */
@@ -53,11 +42,13 @@ async function call(
     token,
     ...(init.json !== undefined ? { json: init.json } : {}),
   });
-  expect(response.status, `${init.method ?? "GET"} ${path}: ${JSON.stringify(response.body)}`).toBe(status);
+  expect(response.status, `${init.method ?? "GET"} ${path}: ${JSON.stringify(response.body)}`).toBe(
+    status,
+  );
   return response.body;
 }
 
-async function listen(handler: Parameters<typeof createServer>[0]) {
+async function listen(handler: RequestListener) {
   const server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return { server, port: (server.address() as AddressInfo).port };
@@ -107,11 +98,13 @@ async function startMcpServer(): Promise<TestMcpServer> {
       return;
     }
     if (!tokens.has(String(req.headers["x-api-key"] ?? ""))) {
-      res
-        .writeHead(401, { "content-type": "application/json" })
-        .end(
-          JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }),
-        );
+      res.writeHead(401, { "content-type": "application/json" }).end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: { code: -32001, message: "Unauthorized" },
+          id: null,
+        }),
+      );
       return;
     }
     // Stateless: one server+transport per request, closed with the response.

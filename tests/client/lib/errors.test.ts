@@ -42,9 +42,9 @@ describe("errorMessage", () => {
     const offline = new TypeError("Failed to fetch");
     const timeout = new DOMException("The operation timed out.", "TimeoutError");
     expect(errorMessage(offline, "Failed")).toBe(OFFLINE_MESSAGE);
-    expect(errorMessage(new TypeError("NetworkError when attempting to fetch resource."), "x")).toBe(
-      OFFLINE_MESSAGE,
-    );
+    expect(
+      errorMessage(new TypeError("NetworkError when attempting to fetch resource."), "x"),
+    ).toBe(OFFLINE_MESSAGE);
     expect(errorMessage(timeout, "Failed")).toBe(TIMEOUT_MESSAGE);
   });
 

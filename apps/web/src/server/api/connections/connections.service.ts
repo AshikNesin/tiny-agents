@@ -157,10 +157,7 @@ async function setBots(connectionId: string, botIds: string[]): Promise<void> {
     .where(eq(botConnections.connectionId, connectionId));
   const bots =
     botIds.length > 0
-      ? await db
-          .select({ id: botsTable.id })
-          .from(botsTable)
-          .where(inArray(botsTable.id, botIds))
+      ? await db.select({ id: botsTable.id }).from(botsTable).where(inArray(botsTable.id, botIds))
       : [];
   db.transaction((tx) => {
     tx.delete(botConnections).where(eq(botConnections.connectionId, connectionId)).run();

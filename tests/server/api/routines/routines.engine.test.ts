@@ -3,13 +3,21 @@
  * delivery, crash between submit and chain, missed-run grace, late once),
  * the routine's own conversation (issue #63: never the bot's chat), and the
  * completion watcher (idle resolution, refused tools, restart boot sweep,
- * chat cards). Real SQLite test DB, fake runtime, queue mocked at the
- * adapter boundary.
+ * chat cards). Real SQLite test DB, fake runtime, and the real queue table
+ * (no worker runs in tests, so queued jobs only wait there).
  */
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
+import {
+  bots,
+  db,
+  jobs,
+  routineRuns,
+  routines,
+} from "../../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
 import {
+  ROUTINE_FIRE_JOB,
   dispatchOccurrence,
   runRequestId,
   type RoutineFirePayload,
@@ -25,21 +33,34 @@ import {
 } from "../../../../apps/web/src/server/api/routines/routines.cards";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 
-let jobCounter = 0;
-const sentJobs: { name: string; data: unknown }[] = [];
+/** Routine-fire jobs queued so far, oldest first. */
+async function sentJobs() {
+  return db.select().from(jobs).where(eq(jobs.name, ROUTINE_FIRE_JOB)).orderBy(sql`rowid`);
+}
 
-vi.mock("@groot/jobs/server/client", () => ({
-  getJobQueue: () => ({
-    send: vi.fn(async (name: string, data: unknown) => {
-      jobCounter += 1;
-      sentJobs.push({ name, data });
-      return `job-${jobCounter}`;
-    }),
-    cancelJob: vi.fn(async () => true),
-    createQueue: vi.fn(async () => undefined),
-  }),
-  jobQueueReady: () => true,
-}));
+async function routineRow(id: string) {
+  return db.query.routines.findFirst({ where: eq(routines.id, id) });
+}
+
+async function runOf(routineId: string, scheduledFor?: Date) {
+  return db.query.routineRuns.findFirst({
+    where: and(
+      eq(routineRuns.routineId, routineId),
+      scheduledFor ? eq(routineRuns.scheduledFor, scheduledFor) : undefined,
+    ),
+  });
+}
+
+async function runById(id: string) {
+  return db.query.routineRuns.findFirst({ where: eq(routineRuns.id, id) });
+}
+
+async function clearTables() {
+  await db.delete(routineRuns);
+  await db.delete(routines);
+  await db.delete(bots);
+  await db.delete(jobs);
+}
 
 /** The bot's chat, where the owner talks (seeded on the bot row). */
 const CHAT = 7;
@@ -69,25 +90,27 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
-  const bot = await prisma.bot.create({
+  const [bot] = await db
+    .insert(bots)
     // The chat thread started before the fixed slots these tests fire at.
-    data: {
+    .values({
       name: "Bot",
       modelId: "m1",
       conversationId: String(CHAT),
       chatStartedAt: new Date("2026-01-01T00:00:00Z"),
-    },
-  });
-  const routine = await prisma.routine.create({
-    data: {
-      botId: bot.id,
+    })
+    .returning();
+  const [routine] = await db
+    .insert(routines)
+    .values({
+      botId: bot!.id,
       name: "digest",
       prompt: "Do the thing.",
-      schedule: schedule as object,
+      schedule,
       enabled: options.enabled ?? true,
-    },
-  });
-  return { bot, routine };
+    })
+    .returning();
+  return { bot: bot!, routine: routine! };
 }
 
 const SLOT = new Date("2026-10-21T03:30:00.000Z"); // 09:00 IST Wed
@@ -110,28 +133,20 @@ describe("routine-fire dispatch", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    jobCounter = 0;
-    sentJobs.length = 0;
     chatReplies = [];
     runtime = fakeRuntime();
     setAgentRuntimeForTests(runtime);
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
+    await clearTables();
   });
 
-  afterEach(async () => {
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
-  });
+  afterEach(clearTables);
 
   it("fires on time: one run row, one labeled submit, next occurrence chained", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
 
-    expect(await prisma.routineRun.count({ where: { routineId: routine.id } })).toBe(1);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    expect(await db.$count(routineRuns, eq(routineRuns.routineId, routine.id))).toBe(1);
+    const run = await runOf(routine.id);
     expect(run).toMatchObject({ status: "awaiting", trigger: "schedule" });
     expect(run?.requestId).toBe(runRequestId(routine.id, SLOT));
 
@@ -149,22 +164,22 @@ describe("routine-fire dispatch", () => {
       expect.objectContaining({ capabilities: expect.objectContaining({ unattended: true }) }),
     );
     expect(vi.mocked(runtime.configure).mock.calls.some(([ref]) => ref === CHAT)).toBe(false);
-    expect((await prisma.routine.findUnique({ where: { id: routine.id } }))?.conversationId).toBe(
-      String(ROUTINE_CONVERSATION),
-    );
+    expect((await routineRow(routine.id))?.conversationId).toBe(String(ROUTINE_CONVERSATION));
     expect(submits[0][1].requestId).toBe(runRequestId(routine.id, SLOT));
     expect(submits[0][1].text).toContain('Routine "digest"');
     expect(submits[0][1].text).toContain("Wed, 21 Oct 2026, 09:00 IST");
 
     // The chain advanced: next slot queued with a fresh pendingJobId.
-    expect(sentJobs).toHaveLength(1);
-    expect(sentJobs[0].data).toMatchObject({
+    const queued = await sentJobs();
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.data).toMatchObject({
       routineId: routine.id,
       scheduledFor: "2026-10-22T03:30:00.000Z",
       trigger: "schedule",
     });
-    const row = await prisma.routine.findUnique({ where: { id: routine.id } });
+    const row = await routineRow(routine.id);
     expect(row?.nextRunAt?.toISOString()).toBe("2026-10-22T03:30:00.000Z");
+    expect(row?.pendingJobId).toBe(queued[0]!.id);
   });
 
   it("every run of a routine shares its conversation, so later runs see earlier ones", async () => {
@@ -181,19 +196,20 @@ describe("routine-fire dispatch", () => {
 
   it("two routines of one bot get conversations of their own", async () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    const other = await prisma.routine.create({
-      data: {
+    const [other] = await db
+      .insert(routines)
+      .values({
         botId: bot.id,
         name: "other",
         prompt: "Other thing.",
         schedule: { kind: "cron", expr: "0 9 * * 1-5" },
-      },
-    });
+      })
+      .returning();
     vi.mocked(runtime.createConversation)
       .mockResolvedValueOnce(ROUTINE_CONVERSATION)
       .mockResolvedValueOnce(43);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    await dispatchOccurrence(payloadOf(other.id, SLOT), ON_TIME);
+    await dispatchOccurrence(payloadOf(other!.id, SLOT), ON_TIME);
     expect(vi.mocked(runtime.submit).mock.calls.map(([ref]) => ref)).toEqual([
       ROUTINE_CONVERSATION,
       43,
@@ -206,20 +222,20 @@ describe("routine-fire dispatch", () => {
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
 
-    expect(await prisma.routineRun.count({ where: { routineId: routine.id } })).toBe(1);
+    expect(await db.$count(routineRuns, eq(routineRuns.routineId, routine.id))).toBe(1);
     expect(vi.mocked(runtime.submit).mock.calls).toHaveLength(1);
-    expect(sentJobs).toHaveLength(1);
+    expect(await sentJobs()).toHaveLength(1);
   });
 
   it("a crash between submit and chaining is repaired by the redelivery", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     // Simulate the crash: the row kept awaiting status but the chain never queued.
-    await prisma.routine.update({ where: { id: routine.id }, data: { pendingJobId: null } });
-    sentJobs.length = 0;
+    await db.update(routines).set({ pendingJobId: null }).where(eq(routines.id, routine.id));
+    await db.delete(jobs);
 
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    expect(sentJobs).toHaveLength(1); // chain repaired
+    expect(await sentJobs()).toHaveLength(1); // chain repaired
     expect(vi.mocked(runtime.submit).mock.calls).toHaveLength(1); // no duplicate submit
   });
 
@@ -228,12 +244,12 @@ describe("routine-fire dispatch", () => {
     const veryLate = new Date(SLOT.getTime() + 3 * 60 * 60_000);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), veryLate);
 
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     expect(run).toMatchObject({ status: "missed" });
     expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
     // Backlog collapses: the next job schedules from now, not from the stale slot.
-    expect(sentJobs).toHaveLength(1);
-    const row = await prisma.routine.findUnique({ where: { id: routine.id } });
+    expect(await sentJobs()).toHaveLength(1);
+    const row = await routineRow(routine.id);
     expect(row?.nextRunAt).toBeTruthy();
     expect(row!.nextRunAt!.getTime()).toBeGreaterThan(veryLate.getTime());
   });
@@ -247,68 +263,63 @@ describe("routine-fire dispatch", () => {
     const late = new Date(at.getTime() + 5 * 60_000);
     await dispatchOccurrence(payloadOf(routine.id, at), late);
 
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     expect(run?.status).toBe("awaiting");
-    const text = vi.mocked(runtime.submit).mock.calls[0][1].text as string;
+    const text = vi.mocked(runtime.submit).mock.calls[0]![1].text as string;
     expect(text).toContain("(late by 5m)");
     // A fired once archives itself.
-    const row = await prisma.routine.findUnique({ where: { id: routine.id } });
+    const row = await routineRow(routine.id);
     expect(row).toMatchObject({ enabled: false, nextRunAt: null, pendingJobId: null });
-    expect(sentJobs).toHaveLength(0);
+    expect(await sentJobs()).toHaveLength(0);
   });
 
   it("a deleted routine (orphan job) acks and exits", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     const id = routine.id;
-    await prisma.routine.delete({ where: { id } });
+    await db.delete(routines).where(eq(routines.id, id));
     await expect(dispatchOccurrence(payloadOf(id, SLOT), ON_TIME)).resolves.toBeUndefined();
     expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
   });
 
   it("a job racing a pause is a phantom fire and does not submit", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    await prisma.routine.update({
-      where: { id: routine.id },
-      data: { enabled: false, nextRunAt: null, pendingJobId: null },
-    });
+    await db
+      .update(routines)
+      .set({ enabled: false, nextRunAt: null, pendingJobId: null })
+      .where(eq(routines.id, routine.id));
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
-    expect(await prisma.routineRun.count()).toBe(0);
+    expect(await db.$count(routineRuns)).toBe(0);
   });
 
   it("manual trigger on a paused routine still fires", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    await prisma.routine.update({
-      where: { id: routine.id },
-      data: { enabled: false, nextRunAt: null, pendingJobId: null },
-    });
+    await db
+      .update(routines)
+      .set({ enabled: false, nextRunAt: null, pendingJobId: null })
+      .where(eq(routines.id, routine.id));
     await dispatchOccurrence(payloadOf(routine.id, SLOT, "manual"), ON_TIME);
     expect(vi.mocked(runtime.submit)).toHaveBeenCalledTimes(1);
     // Manual runs never touch the chain.
-    expect(sentJobs).toHaveLength(0);
+    expect(await sentJobs()).toHaveLength(0);
   });
 
   it("a submit failure fails the run once and pauses the routine, leaving the chat alone", async () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    await prisma.routine.update({
-      where: { id: routine.id },
-      data: { pendingJobId: "job-99" },
-    });
+    await db.update(routines).set({ pendingJobId: "job-99" }).where(eq(routines.id, routine.id));
     const failing = fakeRuntime({ submit: vi.fn().mockRejectedValue(new Error("model gone")) });
     setAgentRuntimeForTests(failing);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findUnique({
-      where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor: SLOT } },
-    });
+    const run = await runOf(routine.id, SLOT);
     expect(run?.status).toBe("failed");
     expect(run?.error).toContain("model gone");
     // The failed run's card says the routine paused; nothing is written to the chat.
     expect(run?.error).toContain("paused");
-    const after = await prisma.routine.findUnique({ where: { id: routine.id } });
+    const after = await routineRow(routine.id);
     expect(after?.enabled).toBe(false);
     expect(after?.pendingJobId).toBeNull();
     expect(after?.nextRunAt).toBeNull();
-    expect(sentJobs).toHaveLength(0); // no chain after a failed submit
+    expect(await sentJobs()).toHaveLength(0); // no chain after a failed submit
     expect(vi.mocked(failing.submit).mock.calls.map(([ref]) => ref)).toEqual([
       ROUTINE_CONVERSATION,
     ]);
@@ -326,12 +337,10 @@ describe("routine-fire dispatch", () => {
     });
     setAgentRuntimeForTests(failing);
     await expect(dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME)).resolves.toBeUndefined();
-    const run = await prisma.routineRun.findUnique({
-      where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor: SLOT } },
-    });
+    const run = await runOf(routine.id, SLOT);
     expect(run?.status).toBe("failed");
     expect(run?.error).toContain("Unknown model");
-    expect((await prisma.routine.findUnique({ where: { id: routine.id } }))?.enabled).toBe(false);
+    expect((await routineRow(routine.id))?.enabled).toBe(false);
   });
 });
 
@@ -347,21 +356,15 @@ describe("completion watcher", () => {
     chatReplies = [];
     runtime = fakeRuntime();
     setAgentRuntimeForTests(runtime);
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
+    await clearTables();
   });
 
-  afterEach(async () => {
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
-  });
+  afterEach(clearTables);
 
   it("marks a run succeeded with a 2000-char preview when the reply lands", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     const submittedAt = run!.submittedAt!;
 
     chatWith([
@@ -372,7 +375,7 @@ describe("completion watcher", () => {
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(1);
 
-    const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
+    const after = await runById(run!.id);
     expect(after?.status).toBe("succeeded");
     expect(after?.output?.length).toBe(2000);
     expect(after?.finishedAt).toBeTruthy();
@@ -381,7 +384,7 @@ describe("completion watcher", () => {
   it("the owner chatting meanwhile never answers the run: only its own conversation does", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     const submittedAt = run!.submittedAt!.getTime();
     const replies: Record<number, FinishedReply[]> = {
       [CHAT]: [{ text: "Owner's answer", createdAt: submittedAt + 500 }],
@@ -393,11 +396,9 @@ describe("completion watcher", () => {
     const watcher = createRoutinesCompletionWatcher(split);
 
     expect(await watcher.resolveConversation(CHAT)).toBe(0);
-    expect((await prisma.routineRun.findUnique({ where: { id: run!.id } }))?.status).toBe(
-      "awaiting",
-    );
+    expect((await runById(run!.id))?.status).toBe("awaiting");
     expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
-    expect(await prisma.routineRun.findUnique({ where: { id: run!.id } })).toMatchObject({
+    expect(await runById(run!.id)).toMatchObject({
       status: "succeeded",
       output: "Routine's answer",
     });
@@ -406,7 +407,7 @@ describe("completion watcher", () => {
   it("a refused ask tool marks the run blocked, naming the tool and how to allow it", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     const submittedAt = run!.submittedAt!.getTime();
 
     chatWith([
@@ -416,7 +417,7 @@ describe("completion watcher", () => {
     const watcher = createRoutinesCompletionWatcher(runtime);
     expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
 
-    expect(await prisma.routineRun.findUnique({ where: { id: run!.id } })).toMatchObject({
+    expect(await runById(run!.id)).toMatchObject({
       status: "blocked",
       error: "Needs approval for `send_email`; set it to Allow for this bot to use it in routines.",
       output: "Drafted the email but could not send it.",
@@ -427,12 +428,10 @@ describe("completion watcher", () => {
   async function runOnce(routineId: string, hour: number, reply: Omit<FinishedReply, "createdAt">) {
     const slot = new Date(SLOT.getTime() + hour * 60 * 60_000);
     await dispatchOccurrence(payloadOf(routineId, slot), new Date(slot.getTime() + 5_000));
-    const run = await prisma.routineRun.findFirstOrThrow({
-      where: { routineId, scheduledFor: slot },
-    });
+    const run = (await runOf(routineId, slot))!;
     chatWith([{ ...reply, createdAt: run.submittedAt!.getTime() + 1000 }]);
     await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
-    return prisma.routineRun.findUniqueOrThrow({ where: { id: run.id } });
+    return (await runById(run.id))!;
   }
 
   it("a run that reports itself blocked is recorded blocked with its reason (#87)", async () => {
@@ -446,9 +445,7 @@ describe("completion watcher", () => {
       error: "Needs a vault login for the Gmail account",
       output: "Nothing processed: no Gmail access.",
     });
-    expect(
-      (await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } })).blockedStreak,
-    ).toBe(1);
+    expect((await routineRow(routine.id))!.blockedStreak).toBe(1);
   });
 
   it("three blocked runs in a row pause the routine and say why; a good run resets the count (#87)", async () => {
@@ -457,17 +454,15 @@ describe("completion watcher", () => {
 
     await runOnce(routine.id, 0, blocked);
     await runOnce(routine.id, 1, { text: "All done." });
-    expect(
-      (await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } })).blockedStreak,
-    ).toBe(0);
+    expect((await routineRow(routine.id))!.blockedStreak).toBe(0);
 
     await runOnce(routine.id, 2, blocked);
     await runOnce(routine.id, 3, blocked);
-    let row = await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } });
+    let row = (await routineRow(routine.id))!;
     expect(row).toMatchObject({ enabled: true, blockedStreak: 2, pausedReason: null });
 
     await runOnce(routine.id, 4, blocked);
-    row = await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } });
+    row = (await routineRow(routine.id))!;
     expect(row).toMatchObject({
       enabled: false,
       blockedStreak: 3,
@@ -489,7 +484,7 @@ describe("completion watcher", () => {
   it("a finished run shows as a card in its bot's chat, live and on connect", async () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     // An awaiting run has no card yet.
     expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([]);
 
@@ -518,7 +513,7 @@ describe("completion watcher", () => {
   it("a model error reply marks the run failed", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
     const submittedAt = run!.submittedAt!;
 
     chatWith([
@@ -527,44 +522,46 @@ describe("completion watcher", () => {
     const watcher = createRoutinesCompletionWatcher(runtime);
     await watcher.resolveConversation(ROUTINE_CONVERSATION);
 
-    const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
+    const after = await runById(run!.id);
     expect(after?.status).toBe("failed");
     expect(after?.error).toContain("Model error");
   });
 
   it("two awaiting runs on one conversation each get their own reply", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    await prisma.routine.update({
-      where: { id: routine.id },
-      data: { conversationId: String(ROUTINE_CONVERSATION) },
-    });
-    const first = await prisma.routineRun.create({
-      data: {
+    await db
+      .update(routines)
+      .set({ conversationId: String(ROUTINE_CONVERSATION) })
+      .where(eq(routines.id, routine.id));
+    const [first] = await db
+      .insert(routineRuns)
+      .values({
         routineId: routine.id,
         scheduledFor: new Date("2026-10-21T03:30:00Z"),
         status: "awaiting",
         requestId: "routine:x:1",
         submittedAt: new Date("2026-10-21T03:30:01Z"),
-      },
-    });
-    const second = await prisma.routineRun.create({
-      data: {
+      })
+      .returning();
+    const [second] = await db
+      .insert(routineRuns)
+      .values({
         routineId: routine.id,
         scheduledFor: new Date("2026-10-22T03:30:00Z"),
         status: "awaiting",
         requestId: "routine:x:2",
         submittedAt: new Date("2026-10-22T03:30:01Z"),
-      },
-    });
+      })
+      .returning();
     chatWith([
-      { text: "First reply", createdAt: first.submittedAt!.getTime() + 1000 },
-      { text: "Second reply", createdAt: second.submittedAt!.getTime() + 1000 },
+      { text: "First reply", createdAt: first!.submittedAt!.getTime() + 1000 },
+      { text: "Second reply", createdAt: second!.submittedAt!.getTime() + 1000 },
     ]);
     const watcher = createRoutinesCompletionWatcher(runtime);
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(2);
-    const afterFirst = await prisma.routineRun.findUnique({ where: { id: first.id } });
-    const afterSecond = await prisma.routineRun.findUnique({ where: { id: second.id } });
+    const afterFirst = await runById(first!.id);
+    const afterSecond = await runById(second!.id);
     expect(afterFirst?.output).toBe("First reply");
     expect(afterSecond?.output).toBe("Second reply");
   });
@@ -572,38 +569,38 @@ describe("completion watcher", () => {
   it("a stale reply (pre-submit) never answers; the run keeps awaiting", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
 
     chatWith([{ text: "Before the run", createdAt: run!.submittedAt!.getTime() - 5000 }]);
     const watcher = createRoutinesCompletionWatcher(runtime);
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(0);
-    const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
+    const after = await runById(run!.id);
     expect(after?.status).toBe("awaiting");
   });
 
   it("boot sweep marks awaiting runs on idle conversations interrupted", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
 
     const watcher = createRoutinesCompletionWatcher(runtime);
     const resolved = await watcher.bootSweep();
     expect(resolved).toBe(1);
-    const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
+    const after = await runById(run!.id);
     expect(after).toMatchObject({ status: "failed", error: "interrupted" });
   });
 
   it("boot sweep leaves runs on busy conversations for the idle listener", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const run = await runOf(routine.id);
 
     const busyRuntime = fakeRuntime({ isBusy: vi.fn().mockReturnValue(true) });
     const watcher = createRoutinesCompletionWatcher(busyRuntime);
     const resolved = await watcher.bootSweep();
     expect(resolved).toBe(0);
-    const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
+    const after = await runById(run!.id);
     expect(after?.status).toBe("awaiting");
   });
 });

@@ -9,12 +9,7 @@ import { asc, eq, ne, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { hashPassword } from "@groot/core/utils/password.utils";
-import {
-  db,
-  users,
-  vaultAuditEvents,
-  vaultItems,
-} from "../../../apps/web/src/server/db";
+import { db, users, vaultAuditEvents, vaultItems } from "../../../apps/web/src/server/db";
 import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import {
   createLocalBackend,
@@ -41,12 +36,6 @@ import type { SecretFill } from "../../../packages/agent/src/toolkits/browser-fi
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
 import { api, createTestApp, type TestApp } from "../helpers";
-// TMP-UPLOADS-MOCK
-vi.mock("../../../apps/web/src/server/api/uploads/uploads.routes", async () => {
-  const { Hono } = await import("hono");
-  return { default: new Hono() };
-});
-// /TMP-UPLOADS-MOCK
 
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
@@ -92,14 +81,11 @@ afterEach(() => {
   secretRedactor.clear();
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
 
 /** An authenticated vault request; `stepUp` sends the step-up header. */
-function vault(
-  path: string,
-  init: { method?: string; json?: unknown; stepUp?: string } = {},
-) {
+function vault(path: string, init: { method?: string; json?: unknown; stepUp?: string } = {}) {
   return api<Data>(app, `/api/v1/vault${path}`, {
     method: init.method ?? "GET",
     token,

@@ -250,10 +250,7 @@ export class ConnectionManager {
 
   /** Re-apply the configuration of every bot using the connection. */
   async reconfigureBots(id: string): Promise<void> {
-    const links = await db
-      .select()
-      .from(botConnections)
-      .where(eq(botConnections.connectionId, id));
+    const links = await db.select().from(botConnections).where(eq(botConnections.connectionId, id));
     for (const link of links) {
       try {
         if (this.#runtime) await reconcileBotConversation(link.botId, this.#runtime);

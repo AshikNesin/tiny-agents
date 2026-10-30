@@ -5,8 +5,9 @@
  * owner's turn. Real SQLite test DB.
  */
 import { randomUUID } from "node:crypto";
+import { inArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
+import { db, botSkills, bots, routines, skills } from "../../../../apps/web/src/server/db";
 import {
   conversationOwner,
   isRoutineConversation,
@@ -18,26 +19,28 @@ import { skillStore } from "../../../../apps/web/src/server/api/skills/skills.st
 const botIds: string[] = [];
 const skillIds: string[] = [];
 afterEach(async () => {
-  await prisma.bot.deleteMany({ where: { id: { in: botIds.splice(0) } } });
-  await prisma.skill.deleteMany({ where: { id: { in: skillIds.splice(0) } } });
+  await db.delete(bots).where(inArray(bots.id, botIds.splice(0)));
+  await db.delete(skills).where(inArray(skills.id, skillIds.splice(0)));
 });
 
 async function seed() {
   const chat = Math.floor(Math.random() * 1_000_000_000);
-  const bot = await prisma.bot.create({
-    data: { name: randomUUID(), modelId: "m", conversationId: String(chat), browserProfile: "own" },
-  });
-  botIds.push(bot.id);
-  const routine = await prisma.routine.create({
-    data: {
-      botId: bot.id,
+  const [bot] = await db
+    .insert(bots)
+    .values({ name: randomUUID(), modelId: "m", conversationId: String(chat), browserProfile: "own" })
+    .returning();
+  botIds.push(bot!.id);
+  const [routine] = await db
+    .insert(routines)
+    .values({
+      botId: bot!.id,
       name: "digest",
       prompt: "Do it.",
       schedule: { kind: "interval", minutes: 60 },
       conversationId: String(chat + 1),
-    },
-  });
-  return { bot, routine, chat, routineConversation: chat + 1 };
+    })
+    .returning();
+  return { bot: bot!, routine: routine!, chat, routineConversation: chat + 1 };
 }
 
 /** A chat whose latest user message is the given one. */
@@ -80,13 +83,14 @@ describe("tool-side lookups from a routine run", () => {
       profile: `bot-${bot.id}`,
       tab: bot.id,
     });
-    const skill = await prisma.skill.create({
-      data: { name: `skill-${randomUUID()}`, description: "d", body: "b" },
-    });
-    skillIds.push(skill.id);
-    await prisma.botSkill.create({ data: { botId: bot.id, skillId: skill.id } });
+    const [skill] = await db
+      .insert(skills)
+      .values({ name: `skill-${randomUUID()}`, description: "d", body: "b" })
+      .returning();
+    skillIds.push(skill!.id);
+    await db.insert(botSkills).values({ botId: bot.id, skillId: skill!.id });
     expect(await skillStore.list(routineConversation)).toEqual([
-      { name: skill.name, description: "d" },
+      { name: skill!.name, description: "d" },
     ]);
   });
 });

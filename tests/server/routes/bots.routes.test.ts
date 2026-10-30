@@ -1,10 +1,8 @@
-import express, { type Express } from "express";
-import request from "supertest";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
+import { api, createTestApp } from "../helpers";
+import { db, bots, routineRuns, routines } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
@@ -17,10 +15,10 @@ import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
 
 /**
  * Route tests run against an app-shaped runtime fake installed through
- * `setAgentRuntimeForTests()` (bots.runtime.ts), with the real Prisma test DB.
+ * `setAgentRuntimeForTests()` (bots.runtime.ts), with the real SQLite test DB.
  */
 
-const token = generateToken({ userId: 1, email: "bots-test@example.com" });
+const token = await generateToken({ userId: 1, email: "bots-test@example.com" });
 const authorization = { Authorization: `Bearer ${token}` };
 
 const models = [
@@ -87,12 +85,39 @@ const agentRuntime = {
   close: vi.fn().mockResolvedValue(undefined),
 };
 
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+const app = createTestApp();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+type Data = any;
+
+/** An authenticated JSON request through the app (`api()` with this file's token). */
+function call(path: string, init: { method?: string; json?: unknown } = {}) {
+  return api<Data>(app, path, { ...init, token });
+}
+
+/** `path?key=value…` for a GET with a query string. */
+function withQuery(path: string, query: Record<string, string>): string {
+  const search = new URLSearchParams(query).toString();
+  return search ? `${path}?${search}` : path;
+}
+
+const findBot = (id: unknown) => db.query.bots.findFirst({ where: eq(bots.id, String(id)) });
+
+/** Read one chunk of an SSE body, or fail after `ms`. */
+async function readChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+  what: string,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(what)), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const createPayload = {
@@ -102,67 +127,39 @@ const createPayload = {
   modelId: "known-model",
 };
 
-async function createBot(
-  app = buildApp(),
-  overrides: Record<string, unknown> = {},
-): Promise<Record<string, unknown>> {
-  const response = await request(app)
-    .post("/api/v1/bots")
-    .set(authorization)
-    .send({ ...createPayload, ...overrides })
-    .expect(201);
-  return response.body.data as Record<string, unknown>;
+async function createBot(overrides: Record<string, unknown> = {}): Promise<Data> {
+  const response = await call("/api/v1/bots", {
+    method: "POST",
+    json: { ...createPayload, ...overrides },
+  });
+  expect(response.status).toBe(201);
+  return response.body.data;
 }
 
 async function readFirstSse(
-  app: Express,
   path: string,
   /** Read until the stream carries this text (the first event by default). */
   until = "data:",
-): Promise<{ status: number; contentType: string | undefined; text: string }> {
-  return new Promise((resolveSse, rejectSse) => {
-    let settled = false;
-    let text = "";
-    const timer = setTimeout(() => {
-      if (!settled) rejectSse(new Error(`Timed out waiting for SSE data from ${path}`));
-    }, 3_000);
-    const stream = request(app)
-      .get(path)
-      .set(authorization)
-      .buffer(false)
-      // supertest's default parser buffers text/event-stream until the
-      // response ends; override it so SSE chunks arrive as they are written.
-      .parse((response, callback) => {
-        response.setEncoding("utf8");
-        response.on("data", (chunk: string) => {
-          text += chunk;
-          if (text.includes(until)) {
-            settled = true;
-            clearTimeout(timer);
-            stream.abort();
-            resolveSse({
-              status: response.statusCode,
-              contentType: response.headers["content-type"],
-              text,
-            });
-          }
-        });
-        response.on("error", (error: Error) => {
-          if (!settled) {
-            clearTimeout(timer);
-            rejectSse(error);
-          }
-        });
-        response.on("end", () => callback(null, ""));
-      });
-
-    stream.end((error) => {
-      if (error && !settled) {
-        clearTimeout(timer);
-        rejectSse(error);
-      }
-    });
-  });
+): Promise<{ status: number; contentType: string | null; text: string }> {
+  const response = await app.request(path, { headers: authorization });
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    while (!text.includes(until)) {
+      const { value, done } = await readChunk(
+        reader,
+        3_000,
+        `Timed out waiting for SSE data from ${path}`,
+      );
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    // The client goes away: the stream must end and drop its watches.
+    await reader.cancel();
+  }
+  return { status: response.status, contentType: response.headers.get("content-type"), text };
 }
 
 describe("Bots API routes", () => {
@@ -185,24 +182,24 @@ describe("Bots API routes", () => {
       return () => activityListeners.delete(listener);
     });
     setAgentRuntimeForTests(agentRuntime);
-    // Expected to fail until the Bot migration from PRD §8 is applied.
-    await prisma.bot.deleteMany();
+    await db.delete(bots);
   });
 
   afterEach(async () => {
     activityListeners.clear();
-    await prisma.bot.deleteMany();
+    await db.delete(bots);
   });
 
   it("requires authentication for bots routes", async () => {
-    const response = await request(buildApp()).get("/api/v1/bots");
+    const response = await api(app, "/api/v1/bots");
 
     expect(response.status).toBe(401);
     expect(response.body).toMatchObject({ success: false });
   });
 
   it("lists the runtime model catalog in the standard envelope", async () => {
-    const response = await request(buildApp()).get("/api/v1/models").set(authorization).expect(200);
+    const response = await call("/api/v1/models");
+    expect(response.status).toBe(200);
 
     expect(response.body).toMatchObject({
       success: true,
@@ -215,11 +212,8 @@ describe("Bots API routes", () => {
   });
 
   it("creates a bot row and its durable conversation", async () => {
-    const response = await request(buildApp())
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send(createPayload)
-      .expect(201);
+    const response = await call("/api/v1/bots", { method: "POST", json: createPayload });
+    expect(response.status).toBe(201);
 
     expect(response.body).toMatchObject({
       success: true,
@@ -237,7 +231,7 @@ describe("Bots API routes", () => {
       capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
     });
 
-    const bot = await prisma.bot.findUnique({ where: { id: response.body.data.id } });
+    const bot = await findBot(response.body.data.id);
     expect(bot).toMatchObject({
       name: createPayload.name,
       description: createPayload.description,
@@ -248,15 +242,14 @@ describe("Bots API routes", () => {
   });
 
   it("rejects a missing name and a model absent from the runtime catalog", async () => {
-    const app = buildApp();
-    const missingName = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send({ ...createPayload, name: "" });
-    const unknownModel = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send({ ...createPayload, modelId: "removed-model" });
+    const missingName = await call("/api/v1/bots", {
+      method: "POST",
+      json: { ...createPayload, name: "" },
+    });
+    const unknownModel = await call("/api/v1/bots", {
+      method: "POST",
+      json: { ...createPayload, modelId: "removed-model" },
+    });
 
     expect(missingName.status).toBe(400);
     expect(unknownModel.status).toBe(400);
@@ -264,15 +257,14 @@ describe("Bots API routes", () => {
   });
 
   it("refuses a name another bot has, ignoring case and surrounding spaces (issue #80)", async () => {
-    const app = buildApp();
-    await createBot(app, { name: "Echo" });
+    await createBot({ name: "Echo" });
     agentRuntime.createConversation.mockClear();
 
     for (const name of ["Echo", "echo", "  ECHO  "]) {
-      const response = await request(app)
-        .post("/api/v1/bots")
-        .set(authorization)
-        .send({ ...createPayload, name });
+      const response = await call("/api/v1/bots", {
+        method: "POST",
+        json: { ...createPayload, name },
+      });
       expect(response.status).toBe(409);
       expect(response.body).toMatchObject({
         success: false,
@@ -281,49 +273,43 @@ describe("Bots API routes", () => {
     }
     // Refused before a conversation was started for it.
     expect(agentRuntime.createConversation).not.toHaveBeenCalled();
-    await expect(prisma.bot.count()).resolves.toBe(1);
+    await expect(db.$count(bots)).resolves.toBe(1);
   });
 
   it("refuses renaming onto another bot's name, but a bot may recase its own", async () => {
-    const app = buildApp();
-    const echo = await createBot(app, { name: "Echo" });
+    const echo = await createBot({ name: "Echo" });
     agentRuntime.createConversation.mockResolvedValueOnce(101);
-    const other = await createBot(app, { name: "Other" });
+    const other = await createBot({ name: "Other" });
 
     for (const name of ["Echo", " eCHo "]) {
-      const response = await request(app)
-        .patch(`/api/v1/bots/${other.id}`)
-        .set(authorization)
-        .send({ name });
+      const response = await call(`/api/v1/bots/${other.id}`, { method: "PATCH", json: { name } });
       expect(response.status).toBe(409);
-      expect(response.body.error.message).toBe('A bot named "Echo" already exists');
+      expect(response.body.error?.message).toBe('A bot named "Echo" already exists');
     }
-    await expect(prisma.bot.findUnique({ where: { id: String(other.id) } })).resolves.toMatchObject(
-      { name: "Other" },
-    );
+    await expect(findBot(other.id)).resolves.toMatchObject({ name: "Other" });
 
-    const recased = await request(app)
-      .patch(`/api/v1/bots/${echo.id}`)
-      .set(authorization)
-      .send({ name: "ECHO" })
-      .expect(200);
+    const recased = await call(`/api/v1/bots/${echo.id}`, {
+      method: "PATCH",
+      json: { name: "ECHO" },
+    });
+    expect(recased.status).toBe(200);
     expect(recased.body.data.name).toBe("ECHO");
     // Saving the dialog sends the bot's own name back unchanged.
-    await request(app)
-      .patch(`/api/v1/bots/${echo.id}`)
-      .set(authorization)
-      .send({ name: "ECHO", description: "Echoes back" })
-      .expect(200);
+    const saved = await call(`/api/v1/bots/${echo.id}`, {
+      method: "PATCH",
+      json: { name: "ECHO", description: "Echoes back" },
+    });
+    expect(saved.status).toBe(200);
   });
 
   it("patches a bot and reconfigures its existing durable conversation", async () => {
     const bot = await createBot();
 
-    const response = await request(buildApp())
-      .patch(`/api/v1/bots/${bot.id}`)
-      .set(authorization)
-      .send({ name: "Edited helper", systemPrompt: "Use bullet points.", modelId: "known-model" })
-      .expect(200);
+    const response = await call(`/api/v1/bots/${bot.id}`, {
+      method: "PATCH",
+      json: { name: "Edited helper", systemPrompt: "Use bullet points.", modelId: "known-model" },
+    });
+    expect(response.status).toBe(200);
 
     expect(response.body).toMatchObject({
       success: true,
@@ -334,7 +320,7 @@ describe("Bots API routes", () => {
       systemPrompt: "Use bullet points.",
       capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
     });
-    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
+    await expect(findBot(bot.id)).resolves.toMatchObject({
       name: "Edited helper",
       systemPrompt: "Use bullet points.",
     });
@@ -342,123 +328,107 @@ describe("Bots API routes", () => {
 
   it("submits, aborts, and deletes through the runtime before removing the bot row", async () => {
     const bot = await createBot();
-    const app = buildApp();
 
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/messages`)
-      .set(authorization)
-      .send({ requestId: "client-generated-id", text: "Hello" })
-      .expect(200);
-    await request(app).post(`/api/v1/bots/${bot.id}/abort`).set(authorization).send({}).expect(200);
+    const sent = await call(`/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "client-generated-id", text: "Hello" },
+    });
+    expect(sent.status).toBe(200);
+    const aborted = await call(`/api/v1/bots/${bot.id}/abort`, { method: "POST", json: {} });
+    expect(aborted.status).toBe(200);
     expect(agentRuntime.abort).toHaveBeenCalledWith(100);
     agentRuntime.abort.mockClear();
-    await request(app).delete(`/api/v1/bots/${bot.id}`).set(authorization).expect(200);
+    expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);
 
     expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
       requestId: "client-generated-id",
       text: "Hello",
     });
     // Vision-model bots do NOT get the vision toolkit auto-included.
-    const visionBot = await createBot(undefined, { modelId: "vision-model" });
-    await request(buildApp())
-      .post(`/api/v1/bots/${visionBot.id}/messages`)
-      .set(authorization)
-      .send({ requestId: "client-generated-id-2", text: "Hello again" })
-      .expect(200);
+    const visionBot = await createBot({ modelId: "vision-model" });
+    const again = await call(`/api/v1/bots/${visionBot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "client-generated-id-2", text: "Hello again" },
+    });
+    expect(again.status).toBe(200);
     // Deleting stops whatever the now-hidden conversation was still doing.
     expect(agentRuntime.abort).toHaveBeenCalledWith(100);
-    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
+    await expect(findBot(bot.id)).resolves.toBeUndefined();
   });
 
   it("passes the steering mode through to the runtime on a busy send", async () => {
     const bot = await createBot();
-    const app = buildApp();
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/messages`)
-      .set(authorization)
-      .send({ requestId: "steering-client-id", text: "change course", whenBusy: "steer" })
-      .expect(200);
+    const steer = await call(`/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "steering-client-id", text: "change course", whenBusy: "steer" },
+    });
+    expect(steer.status).toBe(200);
     expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
       requestId: "steering-client-id",
       text: "change course",
       whenBusy: "steer",
     });
     // Without the flag the runtime keeps its default (a queued follow-up).
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/messages`)
-      .set(authorization)
-      .send({ requestId: "plain-client-id", text: "plain hello" })
-      .expect(200);
+    const plain = await call(`/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "plain-client-id", text: "plain hello" },
+    });
+    expect(plain.status).toBe(200);
     expect(agentRuntime.submit).toHaveBeenLastCalledWith(100, {
       requestId: "plain-client-id",
       text: "plain hello",
     });
     // Unknown modes are rejected before the runtime sees anything.
     agentRuntime.submit.mockClear();
-    await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/messages`)
-      .set(authorization)
-      .send({ requestId: "bad-mode-client-id", text: "nope", whenBusy: "sideways" })
-      .expect(400);
+    const badMode = await call(`/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "bad-mode-client-id", text: "nope", whenBusy: "sideways" },
+    });
+    expect(badMode.status).toBe(400);
     expect(agentRuntime.submit).not.toHaveBeenCalled();
   });
 
   it("withdraws a queued message, refusing placed and unknown ones", async () => {
     const bot = await createBot();
-    const app = buildApp();
+    const withdraw = (requestId: string) =>
+      call(`/api/v1/bots/${bot.id}/messages/${requestId}`, { method: "DELETE" });
     agentRuntime.withdraw.mockResolvedValueOnce("withdrawn");
 
-    await request(app)
-      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
-      .set(authorization)
-      .expect(200)
-      .expect((response) => {
-        expect(response.body).toMatchObject({ success: true, data: { withdrawn: true } });
-      });
+    const response = await withdraw("steering-client-id");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, data: { withdrawn: true } });
     expect(agentRuntime.withdraw).toHaveBeenCalledWith(100, "steering-client-id");
 
     // Placed or settled inputs are a conflict; unknown ids are not found.
     agentRuntime.withdraw.mockResolvedValueOnce("already_placed");
-    await request(app)
-      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
-      .set(authorization)
-      .expect(409);
+    expect((await withdraw("steering-client-id")).status).toBe(409);
     agentRuntime.withdraw.mockResolvedValueOnce("settled");
-    await request(app)
-      .delete(`/api/v1/bots/${bot.id}/messages/steering-client-id`)
-      .set(authorization)
-      .expect(409);
+    expect((await withdraw("steering-client-id")).status).toBe(409);
     agentRuntime.withdraw.mockResolvedValueOnce("not_found");
-    await request(app)
-      .delete(`/api/v1/bots/${bot.id}/messages/never-sent-id`)
-      .set(authorization)
-      .expect(404);
+    expect((await withdraw("never-sent-id")).status).toBe(404);
   });
 
   it("still deletes the bot when stopping its conversation fails", async () => {
     const bot = await createBot();
     agentRuntime.abort.mockRejectedValueOnce(new Error("conversation gone"));
 
-    await request(buildApp()).delete(`/api/v1/bots/${bot.id}`).set(authorization).expect(200);
+    expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);
 
-    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toBeNull();
+    await expect(findBot(bot.id)).resolves.toBeUndefined();
   });
 
   it("resets by swapping to a newly created conversation", async () => {
     const bot = await createBot();
     agentRuntime.createConversation.mockResolvedValueOnce(200);
 
-    const response = await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/reset`)
-      .set(authorization)
-      .send({})
-      .expect(200);
+    const response = await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST", json: {} });
+    expect(response.status).toBe(200);
 
     expect(response.body).toMatchObject({
       success: true,
       data: expect.objectContaining({ conversationId: "200" }),
     });
-    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
+    await expect(findBot(bot.id)).resolves.toMatchObject({
       conversationId: "200",
     });
     // The old conversation's in-flight reply is stopped, the new one untouched.
@@ -473,37 +443,25 @@ describe("Bots API routes", () => {
       await listener([{ type: "snapshot", state: emptyChat }]);
       return { initial: emptyChat, stop };
     });
-    const app = buildApp();
 
-    const openUntilEnded = (path: string) =>
-      new Promise<string>((resolveEnd, rejectEnd) => {
-        let text = "";
-        let counted = false;
-        const timer = setTimeout(() => rejectEnd(new Error(`${path} never ended`)), 3_000);
-        request(app)
-          .get(path)
-          .set(authorization)
-          .buffer(false)
-          .parse((response, callback) => {
-            response.setEncoding("utf8");
-            response.on("data", (chunk: string) => {
-              text += chunk;
-              // Both streams are open and have sent their snapshot: shut down.
-              // Latch: one `data:` per stream, however many chunks deliver it —
-              // chunked delivery (postgres) would otherwise double-fire opened().
-              if (!counted && text.includes("data:")) {
-                counted = true;
-                opened();
-              }
-            });
-            response.on("end", () => {
-              clearTimeout(timer);
-              resolveEnd(text);
-              callback(null, "");
-            });
-          })
-          .end(() => undefined);
-      });
+    const openUntilEnded = async (path: string) => {
+      const response = await app.request(path, { headers: authorization });
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      let counted = false;
+      for (;;) {
+        const { value, done } = await readChunk(reader, 3_000, `${path} never ended`);
+        if (done) return text;
+        text += decoder.decode(value, { stream: true });
+        // Both streams are open and have sent their snapshot: shut down.
+        // Latch: one `data:` per stream, however many chunks deliver it.
+        if (!counted && text.includes("data:")) {
+          counted = true;
+          opened();
+        }
+      }
+    };
     let pending = 2;
     const opened = () => {
       if (--pending === 0) endAllSse();
@@ -521,16 +479,16 @@ describe("Bots API routes", () => {
   });
 
   it("gives every bot every toolkit and stores its tool permissions", async () => {
-    const app = buildApp();
-    const caps = await request(app).get("/api/v1/capabilities").set(authorization).expect(200);
+    const caps = await call("/api/v1/capabilities");
+    expect(caps.status).toBe(200);
     expect(caps.body.data.capabilities.map((c: { id: string }) => c.id)).toEqual(["tasks", "web"]);
 
-    const created = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
+    const created = await call("/api/v1/bots", {
+      method: "POST",
       // A client still sending the old toolkit list is not refused; it is ignored.
-      .send({ ...createPayload, toolkits: ["web"], toolPermissions: { web_fetch: "ask" } })
-      .expect(201);
+      json: { ...createPayload, toolkits: ["web"], toolPermissions: { web_fetch: "ask" } },
+    });
+    expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({ toolPermissions: { web_fetch: "ask" } });
     expect(created.body.data).not.toHaveProperty("toolkits");
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
@@ -542,11 +500,11 @@ describe("Bots API routes", () => {
       }),
     );
 
-    const patched = await request(app)
-      .patch(`/api/v1/bots/${created.body.data.id}`)
-      .set(authorization)
-      .send({ toolPermissions: { web_fetch: "off" } })
-      .expect(200);
+    const patched = await call(`/api/v1/bots/${created.body.data.id}`, {
+      method: "PATCH",
+      json: { toolPermissions: { web_fetch: "off" } },
+    });
+    expect(patched.status).toBe(200);
     expect(patched.body.data.toolPermissions).toEqual({ web_fetch: "off" });
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(100, {
       modelId: "known-model",
@@ -559,34 +517,30 @@ describe("Bots API routes", () => {
   });
 
   it("stores the auto-review switch and hands it to the conversation only when on", async () => {
-    const app = buildApp();
-    const created = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send(createPayload)
-      .expect(201);
+    const created = await call("/api/v1/bots", { method: "POST", json: createPayload });
+    expect(created.status).toBe(201);
     expect(created.body.data.autoReview).toBe(false);
     const off = { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} };
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({ capabilities: off }),
     );
 
-    const on = await request(app)
-      .patch(`/api/v1/bots/${created.body.data.id}`)
-      .set(authorization)
-      .send({ autoReview: true })
-      .expect(200);
+    const on = await call(`/api/v1/bots/${created.body.data.id}`, {
+      method: "PATCH",
+      json: { autoReview: true },
+    });
+    expect(on.status).toBe(200);
     expect(on.body.data.autoReview).toBe(true);
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
       100,
       expect.objectContaining({ capabilities: { ...off, autoReview: true } }),
     );
 
-    await request(app)
-      .patch(`/api/v1/bots/${created.body.data.id}`)
-      .set(authorization)
-      .send({ autoReview: false })
-      .expect(200);
+    const offAgain = await call(`/api/v1/bots/${created.body.data.id}`, {
+      method: "PATCH",
+      json: { autoReview: false },
+    });
+    expect(offAgain.status).toBe(200);
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
       100,
       expect.objectContaining({ capabilities: off }),
@@ -595,12 +549,11 @@ describe("Bots API routes", () => {
 
   it("answers approvals, with 'always allow' switching the tool to allow", async () => {
     const bot = await createBot();
-    const app = buildApp();
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/approvals/7`)
-      .set(authorization)
-      .send({ decision: "approved", alwaysAllow: "send_email" })
-      .expect(200);
+    const approved = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+      method: "POST",
+      json: { decision: "approved", alwaysAllow: "send_email" },
+    });
+    expect(approved.status).toBe(200);
     expect(agentRuntime.decideApproval).toHaveBeenCalledWith(100, 7, "approved");
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
       100,
@@ -611,31 +564,29 @@ describe("Bots API routes", () => {
         },
       }),
     );
-    const row = await prisma.bot.findUnique({ where: { id: String(bot.id) } });
+    const row = await findBot(bot.id);
     expect(JSON.parse(row!.toolPermissions)).toEqual({ send_email: "allow" });
 
     agentRuntime.decideApproval.mockRejectedValueOnce(new ApprovalNotPendingError(7));
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/approvals/7`)
-      .set(authorization)
-      .send({ decision: "denied" })
-      .expect(409);
+    const stale = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+      method: "POST",
+      json: { decision: "denied" },
+    });
+    expect(stale.status).toBe(409);
   });
 
   it("answers or dismisses a bot's questions", async () => {
     const bot = await createBot();
-    const app = buildApp();
     const path = `/api/v1/bots/${bot.id}/questions/7`;
+    const post = (json: unknown, to = path) => call(to, { method: "POST", json });
     const answers = [{ selected: ["Postgres"] }, { selected: [], text: "Ship it Friday" }];
 
-    const answered = await request(app).post(path).set(authorization).send({ answers }).expect(200);
+    const answered = await post({ answers });
+    expect(answered.status).toBe(200);
     expect(answered.body.data).toEqual({ answered: true });
     expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, answers);
-    const dismissed = await request(app)
-      .post(path)
-      .set(authorization)
-      .send({ dismissed: true })
-      .expect(200);
+    const dismissed = await post({ dismissed: true });
+    expect(dismissed.status).toBe(200);
     expect(dismissed.body.data).toEqual({ dismissed: true });
     expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, null);
 
@@ -647,40 +598,36 @@ describe("Bots API routes", () => {
       { answers: [] },
       { answers: [{ selected: "Postgres" }] },
     ]) {
-      await request(app).post(path).set(authorization).send(body).expect(400);
+      expect((await post(body)).status).toBe(400);
     }
-    await request(app)
-      .post(`/api/v1/bots/${bot.id}/questions/zero`)
-      .set(authorization)
-      .send({ dismissed: true })
-      .expect(400);
+    const zero = await post({ dismissed: true }, `/api/v1/bots/${bot.id}/questions/zero`);
+    expect(zero.status).toBe(400);
     expect(agentRuntime.answerQuestions).not.toHaveBeenCalled();
 
     agentRuntime.answerQuestions.mockRejectedValueOnce(new QuestionNotPendingError(7));
-    await request(app).post(path).set(authorization).send({ answers }).expect(409);
+    expect((await post({ answers })).status).toBe(409);
     agentRuntime.answerQuestions.mockRejectedValueOnce(
       new InvalidAnswersError("Expected 3 answer(s), got 2"),
     );
-    await request(app).post(path).set(authorization).send({ answers }).expect(400);
+    expect((await post({ answers })).status).toBe(400);
   });
 
   it("an owner message dismisses the questions the bot is waiting on", async () => {
     const bot = await createBot();
-    const app = buildApp();
     const path = `/api/v1/bots/${bot.id}/messages`;
-    await request(app)
-      .post(path)
-      .set(authorization)
-      .send({ requestId: "no-questions-id", text: "Hello" })
-      .expect(200);
+    const first = await call(path, {
+      method: "POST",
+      json: { requestId: "no-questions-id", text: "Hello" },
+    });
+    expect(first.status).toBe(200);
     expect(agentRuntime.dismissQuestions).not.toHaveBeenCalled();
 
     agentRuntime.pendingQuestions.mockReturnValueOnce(1);
-    await request(app)
-      .post(path)
-      .set(authorization)
-      .send({ requestId: "answer-in-chat-id", text: "Use SQLite", whenBusy: "steer" })
-      .expect(200);
+    const inChat = await call(path, {
+      method: "POST",
+      json: { requestId: "answer-in-chat-id", text: "Use SQLite", whenBusy: "steer" },
+    });
+    expect(inChat.status).toBe(200);
     expect(agentRuntime.dismissQuestions).toHaveBeenCalledWith(100);
     // Submitted first, so the message joins the reply the dismissal resumes.
     expect(agentRuntime.submit.mock.invocationCallOrder.at(-1)).toBeLessThan(
@@ -691,13 +638,10 @@ describe("Bots API routes", () => {
   it("marks a bot as read", async () => {
     const bot = await createBot();
 
-    await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/read`)
-      .set(authorization)
-      .send({})
-      .expect(200);
+    const read = await call(`/api/v1/bots/${bot.id}/read`, { method: "POST", json: {} });
+    expect(read.status).toBe(200);
 
-    await expect(prisma.bot.findUnique({ where: { id: String(bot.id) } })).resolves.toMatchObject({
+    await expect(findBot(bot.id)).resolves.toMatchObject({
       lastReadAt: expect.any(Date),
     });
   });
@@ -706,78 +650,70 @@ describe("Bots API routes", () => {
     const bot = await createBot();
     agentRuntime.configure.mockClear();
 
-    const pinned = await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/pin`)
-      .set(authorization)
-      .send({ pinned: true })
-      .expect(200);
+    const pin = (pinned: boolean) =>
+      call(`/api/v1/bots/${bot.id}/pin`, { method: "POST", json: { pinned } });
+
+    const pinned = await pin(true);
+    expect(pinned.status).toBe(200);
     expect(pinned.body.data.pinnedAt).toEqual(expect.any(String));
 
     // Pinning again keeps the original position.
-    const again = await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/pin`)
-      .set(authorization)
-      .send({ pinned: true })
-      .expect(200);
+    const again = await pin(true);
+    expect(again.status).toBe(200);
     expect(again.body.data.pinnedAt).toBe(pinned.body.data.pinnedAt);
 
-    const list = await request(buildApp()).get("/api/v1/bots").set(authorization).expect(200);
+    const list = await call("/api/v1/bots");
+    expect(list.status).toBe(200);
     expect(list.body.data[0]).toMatchObject({ id: bot.id, pinnedAt: pinned.body.data.pinnedAt });
 
-    const unpinned = await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/pin`)
-      .set(authorization)
-      .send({ pinned: false })
-      .expect(200);
+    const unpinned = await pin(false);
+    expect(unpinned.status).toBe(200);
     expect(unpinned.body.data.pinnedAt).toBeNull();
     expect(agentRuntime.configure).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid pin body and an unknown bot", async () => {
     const bot = await createBot();
-    await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/pin`)
-      .set(authorization)
-      .send({ pinned: "yes" })
-      .expect(400);
-    await request(buildApp())
-      .post("/api/v1/bots/missing/pin")
-      .set(authorization)
-      .send({ pinned: true })
-      .expect(404);
+    const invalid = await call(`/api/v1/bots/${bot.id}/pin`, {
+      method: "POST",
+      json: { pinned: "yes" },
+    });
+    expect(invalid.status).toBe(400);
+    const missing = await call("/api/v1/bots/missing/pin", {
+      method: "POST",
+      json: { pinned: true },
+    });
+    expect(missing.status).toBe(404);
   });
 
   it("returns list fields with preview and unread state", async () => {
     const earlier = new Date(Date.now() - 60_000);
     const later = new Date();
-    await prisma.bot.create({
-      data: {
-        name: "Unread bot",
-        description: "",
-        systemPrompt: "",
-        modelId: "known-model",
-        conversationId: "301",
-        lastReadAt: earlier,
-        lastActivityAt: later,
-        lastMessagePreview: "A fresh assistant reply",
-      },
+    await db.insert(bots).values({
+      name: "Unread bot",
+      description: "",
+      systemPrompt: "",
+      modelId: "known-model",
+      conversationId: "301",
+      lastReadAt: earlier,
+      lastActivityAt: later,
+      lastMessagePreview: "A fresh assistant reply",
     });
-    await prisma.bot.create({
-      data: {
-        name: "Read bot",
-        description: "",
-        systemPrompt: "",
-        modelId: "known-model",
-        conversationId: "302",
-        lastReadAt: later,
-        lastActivityAt: earlier,
-        lastMessagePreview: "Older reply",
-      },
+    await db.insert(bots).values({
+      name: "Read bot",
+      description: "",
+      systemPrompt: "",
+      modelId: "known-model",
+      conversationId: "302",
+      lastReadAt: later,
+      lastActivityAt: earlier,
+      lastMessagePreview: "Older reply",
     });
 
     // Listed newest first: the unread bot has two questions waiting.
     agentRuntime.pendingQuestions.mockReturnValueOnce(2).mockReturnValueOnce(0);
-    const response = await request(buildApp()).get("/api/v1/bots").set(authorization).expect(200);
+    const response = await call("/api/v1/bots");
+    expect(response.status).toBe(200);
 
     expect(response.body).toMatchObject({
       success: true,
@@ -804,7 +740,7 @@ describe("Bots API routes", () => {
   it("streams a chat snapshot over SSE", async () => {
     const bot = await createBot();
 
-    const response = await readFirstSse(buildApp(), `/api/v1/bots/${bot.id}/stream`);
+    const response = await readFirstSse(`/api/v1/bots/${bot.id}/stream`);
 
     expect(response.status).toBe(200);
     expect(response.contentType).toContain("text/event-stream");
@@ -821,21 +757,17 @@ describe("Bots API routes", () => {
     const page = { messages: [{ id: "e3", role: "user", text: "older" }], hasMore: true };
     agentRuntime.readChatPage.mockResolvedValueOnce(page);
 
-    const response = await request(buildApp())
-      .get(`/api/v1/bots/${bot.id}/messages`)
-      .query({ before: "e7", limit: "20" })
-      .set(authorization)
-      .expect(200);
+    const response = await call(
+      withQuery(`/api/v1/bots/${bot.id}/messages`, { before: "e7", limit: "20" }),
+    );
+    expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ success: true, data: page });
     expect(agentRuntime.readChatPage).toHaveBeenCalledWith(100, { before: "e7", limit: 20 });
 
     // The page size defaults to 50.
     agentRuntime.readChatPage.mockResolvedValueOnce({ messages: [], hasMore: false });
-    await request(buildApp())
-      .get(`/api/v1/bots/${bot.id}/messages`)
-      .query({ before: "e7" })
-      .set(authorization)
-      .expect(200);
+    const defaults = await call(withQuery(`/api/v1/bots/${bot.id}/messages`, { before: "e7" }));
+    expect(defaults.status).toBe(200);
     expect(agentRuntime.readChatPage).toHaveBeenLastCalledWith(100, { before: "e7", limit: 50 });
   });
 
@@ -843,12 +775,9 @@ describe("Bots API routes", () => {
     const bot = await createBot();
     const path = `/api/v1/bots/${bot.id}/messages`;
 
-    await request(buildApp()).get(path).query({ before: "e7" }).expect(401);
-    await request(buildApp())
-      .get("/api/v1/bots/no-such-bot/messages")
-      .query({ before: "e7" })
-      .set(authorization)
-      .expect(404);
+    expect((await api(app, withQuery(path, { before: "e7" }))).status).toBe(401);
+    const unknown = await call(withQuery("/api/v1/bots/no-such-bot/messages", { before: "e7" }));
+    expect(unknown.status).toBe(404);
     // Malformed: missing, not a message id, or a limit out of range.
     for (const query of [
       {},
@@ -856,55 +785,47 @@ describe("Bots API routes", () => {
       { before: "e7", limit: "0" },
       { before: "e7", limit: "101" },
     ]) {
-      await request(buildApp()).get(path).query(query).set(authorization).expect(400);
+      expect((await call(withQuery(path, query))).status).toBe(400);
     }
     // Well-formed, but not (or no longer) in the transcript.
     agentRuntime.readChatPage.mockResolvedValueOnce(undefined);
-    const response = await request(buildApp())
-      .get(path)
-      .query({ before: "e999" })
-      .set(authorization)
-      .expect(400);
+    const response = await call(withQuery(path, { before: "e999" }));
+    expect(response.status).toBe(400);
     expect(response.body).toMatchObject({ success: false });
     expect(agentRuntime.readChatPage).toHaveBeenCalledTimes(1);
   });
 
   it("streams the bot's finished routine runs as cards beside the transcript (issue #63)", async () => {
     const bot = await createBot();
-    const routine = await prisma.routine.create({
-      data: {
+    const [routine] = await db
+      .insert(routines)
+      .values({
         botId: bot.id,
         name: "digest",
         prompt: "p",
         schedule: { kind: "interval", minutes: 60 },
         conversationId: "900",
+      })
+      .returning();
+    await db.insert(routineRuns).values([
+      {
+        routineId: routine!.id,
+        scheduledFor: new Date(),
+        status: "succeeded",
+        requestId: "routine:card:1",
+        // In the bot's current thread (it started when the bot was created).
+        finishedAt: new Date(Date.now() + 1000),
+        output: "Digest ready.",
       },
-    });
-    await prisma.routineRun.createMany({
-      data: [
-        {
-          routineId: routine.id,
-          scheduledFor: new Date(),
-          status: "succeeded",
-          requestId: "routine:card:1",
-          // In the bot's current thread (it started when the bot was created).
-          finishedAt: new Date(Date.now() + 1000),
-          output: "Digest ready.",
-        },
-        {
-          routineId: routine.id,
-          scheduledFor: new Date("2026-10-21T03:30:00Z"),
-          status: "awaiting",
-          requestId: "routine:card:2",
-        },
-      ],
-    });
+      {
+        routineId: routine!.id,
+        scheduledFor: new Date("2026-10-21T03:30:00Z"),
+        status: "awaiting",
+        requestId: "routine:card:2",
+      },
+    ]);
 
-    const response = await readFirstSse(
-      buildApp(),
-      `/api/v1/bots/${bot.id}/stream`,
-      '"type":"routine-runs"',
-    );
+    const response = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"routine-runs"');
     const event = response.text
       .split("\n")
       .filter((line) => line.startsWith("data: "))
@@ -926,35 +847,30 @@ describe("Bots API routes", () => {
 
   it("leaves routine runs from before a new chat out of the new thread", async () => {
     const bot = await createBot();
-    const routine = await prisma.routine.create({
-      data: {
+    const [routine] = await db
+      .insert(routines)
+      .values({
         botId: bot.id,
         name: "digest",
         prompt: "p",
         schedule: { kind: "interval", minutes: 60 },
         conversationId: "901",
-      },
-    });
-    await prisma.routineRun.create({
-      data: {
-        routineId: routine.id,
-        scheduledFor: new Date(),
-        status: "succeeded",
-        requestId: "routine:old-thread:1",
-        finishedAt: new Date(),
-        output: "From the old thread.",
-      },
+      })
+      .returning();
+    await db.insert(routineRuns).values({
+      routineId: routine!.id,
+      scheduledFor: new Date(),
+      status: "succeeded",
+      requestId: "routine:old-thread:1",
+      finishedAt: new Date(),
+      output: "From the old thread.",
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await request(buildApp()).post(`/api/v1/bots/${bot.id}/reset`).set(authorization).expect(200);
-    const after = await prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
+    expect((await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" })).status).toBe(200);
+    const after = (await findBot(bot.id))!;
     expect(after.chatStartedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
 
-    const response = await readFirstSse(
-      buildApp(),
-      `/api/v1/bots/${bot.id}/stream`,
-      '"type":"routine-runs"',
-    );
+    const response = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"routine-runs"');
     const event = response.text
       .split("\n")
       .filter((line) => line.startsWith("data: "))
@@ -966,7 +882,7 @@ describe("Bots API routes", () => {
   it("streams app-wide activity over SSE", async () => {
     await createBot();
 
-    const response = await readFirstSse(buildApp(), "/api/v1/events");
+    const response = await readFirstSse("/api/v1/events");
 
     expect(response.status).toBe(200);
     expect(response.contentType).toContain("text/event-stream");
@@ -979,20 +895,21 @@ it("leaves the vision side-call out for a model with native vision", async () =>
   // The side-call's prompt section would order see_image calls with ids
   // that never reach a model that sees images inline (production:
   // fabricated upload_ ULIDs).
-  const bot = await prisma.bot.create({
-    data: {
+  const [bot] = await db
+    .insert(bots)
+    .values({
       id: "stalevision",
       name: "Stale Vision",
       systemPrompt: "You help.",
       modelId: "vision-model",
       conversationId: "777",
-    },
+    })
+    .returning();
+  const response = await call(`/api/v1/bots/${bot!.id}/messages`, {
+    method: "POST",
+    json: { requestId: "stale-vision-check", text: "Hi" },
   });
-  await request(buildApp())
-    .post(`/api/v1/bots/${bot.id}/messages`)
-    .set(authorization)
-    .send({ requestId: "stale-vision-check", text: "Hi" })
-    .expect(200);
+  expect(response.status).toBe(200);
   expect(agentRuntime.configure).toHaveBeenCalledWith(777, {
     modelId: "vision-model",
     systemPrompt: "You help.",
