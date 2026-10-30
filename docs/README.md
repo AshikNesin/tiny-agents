@@ -21,7 +21,7 @@ then read the guides and feature docs as you need them.
 | [`guides/database-migrations.md`](./guides/database-migrations.md) | Drizzle schema files, `pnpm db:generate`, how migrations apply |
 | [`guides/testing.md`](./guides/testing.md)                         | In-process Hono tests on in-memory SQLite, Playwright, CI      |
 | [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars  |
-| [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)   |
+| [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)    |
 | [`config.md`](./config.md)                                         | `AppConfig` defaults and `defineConfig()` overrides            |
 | [`precommit-hooks.md`](./precommit-hooks.md)                       | gitleaks secret detection + Vite+ staged lint/format           |
 
@@ -70,19 +70,19 @@ then read the guides and feature docs as you need them.
 
 ## API surface
 
-| Prefix             | Purpose                                 | Auth                                   |
-| ------------------ | --------------------------------------- | -------------------------------------- |
-| `/api/v1/auth`     | Login, logout, current user, users      | Public login · JWT · admin key (users) |
-| `/api/v1/passkey`  | Passkey registration, login, management | Public login · JWT                     |
-| `/api/v1/bots`, `/api/v1/models`, `/api/v1/events` | tiny-agents: bots, chats (SSE), past chats, browser | JWT |
-| `/api/v1/tasks`, `/api/v1/routines`, `/api/v1/skills` | tiny-agents: tasks, routines, the skills library | JWT |
-| `/api/v1/connections`, `/api/v1/vault`, `/api/v1/uploads`, `/api/v1/terminal` | tiny-agents: MCP servers, vault, attachments, terminal | JWT |
-| `/api/v1/notifications` | tiny-agents: push notification settings and status | JWT |
-| `/api/v1/jobs`     | Job queue management + dashboard API    | JWT                                    |
-| `/api/v1/storage`  | File operations                         | JWT                                    |
-| `/api/v1/settings` | App key-value settings                  | JWT                                    |
-| `GET /health`      | Liveness (503 while shutting down)      | None                                   |
-| `GET /ready`       | Readiness                               | None                                   |
+| Prefix                                                                        | Purpose                                                | Auth                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------- |
+| `/api/v1/auth`                                                                | Login, logout, current user, users                     | Public login · JWT · admin key (users) |
+| `/api/v1/passkey`                                                             | Passkey registration, login, management                | Public login · JWT                     |
+| `/api/v1/bots`, `/api/v1/models`, `/api/v1/events`                            | tiny-agents: bots, chats (SSE), past chats, browser    | JWT                                    |
+| `/api/v1/tasks`, `/api/v1/routines`, `/api/v1/skills`                         | tiny-agents: tasks, routines, the skills library       | JWT                                    |
+| `/api/v1/connections`, `/api/v1/vault`, `/api/v1/uploads`, `/api/v1/terminal` | tiny-agents: MCP servers, vault, attachments, terminal | JWT                                    |
+| `/api/v1/notifications`                                                       | tiny-agents: push notification settings and status     | JWT                                    |
+| `/api/v1/jobs`                                                                | Job queue management + dashboard API                   | JWT                                    |
+| `/api/v1/storage`                                                             | File operations                                        | JWT                                    |
+| `/api/v1/settings`                                                            | App key-value settings                                 | JWT                                    |
+| `GET /health`                                                                 | Liveness (503 while shutting down)                     | None                                   |
+| `GET /ready`                                                                  | Readiness                                              | None                                   |
 
 Every JSON response uses the envelope `{ success, data }` or
 `{ success: false, error: { code, message, details } }`.

@@ -166,8 +166,10 @@ export function convertRow(table: Table, row: Record<string, unknown>): Record<s
     if (mode === "timestamp_ms" || mode === "timestamp") out[field] = toDate(value);
     else if (mode === "boolean") out[field] = toBoolean(value);
     else if (isJson) out[field] = typeof value === "string" ? JSON.parse(value) : value;
-    else if (sqlType === "blob") out[field] = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
-    else if (sqlType === "integer") out[field] = typeof value === "bigint" ? Number(value) : Number(value);
+    else if (sqlType === "blob")
+      out[field] = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
+    else if (sqlType === "integer")
+      out[field] = typeof value === "bigint" ? Number(value) : Number(value);
     else out[field] = value;
   }
   return out;

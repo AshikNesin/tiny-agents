@@ -70,7 +70,10 @@ function buildLegacyDatabase(): void {
     at,
     at,
   );
-  run(`INSERT INTO bot_connections (botId, connectionId, createdAt) VALUES ('cbot1', 'cconn1', ?)`, at);
+  run(
+    `INSERT INTO bot_connections (botId, connectionId, createdAt) VALUES ('cbot1', 'cconn1', ?)`,
+    at,
+  );
   run(
     `INSERT INTO bot_messages (id, fromBotId, toBotId, kind, requestId, text, createdAt) VALUES ('cmsg1', NULL, 'cbot1', 'mention', 'req-1', 'hi', ?)`,
     at,
@@ -125,10 +128,7 @@ function buildLegacyDatabase(): void {
   keyv.run("VAULT_LOCAL:cvault1", JSON.stringify({ value: { iv: "a", data: "b" }, expires: null }));
   keyv.run("APP_SETTING:featureFlags", JSON.stringify({ value: { beta: true }, expires: null }));
   keyv.run("keyv:plain", JSON.stringify({ value: "::colon start", expires: null }));
-  keyv.run(
-    "passkey:challenge:old",
-    JSON.stringify({ value: "c", expires: Date.now() - 60_000 }),
-  );
+  keyv.run("passkey:challenge:old", JSON.stringify({ value: "c", expires: Date.now() - 60_000 }));
   sqlite.close();
 }
 
@@ -154,7 +154,14 @@ describe("legacy (Prisma) database copy", () => {
     expect(backups.filter((name) => !name.endsWith("-wal") && !name.endsWith("-shm"))).toHaveLength(
       1,
     );
-    expect(isLegacyLayout(path.join(dir, backups.find((n) => !n.includes("-wal"))!))).toBe(true);
+    expect(
+      isLegacyLayout(
+        path.join(
+          dir,
+          backups.find((n) => !n.includes("-wal"))!,
+        ),
+      ),
+    ).toBe(true);
     expect(isLegacyLayout(file)).toBe(false);
 
     const [user] = await db.select().from(schema.users);
@@ -163,7 +170,11 @@ describe("legacy (Prisma) database copy", () => {
     expect(user!.createdAt).toEqual(new Date("2026-10-20T10:00:00.000Z"));
 
     const [passkey] = await db.select().from(schema.passkeys);
-    expect(passkey).toMatchObject({ counter: 7, backedUp: true, transports: ["internal", "hybrid"] });
+    expect(passkey).toMatchObject({
+      counter: 7,
+      backedUp: true,
+      transports: ["internal", "hybrid"],
+    });
     expect([...passkey!.publicKey]).toEqual([1, 2, 3]);
 
     const bot = await db.query.bots.findFirst({

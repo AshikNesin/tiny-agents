@@ -43,19 +43,19 @@ the `chromium` apt package to the runtime image for the browser toolkit.
 
 ## Production environment
 
-| Variable               | Required | Value                                                               |
-| ---------------------- | -------- | ------------------------------------------------------------------- |
-| `NODE_ENV`             | yes      | `production`                                                        |
-| `DATABASE_URL`         | no       | defaults to `file:/data/app.db` (on the volume)                     |
-| `AGENT_DB_PATH`        | no       | defaults to `/data/agent.db` (pi-durable store, same volume)        |
-| `UPLOADS_DIR`          | no       | defaults to `/data/uploads` (next to the database)                  |
-| `JWT_SECRET_KEY`       | yes      | ≥ 32 random characters                                              |
-| `ADMIN_AUTH_KEY`       | yes      | random; the `X-Admin-Auth-Key` header for user management           |
-| `RP_ID`, `ORIGIN`      | yes      | `app.example.com`, `https://app.example.com` (passkeys)             |
-| `RP_NAME`              | no       | name shown in passkey prompts                                       |
-| `CORS_ALLOWED_ORIGINS` | no       | only when another origin calls the API                              |
-| `SENTRY_DSN`           | no       | error reporting (defaults to tiny-agents' project DSN)              |
-| `PORT`                 | injected | the platform sets it; do not override                               |
+| Variable               | Required | Value                                                        |
+| ---------------------- | -------- | ------------------------------------------------------------ |
+| `NODE_ENV`             | yes      | `production`                                                 |
+| `DATABASE_URL`         | no       | defaults to `file:/data/app.db` (on the volume)              |
+| `AGENT_DB_PATH`        | no       | defaults to `/data/agent.db` (pi-durable store, same volume) |
+| `UPLOADS_DIR`          | no       | defaults to `/data/uploads` (next to the database)           |
+| `JWT_SECRET_KEY`       | yes      | ≥ 32 random characters                                       |
+| `ADMIN_AUTH_KEY`       | yes      | random; the `X-Admin-Auth-Key` header for user management    |
+| `RP_ID`, `ORIGIN`      | yes      | `app.example.com`, `https://app.example.com` (passkeys)      |
+| `RP_NAME`              | no       | name shown in passkey prompts                                |
+| `CORS_ALLOWED_ORIGINS` | no       | only when another origin calls the API                       |
+| `SENTRY_DSN`           | no       | error reporting (defaults to tiny-agents' project DSN)       |
+| `PORT`                 | injected | the platform sets it; do not override                        |
 
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.

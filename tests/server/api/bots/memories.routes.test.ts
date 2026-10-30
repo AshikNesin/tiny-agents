@@ -167,15 +167,13 @@ describe("Memories API routes", () => {
 
   it("treats the string 'false' as false for includeArchived", async () => {
     const botId = await seedBot(app);
-    await db
-      .insert(memories)
-      .values({
-        botId,
-        text: "Archived one",
-        category: "fact",
-        status: "archived",
-        source: "manual",
-      });
+    await db.insert(memories).values({
+      botId,
+      text: "Archived one",
+      category: "fact",
+      status: "archived",
+      source: "manual",
+    });
     const list = await listMemories(app, botId, "?includeArchived=false");
     expect(list.status).toBe(200);
     expect(list.body.data!.memories).toHaveLength(0);

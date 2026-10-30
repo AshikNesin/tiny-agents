@@ -1,42 +1,13 @@
 /*
- * tiny-agents app-level theme override.
+ * tiny-agents app-level styles.
  *
- * The shell's synced index.css stays untouched; this file re-points its
- * tokens to a warm monochrome palette (measured from grok.com/bot) in both
- * themes, and adds the chat-specific tokens. It loads after the shell
- * stylesheet (see main.tsx import order).
+ * The shell's index.css (synced from groot) carries the warm monochrome
+ * palette; this file only adds the chat-specific tokens and styles. It loads
+ * after the shell stylesheet (see main.tsx import order).
  */
 
+/* Chat surfaces */
 :root {
-  --radius: 0.75rem;
-  --background: #f9f8f7;
-  --foreground: #050505;
-  --card: #ffffff;
-  --card-foreground: #050505;
-  --popover: #ffffff;
-  --popover-foreground: #050505;
-  --primary: #050505;
-  --primary-foreground: #fcfcfc;
-  --secondary: #f0efed;
-  --secondary-foreground: #050505;
-  --muted: #f0efed;
-  --muted-foreground: #636363;
-  --accent: #f0efed;
-  --accent-foreground: #050505;
-  --border: rgb(15 13 10 / 8%);
-  --input: #e6e5e3;
-  --ring: rgb(5 5 5 / 30%);
-
-  --sidebar: #f5f3f2;
-  --sidebar-foreground: #050505;
-  --sidebar-primary: #050505;
-  --sidebar-primary-foreground: #fcfcfc;
-  --sidebar-accent: rgb(5 5 5 / 4%);
-  --sidebar-accent-foreground: #050505;
-  --sidebar-border: rgb(15 13 10 / 8%);
-  --sidebar-ring: rgb(5 5 5 / 30%);
-
-  /* Chat surfaces */
   --bubble: #f0efed;
   --bubble-user: #070707;
   --bubble-user-foreground: #ffffff;
@@ -48,33 +19,6 @@
 }
 
 .dark {
-  --background: #131211;
-  --foreground: #fcfcfc;
-  --card: #201f1d;
-  --card-foreground: #fcfcfc;
-  --popover: #201f1d;
-  --popover-foreground: #fcfcfc;
-  --primary: #fcfcfc;
-  --primary-foreground: #050505;
-  --secondary: #201f1d;
-  --secondary-foreground: #fcfcfc;
-  --muted: #201f1d;
-  --muted-foreground: #9e9e9e;
-  --accent: #2a2927;
-  --accent-foreground: #fcfcfc;
-  --border: rgb(252 252 252 / 8%);
-  --input: rgb(252 252 252 / 10%);
-  --ring: rgb(252 252 252 / 30%);
-
-  --sidebar: #181716;
-  --sidebar-foreground: #fcfcfc;
-  --sidebar-primary: #fcfcfc;
-  --sidebar-primary-foreground: #050505;
-  --sidebar-accent: rgb(252 252 252 / 8%);
-  --sidebar-accent-foreground: #fcfcfc;
-  --sidebar-border: rgb(252 252 252 / 8%);
-  --sidebar-ring: rgb(252 252 252 / 30%);
-
   --bubble: #201f1d;
   --bubble-user: #5a5a5a;
   --bubble-user-foreground: #fcfcfc;
