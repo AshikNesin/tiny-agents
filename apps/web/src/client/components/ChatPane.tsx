@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X } from "lucide-react";
+import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
@@ -41,6 +41,7 @@ import {
   useMessageScroller,
 } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
+import { useOnline } from "../lib/online";
 
 // Stable empties for a chat that has not connected yet: a fresh `[]` per
 // render would re-run every effect that depends on the transcript.
@@ -165,6 +166,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   // Brief stream hiccups reconnect on their own; only a drop that lasts
   // gets the notice. The first connection is "loading", not "reconnecting".
   const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
+  const online = useOnline();
   const showLoading = useSettled(!loaded && messages.length === 0, 300);
   const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
   // A fresh conversation has nothing to start over from.
@@ -441,13 +443,22 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           />
           {/* Stream health: the transcript is frozen while disconnected. A
               floating pill, so the transcript does not shift under it. */}
-          {reconnecting && (
+          {(!online || reconnecting) && (
             <div
               role="status"
               className="bg-background/90 text-muted-foreground absolute top-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm"
             >
-              <Spinner className="size-3" aria-hidden />
-              Reconnecting…
+              {online ? (
+                <>
+                  <Spinner className="size-3" aria-hidden />
+                  Reconnecting…
+                </>
+              ) : (
+                <>
+                  <WifiOff className="size-3" aria-hidden />
+                  You're offline. Messages send when you're back.
+                </>
+              )}
             </div>
           )}
           {/* First load: outside the scroller content, which must hold only

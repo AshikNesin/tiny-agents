@@ -4,7 +4,9 @@ import { markdownComponents } from "@/lib/markdown";
 
 const P = markdownComponents.p;
 /** A child as Streamdown renders it: the hast node rides along as a prop. */
-const Img = (_: { node: { tagName: string } }) => <span data-streamdown="image-wrapper" />;
+const Img = ({ node }: { node: { tagName: string } }) => (
+  <span data-streamdown="image-wrapper" data-tag={node.tagName} />
+);
 
 describe("markdownComponents.p", () => {
   it("renders text next to an image as a div, never a div inside a p", () => {

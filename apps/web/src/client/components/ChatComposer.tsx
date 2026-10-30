@@ -21,6 +21,7 @@ import {
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
 import { errorMessage } from "../lib/errors";
+import { useOnline } from "../lib/online";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
@@ -97,6 +98,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   ref,
 ) {
   const [text, setText] = useState(() => readDraft(bot.id));
+  const online = useOnline();
+  const [retryWhenOnline, setRetryWhenOnline] = useState<"steer" | "followUp" | null>(null);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
   const [staged, setStaged] = useState<StagedItem[]>([]);
@@ -240,6 +243,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         whenBusy,
       });
     } catch {
+      // Offline: send it by itself once the browser is back (sends are
+      // idempotent server-side, and the text stays visible meanwhile).
+      if (!navigator.onLine) setRetryWhenOnline(whenBusy);
       // The pane already toasted; hand the message back for another try,
       // ahead of anything typed or attached while the send was in flight.
       setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
@@ -256,6 +262,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
+
+  useEffect(() => {
+    if (!online || !retryWhenOnline) return;
+    setRetryWhenOnline(null);
+    void send(retryWhenOnline);
+  }, [online, retryWhenOnline]);
 
   const stop = async () => {
     if (!busy || stopping) return;
