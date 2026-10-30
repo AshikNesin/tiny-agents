@@ -34,6 +34,8 @@ export interface ChatToolCall {
   status: ChatToolStatus;
   output?: string;
   durationMs?: number;
+  /** Time the call waited for the owner's approval (not part of durationMs). */
+  waitedMs?: number;
   taskId?: number;
   /** `auto`: auto-review approved the call, no card was shown; `refused`: nobody was there to ask. */
   approval?: "approved" | "denied" | "auto" | "refused";
@@ -112,7 +114,8 @@ export interface RoutineRunCard {
   id: string;
   routineId: string;
   routineName: string;
-  status: "succeeded" | "failed" | "missed" | "cancelled";
+  /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
+  status: "succeeded" | "blocked" | "failed" | "missed" | "cancelled";
   trigger: "schedule" | "manual";
   scheduledFor: string;
   finishedAt: string;
@@ -137,6 +140,10 @@ export interface ChatState {
    * "Reconnecting…" notice while the very first connection opens.
    */
   loaded: boolean;
+  /** Older messages exist above `messages[0]`; they load on scroll (issue #92). */
+  hasMore?: boolean;
+  /** A page of older messages is being fetched. */
+  loadingOlder?: boolean;
   /**
    * Pre-open read marker (epoch ms), seeded once when the chat connects and
    * never advanced: messages newer than it arrived while the owner was away.

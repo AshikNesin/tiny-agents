@@ -51,7 +51,15 @@ export function DesktopFileRow({
           ) : (
             <FileIcon className="size-4 text-muted-foreground" />
           )}
-          <span className={file.isDirectory ? "font-medium text-info" : ""}>{file.name}</span>
+          <span
+            className={
+              file.isDirectory
+                ? "font-medium text-[color-mix(in_oklch,var(--info)_65%,var(--foreground))]"
+                : ""
+            }
+          >
+            {file.name}
+          </span>
         </button>
       </TableCell>
       <TableCell>{file.isDirectory ? "-" : formatBytes(file.size)}</TableCell>
@@ -59,7 +67,12 @@ export function DesktopFileRow({
       <TableCell className="text-right">
         {file.isDirectory ? (
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onDeleteFolder(file.key)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDeleteFolder(file.key)}
+              aria-label={`Delete folder ${file.name}`}
+            >
               <Trash2 className="size-4 text-destructive" />
             </Button>
           </div>
@@ -72,13 +85,28 @@ export function DesktopFileRow({
             >
               View
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleDownload(file.key, file.name)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDownload(file.key, file.name)}
+              aria-label={`Download ${file.name}`}
+            >
               <Download className="size-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => onRename(file.key, file.name)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRename(file.key, file.name)}
+              aria-label={`Rename ${file.name}`}
+            >
               <Edit3 className="size-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => onDeleteFile(file.key)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDeleteFile(file.key)}
+              aria-label={`Delete ${file.name}`}
+            >
               <Trash2 className="size-4 text-destructive" />
             </Button>
           </div>

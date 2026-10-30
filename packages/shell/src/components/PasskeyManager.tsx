@@ -157,7 +157,7 @@ export function PasskeyManager() {
       {/* Add a passkey */}
       <Card>
         <CardHeader className="border-b px-5 pb-4">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle aria-level={2} className="flex items-center gap-2">
             <Fingerprint className="size-4 text-primary" />
             Add a passkey
           </CardTitle>

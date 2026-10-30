@@ -423,4 +423,25 @@ describe("routine notifications", () => {
       ["⏸️ Morning digest paused", "Submit failed: no model", "/chats/b1", 0],
     ]);
   });
+
+  it("stay quiet for a blocked run and push once when blocked runs pause it (#87)", () => {
+    const notifier = fakeNotifier();
+    notifyRoutineRun(run, { status: "blocked", error: "Needs a Gmail vault login" }, notifier);
+    expect(notifier.sent).toHaveLength(0);
+    notifyRoutineRun(
+      run,
+      {
+        status: "blocked",
+        error: "Needs a Gmail vault login",
+        pausedReason: "Paused after 3 blocked runs: Needs a Gmail vault login",
+      },
+      notifier,
+    );
+    expect(notifier.sent).toHaveLength(1);
+    expect(notifier.sent[0]).toMatchObject({
+      title: "⏸️ Morning digest paused",
+      message: "Paused after 3 blocked runs: Needs a Gmail vault login",
+      path: "/routines",
+    });
+  });
 });

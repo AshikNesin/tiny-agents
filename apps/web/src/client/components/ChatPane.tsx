@@ -1,5 +1,13 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X } from "lucide-react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
+import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
@@ -40,6 +48,8 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "./ui/message-scroller";
+import { errorMessage } from "../lib/errors";
+import { useOnline } from "../lib/online";
 
 // Stable empties for a chat that has not connected yet: a fresh `[]` per
 // render would re-run every effect that depends on the transcript.
@@ -47,6 +57,7 @@ const NO_MESSAGES: ChatMessage[] = [];
 const NO_PENDING: PendingMessage[] = [];
 const NO_QUEUED: QueuedMessage[] = [];
 const NO_RUNS: RoutineRunCard[] = [];
+const NO_TOOL_LABELS: { done: ToolLabels; ask: ToolLabels } = { done: {}, ask: {} };
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -114,7 +125,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const [toolLabels, setToolLabels] = useState<ToolLabels>({});
+  const [toolLabels, setToolLabels] = useState<{ done: ToolLabels; ask: ToolLabels }>(
+    NO_TOOL_LABELS,
+  );
   const [confirmReset, setConfirmReset] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -131,19 +144,20 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     return () => disconnectChat(bot.id);
   }, [bot.id, bot.conversationId, connectChat, disconnectChat]);
 
-  // Tool labels for the transcript rows come from the capability catalog.
+  // Tool labels for the transcript rows (past tense) and the approval cards
+  // (imperative) come from the capability catalog.
   useEffect(() => {
     void botsApi
       .capabilities()
-      .then((capabilities) =>
-        setToolLabels(
-          Object.fromEntries(
-            capabilities.flatMap((capability) =>
-              capability.tools.map((tool) => [tool.name, tool.label]),
-            ),
+      .then((capabilities) => {
+        const tools = capabilities.flatMap((capability) => capability.tools);
+        setToolLabels({
+          done: Object.fromEntries(tools.map((tool) => [tool.name, tool.label])),
+          ask: Object.fromEntries(
+            tools.flatMap((tool) => (tool.askLabel ? [[tool.name, tool.askLabel]] : [])),
           ),
-        ),
-      )
+        });
+      })
       .catch(() => undefined);
   }, []);
 
@@ -154,6 +168,51 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   }, [markRead, unread, bot.id]);
 
   const messages = chat?.messages ?? NO_MESSAGES;
+
+  // Older messages load when the top of the transcript scrolls into view
+  // (issue #92), keeping what was on screen where it was.
+  const loadOlder = useBotsStore((s) => s.loadOlder);
+  const olderSentinel = useRef<HTMLDivElement>(null);
+  const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
+  const hasMore = Boolean(chat?.hasMore);
+  useEffect(() => {
+    const viewport = olderSentinel.current?.closest<HTMLElement>(
+      '[data-slot="message-scroller-viewport"]',
+    );
+    if (!viewport || !hasMore) return;
+    // Only the owner's own scrolling loads history: the scroller's jump to
+    // the latest message on open must not fetch a page nobody asked for.
+    let armed = false;
+    const arm = () => {
+      armed = true;
+      check();
+    };
+    const check = () => {
+      if (!armed || viewport.scrollTop > 400) return;
+      if (useBotsStore.getState().chats[bot.id]?.loadingOlder) return;
+      keepFromBottom.current = {
+        el: viewport,
+        distance: viewport.scrollHeight - viewport.scrollTop,
+      };
+      void loadOlder(bot.id);
+    };
+    viewport.addEventListener("wheel", arm, { passive: true });
+    viewport.addEventListener("touchmove", arm, { passive: true });
+    viewport.addEventListener("keydown", arm);
+    viewport.addEventListener("scroll", check, { passive: true });
+    return () => {
+      viewport.removeEventListener("wheel", arm);
+      viewport.removeEventListener("touchmove", arm);
+      viewport.removeEventListener("keydown", arm);
+      viewport.removeEventListener("scroll", check);
+    };
+  }, [bot.id, hasMore, loadOlder, messages.length]);
+  useLayoutEffect(() => {
+    const kept = keepFromBottom.current;
+    if (!kept || chat?.loadingOlder) return;
+    keepFromBottom.current = null;
+    kept.el.scrollTop = kept.el.scrollHeight - kept.distance;
+  }, [messages, chat?.loadingOlder]);
   const pending = chat?.pending ?? NO_PENDING;
   const queued = chat?.queued ?? NO_QUEUED;
   const routineRuns = chat?.routineRuns ?? NO_RUNS;
@@ -164,6 +223,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   // Brief stream hiccups reconnect on their own; only a drop that lasts
   // gets the notice. The first connection is "loading", not "reconnecting".
   const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
+  const online = useOnline();
   const showLoading = useSettled(!loaded && messages.length === 0, 300);
   const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
   // A fresh conversation has nothing to start over from.
@@ -261,7 +321,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       );
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
-      toast.error(error instanceof Error ? error.message : "Failed to send");
+      toast.error(errorMessage(error, "Failed to send"));
       throw error;
     }
   };
@@ -333,7 +393,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       refreshBotsInBackground();
       onBotReset(fresh);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to start a new chat");
+      toast.error(errorMessage(error, "Failed to start a new chat"));
     }
   };
 
@@ -362,17 +422,25 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           >
             <Menu className="size-5" />
           </Button>
-          <button
-            type="button"
-            onClick={onEditBot}
-            className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
-            aria-label={`Edit ${bot.name}`}
-            title="Bot settings"
-          >
-            <BotAvatar name={bot.name} className="size-5" />
-            <span className="truncate">{bot.name}</span>
-            <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
-          </button>
+          {/* The page's heading is the bot's name; the name opens its settings. */}
+          <h1 className="flex min-w-0">
+            <button
+              type="button"
+              onClick={onEditBot}
+              className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
+              aria-label={`Edit ${bot.name}`}
+              title="Bot settings"
+            >
+              <BotAvatar name={bot.name} className="size-5" />
+              <span className="truncate">{bot.name}</span>
+              {bot.description && (
+                <span className="text-muted-foreground hidden min-w-0 truncate font-normal lg:inline">
+                  {bot.description}
+                </span>
+              )}
+              <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
+            </button>
+          </h1>
           <div className="ml-auto flex shrink-0 items-center">
             <Button
               variant="ghost"
@@ -435,13 +503,22 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           />
           {/* Stream health: the transcript is frozen while disconnected. A
               floating pill, so the transcript does not shift under it. */}
-          {reconnecting && (
+          {(!online || reconnecting) && (
             <div
               role="status"
               className="bg-background/90 text-muted-foreground absolute top-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm"
             >
-              <Spinner className="size-3" aria-hidden />
-              Reconnecting…
+              {online ? (
+                <>
+                  <Spinner className="size-3" aria-hidden />
+                  Reconnecting…
+                </>
+              ) : (
+                <>
+                  <WifiOff className="size-3" aria-hidden />
+                  You're offline. Messages send when you're back.
+                </>
+              )}
             </div>
           )}
           {/* First load: outside the scroller content, which must hold only
@@ -454,6 +531,16 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <MessageScroller className="h-full">
             <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
               <MessageScrollerContent className="space-y-4">
+                {hasMore && (
+                  <div
+                    ref={olderSentinel}
+                    className="text-muted-foreground py-2 text-center text-xs"
+                    aria-live="polite"
+                    data-testid="older-messages"
+                  >
+                    {chat?.loadingOlder ? "Loading earlier messages…" : "Earlier messages"}
+                  </div>
+                )}
                 {loaded && timeline.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                     <BotAvatar name={bot.name} className="size-20" />
@@ -509,7 +596,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                           message={message}
                           botName={bot.name}
                           botId={bot.id}
-                          toolLabels={toolLabels}
+                          toolLabels={toolLabels.done}
+                          toolAskLabels={toolLabels.ask}
                         />
                       </MessageScrollerItem>
                     </Fragment>

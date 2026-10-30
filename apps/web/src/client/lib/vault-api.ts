@@ -8,6 +8,7 @@ import type { AxiosError } from "axios";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import { apiClient } from "@groot/shell/lib/api";
+import { errorMessage } from "./errors";
 
 export type VaultKind = "login" | "card" | "identity" | "api_key";
 export type VaultApproval = "every_use" | "per_conversation" | "allowed";
@@ -304,6 +305,5 @@ export const FIELDS_BY_KIND: Record<VaultKind, ValueField[]> = {
 };
 
 export function apiError(error: unknown, fallback: string): string {
-  const response = (error as AxiosError<{ error?: { message?: string } }>)?.response;
-  return response?.data?.error?.message ?? (error instanceof Error ? error.message : fallback);
+  return errorMessage(error, fallback);
 }

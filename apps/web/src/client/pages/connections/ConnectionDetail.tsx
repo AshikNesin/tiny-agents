@@ -225,8 +225,8 @@ export function ConnectionDetail({ id }: { id: string }) {
             <Link to="/connections">Connections</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbPage>{connection.name}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>

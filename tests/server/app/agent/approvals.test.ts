@@ -198,6 +198,33 @@ describe("capabilities and approvals", () => {
     );
   }, 15_000);
 
+  it("reports the wait for approval apart from the tool's own run time (issue #86)", async () => {
+    const mailer: Mailer = { sent: [] };
+    const runtime = await open(mailer, callThenReport("send_email", { to: "ana@x.dev" }));
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mail"], permissions: {} },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "email ana" });
+    const waiting = await until(
+      () =>
+        toolCall(events, "send_email")?.status === "awaiting_approval"
+          ? toolCall(events, "send_email")
+          : undefined,
+      "approval card",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    await until(() => finalText(events), "reply");
+
+    const done = toolCall(events, "send_email")!;
+    expect(done.waitedMs).toBeGreaterThanOrEqual(350);
+    expect(done.durationMs).toBeLessThan(done.waitedMs!);
+  }, 15_000);
+
   it("a denied call never runs and tells the model", async () => {
     const mailer: Mailer = { sent: [] };
     const runtime = await open(mailer, callThenReport("send_email", { to: "bo@x.dev" }));

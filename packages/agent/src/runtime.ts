@@ -50,14 +50,17 @@ import {
   QuestionsDoc,
   storedQuestions,
 } from "./toolkits/questions";
+import { REPORT_ROUTINE_BLOCKED } from "./toolkits/routines";
 import {
   attachmentsOf,
   chatState,
   diffChat,
   CHAT_USER_ENTRY,
   type LiveTool,
+  pageBefore,
   queuedOf,
   type RawChat,
+  windowChat,
 } from "./transcript";
 import type {
   ActivityChange,
@@ -65,8 +68,10 @@ import type {
   BotAgentConfig,
   ChatEvent,
   ChatMessage,
+  ChatPage,
   ChatState,
   ChatSubscription,
+  ChatToolCall,
   ConversationRef,
   FinishedReply,
   LastMessage,
@@ -405,7 +410,10 @@ export class AgentRuntime {
     const off: ToolRegistration[] = [];
     for (const capability of selected) {
       for (const tool of capability.tools) {
-        if (effectivePermission(tool, config.capabilities.permissions) !== "off") continue;
+        const offHere = tool.unattendedOnly === true && !config.capabilities.unattended;
+        if (!offHere && effectivePermission(tool, config.capabilities.permissions) !== "off") {
+          continue;
+        }
         const registration = installed
           .extension(capability.id)
           ?.tools?.find((candidate) => candidate.name === tool.name);
@@ -836,12 +844,16 @@ export class AgentRuntime {
       const refused = message.toolCalls
         ?.filter((call) => call.approval === "refused")
         .map((call) => call.name);
-      if (!message.text && error === undefined && !refused?.length) continue;
+      const blocked = blockedReason(message.toolCalls);
+      if (!message.text && error === undefined && !refused?.length && blocked === undefined) {
+        continue;
+      }
       replies.push({
         text: message.text,
         createdAt: message.createdAt,
         ...(error !== undefined ? { error } : {}),
         ...(refused?.length ? { refused } : {}),
+        ...(blocked !== undefined ? { blocked } : {}),
       });
     }
     return replies;
@@ -859,12 +871,30 @@ export class AgentRuntime {
   }
 
   /**
+   * Up to `limit` messages just before message `before`, oldest first: the
+   * history above a windowed stream's snapshot. Undefined when `before` is
+   * not (or no longer) in the transcript.
+   */
+  async readChatPage(
+    ref: ConversationRef,
+    { before, limit }: { before: string; limit: number },
+  ): Promise<ChatPage | undefined> {
+    return pageBefore((await this.readChat(ref)).messages, before, limit);
+  }
+
+  /**
    * Watch a conversation as chat events: a `snapshot` first, then minimal
    * upserts/deltas per commit. Reconnecting clients simply watch again.
+   *
+   * With `window`, snapshots carry only the newest `window` messages plus
+   * `hasMore`/`cursor` (issue #92). The window's start then stays put, so
+   * new messages arrive as upserts and nothing drops out of it; a
+   * re-snapshot (a slow client fell behind) re-windows to the newest ones.
    */
   async watchChat(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
+    options: { window?: number } = {},
   ): Promise<ChatSubscription> {
     const conversation = await this.#conversation(ref);
     const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
@@ -894,7 +924,20 @@ export class AgentRuntime {
       queued: raw.queued,
     });
 
-    let state: ChatState = chatState(view());
+    // The window's first message id, fixed once older messages exist; with
+    // none, the window is the whole transcript and grows from its start.
+    let from: string | undefined;
+    /** `full` as this stream shows it; undefined when `from` is gone. */
+    const windowed = (full: ChatState, fresh: boolean): ChatState | undefined => {
+      if (options.window === undefined) return full;
+      const next = fresh
+        ? windowChat(full, options.window)
+        : windowChat(full, Number.POSITIVE_INFINITY, from);
+      if (next) from = next.hasMore ? next.cursor : undefined;
+      return next;
+    };
+
+    let state: ChatState = windowed(chatState(view()), true)!;
     const initial = state;
     let stopped = false;
 
@@ -939,7 +982,11 @@ export class AgentRuntime {
         applyEvent(raw, event);
       }
       if (resnapshot || inboxChanged) await this.#refreshQueued(raw, ref);
-      const next = chatState(view());
+      const full = chatState(view());
+      // The window's first message vanished (never expected): start afresh.
+      const kept = resnapshot ? undefined : windowed(full, false);
+      if (!kept) resnapshot = true;
+      const next = kept ?? windowed(full, true)!;
       const diff = resnapshot
         ? [{ type: "snapshot", state: next } as ChatEvent]
         : diffChat(state, next);
@@ -1045,6 +1092,15 @@ export class AgentRuntime {
     if (!conversation) throw new ConversationNotFoundError(ref);
     return conversation;
   }
+}
+
+/** The reason a message's finished `report_routine_blocked` call gave, if it made one (issue #87). */
+function blockedReason(calls: ChatToolCall[] | undefined): string | undefined {
+  const call = calls?.findLast(
+    (candidate) => candidate.name === REPORT_ROUTINE_BLOCKED && candidate.status === "done",
+  );
+  const reason = call?.args.reason;
+  return typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 }
 
 function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {

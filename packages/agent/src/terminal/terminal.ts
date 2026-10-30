@@ -269,15 +269,23 @@ type ConnectShape = {
  * (or an unconfigured app) never pulls ssh2 into the module graph.
  */
 function lazySsh2Transport(connect: () => ConnectShape): TerminalTransport {
-  let bound: TerminalTransport | undefined;
+  // The promise is cached, not the result: concurrent first calls must bind
+  // one transport, or each would pool its own connection.
+  let bound: Promise<TerminalTransport> | undefined;
+  const load = (): Promise<TerminalTransport> => {
+    if (bound) return bound;
+    const loading = loadTransport(connect);
+    loading.catch(() => {
+      if (bound === loading) bound = undefined; // a failed import is retried
+    });
+    return (bound = loading);
+  };
   return {
     async exec(command) {
-      bound ??= await loadTransport(connect);
-      return bound.exec(command);
+      return (await load()).exec(command);
     },
     async pty(command, init) {
-      bound ??= await loadTransport(connect);
-      return bound.pty(command, init);
+      return (await load()).pty(command, init);
     },
   };
 }

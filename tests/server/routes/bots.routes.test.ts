@@ -13,6 +13,7 @@ import {
   QuestionNotPendingError,
 } from "../../../packages/agent/src/runtime";
 import { InvalidAnswersError } from "../../../packages/agent/src/toolkits/questions";
+import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
 
 /**
  * Route tests run against an app-shaped runtime fake installed through
@@ -49,6 +50,13 @@ const agentRuntime = {
   submit: vi.fn().mockResolvedValue(undefined),
   abort: vi.fn().mockResolvedValue(undefined),
   withdraw: vi.fn().mockResolvedValue("withdrawn"),
+  readChatPage:
+    vi.fn<
+      (
+        ref: number,
+        query: { before: string; limit: number },
+      ) => Promise<{ messages: unknown[]; hasMore: boolean } | undefined>
+    >(),
   watchChat: vi.fn(
     async (
       _ref: number,
@@ -253,6 +261,59 @@ describe("Bots API routes", () => {
     expect(missingName.status).toBe(400);
     expect(unknownModel.status).toBe(400);
     expect(agentRuntime.createConversation).not.toHaveBeenCalled();
+  });
+
+  it("refuses a name another bot has, ignoring case and surrounding spaces (issue #80)", async () => {
+    const app = buildApp();
+    await createBot(app, { name: "Echo" });
+    agentRuntime.createConversation.mockClear();
+
+    for (const name of ["Echo", "echo", "  ECHO  "]) {
+      const response = await request(app)
+        .post("/api/v1/bots")
+        .set(authorization)
+        .send({ ...createPayload, name });
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: { message: 'A bot named "Echo" already exists' },
+      });
+    }
+    // Refused before a conversation was started for it.
+    expect(agentRuntime.createConversation).not.toHaveBeenCalled();
+    await expect(prisma.bot.count()).resolves.toBe(1);
+  });
+
+  it("refuses renaming onto another bot's name, but a bot may recase its own", async () => {
+    const app = buildApp();
+    const echo = await createBot(app, { name: "Echo" });
+    agentRuntime.createConversation.mockResolvedValueOnce(101);
+    const other = await createBot(app, { name: "Other" });
+
+    for (const name of ["Echo", " eCHo "]) {
+      const response = await request(app)
+        .patch(`/api/v1/bots/${other.id}`)
+        .set(authorization)
+        .send({ name });
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toBe('A bot named "Echo" already exists');
+    }
+    await expect(prisma.bot.findUnique({ where: { id: String(other.id) } })).resolves.toMatchObject(
+      { name: "Other" },
+    );
+
+    const recased = await request(app)
+      .patch(`/api/v1/bots/${echo.id}`)
+      .set(authorization)
+      .send({ name: "ECHO" })
+      .expect(200);
+    expect(recased.body.data.name).toBe("ECHO");
+    // Saving the dialog sends the bot's own name back unchanged.
+    await request(app)
+      .patch(`/api/v1/bots/${echo.id}`)
+      .set(authorization)
+      .send({ name: "ECHO", description: "Echoes back" })
+      .expect(200);
   });
 
   it("patches a bot and reconfigures its existing durable conversation", async () => {
@@ -749,7 +810,63 @@ describe("Bots API routes", () => {
     expect(response.contentType).toContain("text/event-stream");
     expect(response.text).toContain("data:");
     expect(response.text).toContain('"type":"snapshot"');
-    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function));
+    // Only the newest messages (issue #92): older ones load from /messages.
+    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function), {
+      window: CHAT_WINDOW,
+    });
+  });
+
+  it("pages older transcript messages before a cursor (issue #92)", async () => {
+    const bot = await createBot();
+    const page = { messages: [{ id: "e3", role: "user", text: "older" }], hasMore: true };
+    agentRuntime.readChatPage.mockResolvedValueOnce(page);
+
+    const response = await request(buildApp())
+      .get(`/api/v1/bots/${bot.id}/messages`)
+      .query({ before: "e7", limit: "20" })
+      .set(authorization)
+      .expect(200);
+    expect(response.body).toMatchObject({ success: true, data: page });
+    expect(agentRuntime.readChatPage).toHaveBeenCalledWith(100, { before: "e7", limit: 20 });
+
+    // The page size defaults to 50.
+    agentRuntime.readChatPage.mockResolvedValueOnce({ messages: [], hasMore: false });
+    await request(buildApp())
+      .get(`/api/v1/bots/${bot.id}/messages`)
+      .query({ before: "e7" })
+      .set(authorization)
+      .expect(200);
+    expect(agentRuntime.readChatPage).toHaveBeenLastCalledWith(100, { before: "e7", limit: 50 });
+  });
+
+  it("refuses history without auth, for an unknown bot, or with a bad cursor", async () => {
+    const bot = await createBot();
+    const path = `/api/v1/bots/${bot.id}/messages`;
+
+    await request(buildApp()).get(path).query({ before: "e7" }).expect(401);
+    await request(buildApp())
+      .get("/api/v1/bots/no-such-bot/messages")
+      .query({ before: "e7" })
+      .set(authorization)
+      .expect(404);
+    // Malformed: missing, not a message id, or a limit out of range.
+    for (const query of [
+      {},
+      { before: "live" },
+      { before: "e7", limit: "0" },
+      { before: "e7", limit: "101" },
+    ]) {
+      await request(buildApp()).get(path).query(query).set(authorization).expect(400);
+    }
+    // Well-formed, but not (or no longer) in the transcript.
+    agentRuntime.readChatPage.mockResolvedValueOnce(undefined);
+    const response = await request(buildApp())
+      .get(path)
+      .query({ before: "e999" })
+      .set(authorization)
+      .expect(400);
+    expect(response.body).toMatchObject({ success: false });
+    expect(agentRuntime.readChatPage).toHaveBeenCalledTimes(1);
   });
 
   it("streams the bot's finished routine runs as cards beside the transcript (issue #63)", async () => {
@@ -802,7 +919,9 @@ describe("Bots API routes", () => {
       }),
     ]);
     // The transcript itself is the chat's alone.
-    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function));
+    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function), {
+      window: CHAT_WINDOW,
+    });
   });
 
   it("leaves routine runs from before a new chat out of the new thread", async () => {

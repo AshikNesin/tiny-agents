@@ -143,4 +143,34 @@ describe("ChatPane mention wiring", () => {
     expect(sendMock.mock.calls[0]![2]).toBe("@Ada ask @Grace too");
     expect(sendMock.mock.calls[0]![3]).toEqual(["b1", "b2"]);
   });
+
+  // Issue #80: two bots share a name (older data).
+  const twins = [
+    { id: "e1", name: "Echo", description: "" },
+    { id: "e2", name: "Echo", description: "Echoes back" },
+  ];
+
+  it("sends to the bot picked from the list, not the first with that name", async () => {
+    seedStore(twins);
+    const composer = renderPane();
+    await user.type(composer, "@Ech");
+    await user.click(screen.getByRole("option", { name: /Echoes back/ }));
+    await user.type(composer, "ping{Enter}");
+
+    await waitFor(() => expect(sendMock).toHaveBeenCalled());
+    expect(sendMock.mock.calls[0]![2]).toBe("@Echo ping");
+    expect(sendMock.mock.calls[0]![3]).toEqual(["e2"]);
+  });
+
+  it("holds a typed name several bots share and asks to pick one", async () => {
+    seedStore(twins);
+    const composer = renderPane();
+    await user.type(composer, "@Echo{Escape} ping{Enter}");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      'More than one bot is named "Echo". Type @ and pick the one you mean from the list.',
+    );
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(composer.value).toBe("@Echo ping");
+  });
 });

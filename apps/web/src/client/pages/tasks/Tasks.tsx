@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -29,6 +29,8 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { tasksApi, type Task, type TaskInput } from "../../lib/tasks-api";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
+import { errorMessage } from "../../lib/errors";
+import { parseQuickTask } from "../../lib/task-quick-add";
 
 type Tab = "today" | "upcoming" | "completed";
 
@@ -105,7 +107,7 @@ export function Tasks() {
       setTasks(await tasksApi.list());
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to load tasks");
+      setLoadError(errorMessage(error, "Failed to load tasks"));
     }
   }, []);
 
@@ -119,26 +121,48 @@ export function Tasks() {
     const open = (tasks ?? []).filter((t) => t.status !== "done");
     return {
       today: open.filter((t) => isToday(t, todayEnd)),
-      upcoming: open.filter((t) => !isToday(t, todayEnd)),
+      // Dated tasks soonest first, then the undated ones under "No date" (#97).
+      upcoming: open
+        .filter((t) => !isToday(t, todayEnd))
+        .sort((a, b) => {
+          if (!a.dueAt || !b.dueAt) return a.dueAt ? -1 : b.dueAt ? 1 : 0;
+          return a.dueAt.localeCompare(b.dueAt);
+        }),
       completed: (tasks ?? [])
         .filter((t) => t.status === "done")
         .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "")),
     };
   }, [tasks, todayEnd]);
 
-  const create = async (title: string, dueToday: boolean) => {
+  const quickPreview = useMemo(() => {
+    const parsed = parseQuickTask(quick);
+    if (!quick.trim() || (!parsed.due && !parsed.priority)) return "";
+    return [
+      `"${parsed.title}"`,
+      parsed.due ? `due ${formatDue(parsed.due.toISOString())}` : "",
+      parsed.priority ? `${parsed.priority} priority` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }, [quick]);
+
+  const create = async (text: string, dueToday: boolean) => {
+    // "Call mom tomorrow 5pm !high": a day, time or priority typed in the
+    // box wins over the tab's default due date (#97).
+    const parsed = parseQuickTask(text);
     try {
       await tasksApi.create({
-        title,
-        // Quick-add files the task where it was typed: today's tab due end
-        // of today, Upcoming due end of tomorrow (friction #36). An undated
-        // to-do counts as upcoming, so Today must not leave it undated.
-        dueAt: new Date(dueToday ? todayEnd : todayEnd + 86_400_000).toISOString(),
+        title: parsed.title,
+        ...(parsed.priority ? { priority: parsed.priority } : {}),
+        // Otherwise quick-add files the task where it was typed: today's tab
+        // due end of today, Upcoming due end of tomorrow (friction #36). An
+        // undated to-do counts as upcoming, so Today must not leave it undated.
+        dueAt: (parsed.due ?? new Date(dueToday ? todayEnd : todayEnd + 86_400_000)).toISOString(),
       });
       setQuick("");
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add task");
+      toast.error(errorMessage(error, "Failed to add task"));
     }
   };
 
@@ -164,7 +188,7 @@ export function Tasks() {
         });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update task");
+      toast.error(errorMessage(error, "Failed to update task"));
       await refresh();
     }
   };
@@ -175,7 +199,7 @@ export function Tasks() {
       toast.success("Task deleted");
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete task");
+      toast.error(errorMessage(error, "Failed to delete task"));
     }
   };
 
@@ -222,7 +246,11 @@ export function Tasks() {
           <Input
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
-            placeholder={tab === "today" ? "Add a task for today" : "Add a task for tomorrow"}
+            placeholder={
+              tab === "today"
+                ? "Add a task for today (try “tomorrow 5pm !high”)"
+                : "Add a task for tomorrow (try “fri 9am”)"
+            }
             maxLength={300}
             aria-label="New task title"
           />
@@ -231,6 +259,11 @@ export function Tasks() {
             <span className="hidden sm:inline">Add</span>
           </Button>
         </form>
+      )}
+      {tab !== "completed" && quickPreview && (
+        <p className="text-muted-foreground -mt-2 px-1 text-xs" aria-live="polite">
+          {quickPreview}
+        </p>
       )}
 
       {loadError ? (
@@ -262,76 +295,85 @@ export function Tasks() {
       ) : (
         <Card className="divide-y overflow-hidden p-0">
           <ul role="list">
-            {list.map((task) => {
+            {list.map((task, index) => {
+              const firstUndated =
+                tab === "upcoming" && !task.dueAt && (index === 0 || !!list[index - 1].dueAt);
               const overdue =
                 task.status !== "done" && task.dueAt && new Date(task.dueAt).getTime() < now;
               return (
-                <li key={task.id} className="hover:bg-muted/40 flex items-start gap-3 px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => void toggle(task)}
-                    className="text-muted-foreground hover:text-primary mt-0.5"
-                    aria-label={
-                      task.status === "done"
-                        ? `Mark "${task.title}" as not done`
-                        : `Complete "${task.title}"`
-                    }
-                  >
-                    {task.status === "done" ? (
-                      <CheckCircle2 className="text-primary size-5" />
-                    ) : task.status === "in_progress" ? (
-                      <CircleDot className="size-5" />
-                    ) : (
-                      <Circle className="size-5" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(task)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p
-                      className={cn(
-                        "text-[15px] leading-6",
-                        task.status === "done" && "text-muted-foreground line-through",
-                      )}
+                <Fragment key={task.id}>
+                  {firstUndated && (
+                    <li className="bg-muted/30 text-muted-foreground px-4 py-1.5 text-xs font-medium">
+                      No date
+                    </li>
+                  )}
+                  <li className="hover:bg-muted/40 flex items-start gap-3 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void toggle(task)}
+                      className="text-muted-foreground hover:text-primary mt-0.5"
+                      aria-label={
+                        task.status === "done"
+                          ? `Mark "${task.title}" as not done`
+                          : `Complete "${task.title}"`
+                      }
                     >
-                      {task.title}
-                    </p>
-                    <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      {task.dueAt && (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1",
-                            overdue && "font-medium text-destructive",
-                          )}
-                        >
-                          <CalendarDays className="size-3" />
-                          {overdue ? "Overdue · " : ""}
-                          {formatDue(task.dueAt)}
-                        </span>
+                      {task.status === "done" ? (
+                        <CheckCircle2 className="text-primary size-5" />
+                      ) : task.status === "in_progress" ? (
+                        <CircleDot className="size-5" />
+                      ) : (
+                        <Circle className="size-5" />
                       )}
-                      {task.description && (
-                        <span className="max-w-[16rem] truncate">{task.description}</span>
-                      )}
-                      {task.status === "done" && task.completedAt && (
-                        <span>Done {formatRelativeTime(task.completedAt)}</span>
-                      )}
-                    </div>
-                  </button>
-                  {(task.priority === "high" || task.priority === "urgent") &&
-                    task.status !== "done" && (
-                      <span
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(task)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p
                         className={cn(
-                          "mt-1 inline-flex items-center gap-1 text-xs font-medium capitalize",
-                          PRIORITY_CLASSES[task.priority],
+                          "text-[15px] leading-6 [overflow-wrap:anywhere]",
+                          task.status === "done" && "text-muted-foreground line-through",
                         )}
                       >
-                        <Flag className="size-3" />
-                        {task.priority}
-                      </span>
-                    )}
-                </li>
+                        {task.title}
+                      </p>
+                      <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        {task.dueAt && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1",
+                              overdue && "font-medium text-destructive",
+                            )}
+                          >
+                            <CalendarDays className="size-3" />
+                            {overdue ? "Overdue · " : ""}
+                            {formatDue(task.dueAt)}
+                          </span>
+                        )}
+                        {task.description && (
+                          <span className="max-w-[16rem] truncate">{task.description}</span>
+                        )}
+                        {task.status === "done" && task.completedAt && (
+                          <span>Done {formatRelativeTime(task.completedAt)}</span>
+                        )}
+                      </div>
+                    </button>
+                    {(task.priority === "high" || task.priority === "urgent") &&
+                      task.status !== "done" && (
+                        <span
+                          className={cn(
+                            "mt-1 inline-flex items-center gap-1 text-xs font-medium capitalize",
+                            PRIORITY_CLASSES[task.priority],
+                          )}
+                        >
+                          <Flag className="size-3" />
+                          {task.priority}
+                        </span>
+                      )}
+                  </li>
+                </Fragment>
               );
             })}
           </ul>
@@ -410,7 +452,7 @@ function TaskEditor({
       toast.success("Task saved");
       await onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save task");
+      toast.error(errorMessage(error, "Failed to save task"));
     } finally {
       setSaving(false);
     }

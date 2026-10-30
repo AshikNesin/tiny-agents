@@ -38,6 +38,7 @@ import { skillsApi, type Skill } from "../../lib/skills-api";
 import { botsApi, type BotListEntry } from "../../lib/bots-api";
 import { SkillFileList } from "../../components/skills/SkillFileList";
 import { LeaveGuard } from "../../components/LeaveGuard";
+import { errorMessage } from "../../lib/errors";
 
 export function SkillDetail({ id }: { id: string }) {
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ export function SkillDetail({ id }: { id: string }) {
       setForm({ description: loaded.description, body: loaded.body });
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to load skill");
+      setLoadError(errorMessage(error, "Failed to load skill"));
     }
   }, [id]);
 
@@ -117,7 +118,7 @@ export function SkillDetail({ id }: { id: string }) {
       setForm({ description: updated.description, body: updated.body });
       toast.success("Skill saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save skill");
+      toast.error(errorMessage(error, "Failed to save skill"));
     } finally {
       setSaving(false);
     }
@@ -133,7 +134,7 @@ export function SkillDetail({ id }: { id: string }) {
       setSkill(await skillsApi.update(id, { botIds }));
     } catch (error) {
       setSkill((current) => (current ? { ...current, botIds: previous } : current));
-      toast.error(error instanceof Error ? error.message : "Failed to update bots");
+      toast.error(errorMessage(error, "Failed to update bots"));
     }
   };
 
@@ -144,7 +145,7 @@ export function SkillDetail({ id }: { id: string }) {
       toast.success("Skill deleted");
       navigate("/skills");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete skill");
+      toast.error(errorMessage(error, "Failed to delete skill"));
       setDeleting(false);
     }
   };
@@ -157,8 +158,8 @@ export function SkillDetail({ id }: { id: string }) {
         <BreadcrumbItem>
           <BreadcrumbLink onClick={() => navigate("/skills")}>Skills</BreadcrumbLink>
         </BreadcrumbItem>
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbPage>{skill.name}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>

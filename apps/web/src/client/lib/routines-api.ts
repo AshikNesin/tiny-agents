@@ -20,6 +20,12 @@ export interface Routine {
   scheduleDescription: string;
   enabled: boolean;
   nextRunAt: string | null;
+  /** A one-time routine whose time has passed: finished, not paused. */
+  done?: boolean;
+  /** Runs in a row that ended blocked (issue #87); 3 pause the routine. */
+  blockedStreak: number;
+  /** Why the app paused it ("Paused after 3 blocked runs: …"); null otherwise. */
+  pausedReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,7 +48,8 @@ export interface RoutineRun {
   routineName?: string;
   botName?: string;
   scheduledFor: string;
-  status: "awaiting" | "succeeded" | "failed" | "missed" | "cancelled";
+  /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
+  status: "awaiting" | "succeeded" | "blocked" | "failed" | "missed" | "cancelled";
   trigger: "schedule" | "manual";
   submittedAt: string | null;
   startedAt: string | null;

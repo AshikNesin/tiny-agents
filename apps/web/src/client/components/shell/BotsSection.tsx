@@ -9,7 +9,8 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/shell/lib/utils";
 import type { BotListEntry } from "../../lib/bots-api";
-import { groupBots, visibleRecent } from "../../lib/bot-groups";
+import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
+import { railBots } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
@@ -51,7 +52,7 @@ function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
     );
   }
   if (bot.unread && !active) {
-    return <span aria-label="Unread" className="bg-primary size-2 rounded-full" />;
+    return <span aria-label="Unread" className="bg-primary block size-2 shrink-0 rounded-full" />;
   }
   return null;
 }
@@ -68,6 +69,8 @@ function BotRow({
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const pinned = bot.pinnedAt !== null;
+  const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
+  const previewId = `bot-preview-${bot.id}`;
 
   return (
     <li className="group/row relative">
@@ -75,14 +78,30 @@ function BotRow({
         to={`/chats/${bot.id}`}
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
+        aria-label={railLabel(bot)}
+        aria-describedby={preview ? previewId : undefined}
         className={cn(
-          "flex h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
+          "flex min-h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
           "focus-visible:ring-sidebar-ring focus-visible:ring-1",
           active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
         )}
       >
         <BotAvatar name={bot.name} className="size-6" />
-        <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+            {preview && (
+              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible">
+                {relativeTime(bot.lastActivityAt)}
+              </span>
+            )}
+          </span>
+          {preview && (
+            <span id={previewId} className="text-muted-foreground block truncate text-xs">
+              {preview}
+            </span>
+          )}
+        </span>
         <span className="group-focus-within/row:hidden group-hover/row:hidden">
           <RowStatus bot={bot} active={active} />
         </span>
@@ -177,5 +196,66 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
         </>
       )}
     </section>
+  );
+}
+
+/** A bot's state in words, for the rail's labels and tooltips. */
+function railLabel(bot: BotListEntry): string {
+  const waiting = waitingLabel(bot);
+  const state = waiting || (bot.replying ? "replying" : bot.unread ? "unread" : "");
+  return state ? `${bot.name}, ${state}` : bot.name;
+}
+
+/**
+ * The collapsed sidebar's bots (issue #90): the open one, pinned ones and any
+ * that needs attention, as avatars with their state on top, so a bot waiting
+ * on you never disappears when the sidebar is folded.
+ */
+export function BotRail({ bots, activeId }: { bots: BotListEntry[]; activeId: string | null }) {
+  const setCollapsed = useUiStore((s) => s.setCollapsed);
+  const { shown, hiddenWaiting } = useMemo(() => railBots(bots, activeId), [bots, activeId]);
+  return (
+    <nav aria-label="Bots" className="flex flex-col items-center gap-1.5 py-2">
+      {shown.map((bot) => {
+        const waiting = bot.approvals + bot.questions;
+        const label = railLabel(bot);
+        return (
+          <Link
+            key={bot.id}
+            to={`/chats/${bot.id}`}
+            aria-label={label}
+            title={label}
+            aria-current={bot.id === activeId ? "page" : undefined}
+            className={cn(
+              "relative flex size-9 items-center justify-center rounded-xl outline-none",
+              "focus-visible:ring-sidebar-ring focus-visible:ring-1",
+              bot.id === activeId ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
+            )}
+          >
+            <BotAvatar name={bot.name} className="size-6" />
+            {waiting > 0 ? (
+              <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4">
+                {waiting}
+              </span>
+            ) : bot.replying ? (
+              <span className="bg-fg-tertiary absolute top-0.5 right-0.5 block size-2 animate-pulse rounded-full" />
+            ) : bot.unread && bot.id !== activeId ? (
+              <span className="bg-primary absolute top-0.5 right-0.5 block size-2 rounded-full" />
+            ) : null}
+          </Link>
+        );
+      })}
+      {hiddenWaiting > 0 && (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          aria-label={`${hiddenWaiting} more waiting on you: expand the sidebar`}
+          title="More bots are waiting on you"
+          className="bg-primary text-primary-foreground rounded-full px-1.5 text-[10px] leading-4"
+        >
+          +{hiddenWaiting}
+        </button>
+      )}
+    </nav>
   );
 }

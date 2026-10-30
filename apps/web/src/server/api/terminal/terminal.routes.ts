@@ -93,10 +93,11 @@ router.delete("/terminal/sessions/:name", async (req) => {
   }
 });
 
+// No has-session pre-check: it cost a full SSH round trip before the socket
+// could open (issue #84). Attaching to a missing tab ends the pty at once,
+// tmux prints why, and the bridge closes 1000, so the client stops.
 router.post("/terminal/sessions/:name/ticket", async (req) => {
   const name = nameParam(parseStringParam(req.params.name, "name"));
-  const exists = await getTerminalService().has(name);
-  if (!exists) throw Boom.notFound(`No terminal session named ${name}.`);
   return {
     path: `/api/v1/terminal/ws/${encodeURIComponent(name)}?ticket=${issueTerminalTicket({
       userId: req.user!.userId,

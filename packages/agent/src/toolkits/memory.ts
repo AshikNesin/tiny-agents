@@ -200,12 +200,20 @@ export function createMemoryCapability(store: MemoryStore): Capability {
             {
               name: "remember",
               label: "Saved memory",
+              askLabel: "save a memory",
               description: "Remember a fact about the owner",
             },
           ]
         : []),
       ...(drop
-        ? [{ name: "forget", label: "Forgot memory", description: "Forget a fact about the owner" }]
+        ? [
+            {
+              name: "forget",
+              label: "Forgot memory",
+              askLabel: "forget a memory",
+              description: "Forget a fact about the owner",
+            },
+          ]
         : []),
     ],
   };

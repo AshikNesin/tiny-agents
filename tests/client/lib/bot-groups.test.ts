@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { groupBots, RECENT_FOLD_LIMIT, visibleRecent } from "@/lib/bot-groups";
+import {
+  groupBots,
+  RECENT_FOLD_LIMIT,
+  visibleRecent,
+  previewLine,
+  relativeTime,
+} from "@/lib/bot-groups";
 import type { BotListEntry } from "@/lib/bots-api";
 
 function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
@@ -53,5 +59,24 @@ describe("visibleRecent", () => {
 
   it("does not fold short lists", () => {
     expect(visibleRecent(many.slice(0, 3), false, null)).toHaveLength(3);
+  });
+});
+
+describe("bot row helpers", () => {
+  const now = new Date("2026-10-30T12:00:00").getTime();
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  it("relativeTime reads like a messenger list", () => {
+    expect(relativeTime(ago(20_000), now)).toBe("now");
+    expect(relativeTime(ago(5 * 60_000), now)).toBe("5m");
+    expect(relativeTime(ago(3 * 60 * 60_000), now)).toBe("3h");
+    expect(relativeTime(ago(14 * 60 * 60_000), now)).toBe("Yesterday");
+    expect(relativeTime("not a date", now)).toBe("");
+  });
+
+  it("previewLine flattens markdown and line breaks", () => {
+    expect(previewLine("## Steps\n1. **Gather** `sources`\n\n> quote")).toBe(
+      "Steps 1. Gather sources quote",
+    );
   });
 });

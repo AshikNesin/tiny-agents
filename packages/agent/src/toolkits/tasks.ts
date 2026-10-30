@@ -209,11 +209,37 @@ export function createTasksToolkit(store: TaskStore): Capability {
     description: "Create and manage your tasks",
     extension: createTasksExtension(store),
     tools: [
-      { name: "create_task", label: "Added task", description: "Create a task" },
-      { name: "list_tasks", label: "Listed tasks", description: "List tasks", readOnly: true },
-      { name: "update_task", label: "Updated task", description: "Update a task" },
-      { name: "complete_task", label: "Completed task", description: "Mark a task done" },
-      { name: "delete_task", label: "Deleted task", description: "Delete a task" },
+      {
+        name: "create_task",
+        label: "Added task",
+        askLabel: "add a task",
+        description: "Create a task",
+      },
+      {
+        name: "list_tasks",
+        label: "Listed tasks",
+        askLabel: "list tasks",
+        description: "List tasks",
+        readOnly: true,
+      },
+      {
+        name: "update_task",
+        label: "Updated task",
+        askLabel: "update a task",
+        description: "Update a task",
+      },
+      {
+        name: "complete_task",
+        label: "Completed task",
+        askLabel: "complete a task",
+        description: "Mark a task done",
+      },
+      {
+        name: "delete_task",
+        label: "Deleted task",
+        askLabel: "delete a task",
+        description: "Delete a task",
+      },
     ],
   };
 }

@@ -3,6 +3,10 @@
  * routines.schedule.ts, dispatch in routines.jobs.ts. Every mutation that can
  * move nextRunAt reconciles the pending queue job (cancel the old, enqueue
  * the new), so the queue and the row never disagree.
+ *
+ * Blocked runs (issue #87) count in `blockedStreak`; the third in a row
+ * pauses the routine through the same disarm path as a manual pause and
+ * records why in `pausedReason`. Arming it again (resume) starts over.
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
@@ -14,6 +18,7 @@ import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routi
 import {
   MAX_ROUTINES,
   describeSchedule,
+  isSpentOnce,
   nextOccurrence,
   safeParseSchedule,
   type Schedule,
@@ -32,6 +37,8 @@ type RoutineRow = {
   nextRunAt: Date | null;
   pendingJobId: string | null;
   conversationId: string | null;
+  blockedStreak: number;
+  pausedReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   bot: { id: string; name: string; conversationId: string };
@@ -49,6 +56,10 @@ function toApi(row: RoutineRow) {
     scheduleDescription: schedule ? describeSchedule(schedule) : "Unknown schedule",
     enabled: row.enabled,
     nextRunAt: row.nextRunAt,
+    // A one-time routine past its instant is finished, not paused.
+    done: !row.enabled && schedule !== undefined && isSpentOnce(schedule, new Date()),
+    blockedStreak: row.blockedStreak,
+    pausedReason: row.pausedReason,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -99,14 +110,15 @@ function assertQueueReady(): void {
 
 /** Enable the chain: next occurrence from `from`, queued, handle stored.
  * Arming needs the queue; a boot without it (jobs.enabled false) fails with
- * how to fix instead of an internal error. */
+ * how to fix instead of an internal error. Arming starts the blocked count
+ * over: the owner resumed it, presumably having fixed what blocked it. */
 async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<void> {
   assertQueueReady();
   const now = new Date();
   const next = await enqueueOccurrence(id, schedule, from, now);
   await prisma.routine.update({
     where: { id },
-    data: { enabled: true, nextRunAt: next },
+    data: { enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null },
   });
 }
 
@@ -131,8 +143,23 @@ export async function get(id: string): Promise<ReturnType<typeof toApi>> {
   return toApi(await findRoutine(id));
 }
 
+/** A one-time routine must point at the future when it is created or rescheduled. */
+function assertFutureOnce(schedule: Schedule): void {
+  if (isSpentOnce(schedule, new Date())) {
+    throw Boom.badRequest("Pick a time in the future for a one-time routine");
+  }
+}
+
+/** Re-enabling a one-time routine whose time has passed would arm a slot that already ran. */
+function assertCanArm(schedule: Schedule): void {
+  if (isSpentOnce(schedule, new Date())) {
+    throw Boom.badRequest("This one-time routine already ran. Pick a new time to run it again.");
+  }
+}
+
 export async function create(input: CreateRoutineDTO): Promise<ReturnType<typeof toApi>> {
   await assertBotExists(input.botId);
+  assertFutureOnce(input.schedule);
   const count = await prisma.routine.count();
   if (count >= MAX_ROUTINES) {
     throw Boom.badRequest(`Routine limit reached (${MAX_ROUTINES})`);
@@ -160,6 +187,7 @@ export async function update(
   input: UpdateRoutineDTO,
 ): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
+  if (input.schedule !== undefined) assertFutureOnce(input.schedule);
   const botChanged = input.botId !== undefined && input.botId !== row.botId;
   if (botChanged) await assertBotExists(input.botId!);
   await prisma.routine.update({
@@ -208,6 +236,7 @@ export async function update(
     if (input.enabled && !row.enabled) {
       const schedule = safeParseSchedule(row.schedule);
       if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
+      assertCanArm(schedule);
       await armRoutine(id, schedule, new Date());
     } else if (!input.enabled && row.enabled) {
       await disarmRoutine(id, row.pendingJobId);
@@ -233,8 +262,45 @@ export async function resume(id: string): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
   const schedule = safeParseSchedule(row.schedule);
   if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
-  if (!row.enabled) await armRoutine(id, schedule, new Date());
+  if (!row.enabled) {
+    assertCanArm(schedule);
+    await armRoutine(id, schedule, new Date());
+  }
   return get(id);
+}
+
+/** Blocked runs in a row that pause a routine (issue #87). */
+export const BLOCKED_RUNS_BEFORE_PAUSE = 3;
+const PAUSED_REASON_CHARS = 500;
+
+/**
+ * A run of the routine ended blocked: count it, and pause the routine once
+ * BLOCKED_RUNS_BEFORE_PAUSE runs in a row have. Returns the paused reason
+ * when this run paused it (the caller notifies once), else null; a routine
+ * that is already paused (a manual run) only counts.
+ */
+export async function recordBlockedRun(id: string, reason: string): Promise<string | null> {
+  const row = await prisma.routine.update({
+    where: { id },
+    data: { blockedStreak: { increment: 1 } },
+    select: { enabled: true, pendingJobId: true, blockedStreak: true },
+  });
+  if (!row.enabled || row.blockedStreak < BLOCKED_RUNS_BEFORE_PAUSE) return null;
+  const pausedReason = `Paused after ${row.blockedStreak} blocked runs: ${reason}`.slice(
+    0,
+    PAUSED_REASON_CHARS,
+  );
+  await disarmRoutine(id, row.pendingJobId);
+  await prisma.routine.update({ where: { id }, data: { pausedReason } });
+  return pausedReason;
+}
+
+/** A run of the routine finished some other way: the blocked streak is broken. */
+export async function clearBlockedStreak(id: string): Promise<void> {
+  await prisma.routine.updateMany({
+    where: { id, blockedStreak: { gt: 0 } },
+    data: { blockedStreak: 0 },
+  });
 }
 
 /** Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5). */
@@ -284,6 +350,7 @@ export async function recentRuns(limit: number) {
 
 /** The next N fire times of a schedule from now, for previews and echoes (PRD 5.2). */
 export function previewFireTimes(schedule: Schedule, from: Date, count = 3): Date[] {
+  if (schedule.kind === "once") return [nextOccurrence(schedule, from)];
   const times: Date[] = [];
   let cursor = from;
   for (let i = 0; i < count; i++) {

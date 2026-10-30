@@ -431,12 +431,14 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       {
         name: "web_search",
         label: "Searched the web",
+        askLabel: "search the web",
         description: "Search the web",
         readOnly: true,
       },
       {
         name: "web_fetch",
         label: "Read page",
+        askLabel: "read a page",
         description: "Read a URL as markdown",
         readOnly: true,
       },
@@ -445,6 +447,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
             {
               name: "http_request",
               label: "Called an API",
+              askLabel: "call an API",
               description: "Make an HTTP request, optionally with a vault API key",
             },
           ]

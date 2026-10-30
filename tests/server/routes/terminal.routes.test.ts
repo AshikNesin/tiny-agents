@@ -206,7 +206,7 @@ describe("terminal routes", () => {
     expect(res.body.error.details).toEqual({ process: "vim" });
   });
 
-  it("mints a single-use ticket bound to name+user, 404s unknown names", async () => {
+  it("mints a single-use ticket bound to name+user, with no SSH round trip", async () => {
     const minted = await request(app)
       .post("/api/v1/terminal/sessions/ta-term-1/ticket")
       .set(authorization);
@@ -219,10 +219,13 @@ describe("terminal routes", () => {
     });
     expect(redeemTerminalTicket(ticket, "ta-term-1" as never)).toBeUndefined();
 
+    // Unlisted names still mint (issue #84): the attach reports a missing
+    // tab itself, and the pre-check cost a full SSH handshake.
     const unknown = await request(app)
       .post("/api/v1/terminal/sessions/ta-term-9/ticket")
       .set(authorization);
-    expect(unknown.status).toBe(404);
+    expect(unknown.status).toBe(200);
+    expect(fake.calls.filter((call) => call.startsWith("has"))).toEqual([]);
 
     const foreign = await request(app)
       .post("/api/v1/terminal/sessions/notours/ticket")

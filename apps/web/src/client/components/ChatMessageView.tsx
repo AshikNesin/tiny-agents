@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, Check, Clock, Copy, ExternalLink, KeyRound, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
+import { markdownComponents } from "../lib/markdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import { botsApi } from "../lib/bots-api";
@@ -32,9 +33,45 @@ import { AskedQuestions, QuestionCard } from "./QuestionCard";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import { errorMessage } from "../lib/errors";
 
-/** Round hover action beside a bubble; always visible on touch, where there is no hover. */
-function CopyButton({ text }: { text: string }) {
+/** "14:05" today, "Mon 14:05" this week, "12 Oct, 14:05" before; the full date in the tooltip. */
+function messageTime(at: number, now = Date.now()): { short: string; full: string } {
+  const date = new Date(at);
+  const time = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const full = date.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" });
+  const sameDay = new Date(now).toDateString() === date.toDateString();
+  if (sameDay) return { short: time, full };
+  if (now - at < 6 * 24 * 60 * 60_000) {
+    return { short: `${date.toLocaleDateString(undefined, { weekday: "short" })} ${time}`, full };
+  }
+  const day = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return { short: `${day}, ${time}`, full };
+}
+
+/**
+ * Round hover actions beside a bubble: when it was sent, and copy. Always
+ * visible on touch, where there is no hover.
+ */
+function CopyButton({ text, at }: { text: string; at?: number }) {
+  const stamp = at ? messageTime(at) : undefined;
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-0.5">
+      <CopyAction text={text} />
+      {stamp && (
+        <time
+          dateTime={new Date(at!).toISOString()}
+          title={stamp.full}
+          className="text-muted-foreground text-[11px] leading-none whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+        >
+          {stamp.short}
+        </time>
+      )}
+    </div>
+  );
+}
+
+function CopyAction({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -135,6 +172,15 @@ function formatDuration(ms: number): string {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** A human wait: "40s", "1m 40s", "2h 5m". */
+function formatWait(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
+  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
+}
+
 /** Tool states whose row already shows the bot at work (or waiting on you). */
 export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
   "pending",
@@ -181,15 +227,18 @@ function statusIcon(call: ChatToolCall) {
   }
 }
 
-/** The approval card: an AI Elements Confirmation built on Item. */
+/**
+ * The approval card: an AI Elements Confirmation built on Item. `ask` is the
+ * imperative phrase completing "<bot> wants to …" (issue #85).
+ */
 function ApprovalCard({
   call,
-  label,
+  ask,
   botId,
   botName,
 }: {
   call: ChatToolCall;
-  label: string;
+  ask: string;
   botId: string;
   botName: string;
 }) {
@@ -200,7 +249,7 @@ function ApprovalCard({
     try {
       await botsApi.decideApproval(botId, call.taskId, decision, alwaysAllow);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to answer");
+      toast.error(errorMessage(error, "Failed to answer"));
     } finally {
       setBusy(false);
     }
@@ -209,7 +258,7 @@ function ApprovalCard({
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
-          {botName} wants to {label.toLowerCase()}
+          {botName} wants to {ask}
           {summarizeArgs(call) ? ` — “${summarizeArgs(call)}”` : ""}
         </ItemTitle>
         <ItemDescription>Nothing runs until you answer.</ItemDescription>
@@ -226,7 +275,7 @@ function ApprovalCard({
           variant="ghost"
           disabled={busy}
           onClick={() => decide("approved", call.name)}
-          title={`Approve and stop asking about ${label}`}
+          title={`Approve, and let ${botName} ${ask} without asking`}
         >
           Always allow
         </Button>
@@ -265,7 +314,7 @@ function VaultApprovalCard({
     try {
       await botsApi.decideApproval(botId, call.taskId, decision, undefined, grant);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to answer");
+      toast.error(errorMessage(error, "Failed to answer"));
     } finally {
       setBusy(false);
     }
@@ -393,11 +442,13 @@ function ToolDetailBlock({
 function ToolRow({
   call,
   label,
+  ask,
   botId,
   botName,
 }: {
   call: ChatToolCall;
   label: string;
+  ask: string;
   botId: string;
   botName: string;
 }) {
@@ -454,7 +505,7 @@ function ToolRow({
     }
     return (
       <div data-waiting={`approval:${call.taskId}`}>
-        <ApprovalCard call={call} label={label} botId={botId} botName={botName} />
+        <ApprovalCard call={call} ask={ask} botId={botId} botName={botName} />
       </div>
     );
   }
@@ -509,7 +560,10 @@ function ToolRow({
         </TraceDescription>
       )}
       {call.durationMs !== undefined && (
-        <TraceDescription>{formatDuration(call.durationMs)}</TraceDescription>
+        <TraceDescription>
+          {formatDuration(call.durationMs)}
+          {call.waitedMs ? ` · waited ${formatWait(call.waitedMs)} for you` : ""}
+        </TraceDescription>
       )}
     </TraceLine>
   );
@@ -553,11 +607,22 @@ export function toolLabel(labels: ToolLabels, name: string): string {
   return name.replace(/_/g, " ");
 }
 
+/**
+ * What a tool call asks to do, completing "<bot> wants to …": the tool's
+ * imperative label from the catalog, else "use <display name>" (connection
+ * tools have no imperative label).
+ */
+export function toolAskLabel(askLabels: ToolLabels, labels: ToolLabels, name: string): string {
+  return askLabels[name] ?? `use ${toolLabel(labels, name)}`;
+}
+
 export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
   botId?: string;
   toolLabels?: ToolLabels;
+  /** Tool name → imperative label for approval cards ("open a page"). */
+  toolAskLabels?: ToolLabels;
 }
 
 /**
@@ -571,6 +636,7 @@ export function ChatMessageView({
   botName,
   botId,
   toolLabels = {},
+  toolAskLabels = {},
 }: ChatMessageViewProps) {
   if (message.role === "marker") {
     return (
@@ -611,7 +677,7 @@ export function ChatMessageView({
           )}
           {text && (
             <div className="flex max-w-full min-w-0 items-center gap-2">
-              <CopyButton text={text} />
+              <CopyButton text={text} at={message.createdAt || undefined} />
               <div className={USER_PILL}>
                 <p className="whitespace-pre-wrap">{text}</p>
               </div>
@@ -623,7 +689,7 @@ export function ChatMessageView({
     );
   }
 
-  return assistantView(message, { botName, botId, toolLabels });
+  return assistantView(message, { botName, botId, toolLabels, toolAskLabels });
 }
 
 /** One peer-traffic user message as a Grok-style attributed card. */
@@ -725,7 +791,7 @@ export function PeerIncomingCard({
           data-slot="reply-card"
           className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
         >
-          <Streamdown>{text}</Streamdown>
+          <Streamdown components={markdownComponents}>{text}</Streamdown>
         </div>
         <CopyButton text={text} />
       </div>
@@ -741,9 +807,9 @@ export function PeerIncomingCard({
 
 function assistantView(
   message: ChatMessage,
-  ctx: { botName: string; botId?: string; toolLabels: ToolLabels },
+  ctx: { botName: string; botId?: string; toolLabels: ToolLabels; toolAskLabels: ToolLabels },
 ) {
-  const { botName, botId, toolLabels } = ctx;
+  const { botName, botId, toolLabels, toolAskLabels } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -759,6 +825,7 @@ function assistantView(
                 key={`${call.id}-${i}-${call.name}`}
                 call={call}
                 label={toolLabel(toolLabels, call.name)}
+                ask={toolAskLabel(toolAskLabels, toolLabels, call.name)}
                 botId={botId ?? ""}
                 botName={botName}
               />
@@ -776,7 +843,7 @@ function assistantView(
               data-slot="reply-card"
               className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
             >
-              <Streamdown>{message.text}</Streamdown>
+              <Streamdown components={markdownComponents}>{message.text}</Streamdown>
               {message.status === "error" && (
                 <p className="text-destructive mt-1 text-xs">
                   {message.error ?? "The model returned an error."}
@@ -789,7 +856,7 @@ function assistantView(
                 <p className="text-destructive mt-1 text-xs">{message.error}</p>
               )}
             </div>
-            {message.text && <CopyButton text={message.text} />}
+            {message.text && <CopyButton text={message.text} at={message.createdAt || undefined} />}
           </div>
         )}
         {/* Nothing visible yet: dots, unless a running tool row or the

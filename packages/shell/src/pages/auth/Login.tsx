@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@groot/ui/button";
 import { displayClass, h1Class } from "@groot/ui";
 import { Input } from "@groot/ui/input";
@@ -47,10 +47,26 @@ const FEATURES = [
   { icon: LayoutDashboard, title: "Production UI", desc: "A polished sidebar shell you can ship." },
 ] satisfies LoginFeature[];
 
+/**
+ * Where to go after signing in: the protected page that sent the visitor here
+ * (ProtectedRoute puts it in router state), else home. Router state only ever
+ * holds an in-app location, never an outside URL.
+ */
+export function returnPath(state: unknown): string {
+  const from = (state as { from?: { pathname?: unknown; search?: unknown; hash?: unknown } })?.from;
+  if (!from || typeof from.pathname !== "string" || !from.pathname.startsWith("/")) return "/";
+  if (from.pathname.startsWith("//") || from.pathname === "/login") return "/";
+  const search = typeof from.search === "string" ? from.search : "";
+  const hash = typeof from.hash === "string" ? from.hash : "";
+  return `${from.pathname}${search}${hash}`;
+}
+
 export function Login() {
   const login = useAuthStore((state) => state.login);
   const loginWithPasskey = useAuthStore((state) => state.loginWithPasskey);
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = returnPath(location.state);
   const config = useShellConfig();
   const BrandMark = config.brand?.icon ?? LayoutDashboard;
   const brandLabel = config.brand?.label ?? "Groot";
@@ -63,7 +79,7 @@ export function Login() {
   const onSubmit = async (values: LoginValues) => {
     try {
       await login(values.email, values.password);
-      navigate("/");
+      navigate(destination, { replace: true });
     } catch (error) {
       console.error("Login failed:", error);
       toast.error("Login Failed", {
@@ -75,7 +91,7 @@ export function Login() {
   const handlePasskeyLogin = async () => {
     try {
       await loginWithPasskey();
-      navigate("/");
+      navigate(destination, { replace: true });
     } catch (error) {
       console.error("Passkey sign-in failed:", error);
       toast.error("Passkey Sign-In Failed", {

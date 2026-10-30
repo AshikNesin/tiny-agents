@@ -179,8 +179,12 @@ export function gateTool(
           ? await reviewOnce(tool.name, review, args, api, context)
           : undefined;
       const auto = verdict?.approve === true;
+      // How long the call sat on the owner, so its duration can leave that out.
+      let waitedMs: number | undefined;
       if (ask && !auto) {
+        const waitStarted = Date.now();
         const decision = await waitForDecision(api, tracker, tool.name, context, plan);
+        waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
         if (decision !== "approved") {
           await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
           return decision === "expired"
@@ -189,14 +193,14 @@ export function gateTool(
                   `Nobody answered the approval for this ${tool.name} call in time, so it did not run. Tell the owner what you needed; do not retry it unless asked.`,
                 ),
                 isError: true,
-                details: { approval: "expired" },
+                details: { approval: "expired", waitedMs },
               }
             : {
                 output: text(
                   `The owner denied this ${tool.name} call. Do not retry it unless asked.`,
                 ),
                 isError: true,
-                details: { approval: "denied" },
+                details: { approval: "denied", waitedMs },
               };
         }
         await api.memo("gate:approved", true, context);
@@ -211,6 +215,7 @@ export function gateTool(
             details: {
               interrupted: true,
               ...(ask ? { approval: auto ? "auto" : "approved" } : {}),
+              ...(waitedMs !== undefined ? { waitedMs } : {}),
             },
           };
         }
@@ -227,7 +232,7 @@ export function gateTool(
               review: verdict as unknown as JsonObject,
               result: result.details ?? null,
             }
-          : { approval: "approved", result: result.details ?? null },
+          : { approval: "approved", waitedMs: waitedMs ?? 0, result: result.details ?? null },
       };
     },
   };

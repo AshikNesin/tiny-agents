@@ -4,11 +4,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import type { InboxItem, SubmissionRecord } from "@earendil-works/pi-durable";
 import type { EntryRecord } from "@earendil-works/pi-durable";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
   chatState,
   deriveChat,
   diffChat,
+  pageBefore,
   queuedOf,
+  windowChat,
   CHAT_USER_ENTRY,
   StoreLockedError,
   type ChatEvent,
@@ -86,6 +89,7 @@ function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatSta
 async function observeChat(
   runtime: Awaited<ReturnType<typeof openTestRuntime>>,
   ref: number,
+  options: { window?: number } = {},
 ): Promise<{
   batches: ChatEvent[][];
   state: () => ChatState;
@@ -93,10 +97,14 @@ async function observeChat(
 }> {
   const batches: ChatEvent[][] = [];
   let current: ChatState = { messages: [], busy: false, queued: [] };
-  const subscription = await runtime.watchChat(ref, (events) => {
-    batches.push([...events]);
-    current = applyEvents(current, events);
-  });
+  const subscription = await runtime.watchChat(
+    ref,
+    (events) => {
+      batches.push([...events]);
+      current = applyEvents(current, events);
+    },
+    options,
+  );
   return { batches, state: () => current, stop: () => subscription.stop() };
 }
 
@@ -602,6 +610,69 @@ describe("AgentRuntime", () => {
     }
   });
 
+  it("windows a stream's snapshot to the newest messages and pages older ones (issue #92)", async () => {
+    const runtime = await openTestRuntime({ storePath: ":memory:" });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      for (let i = 0; i < 4; i++) {
+        await runtime.submit(ref, { requestId: `window-${i}`, text: `message ${i}` });
+      }
+      await waitUntil(
+        async () => (await runtime.lastMessage(ref))?.text === "Echo: message 3",
+        "every message to be answered",
+      );
+      const full = (await runtime.readChat(ref)).messages;
+      expect(full).toHaveLength(8);
+
+      const chat = await observeChat(runtime, ref, { window: 3 });
+      expect(chat.batches[0][0]).toMatchObject({
+        type: "snapshot",
+        state: { hasMore: true, cursor: full[5].id, messages: full.slice(5) },
+      });
+
+      // New messages extend the window: nothing older is removed from it.
+      await runtime.submit(ref, { requestId: "window-4", text: "message 4" });
+      await waitUntil(
+        () =>
+          !chat.state().busy &&
+          chat.state().messages.at(-1)?.text === "Echo: message 4" &&
+          chat.state().messages.at(-1)?.status === "done",
+        "the new reply to land",
+      );
+      expect(chat.batches.flat().some((event) => event.type === "remove")).toBe(false);
+      expect(
+        chat.batches
+          .slice(1)
+          .flat()
+          .some((event) => event.type === "snapshot"),
+      ).toBe(false);
+      expect(chat.state().messages.map((m) => m.text)).toEqual([
+        ...full.slice(5).map((m) => m.text),
+        "message 4",
+        "Echo: message 4",
+      ]);
+      await chat.stop();
+
+      // History above the window, page by page.
+      const page = await runtime.readChatPage(ref, { before: full[5].id, limit: 3 });
+      expect(page).toEqual({ messages: full.slice(2, 5), hasMore: true });
+      const last = await runtime.readChatPage(ref, { before: full[2].id, limit: 3 });
+      expect(last).toEqual({ messages: full.slice(0, 2), hasMore: false });
+      expect(await runtime.readChatPage(ref, { before: "e9999", limit: 3 })).toBeUndefined();
+
+      // A short conversation fits its window whole.
+      const other = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      const short = await observeChat(runtime, other, { window: 3 });
+      expect(short.batches[0][0]).toMatchObject({
+        type: "snapshot",
+        state: { messages: [], hasMore: false },
+      });
+      await short.stop();
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("reports finished replies only once the conversation is idle", async () => {
     const runtime = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 5 });
     try {
@@ -737,6 +808,42 @@ describe("transcript derivation", () => {
     });
   });
 
+  it("treats back-to-back inputs answered by one reply as answered", () => {
+    const messages = deriveChat(
+      rawChat([
+        userEntry(1, "queued message"),
+        userEntry(2, "steer message"),
+        assistantEntry(3, "one reply for both"),
+      ]),
+    );
+
+    expect(messages.map((message) => [message.id, message.status])).toEqual([
+      ["e1", "done"],
+      ["e2", "done"],
+      ["e3", "done"],
+    ]);
+  });
+
+  it("still flags a recorded settlement inside a run of inputs", () => {
+    const messages = deriveChat(
+      rawChat(
+        [userEntry(1, "stopped early"), userEntry(2, "asked again"), assistantEntry(3, "answer")],
+        { unanswered: new Map([[1, "aborted"]]) },
+      ),
+    );
+
+    expect(messages[0]).toMatchObject({ id: "e1", status: "unanswered" });
+    expect(messages[1]).toMatchObject({ id: "e2", status: "done" });
+  });
+
+  it("leaves trailing inputs alone while the bot is still working", () => {
+    const state = chatState(
+      rawChat([userEntry(1, "first"), userEntry(2, "second")], { busy: true }),
+    );
+
+    expect(state.messages.map((message) => message.status)).toEqual(["done", "done"]);
+  });
+
   it("emits deltas for append-only text and upserts for a changed message", () => {
     const previous: ChatState = { messages: [assistantMessage("Hel")], busy: true, queued: [] };
     const appended: ChatState = { messages: [assistantMessage("Hello")], busy: true, queued: [] };
@@ -746,6 +853,66 @@ describe("transcript derivation", () => {
     expect(diffChat(previous, changed)).toEqual([
       { type: "upsert", message: assistantMessage("Howdy") },
     ]);
+  });
+
+  it("windows a derived chat without losing the flags at its edge", () => {
+    const state = chatState(
+      rawChat(
+        [
+          userEntry(1, "first"),
+          assistantEntry(2, "answer"),
+          userEntry(3, "never answered"),
+          userEntry(4, "asked again"),
+          assistantEntry(5, "second answer"),
+          userEntry(6, "latest"),
+        ],
+        {
+          busy: true,
+          live: assistantEntry(7, "stream").model?.[0] as AssistantMessage,
+          unanswered: new Map([[3, "aborted"]]),
+        },
+      ),
+    );
+    const windowed = windowChat(state, 5);
+    // e3 is unanswered because the runtime recorded it so, and e6 is not
+    // because the live reply answers it: both judged over the full transcript.
+    expect(windowed?.messages.map((m) => [m.id, m.status])).toEqual([
+      ["e3", "unanswered"],
+      ["e4", "done"],
+      ["e5", "done"],
+      ["e6", "done"],
+      ["live", "streaming"],
+    ]);
+    expect(windowed).toMatchObject({ hasMore: true, cursor: "e3", busy: true });
+
+    // A window that holds everything has nothing more above it.
+    expect(windowChat(state, 50)).toMatchObject({ hasMore: false, cursor: "e1" });
+    // Anchored at an id, the window keeps every message from it on.
+    expect(windowChat(state, 2, "e4")?.messages.map((m) => m.id)).toEqual([
+      "e4",
+      "e5",
+      "e6",
+      "live",
+    ]);
+    expect(windowChat(state, 2, "e99")).toBeUndefined();
+    // An empty chat: no cursor.
+    expect(windowChat(chatState(rawChat([])), 4)).toEqual({
+      messages: [],
+      busy: false,
+      queued: [],
+      hasMore: false,
+    });
+  });
+
+  it("pages the messages before a cursor", () => {
+    const { messages } = chatState(rawChat([1, 2, 3, 4, 5].map((n) => userEntry(n * 2, `m${n}`))));
+    const ids = (page: ReturnType<typeof pageBefore>) => page?.messages.map((m) => m.id);
+    expect(ids(pageBefore(messages, "e10", 2))).toEqual(["e6", "e8"]);
+    expect(pageBefore(messages, "e10", 2)?.hasMore).toBe(true);
+    expect(ids(pageBefore(messages, "e6", 2))).toEqual(["e2", "e4"]);
+    expect(pageBefore(messages, "e6", 2)?.hasMore).toBe(false);
+    expect(pageBefore(messages, "e2", 5)).toEqual({ messages: [], hasMore: false });
+    expect(pageBefore(messages, "e3", 5)).toBeUndefined();
   });
 
   it("emits a queued event only when the queue changes", () => {

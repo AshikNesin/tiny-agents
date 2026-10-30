@@ -8,6 +8,7 @@ import type { RoutineRunCard } from "../lib/chat-types";
 
 const STATUS_WORD: Record<RoutineRunCard["status"], string> = {
   succeeded: "done",
+  blocked: "needs attention",
   failed: "failed",
   missed: "missed",
   cancelled: "cancelled",
@@ -20,19 +21,26 @@ const timeOfDay = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 });
 
-const failedRun = (run: RoutineRunCard) => run.status !== "succeeded";
+const blockedRun = (run: RoutineRunCard) => run.status === "blocked";
+const failedRun = (run: RoutineRunCard) => run.status !== "succeeded" && !blockedRun(run);
+
+/** Amber for a run that needs attention (issue #87), red for one that failed. */
+const statusClass = (run: RoutineRunCard) =>
+  cn(blockedRun(run) && "text-warning", failedRun(run) && "text-destructive");
 
 /**
  * Routine results in the bot's chat (issue #63), kept quiet: one centered
  * line for a run, or for runs that finished back to back, styled like the
  * day divider. Clicking it shows each run's output and error. Rendered from
- * the run rows, never sent to the model.
+ * the run rows, never sent to the model. A blocked run (it could not do its
+ * job, issue #87) reads "needs attention" in amber.
  */
 export function RoutineRuns({ runs }: { runs: RoutineRunCard[] }) {
   const [open, setOpen] = useState(false);
   const latest = runs[runs.length - 1];
   const names = new Set(runs.map((run) => run.routineName));
   const failed = runs.filter(failedRun).length;
+  const blocked = runs.filter(blockedRun).length;
   return (
     <div data-testid="routine-runs" className="flex flex-col items-center gap-1.5">
       <button
@@ -48,11 +56,16 @@ export function RoutineRuns({ runs }: { runs: RoutineRunCard[] }) {
         </span>
         <span aria-hidden>·</span>
         {runs.length === 1 ? (
-          <span className={cn(failed > 0 && "text-destructive")}>{STATUS_WORD[latest.status]}</span>
+          <span className={statusClass(latest)}>{STATUS_WORD[latest.status]}</span>
         ) : (
           <>
             <span>ran {runs.length}×</span>
             {failed > 0 && <span className="text-destructive">{failed} failed</span>}
+            {blocked > 0 && (
+              <span className="text-warning">
+                {blocked} need{blocked === 1 ? "s" : ""} attention
+              </span>
+            )}
           </>
         )}
         <span aria-hidden>·</span>
@@ -87,11 +100,13 @@ function RunDetail({ run, showName }: { run: RoutineRunCard; showName: boolean }
         {timeOfDay.format(new Date(run.finishedAt))}
         {showName ? ` · ${run.routineName}` : ""}
         {" · "}
-        <span className={cn(failedRun(run) && "text-destructive")}>{STATUS_WORD[run.status]}</span>
+        <span className={statusClass(run)}>{STATUS_WORD[run.status]}</span>
         {run.trigger === "manual" ? " · run now" : ""}
       </p>
       {output && <p className="text-foreground text-sm whitespace-pre-wrap">{output}</p>}
-      {run.error && <p className="text-destructive">{run.error}</p>}
+      {run.error && (
+        <p className={blockedRun(run) ? "text-warning" : "text-destructive"}>{run.error}</p>
+      )}
     </div>
   );
 }

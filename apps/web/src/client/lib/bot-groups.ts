@@ -35,3 +35,28 @@ export function visibleRecent(
   const active = activeId ? recent.find((bot) => bot.id === activeId) : undefined;
   return active && !head.includes(active) ? [...head, active] : head;
 }
+
+/** A bot row's activity time: "now", "5m", "3h", "Yesterday", "Mon", "12 Oct". */
+export function relativeTime(iso: string, now = Date.now()): string {
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return "";
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const date = new Date(at);
+  const today = new Date(now);
+  if (date.toDateString() === today.toDateString()) return `${Math.floor(minutes / 60)}h`;
+  const yesterday = new Date(now - 24 * 60 * 60_000);
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  if (now - at < 6 * 24 * 60 * 60_000)
+    return date.toLocaleDateString(undefined, { weekday: "short" });
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+/** One line of a message for a list row: markdown markers and line breaks flattened. */
+export function previewLine(text: string): string {
+  return text
+    .replace(/[*_`#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}

@@ -24,7 +24,7 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
-import { BotsSection } from "./BotsSection";
+import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
 import { openFeedback } from "../../lib/feedback";
 
@@ -205,7 +205,11 @@ export function AppSidebar() {
         <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>
           <BotsSection bots={bots} activeId={activeBotId} onNavigate={closeDrawer} />
         </div>
-        {rail && <div className="hidden flex-1 md:block" />}
+        {rail && (
+          <div className="hidden min-h-0 flex-1 overflow-y-auto md:block">
+            <BotRail bots={bots} activeId={activeBotId} />
+          </div>
+        )}
 
         <div className={cn("shrink-0 p-2.5", rail && "md:flex md:justify-center")}>
           <DropdownMenu>

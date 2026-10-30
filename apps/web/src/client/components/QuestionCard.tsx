@@ -16,6 +16,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "./ui/trace";
+import { errorMessage } from "../lib/errors";
 
 /** Mirrors the agent package's MAX_ANSWER_TEXT (the server rejects longer answers). */
 const MAX_ANSWER_TEXT = 2_000;
@@ -79,7 +80,7 @@ export function QuestionCard({
       await botsApi.answerQuestions(botId, call.taskId, answers);
       // Stay disabled: the stream replaces this card with the answered row.
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send your answers");
+      toast.error(errorMessage(error, "Failed to send your answers"));
       setBusy(false);
     }
   };

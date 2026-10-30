@@ -16,11 +16,23 @@ export interface ToolInfo {
   name: string;
   /** Past-tense label for the transcript ("Searched the web"). */
   label: string;
+  /**
+   * Imperative, lowercase phrase that completes "<bot> wants to …" on an
+   * approval card ("search the web"); the bot editor capitalizes it for the
+   * tool's row. Every built-in tool has one; connection tools fall back to
+   * "use <label>".
+   */
+  askLabel?: string;
   description: string;
   /** Read-only tools default to `allow`; everything else to `ask`. */
   readOnly?: boolean;
   /** Tools that can never run unattended (e.g. `save_skill`): `allow` is not offered. */
   askOnly?: boolean;
+  /**
+   * Offered only where nobody watches (a routine's conversation, issue #87),
+   * e.g. `report_routine_blocked`: removed from the model in chats.
+   */
+  unattendedOnly?: boolean;
 }
 
 export type CapabilityKind = "toolkit" | "skills" | "connection";
@@ -88,6 +100,7 @@ export function createToolSearchCapability(): Capability {
       {
         name: "tool_search",
         label: "Searched tools",
+        askLabel: "search tools",
         description: "Find tools of large connections",
         readOnly: true,
       },

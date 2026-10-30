@@ -13,12 +13,24 @@
  * pre-rendered strings the tools echo back as confirmation cards. The store
  * also rejects mutations from routine-fired turns (the recursion guard,
  * PRD 5.6): that rejection reaches the model as a plain tool error.
+ *
+ * `report_routine_blocked` is offered only in a routine's own conversation
+ * (`unattendedOnly`, issue #87): a run that cannot do its job says why, and
+ * the app records the run as needing attention instead of succeeded. The
+ * call's `reason` argument is the record (`FinishedReply.blocked`); the tool
+ * itself stores nothing.
  */
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import type { Extension, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
+import { isUnattendedConversation } from "../approvals";
 import type { Capability } from "../capabilities";
 import { toolIdempotencyKey } from "./tasks";
+
+/** The tool a routine run calls when it cannot do its job (issue #87). */
+export const REPORT_ROUTINE_BLOCKED = "report_routine_blocked";
+/** The longest blocked reason a run may record. */
+export const MAX_BLOCKED_REASON = 300;
 
 export type RoutineSchedule =
   | { kind: "once"; at: string }
@@ -260,9 +272,38 @@ export function createRoutinesExtension(
       }),
   });
 
+  const reportBlocked = defineTool({
+    name: REPORT_ROUTINE_BLOCKED,
+    description:
+      "Only in a scheduled routine run: report that this run cannot do its job until the owner " +
+      "fixes something (a missing vault login, an approval routines can't get, an account it " +
+      "can't reach). Give the reason as what the owner must do, e.g. \"Needs a vault login for " +
+      'the Gmail account". The run shows as needing attention, and the routine pauses after ' +
+      "3 blocked runs in a row. Don't use it when there was simply nothing to do.",
+    parameters: Type.Object({
+      reason: Type.String({ minLength: 1, maxLength: MAX_BLOCKED_REASON }),
+    }),
+    replay: "safe",
+    execute: async (_args, api, context) => {
+      if (!(await isUnattendedConversation(api, context))) {
+        return fail("Only a scheduled routine run can report itself blocked.");
+      }
+      return ok(
+        "Recorded: this run needs the owner's attention. Finish with a short reply saying what is needed.",
+      );
+    },
+  });
+
   return defineExtension({
     name: "routines",
-    tools: [createRoutine, listRoutines, updateRoutine, deleteRoutine, runRoutineNow],
+    tools: [
+      createRoutine,
+      listRoutines,
+      updateRoutine,
+      deleteRoutine,
+      runRoutineNow,
+      reportBlocked,
+    ],
   });
 }
 
@@ -278,16 +319,46 @@ export function createRoutinesToolkit(
     description: "Schedule recurring or one-time routines for the owner",
     extension: createRoutinesExtension(store, options),
     tools: [
-      { name: "create_routine", label: "Created routine", description: "Create a routine" },
+      {
+        name: "create_routine",
+        label: "Created routine",
+        askLabel: "create a routine",
+        description: "Create a routine",
+      },
       {
         name: "list_routines",
         label: "Listed routines",
+        askLabel: "list routines",
         description: "List routines",
         readOnly: true,
       },
-      { name: "update_routine", label: "Updated routine", description: "Update a routine" },
-      { name: "delete_routine", label: "Deleted routine", description: "Delete a routine" },
-      { name: "run_routine_now", label: "Ran routine now", description: "Run a routine now" },
+      {
+        name: "update_routine",
+        label: "Updated routine",
+        askLabel: "update a routine",
+        description: "Update a routine",
+      },
+      {
+        name: "delete_routine",
+        label: "Deleted routine",
+        askLabel: "delete a routine",
+        description: "Delete a routine",
+      },
+      {
+        name: "run_routine_now",
+        label: "Ran routine now",
+        askLabel: "run a routine now",
+        description: "Run a routine now",
+      },
+      {
+        name: REPORT_ROUTINE_BLOCKED,
+        label: "Reported the routine blocked",
+        askLabel: "report this routine run blocked",
+        description: "Flag a routine run that can't do its job",
+        // Writes nothing (it only marks the run), and a routine can't ask for approval.
+        readOnly: true,
+        unattendedOnly: true,
+      },
     ],
   };
 }

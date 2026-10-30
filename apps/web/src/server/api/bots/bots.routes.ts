@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { createRouter } from "@groot/core/utils/router.utils";
-import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
+import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
-import { isGatewayConfigured } from "@tiny-agents/agent";
+import { CHAT_WINDOW, isGatewayConfigured } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
@@ -13,6 +13,7 @@ import { chatCards, onRoutineCard } from "../routines/routines.cards";
 import {
   answerQuestionsSchema,
   approvalSchema,
+  chatHistorySchema,
   createBotSchema,
   pinBotSchema,
   updateBotSchema,
@@ -86,9 +87,16 @@ router.get("/bots/:id/stream", async (req: Request, res: Response) => {
     const heartbeat = initSse(res);
     const unwatch = watchBot(bot.id);
     res.on("close", unwatch);
-    subscription = await getAgentRuntime().watchChat(Number(bot.conversationId), (events) => {
-      for (const event of events) writeSse(res, event);
-    });
+    // Only the newest messages (issue #92): older ones load on scroll from
+    // GET /bots/:id/messages, so an open or reconnect stays the same size
+    // however long the conversation gets.
+    subscription = await getAgentRuntime().watchChat(
+      Number(bot.conversationId),
+      (events) => {
+        for (const event of events) writeSse(res, event);
+      },
+      { window: CHAT_WINDOW },
+    );
     // Routine results (issue #63): cards beside the transcript, not in it.
     // Follow first, then list, so a run finishing in between still arrives
     // (the client dedupes by id).
@@ -138,6 +146,12 @@ router.delete("/bots/:id", async (req: Request) => {
 });
 
 // ── Chat actions ──────────────────────────────────────────────────────
+
+router.get("/bots/:id/messages", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const query = parseQuery(req, chatHistorySchema);
+  return await botsService.chatHistory(id, query);
+});
 
 router.post("/bots/:id/messages", async (req: Request) => {
   const id = parseStringParam(req.params.id, "id");

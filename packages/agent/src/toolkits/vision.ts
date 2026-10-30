@@ -119,6 +119,7 @@ export function createVisionToolkit(store: VisionStore, transcriber: Transcriber
       {
         name: "see_image",
         label: "Looked at an image",
+        askLabel: "look at an image",
         description: "Transcribe an attached image through a vision model",
         readOnly: true,
       },

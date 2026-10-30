@@ -147,3 +147,85 @@ describe("BotDialog browser profile", () => {
     );
   });
 });
+
+describe("BotDialog tools at scale (issue #91)", () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    name: `notion_tool_${i}`,
+    label: `Ran Notion tool ${i}`,
+    askLabel: i === 3 ? "delete a Notion page" : `run Notion tool ${i}`,
+    description: i === 3 ? "Remove a page" : "Do a Notion thing",
+    readOnly: i % 2 === 0,
+  }));
+  const withNotion = () =>
+    vi.mocked(botsApi.capabilities).mockResolvedValueOnce([
+      { id: "notion", kind: "toolkit", name: "Notion", description: "Docs", tools: many },
+      {
+        id: "tasks",
+        kind: "toolkit",
+        name: "Tasks",
+        description: "Tasks",
+        tools: [{ name: "tasks.add", label: "Added task", description: "Create a task" }],
+      },
+    ] as never);
+
+  it("collapses a big toolkit, summarises it, and sets all its tools at once", async () => {
+    withNotion();
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+
+    const header = await screen.findByRole("button", { name: /Notion/ });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("12 tools · 6 allow · 6 ask")).toBeInTheDocument();
+    expect(screen.queryByText("Delete a Notion page")).toBeNull();
+    // A small toolkit starts open, titled by what each tool does.
+    expect(screen.getByText("Added task")).toBeInTheDocument();
+
+    const all = screen.getByRole("radiogroup", { name: "All Notion tools" });
+    expect(screen.getByText("Mixed")).toBeInTheDocument();
+    await user.click(within(all).getByRole("radio", { name: "Off" }));
+    expect(screen.getByText("12 tools · 12 off")).toBeInTheDocument();
+    expect(screen.queryByText("Mixed")).toBeNull();
+
+    await user.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Delete a Notion page")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    const saved = vi.mocked(botsApi.update).mock.lastCall?.[1] as {
+      toolPermissions: Record<string, string>;
+    };
+    expect(saved.toolPermissions.notion_tool_0).toBe("off");
+    expect(saved.toolPermissions.notion_tool_11).toBe("off");
+  });
+
+  it("searches across toolkits and opens the groups with matches", async () => {
+    withNotion();
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+
+    await user.type(
+      await screen.findByRole("searchbox", { name: "Search tools" }),
+      "notion delete",
+    );
+    expect(screen.getByText("Delete a Notion page")).toBeInTheDocument();
+    expect(screen.queryByText("Run Notion tool 1")).toBeNull();
+    expect(screen.queryByText("Added task")).toBeNull();
+
+    await user.clear(screen.getByRole("searchbox", { name: "Search tools" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search tools" }), "zzz");
+    expect(screen.getByText("No tools match “zzz”.")).toBeInTheDocument();
+  });
+
+  it("applies the Ask for everything preset", async () => {
+    withNotion();
+    const user = userEvent.setup();
+    render(<BotDialog open onOpenChange={() => {}} models={models} bot={bot} onSaved={() => {}} />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+
+    await user.click(await screen.findByRole("button", { name: "Ask for everything" }));
+    expect(screen.getByText("12 tools · 12 ask")).toBeInTheDocument();
+    expect(screen.getByText("13 ask")).toBeInTheDocument();
+  });
+});

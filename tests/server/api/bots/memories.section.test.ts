@@ -53,6 +53,7 @@ it(
     expect(capability.tools).toContainEqual({
       name: "remember",
       label: "Saved memory",
+      askLabel: "save a memory",
       description: "Remember a fact about the owner",
     });
     rt = await openTestRuntime({

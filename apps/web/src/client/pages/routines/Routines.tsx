@@ -2,6 +2,8 @@
  * Routines page (issue #18 phase B, PRD 5.8): upcoming runs, active
  * schedules, recent executions, and the editor dialog with a live
  * next-3-runs preview. All times render in IST; there is no timezone picker.
+ * A run that could not do its job shows as "Needs attention" in amber, and
+ * a routine the app paused after blocked runs says why (issue #87).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +17,7 @@ import {
   Play,
   Plus,
   Repeat,
+  RotateCcw,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -62,26 +65,23 @@ import {
   onceAtFromIstInput,
   previewFireTimes,
 } from "../../lib/routines-schedule";
+import { errorMessage } from "../../lib/errors";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 const RUN_STATUS_VARIANT: Record<RoutineRun["status"], string> = {
   awaiting: "pending",
   succeeded: "success",
+  blocked: "warning",
   failed: "failed",
   missed: "warning",
   cancelled: "cancelled",
 };
 
-/** Prefer the server's error message (Boom) over axios's generic text. */
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error) {
-    const message = (error as { response?: { data?: { error?: { message?: string } } } }).response
-      ?.data?.error?.message;
-    if (message) return message;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+/** Status words where the stored value doesn't read well. */
+const RUN_STATUS_LABEL: Partial<Record<RoutineRun["status"], string>> = {
+  blocked: "needs attention",
+};
 
 /** Seconds between two ISO strings, when both are present. */
 function durationSeconds(run: RoutineRun): number | null {
@@ -222,7 +222,8 @@ export function Routines() {
                     busyId !== null &&
                     (busyId === routine.id + "run" ||
                       busyId === routine.id + "remove" ||
-                      busyId === routine.id + "toggle")
+                      busyId === routine.id + "toggle" ||
+                      busyId === routine.id + "resume")
                   }
                   onEdit={() => {
                     setEditing(routine);
@@ -230,6 +231,9 @@ export function Routines() {
                   }}
                   onDelete={() => void remove(routine)}
                   onRunNow={() => void runNow(routine)}
+                  onResume={() =>
+                    void act(routine.id, () => routinesApi.resume(routine.id), "resume")
+                  }
                   onToggle={(enabled) =>
                     void act(
                       routine.id,
@@ -273,7 +277,10 @@ export function Routines() {
                   {runs.map((run) => (
                     <li key={run.id} className={cn(listRowClass, "flex-col items-start")}>
                       <div className="flex w-full items-center gap-3">
-                        <StatusBadge status={RUN_STATUS_VARIANT[run.status]} label={run.status} />
+                        <StatusBadge
+                          status={RUN_STATUS_VARIANT[run.status]}
+                          label={RUN_STATUS_LABEL[run.status] ?? run.status}
+                        />
                         <span className="min-w-0 flex-1 truncate text-sm">
                           {run.routineName ?? "Routine"}
                         </span>
@@ -299,7 +306,13 @@ export function Routines() {
                         {run.error && (
                           <>
                             {" · "}
-                            <span className="text-destructive">{run.error}</span>
+                            <span
+                              className={
+                                run.status === "blocked" ? "text-warning" : "text-destructive"
+                              }
+                            >
+                              {run.error}
+                            </span>
                           </>
                         )}
                       </p>
@@ -335,6 +348,7 @@ function RoutineCard({
   onEdit,
   onDelete,
   onRunNow,
+  onResume,
   onToggle,
 }: {
   routine: Routine;
@@ -342,8 +356,11 @@ function RoutineCard({
   onEdit: () => void;
   onDelete: () => void;
   onRunNow: () => void;
+  onResume: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
+  const autoPaused = !routine.enabled && routine.pausedReason !== null;
+  const blocked = routine.enabled && routine.blockedStreak > 0;
   return (
     <Card>
       <div className="flex items-start gap-3 px-4 pt-4">
@@ -351,29 +368,52 @@ function RoutineCard({
           <div className="flex items-center gap-2">
             <Repeat className="size-4 shrink-0 text-muted-foreground" />
             <p className="truncate text-sm font-medium">{routine.name}</p>
+            {(autoPaused || blocked) && (
+              <StatusBadge status="warning" label="Needs attention" className="shrink-0" />
+            )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {routine.botName} · {routine.scheduleDescription}
           </p>
-          <p
-            className={cn(
-              "mt-1 text-xs",
-              routine.enabled ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            {routine.enabled && routine.nextRunAt
-              ? `Next run ${formatIst(routine.nextRunAt)}`
-              : "Paused"}
-          </p>
+          {autoPaused ? (
+            <p className="mt-1 text-xs text-warning">{routine.pausedReason}</p>
+          ) : (
+            <p
+              className={cn(
+                "mt-1 text-xs",
+                routine.enabled ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {routine.enabled && routine.nextRunAt
+                ? `Next run ${formatIst(routine.nextRunAt)}`
+                : routine.done
+                  ? "Done · edit to pick a new time"
+                  : "Paused"}
+            </p>
+          )}
+          {blocked && (
+            <p className="mt-1 text-xs text-warning">
+              {routine.blockedStreak === 1
+                ? "The last run was blocked."
+                : `The last ${routine.blockedStreak} runs were blocked.`}{" "}
+              It pauses after 3 in a row.
+            </p>
+          )}
         </div>
         <Switch
           checked={routine.enabled}
-          disabled={busy}
+          disabled={busy || routine.done}
           onCheckedChange={onToggle}
           aria-label={routine.enabled ? `Pause ${routine.name}` : `Resume ${routine.name}`}
         />
       </div>
       <div className="flex items-center gap-2 px-4 pb-4">
+        {autoPaused && (
+          <Button variant="outline" size="sm" onClick={onResume} disabled={busy}>
+            <RotateCcw className="size-3.5" />
+            Resume
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onRunNow} disabled={busy}>
           <Play className="size-3.5" />
           Run now
@@ -496,7 +536,9 @@ function compileSchedule(
   switch (form.kind) {
     case "once": {
       if (!form.onceAt) return { error: "Pick a date and time (IST)" };
-      return { schedule: { kind: "once", at: onceAtFromIstInput(form.onceAt) } };
+      const at = onceAtFromIstInput(form.onceAt);
+      if (new Date(at).getTime() <= Date.now()) return { error: "Pick a time in the future" };
+      return { schedule: { kind: "once", at } };
     }
     case "daily": {
       const [hour, minute] = form.dailyTime.split(":").map(Number);
@@ -695,6 +737,7 @@ function RoutineEditor({
                   <Input
                     type="datetime-local"
                     aria-label="Run at (IST)"
+                    min={istInputFromAt(new Date().toISOString())}
                     value={form.onceAt}
                     onChange={(e) => set("onceAt", e.target.value)}
                   />

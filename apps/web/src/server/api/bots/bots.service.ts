@@ -11,12 +11,15 @@ import {
   ApprovalNotPendingError,
   InvalidAnswersError,
   QuestionNotPendingError,
+  closeBrowserSession,
+  closeBrowserTab,
   sanitizePeerText,
   stripPeerEnvelope,
   type AttachmentRef,
   type OwnerAnswer,
 } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
+import { browserTargetForBot } from "./browser.targets";
 import {
   findBotRow,
   startBotConversation,
@@ -26,7 +29,7 @@ import {
   type Bot,
   type BotRow,
 } from "./bots.conversation";
-import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
+import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -35,6 +38,7 @@ export type BotAgentRuntime = Pick<
   | "submit"
   | "abort"
   | "withdraw"
+  | "readChatPage"
   | "hasModel"
   | "listModels"
   | "busyConversations"
@@ -115,10 +119,29 @@ export async function getBot(id: string): Promise<Bot> {
   return toBot(await findBotRow(id));
 }
 
+/** Names compare case-insensitively after trimming: "  echo " is "Echo". */
+function nameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Bot names are unique (issue #80): an @mention, a message_bot `to` and the
+ * pickers all tell bots apart by name. 409 when another bot has it; `selfId`
+ * lets a bot keep its own name or change only its case. Compared in JS, not
+ * SQL: SQLite has no case-insensitive `mode`, and the roster is small.
+ */
+async function assertNameFree(name: string, selfId?: string): Promise<void> {
+  const rows = await prisma.bot.findMany({ select: { id: true, name: true } });
+  const taken = rows.find((row) => row.id !== selfId && nameKey(row.name) === nameKey(name));
+  if (taken) throw Boom.conflict(`A bot named "${taken.name}" already exists`);
+}
+
 export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
   if (!rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
+  // Before the conversation exists, so a refused name leaves nothing behind.
+  await assertNameFree(data.name);
   const toolPermissions = data.toolPermissions ?? {};
   const conversationId = await startBotConversation(
     {
@@ -186,6 +209,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   if (data.modelId !== undefined && !rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
+  if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);
   await prisma.bot.update({
     where: { id },
@@ -220,6 +244,21 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
   }
 }
 
+/**
+ * A deleted bot's browser goes with it (issue #88): its tab in the shared
+ * browser closes, and a browser of its own closes with its profile (cookies,
+ * logins) wiped. Best effort: a browser hiccup never fails the delete.
+ */
+async function releaseBrowser(bot: { id: string; browserProfile: string }): Promise<void> {
+  const target = browserTargetForBot(bot);
+  try {
+    if (bot.browserProfile === "own") await closeBrowserSession(target, { wipeProfile: true });
+    else await closeBrowserTab(target);
+  } catch (error) {
+    logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's browser");
+  }
+}
+
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await findBotRow(id);
   // Its routines go with it (cascade), and their conversations (issue #63).
@@ -232,6 +271,7 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
   await retireConversation(rt, bot.conversationId);
   await Promise.all(routines.map((routine) => retireConversation(rt, routine.conversationId!)));
+  await releaseBrowser(bot);
   return toBot(deleted);
 }
 
@@ -341,6 +381,17 @@ async function deliverMentions(
       logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
     }
   }
+}
+
+/**
+ * Transcript messages older than `before` (issue #92): the chat stream sends
+ * only the newest ones, and the client loads the rest as the owner scrolls up.
+ */
+export async function chatHistory(id: string, query: ChatHistoryDTO) {
+  const bot = await getBot(id);
+  const page = await runtime().readChatPage(Number(bot.conversationId), query);
+  if (!page) throw Boom.badRequest("Unknown message cursor");
+  return page;
 }
 
 export async function abortReply(id: string) {

@@ -56,6 +56,8 @@ export interface ChatToolCall {
   /** Result text for the user (bounded). */
   output?: string;
   durationMs?: number;
+  /** Time the call waited for the owner's approval (not part of durationMs). */
+  waitedMs?: number;
   /** Durable tool task id: what approval decisions address. */
   taskId?: number;
   /**
@@ -202,6 +204,20 @@ export interface ChatState {
   busy: boolean;
   /** Owner inputs waiting behind (or steering into) the running reply. */
   readonly queued: readonly QueuedMessage[];
+  /**
+   * Windowed states only (a chat stream's snapshot, issue #92): older
+   * messages exist before `messages[0]`, fetched with `readChatPage`.
+   */
+  hasMore?: boolean;
+  /** Windowed states only: the oldest message id in the window. */
+  cursor?: string;
+}
+
+/** A page of older messages (see `AgentRuntime.readChatPage`), oldest first. */
+export interface ChatPage {
+  messages: ChatMessage[];
+  /** Still older messages exist before `messages[0]`. */
+  hasMore: boolean;
 }
 
 export type ChatEvent =
@@ -256,6 +272,8 @@ export interface FinishedReply {
   error?: string;
   /** Tools this message called that were refused for want of an approval (unattended runs). */
   refused?: string[];
+  /** The reason this message's `report_routine_blocked` call gave (routine runs, issue #87). */
+  blocked?: string;
 }
 
 /** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */

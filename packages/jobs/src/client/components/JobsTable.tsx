@@ -205,7 +205,8 @@ export function JobsTable({
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                              aria-label={`Actions for job ${job.name} (${formatJobId(job.id)})`}
+                              className="relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                             >
                               <MoreVertical className="size-3.5" />
                             </Button>

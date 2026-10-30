@@ -198,6 +198,28 @@ describe("Terminal page", () => {
     await waitFor(() => expect(tab.querySelector("span[title='Reconnecting']")).toBeNull());
   });
 
+  it("says it is connecting while the first list is in flight", async () => {
+    let answer!: (value: unknown) => void;
+    listMock.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    mount();
+    expect(await screen.findByText("Connecting to sandbox…")).toBeTruthy();
+    expect(screen.queryByText("No tabs open")).toBeNull();
+    await act(async () => answer(ready([])));
+    expect(await screen.findByText("No tabs open")).toBeTruthy();
+  });
+
+  it("shows Connecting to sandbox in the pane until the first pty bytes", async () => {
+    listMock.mockResolvedValue(ready([session(1)]));
+    mount();
+    expect(await screen.findByTestId("terminal-connecting-ta-term-1")).toBeTruthy();
+    await waitFor(() => expect(connections.length).toBeGreaterThan(0));
+    // The socket opening is not enough: tmux has not painted anything yet.
+    act(() => connections[0]!.handlers.onStateChange("live"));
+    expect(screen.getByTestId("terminal-connecting-ta-term-1")).toBeTruthy();
+    act(() => connections[0]!.handlers.onData(new Uint8Array([36, 32])));
+    await waitFor(() => expect(screen.queryByTestId("terminal-connecting-ta-term-1")).toBeNull());
+  });
+
   it("switches the active tab on click", async () => {
     listMock.mockResolvedValue(ready([session(1), session(2)]));
     mount();

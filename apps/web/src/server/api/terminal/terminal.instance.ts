@@ -11,6 +11,7 @@ import {
   type HostKeyStore,
   type TerminalService,
 } from "@tiny-agents/agent";
+import { sandboxHost } from "../bots/sandbox-host";
 
 const unquote = (value: string | undefined) =>
   value
@@ -41,7 +42,7 @@ let overridden = false;
 export function getTerminalService(): TerminalService {
   if (instance) return instance;
   const service = createTerminalService({
-    host: unquote(process.env.SANDBOX_HOST),
+    host: sandboxHost(),
     port: process.env.SANDBOX_PORT ? Number(process.env.SANDBOX_PORT) : undefined,
     user: unquote(process.env.SANDBOX_USER),
     hostKeys: kvHostKeyStore(),

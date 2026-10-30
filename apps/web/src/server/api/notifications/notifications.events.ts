@@ -244,6 +244,26 @@ export function routineFailed(
   };
 }
 
+/**
+ * A routine the app paused after blocked runs in a row (issue #87): the one
+ * push for the whole streak, never one per blocked run.
+ */
+export function routinePausedBlocked(run: RoutineRunRef, reason: string): Notification {
+  return {
+    event: "routine.failed",
+    category: "notify",
+    title: `⏸️ ${run.routineName} paused`,
+    message:
+      scrubText(reason) ??
+      "It was blocked several runs in a row. Fix what it needs, then resume it.",
+    path: "/routines",
+    urlTitle: "Open routines",
+    priority: 0,
+    dedupeKey: `routine:${run.runId}:paused-blocked`,
+    botId: run.bot.id,
+  };
+}
+
 export function runFailed(bot: BotRef, replyAt: number, error?: string): Notification {
   return {
     event: "run.failed",

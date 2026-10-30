@@ -43,6 +43,7 @@ import { useConfirm } from "@groot/ui/primitives";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
 import { VncView, type VncHandle, type VncState } from "./browser/VncView";
+import { errorMessage } from "../lib/errors";
 
 const WIDTH_KEY = "tiny-agents:browser-panel-width";
 const DEFAULT_WIDTH = 640;
@@ -52,8 +53,14 @@ const LOCKED_KEYS = ["Escape", "Tab", "KeyW", "KeyT", "KeyN", "KeyL", "KeyR", "F
 
 type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
 
+/** Room the docked panel leaves for the sidebar (256px) and a usable chat (416px). */
+const RESERVED_WIDTH = 672;
+
 function maxWidth(): number {
-  return Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.75));
+  return Math.max(
+    MIN_WIDTH,
+    Math.min(Math.floor(window.innerWidth * 0.75), window.innerWidth - RESERVED_WIDTH),
+  );
 }
 
 function clampWidth(value: number): number {
@@ -151,7 +158,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       // Releasing makes the agent adopt the tab the owner left in front.
       if (driver === "agent") await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to switch driver");
+      toast.error(errorMessage(error, "Failed to switch driver"));
     }
   };
 
@@ -160,7 +167,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       await botsApi.browserStart(bot.id);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to open the browser");
+      toast.error(errorMessage(error, "Failed to open the browser"));
     }
   };
 
@@ -186,7 +193,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
           : "Browser profile wiped; the next session starts fresh.",
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset");
+      toast.error(errorMessage(error, "Failed to reset"));
     }
   };
 
@@ -243,8 +250,11 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
   // window fitted to it) fills the display.
   const sizing = fullscreen
     ? "fixed inset-0 z-40 w-full bg-background"
-    : "fixed inset-0 z-40 bg-background md:static md:z-auto md:h-full md:w-(--browser-panel-width) md:shrink-0 md:bg-transparent md:p-2 md:pl-0";
-  const surface = fullscreen ? "rounded-none ring-0" : "max-md:rounded-none max-md:ring-0";
+    : // Docked beside the chat only where both fit (xl, and never wider than
+      // the viewport leaves after the sidebar and a 26rem chat); narrower
+      // screens get the panel over the chat, closable, like phones (#89).
+      "fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0";
+  const surface = fullscreen ? "rounded-none ring-0" : "max-xl:rounded-none max-xl:ring-0";
 
   return (
     <div
@@ -259,7 +269,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
           aria-orientation="vertical"
           aria-label="Resize browser panel"
           onPointerDown={startResize}
-          className="absolute inset-y-0 left-0 z-10 hidden w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-border md:block"
+          className="absolute inset-y-0 left-0 z-10 hidden w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-border xl:block"
           data-testid="browser-resize"
         />
       )}

@@ -7,6 +7,16 @@ import { test, expect } from "@playwright/test";
  * playwright.config (scripted echo model, no network).
  */
 
+/**
+ * Whether a bot whose name matches exists, asked of the API: the sidebar may
+ * not have loaded yet, and creating a second bot of a name now fails (issue #80).
+ */
+async function hasBotNamed(page: import("@playwright/test").Page, name: RegExp): Promise<boolean> {
+  const response = await page.request.get("/api/v1/bots");
+  const body = (await response.json()) as { data?: { name: string }[] };
+  return (body.data ?? []).some((entry) => name.test(entry.name));
+}
+
 test.describe("Chats", () => {
   test("create a bot and chat with a streamed reply that survives a refresh", async ({ page }) => {
     await page.goto("/login");
@@ -29,7 +39,8 @@ test.describe("Chats", () => {
     await expect(page.getByRole("button", { name: "Test Model (faux)" })).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByLabel("Name").fill("Echo Bot");
+    // Bot names are unique (issue #80), and the database outlives a run.
+    await page.getByLabel("Name").fill(`Echo Bot ${Date.now()}`);
     await page.getByRole("button", { name: /create bot/i }).click();
     await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
 
@@ -58,10 +69,7 @@ test.describe("Chats", () => {
     await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure at least one bot exists, then stay on the list (no chat open).
-    const hasBot = await page
-      .getByRole("link", { name: /echo bot/i })
-      .first()
-      .isVisible();
+    const hasBot = await hasBotNamed(page, /echo bot/i);
     if (!hasBot) {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Echo Bot");
@@ -83,10 +91,7 @@ test.describe("Chats — new chat", () => {
     await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure a bot with some history exists.
-    const hasBot = await page
-      .getByRole("link", { name: /reset bot/i })
-      .first()
-      .isVisible();
+    const hasBot = await hasBotNamed(page, /reset bot/i);
     if (!hasBot) {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Reset Bot");
@@ -125,10 +130,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure a bot exists.
-    const hasBot = await page
-      .getByRole("link", { name: /attach bot/i })
-      .first()
-      .isVisible();
+    const hasBot = await hasBotNamed(page, /attach bot/i);
     if (!hasBot) {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Attach Bot");
@@ -179,10 +181,7 @@ test.describe("Chats — attachments (issue #17)", () => {
     await page.getByLabel(/password/i).fill("demo@example.com");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
-    const hasBot = await page
-      .getByRole("link", { name: /attach bot/i })
-      .first()
-      .isVisible();
+    const hasBot = await hasBotNamed(page, /attach bot/i);
     if (!hasBot) {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Attach Bot");
@@ -224,10 +223,7 @@ test.describe("Chats — steering (issue #9)", () => {
     await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 
     // Ensure the bot exists.
-    const hasBot = await page
-      .getByRole("link", { name: /steer bot/i })
-      .first()
-      .isVisible();
+    const hasBot = await hasBotNamed(page, /steer bot/i);
     if (!hasBot) {
       await page.getByRole("button", { name: /new bot/i }).click();
       await page.getByLabel("Name").fill("Steer Bot");

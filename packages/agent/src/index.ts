@@ -121,6 +121,7 @@ export {
 } from "./terminal/terminal";
 export {
   createSsh2TerminalTransport,
+  type Ssh2TerminalTransport,
   type Ssh2TerminalTransportOptions,
 } from "./terminal/terminal-ssh2";
 export {
@@ -154,6 +155,7 @@ export {
   normalizeCredentialRequest,
   closeAllBrowserSessions,
   closeBrowserSession,
+  closeBrowserTab,
   conversationBrowserTarget,
   createBrowserToolkit,
   setDriver,
@@ -179,6 +181,8 @@ export {
   createRoutinesExtension,
   createRoutinesToolkit,
   confirmationCard,
+  MAX_BLOCKED_REASON,
+  REPORT_ROUTINE_BLOCKED,
   type RoutineCreateInput,
   type RoutineRecord,
   type RoutineSchedule,
@@ -244,6 +248,9 @@ export {
   deriveChat,
   diffChat,
   chatState,
+  windowChat,
+  pageBefore,
+  CHAT_WINDOW,
   CHAT_USER_ENTRY,
   peerOf,
   attachmentsOf,

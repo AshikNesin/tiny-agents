@@ -24,6 +24,7 @@ import { DataField, DataFields } from "@groot/ui/display";
 import { Streamdown } from "streamdown";
 import { skillsApi, type Skill, type SkillPreview } from "../../lib/skills-api";
 import { SkillFileList } from "./SkillFileList";
+import { errorMessage } from "../../lib/errors";
 
 type Mode = "paste" | "github";
 
@@ -70,7 +71,7 @@ export function ImportSkillDialog({
           : await skillsApi.preview({ source: "github", url: url.trim() });
       setPreview(parsed);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to preview skill");
+      toast.error(errorMessage(error, "Failed to preview skill"));
     } finally {
       setLoading(false);
     }
@@ -91,7 +92,7 @@ export function ImportSkillDialog({
       onOpenChange(false);
       onInstalled(skill);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to install skill");
+      toast.error(errorMessage(error, "Failed to install skill"));
     } finally {
       setInstalling(false);
     }

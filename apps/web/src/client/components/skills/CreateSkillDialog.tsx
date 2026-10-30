@@ -15,6 +15,7 @@ import { Input } from "@groot/ui/input";
 import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import { skillsApi, type Skill } from "../../lib/skills-api";
+import { errorMessage } from "../../lib/errors";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -53,7 +54,7 @@ export function CreateSkillDialog({
       onOpenChange(false);
       onCreated(skill);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create skill");
+      toast.error(errorMessage(error, "Failed to create skill"));
     } finally {
       setSaving(false);
     }

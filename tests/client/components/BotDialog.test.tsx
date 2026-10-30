@@ -2,19 +2,21 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
+import { AxiosError, AxiosHeaders } from "axios";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
 import type { Bot, ModelInfo } from "@/lib/bots-api";
 
 const removeMock = vi.fn().mockResolvedValue(undefined);
+const createMock = vi.fn();
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
     // Real wire shape: the route returns { capabilities } and the client
     // unwraps it — mock the unwrapped result here.
     capabilities: vi.fn().mockResolvedValue([]),
-    create: vi.fn(),
+    create: (...args: unknown[]) => createMock(...args),
     remove: (...args: unknown[]) => removeMock(...args),
   },
 }));
@@ -84,11 +86,15 @@ describe("BotDialog", () => {
       />,
     );
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Delete bot" }));
+    // The Profile tab (phones) and the footer (wider screens) each offer it.
+    const offers = screen.getAllByRole("button", { name: "Delete bot" });
+    expect(offers).toHaveLength(2);
+    await user.click(offers[1]);
     expect(screen.getByText("Delete Ada? This cannot be undone.")).toBeTruthy();
     expect(removeMock).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Delete bot" }));
+    // The confirmation's button replaces the footer, after the Profile tab's.
+    await user.click(screen.getAllByRole("button", { name: "Delete bot" }).at(-1)!);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(bot));
     expect(removeMock).toHaveBeenCalledWith("b1");
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -99,5 +105,42 @@ describe("BotDialog", () => {
       <BotDialog open onOpenChange={() => {}} models={models} bot={null} onSaved={() => {}} />,
     );
     expect(screen.queryByRole("button", { name: "Delete bot" })).toBeNull();
+  });
+
+  it("shows a taken name under the Name field, in the server's words (issue #80)", async () => {
+    const message = 'A bot named "Echo" already exists';
+    createMock.mockRejectedValueOnce(
+      new AxiosError("Request failed with status code 409", "ERR_BAD_REQUEST", undefined, null, {
+        status: 409,
+        statusText: "Conflict",
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+        data: { success: false, error: { message } },
+      }),
+    );
+    const onOpenChange = vi.fn();
+    render(
+      <BotDialog
+        open
+        onOpenChange={onOpenChange}
+        models={models}
+        defaultModelId="test-model"
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    const user = userEvent.setup();
+    const name = screen.getByLabelText("Name");
+    await user.type(name, " echo ");
+    await user.click(screen.getByRole("button", { name: /create bot/i }));
+
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ name: "echo" }));
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    // Editing the name clears the error.
+    await user.type(name, "2");
+    expect(screen.queryByText(message)).toBeNull();
   });
 });

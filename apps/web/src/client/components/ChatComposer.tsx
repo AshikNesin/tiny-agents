@@ -11,18 +11,29 @@ import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
-import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
+import {
+  activeMentionToken,
+  mentionableBots,
+  resolveMentions,
+  trackPickedMentions,
+  type PickedMention,
+} from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
-import { StagedAttachment, type StagedItem } from "./Attachments";
+import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
 import {
   MentionAutocomplete,
   type MentionAutocompleteHandle,
   type MentionableBot,
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
+import { errorMessage } from "../lib/errors";
+import { useOnline } from "../lib/online";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
+const MENTION_TIP_KEY = "tiny-agents:mention-tip-seen";
+/** The server's per-file limit (uploads.routes.ts MAX_UPLOAD_MB), checked before uploading. */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
@@ -60,6 +71,12 @@ function writeDraft(botId: string, text: string) {
   }
 }
 
+/** The hint shown instead of sending when a typed @name fits several bots. */
+function ambiguousMentionHint(names: string[]): string {
+  const quoted = names.map((name) => `"${name}"`).join(", ");
+  return `More than one bot is named ${quoted}. Type @ and pick the one you mean from the list.`;
+}
+
 export interface ComposerSubmission {
   body: string;
   attachments: AttachmentRef[];
@@ -93,6 +110,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   ref,
 ) {
   const [text, setText] = useState(() => readDraft(bot.id));
+  const online = useOnline();
+  const [retryWhenOnline, setRetryWhenOnline] = useState<"steer" | "followUp" | null>(null);
+  // Mentions picked from the autocomplete, kept in step with the text: they
+  // send to the bot picked, not whichever bot the name matches (issue #80).
+  const [picked, setPicked] = useState<PickedMention[]>([]);
+  const [mentionHint, setMentionHint] = useState<string | null>(null);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
   const [staged, setStaged] = useState<StagedItem[]>([]);
@@ -105,6 +128,25 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
+  // The @ tip lives under the composer (not in the placeholder, where a long
+  // bot name wrapped it onto two lines) until the owner has used a mention.
+  const [mentionTipSeen, setMentionTipSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(MENTION_TIP_KEY) === "1";
+    } catch {
+      return true;
+    }
+  });
+  const mentionTip = !mentionTipSeen && mentionCandidates.length > 0;
+  useEffect(() => {
+    if (mentionTipSeen || !text.includes("@")) return;
+    setMentionTipSeen(true);
+    try {
+      window.localStorage.setItem(MENTION_TIP_KEY, "1");
+    } catch {
+      // Storage blocked: the tip just shows again next time.
+    }
+  }, [text, mentionTipSeen]);
   // The overlay follows the caret inside the mention token, so it needs
   // the caret on every keystroke; `mentionClosed` covers Escape.
   const mention = activeMentionToken(text, caret);
@@ -159,6 +201,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
       const name = file.name || `pasted-image-${++pasteCount.current}.png`;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        const error = `${name} is ${humanSize(file.size)}; files can be up to 25 MB.`;
+        setStaged((current) => [...current, { key, name, status: "error", error, previewUrl }]);
+        toast.error(error);
+        continue;
+      }
       setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
       botsApi
         .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
@@ -174,15 +222,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           );
         })
         .catch((error) => {
+          const message = errorMessage(error, "Upload failed");
+          // The 64px tile has no room for the reason; say it once, readably.
+          toast.error(`${name}: ${message}`);
           setStaged((current) =>
             current.map((item) =>
-              item.key === key
-                ? {
-                    ...item,
-                    status: "error",
-                    error: error instanceof Error ? error.message : "Upload failed",
-                  }
-                : item,
+              item.key === key ? { ...item, status: "error", error: message } : item,
             ),
           );
         });
@@ -201,8 +246,18 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     if (!canSend) return;
     const body = text.trim();
+    // Picks are placed in `text`; trimming moves them left by the indent.
+    const indent = text.length - text.trimStart().length;
+    const bodyPicked = picked.map((pick) => ({ ...pick, start: pick.start - indent }));
+    const mentions = resolveMentions(body, mentionCandidates, bot.id, bodyPicked);
+    // A typed name several bots share would reach an arbitrary one of them.
+    if (mentions.ambiguous.length > 0) {
+      setMentionHint(ambiguousMentionHint(mentions.ambiguous));
+      return;
+    }
     const attachments = readyAttachments.map((item) => item.ref!);
     setText("");
+    setPicked([]);
     setStaged([]);
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
@@ -210,13 +265,21 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       await onSend({
         body,
         attachments,
-        mentions: mentionedBotIds(body, mentionCandidates, bot.id),
+        mentions: mentions.ids,
         whenBusy,
       });
     } catch {
+      // Offline: send it by itself once the browser is back (sends are
+      // idempotent server-side, and the text stays visible meanwhile).
+      if (!navigator.onLine) setRetryWhenOnline(whenBusy);
       // The pane already toasted; hand the message back for another try,
       // ahead of anything typed or attached while the send was in flight.
       setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
+      // Picks made meanwhile imply text, so they move down behind the body.
+      setPicked((current) => [
+        ...bodyPicked,
+        ...current.map((pick) => ({ ...pick, start: pick.start + body.length + 2 })),
+      ]);
       setStaged((current) => [
         ...attachments.map((ref) => ({
           key: crypto.randomUUID(),
@@ -230,6 +293,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
+
+  useEffect(() => {
+    if (!online || !retryWhenOnline) return;
+    setRetryWhenOnline(null);
+    void send(retryWhenOnline);
+  }, [online, retryWhenOnline]);
 
   const stop = async () => {
     if (!busy || stopping) return;
@@ -246,6 +315,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     const insertion = `@${chosen.name} `;
     const next = text.slice(0, mention.start) + insertion + text.slice(caret);
     setText(next);
+    // The latest pick at this `@` replaces any earlier one there.
+    setPicked((current) => [
+      ...trackPickedMentions(text, next, current).filter((pick) => pick.start !== mention.start),
+      { start: mention.start, botId: chosen.id, name: chosen.name },
+    ]);
+    setMentionHint(null);
     // Restore the caret after the trailing space once React re-renders the
     // textarea (it would otherwise land at the very end of the text).
     const target = mention.start + insertion.length;
@@ -292,6 +367,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             ))}
           </div>
         )}
+        {mentionHint && (
+          <p role="alert" className="text-destructive mb-1.5 px-1 text-xs">
+            {mentionHint}
+          </p>
+        )}
         {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
           <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
             {model.name} reads images with the see_image tool
@@ -315,7 +395,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             ref={textareaRef}
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
+              const next = e.target.value;
+              setPicked((current) => trackPickedMentions(text, next, current));
+              setText(next);
+              setMentionHint(null);
               setCaret(e.target.selectionStart ?? e.target.value.length);
               setMentionClosed(false);
             }}
@@ -353,11 +436,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 void send(e.altKey ? "followUp" : "steer");
               }
             }}
-            placeholder={
-              mentionCandidates.length > 0
-                ? `Message ${bot.name} (type @ to tag another bot)`
-                : `Message ${bot.name}`
-            }
+            placeholder={`Message ${bot.name}`}
             rows={1}
             disabled={!enabled}
             className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
@@ -410,13 +489,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             pill, fading in and out inside the reserved gutter. */}
         {!coarsePointer && (
           <p
-            aria-hidden={!busy}
+            aria-hidden={!busy && !mentionTip}
             data-testid="composer-hint"
-            className={`text-muted-foreground/60 pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
-              busy ? "opacity-100" : "opacity-0"
+            className={`text-muted-foreground pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
+              busy || mentionTip ? "opacity-100" : "opacity-0"
             }`}
           >
-            Enter to steer · Alt+Enter to queue · Esc to stop
+            {busy
+              ? "Enter to steer · Alt+Enter to queue · Esc to stop"
+              : "Type @ to tag another bot"}
           </p>
         )}
         {mentionOpen && mention && (

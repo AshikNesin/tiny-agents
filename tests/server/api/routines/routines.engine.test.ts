@@ -403,7 +403,7 @@ describe("completion watcher", () => {
     });
   });
 
-  it("a refused ask tool fails the run, naming the tool and how to allow it", async () => {
+  it("a refused ask tool marks the run blocked, naming the tool and how to allow it", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
@@ -417,10 +417,63 @@ describe("completion watcher", () => {
     expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
 
     expect(await prisma.routineRun.findUnique({ where: { id: run!.id } })).toMatchObject({
-      status: "failed",
+      status: "blocked",
       error: "Needs approval for `send_email`; set it to Allow for this bot to use it in routines.",
       output: "Drafted the email but could not send it.",
     });
+  });
+
+  /** Fire the next hourly slot and resolve it with `reply` (issue #87 helpers). */
+  async function runOnce(routineId: string, hour: number, reply: Omit<FinishedReply, "createdAt">) {
+    const slot = new Date(SLOT.getTime() + hour * 60 * 60_000);
+    await dispatchOccurrence(payloadOf(routineId, slot), new Date(slot.getTime() + 5_000));
+    const run = await prisma.routineRun.findFirstOrThrow({
+      where: { routineId, scheduledFor: slot },
+    });
+    chatWith([{ ...reply, createdAt: run.submittedAt!.getTime() + 1000 }]);
+    await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
+    return prisma.routineRun.findUniqueOrThrow({ where: { id: run.id } });
+  }
+
+  it("a run that reports itself blocked is recorded blocked with its reason (#87)", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "interval", minutes: 60 });
+    const run = await runOnce(routine.id, 0, {
+      text: "Nothing processed: no Gmail access.",
+      blocked: "Needs a vault login for the Gmail account",
+    });
+    expect(run).toMatchObject({
+      status: "blocked",
+      error: "Needs a vault login for the Gmail account",
+      output: "Nothing processed: no Gmail access.",
+    });
+    expect(
+      (await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } })).blockedStreak,
+    ).toBe(1);
+  });
+
+  it("three blocked runs in a row pause the routine and say why; a good run resets the count (#87)", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "interval", minutes: 60 });
+    const blocked = { text: "Blocked.", blocked: "Needs a vault login" };
+
+    await runOnce(routine.id, 0, blocked);
+    await runOnce(routine.id, 1, { text: "All done." });
+    expect(
+      (await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } })).blockedStreak,
+    ).toBe(0);
+
+    await runOnce(routine.id, 2, blocked);
+    await runOnce(routine.id, 3, blocked);
+    let row = await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } });
+    expect(row).toMatchObject({ enabled: true, blockedStreak: 2, pausedReason: null });
+
+    await runOnce(routine.id, 4, blocked);
+    row = await prisma.routine.findUniqueOrThrow({ where: { id: routine.id } });
+    expect(row).toMatchObject({
+      enabled: false,
+      blockedStreak: 3,
+      pausedReason: "Paused after 3 blocked runs: Needs a vault login",
+    });
+    expect(row.nextRunAt).toBeNull();
   });
 
   it("explains tools that can never be allowed apart from those that can", () => {

@@ -15,7 +15,7 @@ export function ThemeSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appearance</CardTitle>
+        <CardTitle aria-level={2}>Appearance</CardTitle>
         <CardDescription>Choose how the app looks on this device.</CardDescription>
       </CardHeader>
       <CardContent>

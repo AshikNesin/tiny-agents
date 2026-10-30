@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { botsApi, type BotListEntry, type ModelInfo } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { ChatEvent, ChatState } from "../lib/chat-types";
+import { errorMessage } from "../lib/errors";
+import { mergeSnapshot, oldestEntryId, prependOlder } from "../lib/chat-history";
 
 interface BotsState {
   bots: BotListEntry[];
@@ -39,6 +41,8 @@ interface BotsState {
    */
   resetChat: (botId: string) => void;
   applyChatEvent: (botId: string, event: ChatEvent) => void;
+  /** Fetch the page of messages above the oldest loaded one (issue #92). */
+  loadOlder: (botId: string) => Promise<void>;
 
   // App-wide activity feed
   connectActivity: () => void;
@@ -82,6 +86,10 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       // state, not stream state, so it survives the replacement.
       return {
         ...event.state,
+        // A reconnect's snapshot is the newest window again: keep the older
+        // pages already loaded above it (issue #92).
+        ...mergeSnapshot(state, event.state),
+        loadingOlder: false,
         // Routine cards ride their own events; a transcript snapshot keeps them.
         routineRuns: state.routineRuns,
         queued: event.state.queued ?? [],
@@ -173,7 +181,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       if (request !== botsRequest) return;
       set({
         loading: false,
-        error: error instanceof Error ? error.message : "Failed to load bots",
+        error: errorMessage(error, "Failed to load bots"),
       });
     }
   },
@@ -201,7 +209,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       setPinnedAt(updated.pinnedAt);
     } catch (error) {
       setPinnedAt(current.pinnedAt);
-      toast.error(error instanceof Error ? error.message : "Failed to update pin");
+      toast.error(errorMessage(error, "Failed to update pin"));
     }
   },
 
@@ -303,6 +311,29 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       delete chats[botId];
       return { chats };
     });
+  },
+
+  loadOlder: async (botId) => {
+    const chat = get().chats[botId];
+    const before = chat ? oldestEntryId(chat.messages) : undefined;
+    if (!chat || !chat.hasMore || chat.loadingOlder || !before) return;
+    const patch = (next: Partial<ChatState>) =>
+      set((s) => {
+        const current = s.chats[botId];
+        return current ? { chats: { ...s.chats, [botId]: { ...current, ...next } } } : s;
+      });
+    patch({ loadingOlder: true });
+    try {
+      const page = await botsApi.history(botId, before);
+      const current = get().chats[botId];
+      // A new chat or a fresh snapshot meanwhile: this page no longer fits.
+      if (!current || oldestEntryId(current.messages) !== before)
+        return patch({ loadingOlder: false });
+      patch({ ...prependOlder(current.messages, page), loadingOlder: false });
+    } catch {
+      // Stay loadable: the next scroll to the top tries again.
+      patch({ loadingOlder: false });
+    }
   },
 
   applyChatEvent: (botId, event) => {

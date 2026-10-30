@@ -2,7 +2,7 @@
  * Terminal service (issue #28), integration: the real ssh2 client against
  * the in-process fake SSH server. Asserts the exact tmux command lines the
  * VM sees (the strings are the frozen contract with tmux 3.4), byte flow
- * through fake ptys, and the fresh-connection-per-attach invariant.
+ * through fake ptys, and the one-pooled-connection invariant (issue #84).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryHostKeyStore } from "../../../../packages/agent/src/toolkits/sandbox";
@@ -137,6 +137,7 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
   let server: FakeSandboxServer;
   let vm: ReturnType<typeof fakeTmuxVm>;
   let service: ReturnType<typeof createTerminalService>;
+  let transport: ReturnType<typeof createSsh2TerminalTransport>;
   const attached: FakePty[] = [];
 
   beforeAll(async () => {
@@ -153,21 +154,25 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
       },
     );
     const keys = createMemoryHostKeyStore();
+    transport = createSsh2TerminalTransport({
+      host: "127.0.0.1",
+      port: server.port,
+      user: "exedev",
+      hostKeys: keys,
+    });
     service = createTerminalService({
       host: "127.0.0.1",
       port: server.port,
       user: "exedev",
       hostKeys: keys,
-      transport: createSsh2TerminalTransport({
-        host: "127.0.0.1",
-        port: server.port,
-        user: "exedev",
-        hostKeys: keys,
-      }),
+      transport,
     });
   });
 
-  afterAll(() => server?.close());
+  afterAll(() => {
+    transport?.close();
+    server?.close();
+  });
 
   it("lists sessions parsed from the exact live-verified ls line", async () => {
     vm.created.set("1", 1792605227);
@@ -250,12 +255,15 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     fake.emit("hello from vm");
     await vi.waitFor(() => expect(Buffer.concat(saw).toString()).toContain("hello from vm"));
 
+    const closed = new Promise((resolve) => stream.once("close", resolve));
     fake.end();
     expect(await stream.done).toEqual({ exitCode: 0 });
+    // The bridge listens for close: a remote end must emit it.
+    await closed;
     vm.clear();
   });
 
-  it("uses a fresh connection per attach (no pooling)", async () => {
+  it("shares one connection across execs and attaches", async () => {
     vm.clear();
     await service.create(80, 24);
     const before = server.connections;
@@ -263,7 +271,10 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     for (let i = 0; i < 3; i++) {
       streams.push(await service.attach(name(1), { cols: 80, rows: 24 }));
     }
-    expect(server.connections).toBeGreaterThanOrEqual(before + 3);
+    await Promise.all([service.list(), service.has(name(1)), service.list()]);
+    streams[0]!.destroy(); // closes its channel, not the shared connection
+    expect(await service.has(name(1))).toBe(true);
+    expect(server.connections).toBe(before);
     for (const s of streams) s.destroy();
     vm.clear();
   });
@@ -275,17 +286,17 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
       }
       return { stderr: "unexpected", exitCode: 1 };
     });
-    const service127 = createTerminalService({
-      transport: createSsh2TerminalTransport({
-        host: "127.0.0.1",
-        port: missing.port,
-      }),
+    const transport127 = createSsh2TerminalTransport({
+      host: "127.0.0.1",
+      port: missing.port,
     });
+    const service127 = createTerminalService({ transport: transport127 });
     expect(await service127.status()).toEqual({
       kind: "tmux-missing",
       installCommand: "sudo apt-get install -y tmux",
     });
     await expect(service127.create(80, 24)).rejects.toBeInstanceOf(TmuxMissingError);
+    transport127.close();
     missing.close();
   });
 });

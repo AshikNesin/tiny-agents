@@ -34,25 +34,29 @@ test.describe("Bot to bot", () => {
   test("tagging a bot in the composer reaches it and the reply relays back", async ({ page }) => {
     await login(page);
 
-    await createBot(page, "Relay Guest");
+    // Bot names are unique (issue #80), and the database outlives a run.
+    const stamp = Date.now();
+    const guest = `Relay Guest ${stamp}`;
+    const host = `Relay Host ${stamp}`;
+    await createBot(page, guest);
     await page.goto("/chats");
-    await createBot(page, "Relay Host");
+    await createBot(page, host);
     // Creating a bot navigates into its chat; the host is the open one.
     // Two bots exist now, so the placeholder advertises @mentions.
-    const composer = page.getByPlaceholder(/message relay host/i);
+    const composer = page.getByPlaceholder(`Message ${host}`);
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    await composer.fill("what do you think @Relay Guest");
+    await composer.fill(`what do you think @${guest}`);
     await composer.press("Enter");
 
     // The owner's message is in the host transcript.
-    await expect(page.getByText("what do you think @Relay Guest").first()).toBeVisible();
+    await expect(page.getByText(`what do you think @${guest}`).first()).toBeVisible();
 
     // The guest echoed the attributed copy; the relay brought it back into
     // the host chat, rendered as a Grok-style card: the peer's name, a
     // "reply relayed into this chat" marker and the payload — the raw
     // "**Reply from …:**" prefix never shows.
-    const relayCard = page.getByTestId("peer-card").filter({ hasText: "Relay Guest" });
+    const relayCard = page.getByTestId("peer-card").filter({ hasText: guest });
     await expect(relayCard.first()).toBeVisible({ timeout: 30_000 });
     await expect(relayCard.first()).toContainText("reply relayed into this chat");
     await expect(relayCard.first()).toContainText(/Echo: \[From the owner/);
@@ -60,22 +64,22 @@ test.describe("Bot to bot", () => {
     // host's own assistant echo of the turn may quote the prefix; that is
     // model output, not transcript plumbing.)
     await expect(
-      page.locator('[data-slot="bubble"]').filter({ hasText: "Reply from Relay Guest:" }),
+      page.locator('[data-slot="bubble"]').filter({ hasText: `Reply from ${guest}:` }),
     ).toHaveCount(0);
 
     // The guest's own chat shows the attributed copy it received.
-    // Anchor to a row that STARTS with "Relay Guest": rows re-sort by
-    // activity as replies land, and a bare /relay guest/ match also hits the
-    // host rows quoting the guest's reply in their preview.
+    // Anchor to a row that STARTS with the guest's name: rows re-sort by
+    // activity as replies land, and a bare name match also hits the host
+    // rows quoting the guest's reply in their preview.
     await page
-      .getByRole("link", { name: /^Relay Guest/ })
+      .getByRole("link", { name: new RegExp(`^${guest}`) })
       .first()
       .click();
-    await expect(page.getByRole("button", { name: /edit relay guest/i })).toBeVisible({
+    await expect(page.getByRole("button", { name: `Edit ${guest}` })).toBeVisible({
       timeout: 15_000,
     });
     // The mention arrives as the owner's labeled bubble, not a raw prefix.
-    await expect(page.getByText(/You · in Relay Host's chat/).first()).toBeVisible({
+    await expect(page.getByText(`You · in ${host}'s chat`).first()).toBeVisible({
       timeout: 15_000,
     });
     await expect(

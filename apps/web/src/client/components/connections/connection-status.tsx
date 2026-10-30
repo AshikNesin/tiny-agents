@@ -33,11 +33,4 @@ export function openOAuthPopup(url: string): boolean {
   return popup !== null;
 }
 
-export function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error) {
-    const response = (error as { response?: { data?: { error?: { message?: string } } } }).response;
-    const message = response?.data?.error?.message;
-    if (message) return message;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+export { errorMessage } from "../../lib/errors";

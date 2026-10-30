@@ -477,17 +477,20 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       {
         name: "run_command",
         label: "Ran a command",
+        askLabel: "run a command",
         description: "Run a shell command on the sandbox VM",
       },
       {
         name: "read_file",
         label: "Read a file",
+        askLabel: "read a file",
         description: "Read a file from the sandbox VM",
         readOnly: true,
       },
       {
         name: "write_file",
         label: "Wrote a file",
+        askLabel: "write a file",
         description: "Write a file on the sandbox VM",
       },
     ],

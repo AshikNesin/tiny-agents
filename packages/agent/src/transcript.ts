@@ -4,6 +4,7 @@ import type {
   AttachmentRef,
   ChatEvent,
   ChatMessage,
+  ChatPage,
   ChatState,
   ChatToolCall,
   ChatCredentialRequest,
@@ -240,11 +241,17 @@ function toolCallView(
     const sources = sourcesOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
+    // The tool's clock includes any wait for the owner's approval: report
+    // the run and the wait apart.
+    const waitedMs = typeof details?.waitedMs === "number" ? details.waitedMs : undefined;
     return {
       ...base,
       status: resultStatus(result),
       ...(output ? { output: clip(output) } : {}),
-      ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+      ...(message.durationMs !== undefined
+        ? { durationMs: Math.max(0, message.durationMs - (waitedMs ?? 0)) }
+        : {}),
+      ...(waitedMs ? { waitedMs } : {}),
       ...(approval === "approved" ||
       approval === "denied" ||
       approval === "auto" ||
@@ -465,15 +472,19 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     );
   }
 
-  // Flag inputs that never got an answer.
+  // Flag inputs that never got an answer. Inputs that landed in the same turn
+  // (a queued message plus a steer) sit back to back and share one reply, so
+  // a run of user messages counts as answered when an assistant reply follows
+  // it; only a settlement the runtime recorded flags one inside the run.
   for (let i = 0; i < out.length; i++) {
     const message = out[i];
     if (message.role !== "user") continue;
     const next = out.slice(i + 1).find((m) => m.role !== "marker");
     if (next?.role === "assistant") continue;
-    const isLast = next === undefined;
-    if (isLast && (raw.busy || raw.live)) continue;
     const reasonCode = raw.unanswered.get(Number(message.id.slice(1)));
+    const reply = out.slice(i + 1).find((m) => m.role !== "marker" && m.role !== "user");
+    if (!reasonCode && reply?.role === "assistant") continue;
+    if (reply === undefined && (raw.busy || raw.live)) continue;
     out[i] = {
       ...message,
       status: "unanswered",
@@ -493,6 +504,47 @@ export function chatState(raw: RawChat): ChatState {
     busy: raw.busy || raw.live !== undefined,
     queued: raw.queued ?? [],
   };
+}
+
+/** Messages a chat stream's snapshot carries: the newest ones (issue #92). */
+export const CHAT_WINDOW = 60;
+
+/**
+ * A full chat state cut down to its newest `size` messages, or to every
+ * message from id `from` on (a stream keeps its window's start fixed, so
+ * new messages extend it instead of pushing older ones out). Slice a state
+ * derived from the full raw history: the `unanswered` flags and tool
+ * statuses then stay right at the window's edge. Undefined when `from` is
+ * gone from the transcript.
+ */
+export function windowChat(state: ChatState, size: number, from?: string): ChatState | undefined {
+  let start = Math.max(0, state.messages.length - size);
+  if (from !== undefined) {
+    start = state.messages.findIndex((m) => m.id === from);
+    if (start < 0) return undefined;
+  }
+  const messages = state.messages.slice(start);
+  return {
+    ...state,
+    messages,
+    hasMore: start > 0,
+    ...(messages[0] ? { cursor: messages[0].id } : {}),
+  };
+}
+
+/**
+ * Up to `limit` messages just before message id `before`, for loading
+ * history above a window. Undefined when `before` is not in the transcript.
+ */
+export function pageBefore(
+  messages: readonly ChatMessage[],
+  before: string,
+  limit: number,
+): ChatPage | undefined {
+  const end = messages.findIndex((m) => m.id === before);
+  if (end < 0) return undefined;
+  const start = Math.max(0, end - limit);
+  return { messages: messages.slice(start, end), hasMore: start > 0 };
 }
 
 function sameExceptText(a: ChatMessage, b: ChatMessage): boolean {

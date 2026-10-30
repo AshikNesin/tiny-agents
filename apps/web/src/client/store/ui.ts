@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { botsApi, type Bot } from "../lib/bots-api";
 import { toast } from "sonner";
+import { errorMessage } from "../lib/errors";
 
 export const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
 
@@ -55,7 +56,7 @@ export const useUiStore = create<UiState>((set) => ({
       const bot = await botsApi.get(botId);
       set({ botDialogOpen: true, editingBot: bot, mobileOpen: false });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load bot");
+      toast.error(errorMessage(error, "Failed to load bot"));
     }
   },
   setBotDialogOpen: (botDialogOpen) => set({ botDialogOpen }),

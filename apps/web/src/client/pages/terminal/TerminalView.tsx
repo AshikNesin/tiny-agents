@@ -54,6 +54,8 @@ export function TerminalView({
   const fitRef = useRef<() => void>(() => undefined);
   const encoderRef = useRef(new TextEncoder());
   const [reconnecting, setReconnecting] = useState(false);
+  // True until the first pty bytes land: the pane is blank until then.
+  const [waiting, setWaiting] = useState(true);
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
@@ -108,13 +110,18 @@ export function TerminalView({
       });
 
       connectionRef.current = connectTerminal(name, {
-        onData: (bytes) => terminal.write(bytes),
+        onData: (bytes) => {
+          setWaiting(false);
+          terminal.write(bytes);
+        },
         onStateChange: (state) => {
           // The first fit usually lands while the socket is still opening,
           // when sendResize is a no-op. Re-send the grid once it is live so
           // the pty starts at the rendered size.
           if (state === "live" && size) connectionRef.current?.sendResize(size.cols, size.rows);
           setReconnecting(state === "reconnecting");
+          // A retry has its own chip, and a closed tab has nothing coming.
+          if (state === "reconnecting" || state === "closed") setWaiting(false);
           onStateRef.current(state);
         },
       });
@@ -191,6 +198,15 @@ export function TerminalView({
       onMouseDown={() => terminalRef.current?.focus()}
       data-testid={`terminal-view-${name}`}
     >
+      {waiting && (
+        <span
+          className="text-muted-foreground pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm"
+          aria-live="polite"
+          data-testid={`terminal-connecting-${name}`}
+        >
+          Connecting to sandbox…
+        </span>
+      )}
       {reconnecting && (
         <span
           className="bg-background/80 text-muted-foreground pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full px-2.5 py-1 text-xs ring-1 ring-border"

@@ -131,8 +131,8 @@ export async function createServer(options: ServerOptions): Promise<ServerInstan
     app.use(
       express.static(distPath, {
         index: false,
-        setHeaders: (res) => {
-          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        setHeaders: (res, filePath) => {
+          res.setHeader("Cache-Control", staticCacheControl(path.relative(distPath, filePath)));
         },
       }),
     );
@@ -168,6 +168,26 @@ export async function createServer(options: ServerOptions): Promise<ServerInstan
   return { app, httpServer, viteServer };
 }
 
+/**
+ * Vite fingerprints everything under /assets, so those files never change and
+ * can be cached for a year; everything else (index.html, favicon) revalidates.
+ */
+export function staticCacheControl(relativePath: string): string {
+  return relativePath.split(path.sep)[0] === "assets"
+    ? "public, max-age=31536000, immutable"
+    : "no-cache, no-store, must-revalidate";
+}
+
+/** Requests for build output (never an app route): /assets/* and common static files. */
+export function isAssetRequest(urlPath: string): boolean {
+  return (
+    urlPath.startsWith("/assets/") ||
+    /\.(?:js|mjs|css|map|woff2?|ttf|otf|png|jpe?g|gif|webp|avif|svg|ico|json|txt|webmanifest|wasm)$/i.test(
+      urlPath,
+    )
+  );
+}
+
 export function setupSpaFallback(
   app: Express,
   viteServer: ViteDevServer | null,
@@ -177,6 +197,13 @@ export function setupSpaFallback(
   const isProd = env.NODE_ENV === "production";
 
   app.get(/^(?!\/api)(?!\/health).*/, async (req, res, next) => {
+    // A missing build file must 404, not get index.html with a 200: a stale
+    // tab importing an old chunk would run HTML as JS, and a CDN would cache
+    // that HTML under the asset's URL.
+    if (isAssetRequest(req.path)) {
+      res.status(404).set({ "Cache-Control": "no-store" }).type("text/plain").end("Not found");
+      return;
+    }
     try {
       if (!isProd && viteServer) {
         const url = req.originalUrl;
