@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
@@ -418,6 +418,12 @@ describe("BrowserPanel", () => {
   });
 
   it("remembers the panel width dragged on the edge", async () => {
+    // The panel docks (and resizes) only on wide screens.
+    const innerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
+    onTestFinished(() =>
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth }),
+    );
     mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
@@ -432,6 +438,25 @@ describe("BrowserPanel", () => {
     const after = Number(panel.style.getPropertyValue("--browser-panel-width").replace("px", ""));
     expect(after).toBe(before + 50);
     expect(window.localStorage.getItem("tiny-agents:browser-panel-width")).toBe(String(after));
+  });
+
+  it("never lets a dragged panel crowd out the chat (issue #89)", async () => {
+    const innerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    onTestFinished(() =>
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth }),
+    );
+    mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+    const handle = screen.getByTestId("browser-resize");
+    fireEvent.pointerDown(handle, { clientX: 900, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientX: 100, pointerId: 1 });
+
+    const panel = screen.getByTestId("browser-panel");
+    // 1280 - 256px sidebar - 416px chat leaves at most 608px for the panel.
+    expect(panel.style.getPropertyValue("--browser-panel-width")).toBe("608px");
   });
 
   it("says there is no live view for a headless browser", async () => {
