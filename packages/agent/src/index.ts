@@ -202,7 +202,15 @@ export {
   type SkillStore,
   type SkillSummary,
 } from "./skills";
-export { createMemoryCapability, type MemoryLine, type MemoryStore } from "./toolkits/memory";
+export {
+  createMemoryCapability,
+  MEMORY_CATEGORY_ORDER,
+  MEMORY_HEADING,
+  MEMORY_RENDER_CHAR_CAP,
+  renderMemoryBlock,
+  type MemoryLine,
+  type MemoryStore,
+} from "./toolkits/memory";
 export {
   createWebToolkit,
   checkPublicUrl,

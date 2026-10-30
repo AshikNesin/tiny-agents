@@ -178,7 +178,10 @@ async function setLinks(botId: string, skillIds?: string[], connectionIds?: stri
 }
 
 export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRuntime = runtime()) {
-  await findBotRow(id);
+  const before = await findBotRow(id);
+  // Turning memory back on starts capture from now: what was said while it
+  // was off is never remembered.
+  const memoryResumed = data.memoryEnabled === true && !before.memoryEnabled;
   if (data.modelId !== undefined && !rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
@@ -194,6 +197,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
       ...(data.systemPrompt !== undefined ? { systemPrompt: data.systemPrompt } : {}),
       ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+      ...(memoryResumed ? { memoryCapturedThrough: new Date() } : {}),
       ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     },

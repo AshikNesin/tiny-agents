@@ -7,8 +7,9 @@
  */
 import { prisma } from "@groot/core/database";
 import { notifyVaultAlert } from "../notifications/notifications.wiring";
-import type { AgentRuntime, VaultBroker, VaultUse } from "@tiny-agents/agent";
+import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
+import { isUnattended, type ChatReader } from "../bots/bots.unattended";
 import {
   audit,
   findItem,
@@ -18,27 +19,6 @@ import {
   useItem,
   type UseContext,
 } from "./vault.service";
-
-/** The label every routine prompt starts with (`composeRoutineLabel`). */
-const ROUTINE_PROMPT = /^\*\*Routine "/;
-
-type ChatReader = Pick<AgentRuntime, "readChat">;
-
-/**
- * True when the conversation's latest user message is not the owner's own:
- * a peer delivery (another bot, a relayed reply or a mention) or a routine.
- * Unknown counts as unattended, which only ever refuses more.
- */
-export async function isUnattended(conversation: number, runtime: ChatReader): Promise<boolean> {
-  try {
-    const state = await runtime.readChat(conversation);
-    const last = state.messages.findLast((message) => message.role === "user");
-    if (!last) return true;
-    return last.peer !== undefined || ROUTINE_PROMPT.test(last.text);
-  } catch {
-    return true;
-  }
-}
 
 async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
   const bot = await prisma.bot.findUnique({

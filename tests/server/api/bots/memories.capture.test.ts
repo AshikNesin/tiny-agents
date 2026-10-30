@@ -46,6 +46,23 @@ function sideCall(reply = fauxAssistantMessage([fauxText("[]")])) {
   };
 }
 
+describe("buildCapturePrompt removed memories", () => {
+  it("lists what the owner removed as never-re-add, and nothing when there is none", () => {
+    const input = {
+      botName: "Scout",
+      transcript: "Owner: hi",
+      currentMemories: null,
+      today: "2026-10-29",
+    };
+    const prompt = buildCapturePrompt({ ...input, removedMemories: "- The owner prefers tea." });
+    expect(prompt).toContain(
+      "The owner removed these memories. Never add them again, reworded or not:",
+    );
+    expect(prompt).toContain("- The owner prefers tea.");
+    expect(buildCapturePrompt(input)).not.toContain("removed these memories");
+  });
+});
+
 describe("buildCapturePrompt", () => {
   it("carries the anti-junk rules and JSON contract", () => {
     const prompt = buildCapturePrompt({
@@ -242,6 +259,22 @@ describe("captureWindow", () => {
     );
     expect(window.ownerBytes).toBe(6);
     expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(1_500)}`]);
+  });
+
+  it("caps a long window to its newest lines but still ends at the newest owner turn", () => {
+    // A never-captured bot (null watermark) with ~100k chars of history.
+    const messages = Array.from({ length: 200 }, (_, i) => ({
+      role: "user",
+      text: `Turn ${String(i).padStart(3, "0")} ${"y".repeat(500)}`,
+      createdAt: i + 1,
+    }));
+    const window = captureWindow(messages, null, "Scout");
+    const size = window.lines.reduce((sum, line) => sum + line.length + 1, 0);
+    expect(size).toBeLessThanOrEqual(24_000);
+    expect(window.lines.at(-1)).toContain("Turn 199");
+    expect(window.lines.join("\n")).not.toContain("Turn 000");
+    expect(window.turns).toBe(window.lines.length);
+    expect(window.through?.getTime()).toBe(200);
   });
 });
 
@@ -458,5 +491,54 @@ describe("startMemoryCapture debounce", () => {
     expect(captureNow).toHaveBeenCalledWith(9);
     stop();
     vi.useRealTimers();
+  });
+});
+
+describe("captureConversation and removed memories", () => {
+  it("shows the newest 30 deleted memories to the extractor, which then leaves them out", async () => {
+    const { botId, conversationId } = await seedBot();
+    await prisma.memory.createMany({
+      data: Array.from({ length: 35 }, (_, i) => ({
+        botId,
+        text: `Removed fact ${String(i).padStart(2, "0")}.`,
+        category: "fact",
+        status: "deleted",
+        updatedAt: new Date(Date.UTC(2026, 9, 1, 0, i)),
+      })),
+    });
+    await prisma.memory.create({
+      data: {
+        botId,
+        text: "Owner prefers tea",
+        category: "preference",
+        status: "deleted",
+        updatedAt: new Date(Date.UTC(2026, 9, 2)),
+      },
+    });
+    // A scripted extractor that, like a model following the prompt, drops a
+    // reworded fact the prompt lists as removed.
+    const call = sideCall();
+    call.models.completeSimple.mockImplementation(async (_model, context) => {
+      const proposed = [
+        { text: "The owner likes tea.", category: "preference", confidence: 0.9 },
+        { text: "The owner lives in Chennai.", category: "fact", confidence: 0.9 },
+      ].filter(
+        (m) => !(m.text.includes("tea") && context.systemPrompt?.includes("Owner prefers tea")),
+      );
+      return fauxAssistantMessage([fauxText(JSON.stringify(proposed))]);
+    });
+    await captureConversation(conversationId, {
+      sideCall: call,
+      readTranscript: async () => [
+        { role: "user", text: "I like tea and I live in Chennai.", createdAt: Date.now() },
+      ],
+    });
+    const prompt = call.models.completeSimple.mock.calls[0][1].systemPrompt ?? "";
+    expect(prompt).toContain("- Owner prefers tea");
+    expect(prompt).toContain("Removed fact 34.");
+    expect(prompt).toContain("Removed fact 06.");
+    expect(prompt).not.toContain("Removed fact 05.");
+    const active = await prisma.memory.findMany({ where: { botId, status: "active" } });
+    expect(active.map((m) => m.text)).toEqual(["The owner lives in Chennai."]);
   });
 });
