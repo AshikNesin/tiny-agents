@@ -30,6 +30,7 @@ import {
   type BotRow,
 } from "./bots.conversation";
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
+import { findPastChat, recordPastChat, type EndingChat } from "./chats.history";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -39,6 +40,7 @@ export type BotAgentRuntime = Pick<
   | "abort"
   | "withdraw"
   | "readChatPage"
+  | "readChat"
   | "hasModel"
   | "listModels"
   | "busyConversations"
@@ -412,10 +414,22 @@ export async function withdrawMessage(id: string, input: { requestId: string }) 
   return { withdrawn: true };
 }
 
+/** The chat a bot row is on, as a past chat would record it. */
+function endingChat(row: BotRow): EndingChat {
+  return {
+    botId: row.id,
+    botName: row.name,
+    botModelId: row.modelId,
+    conversationId: row.conversationId,
+    startedAt: row.chatStartedAt,
+    lastMessagePreview: row.lastMessagePreview,
+  };
+}
+
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
   const old = await findBotRow(id);
-  // Fresh conversation; the old one stays in agent.db, hidden (PRD §5.1),
-  // and any reply still running there is stopped.
+  // Fresh conversation; the old one stays in agent.db as a past chat
+  // (issue #101), and any reply still running there is stopped.
   const conversationId = await startBotConversation(id, rt);
   await prisma.bot.update({
     where: { id },
@@ -429,7 +443,39 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
     },
   });
   await retireConversation(rt, old.conversationId);
+  await recordPastChat(endingChat(old), rt);
   return getBot(id);
+}
+
+/**
+ * Continue a past chat (issue #101): the bot moves back onto its
+ * conversation, and the chat it was on becomes a past chat in turn. The
+ * conversation is reconciled first, so it runs on the bot's current persona,
+ * model and tools. Its routine cards start from when it first began.
+ */
+export async function continuePastChat(
+  id: string,
+  chatId: string,
+  rt: BotAgentRuntime = runtime(),
+) {
+  const old = await findBotRow(id);
+  const past = await findPastChat(id, chatId);
+  await prisma.$transaction([
+    prisma.botChat.delete({ where: { id: past.id } }),
+    prisma.bot.update({
+      where: { id },
+      data: {
+        conversationId: past.conversationId,
+        chatStartedAt: past.startedAt,
+        lastReadAt: new Date(),
+        lastMessagePreview: past.lastMessagePreview,
+        lastActivityAt: new Date(),
+      },
+    }),
+  ]);
+  await retireConversation(rt, old.conversationId);
+  await recordPastChat(endingChat(old), rt);
+  return reconcileBotConversation(id, rt);
 }
 
 /** Pin or unpin a bot. Row-only: unlike `updateBot` it never reconfigures the conversation. */

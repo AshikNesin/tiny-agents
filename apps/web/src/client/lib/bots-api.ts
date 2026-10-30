@@ -4,7 +4,7 @@
  */
 import { apiClient } from "@groot/shell/lib/api";
 import type { OwnerAnswer } from "./chat-types";
-import type { ChatMessage } from "./chat-types";
+import type { ChatMessage, RoutineRunCard } from "./chat-types";
 
 export interface ModelInfo {
   id: string;
@@ -214,6 +214,24 @@ async function fetchCapabilities(): Promise<CapabilityInfo[]> {
   }
 }
 
+/** A conversation the bot ran on before a "New chat" (issue #101). */
+export interface PastChat {
+  id: string;
+  /** Model-written title; the first owner message until it arrives. */
+  title: string | null;
+  startedAt: string;
+  endedAt: string;
+  lastMessagePreview: string | null;
+  messageCount: number;
+}
+
+/** A past chat to read: its newest messages (older ones page in) and its routine cards. */
+export interface PastChatView {
+  chat: PastChat;
+  state: { messages: ChatMessage[]; hasMore?: boolean };
+  runs: RoutineRunCard[];
+}
+
 export const botsApi = {
   list: () => apiClient.get<BotListEntry[]>("/bots"),
   create: (input: BotInput) => apiClient.post<Bot>("/bots", input),
@@ -257,6 +275,20 @@ export const botsApi = {
   deleteUpload: (uploadId: string) => apiClient.delete(`/uploads/${uploadId}`),
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
+  pastChats: (id: string) =>
+    apiClient.get<{ chats: PastChat[] }>(`/bots/${id}/chats`).then((r) => r.chats),
+  pastChat: (id: string, chatId: string) =>
+    apiClient.get<PastChatView>(`/bots/${id}/chats/${chatId}`),
+  /** Older messages of a past chat, just before message `before`. */
+  pastChatHistory: (id: string, chatId: string, before: string, limit = 50) =>
+    apiClient.get<{ messages: ChatMessage[]; hasMore: boolean }>(
+      `/bots/${id}/chats/${chatId}/messages`,
+      { before, limit },
+    ),
+  /** Move the bot back onto a past chat; the chat it was on becomes a past chat. */
+  continuePastChat: (id: string, chatId: string) =>
+    apiClient.post<Bot>(`/bots/${id}/chats/${chatId}/continue`),
+  deletePastChat: (id: string, chatId: string) => apiClient.delete(`/bots/${id}/chats/${chatId}`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
   pin: (id: string, pinned: boolean) => apiClient.post<Bot>(`/bots/${id}/pin`, { pinned }),
   capabilities: () => (capabilitiesCache ??= fetchCapabilities()),

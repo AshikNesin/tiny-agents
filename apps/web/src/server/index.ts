@@ -31,6 +31,7 @@ import { createBotRelay } from "./api/bots/bots.relay";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { startMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
+import { setChatTitler } from "./api/bots/chats.title";
 import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
@@ -169,6 +170,16 @@ async function main() {
           },
           readTranscript: async (id) => (await runtime.readChat(id)).messages,
         }),
+    });
+  }
+
+  // Past-chat titles (issue #101): one lightweight side-call per "New chat"
+  // names the chat that ended. Faux mode keeps the first-message titles.
+  if (process.env.TINY_AGENTS_FAUX !== "1") {
+    setChatTitler({
+      models: runtime.models,
+      hasModel: (id) => runtime.hasModel(id),
+      modelId: env.CHAT_TITLE_MODEL,
     });
   }
 

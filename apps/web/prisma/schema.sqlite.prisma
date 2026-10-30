@@ -56,6 +56,8 @@ model Bot {
   routines           Routine[]
   /// Long-term memories this bot keeps about the owner (issue #22).
   memories           Memory[]
+  /// Conversations this bot ran on before a "New chat" (past chats, issue #101).
+  pastChats          BotChat[]
   /// Memory capture + injection switch (issue #22).
   memoryEnabled      Boolean   @default(true)
   /// Auto-review switch (issue #65): a classifier may approve "ask" tool calls.
@@ -70,6 +72,29 @@ model Bot {
   updatedAt          DateTime  @updatedAt
 
   @@map("bots")
+}
+
+/// A past chat (issue #101): a conversation this bot ran on before a "New
+/// chat". Read-only until the owner continues it, which moves the bot back
+/// onto it and drops this row.
+model BotChat {
+  id                 String   @id @default(cuid())
+  botId              String
+  /// The retired durable conversation in agent.db.
+  conversationId     String   @unique
+  /// The bot's chatStartedAt while this was its chat.
+  startedAt          DateTime
+  /// When "New chat" (or continuing another past chat) retired it.
+  endedAt            DateTime
+  /// Short title: the first owner message until the title side-call replaces it.
+  title              String?
+  /// Bot.lastMessagePreview when it was retired.
+  lastMessagePreview String?
+  messageCount       Int      @default(0)
+  bot                Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId, endedAt])
+  @@map("bot_chats")
 }
 
 /// An Agent Skill (SKILL.md) in the shared library (issue #1 D5/D6).

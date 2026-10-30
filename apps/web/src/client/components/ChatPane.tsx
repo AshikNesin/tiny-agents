@@ -18,11 +18,13 @@ import {
   DialogTitle,
 } from "@groot/ui/dialog";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
+import { ChatHistoryMenu } from "./ChatHistoryMenu";
 import {
   ACTIVE_TOOL_STATUSES,
   ChatMessageView,
@@ -129,6 +131,16 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     NO_TOOL_LABELS,
   );
   const [confirmReset, setConfirmReset] = useState(false);
+  // `?history=1` (the sidebar row's "Chat history") opens the history menu.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("history") !== "1") return;
+    setHistoryOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("history");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const composerRef = useRef<ChatComposerHandle>(null);
@@ -471,6 +483,12 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                 />
               )}
             </Button>
+            <ChatHistoryMenu
+              botId={bot.id}
+              conversationId={bot.conversationId}
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+            />
             <Button
               variant="ghost"
               size="icon"
@@ -685,7 +703,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <DialogHeader>
             <DialogTitle>Start a new chat?</DialogTitle>
             <DialogDescription>
-              {bot.name} gets a fresh, empty conversation. The old one is kept but hidden.
+              {bot.name} gets a fresh, empty conversation. This one moves to Chat history, where you
+              can read or continue it.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

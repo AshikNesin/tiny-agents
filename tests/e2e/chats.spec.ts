@@ -121,6 +121,67 @@ test.describe("Chats — new chat", () => {
   });
 });
 
+test.describe("Chats — past chats (issue #101)", () => {
+  test("read, continue and delete a chat that New chat left behind", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
+    await page.getByLabel(/password/i).fill("demo@example.com");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
+
+    // A bot of its own: the database outlives a run.
+    const name = `History Bot ${Date.now()}`;
+    await page.getByRole("button", { name: /new bot/i }).click();
+    await page.getByLabel("Name").fill(name);
+    await expect(page.getByRole("button", { name: "Test Model (faux)" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: /create bot/i }).click();
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
+
+    const composer = page.getByPlaceholder(/(?:ask|message) history bot/i);
+    await composer.fill("plan the goa trip");
+    await composer.press("Enter");
+    await expect(page.getByText(/Echo: plan the goa trip/i).first()).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // New chat: the old one moves to Chat history.
+    await page.getByRole("button", { name: "Start a new chat" }).click();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page.getByText(/Echo: plan the goa trip/i)).toHaveCount(0);
+    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByTestId("past-chat-item").filter({ hasText: "plan the goa trip" }).click();
+
+    // Read-only: the old transcript, no composer, Continue in its place.
+    await expect(page).toHaveURL(/\/history\//);
+    await expect(page.getByText(/Echo: plan the goa trip/i).first()).toBeVisible();
+    await expect(composer).toHaveCount(0);
+    await expect(page.getByTestId("past-chat-footer")).toBeVisible();
+
+    // Continue: back in the live chat, on the old conversation.
+    await page.getByRole("button", { name: "Continue this chat" }).click();
+    await expect(page).not.toHaveURL(/\/history\//);
+    await expect(page.getByText(/Echo: plan the goa trip/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await composer.fill("and hotels");
+    await composer.press("Enter");
+    await expect(page.getByText(/Echo: and hotels/i).first()).toBeVisible({ timeout: 20_000 });
+
+    // Delete: a second New chat, then delete that past chat.
+    await page.getByRole("button", { name: "Start a new chat" }).click();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByTestId("past-chat-item").first().click();
+    await page.getByRole("button", { name: "Past chat actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete chat" }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page).not.toHaveURL(/\/history\//);
+    await expect(page.getByRole("button", { name: "Chat history" })).toHaveCount(0);
+  });
+});
+
 test.describe("Chats — attachments (issue #17)", () => {
   test("attach an image, send, render, survive reload", async ({ page }) => {
     await page.goto("/login");

@@ -445,16 +445,20 @@ function ToolRow({
   ask,
   botId,
   botName,
+  readOnly = false,
 }: {
   call: ChatToolCall;
   label: string;
   ask: string;
   botId: string;
   botName: string;
+  /** A past chat (issue #101): what still waits there can no longer be answered. */
+  readOnly?: boolean;
 }) {
   const summary = summarizeArgs(call);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const extra = STATUS_TEXT[call.status];
+  const waiting = call.status.startsWith("awaiting_");
+  const extra = readOnly && waiting ? "not answered" : STATUS_TEXT[call.status];
   const argsJson = JSON.stringify(call.args, null, 2);
   const detail =
     call.output || argsJson !== "{}" ? (
@@ -491,7 +495,7 @@ function ToolRow({
     ) : null;
 
   // data-waiting: what a notification's ?focus= link scrolls to (focus-param.ts).
-  if (call.status === "awaiting_approval" && call.taskId !== undefined) {
+  if (!readOnly && call.status === "awaiting_approval" && call.taskId !== undefined) {
     if (call.vault) {
       return (
         <div data-waiting={`approval:${call.taskId}`}>
@@ -510,7 +514,12 @@ function ToolRow({
     );
   }
 
-  if (call.status === "awaiting_credentials" && call.taskId !== undefined && call.credentials) {
+  if (
+    !readOnly &&
+    call.status === "awaiting_credentials" &&
+    call.taskId !== undefined &&
+    call.credentials
+  ) {
     return (
       <CredentialRequestCard call={{ ...call, credentials: call.credentials }} botName={botName} />
     );
@@ -518,7 +527,7 @@ function ToolRow({
 
   // ask_owner: the questionnaire while it waits, then the questions and answers.
   if (call.questions) {
-    if (call.status === "awaiting_answer" && call.taskId !== undefined) {
+    if (!readOnly && call.status === "awaiting_answer" && call.taskId !== undefined) {
       return (
         <div data-waiting={`question:${call.taskId}`}>
           <QuestionCard
@@ -529,7 +538,7 @@ function ToolRow({
         </div>
       );
     }
-    const note = STATUS_TEXT[call.status] ?? (call.answers ? undefined : "dismissed by you");
+    const note = extra ?? (call.answers ? undefined : "dismissed by you");
     return <AskedQuestions call={call} note={note} />;
   }
 
@@ -623,6 +632,8 @@ export interface ChatMessageViewProps {
   toolLabels?: ToolLabels;
   /** Tool name → imperative label for approval cards ("open a page"). */
   toolAskLabels?: ToolLabels;
+  /** A past chat (issue #101): approval and question cards render without actions. */
+  readOnly?: boolean;
 }
 
 /**
@@ -637,6 +648,7 @@ export function ChatMessageView({
   botId,
   toolLabels = {},
   toolAskLabels = {},
+  readOnly = false,
 }: ChatMessageViewProps) {
   if (message.role === "marker") {
     return (
@@ -689,7 +701,7 @@ export function ChatMessageView({
     );
   }
 
-  return assistantView(message, { botName, botId, toolLabels, toolAskLabels });
+  return assistantView(message, { botName, botId, toolLabels, toolAskLabels, readOnly });
 }
 
 /** One peer-traffic user message as a Grok-style attributed card. */
@@ -807,9 +819,15 @@ export function PeerIncomingCard({
 
 function assistantView(
   message: ChatMessage,
-  ctx: { botName: string; botId?: string; toolLabels: ToolLabels; toolAskLabels: ToolLabels },
+  ctx: {
+    botName: string;
+    botId?: string;
+    toolLabels: ToolLabels;
+    toolAskLabels: ToolLabels;
+    readOnly: boolean;
+  },
 ) {
-  const { botName, botId, toolLabels, toolAskLabels } = ctx;
+  const { botName, botId, toolLabels, toolAskLabels, readOnly } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -828,6 +846,7 @@ function assistantView(
                 ask={toolAskLabel(toolAskLabels, toolLabels, call.name)}
                 botId={botId ?? ""}
                 botName={botName}
+                readOnly={readOnly}
               />
             ))}
           </div>

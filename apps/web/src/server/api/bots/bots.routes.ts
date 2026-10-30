@@ -7,6 +7,7 @@ import { CHAT_WINDOW, isGatewayConfigured } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
+import * as pastChats from "./chats.history";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
 import { watchBot } from "./bots.viewers";
 import { chatCards, onRoutineCard } from "../routines/routines.cards";
@@ -175,6 +176,39 @@ router.post("/bots/:id/abort", async (req: Request) => {
 router.post("/bots/:id/reset", async (req: Request) => {
   const id = parseStringParam(req.params.id, "id");
   return await botsService.resetConversation(id);
+});
+
+// ── Past chats (issue #101) ───────────────────────────────────────────
+
+router.get("/bots/:id/chats", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  await botsService.getBot(id);
+  return { chats: await pastChats.listPastChats(id) };
+});
+
+router.get("/bots/:id/chats/:chatId", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const chatId = parseStringParam(req.params.chatId, "chatId");
+  return await pastChats.readPastChat(id, chatId, getAgentRuntime());
+});
+
+router.get("/bots/:id/chats/:chatId/messages", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const chatId = parseStringParam(req.params.chatId, "chatId");
+  const query = parseQuery(req, chatHistorySchema);
+  return await pastChats.pastChatPage(id, chatId, query, getAgentRuntime());
+});
+
+router.post("/bots/:id/chats/:chatId/continue", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const chatId = parseStringParam(req.params.chatId, "chatId");
+  return await botsService.continuePastChat(id, chatId);
+});
+
+router.delete("/bots/:id/chats/:chatId", async (req: Request) => {
+  const id = parseStringParam(req.params.id, "id");
+  const chatId = parseStringParam(req.params.chatId, "chatId");
+  return await pastChats.deletePastChat(id, chatId);
 });
 
 router.post("/bots/:id/approvals/:taskId", async (req: Request) => {

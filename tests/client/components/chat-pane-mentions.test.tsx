@@ -24,6 +24,7 @@ vi.mock("@/lib/bots-api", () => ({
     reset: vi.fn(),
     read: vi.fn(),
     capabilities: vi.fn().mockResolvedValue([]),
+    pastChats: vi.fn().mockResolvedValue([]),
   },
 }));
 
