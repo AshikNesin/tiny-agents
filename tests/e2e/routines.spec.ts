@@ -11,7 +11,8 @@ import { test, expect } from "@playwright/test";
  * toggling, and "Run now", which dispatches synchronously through the real
  * watcher so Recent executions shows a succeeded manual run with output.
  * The run happens in the routine's own conversation (issue #63): the bot's
- * chat shows only its result card, never the routine's prompt or reply.
+ * chat shows only a quiet result line, never the routine's prompt or reply,
+ * and a new chat starts without it.
  * Waiting for the delayed queue fire is covered by the server tests.
  */
 
@@ -41,12 +42,10 @@ test.describe("Routines", () => {
     await login(page);
     await cleanup(page);
 
-    // Ensure a faux bot exists for the editor's picker.
-    const hasBot = await page
-      .getByRole("link", { name: /routine bot/i })
-      .first()
-      .isVisible();
-    if (!hasBot) {
+    // Ensure a faux bot exists for the editor's picker. Asked of the API: the
+    // sidebar may not have loaded yet, and a second "Routine Bot" would make
+    // the picker ambiguous.
+    if (!(await hasBotNamed(page, "Routine Bot"))) {
       await page
         .getByRole("button", { name: /new bot/i })
         .first()
@@ -115,15 +114,23 @@ test.describe("Routines", () => {
       timeout: 20_000,
     });
 
-    // The bot's chat shows the run as a card; the prompt and the reply stay
-    // in the routine's own conversation (a user bubble would show the raw
-    // `**Routine "…"` label).
+    // The bot's chat shows the run as one quiet line; the prompt and the
+    // reply stay in the routine's own conversation (a user bubble would show
+    // the raw `**Routine "…"` label).
     const botId = await botIdOf(page, "Routine Bot");
     await page.goto(`/chats/${botId}`);
-    const card = page.getByTestId("routine-run-card").filter({ hasText: ROUTINE_NAME });
-    await expect(card).toBeVisible({ timeout: 20_000 });
-    await expect(card.getByText("succeeded")).toBeVisible();
+    const line = page.getByTestId("routine-runs").filter({ hasText: ROUTINE_NAME });
+    await expect(line).toBeVisible({ timeout: 20_000 });
+    await expect(line.getByRole("button")).toContainText("done");
     await expect(page.getByText(`**Routine "${ROUTINE_NAME}"`)).toHaveCount(0);
+    // Its output shows only when opened.
+    await line.getByRole("button").click();
+    await expect(line.getByTestId("routine-run")).toBeVisible();
+    // A new chat starts clean: earlier results stay on the Routines page.
+    await page.request.post(`/api/v1/bots/${botId}/reset`);
+    await page.reload();
+    await expect(page.getByRole("textbox")).toBeVisible();
+    await expect(page.getByTestId("routine-runs").filter({ hasText: ROUTINE_NAME })).toHaveCount(0);
     await page.goto("/routines");
 
     // The resume switch would re-arm through the queue; in this environment
@@ -135,6 +142,12 @@ test.describe("Routines", () => {
     await cleanup(page);
   });
 });
+
+async function hasBotNamed(page: import("@playwright/test").Page, name: string): Promise<boolean> {
+  const response = await page.request.get("/api/v1/bots");
+  const body = (await response.json()) as { data?: { name: string }[] };
+  return (body.data ?? []).some((entry) => entry.name === name);
+}
 
 /** Look up the bot id through the API using the page's auth cookie. */
 async function botIdOf(page: import("@playwright/test").Page, name: string): Promise<string> {

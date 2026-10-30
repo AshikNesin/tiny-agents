@@ -37,6 +37,8 @@ model Bot {
   systemPrompt       String    @default("")
   modelId            String
   conversationId     String    @unique
+  /// When the current chat conversation started (bot create, "New chat"); bots that predate it start at the migration. Routine run cards older than it stay out of the chat.
+  chatStartedAt      DateTime  @default(now())
   lastReadAt         DateTime?
   lastActivityAt     DateTime  @default(now())
   lastMessagePreview String?

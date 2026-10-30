@@ -24,18 +24,13 @@ import {
 } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle, type ComposerSubmission } from "./ChatComposer";
 import { MessageAttachments } from "./Attachments";
-import { RoutineRunCard } from "./RoutineRunCard";
+import { RoutineRuns } from "./RoutineRuns";
 import { browserInUse, useBrowserPanel } from "../lib/browser-panel";
 import { formatDayDivider } from "../lib/day-divider";
 import { chatTimeline } from "../lib/chat-timeline";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
-import type {
-  ChatMessage,
-  PendingMessage,
-  QueuedMessage,
-  RoutineRunCard as RoutineRunCardData,
-} from "../lib/chat-types";
+import type { ChatMessage, PendingMessage, QueuedMessage, RoutineRunCard } from "../lib/chat-types";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -51,7 +46,7 @@ import {
 const NO_MESSAGES: ChatMessage[] = [];
 const NO_PENDING: PendingMessage[] = [];
 const NO_QUEUED: QueuedMessage[] = [];
-const NO_RUNS: RoutineRunCardData[] = [];
+const NO_RUNS: RoutineRunCard[] = [];
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -162,7 +157,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const pending = chat?.pending ?? NO_PENDING;
   const queued = chat?.queued ?? NO_QUEUED;
   const routineRuns = chat?.routineRuns ?? NO_RUNS;
-  // Routine results (issue #63) sit between messages by when the run finished.
+  // Routine results (issue #63): quiet lines between messages, by finish time.
   const timeline = useMemo(() => chatTimeline(messages, routineRuns), [messages, routineRuns]);
   const busy = chat?.busy ?? false;
   const loaded = chat?.loaded ?? false;
@@ -481,12 +476,13 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                       {formatDayDivider(item.at)}
                     </div>
                   );
-                  if (item.kind === "routine-run") {
+                  if (item.kind === "routine-runs") {
+                    const key = `runs-${item.runs[0].id}`;
                     return (
-                      <Fragment key={`run-${item.run.id}`}>
+                      <Fragment key={key}>
                         {dayDivider}
-                        <MessageScrollerItem messageId={`run-${item.run.id}`}>
-                          <RoutineRunCard run={item.run} />
+                        <MessageScrollerItem messageId={key}>
+                          <RoutineRuns runs={item.runs} />
                         </MessageScrollerItem>
                       </Fragment>
                     );

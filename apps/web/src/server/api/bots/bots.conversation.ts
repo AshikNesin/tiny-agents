@@ -35,6 +35,8 @@ export interface BotRow {
   systemPrompt: string;
   modelId: string;
   conversationId: string;
+  /** When the current chat conversation started; routine cards older than it stay out. */
+  chatStartedAt: Date;
   lastReadAt: Date | null;
   lastActivityAt: Date;
   lastMessagePreview: string | null;

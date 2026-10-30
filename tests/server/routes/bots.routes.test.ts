@@ -767,10 +767,11 @@ describe("Bots API routes", () => {
       data: [
         {
           routineId: routine.id,
-          scheduledFor: new Date("2026-10-20T03:30:00Z"),
+          scheduledFor: new Date(),
           status: "succeeded",
           requestId: "routine:card:1",
-          finishedAt: new Date("2026-10-20T03:31:00Z"),
+          // In the bot's current thread (it started when the bot was created).
+          finishedAt: new Date(Date.now() + 1000),
           output: "Digest ready.",
         },
         {
@@ -802,6 +803,45 @@ describe("Bots API routes", () => {
     ]);
     // The transcript itself is the chat's alone.
     expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function));
+  });
+
+  it("leaves routine runs from before a new chat out of the new thread", async () => {
+    const bot = await createBot();
+    const routine = await prisma.routine.create({
+      data: {
+        botId: bot.id,
+        name: "digest",
+        prompt: "p",
+        schedule: { kind: "interval", minutes: 60 },
+        conversationId: "901",
+      },
+    });
+    await prisma.routineRun.create({
+      data: {
+        routineId: routine.id,
+        scheduledFor: new Date(),
+        status: "succeeded",
+        requestId: "routine:old-thread:1",
+        finishedAt: new Date(),
+        output: "From the old thread.",
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await request(buildApp()).post(`/api/v1/bots/${bot.id}/reset`).set(authorization).expect(200);
+    const after = await prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
+    expect(after.chatStartedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+
+    const response = await readFirstSse(
+      buildApp(),
+      `/api/v1/bots/${bot.id}/stream`,
+      '"type":"routine-runs"',
+    );
+    const event = response.text
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)) as { type: string; runs?: unknown[] })
+      .find((parsed) => parsed.type === "routine-runs");
+    expect(event?.runs).toEqual([]);
   });
 
   it("streams app-wide activity over SSE", async () => {
