@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { MoreHorizontal, Pencil, Pin, PinOff, Plus } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { History, MoreHorizontal, Pencil, Pin, PinOff, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,6 +68,7 @@ function BotRow({
 }) {
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
+  const navigate = useNavigate();
   const pinned = bot.pinnedAt !== null;
   const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
   const previewId = `bot-preview-${bot.id}`;
@@ -124,6 +125,14 @@ function BotRow({
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void openEditBot(bot.id)}>
             <Pencil className="size-4" /> Edit bot
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              onNavigate();
+              navigate(`/chats/${bot.id}?history=1`);
+            }}
+          >
+            <History className="size-4" /> Chat history
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

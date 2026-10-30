@@ -21,6 +21,7 @@ import type { Bot, ModelInfo } from "@/lib/bots-api";
 const sendMock = vi.fn().mockResolvedValue(undefined);
 const readMock = vi.fn().mockResolvedValue(undefined);
 const abortMock = vi.fn().mockResolvedValue(undefined);
+const pastChatsMock = vi.fn().mockResolvedValue([]);
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -29,6 +30,7 @@ vi.mock("@/lib/bots-api", () => ({
     reset: vi.fn(),
     read: () => readMock(),
     capabilities: vi.fn().mockResolvedValue([]),
+    pastChats: (...args: unknown[]) => pastChatsMock(...args),
   },
 }));
 
@@ -100,6 +102,7 @@ const user = userEvent.setup();
 
 beforeEach(() => {
   sendMock.mockClear();
+  pastChatsMock.mockResolvedValue([]);
   readMock.mockClear();
   abortMock.mockClear();
   localStorage.clear();
@@ -373,5 +376,24 @@ describe("ChatPane header", () => {
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
     expect(await screen.findByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
+  });
+
+  it("shows Chat history only once the bot has a past chat, and lists it", async () => {
+    seedStore();
+    pastChatsMock.mockResolvedValue([
+      {
+        id: "c1",
+        title: "Goa trip",
+        startedAt: "2026-10-12T10:00:00.000Z",
+        endedAt: "2026-10-20T10:00:00.000Z",
+        lastMessagePreview: "Booked the 6:40 flight",
+        messageCount: 34,
+      },
+    ]);
+    renderPane();
+    const toggle = await screen.findByRole("button", { name: "Chat history" });
+    await user.click(toggle);
+    expect(await screen.findByText("Goa trip")).toBeInTheDocument();
+    expect(screen.getByText(/34 messages/)).toBeInTheDocument();
   });
 });

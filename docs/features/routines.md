@@ -22,8 +22,8 @@ the bot's chat, or to the owner's queued messages.
 - **Moves and deletes.** Moving a routine to another bot clears its
   conversation (the next fire starts a fresh one for the new bot), stops the
   old one, and cancels a run still awaiting there. Deleting a routine or its
-  bot stops its conversation. Old conversations stay in agent.db, hidden, like
-  a chat's after "New chat".
+  bot stops its conversation. Old conversations stay in agent.db, hidden
+  (a chat's after "New chat" becomes a [past chat](./past-chats.md) instead).
 
 Routine runs still have their bot's identity: tool calls in a routine's
 conversation resolve to the bot through `conversationOwner`

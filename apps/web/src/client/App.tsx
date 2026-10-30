@@ -97,6 +97,7 @@ const router = createBrowserRouter(
         <Route path="/" element={<Navigate to="/chats" replace />} />
         <Route path="/chats" element={<ChatWorkspace />} />
         <Route path="/chats/:botId" element={<ChatWorkspace />} />
+        <Route path="/chats/:botId/history/:chatId" element={<ChatWorkspace />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/routines" element={<Routines />} />

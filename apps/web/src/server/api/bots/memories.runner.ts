@@ -100,7 +100,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-function resolveCaptureModel(models: CaptureModels, modelId: string) {
+export function resolveCaptureModel(models: CaptureModels, modelId: string) {
   const customPrefix = "custom:";
   if (modelId.startsWith(customPrefix)) {
     const rest = modelId.slice(customPrefix.length);

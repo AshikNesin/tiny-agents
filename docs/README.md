@@ -39,6 +39,7 @@ feature docs as you need them.
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files   |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions   |
 | [`features/routines.md`](./features/routines.md)                             | tiny-agents: where routine runs happen, result cards   |
+| [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats    |
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you      |
 | [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks       |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM              |

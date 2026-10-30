@@ -8,6 +8,7 @@ import { botsApi, type Bot as BotRow } from "../../lib/bots-api";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
+import { PastChatPane } from "../../components/PastChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
 
 /** Desktop layout (the sidebar is on screen), tracked live across resizes. */
@@ -30,7 +31,7 @@ function isDesktop(): boolean {
  * With no bots at all it is the "create your first bot" screen everywhere.
  */
 export function ChatWorkspace() {
-  const { botId } = useParams();
+  const { botId, chatId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const bots = useBotsStore((s) => s.bots);
@@ -95,7 +96,15 @@ export function ChatWorkspace() {
 
   return (
     <div className="h-full min-h-0">
-      {fullBot && currentListBot ? (
+      {fullBot && currentListBot && chatId ? (
+        // A past chat (issue #101), read-only until continued.
+        <PastChatPane
+          key={`${fullBot.id}-${chatId}`}
+          bot={fullBot}
+          chatId={chatId}
+          onContinued={(fresh) => setFullBot(fresh)}
+        />
+      ) : fullBot && currentListBot ? (
         <ChatPane
           key={fullBot.id}
           bot={fullBot}

@@ -75,7 +75,7 @@ Explicitly out of scope (see §15 Roadmap):
 | Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model. The avatar is a DiceBear "gaze" illustration derived from the name. Model defaults to `DEFAULT_MODEL`. |
 | Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                                                       |
 | Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                                                           |
-| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one is kept in `agent.db` but hidden.                                       |
+| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one becomes a past chat under **Chat history** (issue #101).                |
 
 ### 5.2 Chat
 

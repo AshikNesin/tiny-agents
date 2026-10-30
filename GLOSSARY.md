@@ -32,3 +32,7 @@ _Avoid_: prompt, form, survey
 **Echo**:
 The optimistic copy of an owner's send shown until the server confirms it. It is confirmed by request id when the entry recorded one, otherwise by text.
 _Avoid_: pending message, ghost bubble
+
+**Past chat**:
+A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only until the owner continues it, which moves the bot back onto it; nothing is submitted or reconciled there before that.
+_Avoid_: archive, old thread, history (for the record itself)

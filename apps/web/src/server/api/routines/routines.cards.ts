@@ -69,14 +69,20 @@ const cardSelect = {
   routine: { select: { name: true } },
 } as const;
 
-/** The bot's routine runs that finished since its chat thread started, oldest first. */
+/**
+ * The bot's routine runs that finished since its chat thread started, oldest
+ * first. `until` bounds a past chat (issue #101) to the runs that finished
+ * while it was the bot's chat.
+ */
 export async function chatCards(
   botId: string,
   since: Date,
   limit = CHAT_CARDS,
+  until?: Date,
 ): Promise<RoutineRunCard[]> {
+  const finishedAt = until ? { gte: since, lt: until } : { gte: since };
   const rows = await prisma.routineRun.findMany({
-    where: { routine: { botId }, status: { not: "awaiting" }, finishedAt: { gte: since } },
+    where: { routine: { botId }, status: { not: "awaiting" }, finishedAt },
     orderBy: { finishedAt: "desc" },
     take: limit,
     select: cardSelect,
