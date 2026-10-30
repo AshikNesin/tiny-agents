@@ -18,7 +18,7 @@ import { Switch } from "./ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ModelSelector } from "./ai-elements/ModelSelector";
 import { toast } from "sonner";
-import { Wrench } from "lucide-react";
+import { ChevronRight, Search, Wrench } from "lucide-react";
 import { metaLabelClass } from "@groot/ui/typography";
 import {
   botsApi,
@@ -32,6 +32,17 @@ import { skillsApi, type SkillSummary } from "../lib/skills-api";
 import { connectionsApi, type ConnectionSummary } from "../lib/connections-api";
 import { BotAvatar } from "./BotAvatar";
 import { errorMessage } from "../lib/errors";
+import {
+  applyPreset,
+  COLLAPSE_OVER,
+  groupValue,
+  matchesQuery,
+  permissionOf,
+  setAll,
+  summary,
+  toolTitle,
+  type ToolInfo,
+} from "../lib/tool-permissions";
 
 /** The server caps the persona at ~24 KB (bots.schema.ts). */
 const SYSTEM_PROMPT_MAX = 24_576;
@@ -46,10 +57,6 @@ interface BotDialogProps {
   onSaved: (bot: Bot) => void;
   /** Edit mode only: the bot was deleted from the dialog. */
   onDeleted?: (bot: Bot) => void;
-}
-
-function defaultPermission(tool: CapabilityInfo["tools"][number]): ToolPermission {
-  return tool.readOnly && !tool.askOnly ? "allow" : "ask";
 }
 
 /**
@@ -84,6 +91,9 @@ export function BotDialog({
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
   const [browserProfile, setBrowserProfile] = useState<BrowserProfile>("shared");
   const [autoReview, setAutoReview] = useState(false);
+  const [toolQuery, setToolQuery] = useState("");
+  /** Toolkits the user opened or closed; the rest follow their size. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +108,8 @@ export function BotDialog({
     setSelectedConnections(bot?.connectionIds ?? []);
     setBrowserProfile(bot?.browserProfile ?? "shared");
     setAutoReview(bot?.autoReview ?? false);
+    setToolQuery("");
+    setExpanded({});
   }, [open, bot, defaultModelId, models]);
 
   useEffect(() => {
@@ -136,6 +148,10 @@ export function BotDialog({
           (capability.tools.length > 0 || capability.setupHint),
       ),
     [capabilities],
+  );
+  const allTools = useMemo(
+    () => toolkitsList.flatMap((toolkit) => (toolkit.setupHint ? [] : toolkit.tools)),
+    [toolkitsList],
   );
 
   const save = async () => {
@@ -257,50 +273,80 @@ export function BotDialog({
           </p>
         )}
       </div>
+
+      {bot && (
+        // On a phone the footer keeps only Cancel and Save; delete lives here.
+        <div className="border-border/60 flex items-center gap-3 border-t pt-4 sm:hidden">
+          <p className="text-muted-foreground min-w-0 flex-1 text-xs">
+            Deletes the bot and its chat history.
+          </p>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setConfirmingDelete(true)}
+            disabled={saving}
+          >
+            Delete bot
+          </Button>
+        </div>
+      )}
     </>
   );
 
-  const toolRow = (tool: CapabilityInfo["tools"][number]) => {
-    const value = toolPermissions[tool.name] ?? defaultPermission(tool);
+  const permissionToggle = (
+    value: ToolPermission | "",
+    onChange: (next: ToolPermission) => void,
+    label: string,
+    askOnly?: boolean,
+  ) => (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next: string) => {
+        if (next) onChange(next as ToolPermission); // clicking the active item must not clear it
+      }}
+      spacing={0}
+      size="sm"
+      aria-label={label}
+      className="shrink-0"
+    >
+      {askOnly ? null : (
+        <ToggleGroupItem value="allow" className="text-xs">
+          Allow
+        </ToggleGroupItem>
+      )}
+      <ToggleGroupItem value="ask" className="text-xs">
+        {askOnly ? "Ask (always)" : "Ask"}
+      </ToggleGroupItem>
+      <ToggleGroupItem value="off" className="text-xs">
+        Off
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+
+  const toolRow = (tool: ToolInfo) => {
+    const title = toolTitle(tool);
     return (
-      <div key={tool.name} className="flex items-center gap-3 py-1.5 pl-8">
+      <div key={tool.name} className="flex items-center gap-3 py-1.5 sm:pl-7">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm">{tool.label}</p>
-          <p className="text-muted-foreground truncate text-xs">{tool.description}</p>
+          <p className="truncate text-sm">{title}</p>
+          <p className="text-muted-foreground line-clamp-2 text-xs sm:truncate">
+            {tool.description}
+          </p>
         </div>
-        <ToggleGroup
-          type="single"
-          value={value}
-          onValueChange={(next: string) => {
-            if (!next) return; // clicking the active item must not clear it
-            setToolPermissions((permissions) => ({
-              ...permissions,
-              [tool.name]: next as ToolPermission,
-            }));
-          }}
-          spacing={0}
-          size="sm"
-          aria-label={`${tool.label} permission`}
-        >
-          {tool.askOnly ? null : (
-            <ToggleGroupItem value="allow" className="text-xs">
-              Allow
-            </ToggleGroupItem>
-          )}
-          <ToggleGroupItem value="ask" className="text-xs">
-            {tool.askOnly ? "Ask (always)" : "Ask"}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="off" className="text-xs">
-            Off
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {permissionToggle(
+          permissionOf(toolPermissions, tool),
+          (next) => setToolPermissions((permissions) => ({ ...permissions, [tool.name]: next })),
+          `${title} permission`,
+          tool.askOnly,
+        )}
       </div>
     );
   };
 
   // Bots share one browser (and its sign-ins) unless one needs its own.
   const browserProfileRow = (
-    <div className="flex items-center gap-3 py-1.5 pl-8">
+    <div className="flex items-center gap-3 py-1.5 sm:pl-7">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">Browser profile</p>
         <p className="text-muted-foreground text-xs">
@@ -329,42 +375,141 @@ export function BotDialog({
     </div>
   );
 
-  const tools = (
-    <div className="space-y-4">
-      <p className="text-muted-foreground text-xs">
-        Every bot has these tools. <strong>Allow</strong> runs a tool unattended,{" "}
-        <strong>Ask</strong> waits for your approval, <strong>Off</strong> hides it from this bot.
-      </p>
-      <div className="bg-secondary/50 flex items-start gap-3 rounded-2xl p-3.5">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Auto-review</p>
-          <p className="text-muted-foreground text-xs">
-            A classifier approves low-risk Ask actions you clearly asked for, so they run without a
-            card. Anything else still asks you, and so do vault use and Ask (always) tools.
-          </p>
-        </div>
-        <Switch checked={autoReview} onCheckedChange={setAutoReview} aria-label="Auto-review" />
-      </div>
-      {toolkitsList.map((toolkit) => (
-        <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
-          <div className="flex items-center gap-3 p-3.5">
-            <Wrench className="text-muted-foreground size-4" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{toolkit.name}</p>
-              <p className="text-muted-foreground truncate text-xs">
-                {toolkit.setupHint ?? toolkit.description}
-              </p>
-            </div>
-          </div>
-          {!toolkit.setupHint && (
-            <div className="border-border/60 border-t px-3 pb-3 pt-1">
-              {toolkit.id === "browser" && browserProfileRow}
-              {toolkit.tools.map(toolRow)}
+  const searching = toolQuery.trim().length > 0;
+  // A query naming the toolkit ("notion") matches all of its tools.
+  const toolGroups = toolkitsList.map((toolkit) => ({
+    toolkit,
+    shown: toolkit.tools.filter((tool) => matchesQuery(tool, toolkit.name, toolQuery)),
+  }));
+  const visibleGroups = searching
+    ? toolGroups.filter(({ toolkit, shown }) => !toolkit.setupHint && shown.length > 0)
+    : toolGroups;
+
+  const toolkitGroup = ({ toolkit, shown }: (typeof toolGroups)[number]) => {
+    const setUp = !toolkit.setupHint;
+    // Searching opens every group with a match; otherwise big groups start closed.
+    const isOpen =
+      setUp && (searching || (expanded[toolkit.id] ?? toolkit.tools.length <= COLLAPSE_OVER));
+    // While searching, the group control and counts cover only the matches.
+    const value = groupValue(toolPermissions, shown);
+    const bodyId = `toolkit-${toolkit.id}-tools`;
+    return (
+      <div key={toolkit.id} className="bg-secondary/50 rounded-2xl">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3.5">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default max-sm:basis-full"
+            onClick={() => setExpanded((current) => ({ ...current, [toolkit.id]: !isOpen }))}
+            disabled={!setUp || searching}
+            aria-expanded={setUp ? isOpen : undefined}
+            aria-controls={setUp ? bodyId : undefined}
+          >
+            {setUp ? (
+              <ChevronRight
+                className={`text-muted-foreground size-4 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                aria-hidden
+              />
+            ) : (
+              <Wrench className="text-muted-foreground size-4 shrink-0" aria-hidden />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{toolkit.name}</span>
+              <span className="text-muted-foreground block truncate text-xs">
+                {toolkit.setupHint ??
+                  `${shown.length} ${shown.length === 1 ? "tool" : "tools"} · ${summary(toolPermissions, shown)}`}
+              </span>
+            </span>
+          </button>
+          {setUp && shown.length > 1 && (
+            <div className="ml-auto flex items-center gap-2">
+              {value === "mixed" && <span className="text-muted-foreground text-xs">Mixed</span>}
+              {permissionToggle(
+                value === "mixed" ? "" : value,
+                (next) => setToolPermissions((current) => setAll(current, shown, next)),
+                searching ? `All matching ${toolkit.name} tools` : `All ${toolkit.name} tools`,
+              )}
             </div>
           )}
         </div>
-      ))}
-      {connections.length > 0 && (
+        {isOpen && (
+          <div id={bodyId} className="border-border/60 border-t px-3.5 pb-3 pt-1">
+            {toolkit.id === "browser" && !searching && browserProfileRow}
+            {shown.map(toolRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const tools = (
+    <div className="space-y-4">
+      <div className="bg-popover sticky -top-1 z-10 -mx-1 space-y-2 px-1 pt-1 pb-2">
+        <div className="relative">
+          <Search
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={toolQuery}
+            onChange={(e) => setToolQuery(e.target.value)}
+            placeholder={`Search ${allTools.length} tools`}
+            aria-label="Search tools"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground text-xs max-sm:w-full">
+            {summary(toolPermissions, allTools) || "No tools"}
+          </span>
+          <span className="flex-1 max-sm:hidden" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setToolPermissions((current) => applyPreset(current, allTools, "read-only"))
+            }
+          >
+            Allow read-only
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setToolPermissions((current) => applyPreset(current, allTools, "ask-all"))
+            }
+          >
+            Ask for everything
+          </Button>
+        </div>
+      </div>
+      {!searching && (
+        <>
+          <p className="text-muted-foreground text-xs">
+            Every bot has these tools. <strong>Allow</strong> runs a tool unattended,{" "}
+            <strong>Ask</strong> waits for your approval, <strong>Off</strong> hides it from this
+            bot.
+          </p>
+          <div className="bg-secondary/50 flex items-start gap-3 rounded-2xl p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Auto-review</p>
+              <p className="text-muted-foreground text-xs">
+                A classifier approves low-risk Ask actions you clearly asked for, so they run
+                without a card. Anything else still asks you, and so do vault use and Ask (always)
+                tools.
+              </p>
+            </div>
+            <Switch checked={autoReview} onCheckedChange={setAutoReview} aria-label="Auto-review" />
+          </div>
+        </>
+      )}
+      {visibleGroups.map(toolkitGroup)}
+      {searching && visibleGroups.length === 0 && (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No tools match “{toolQuery.trim()}”.
+        </p>
+      )}
+      {connections.length > 0 && !searching && (
         <div>
           <p className={`${metaLabelClass} mb-1.5`}>Connections</p>
           {connections.map((connection) => {
@@ -441,7 +586,8 @@ export function BotDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-xl">
+      {/* Editing has a fixed height, so switching tabs never moves the tab bar. */}
+      <DialogContent className={bot ? "h-[min(85dvh,760px)] sm:max-w-xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>
           <DialogDescription>
@@ -497,18 +643,27 @@ export function BotDialog({
             {bot && (
               <Button
                 variant="ghost"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive max-sm:hidden"
                 onClick={() => setConfirmingDelete(true)}
                 disabled={saving}
               >
                 Delete bot
               </Button>
             )}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="max-sm:flex-1"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
                 Cancel
               </Button>
-              <Button onClick={save} disabled={saving || !name.trim() || !modelId}>
+              <Button
+                className="max-sm:flex-1"
+                onClick={save}
+                disabled={saving || !name.trim() || !modelId}
+              >
                 {saving ? "Saving…" : bot ? "Save changes" : "Create bot"}
               </Button>
             </div>

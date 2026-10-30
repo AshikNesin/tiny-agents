@@ -86,11 +86,15 @@ describe("BotDialog", () => {
       />,
     );
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Delete bot" }));
+    // The Profile tab (phones) and the footer (wider screens) each offer it.
+    const offers = screen.getAllByRole("button", { name: "Delete bot" });
+    expect(offers).toHaveLength(2);
+    await user.click(offers[1]);
     expect(screen.getByText("Delete Ada? This cannot be undone.")).toBeTruthy();
     expect(removeMock).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Delete bot" }));
+    // The confirmation's button replaces the footer, after the Profile tab's.
+    await user.click(screen.getAllByRole("button", { name: "Delete bot" }).at(-1)!);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(bot));
     expect(removeMock).toHaveBeenCalledWith("b1");
     expect(onOpenChange).toHaveBeenCalledWith(false);
