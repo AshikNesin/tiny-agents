@@ -165,7 +165,9 @@ export function Storage({ onView }: StorageProps = {}) {
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead aria-label="Select file" className="w-12" />
+                  <TableHead className="w-12">
+                    <span className="sr-only">Select file</span>
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Modified</TableHead>

@@ -12,6 +12,13 @@ import {
 } from "lucide-react";
 
 /**
+ * Red text on the red tint must still reach 4.5:1: plain --destructive measured
+ * 4.0 (light) and 4.2 (dark) at 12px. Mixing in the foreground darkens it on
+ * light surfaces and lightens it on dark ones, from tokens alone.
+ */
+const DESTRUCTIVE_TEXT = "text-[color-mix(in_oklch,var(--destructive)_65%,var(--foreground))]";
+
+/**
  * Canonical status badge — the single source of truth for rendering a job /
  * health status. Colors come exclusively from design tokens.
  *
@@ -76,14 +83,14 @@ const STATUS_CONFIG: Record<StatusVariant, StatusConfig> = {
   },
   failed: {
     dot: "bg-destructive",
-    text: "text-destructive",
+    text: DESTRUCTIVE_TEXT,
     bg: "bg-destructive/10",
     label: "Failed",
     icon: XCircle,
   },
   error: {
     dot: "bg-destructive",
-    text: "text-destructive",
+    text: DESTRUCTIVE_TEXT,
     bg: "bg-destructive/10",
     label: "Error",
     icon: AlertCircle,
@@ -125,7 +132,7 @@ const STATUS_CONFIG: Record<StatusVariant, StatusConfig> = {
   },
   expired: {
     dot: "bg-destructive",
-    text: "text-destructive",
+    text: DESTRUCTIVE_TEXT,
     bg: "bg-destructive/10",
     label: "Expired",
     icon: AlertCircle,

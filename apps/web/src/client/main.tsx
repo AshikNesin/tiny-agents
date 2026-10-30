@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
 import App from "./App";
-import { installFeedbackDismiss } from "./lib/feedback";
+import { installFeedbackDismiss, installFeedbackLabels } from "./lib/feedback";
 // Inter loads from JS, not from the shell CSS: an @import there is inlined by
 // Tailwind before Vite sees it, so the fonts' relative url()s were never
 // emitted and production served index.html in their place (issue #82).
@@ -40,6 +40,7 @@ setDefaultTheme("dark");
 initTheme();
 // The FeedbackBee panel closes on an outside click, like the app's modals.
 installFeedbackDismiss();
+installFeedbackLabels();
 
 const queryClient = new QueryClient({
   defaultOptions: {

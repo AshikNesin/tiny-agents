@@ -91,7 +91,7 @@ function BotRow({
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate">{bot.name}</span>
             {preview && (
-              <span className="text-fg-tertiary shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible">
+              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible">
                 {relativeTime(bot.lastActivityAt)}
               </span>
             )}

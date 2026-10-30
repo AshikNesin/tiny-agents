@@ -54,16 +54,24 @@ export function JobsFilters({
         value={queryParams.state}
         onValueChange={(value) => setQueryParams({ state: value, page: 0 })}
       >
-        <TabsList>
-          {primaryOptions.map((option) => (
-            <TabsTrigger key={option.value} value={option.value}>
-              {option.label}
-            </TabsTrigger>
-          ))}
+        {/* These tabs filter one list (there are no tab panels to control),
+            and the overflow menu sits beside the tab list, not inside it:
+            a tablist may only hold tabs. */}
+        <div className="bg-muted inline-flex h-9 items-center rounded-xl p-[3px]">
+          <TabsList className="h-full bg-transparent p-0">
+            {primaryOptions.map((option) => (
+              <TabsTrigger key={option.value} value={option.value} aria-controls={undefined}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                aria-label={
+                  activeSecondaryTab ? `State: ${activeSecondaryTab.label}` : "More job states"
+                }
                 className={`inline-flex h-full items-center justify-center whitespace-nowrap rounded-sm px-2 py-1 text-sm font-medium focus-visible:outline-none ${
                   activeSecondaryTab
                     ? "bg-background text-foreground shadow-sm"
@@ -88,7 +96,7 @@ export function JobsFilters({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </TabsList>
+        </div>
       </Tabs>
 
       <div className="flex items-center gap-2 shrink-0">

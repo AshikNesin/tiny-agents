@@ -446,7 +446,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           <p
             aria-hidden={!busy && !mentionTip}
             data-testid="composer-hint"
-            className={`text-muted-foreground/60 pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
+            className={`text-muted-foreground pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
               busy || mentionTip ? "opacity-100" : "opacity-0"
             }`}
           >

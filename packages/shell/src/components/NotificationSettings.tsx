@@ -87,7 +87,7 @@ function StatusCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Push notifications</CardTitle>
+        <CardTitle aria-level={2}>Push notifications</CardTitle>
         <CardDescription>
           Pushover alerts when a bot needs you or unattended work finishes.
         </CardDescription>
@@ -259,7 +259,7 @@ function PreferencesCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>What to send</CardTitle>
+        <CardTitle aria-level={2}>What to send</CardTitle>
         <CardDescription>
           Messages never include tool arguments, outputs or secrets.
         </CardDescription>
@@ -404,7 +404,7 @@ function LogCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent notifications</CardTitle>
+        <CardTitle aria-level={2}>Recent notifications</CardTitle>
         <CardDescription>The last 20, kept for 30 days. Titles only.</CardDescription>
       </CardHeader>
       <CardContent>

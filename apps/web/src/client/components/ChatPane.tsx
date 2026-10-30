@@ -365,22 +365,25 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           >
             <Menu className="size-5" />
           </Button>
-          <button
-            type="button"
-            onClick={onEditBot}
-            className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
-            aria-label={`Edit ${bot.name}`}
-            title="Bot settings"
-          >
-            <BotAvatar name={bot.name} className="size-5" />
-            <span className="truncate">{bot.name}</span>
-            {bot.description && (
-              <span className="text-muted-foreground hidden min-w-0 truncate font-normal lg:inline">
-                {bot.description}
-              </span>
-            )}
-            <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
-          </button>
+          {/* The page's heading is the bot's name; the name opens its settings. */}
+          <h1 className="flex min-w-0">
+            <button
+              type="button"
+              onClick={onEditBot}
+              className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
+              aria-label={`Edit ${bot.name}`}
+              title="Bot settings"
+            >
+              <BotAvatar name={bot.name} className="size-5" />
+              <span className="truncate">{bot.name}</span>
+              {bot.description && (
+                <span className="text-muted-foreground hidden min-w-0 truncate font-normal lg:inline">
+                  {bot.description}
+                </span>
+              )}
+              <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
+            </button>
+          </h1>
           <div className="ml-auto flex shrink-0 items-center">
             <Button
               variant="ghost"

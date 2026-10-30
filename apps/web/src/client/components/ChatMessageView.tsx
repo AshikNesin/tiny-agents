@@ -62,7 +62,7 @@ function CopyButton({ text, at }: { text: string; at?: number }) {
         <time
           dateTime={new Date(at!).toISOString()}
           title={stamp.full}
-          className="text-fg-tertiary text-[11px] leading-none whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+          className="text-muted-foreground text-[11px] leading-none whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
         >
           {stamp.short}
         </time>
