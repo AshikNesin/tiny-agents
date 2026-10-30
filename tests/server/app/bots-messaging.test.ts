@@ -196,6 +196,37 @@ describe("messaging store (issues #13, #15, #16)", () => {
     );
   });
 
+  it("delivers from a routine run as its bot, with no answer relayed into the chat (issue #63)", async () => {
+    const sender = await seedBot("Sender", "1");
+    const target = await seedBot("Target", "2");
+    await prisma.routine.create({
+      data: {
+        botId: sender.id,
+        name: "digest",
+        prompt: "Ask Target.",
+        schedule: { kind: "interval", minutes: 60 },
+        conversationId: "10",
+      },
+    });
+    const store = createBotMessagingStore(runtime);
+    expect((await store.roster(10)).map((bot) => bot.name)).toEqual(["Target"]);
+    const result = await store.deliver({
+      conversationId: 10,
+      toName: "Target",
+      text: "from the routine",
+      requestId: "routine-send-1",
+      sourceKey: "sk-routine-send-1",
+    });
+    expect(result).toMatchObject({ delivered: true });
+    expect(
+      await prisma.botMessage.findUnique({ where: { requestId: "routine-send-1" } }),
+    ).toMatchObject({
+      fromBotId: sender.id,
+      toBotId: target.id,
+      replyToBotId: null,
+    });
+  });
+
   it("reports busy roster entries and a queued receipt (issue #15)", async () => {
     await seedBot("Sender", "1");
     await seedBot("Busy Bot", "2");

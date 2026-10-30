@@ -50,7 +50,7 @@ model Bot {
   messagesTo         BotMessage[] @relation("BotMessagesTo")
   /// Conversations whose answer routes back to this bot.
   answersFor         BotMessage[] @relation("BotMessagesReplyTo")
-  /// Scheduled routines that run prompts in this bot's conversation.
+  /// Scheduled routines; each runs in a conversation of its own (issue #63).
   routines           Routine[]
   /// Long-term memories this bot keeps about the owner (issue #22).
   memories           Memory[]
@@ -288,6 +288,8 @@ model Routine {
   pendingJobId String? @unique
   /// Durable tool-call id: exactly-once row create across pi-durable replays (same pattern as Task.sourceKey).
   sourceKey    String?   @unique
+  /// The routine's own durable conversation (issue #63): every run is submitted here, never into the bot's chat. Created on first fire; null until then.
+  conversationId String? @unique
   bot       Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
   runs      RoutineRun[]
   createdAt DateTime @default(now())

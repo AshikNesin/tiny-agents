@@ -1,21 +1,27 @@
 /**
- * The completion listener: fired runs await their bot's reply, and this
- * watcher resolves them off the runtime's activity feed. When a conversation
- * holding an awaiting run goes idle, the run adopts the last assistant reply
- * (2000-char preview) or the model error. A boot sweep marks runs whose
- * conversations are idle at startup as failed (interrupted by restart).
+ * The completion listener: fired runs await their bot's reply in the
+ * routine's own conversation (issue #63), and this watcher resolves them off
+ * the runtime's activity feed. When a conversation holding an awaiting run
+ * goes idle, the run adopts the last assistant reply (2000-char preview) or
+ * the model error; a run whose `ask` tool was refused (nobody watches a
+ * routine's conversation to approve it) fails with the tool named. A boot
+ * sweep marks runs whose conversations are idle at startup as failed
+ * (interrupted by restart). Each resolved run shows as a card in the chat.
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
-import { notifyRoutineRun } from "../notifications/notifications.wiring";
 import type { RoutineRunRef } from "../notifications/notifications.events";
+import { announceRun } from "./routines.cards";
 
 export const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
 
 /** Minimal runtime surface the watcher needs (the full AgentRuntime satisfies it). */
-export type RoutinesRuntime = Pick<AgentRuntime, "onActivity" | "isBusy" | "finishedReplies">;
+export type RoutinesRuntime = Pick<
+  AgentRuntime,
+  "onActivity" | "isBusy" | "finishedReplies" | "listCapabilities"
+>;
 
 export interface RoutinesCompletionWatcher {
   /** Resolve awaiting runs of one conversation (used on idle transitions). */
@@ -50,19 +56,59 @@ export function matchingReply(
   return match;
 }
 
+/**
+ * Tools refused for want of an approval among the replies after the floor
+ * and up to `untilMs`: every message of the run's turn, not only the last.
+ */
+export function refusedTools(
+  replies: FinishedReply[],
+  floorMs: number,
+  untilMs?: number,
+): string[] {
+  const names = new Set<string>();
+  for (const reply of replies) {
+    if (reply.createdAt <= floorMs) continue;
+    if (untilMs !== undefined && reply.createdAt > untilMs) break;
+    for (const name of reply.refused ?? []) names.add(name);
+  }
+  return [...names];
+}
+
+/** Why a run failed on refused tools, telling the owner how to let them run. */
+export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): string {
+  const allowable = tools.filter((tool) => !askOnly.has(tool));
+  const never = tools.filter((tool) => askOnly.has(tool));
+  const list = (names: string[]) => names.map((name) => `\`${name}\``).join(", ");
+  const parts: string[] = [];
+  if (allowable.length > 0) {
+    parts.push(
+      `Needs approval for ${list(allowable)}; set ${allowable.length === 1 ? "it" : "them"} to Allow for this bot to use ${allowable.length === 1 ? "it" : "them"} in routines.`,
+    );
+  }
+  if (never.length > 0) {
+    parts.push(`${list(never)} always asks for approval, so routines can't use it.`);
+  }
+  return parts.join(" ");
+}
+
 async function awaitingRunsWithBot() {
   const rows = await prisma.routineRun.findMany({
     where: { status: "awaiting" },
     orderBy: { scheduledFor: "asc" },
     include: {
       routine: {
-        select: { name: true, bot: { select: { id: true, name: true, conversationId: true } } },
+        select: {
+          name: true,
+          conversationId: true,
+          bot: { select: { id: true, name: true, conversationId: true } },
+        },
       },
     },
   });
   return rows.map((row) => ({
     run: row,
-    conversationId: Number(row.routine.bot.conversationId),
+    // Runs fired before routines had conversations of their own awaited the chat.
+    conversationId: Number(row.routine.conversationId ?? row.routine.bot.conversationId),
     ref: {
       runId: row.id,
       routineName: row.routine.name,
@@ -72,22 +118,50 @@ async function awaitingRunsWithBot() {
 }
 
 export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCompletionWatcher {
-  async function resolveRun(ref: RoutineRunRef, reply: FinishedReply): Promise<void> {
+  /** Tools that can never be set to Allow (`askOnly`). */
+  function askOnlyTools(): Set<string> {
+    try {
+      return new Set(
+        rt
+          .listCapabilities()
+          .flatMap((capability) => capability.tools)
+          .filter((tool) => tool.askOnly)
+          .map((tool) => tool.name),
+      );
+    } catch {
+      return new Set();
+    }
+  }
+
+  async function resolveRun(
+    ref: RoutineRunRef,
+    reply: FinishedReply,
+    refused: string[],
+  ): Promise<void> {
     if (reply.error !== undefined) {
       const error = preview(reply.error, ERROR_PREVIEW_CHARS);
       await prisma.routineRun.update({
         where: { id: ref.runId },
         data: { status: "failed", finishedAt: new Date(), error },
       });
-      notifyRoutineRun(ref, { status: "failed", error });
+      announceRun(ref, { status: "failed", error });
       return;
     }
     const output = preview(reply.text, OUTPUT_PREVIEW_CHARS);
+    if (refused.length > 0) {
+      const error = refusalReason(refused, askOnlyTools()).slice(0, ERROR_PREVIEW_CHARS);
+      await prisma.routineRun.update({
+        where: { id: ref.runId },
+        data: { status: "failed", finishedAt: new Date(), error, output: output || null },
+      });
+      announceRun(ref, { status: "failed", error });
+      return;
+    }
     await prisma.routineRun.update({
       where: { id: ref.runId },
       data: { status: "succeeded", finishedAt: new Date(), output },
     });
-    notifyRoutineRun(ref, { status: "succeeded", output });
+    announceRun(ref, { status: "succeeded", output });
   }
 
   async function markInterrupted(ref: RoutineRunRef): Promise<void> {
@@ -95,7 +169,7 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
       where: { id: ref.runId },
       data: { status: "failed", finishedAt: new Date(), error: "interrupted" },
     });
-    notifyRoutineRun(ref, { status: "failed", error: "Interrupted by a server restart." });
+    announceRun(ref, { status: "failed", error: "Interrupted by a server restart." });
   }
 
   async function resolveConversation(conversationId: number): Promise<number> {
@@ -119,9 +193,10 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
           ? matchingReply(replies, floorAt, next)
           : matchingReply(replies, floorAt);
       if (!reply) continue;
+      const refused = refusedTools(replies, floorAt, reply.createdAt);
       floor = reply.createdAt;
       try {
-        await resolveRun(runs[i].ref, reply);
+        await resolveRun(runs[i].ref, reply, refused);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Failed to resolve an awaiting routine run");

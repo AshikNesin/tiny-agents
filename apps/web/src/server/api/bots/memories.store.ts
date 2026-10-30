@@ -21,6 +21,7 @@ import {
 } from "./memories.domain";
 import { applyExtraction } from "./memories.capture";
 import { getAgentRuntime } from "./bots.runtime";
+import { conversationOwner } from "./bots.owner";
 import { isUnattended, type ChatReader } from "./bots.unattended";
 import type { MemoryLine, MemoryStore } from "@tiny-agents/agent";
 
@@ -45,10 +46,13 @@ export function createMemoryStore(
 ): MemoryStore {
   /** The bot behind the conversation, when memory may change in this turn. */
   const writable = async (conversationId: number) => {
-    const bot = await prisma.bot.findUnique({
-      where: { conversationId: String(conversationId) },
-      select: { id: true, memoryEnabled: true },
-    });
+    const owner = await conversationOwner(conversationId);
+    const bot = owner
+      ? await prisma.bot.findUnique({
+          where: { id: owner.botId },
+          select: { id: true, memoryEnabled: true },
+        })
+      : null;
     if (!bot?.memoryEnabled) return "disabled" as const;
     // A runtime that can't be read counts as unattended (refuses, never allows).
     const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
@@ -89,8 +93,11 @@ export function createMemoryStore(
     },
 
     async list(conversationId: number) {
+      // A routine's turns read its bot's memories too; only writes are refused.
+      const owner = await conversationOwner(conversationId);
+      if (!owner) return [];
       const bot = await prisma.bot.findUnique({
-        where: { conversationId: String(conversationId) },
+        where: { id: owner.botId },
         select: {
           memoryEnabled: true,
           memories: { orderBy: { createdAt: "asc" } },

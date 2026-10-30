@@ -41,8 +41,9 @@ again.
 
 Each can be turned off in Settings. "Nobody watched" means no open chat
 stream for that bot (`bots.viewers.ts`); approvals and questions always send,
-since the owner may be on another tab. A routine's own turn reports through
-the routine events only. The `?focus=` link scrolls the chat to the waiting
+since the owner may be on another tab. A routine's run happens in the
+routine's own conversation and reports through the routine events only; it
+never waits on the owner (see [routines](./routines.md)). The `?focus=` link scrolls the chat to the waiting
 card (`focus-param.ts`).
 
 ## Content rules

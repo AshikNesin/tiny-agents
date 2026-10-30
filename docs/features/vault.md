@@ -88,9 +88,10 @@ Per item, set in the Vault UI:
 | identity | none (owner reference only in v1)           |
 | api_key  | `http_request`, `mcp`                       |
 
-A turn counts as **unattended** when the conversation's latest user message
-is a routine's prompt or a delivery from another bot. When in doubt it counts
-as unattended, which only ever refuses more.
+A turn counts as **unattended** when it runs in a routine's own conversation
+(every routine run, see [routines](./routines.md)) or when the chat's latest
+user message is a delivery from another bot. When in doubt it counts as
+unattended, which only ever refuses more.
 
 ## Sandbox commands and the egress allowlist
 

@@ -58,8 +58,11 @@ export interface ChatToolCall {
   durationMs?: number;
   /** Durable tool task id: what approval decisions address. */
   taskId?: number;
-  /** Set once the owner answered an approval for this call; `auto`: auto-review approved it. */
-  approval?: "approved" | "denied" | "auto";
+  /**
+   * Set once the owner answered an approval for this call; `auto`: auto-review
+   * approved it; `refused`: it would have asked in a conversation nobody watches.
+   */
+  approval?: "approved" | "denied" | "auto" | "refused";
   /** Epoch ms after which a pending approval or credential request expires. */
   expiresAt?: number;
   /** Vault sinks: the item and target the approval card shows (never a value). */
@@ -251,6 +254,8 @@ export interface FinishedReply {
   createdAt: number;
   /** Set when the reply ended in a model error: the provider's message. */
   error?: string;
+  /** Tools this message called that were refused for want of an approval (unattended runs). */
+  refused?: string[];
 }
 
 /** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */

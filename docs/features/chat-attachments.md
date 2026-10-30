@@ -76,8 +76,9 @@ first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
 and the bot says so.
 
 Every submit path (send, mention delivery, bot-to-bot message and relay,
-routine fire) goes through `submitToBot` in `bots.conversation.ts`, which
-reconciles the bot's durable config from its row first and drops a stale
+routine fire into the routine's own conversation) goes through `submitToBot`
+in `bots.conversation.ts`, which reconciles the target conversation's durable
+config from the bot's row first and drops a stale
 `vision` toolkit when the model sees images inline; editing a bot or
 answering an approval reconciles too. A durable conversation can never run
 a selection older than its row.

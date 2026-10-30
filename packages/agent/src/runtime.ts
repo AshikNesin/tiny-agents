@@ -450,13 +450,15 @@ export class AgentRuntime {
   }
 
   #setPermissions(
-    doc: { allow: string[]; review?: string[] },
+    doc: { allow: string[]; review?: string[]; unattended?: boolean },
     selection: CapabilitySelection,
   ): void {
     doc.allow = this.#allowedTools(selection);
-    const review = this.#reviewableTools(selection);
+    const review = selection.unattended ? [] : this.#reviewableTools(selection);
     if (review.length > 0) doc.review = review;
     else delete doc.review;
+    if (selection.unattended) doc.unattended = true;
+    else delete doc.unattended;
   }
 
   async #writePermissions(ref: ConversationRef, selection: CapabilitySelection): Promise<void> {
@@ -831,11 +833,15 @@ export class AgentRuntime {
     for (const message of state.messages) {
       if (message.role !== "assistant" || message.status === "streaming") continue;
       const error = message.status === "error" ? message.error : undefined;
-      if (!message.text && error === undefined) continue;
+      const refused = message.toolCalls
+        ?.filter((call) => call.approval === "refused")
+        .map((call) => call.name);
+      if (!message.text && error === undefined && !refused?.length) continue;
       replies.push({
         text: message.text,
         createdAt: message.createdAt,
         ...(error !== undefined ? { error } : {}),
+        ...(refused?.length ? { refused } : {}),
       });
     }
     return replies;

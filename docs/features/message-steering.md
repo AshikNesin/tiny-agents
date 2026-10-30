@@ -36,8 +36,10 @@ DELETE /bots/:id/messages/:requestId → AgentRuntime.withdraw
   showing them.
 - `queuedOf` filters the inbox to owner messages: write submissions
   (compaction summaries) and peer deliveries (mentions, bot-to-bot relay)
-  never render as owner bubbles. Routine prompts are plain inputs, so a
-  routine firing at a busy bot is visible (and cancelable) in its queue.
+  never render as owner bubbles. Routine prompts never reach the chat at all:
+  each routine runs in a conversation of its own (see
+  [routines](./routines.md)), so a fire never queues behind, or steers into,
+  the owner's reply.
 - Withdrawal outcomes: `withdrawn` (200), `already_placed` / `settled`
   (409 — the message is already part of the conversation), `not_found`
   (404). Re-withdrawing a withdrawn input stays `withdrawn`, not 409.

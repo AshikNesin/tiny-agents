@@ -53,13 +53,14 @@ custom providers). The override is read at boot, not lazily from `process.env`.
 Captures never overlap per conversation. Skip rules run
 before any model call: memory off, no resolvable model (faux mode disables capture),
 trivial window (advances the watermark without a call), no owner turns since
-the watermark. Peer deliveries and routine fires are not memory sources —
-only owner-authored turns count. One capture reads at most the newest
+the watermark. Peer deliveries are not memory sources — only owner-authored
+turns count — and a routine's own conversation is never captured (its runs
+never enter the chat, see [routines](./routines.md)). One capture reads at most the newest
 24 000 characters of whole lines; when the cap applies (a long backlog, or a
 bot that predates memory with no watermark) the watermark still advances to
 the window's end, so an oversized window never retries forever. Assistant replies provide context for the
 owner's words, clipped to 1,500 characters each; error replies and replies
-to peers/routines stay out. Role labels and assistant text do not count
+to peers stay out. Role labels and assistant text do not count
 toward the trivial threshold.
 
 The extraction prompt carries the anti-junk contract (owner's words only,
@@ -100,11 +101,11 @@ so the bot can confirm exactly what went. Words that pick out nothing in
 particular (“the owner”) are refused as too vague. It also defaults to
 **Ask**.
 
-Both tools work only in the owner's own turns. In a routine run or a turn
-another bot started they are refused, even with **Always allow**: a memory
-planted there (for example by injected web content) would reach every later
-prompt. The check is `isUnattended` (`bots.unattended.ts`), shared with the
-vault.
+Both tools work only in the owner's own turns. In a routine run (any turn in
+a routine's own conversation) or a turn another bot started they are refused,
+even with **Always allow**: a memory planted there (for example by injected
+web content) would reach every later prompt. The check is `isUnattended`
+(`bots.unattended.ts`), shared with the vault.
 
 ## API
 

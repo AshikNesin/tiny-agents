@@ -6,6 +6,7 @@
  */
 import { prisma } from "@groot/core/database";
 import type { BrowserTarget } from "@tiny-agents/agent";
+import { conversationOwner } from "./bots.owner";
 
 export const SHARED_BROWSER_PROFILE = "shared";
 
@@ -18,10 +19,14 @@ export function browserTargetForBot(bot: { id: string; browserProfile: string })
 
 /** The toolkit's resolver: tool calls know their conversation, not their bot. */
 export async function browserTargetForConversation(conversationId: number): Promise<BrowserTarget> {
-  const bot = await prisma.bot.findUnique({
-    where: { conversationId: String(conversationId) },
-    select: { id: true, browserProfile: true },
-  });
+  // A routine's runs drive their bot's browser (issue #63).
+  const owner = await conversationOwner(conversationId);
+  const bot = owner
+    ? await prisma.bot.findUnique({
+        where: { id: owner.botId },
+        select: { id: true, browserProfile: true },
+      })
+    : null;
   // A conversation no bot shows any more (retired by "New chat") still
   // gets the shared browser, in a tab of its own.
   return bot

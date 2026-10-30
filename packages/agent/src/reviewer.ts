@@ -18,7 +18,7 @@ export interface ReviewInput {
   args: unknown;
   /** The bot's persona / system prompt. */
   instructions?: string;
-  /** The owner's latest messages, oldest first (a routine's prompt counts). */
+  /** The owner's latest messages, oldest first (routine runs are never reviewed). */
   ownerMessages: string[];
 }
 

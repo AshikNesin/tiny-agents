@@ -221,10 +221,16 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
 
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await findBotRow(id);
+  // Its routines go with it (cascade), and their conversations (issue #63).
+  const routines = await prisma.routine.findMany({
+    where: { botId: bot.id, conversationId: { not: null } },
+    select: { conversationId: true },
+  });
   // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
   // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
   await retireConversation(rt, bot.conversationId);
+  await Promise.all(routines.map((routine) => retireConversation(rt, routine.conversationId!)));
   return toBot(deleted);
 }
 

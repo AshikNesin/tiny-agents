@@ -109,6 +109,8 @@ async function createBot(
 async function readFirstSse(
   app: Express,
   path: string,
+  /** Read until the stream carries this text (the first event by default). */
+  until = "data:",
 ): Promise<{ status: number; contentType: string | undefined; text: string }> {
   return new Promise((resolveSse, rejectSse) => {
     let settled = false;
@@ -126,7 +128,7 @@ async function readFirstSse(
         response.setEncoding("utf8");
         response.on("data", (chunk: string) => {
           text += chunk;
-          if (text.includes("data:")) {
+          if (text.includes(until)) {
             settled = true;
             clearTimeout(timer);
             stream.abort();
@@ -747,6 +749,58 @@ describe("Bots API routes", () => {
     expect(response.contentType).toContain("text/event-stream");
     expect(response.text).toContain("data:");
     expect(response.text).toContain('"type":"snapshot"');
+    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function));
+  });
+
+  it("streams the bot's finished routine runs as cards beside the transcript (issue #63)", async () => {
+    const bot = await createBot();
+    const routine = await prisma.routine.create({
+      data: {
+        botId: bot.id,
+        name: "digest",
+        prompt: "p",
+        schedule: { kind: "interval", minutes: 60 },
+        conversationId: "900",
+      },
+    });
+    await prisma.routineRun.createMany({
+      data: [
+        {
+          routineId: routine.id,
+          scheduledFor: new Date("2026-10-20T03:30:00Z"),
+          status: "succeeded",
+          requestId: "routine:card:1",
+          finishedAt: new Date("2026-10-20T03:31:00Z"),
+          output: "Digest ready.",
+        },
+        {
+          routineId: routine.id,
+          scheduledFor: new Date("2026-10-21T03:30:00Z"),
+          status: "awaiting",
+          requestId: "routine:card:2",
+        },
+      ],
+    });
+
+    const response = await readFirstSse(
+      buildApp(),
+      `/api/v1/bots/${bot.id}/stream`,
+      '"type":"routine-runs"',
+    );
+    const event = response.text
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)) as { type: string; runs?: unknown[] })
+      .find((parsed) => parsed.type === "routine-runs");
+    // Only finished runs get a card; the awaiting one is still working.
+    expect(event?.runs).toEqual([
+      expect.objectContaining({
+        routineName: "digest",
+        status: "succeeded",
+        output: "Digest ready.",
+      }),
+    ]);
+    // The transcript itself is the chat's alone.
     expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function));
   });
 

@@ -1,8 +1,10 @@
 /**
  * Engine tests: the routine-fire handler's exactly-once contract (double
- * delivery, crash between submit and chain, missed-run grace, late once) and
- * the completion watcher (idle resolution, restart boot sweep). Real SQLite
- * test DB, fake runtime, queue mocked at the adapter boundary.
+ * delivery, crash between submit and chain, missed-run grace, late once),
+ * the routine's own conversation (issue #63: never the bot's chat), and the
+ * completion watcher (idle resolution, refused tools, restart boot sweep,
+ * chat cards). Real SQLite test DB, fake runtime, queue mocked at the
+ * adapter boundary.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { prisma } from "@groot/core/database";
@@ -12,7 +14,15 @@ import {
   runRequestId,
   type RoutineFirePayload,
 } from "../../../../apps/web/src/server/api/routines/routines.jobs";
-import { createRoutinesCompletionWatcher } from "../../../../apps/web/src/server/api/routines/routines.watcher";
+import {
+  createRoutinesCompletionWatcher,
+  refusalReason,
+} from "../../../../apps/web/src/server/api/routines/routines.watcher";
+import {
+  chatCards,
+  onRoutineCard,
+  type RoutineRunCard,
+} from "../../../../apps/web/src/server/api/routines/routines.cards";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 
 let jobCounter = 0;
@@ -31,12 +41,17 @@ vi.mock("@groot/jobs/server/client", () => ({
   jobQueueReady: () => true,
 }));
 
-/** Finished replies the runtime reports for the bot's conversation. */
+/** The bot's chat, where the owner talks (seeded on the bot row). */
+const CHAT = 7;
+/** The conversation the fake runtime creates for a routine on its first fire. */
+const ROUTINE_CONVERSATION = 42;
+
+/** Finished replies the runtime reports for the routine's conversation. */
 let chatReplies: FinishedReply[] = [];
 
 function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
   return {
-    createConversation: vi.fn(),
+    createConversation: vi.fn().mockResolvedValue(ROUTINE_CONVERSATION),
     configure: vi.fn().mockResolvedValue(undefined),
     submit: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn(),
@@ -55,7 +70,7 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
 
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
   const bot = await prisma.bot.create({
-    data: { name: "Bot", modelId: "m1", conversationId: "7" },
+    data: { name: "Bot", modelId: "m1", conversationId: String(CHAT) },
   });
   const routine = await prisma.routine.create({
     data: {
@@ -114,9 +129,23 @@ describe("routine-fire dispatch", () => {
     expect(run).toMatchObject({ status: "awaiting", trigger: "schedule" });
     expect(run?.requestId).toBe(runRequestId(routine.id, SLOT));
 
+    // Into the routine's own conversation, created on this first fire from
+    // the bot's config and set to refuse what would ask: never the chat.
     const submits = vi.mocked(runtime.submit).mock.calls;
     expect(submits).toHaveLength(1);
-    expect(submits[0][0]).toBe(7);
+    expect(submits[0][0]).toBe(ROUTINE_CONVERSATION);
+    expect(vi.mocked(runtime.createConversation)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.createConversation).mock.calls[0][0].capabilities).toMatchObject({
+      unattended: true,
+    });
+    expect(vi.mocked(runtime.configure)).toHaveBeenCalledWith(
+      ROUTINE_CONVERSATION,
+      expect.objectContaining({ capabilities: expect.objectContaining({ unattended: true }) }),
+    );
+    expect(vi.mocked(runtime.configure).mock.calls.some(([ref]) => ref === CHAT)).toBe(false);
+    expect((await prisma.routine.findUnique({ where: { id: routine.id } }))?.conversationId).toBe(
+      String(ROUTINE_CONVERSATION),
+    );
     expect(submits[0][1].requestId).toBe(runRequestId(routine.id, SLOT));
     expect(submits[0][1].text).toContain('Routine "digest"');
     expect(submits[0][1].text).toContain("Wed, 21 Oct 2026, 09:00 IST");
@@ -130,6 +159,39 @@ describe("routine-fire dispatch", () => {
     });
     const row = await prisma.routine.findUnique({ where: { id: routine.id } });
     expect(row?.nextRunAt?.toISOString()).toBe("2026-10-22T03:30:00.000Z");
+  });
+
+  it("every run of a routine shares its conversation, so later runs see earlier ones", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const nextSlot = new Date("2026-10-22T03:30:00.000Z");
+    await dispatchOccurrence(payloadOf(routine.id, nextSlot), new Date(nextSlot.getTime() + 5000));
+    expect(vi.mocked(runtime.createConversation)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.submit).mock.calls.map(([ref]) => ref)).toEqual([
+      ROUTINE_CONVERSATION,
+      ROUTINE_CONVERSATION,
+    ]);
+  });
+
+  it("two routines of one bot get conversations of their own", async () => {
+    const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    const other = await prisma.routine.create({
+      data: {
+        botId: bot.id,
+        name: "other",
+        prompt: "Other thing.",
+        schedule: { kind: "cron", expr: "0 9 * * 1-5" },
+      },
+    });
+    vi.mocked(runtime.createConversation)
+      .mockResolvedValueOnce(ROUTINE_CONVERSATION)
+      .mockResolvedValueOnce(43);
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    await dispatchOccurrence(payloadOf(other.id, SLOT), ON_TIME);
+    expect(vi.mocked(runtime.submit).mock.calls.map(([ref]) => ref)).toEqual([
+      ROUTINE_CONVERSATION,
+      43,
+    ]);
   });
 
   it("double delivery is exactly-once: one run, one submit, one chain job", async () => {
@@ -220,8 +282,8 @@ describe("routine-fire dispatch", () => {
     expect(sentJobs).toHaveLength(0);
   });
 
-  it("a submit failure fails the run once, pauses the routine, and notifies the chat", async () => {
-    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+  it("a submit failure fails the run once and pauses the routine, leaving the chat alone", async () => {
+    const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await prisma.routine.update({
       where: { id: routine.id },
       data: { pendingJobId: "job-99" },
@@ -234,18 +296,19 @@ describe("routine-fire dispatch", () => {
     });
     expect(run?.status).toBe("failed");
     expect(run?.error).toContain("model gone");
+    // The failed run's card says the routine paused; nothing is written to the chat.
+    expect(run?.error).toContain("paused");
     const after = await prisma.routine.findUnique({ where: { id: routine.id } });
     expect(after?.enabled).toBe(false);
     expect(after?.pendingJobId).toBeNull();
     expect(after?.nextRunAt).toBeNull();
     expect(sentJobs).toHaveLength(0); // no chain after a failed submit
-    const notice = vi
-      .mocked(failing.submit)
-      .mock.calls.find(
-        ([_ref, message]) => typeof message.text === "string" && message.text.includes("paused"),
-      );
-    expect(notice).toBeTruthy();
-    expect(String(notice?.[0])).toBe("7");
+    expect(vi.mocked(failing.submit).mock.calls.map(([ref]) => ref)).toEqual([
+      ROUTINE_CONVERSATION,
+    ]);
+    expect(await chatCards(bot.id)).toEqual([
+      expect.objectContaining({ id: run!.id, status: "failed" }),
+    ]);
   });
 
   it("a model removed from the catalog pauses the routine instead of retrying", async () => {
@@ -300,13 +363,95 @@ describe("completion watcher", () => {
       { text: "x".repeat(2500), createdAt: submittedAt.getTime() + 1000 },
     ]);
     const watcher = createRoutinesCompletionWatcher(runtime);
-    const resolved = await watcher.resolveConversation(7);
+    const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(1);
 
     const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
     expect(after?.status).toBe("succeeded");
     expect(after?.output?.length).toBe(2000);
     expect(after?.finishedAt).toBeTruthy();
+  });
+
+  it("the owner chatting meanwhile never answers the run: only its own conversation does", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const submittedAt = run!.submittedAt!.getTime();
+    const replies: Record<number, FinishedReply[]> = {
+      [CHAT]: [{ text: "Owner's answer", createdAt: submittedAt + 500 }],
+      [ROUTINE_CONVERSATION]: [{ text: "Routine's answer", createdAt: submittedAt + 1000 }],
+    };
+    const split = fakeRuntime({
+      finishedReplies: vi.fn(async (ref: number) => replies[ref] ?? []),
+    });
+    const watcher = createRoutinesCompletionWatcher(split);
+
+    expect(await watcher.resolveConversation(CHAT)).toBe(0);
+    expect((await prisma.routineRun.findUnique({ where: { id: run!.id } }))?.status).toBe(
+      "awaiting",
+    );
+    expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
+    expect(await prisma.routineRun.findUnique({ where: { id: run!.id } })).toMatchObject({
+      status: "succeeded",
+      output: "Routine's answer",
+    });
+  });
+
+  it("a refused ask tool fails the run, naming the tool and how to allow it", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    const submittedAt = run!.submittedAt!.getTime();
+
+    chatWith([
+      { text: "", createdAt: submittedAt + 500, refused: ["send_email"] },
+      { text: "Drafted the email but could not send it.", createdAt: submittedAt + 1000 },
+    ]);
+    const watcher = createRoutinesCompletionWatcher(runtime);
+    expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
+
+    expect(await prisma.routineRun.findUnique({ where: { id: run!.id } })).toMatchObject({
+      status: "failed",
+      error: "Needs approval for `send_email`; set it to Allow for this bot to use it in routines.",
+      output: "Drafted the email but could not send it.",
+    });
+  });
+
+  it("explains tools that can never be allowed apart from those that can", () => {
+    expect(refusalReason(["send_email", "save_skill"], new Set(["save_skill"]))).toBe(
+      "Needs approval for `send_email`; set it to Allow for this bot to use it in routines. " +
+        "`save_skill` always asks for approval, so routines can't use it.",
+    );
+    expect(refusalReason(["a", "b"], new Set())).toBe(
+      "Needs approval for `a`, `b`; set them to Allow for this bot to use them in routines.",
+    );
+  });
+
+  it("a finished run shows as a card in its bot's chat, live and on connect", async () => {
+    const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
+    // An awaiting run has no card yet.
+    expect(await chatCards(bot.id)).toEqual([]);
+
+    const seen: { botId: string; card: RoutineRunCard }[] = [];
+    const stop = onRoutineCard((botId, card) => seen.push({ botId, card }));
+    chatWith([{ text: "**All** good", createdAt: run!.submittedAt!.getTime() + 1000 }]);
+    await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    stop();
+
+    const card = {
+      id: run!.id,
+      routineId: routine.id,
+      routineName: "digest",
+      status: "succeeded",
+      trigger: "schedule",
+      output: "**All** good",
+      error: null,
+    };
+    expect(seen[0]).toEqual({ botId: bot.id, card: expect.objectContaining(card) });
+    expect(await chatCards(bot.id)).toEqual([expect.objectContaining(card)]);
   });
 
   it("a model error reply marks the run failed", async () => {
@@ -319,7 +464,7 @@ describe("completion watcher", () => {
       { text: "", createdAt: submittedAt.getTime() + 1000, error: "Model error: gateway down" },
     ]);
     const watcher = createRoutinesCompletionWatcher(runtime);
-    await watcher.resolveConversation(7);
+    await watcher.resolveConversation(ROUTINE_CONVERSATION);
 
     const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
     expect(after?.status).toBe("failed");
@@ -328,6 +473,10 @@ describe("completion watcher", () => {
 
   it("two awaiting runs on one conversation each get their own reply", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await prisma.routine.update({
+      where: { id: routine.id },
+      data: { conversationId: String(ROUTINE_CONVERSATION) },
+    });
     const first = await prisma.routineRun.create({
       data: {
         routineId: routine.id,
@@ -351,7 +500,7 @@ describe("completion watcher", () => {
       { text: "Second reply", createdAt: second.submittedAt!.getTime() + 1000 },
     ]);
     const watcher = createRoutinesCompletionWatcher(runtime);
-    const resolved = await watcher.resolveConversation(7);
+    const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(2);
     const afterFirst = await prisma.routineRun.findUnique({ where: { id: first.id } });
     const afterSecond = await prisma.routineRun.findUnique({ where: { id: second.id } });
@@ -366,7 +515,7 @@ describe("completion watcher", () => {
 
     chatWith([{ text: "Before the run", createdAt: run!.submittedAt!.getTime() - 5000 }]);
     const watcher = createRoutinesCompletionWatcher(runtime);
-    const resolved = await watcher.resolveConversation(7);
+    const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(0);
     const after = await prisma.routineRun.findUnique({ where: { id: run!.id } });
     expect(after?.status).toBe("awaiting");

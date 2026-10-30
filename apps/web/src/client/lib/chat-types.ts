@@ -1,6 +1,7 @@
 /** Chat stream shapes shared by the SSE client and the UI. Mirrors
  * `@tiny-agents/agent` ChatEvent/ChatState (server sends them verbatim).
- * Client-only additions live here: `connected`, `loaded`, `pending`, `unreadFrom`. */
+ * Client-only additions live here: `connected`, `loaded`, `pending`,
+ * `unreadFrom`, and the routine run cards (`routineRuns`). */
 import type {
   ChatCredentialRequest,
   ChatVaultUse,
@@ -34,8 +35,8 @@ export interface ChatToolCall {
   output?: string;
   durationMs?: number;
   taskId?: number;
-  /** `auto`: auto-review approved the call, no card was shown. */
-  approval?: "approved" | "denied" | "auto";
+  /** `auto`: auto-review approved the call, no card was shown; `refused`: nobody was there to ask. */
+  approval?: "approved" | "denied" | "auto" | "refused";
   sources?: { url: string; title: string }[];
   /** ask_owner calls: the questions the bot asked. */
   questions?: OwnerQuestion[];
@@ -101,8 +102,28 @@ export interface QueuedMessage {
   attachments?: AttachmentRef[];
 }
 
+/**
+ * A finished routine run, shown as a card in its bot's chat (issue #63). The
+ * run itself happened in the routine's own conversation: the card is not a
+ * transcript entry and the bot never reads it. Mirrors the server's
+ * `RoutineRunCard` (routines.cards.ts).
+ */
+export interface RoutineRunCard {
+  id: string;
+  routineId: string;
+  routineName: string;
+  status: "succeeded" | "failed" | "missed" | "cancelled";
+  trigger: "schedule" | "manual";
+  scheduledFor: string;
+  finishedAt: string;
+  output: string | null;
+  error: string | null;
+}
+
 export interface ChatState {
   messages: ChatMessage[];
+  /** Finished routine runs of this bot, oldest first: merged into the timeline by time. */
+  routineRuns: RoutineRunCard[];
   busy: boolean;
   /** Owner inputs the server holds behind (or steering into) the reply. */
   queued: QueuedMessage[];
@@ -141,6 +162,8 @@ export type ChatEvent =
   | { type: "delta"; id: string; text?: string; reasoning?: string }
   | { type: "queued"; items: QueuedMessage[] }
   | { type: "busy"; busy: boolean }
+  | { type: "routine-runs"; runs: RoutineRunCard[] }
+  | { type: "routine-run"; run: RoutineRunCard }
   | ActivityEvent
   | { type: "connection"; id: string; status: string; error?: string }
   | { type: "ping" }

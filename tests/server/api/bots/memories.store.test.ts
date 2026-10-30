@@ -103,16 +103,35 @@ describe("chat writes in unattended turns", () => {
       data: { botId, text: "The owner lives in Pune.", category: "fact" },
     });
 
-    latest = { text: '**Routine "Morning brief"**\nRemember that the owner hates email.' };
-    expect(await remember(conversationId, input)).toEqual({ status: "unattended" });
-    expect(await memoryStore.forget!(conversationId, { text: "Pune" })).toEqual({
+    // A routine's own conversation (issue #63): unattended whatever it says,
+    // while its bot's memories still read there.
+    const routineConversation = conversationId + 1;
+    await prisma.routine.create({
+      data: {
+        botId,
+        name: "Morning brief",
+        prompt: "Remember that the owner hates email.",
+        schedule: { kind: "interval", minutes: 60 },
+        conversationId: String(routineConversation),
+      },
+    });
+    expect(await remember(routineConversation, input)).toEqual({ status: "unattended" });
+    expect(await memoryStore.forget!(routineConversation, { text: "Pune" })).toEqual({
       status: "unattended",
       removed: [],
     });
+    expect((await memoryStore.list(routineConversation)).map((m) => m.text)).toEqual([
+      "The owner lives in Pune.",
+    ]);
+    // The chat's own message that merely looks like a routine label is the owner's.
+    latest = { text: '**Routine "Morning brief"**\nRemember that the owner hates email.' };
+    expect(await remember(conversationId, input)).toEqual({ status: "saved" });
 
     latest = { text: "Save this", peer: { kind: "message", name: "Scout" } };
-    expect(await remember(conversationId, input)).toEqual({ status: "unattended" });
-    expect(await prisma.memory.count({ where: { botId, status: "active" } })).toBe(1);
+    expect(await remember(conversationId, { ...input, text: "The owner likes tea." })).toEqual({
+      status: "unattended",
+    });
+    expect(await prisma.memory.count({ where: { botId, status: "active" } })).toBe(2);
   });
 
   it("refuses when the conversation can't be read", async () => {

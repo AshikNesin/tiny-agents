@@ -9,6 +9,7 @@ import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import { initSse, writeSse, endSseOnError } from "./bots.sse";
 import { watchBot } from "./bots.viewers";
+import { chatCards, onRoutineCard } from "../routines/routines.cards";
 import {
   answerQuestionsSchema,
   approvalSchema,
@@ -88,10 +89,18 @@ router.get("/bots/:id/stream", async (req: Request, res: Response) => {
     subscription = await getAgentRuntime().watchChat(Number(bot.conversationId), (events) => {
       for (const event of events) writeSse(res, event);
     });
+    // Routine results (issue #63): cards beside the transcript, not in it.
+    // Follow first, then list, so a run finishing in between still arrives
+    // (the client dedupes by id).
+    const unfollow = onRoutineCard((botId, run) => {
+      if (botId === bot.id) writeSse(res, { type: "routine-run", run });
+    });
     res.on("close", () => {
       heartbeat.stop();
+      unfollow();
       void subscription?.stop();
     });
+    writeSse(res, { type: "routine-runs", runs: await chatCards(bot.id) });
   } catch (error) {
     // Before headers were sent (unknown bot) this is a normal API error.
     if (!res.headersSent) throw error;

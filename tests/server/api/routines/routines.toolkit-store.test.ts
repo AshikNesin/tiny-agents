@@ -1,7 +1,7 @@
 /**
  * The app-side RoutineStore adapter (issue #18 phase C): the recursion guard
- * rejects mutations while the calling conversation has an awaiting routine
- * run (list stays open), creates validate the schedule like the API, sourceKey
+ * rejects mutations from a routine's own conversation (issue #63; list stays
+ * open) and never from the owner's chat, creates validate the schedule like the API, sourceKey
  * makes a replayed create return the same routine, and every save path
  * renders the sentence and next 3 IST fire times. Real SQLite test DB; the
  * queue adapter is mocked so arming routines needs no live queue.
@@ -24,6 +24,8 @@ import {
 } from "../../../../apps/web/src/server/api/routines/routines.toolkit-store";
 
 const CONVERSATION = 7;
+/** The routine's own conversation, where its runs happen (issue #63). */
+const ROUTINE_CONVERSATION = 70;
 
 async function seedBot(name = "Bot", conversationId = String(CONVERSATION)) {
   return prisma.bot.create({
@@ -31,7 +33,7 @@ async function seedBot(name = "Bot", conversationId = String(CONVERSATION)) {
   });
 }
 
-async function seedRoutine(botId: string) {
+async function seedRoutine(botId: string, conversationId?: number) {
   return prisma.routine.create({
     data: {
       botId,
@@ -39,11 +41,12 @@ async function seedRoutine(botId: string) {
       prompt: "Do the thing.",
       schedule: { kind: "cron", expr: "0 9 * * 1-5" },
       enabled: true,
+      ...(conversationId !== undefined ? { conversationId: String(conversationId) } : {}),
     },
   });
 }
 
-/** An awaiting run on this bot's conversation makes it a routine-fired turn. */
+/** A run of the routine waiting for its reply in the routine's conversation. */
 async function seedAwaitingRun(routineId: string) {
   const at = new Date("2026-10-21T03:30:00.000Z");
   return prisma.routineRun.create({
@@ -142,12 +145,11 @@ describe("routines toolkit store adapter", () => {
     expect(await prisma.routine.count()).toBe(0);
   });
 
-  it("rejects creates from a conversation whose routine run is awaiting (recursion guard)", async () => {
+  it("rejects creates from a routine's own conversation (recursion guard)", async () => {
     const bot = await seedBot();
-    const routine = await seedRoutine(bot.id);
-    await seedAwaitingRun(routine.id);
+    await seedRoutine(bot.id, ROUTINE_CONVERSATION);
     await expect(
-      store.create(CONVERSATION, {
+      store.create(ROUTINE_CONVERSATION, {
         idempotencyKey: "k",
         name: "loop",
         prompt: "no",
@@ -159,24 +161,39 @@ describe("routines toolkit store adapter", () => {
 
   it("update, delete, and run now are guarded too; list stays open", async () => {
     const bot = await seedBot();
-    const routine = await seedRoutine(bot.id);
-    await seedAwaitingRun(routine.id);
+    const routine = await seedRoutine(bot.id, ROUTINE_CONVERSATION);
 
-    await expect(store.update(CONVERSATION, routine.id, { enabled: false })).rejects.toThrow(
-      RECURSION_MSG,
-    );
-    await expect(store.remove(CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
-    await expect(store.runNow(CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
+    await expect(
+      store.update(ROUTINE_CONVERSATION, routine.id, { enabled: false }),
+    ).rejects.toThrow(RECURSION_MSG);
+    await expect(store.remove(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
+    await expect(store.runNow(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
     // The guard rejects before any effect: still enabled, still there.
     expect(await prisma.routine.findUnique({ where: { id: routine.id } })).toMatchObject({
       enabled: true,
     });
 
-    const listed = await store.list(CONVERSATION);
+    const listed = await store.list(ROUTINE_CONVERSATION);
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       id: routine.id,
       sentence: "At 09:00, Monday through Friday",
+    });
+  });
+
+  it("the owner's chat manages routines while a run is working (issue #63)", async () => {
+    const bot = await seedBot();
+    const routine = await seedRoutine(bot.id, ROUTINE_CONVERSATION);
+    await seedAwaitingRun(routine.id);
+    const created = await store.create(CONVERSATION, {
+      idempotencyKey: "k",
+      name: "another",
+      prompt: "ok",
+      schedule: { kind: "interval", minutes: 30 },
+    });
+    expect(created.enabled).toBe(true);
+    expect(await store.update(CONVERSATION, routine.id, { enabled: false })).toMatchObject({
+      enabled: false,
     });
   });
 
