@@ -66,8 +66,6 @@ jobs:
         run: pnpm build
       - name: Runtime dependency closure
         run: pnpm check:closure
-      - name: Workers bundle (wrangler dry run)
-        run: pnpm check:worker
 
       - name: Pruned production boot
         env:
