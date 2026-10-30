@@ -86,6 +86,41 @@ describe("Tasks page", () => {
     expect(new Date(dueAt).getTime()).toBe(endOfDay(0).getTime());
   });
 
+  it("reads a day and priority typed in quick-add (#97)", async () => {
+    listMock.mockResolvedValue([]);
+    const user = userEvent.setup();
+    mount();
+
+    await user.type(await screen.findByLabelText("New task title"), "Call mom tomorrow 5pm !high");
+    expect(screen.getByText(/"Call mom" · due .* · high priority/)).toBeTruthy();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    const input = createMock.mock.calls[0][0] as { title: string; dueAt: string; priority: string };
+    expect(input.title).toBe("Call mom");
+    expect(input.priority).toBe("high");
+    const due = new Date(input.dueAt);
+    expect(due.getHours()).toBe(17);
+    expect(due.getDate()).toBe(endOfDay(1).getDate());
+  });
+
+  it("lists undated tasks last in Upcoming, under No date (#97)", async () => {
+    listMock.mockResolvedValue([
+      task({ id: "t1", title: "Plan Goa trip", dueAt: null }),
+      task({ id: "t2", title: "Send invoice", dueAt: endOfDay(3).toISOString() }),
+    ]);
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole("tab", { name: /Upcoming/ }));
+
+    const items = (await screen.findAllByRole("listitem")).map((li) => li.textContent ?? "");
+    const invoice = items.findIndex((text) => text.includes("Send invoice"));
+    const header = items.findIndex((text) => text === "No date");
+    const goa = items.findIndex((text) => text.includes("Plan Goa trip"));
+    expect(invoice).toBeLessThan(header);
+    expect(header).toBeLessThan(goa);
+  });
+
   it("shows end-of-day due dates as a day, without a clock time", async () => {
     listMock.mockResolvedValue([
       task({}),
