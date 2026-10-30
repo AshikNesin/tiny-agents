@@ -18,18 +18,20 @@ async function login(page: import("@playwright/test").Page) {
 test("Allow/Ask/Off toggle changes on click and the selection is visible", async ({ page }) => {
   await login(page);
 
-  // Create a fresh bot.
+  // Create a fresh bot (names are unique, issue #80, and the database
+  // outlives a run).
+  const name = `Toggle Probe ${Date.now()}`;
   await page
     .getByRole("button", { name: /new bot/i })
     .first()
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByLabel("Name").fill("Toggle Probe");
+  await page.getByLabel("Name").fill(name);
   await page.getByRole("button", { name: /create bot/i }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
 
   // Open its edit dialog and go to Tools.
-  await page.getByRole("button", { name: /edit toggle probe/i }).click({ timeout: 15_000 });
+  await page.getByRole("button", { name: `Edit ${name}` }).click({ timeout: 15_000 });
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab", { name: "Tools" }).click();

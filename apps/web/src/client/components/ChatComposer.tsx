@@ -11,7 +11,13 @@ import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
-import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
+import {
+  activeMentionToken,
+  mentionableBots,
+  resolveMentions,
+  trackPickedMentions,
+  type PickedMention,
+} from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
 import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
 import {
@@ -65,6 +71,12 @@ function writeDraft(botId: string, text: string) {
   }
 }
 
+/** The hint shown instead of sending when a typed @name fits several bots. */
+function ambiguousMentionHint(names: string[]): string {
+  const quoted = names.map((name) => `"${name}"`).join(", ");
+  return `More than one bot is named ${quoted}. Type @ and pick the one you mean from the list.`;
+}
+
 export interface ComposerSubmission {
   body: string;
   attachments: AttachmentRef[];
@@ -100,6 +112,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const [text, setText] = useState(() => readDraft(bot.id));
   const online = useOnline();
   const [retryWhenOnline, setRetryWhenOnline] = useState<"steer" | "followUp" | null>(null);
+  // Mentions picked from the autocomplete, kept in step with the text: they
+  // send to the bot picked, not whichever bot the name matches (issue #80).
+  const [picked, setPicked] = useState<PickedMention[]>([]);
+  const [mentionHint, setMentionHint] = useState<string | null>(null);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
   const [staged, setStaged] = useState<StagedItem[]>([]);
@@ -230,8 +246,18 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     if (!canSend) return;
     const body = text.trim();
+    // Picks are placed in `text`; trimming moves them left by the indent.
+    const indent = text.length - text.trimStart().length;
+    const bodyPicked = picked.map((pick) => ({ ...pick, start: pick.start - indent }));
+    const mentions = resolveMentions(body, mentionCandidates, bot.id, bodyPicked);
+    // A typed name several bots share would reach an arbitrary one of them.
+    if (mentions.ambiguous.length > 0) {
+      setMentionHint(ambiguousMentionHint(mentions.ambiguous));
+      return;
+    }
     const attachments = readyAttachments.map((item) => item.ref!);
     setText("");
+    setPicked([]);
     setStaged([]);
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
@@ -239,7 +265,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       await onSend({
         body,
         attachments,
-        mentions: mentionedBotIds(body, mentionCandidates, bot.id),
+        mentions: mentions.ids,
         whenBusy,
       });
     } catch {
@@ -249,6 +275,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       // The pane already toasted; hand the message back for another try,
       // ahead of anything typed or attached while the send was in flight.
       setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
+      // Picks made meanwhile imply text, so they move down behind the body.
+      setPicked((current) => [
+        ...bodyPicked,
+        ...current.map((pick) => ({ ...pick, start: pick.start + body.length + 2 })),
+      ]);
       setStaged((current) => [
         ...attachments.map((ref) => ({
           key: crypto.randomUUID(),
@@ -284,6 +315,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     const insertion = `@${chosen.name} `;
     const next = text.slice(0, mention.start) + insertion + text.slice(caret);
     setText(next);
+    // The latest pick at this `@` replaces any earlier one there.
+    setPicked((current) => [
+      ...trackPickedMentions(text, next, current).filter((pick) => pick.start !== mention.start),
+      { start: mention.start, botId: chosen.id, name: chosen.name },
+    ]);
+    setMentionHint(null);
     // Restore the caret after the trailing space once React re-renders the
     // textarea (it would otherwise land at the very end of the text).
     const target = mention.start + insertion.length;
@@ -330,6 +367,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             ))}
           </div>
         )}
+        {mentionHint && (
+          <p role="alert" className="text-destructive mb-1.5 px-1 text-xs">
+            {mentionHint}
+          </p>
+        )}
         {staged.some((item) => item.ref?.kind === "image") && model && !model.vision && (
           <p className="text-muted-foreground mb-1.5 px-1 text-right text-xs">
             {model.name} reads images with the see_image tool
@@ -353,7 +395,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             ref={textareaRef}
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
+              const next = e.target.value;
+              setPicked((current) => trackPickedMentions(text, next, current));
+              setText(next);
+              setMentionHint(null);
               setCaret(e.target.selectionStart ?? e.target.value.length);
               setMentionClosed(false);
             }}

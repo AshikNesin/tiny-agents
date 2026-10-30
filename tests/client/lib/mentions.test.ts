@@ -4,7 +4,13 @@
  * tags, so they are pinned here rather than through the ChatPane UI.
  */
 import { describe, expect, it } from "vite-plus/test";
-import { activeMentionToken, mentionableBots, mentionedBotIds } from "@/lib/mentions";
+import {
+  activeMentionToken,
+  mentionableBots,
+  mentionedBotIds,
+  resolveMentions,
+  trackPickedMentions,
+} from "@/lib/mentions";
 
 const BOTS = [
   { id: "b1", name: "Ada" },
@@ -130,5 +136,89 @@ describe("mentionedBotIds", () => {
   it("escapes regex metacharacters in names", () => {
     expect(mentionedBotIds("call @C++ bot", [{ id: "c", name: "C++" }], "host")).toEqual(["c"]);
     expect(mentionedBotIds("call @C bot", [{ id: "c", name: "C++" }], "host")).toEqual([]);
+  });
+});
+
+// Older data can hold two bots with one name (issue #80): the autocomplete
+// pick, not the text, says which one is meant.
+const TWINS = [
+  { id: "e1", name: "Echo" },
+  { id: "e2", name: "Echo" },
+  { id: "b1", name: "Ada" },
+];
+
+describe("resolveMentions", () => {
+  it("sends a picked mention to the bot picked, not the first with that name", () => {
+    const picked = [{ start: 0, botId: "e2", name: "Echo" }];
+    expect(resolveMentions("@Echo ping", TWINS, "host", picked)).toEqual({
+      ids: ["e2"],
+      ambiguous: [],
+    });
+  });
+
+  it("refuses a typed name several bots share instead of picking one", () => {
+    expect(resolveMentions("@Echo ping @Ada", TWINS, "host")).toEqual({
+      ids: ["b1"],
+      ambiguous: ["Echo"],
+    });
+    // A pick elsewhere does not settle another, typed, occurrence.
+    const picked = [{ start: 0, botId: "e1", name: "Echo" }];
+    expect(resolveMentions("@Echo and @Echo", TWINS, "host", picked)).toEqual({
+      ids: ["e1"],
+      ambiguous: ["Echo"],
+    });
+  });
+
+  it("falls back to name matching once the picked text was edited", () => {
+    // "@Echo" became "@Echoes": not a mention of anyone.
+    const picked = [{ start: 0, botId: "e1", name: "Echo" }];
+    expect(resolveMentions("@Echoes @Ada", TWINS, "host", picked)).toEqual({
+      ids: ["b1"],
+      ambiguous: [],
+    });
+  });
+
+  it("ignores a pick of the host or of a bot no longer in the roster", () => {
+    const picked = [
+      { start: 0, botId: "host", name: "Echo" },
+      { start: 6, botId: "gone", name: "Ada" },
+    ];
+    expect(resolveMentions("@Echo @Ada", [{ id: "b1", name: "Ada" }], "host", picked)).toEqual({
+      ids: ["b1"],
+      ambiguous: [],
+    });
+  });
+
+  it("lets a pick beat a longer typed name at the same @", () => {
+    const picked = [{ start: 0, botId: "b3", name: "Pi" }];
+    expect(mentionedBotIds("@Pi Helper", BOTS, "host", picked)).toEqual(["b3"]);
+  });
+
+  it("keeps text order and dedupes across picked and typed mentions", () => {
+    const picked = [{ start: 10, botId: "e1", name: "Echo" }];
+    expect(mentionedBotIds("@Ada tell @Echo and @Ada", TWINS, "host", picked)).toEqual([
+      "b1",
+      "e1",
+    ]);
+  });
+});
+
+describe("trackPickedMentions", () => {
+  const pick = { start: 3, botId: "e1", name: "Echo" };
+
+  it("keeps a pick when the text changes after it", () => {
+    expect(trackPickedMentions("hi @Echo ", "hi @Echo there", [pick])).toEqual([pick]);
+  });
+
+  it("shifts a pick when the text changes before it", () => {
+    expect(trackPickedMentions("hi @Echo ", "oh hi @Echo ", [pick])).toEqual([
+      { ...pick, start: 6 },
+    ]);
+    expect(trackPickedMentions("hi @Echo ", "@Echo ", [pick])).toEqual([{ ...pick, start: 0 }]);
+  });
+
+  it("drops a pick whose text the edit touches", () => {
+    expect(trackPickedMentions("hi @Echo ", "hi @Ecbo ", [pick])).toEqual([]);
+    expect(trackPickedMentions("hi @Echo ", "", [pick])).toEqual([]);
   });
 });

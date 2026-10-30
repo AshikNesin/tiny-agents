@@ -255,6 +255,59 @@ describe("Bots API routes", () => {
     expect(agentRuntime.createConversation).not.toHaveBeenCalled();
   });
 
+  it("refuses a name another bot has, ignoring case and surrounding spaces (issue #80)", async () => {
+    const app = buildApp();
+    await createBot(app, { name: "Echo" });
+    agentRuntime.createConversation.mockClear();
+
+    for (const name of ["Echo", "echo", "  ECHO  "]) {
+      const response = await request(app)
+        .post("/api/v1/bots")
+        .set(authorization)
+        .send({ ...createPayload, name });
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: { message: 'A bot named "Echo" already exists' },
+      });
+    }
+    // Refused before a conversation was started for it.
+    expect(agentRuntime.createConversation).not.toHaveBeenCalled();
+    await expect(prisma.bot.count()).resolves.toBe(1);
+  });
+
+  it("refuses renaming onto another bot's name, but a bot may recase its own", async () => {
+    const app = buildApp();
+    const echo = await createBot(app, { name: "Echo" });
+    agentRuntime.createConversation.mockResolvedValueOnce(101);
+    const other = await createBot(app, { name: "Other" });
+
+    for (const name of ["Echo", " eCHo "]) {
+      const response = await request(app)
+        .patch(`/api/v1/bots/${other.id}`)
+        .set(authorization)
+        .send({ name });
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toBe('A bot named "Echo" already exists');
+    }
+    await expect(prisma.bot.findUnique({ where: { id: String(other.id) } })).resolves.toMatchObject(
+      { name: "Other" },
+    );
+
+    const recased = await request(app)
+      .patch(`/api/v1/bots/${echo.id}`)
+      .set(authorization)
+      .send({ name: "ECHO" })
+      .expect(200);
+    expect(recased.body.data.name).toBe("ECHO");
+    // Saving the dialog sends the bot's own name back unchanged.
+    await request(app)
+      .patch(`/api/v1/bots/${echo.id}`)
+      .set(authorization)
+      .send({ name: "ECHO", description: "Echoes back" })
+      .expect(200);
+  });
+
   it("patches a bot and reconfigures its existing durable conversation", async () => {
     const bot = await createBot();
 

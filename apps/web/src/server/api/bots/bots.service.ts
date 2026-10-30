@@ -118,10 +118,29 @@ export async function getBot(id: string): Promise<Bot> {
   return toBot(await findBotRow(id));
 }
 
+/** Names compare case-insensitively after trimming: "  echo " is "Echo". */
+function nameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Bot names are unique (issue #80): an @mention, a message_bot `to` and the
+ * pickers all tell bots apart by name. 409 when another bot has it; `selfId`
+ * lets a bot keep its own name or change only its case. Compared in JS, not
+ * SQL: SQLite has no case-insensitive `mode`, and the roster is small.
+ */
+async function assertNameFree(name: string, selfId?: string): Promise<void> {
+  const rows = await prisma.bot.findMany({ select: { id: true, name: true } });
+  const taken = rows.find((row) => row.id !== selfId && nameKey(row.name) === nameKey(name));
+  if (taken) throw Boom.conflict(`A bot named "${taken.name}" already exists`);
+}
+
 export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
   if (!rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
+  // Before the conversation exists, so a refused name leaves nothing behind.
+  await assertNameFree(data.name);
   const toolPermissions = data.toolPermissions ?? {};
   const conversationId = await startBotConversation(
     {
@@ -189,6 +208,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   if (data.modelId !== undefined && !rt.hasModel(data.modelId)) {
     throw Boom.badRequest(`Unknown model "${data.modelId}"`);
   }
+  if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);
   await prisma.bot.update({
     where: { id },

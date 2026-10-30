@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isAxiosError } from "axios";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,9 @@ export function BotDialog({
   onDeleted,
 }: BotDialogProps) {
   const [name, setName] = useState("");
+  /** The server's refusal of the name (another bot has it, issue #80). */
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [tab, setTab] = useState("profile");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelId, setModelId] = useState("");
@@ -84,6 +88,8 @@ export function BotDialog({
   useEffect(() => {
     if (!open) return;
     setName(bot?.name ?? "");
+    setNameError(null);
+    setTab("profile");
     setDescription(bot?.description ?? "");
     setSystemPrompt(bot?.systemPrompt ?? "");
     setModelId(bot?.modelId ?? defaultModelId ?? models[0]?.id ?? "");
@@ -156,7 +162,14 @@ export function BotDialog({
       // A new bot opens its chat, which says it all; an edit stays put.
       if (bot) toast.success("Bot updated");
     } catch (error) {
-      toast.error(errorMessage(error, "Failed to save bot"));
+      const message = errorMessage(error, "Failed to save bot");
+      // A taken name shows under the Name field (on the Profile tab).
+      if (isAxiosError(error) && error.response?.status === 409) {
+        setNameError(message);
+        setTab("profile");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -188,12 +201,22 @@ export function BotDialog({
           <Input
             id="bot-name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError(null);
+            }}
             placeholder="e.g. Research helper"
             maxLength={100}
             autoFocus={!bot}
+            aria-invalid={nameError !== null}
+            aria-describedby={nameError ? "bot-name-error" : undefined}
           />
         </div>
+        {nameError && (
+          <p id="bot-name-error" className="text-xs text-destructive">
+            {nameError}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-1.5">
@@ -428,7 +451,7 @@ export function BotDialog({
           </DialogDescription>
         </DialogHeader>
         {bot ? (
-          <Tabs defaultValue="profile" className="min-h-0 flex-1 gap-4">
+          <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-4">
             <TabsList className="w-full shrink-0">
               <TabsTrigger value="profile" className="flex-1">
                 Profile
