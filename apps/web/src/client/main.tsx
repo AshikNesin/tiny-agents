@@ -12,6 +12,28 @@ import "@groot/shell/index.css";
 import "streamdown/styles.css";
 import "./app.css";
 
+// After a deploy, a tab still running the old bundle asks for chunks that no
+// longer exist. Reload once to pick up the new build instead of breaking.
+window.addEventListener("vite:preloadError", (event) => {
+  try {
+    if (sessionStorage.getItem("chunk-reload") === "1") return;
+    sessionStorage.setItem("chunk-reload", "1");
+  } catch {
+    return;
+  }
+  event.preventDefault();
+  window.location.reload();
+});
+// Re-arm only once this build has run for a while, so a chunk that fails
+// right after boot cannot reload in a loop.
+window.setTimeout(() => {
+  try {
+    sessionStorage.removeItem("chunk-reload");
+  } catch {
+    // Storage blocked: nothing to clear.
+  }
+}, 10_000);
+
 // tiny-agents stays dark unless the user picks otherwise (PRD §6.1).
 setDefaultTheme("dark");
 // Apply before first render — no theme flash.
