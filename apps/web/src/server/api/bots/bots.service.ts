@@ -230,7 +230,7 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
   await retireConversation(rt, bot.conversationId);
-  for (const routine of routines) await retireConversation(rt, routine.conversationId!);
+  await Promise.all(routines.map((routine) => retireConversation(rt, routine.conversationId!)));
   return toBot(deleted);
 }
 
