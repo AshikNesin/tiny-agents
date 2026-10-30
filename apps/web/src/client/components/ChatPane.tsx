@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -160,6 +168,51 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   }, [markRead, unread, bot.id]);
 
   const messages = chat?.messages ?? NO_MESSAGES;
+
+  // Older messages load when the top of the transcript scrolls into view
+  // (issue #92), keeping what was on screen where it was.
+  const loadOlder = useBotsStore((s) => s.loadOlder);
+  const olderSentinel = useRef<HTMLDivElement>(null);
+  const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
+  const hasMore = Boolean(chat?.hasMore);
+  useEffect(() => {
+    const viewport = olderSentinel.current?.closest<HTMLElement>(
+      '[data-slot="message-scroller-viewport"]',
+    );
+    if (!viewport || !hasMore) return;
+    // Only the owner's own scrolling loads history: the scroller's jump to
+    // the latest message on open must not fetch a page nobody asked for.
+    let armed = false;
+    const arm = () => {
+      armed = true;
+      check();
+    };
+    const check = () => {
+      if (!armed || viewport.scrollTop > 400) return;
+      if (useBotsStore.getState().chats[bot.id]?.loadingOlder) return;
+      keepFromBottom.current = {
+        el: viewport,
+        distance: viewport.scrollHeight - viewport.scrollTop,
+      };
+      void loadOlder(bot.id);
+    };
+    viewport.addEventListener("wheel", arm, { passive: true });
+    viewport.addEventListener("touchmove", arm, { passive: true });
+    viewport.addEventListener("keydown", arm);
+    viewport.addEventListener("scroll", check, { passive: true });
+    return () => {
+      viewport.removeEventListener("wheel", arm);
+      viewport.removeEventListener("touchmove", arm);
+      viewport.removeEventListener("keydown", arm);
+      viewport.removeEventListener("scroll", check);
+    };
+  }, [bot.id, hasMore, loadOlder, messages.length]);
+  useLayoutEffect(() => {
+    const kept = keepFromBottom.current;
+    if (!kept || chat?.loadingOlder) return;
+    keepFromBottom.current = null;
+    kept.el.scrollTop = kept.el.scrollHeight - kept.distance;
+  }, [messages, chat?.loadingOlder]);
   const pending = chat?.pending ?? NO_PENDING;
   const queued = chat?.queued ?? NO_QUEUED;
   const routineRuns = chat?.routineRuns ?? NO_RUNS;
@@ -478,6 +531,16 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <MessageScroller className="h-full">
             <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
               <MessageScrollerContent className="space-y-4">
+                {hasMore && (
+                  <div
+                    ref={olderSentinel}
+                    className="text-muted-foreground py-2 text-center text-xs"
+                    aria-live="polite"
+                    data-testid="older-messages"
+                  >
+                    {chat?.loadingOlder ? "Loading earlier messages…" : "Earlier messages"}
+                  </div>
+                )}
                 {loaded && timeline.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                     <BotAvatar name={bot.name} className="size-20" />

@@ -139,6 +139,10 @@ export interface ChatState {
    * "Reconnecting…" notice while the very first connection opens.
    */
   loaded: boolean;
+  /** Older messages exist above `messages[0]`; they load on scroll (issue #92). */
+  hasMore?: boolean;
+  /** A page of older messages is being fetched. */
+  loadingOlder?: boolean;
   /**
    * Pre-open read marker (epoch ms), seeded once when the chat connects and
    * never advanced: messages newer than it arrived while the owner was away.

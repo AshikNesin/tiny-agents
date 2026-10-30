@@ -56,8 +56,10 @@ import {
   diffChat,
   CHAT_USER_ENTRY,
   type LiveTool,
+  pageBefore,
   queuedOf,
   type RawChat,
+  windowChat,
 } from "./transcript";
 import type {
   ActivityChange,
@@ -65,6 +67,7 @@ import type {
   BotAgentConfig,
   ChatEvent,
   ChatMessage,
+  ChatPage,
   ChatState,
   ChatSubscription,
   ConversationRef,
@@ -859,12 +862,30 @@ export class AgentRuntime {
   }
 
   /**
+   * Up to `limit` messages just before message `before`, oldest first: the
+   * history above a windowed stream's snapshot. Undefined when `before` is
+   * not (or no longer) in the transcript.
+   */
+  async readChatPage(
+    ref: ConversationRef,
+    { before, limit }: { before: string; limit: number },
+  ): Promise<ChatPage | undefined> {
+    return pageBefore((await this.readChat(ref)).messages, before, limit);
+  }
+
+  /**
    * Watch a conversation as chat events: a `snapshot` first, then minimal
    * upserts/deltas per commit. Reconnecting clients simply watch again.
+   *
+   * With `window`, snapshots carry only the newest `window` messages plus
+   * `hasMore`/`cursor` (issue #92). The window's start then stays put, so
+   * new messages arrive as upserts and nothing drops out of it; a
+   * re-snapshot (a slow client fell behind) re-windows to the newest ones.
    */
   async watchChat(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
+    options: { window?: number } = {},
   ): Promise<ChatSubscription> {
     const conversation = await this.#conversation(ref);
     const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
@@ -894,7 +915,20 @@ export class AgentRuntime {
       queued: raw.queued,
     });
 
-    let state: ChatState = chatState(view());
+    // The window's first message id, fixed once older messages exist; with
+    // none, the window is the whole transcript and grows from its start.
+    let from: string | undefined;
+    /** `full` as this stream shows it; undefined when `from` is gone. */
+    const windowed = (full: ChatState, fresh: boolean): ChatState | undefined => {
+      if (options.window === undefined) return full;
+      const next = fresh
+        ? windowChat(full, options.window)
+        : windowChat(full, Number.POSITIVE_INFINITY, from);
+      if (next) from = next.hasMore ? next.cursor : undefined;
+      return next;
+    };
+
+    let state: ChatState = windowed(chatState(view()), true)!;
     const initial = state;
     let stopped = false;
 
@@ -939,7 +973,11 @@ export class AgentRuntime {
         applyEvent(raw, event);
       }
       if (resnapshot || inboxChanged) await this.#refreshQueued(raw, ref);
-      const next = chatState(view());
+      const full = chatState(view());
+      // The window's first message vanished (never expected): start afresh.
+      const kept = resnapshot ? undefined : windowed(full, false);
+      if (!kept) resnapshot = true;
+      const next = kept ?? windowed(full, true)!;
       const diff = resnapshot
         ? [{ type: "snapshot", state: next } as ChatEvent]
         : diffChat(state, next);

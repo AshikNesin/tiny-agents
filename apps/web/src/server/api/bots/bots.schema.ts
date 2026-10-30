@@ -35,6 +35,12 @@ export const updateBotSchema = z.object({
   connectionIds: z.array(z.string()).max(100).optional(),
 });
 
+/** Older transcript messages (issue #92): the page just before message `before`. */
+export const chatHistorySchema = z.object({
+  before: z.string().regex(/^e\d+$/, "Invalid message id"),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+});
+
 export const pinBotSchema = z.object({ pinned: z.boolean() });
 
 export const approvalSchema = z.object({
@@ -89,4 +95,5 @@ export type CreateBotDTO = z.infer<typeof createBotSchema>;
 export type UpdateBotDTO = z.infer<typeof updateBotSchema>;
 export type SendMessageDTO = z.infer<typeof sendMessageSchema>;
 export type ApprovalDTO = z.infer<typeof approvalSchema>;
+export type ChatHistoryDTO = z.infer<typeof chatHistorySchema>;
 export type AnswerQuestionsDTO = z.infer<typeof answerQuestionsSchema>;

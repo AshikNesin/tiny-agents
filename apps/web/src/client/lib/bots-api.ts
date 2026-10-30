@@ -4,6 +4,7 @@
  */
 import { apiClient } from "@groot/shell/lib/api";
 import type { OwnerAnswer } from "./chat-types";
+import type { ChatMessage } from "./chat-types";
 
 export interface ModelInfo {
   id: string;
@@ -217,6 +218,12 @@ export const botsApi = {
   list: () => apiClient.get<BotListEntry[]>("/bots"),
   create: (input: BotInput) => apiClient.post<Bot>("/bots", input),
   get: (id: string) => apiClient.get<Bot>(`/bots/${id}`),
+  /** Older messages, just before message `before` (issue #92). */
+  history: (id: string, before: string, limit = 50) =>
+    apiClient.get<{ messages: ChatMessage[]; hasMore: boolean }>(`/bots/${id}/messages`, {
+      before,
+      limit,
+    }),
   update: (id: string, input: Partial<BotInput>) => apiClient.patch<Bot>(`/bots/${id}`, input),
   remove: (id: string) => apiClient.delete(`/bots/${id}`),
   models: () => apiClient.get<ModelsResponse>("/models"),

@@ -4,6 +4,7 @@ import type {
   AttachmentRef,
   ChatEvent,
   ChatMessage,
+  ChatPage,
   ChatState,
   ChatToolCall,
   ChatCredentialRequest,
@@ -503,6 +504,47 @@ export function chatState(raw: RawChat): ChatState {
     busy: raw.busy || raw.live !== undefined,
     queued: raw.queued ?? [],
   };
+}
+
+/** Messages a chat stream's snapshot carries: the newest ones (issue #92). */
+export const CHAT_WINDOW = 60;
+
+/**
+ * A full chat state cut down to its newest `size` messages, or to every
+ * message from id `from` on (a stream keeps its window's start fixed, so
+ * new messages extend it instead of pushing older ones out). Slice a state
+ * derived from the full raw history: the `unanswered` flags and tool
+ * statuses then stay right at the window's edge. Undefined when `from` is
+ * gone from the transcript.
+ */
+export function windowChat(state: ChatState, size: number, from?: string): ChatState | undefined {
+  let start = Math.max(0, state.messages.length - size);
+  if (from !== undefined) {
+    start = state.messages.findIndex((m) => m.id === from);
+    if (start < 0) return undefined;
+  }
+  const messages = state.messages.slice(start);
+  return {
+    ...state,
+    messages,
+    hasMore: start > 0,
+    ...(messages[0] ? { cursor: messages[0].id } : {}),
+  };
+}
+
+/**
+ * Up to `limit` messages just before message id `before`, for loading
+ * history above a window. Undefined when `before` is not in the transcript.
+ */
+export function pageBefore(
+  messages: readonly ChatMessage[],
+  before: string,
+  limit: number,
+): ChatPage | undefined {
+  const end = messages.findIndex((m) => m.id === before);
+  if (end < 0) return undefined;
+  const start = Math.max(0, end - limit);
+  return { messages: messages.slice(start, end), hasMore: start > 0 };
 }
 
 function sameExceptText(a: ChatMessage, b: ChatMessage): boolean {

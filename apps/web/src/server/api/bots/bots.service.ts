@@ -29,7 +29,7 @@ import {
   type Bot,
   type BotRow,
 } from "./bots.conversation";
-import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
+import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -38,6 +38,7 @@ export type BotAgentRuntime = Pick<
   | "submit"
   | "abort"
   | "withdraw"
+  | "readChatPage"
   | "hasModel"
   | "listModels"
   | "busyConversations"
@@ -380,6 +381,17 @@ async function deliverMentions(
       logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
     }
   }
+}
+
+/**
+ * Transcript messages older than `before` (issue #92): the chat stream sends
+ * only the newest ones, and the client loads the rest as the owner scrolls up.
+ */
+export async function chatHistory(id: string, query: ChatHistoryDTO) {
+  const bot = await getBot(id);
+  const page = await runtime().readChatPage(Number(bot.conversationId), query);
+  if (!page) throw Boom.badRequest("Unknown message cursor");
+  return page;
 }
 
 export async function abortReply(id: string) {

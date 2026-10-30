@@ -204,6 +204,20 @@ export interface ChatState {
   busy: boolean;
   /** Owner inputs waiting behind (or steering into) the running reply. */
   readonly queued: readonly QueuedMessage[];
+  /**
+   * Windowed states only (a chat stream's snapshot, issue #92): older
+   * messages exist before `messages[0]`, fetched with `readChatPage`.
+   */
+  hasMore?: boolean;
+  /** Windowed states only: the oldest message id in the window. */
+  cursor?: string;
+}
+
+/** A page of older messages (see `AgentRuntime.readChatPage`), oldest first. */
+export interface ChatPage {
+  messages: ChatMessage[];
+  /** Still older messages exist before `messages[0]`. */
+  hasMore: boolean;
 }
 
 export type ChatEvent =
