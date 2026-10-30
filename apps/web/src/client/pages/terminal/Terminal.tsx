@@ -37,6 +37,7 @@ import {
 import type { TerminalConnectionState } from "../../lib/terminal-ws";
 import { TerminalView, type TerminalControls } from "./TerminalView";
 import { TerminalKeysPanel } from "./TerminalKeysPanel";
+import { errorMessage } from "../../lib/errors";
 
 /** GET /terminal/sessions answers { status, sessions } (frozen contract). */
 
@@ -48,16 +49,6 @@ const CONNECTING: ReadonlySet<TerminalConnectionState> = new Set(["connecting", 
 /** `ta-term-3` -> "3": the prefix is ours, the number is the whole signal. */
 function tabLabel(name: string): string {
   return name.replace(/^ta-term-/, "");
-}
-
-/** Prefer the server's Boom message over axios's generic text (Memory's helper). */
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error) {
-    const message = (error as { response?: { data?: { error?: { message?: string } } } }).response
-      ?.data?.error?.message;
-    if (message) return message;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 /** Below md the panel would cover most of a phone's terminal, so a first

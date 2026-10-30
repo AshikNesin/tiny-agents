@@ -43,6 +43,7 @@ import { useConfirm } from "@groot/ui/primitives";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
 import { VncView, type VncHandle, type VncState } from "./browser/VncView";
+import { errorMessage } from "../lib/errors";
 
 const WIDTH_KEY = "tiny-agents:browser-panel-width";
 const DEFAULT_WIDTH = 640;
@@ -151,7 +152,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       // Releasing makes the agent adopt the tab the owner left in front.
       if (driver === "agent") await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to switch driver");
+      toast.error(errorMessage(error, "Failed to switch driver"));
     }
   };
 
@@ -160,7 +161,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       await botsApi.browserStart(bot.id);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to open the browser");
+      toast.error(errorMessage(error, "Failed to open the browser"));
     }
   };
 
@@ -186,7 +187,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
           : "Browser profile wiped; the next session starts fresh.",
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset");
+      toast.error(errorMessage(error, "Failed to reset"));
     }
   };
 

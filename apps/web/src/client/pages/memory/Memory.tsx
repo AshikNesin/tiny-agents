@@ -38,6 +38,7 @@ import {
   type MemoryCategory,
   type MemoryRecord,
 } from "../../lib/bots-api";
+import { errorMessage } from "../../lib/errors";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: "Preferences",
@@ -45,16 +46,6 @@ const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   goal: "Goals",
   habit: "Habits",
 };
-
-/** Prefer the server's error message (Boom) over axios's generic text. */
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error) {
-    const message = (error as { response?: { data?: { error?: { message?: string } } } }).response
-      ?.data?.error?.message;
-    if (message) return message;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 interface MemoryGroup {
   category: MemoryCategory | "archived";

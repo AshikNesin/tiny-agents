@@ -30,6 +30,10 @@ import {
 import { skillsApi, type SkillSummary } from "../lib/skills-api";
 import { connectionsApi, type ConnectionSummary } from "../lib/connections-api";
 import { BotAvatar } from "./BotAvatar";
+import { errorMessage } from "../lib/errors";
+
+/** The server caps the persona at ~24 KB (bots.schema.ts). */
+const SYSTEM_PROMPT_MAX = 24_576;
 
 interface BotDialogProps {
   open: boolean;
@@ -151,7 +155,7 @@ export function BotDialog({
       onOpenChange(false);
       toast.success(bot ? "Bot updated" : "Bot created");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save bot");
+      toast.error(errorMessage(error, "Failed to save bot"));
     } finally {
       setSaving(false);
     }
@@ -166,7 +170,7 @@ export function BotDialog({
       onOpenChange(false);
       onDeleted?.(bot);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete bot");
+      toast.error(errorMessage(error, "Failed to delete bot"));
     } finally {
       setDeleting(false);
     }
@@ -220,7 +224,14 @@ export function BotDialog({
           onChange={(e) => setSystemPrompt(e.target.value)}
           placeholder="Who is this bot? How should it reply?"
           rows={6}
+          maxLength={SYSTEM_PROMPT_MAX}
+          aria-describedby="bot-prompt-count"
         />
+        {systemPrompt.length > SYSTEM_PROMPT_MAX * 0.8 && (
+          <p id="bot-prompt-count" className="text-muted-foreground text-right text-xs">
+            {systemPrompt.length.toLocaleString()} / {SYSTEM_PROMPT_MAX.toLocaleString()}
+          </p>
+        )}
       </div>
     </>
   );

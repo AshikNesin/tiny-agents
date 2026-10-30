@@ -40,6 +40,7 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "./ui/message-scroller";
+import { errorMessage } from "../lib/errors";
 
 // Stable empties for a chat that has not connected yet: a fresh `[]` per
 // render would re-run every effect that depends on the transcript.
@@ -261,7 +262,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       );
     } catch (error) {
       applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
-      toast.error(error instanceof Error ? error.message : "Failed to send");
+      toast.error(errorMessage(error, "Failed to send"));
       throw error;
     }
   };
@@ -333,7 +334,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       refreshBotsInBackground();
       onBotReset(fresh);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to start a new chat");
+      toast.error(errorMessage(error, "Failed to start a new chat"));
     }
   };
 

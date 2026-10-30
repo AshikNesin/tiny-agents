@@ -62,6 +62,7 @@ import {
   onceAtFromIstInput,
   previewFireTimes,
 } from "../../lib/routines-schedule";
+import { errorMessage } from "../../lib/errors";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -72,16 +73,6 @@ const RUN_STATUS_VARIANT: Record<RoutineRun["status"], string> = {
   missed: "warning",
   cancelled: "cancelled",
 };
-
-/** Prefer the server's error message (Boom) over axios's generic text. */
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error) {
-    const message = (error as { response?: { data?: { error?: { message?: string } } } }).response
-      ?.data?.error?.message;
-    if (message) return message;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 /** Seconds between two ISO strings, when both are present. */
 function durationSeconds(run: RoutineRun): number | null {

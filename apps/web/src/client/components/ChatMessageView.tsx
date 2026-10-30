@@ -32,6 +32,7 @@ import { AskedQuestions, QuestionCard } from "./QuestionCard";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import { errorMessage } from "../lib/errors";
 
 /** Round hover action beside a bubble; always visible on touch, where there is no hover. */
 function CopyButton({ text }: { text: string }) {
@@ -200,7 +201,7 @@ function ApprovalCard({
     try {
       await botsApi.decideApproval(botId, call.taskId, decision, alwaysAllow);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to answer");
+      toast.error(errorMessage(error, "Failed to answer"));
     } finally {
       setBusy(false);
     }
@@ -265,7 +266,7 @@ function VaultApprovalCard({
     try {
       await botsApi.decideApproval(botId, call.taskId, decision, undefined, grant);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to answer");
+      toast.error(errorMessage(error, "Failed to answer"));
     } finally {
       setBusy(false);
     }

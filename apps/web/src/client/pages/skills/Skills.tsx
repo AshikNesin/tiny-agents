@@ -18,6 +18,7 @@ import { skillsApi, type Skill } from "../../lib/skills-api";
 import { CreateSkillDialog } from "../../components/skills/CreateSkillDialog";
 import { ImportSkillDialog } from "../../components/skills/ImportSkillDialog";
 import { SkillDetail } from "./SkillDetail";
+import { errorMessage } from "../../lib/errors";
 
 export function SkillsPage() {
   const { id } = useParams();
@@ -37,7 +38,7 @@ function SkillsList() {
       setSkills(await skillsApi.list());
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to load skills");
+      setLoadError(errorMessage(error, "Failed to load skills"));
     }
   }, []);
 

@@ -29,6 +29,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { tasksApi, type Task, type TaskInput } from "../../lib/tasks-api";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
+import { errorMessage } from "../../lib/errors";
 
 type Tab = "today" | "upcoming" | "completed";
 
@@ -105,7 +106,7 @@ export function Tasks() {
       setTasks(await tasksApi.list());
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to load tasks");
+      setLoadError(errorMessage(error, "Failed to load tasks"));
     }
   }, []);
 
@@ -138,7 +139,7 @@ export function Tasks() {
       setQuick("");
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add task");
+      toast.error(errorMessage(error, "Failed to add task"));
     }
   };
 
@@ -164,7 +165,7 @@ export function Tasks() {
         });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update task");
+      toast.error(errorMessage(error, "Failed to update task"));
       await refresh();
     }
   };
@@ -175,7 +176,7 @@ export function Tasks() {
       toast.success("Task deleted");
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete task");
+      toast.error(errorMessage(error, "Failed to delete task"));
     }
   };
 
@@ -410,7 +411,7 @@ function TaskEditor({
       toast.success("Task saved");
       await onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save task");
+      toast.error(errorMessage(error, "Failed to save task"));
     } finally {
       setSaving(false);
     }

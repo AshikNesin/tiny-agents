@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { botsApi, type BotListEntry, type ModelInfo } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { ChatEvent, ChatState } from "../lib/chat-types";
+import { errorMessage } from "../lib/errors";
 
 interface BotsState {
   bots: BotListEntry[];
@@ -173,7 +174,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       if (request !== botsRequest) return;
       set({
         loading: false,
-        error: error instanceof Error ? error.message : "Failed to load bots",
+        error: errorMessage(error, "Failed to load bots"),
       });
     }
   },
@@ -201,7 +202,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
       setPinnedAt(updated.pinnedAt);
     } catch (error) {
       setPinnedAt(current.pinnedAt);
-      toast.error(error instanceof Error ? error.message : "Failed to update pin");
+      toast.error(errorMessage(error, "Failed to update pin"));
     }
   },
 

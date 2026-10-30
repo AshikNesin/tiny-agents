@@ -20,6 +20,7 @@ import {
   type MentionableBot,
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
+import { errorMessage } from "../lib/errors";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
@@ -180,7 +181,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 ? {
                     ...item,
                     status: "error",
-                    error: error instanceof Error ? error.message : "Upload failed",
+                    error: errorMessage(error, "Upload failed"),
                   }
                 : item,
             ),
