@@ -9,7 +9,8 @@
  * - Runs: a reply that ends in a model error, or one that ran for at least
  *   `longRunMinutes`, pushes when nobody has that chat open. Routine runs
  *   (their own conversations, issue #63) are left to the routine events.
- * - Routines: `notifyRoutineRun` (watcher and fire job).
+ * - Routines: `notifyRoutineRun` (watcher and fire job). A blocked run
+ *   (issue #87) stays quiet; the run that pauses the routine pushes once.
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
@@ -26,6 +27,7 @@ import {
   NOTIFICATION_EVENTS,
   questionAsked,
   routineFailed,
+  routinePausedBlocked,
   routineSucceeded,
   runFailed,
   runLongDone,
@@ -174,20 +176,29 @@ export function startNotifications(
 /** A routine run ended (watcher) or never started (fire job). */
 export function notifyRoutineRun(
   run: RoutineRunRef,
-  outcome:
-    | { status: "succeeded"; output?: string | null }
-    | {
-        status: RoutineFailure;
-        error?: string | null;
-      },
+  outcome: RoutineOutcome,
   notifier: Pick<Notifier, "notify"> = notificationService,
 ): void {
+  if (outcome.status === "blocked") {
+    if (outcome.pausedReason) notifier.notify(routinePausedBlocked(run, outcome.pausedReason));
+    return;
+  }
   notifier.notify(
     outcome.status === "succeeded"
       ? routineSucceeded(run, outcome.output)
       : routineFailed(run, outcome.status, outcome.error),
   );
 }
+
+/**
+ * How a routine run ended, as its card and push see it. `blocked`: it
+ * finished but could not do its job (issue #87); `pausedReason` is set on
+ * the run that paused the routine.
+ */
+export type RoutineOutcome =
+  | { status: "succeeded"; output?: string | null }
+  | { status: "blocked"; error: string; pausedReason?: string | null }
+  | { status: RoutineFailure; error?: string | null };
 
 /** A vault security alert (reveal, delete, refused fill). Cannot be switched off. */
 export function notifyVaultAlert(

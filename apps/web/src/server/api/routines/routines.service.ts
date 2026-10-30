@@ -3,6 +3,10 @@
  * routines.schedule.ts, dispatch in routines.jobs.ts. Every mutation that can
  * move nextRunAt reconciles the pending queue job (cancel the old, enqueue
  * the new), so the queue and the row never disagree.
+ *
+ * Blocked runs (issue #87) count in `blockedStreak`; the third in a row
+ * pauses the routine through the same disarm path as a manual pause and
+ * records why in `pausedReason`. Arming it again (resume) starts over.
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
@@ -33,6 +37,8 @@ type RoutineRow = {
   nextRunAt: Date | null;
   pendingJobId: string | null;
   conversationId: string | null;
+  blockedStreak: number;
+  pausedReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   bot: { id: string; name: string; conversationId: string };
@@ -52,6 +58,8 @@ function toApi(row: RoutineRow) {
     nextRunAt: row.nextRunAt,
     // A one-time routine past its instant is finished, not paused.
     done: !row.enabled && schedule !== undefined && isSpentOnce(schedule, new Date()),
+    blockedStreak: row.blockedStreak,
+    pausedReason: row.pausedReason,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -102,14 +110,15 @@ function assertQueueReady(): void {
 
 /** Enable the chain: next occurrence from `from`, queued, handle stored.
  * Arming needs the queue; a boot without it (jobs.enabled false) fails with
- * how to fix instead of an internal error. */
+ * how to fix instead of an internal error. Arming starts the blocked count
+ * over: the owner resumed it, presumably having fixed what blocked it. */
 async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<void> {
   assertQueueReady();
   const now = new Date();
   const next = await enqueueOccurrence(id, schedule, from, now);
   await prisma.routine.update({
     where: { id },
-    data: { enabled: true, nextRunAt: next },
+    data: { enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null },
   });
 }
 
@@ -258,6 +267,40 @@ export async function resume(id: string): Promise<ReturnType<typeof toApi>> {
     await armRoutine(id, schedule, new Date());
   }
   return get(id);
+}
+
+/** Blocked runs in a row that pause a routine (issue #87). */
+export const BLOCKED_RUNS_BEFORE_PAUSE = 3;
+const PAUSED_REASON_CHARS = 500;
+
+/**
+ * A run of the routine ended blocked: count it, and pause the routine once
+ * BLOCKED_RUNS_BEFORE_PAUSE runs in a row have. Returns the paused reason
+ * when this run paused it (the caller notifies once), else null; a routine
+ * that is already paused (a manual run) only counts.
+ */
+export async function recordBlockedRun(id: string, reason: string): Promise<string | null> {
+  const row = await prisma.routine.update({
+    where: { id },
+    data: { blockedStreak: { increment: 1 } },
+    select: { enabled: true, pendingJobId: true, blockedStreak: true },
+  });
+  if (!row.enabled || row.blockedStreak < BLOCKED_RUNS_BEFORE_PAUSE) return null;
+  const pausedReason = `Paused after ${row.blockedStreak} blocked runs: ${reason}`.slice(
+    0,
+    PAUSED_REASON_CHARS,
+  );
+  await disarmRoutine(id, row.pendingJobId);
+  await prisma.routine.update({ where: { id }, data: { pausedReason } });
+  return pausedReason;
+}
+
+/** A run of the routine finished some other way: the blocked streak is broken. */
+export async function clearBlockedStreak(id: string): Promise<void> {
+  await prisma.routine.updateMany({
+    where: { id, blockedStreak: { gt: 0 } },
+    data: { blockedStreak: 0 },
+  });
 }
 
 /** Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5). */

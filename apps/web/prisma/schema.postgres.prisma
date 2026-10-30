@@ -293,6 +293,10 @@ model Routine {
   sourceKey    String?   @unique
   /// The routine's own durable conversation (issue #63): every run is submitted here, never into the bot's chat. Created on first fire; null until then.
   conversationId String? @unique
+  /// Runs in a row that ended blocked (issue #87); a run that finishes any other way, or arming the routine again, resets it.
+  blockedStreak  Int     @default(0)
+  /// Why the app paused the routine itself, e.g. "Paused after 3 blocked runs: <reason>" (issue #87). Max 500 chars; cleared when it is armed again.
+  pausedReason   String?
   bot       Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
   runs      RoutineRun[]
   createdAt DateTime @default(now())
@@ -337,7 +341,7 @@ model RoutineRun {
   routineId    String
   /// The occurrence this run represents (UTC instant).
   scheduledFor DateTime
-  /// awaiting | succeeded | failed | missed | cancelled
+  /// awaiting | succeeded | blocked | failed | missed | cancelled (blocked: it finished but could not do its job, issue #87)
   status       String
   /// schedule | manual
   trigger      String   @default("schedule")
@@ -348,7 +352,7 @@ model RoutineRun {
   finishedAt  DateTime?
   /// Reply preview, max 2000 chars.
   output      String?
-  /// Failure reason, max 500 chars.
+  /// Failure or blocked reason, max 500 chars.
   error       String?
   routine      Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
 

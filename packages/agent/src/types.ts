@@ -272,6 +272,8 @@ export interface FinishedReply {
   error?: string;
   /** Tools this message called that were refused for want of an approval (unattended runs). */
   refused?: string[];
+  /** The reason this message's `report_routine_blocked` call gave (routine runs, issue #87). */
+  blocked?: string;
 }
 
 /** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */

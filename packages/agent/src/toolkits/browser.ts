@@ -1020,11 +1020,15 @@ function vaultTools(options: BrowserToolkitOptions) {
     const existing = await api.snapshot(CredentialRequestDoc, api.taskId, context);
     let request = existing ? storedRequest(existing) : null;
     if (!request) {
-      // A routine's run (issue #63) has nobody to fill the sheet.
+      // A routine's run (issue #63) has nobody to fill the sheet: refused like
+      // an approval nobody can give, so the run shows as needing attention (#87).
       if (await isUnattendedConversation(api, context)) {
-        return fail(
-          "Nobody can fill credentials here: this is a scheduled routine run. Use a saved vault item, or say in your reply what is needed.",
-        );
+        return {
+          ...fail(
+            "Nobody can fill credentials here: this is a scheduled routine run. Use a saved vault item, or say in your reply what is needed.",
+          ),
+          details: { approval: "refused" },
+        };
       }
       const tab = await peekTab(options, conversation);
       const normalized = normalizeCredentialRequest(

@@ -3,16 +3,20 @@
  * routine's own conversation (issue #63), and this watcher resolves them off
  * the runtime's activity feed. When a conversation holding an awaiting run
  * goes idle, the run adopts the last assistant reply (2000-char preview) or
- * the model error; a run whose `ask` tool was refused (nobody watches a
- * routine's conversation to approve it) fails with the tool named. A boot
- * sweep marks runs whose conversations are idle at startup as failed
- * (interrupted by restart). Each resolved run shows as a card in the chat.
+ * the model error. A run that could not do its job ends `blocked` (issue
+ * #87), with the reason: one whose tool call was refused (nobody watches a
+ * routine's conversation to approve it or fill in a sign-in), or one that
+ * said so itself (`report_routine_blocked`). Three blocked runs in a row
+ * pause the routine (routines.service.ts). A boot sweep marks runs whose
+ * conversations are idle at startup as failed (interrupted by restart).
+ * Each resolved run shows as a card in the chat.
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
+import { clearBlockedStreak, recordBlockedRun } from "./routines.service";
 
 export const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
@@ -74,12 +78,40 @@ export function refusedTools(
   return [...names];
 }
 
-/** Why a run failed on refused tools, telling the owner how to let them run. */
+/**
+ * The reason the run gave for being blocked (`report_routine_blocked`): the
+ * newest one in the run's window, like `refusedTools`.
+ */
+export function blockedReason(
+  replies: FinishedReply[],
+  floorMs: number,
+  untilMs?: number,
+): string | undefined {
+  let reason: string | undefined;
+  for (const reply of replies) {
+    if (reply.createdAt <= floorMs) continue;
+    if (untilMs !== undefined && reply.createdAt > untilMs) break;
+    if (reply.blocked !== undefined) reason = reply.blocked;
+  }
+  return reason;
+}
+
+/** Tools that ask the owner to type a sign-in: refused unattended, never allowable. */
+const CREDENTIAL_TOOLS = new Set(["request_credentials"]);
+
+/** Why a run was blocked on refused tools, telling the owner how to let them run. */
 export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): string {
-  const allowable = tools.filter((tool) => !askOnly.has(tool));
-  const never = tools.filter((tool) => askOnly.has(tool));
+  const signIn = tools.filter((tool) => CREDENTIAL_TOOLS.has(tool));
+  const rest = tools.filter((tool) => !CREDENTIAL_TOOLS.has(tool));
+  const allowable = rest.filter((tool) => !askOnly.has(tool));
+  const never = rest.filter((tool) => askOnly.has(tool));
   const list = (names: string[]) => names.map((name) => `\`${name}\``).join(", ");
   const parts: string[] = [];
+  if (signIn.length > 0) {
+    parts.push(
+      "Needs a sign-in nobody can type during a routine run; save the login in the Vault and turn on Use in routines.",
+    );
+  }
   if (allowable.length > 0) {
     parts.push(
       `Needs approval for ${list(allowable)}; set ${allowable.length === 1 ? "it" : "them"} to Allow for this bot to use ${allowable.length === 1 ? "it" : "them"} in routines.`,
@@ -135,8 +167,10 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
 
   async function resolveRun(
     ref: RoutineRunRef,
+    routineId: string,
     reply: FinishedReply,
     refused: string[],
+    blocked: string | undefined,
   ): Promise<void> {
     if (reply.error !== undefined) {
       const error = preview(reply.error, ERROR_PREVIEW_CHARS);
@@ -144,23 +178,30 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
         where: { id: ref.runId },
         data: { status: "failed", finishedAt: new Date(), error },
       });
+      await clearBlockedStreak(routineId);
       announceRun(ref, { status: "failed", error });
       return;
     }
     const output = preview(reply.text, OUTPUT_PREVIEW_CHARS);
-    if (refused.length > 0) {
-      const error = refusalReason(refused, askOnlyTools()).slice(0, ERROR_PREVIEW_CHARS);
+    const reasons = [
+      blocked,
+      refused.length > 0 ? refusalReason(refused, askOnlyTools()) : undefined,
+    ].filter((reason): reason is string => reason !== undefined);
+    if (reasons.length > 0) {
+      const error = preview(reasons.join(" "), ERROR_PREVIEW_CHARS);
       await prisma.routineRun.update({
         where: { id: ref.runId },
-        data: { status: "failed", finishedAt: new Date(), error, output: output || null },
+        data: { status: "blocked", finishedAt: new Date(), error, output: output || null },
       });
-      announceRun(ref, { status: "failed", error });
+      const pausedReason = await recordBlockedRun(routineId, error);
+      announceRun(ref, { status: "blocked", error, pausedReason });
       return;
     }
     await prisma.routineRun.update({
       where: { id: ref.runId },
       data: { status: "succeeded", finishedAt: new Date(), output },
     });
+    await clearBlockedStreak(routineId);
     announceRun(ref, { status: "succeeded", output });
   }
 
@@ -194,9 +235,10 @@ export function createRoutinesCompletionWatcher(rt: RoutinesRuntime): RoutinesCo
           : matchingReply(replies, floorAt);
       if (!reply) continue;
       const refused = refusedTools(replies, floorAt, reply.createdAt);
+      const blocked = blockedReason(replies, floorAt, reply.createdAt);
       floor = reply.createdAt;
       try {
-        await resolveRun(runs[i].ref, reply, refused);
+        await resolveRun(runs[i].ref, run.routineId, reply, refused, blocked);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Failed to resolve an awaiting routine run");

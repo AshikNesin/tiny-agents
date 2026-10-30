@@ -12,8 +12,8 @@
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
-import { notifyRoutineRun } from "../notifications/notifications.wiring";
-import type { RoutineFailure, RoutineRunRef } from "../notifications/notifications.events";
+import { notifyRoutineRun, type RoutineOutcome } from "../notifications/notifications.wiring";
+import type { RoutineRunRef } from "../notifications/notifications.events";
 
 /** Cards one chat shows: the newest finished runs across the bot's routines. */
 export const CHAT_CARDS = 50;
@@ -109,12 +109,7 @@ export async function publishRunCard(runId: string): Promise<void> {
 }
 
 /** A run ended (watcher) or never started (fire job): push it and show its card. */
-export function announceRun(
-  ref: RoutineRunRef,
-  outcome:
-    | { status: "succeeded"; output?: string | null }
-    | { status: RoutineFailure; error?: string | null },
-): void {
+export function announceRun(ref: RoutineRunRef, outcome: RoutineOutcome): void {
   notifyRoutineRun(ref, outcome);
   void publishRunCard(ref.runId);
 }

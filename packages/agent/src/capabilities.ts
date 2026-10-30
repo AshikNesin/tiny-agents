@@ -28,6 +28,11 @@ export interface ToolInfo {
   readOnly?: boolean;
   /** Tools that can never run unattended (e.g. `save_skill`): `allow` is not offered. */
   askOnly?: boolean;
+  /**
+   * Offered only where nobody watches (a routine's conversation, issue #87),
+   * e.g. `report_routine_blocked`: removed from the model in chats.
+   */
+  unattendedOnly?: boolean;
 }
 
 export type CapabilityKind = "toolkit" | "skills" | "connection";

@@ -114,7 +114,8 @@ export interface RoutineRunCard {
   id: string;
   routineId: string;
   routineName: string;
-  status: "succeeded" | "failed" | "missed" | "cancelled";
+  /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
+  status: "succeeded" | "blocked" | "failed" | "missed" | "cancelled";
   trigger: "schedule" | "manual";
   scheduledFor: string;
   finishedAt: string;

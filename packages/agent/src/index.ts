@@ -181,6 +181,8 @@ export {
   createRoutinesExtension,
   createRoutinesToolkit,
   confirmationCard,
+  MAX_BLOCKED_REASON,
+  REPORT_ROUTINE_BLOCKED,
   type RoutineCreateInput,
   type RoutineRecord,
   type RoutineSchedule,

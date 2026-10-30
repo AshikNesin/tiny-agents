@@ -50,6 +50,7 @@ import {
   QuestionsDoc,
   storedQuestions,
 } from "./toolkits/questions";
+import { REPORT_ROUTINE_BLOCKED } from "./toolkits/routines";
 import {
   attachmentsOf,
   chatState,
@@ -70,6 +71,7 @@ import type {
   ChatPage,
   ChatState,
   ChatSubscription,
+  ChatToolCall,
   ConversationRef,
   FinishedReply,
   LastMessage,
@@ -408,7 +410,10 @@ export class AgentRuntime {
     const off: ToolRegistration[] = [];
     for (const capability of selected) {
       for (const tool of capability.tools) {
-        if (effectivePermission(tool, config.capabilities.permissions) !== "off") continue;
+        const offHere = tool.unattendedOnly === true && !config.capabilities.unattended;
+        if (!offHere && effectivePermission(tool, config.capabilities.permissions) !== "off") {
+          continue;
+        }
         const registration = installed
           .extension(capability.id)
           ?.tools?.find((candidate) => candidate.name === tool.name);
@@ -839,12 +844,16 @@ export class AgentRuntime {
       const refused = message.toolCalls
         ?.filter((call) => call.approval === "refused")
         .map((call) => call.name);
-      if (!message.text && error === undefined && !refused?.length) continue;
+      const blocked = blockedReason(message.toolCalls);
+      if (!message.text && error === undefined && !refused?.length && blocked === undefined) {
+        continue;
+      }
       replies.push({
         text: message.text,
         createdAt: message.createdAt,
         ...(error !== undefined ? { error } : {}),
         ...(refused?.length ? { refused } : {}),
+        ...(blocked !== undefined ? { blocked } : {}),
       });
     }
     return replies;
@@ -1083,6 +1092,15 @@ export class AgentRuntime {
     if (!conversation) throw new ConversationNotFoundError(ref);
     return conversation;
   }
+}
+
+/** The reason a message's finished `report_routine_blocked` call gave, if it made one (issue #87). */
+function blockedReason(calls: ChatToolCall[] | undefined): string | undefined {
+  const call = calls?.findLast(
+    (candidate) => candidate.name === REPORT_ROUTINE_BLOCKED && candidate.status === "done",
+  );
+  const reason = call?.args.reason;
+  return typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 }
 
 function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {

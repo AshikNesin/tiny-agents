@@ -161,6 +161,18 @@ export interface BotDraft {
 }
 
 /**
+ * Added to a routine conversation's persona (issue #87): nobody watches a
+ * routine run, so a run that cannot do its job must say so through the tool
+ * that records it, or it reads as succeeded.
+ */
+export const ROUTINE_RUN_GUIDANCE =
+  "This conversation runs your scheduled routines, and nobody watches it live: you cannot " +
+  "ask the owner anything here. If a run cannot do its job until the owner fixes something " +
+  "(a missing vault login, an account you cannot reach, an approval routines cannot get), " +
+  "call report_routine_blocked with what they need to do, then reply in a sentence. If there " +
+  "was simply nothing to do this time, just say so; that is not blocked.";
+
+/**
  * What the bot's durable conversation runs with: persona, model and
  * capabilities: every built-in toolkit, its connections, and the automatic
  * ones (vision for text-only models, tool search for large connections).
@@ -177,7 +189,9 @@ function agentConfig(
   );
   return {
     modelId: bot.modelId,
-    systemPrompt: bot.systemPrompt,
+    systemPrompt: unattended
+      ? [bot.systemPrompt.trim(), ROUTINE_RUN_GUIDANCE].filter(Boolean).join("\n\n")
+      : bot.systemPrompt,
     capabilities: {
       enabled: [
         ...BOT_TOOLKITS,
