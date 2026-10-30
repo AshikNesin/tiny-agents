@@ -52,7 +52,7 @@ document). In it:
   guard); `list_routines` stays open. The owner's chat is never a routine's
   conversation, so the owner can manage routines while a run is working.
 
-## Results show as cards in the chat
+## Results show as quiet lines in the chat
 
 The watcher (`routines.watcher.ts`) resolves an awaiting run when its
 routine's conversation goes idle. Only routine prompts go into that
@@ -60,16 +60,23 @@ conversation, so the run's output is always the routine's own reply, even if
 the owner chats during the run.
 
 A finished run (succeeded, failed, missed, cancelled) shows in its bot's chat
-as a card built from the `RoutineRun` row: the routine's name, status, output
-preview, error and time (`routines.cards.ts`, `RoutineRunCard.tsx`). The card
-is not a transcript entry. It costs no model turn and the bot never reads it.
+as one quiet, centered line built from the `RoutineRun` row (`routines.cards.ts`,
+`RoutineRuns.tsx`): the routine's name, status and time, styled like the day
+divider. Runs that finish back to back (no message between them, same day)
+fold into one line ("ran 4× · 1 failed · last 09:00"). Clicking the line shows
+each run's output and error, newest first, with a link to the Routines page.
+It is not a transcript entry: it costs no model turn and the bot never reads
+it.
 
+- **Per thread.** Lines belong to the chat thread they finished in.
+  `Bot.chatStartedAt` is set when the bot is created and on "New chat"; only
+  runs that finished after it show. Earlier results stay on the Routines page.
 - The chat stream (`GET /bots/:id/stream`) sends `{ type: "routine-runs" }`
-  with the bot's 50 newest finished runs on connect, then
+  with the thread's 50 newest finished runs on connect, then
   `{ type: "routine-run" }` as each one finishes.
-- The client merges cards into the timeline by when the run finished
+- The client merges them into the timeline by finish time
   (`lib/chat-timeline.ts`).
-- A run whose submit failed pauses the routine. Its card says so; no notice
+- A run whose submit failed pauses the routine. Its line says so; no notice
   is written into the chat.
 - Pushes are unchanged (`routine.succeeded`, `routine.failed`, see
   [notifications](./notifications.md)).

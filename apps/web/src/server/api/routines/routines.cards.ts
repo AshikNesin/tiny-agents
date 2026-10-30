@@ -5,7 +5,9 @@
  * client merges into the timeline. A card is not a transcript entry: it
  * costs no model turn and never reaches the bot's context.
  *
- * The bot's chat stream sends the cards it already has on connect and each
+ * Cards belong to the chat thread they finished in: "New chat" starts a
+ * clean thread (`Bot.chatStartedAt`), and older results stay on the Routines
+ * page. The bot's chat stream sends the thread's cards on connect and each
  * newly finished run as it lands (`onRoutineCard`).
  */
 import { prisma } from "@groot/core/database";
@@ -67,10 +69,14 @@ const cardSelect = {
   routine: { select: { name: true } },
 } as const;
 
-/** The bot's finished routine runs, oldest first (the chat's order). */
-export async function chatCards(botId: string, limit = CHAT_CARDS): Promise<RoutineRunCard[]> {
+/** The bot's routine runs that finished since its chat thread started, oldest first. */
+export async function chatCards(
+  botId: string,
+  since: Date,
+  limit = CHAT_CARDS,
+): Promise<RoutineRunCard[]> {
   const rows = await prisma.routineRun.findMany({
-    where: { routine: { botId }, status: { not: "awaiting" }, finishedAt: { not: null } },
+    where: { routine: { botId }, status: { not: "awaiting" }, finishedAt: { gte: since } },
     orderBy: { finishedAt: "desc" },
     take: limit,
     select: cardSelect,

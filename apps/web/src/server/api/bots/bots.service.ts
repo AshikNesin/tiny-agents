@@ -138,6 +138,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       systemPrompt: data.systemPrompt,
       modelId: data.modelId,
       conversationId,
+      chatStartedAt: new Date(),
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
@@ -369,6 +370,8 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
     where: { id },
     data: {
       conversationId,
+      // A fresh thread: routine results from before it stay out of it.
+      chatStartedAt: new Date(),
       lastReadAt: new Date(),
       lastMessagePreview: null,
       lastActivityAt: new Date(),

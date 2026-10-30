@@ -100,7 +100,7 @@ router.get("/bots/:id/stream", async (req: Request, res: Response) => {
       unfollow();
       void subscription?.stop();
     });
-    writeSse(res, { type: "routine-runs", runs: await chatCards(bot.id) });
+    writeSse(res, { type: "routine-runs", runs: await chatCards(bot.id, bot.chatStartedAt) });
   } catch (error) {
     // Before headers were sent (unknown bot) this is a normal API error.
     if (!res.headersSent) throw error;

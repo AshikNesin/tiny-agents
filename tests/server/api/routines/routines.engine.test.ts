@@ -70,7 +70,13 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
 
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
   const bot = await prisma.bot.create({
-    data: { name: "Bot", modelId: "m1", conversationId: String(CHAT) },
+    // The chat thread started before the fixed slots these tests fire at.
+    data: {
+      name: "Bot",
+      modelId: "m1",
+      conversationId: String(CHAT),
+      chatStartedAt: new Date("2026-01-01T00:00:00Z"),
+    },
   });
   const routine = await prisma.routine.create({
     data: {
@@ -306,7 +312,7 @@ describe("routine-fire dispatch", () => {
     expect(vi.mocked(failing.submit).mock.calls.map(([ref]) => ref)).toEqual([
       ROUTINE_CONVERSATION,
     ]);
-    expect(await chatCards(bot.id)).toEqual([
+    expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([
       expect.objectContaining({ id: run!.id, status: "failed" }),
     ]);
   });
@@ -432,7 +438,7 @@ describe("completion watcher", () => {
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await prisma.routineRun.findFirst({ where: { routineId: routine.id } });
     // An awaiting run has no card yet.
-    expect(await chatCards(bot.id)).toEqual([]);
+    expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([]);
 
     const seen: { botId: string; card: RoutineRunCard }[] = [];
     const stop = onRoutineCard((botId, card) => seen.push({ botId, card }));
@@ -451,7 +457,9 @@ describe("completion watcher", () => {
       error: null,
     };
     expect(seen[0]).toEqual({ botId: bot.id, card: expect.objectContaining(card) });
-    expect(await chatCards(bot.id)).toEqual([expect.objectContaining(card)]);
+    expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([expect.objectContaining(card)]);
+    // A thread started after the run ("New chat") does not show it.
+    expect(await chatCards(bot.id, new Date(Date.now() + 1000))).toEqual([]);
   });
 
   it("a model error reply marks the run failed", async () => {

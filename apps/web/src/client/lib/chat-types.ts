@@ -103,10 +103,10 @@ export interface QueuedMessage {
 }
 
 /**
- * A finished routine run, shown as a card in its bot's chat (issue #63). The
- * run itself happened in the routine's own conversation: the card is not a
- * transcript entry and the bot never reads it. Mirrors the server's
- * `RoutineRunCard` (routines.cards.ts).
+ * A finished routine run, shown as a quiet line in its bot's chat (issue
+ * #63) when it finished in the current thread. The run itself happened in
+ * the routine's own conversation: the line is not a transcript entry and the
+ * bot never reads it. Mirrors the server's `RoutineRunCard` (routines.cards.ts).
  */
 export interface RoutineRunCard {
   id: string;
