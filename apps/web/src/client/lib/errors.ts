@@ -27,12 +27,15 @@ function firstDetail(details: unknown): string | undefined {
 
 /**
  * The server's own error message, or undefined when the response carried no
- * envelope (a proxy's HTML page, an empty body): `ApiError` then falls back
- * to the status line and an `HTTP_<status>` code.
+ * envelope message (a proxy's HTML page, an empty body): `ApiError` then
+ * holds only the status line.
  */
 export function serverMessage(error: ApiError): string | undefined {
-  if (error.code === `HTTP_${error.status}`) return undefined;
-  return error.message || undefined;
+  if (!error.message) return undefined;
+  // A message from the envelope counts even without a code; otherwise only a
+  // real code (e.g. NO_DATA) makes the client's message worth showing.
+  if (error.fromServer || error.code !== `HTTP_${error.status}`) return error.message;
+  return undefined;
 }
 
 /** fetch rejects with a TypeError when the request never got an answer. */

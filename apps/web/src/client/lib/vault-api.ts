@@ -239,6 +239,7 @@ async function requestWithStepUp<T>(
         (response.statusText || `Request failed with status ${response.status}`),
       details: envelope?.error?.details,
       url,
+      fromServer: typeof envelope?.error?.message === "string",
     });
   }
   return envelope?.data as T;

@@ -26,6 +26,11 @@ export class ApiError extends Error {
   readonly code: string;
   readonly details?: unknown;
   readonly url: string;
+  /**
+   * True when `message` came from the server's error envelope; false when it
+   * is the client's fallback (the HTTP status line), which says little.
+   */
+  readonly fromServer: boolean;
 
   constructor(init: {
     status: number;
@@ -33,6 +38,7 @@ export class ApiError extends Error {
     message: string;
     details?: unknown;
     url: string;
+    fromServer?: boolean;
   }) {
     super(init.message);
     this.name = "ApiError";
@@ -40,6 +46,7 @@ export class ApiError extends Error {
     this.code = init.code;
     this.details = init.details;
     this.url = init.url;
+    this.fromServer = init.fromServer ?? false;
   }
 }
 
@@ -128,6 +135,7 @@ class ApiClient {
           (response.statusText || `Request failed with status ${response.status}`),
         details: parsed?.error?.details,
         url: path,
+        fromServer: typeof parsed?.error?.message === "string",
       });
     }
     return parsed ?? { success: true };

@@ -211,7 +211,7 @@ test.describe("Chats — attachments (issue #17)", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
       "base64",
     );
-    await page.setInputFiles('input[type="file"]', {
+    await page.setInputFiles('#root input[type="file"]', {
       name: "e2e-shot.png",
       mimeType: "image/png",
       buffer: png,
@@ -261,7 +261,7 @@ test.describe("Chats — attachments (issue #17)", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
       "base64",
     );
-    await page.setInputFiles('input[type="file"]', {
+    await page.setInputFiles('#root input[type="file"]', {
       name: "only-image.png",
       mimeType: "image/png",
       buffer: png,

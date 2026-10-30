@@ -37,7 +37,7 @@ test.describe("Questions for the owner", () => {
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card.getByText(`${name} has 3 questions for you`)).toBeVisible();
     // The sidebar shows the bot is waiting on the owner.
-    await expect(page.getByLabel("1 question for you")).toBeVisible();
+    await expect(page.getByLabel("1 question for you", { exact: true })).toBeVisible();
 
     // A reload keeps the questions waiting.
     await page.reload();
@@ -60,7 +60,7 @@ test.describe("Questions for the owner", () => {
     await expect(page.getByText(/A: React/).first()).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: /Asked you 3 questions/ }).click();
     await expect(page.getByText("Ship it Friday", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("1 question for you")).not.toBeVisible();
+    await expect(page.getByLabel("1 question for you", { exact: true })).not.toBeVisible();
   });
 
   test("writing in the chat instead dismisses the questions", async ({ page }) => {

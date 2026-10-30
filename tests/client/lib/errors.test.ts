@@ -7,7 +7,7 @@ function apiFailure(
   status: number,
   error: { code: string; message: string; details?: unknown },
 ): ApiError {
-  return new ApiError({ status, ...error, url: "/bots" });
+  return new ApiError({ status, ...error, url: "/bots", fromServer: true });
 }
 
 describe("errorMessage", () => {
@@ -25,6 +25,17 @@ describe("errorMessage", () => {
   it("falls back to the server's message", () => {
     const error = apiFailure(409, { code: "CONFLICT", message: "Skill exists" });
     expect(errorMessage(error, "Failed")).toBe("Skill exists");
+  });
+
+  it("shows an envelope message that came without a code", () => {
+    const error = new ApiError({
+      status: 503,
+      code: "HTTP_503",
+      message: "Cannot reach the sandbox (ETIMEDOUT).",
+      url: "/terminal/sessions",
+      fromServer: true,
+    });
+    expect(errorMessage(error, "Couldn't load")).toBe("Cannot reach the sandbox (ETIMEDOUT).");
   });
 
   it("never shows the status-line text of a response without an envelope", () => {

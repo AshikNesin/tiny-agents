@@ -30,4 +30,6 @@ pi-durable store run in-process).
   the warm palette now lives in the shell (app.css keeps only chat tokens).
 - Fixes found on the way: a bot edit that only changed its skills or
   connections returned 500 under Drizzle; the login page showed the raw error
-  instead of "Invalid email or password" with the fetch client.
+  instead of "Invalid email or password" with the fetch client; a server
+  error message without a code (the terminal's, for one) was replaced by the
+  generic fallback. `ApiError` now carries `fromServer` to tell the two apart.

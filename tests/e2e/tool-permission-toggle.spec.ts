@@ -37,7 +37,7 @@ test("Allow/Ask/Off toggle changes on click and the selection is visible", async
   await dialog.getByRole("tab", { name: "Tools" }).click();
 
   // Every bot has every toolkit: a new bot's task tools are listed already.
-  const group = dialog.getByRole("radiogroup", { name: "Added task permission" });
+  const group = dialog.getByRole("radiogroup", { name: "Add a task permission" });
   await expect(group).toBeVisible({ timeout: 15_000 });
   const off = group.getByRole("radio", { name: "Off" });
   const ask = group.getByRole("radio", { name: "Ask" });
