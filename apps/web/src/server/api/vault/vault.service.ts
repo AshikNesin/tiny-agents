@@ -7,7 +7,7 @@
  * module resolves with the read-only backends only; writes live in
  * `vault.admin.service.ts`.
  */
-import { prisma } from "@groot/core/database";
+import { asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
   secretRedactor,
@@ -22,6 +22,7 @@ import {
   type VaultPlan,
   type VaultUse,
 } from "@tiny-agents/agent";
+import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
 import { readBackends } from "./backends";
 import {
   BackendError,
@@ -30,7 +31,7 @@ import {
   type ValueField,
 } from "./backends/types";
 
-export type VaultItemRow = NonNullable<Awaited<ReturnType<typeof prisma.vaultItem.findUnique>>>;
+export type VaultItemRow = VaultItem;
 
 /** Tools an item may be used by when its row names none. */
 export const KIND_DEFAULT_TOOLS: Record<VaultKind, string[]> = {
@@ -165,19 +166,17 @@ export interface AuditInput {
 
 export async function audit(input: AuditInput): Promise<void> {
   try {
-    await prisma.vaultAuditEvent.create({
-      data: {
-        itemId: input.item?.id ?? null,
-        handle: input.handle,
-        botId: input.botId ?? null,
-        conversationId: input.conversationId ?? null,
-        taskId: input.taskId ?? null,
-        tool: input.tool,
-        target: secretRedactor.scrub(input.target).slice(0, 500),
-        outcome: input.outcome,
-        reason: input.reason ? secretRedactor.scrub(input.reason).slice(0, 500) : null,
-        unattended: input.unattended ?? false,
-      },
+    await db.insert(vaultAuditEvents).values({
+      itemId: input.item?.id ?? null,
+      handle: input.handle,
+      botId: input.botId ?? null,
+      conversationId: input.conversationId ?? null,
+      taskId: input.taskId ?? null,
+      tool: input.tool,
+      target: secretRedactor.scrub(input.target).slice(0, 500),
+      outcome: input.outcome,
+      reason: input.reason ? secretRedactor.scrub(input.reason).slice(0, 500) : null,
+      unattended: input.unattended ?? false,
     });
   } catch (error) {
     logger.error(
@@ -197,7 +196,7 @@ export interface UseContext {
 }
 
 export async function findItem(handle: string): Promise<VaultItemRow | null> {
-  return prisma.vaultItem.findUnique({ where: { handle } });
+  return (await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) })) ?? null;
 }
 
 /** Items the bot may use, narrowed by tool and origin. */
@@ -206,10 +205,11 @@ export async function listFor(scope: {
   tool?: string;
   origin?: string;
 }): Promise<VaultItemMeta[]> {
-  const rows = await prisma.vaultItem.findMany({
-    where: { disabled: false },
-    orderBy: { handle: "asc" },
-  });
+  const rows = await db
+    .select()
+    .from(vaultItems)
+    .where(eq(vaultItems.disabled, false))
+    .orderBy(asc(vaultItems.handle));
   const origin = scope.origin ? normalizeOrigin(scope.origin) : undefined;
   return rows
     .filter((row) => botAllowed(row, scope.botId))
@@ -404,11 +404,10 @@ export async function useItem<T>(
   } finally {
     await audit({ ...base, outcome, ...(reason ? { reason } : {}) });
     if (outcome !== "refused_origin") {
-      await prisma.vaultItem
-        .update({
-          where: { id: row.id },
-          data: { lastUsedAt: new Date(), lastUsedBy: who.botName ?? null },
-        })
+      await db
+        .update(vaultItems)
+        .set({ lastUsedAt: new Date(), lastUsedBy: who.botName ?? null })
+        .where(eq(vaultItems.id, row.id))
         .catch(() => undefined);
     }
   }
@@ -439,11 +438,10 @@ export async function resolveConnectionSecret(handle: string, slug: string): Pro
     const value = await backend.resolve(row.externalId, backendField(row, "value"));
     secretRedactor.register(value);
     await audit({ ...base, item: row, outcome: "used" });
-    await prisma.vaultItem
-      .update({
-        where: { id: row.id },
-        data: { lastUsedAt: new Date(), lastUsedBy: `mcp:${slug}` },
-      })
+    await db
+      .update(vaultItems)
+      .set({ lastUsedAt: new Date(), lastUsedBy: `mcp:${slug}` })
+      .where(eq(vaultItems.id, row.id))
       .catch(() => undefined);
     return value.reveal();
   } catch (error) {

@@ -2,7 +2,9 @@
  * The notification log (`NotificationLog`): one metadata row per accepted
  * notification — event, title, path, status — never the message body.
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { db } from "@groot/core/database";
+import { notificationLog } from "./notification.schema";
 
 export type NotificationStatus = "queued" | "sent" | "failed" | "suppressed" | "cancelled";
 
@@ -44,31 +46,52 @@ export interface NotificationLogStore {
   prune(before: Date): Promise<number>;
 }
 
-export function createPrismaLogStore(): NotificationLogStore {
+/** The log on the app database (core's query builder: no relational queries, no transactions). */
+export function createDbLogStore(): NotificationLogStore {
   return {
     async create(row) {
-      const created = await prisma.notificationLog.create({ data: row, select: { id: true } });
-      return created.id;
+      const [created] = await db
+        .insert(notificationLog)
+        .values(row)
+        .returning({ id: notificationLog.id });
+      return created!.id;
     },
     async update(ids, update) {
       if (ids.length === 0) return;
-      await prisma.notificationLog.updateMany({ where: { id: { in: [...ids] } }, data: update });
+      // Drizzle skips undefined fields and refuses an empty SET; nothing to change is a no-op.
+      if (Object.values(update).every((value) => value === undefined)) return;
+      await db
+        .update(notificationLog)
+        .set(update)
+        .where(inArray(notificationLog.id, [...ids]));
     },
     async hasRecent(dedupeKey, since) {
-      const row = await prisma.notificationLog.findFirst({
-        where: { dedupeKey, createdAt: { gte: since }, status: { in: ["queued", "sent"] } },
-        select: { id: true },
-      });
-      return row !== null;
+      const [row] = await db
+        .select({ id: notificationLog.id })
+        .from(notificationLog)
+        .where(
+          and(
+            eq(notificationLog.dedupeKey, dedupeKey),
+            gte(notificationLog.createdAt, since),
+            inArray(notificationLog.status, ["queued", "sent"]),
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
     },
     list(limit) {
-      return prisma.notificationLog.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+      return db
+        .select()
+        .from(notificationLog)
+        .orderBy(desc(notificationLog.createdAt))
+        .limit(limit);
     },
     async prune(before) {
-      const { count } = await prisma.notificationLog.deleteMany({
-        where: { createdAt: { lt: before } },
-      });
-      return count;
+      const deleted = await db
+        .delete(notificationLog)
+        .where(lt(notificationLog.createdAt, before))
+        .returning({ id: notificationLog.id });
+      return deleted.length;
     },
   };
 }

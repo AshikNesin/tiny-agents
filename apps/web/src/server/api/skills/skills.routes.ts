@@ -1,35 +1,35 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as skillsService from "./skills.service";
 import { createSkillSchema, previewSkillSchema, updateSkillSchema } from "./skills.schema";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.get("/skills", async () => skillsService.list());
+router.get("/skills", async (c) => ok(c, await skillsService.list()));
 
-router.post("/skills/preview", async (req: Request) => {
-  return skillsService.preview(parseBody(req, previewSkillSchema));
+router.post("/skills/preview", async (c) => {
+  return ok(c, await skillsService.preview(await parseBody(c, previewSkillSchema)));
 });
 
-router.post("/skills", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createSkillSchema);
-  res.status(201);
-  return skillsService.create(payload);
+router.post("/skills", async (c) => {
+  const payload = await parseBody(c, createSkillSchema);
+  return ok(c, await skillsService.create(payload), 201);
 });
 
-router.get("/skills/:id", async (req: Request) => {
-  return skillsService.get(parseStringParam(req.params.id, "id"));
+router.get("/skills/:id", async (c) => {
+  return ok(c, await skillsService.get(parseStringParam(c.req.param("id"), "id")));
 });
 
-router.patch("/skills/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return skillsService.update(id, parseBody(req, updateSkillSchema));
+router.patch("/skills/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await skillsService.update(id, await parseBody(c, updateSkillSchema)));
 });
 
-router.delete("/skills/:id", async (req: Request) => {
-  await skillsService.remove(parseStringParam(req.params.id, "id"));
-  return { deleted: true };
+router.delete("/skills/:id", async (c) => {
+  await skillsService.remove(parseStringParam(c.req.param("id"), "id"));
+  return ok(c, { deleted: true });
 });
 
 export default router;

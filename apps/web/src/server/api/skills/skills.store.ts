@@ -3,7 +3,8 @@
  * assigned to the bot behind a conversation from app.db. Dependency direction
  * stays one-way — `@tiny-agents/agent` defines the port, apps/web implements it.
  */
-import { prisma } from "@groot/core/database";
+import { asc, eq } from "drizzle-orm";
+import { botSkills, bots, db, skills } from "../../db";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
 import type { SkillFile } from "./skills.parse";
@@ -20,14 +21,18 @@ function files(raw: string): SkillFile[] {
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
   if (!owner) return { botId: undefined, skills: [] };
-  const bot = await prisma.bot.findUnique({
-    where: { id: owner.botId },
-    select: {
-      id: true,
-      skills: { select: { skill: true }, orderBy: { skill: { name: "asc" } } },
-    },
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.id, owner.botId),
+    columns: { id: true },
   });
-  return { botId: bot?.id, skills: bot?.skills.map((link) => link.skill) ?? [] };
+  if (!bot) return { botId: undefined, skills: [] };
+  const links = await db
+    .select({ skill: skills })
+    .from(botSkills)
+    .innerJoin(skills, eq(botSkills.skillId, skills.id))
+    .where(eq(botSkills.botId, bot.id))
+    .orderBy(asc(skills.name));
+  return { botId: bot.id, skills: links.map((link) => link.skill) };
 }
 
 export const skillStore: SkillStore = {
@@ -54,21 +59,28 @@ export const skillStore: SkillStore = {
 
   async save(conversationId, input) {
     const { botId } = await assigned(conversationId);
-    const existing = await prisma.skill.findUnique({ where: { name: input.name } });
-    const skill = existing
-      ? await prisma.skill.update({
-          where: { id: existing.id },
-          data: { description: input.description, body: input.body },
-        })
-      : await prisma.skill.create({
-          data: { ...input, source: "bot" },
-        });
+    const existing = await db.query.skills.findFirst({ where: eq(skills.name, input.name) });
+    const [skill] = existing
+      ? await db
+          .update(skills)
+          .set({ description: input.description, body: input.body })
+          .where(eq(skills.id, existing.id))
+          .returning({ id: skills.id })
+      : await db
+          .insert(skills)
+          .values({
+            name: input.name,
+            description: input.description,
+            body: input.body,
+            source: "bot",
+          })
+          .returning({ id: skills.id });
     if (botId) {
-      await prisma.botSkill.upsert({
-        where: { botId_skillId: { botId, skillId: skill.id } },
-        create: { botId, skillId: skill.id },
-        update: {},
-      });
+      // Already assigned is fine: the upsert's update was a no-op.
+      await db
+        .insert(botSkills)
+        .values({ botId, skillId: skill!.id })
+        .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
     }
     return { created: !existing };
   },

@@ -4,8 +4,9 @@
  * is a status flip, never a row removal — the tombstone is what stops an
  * exact-text re-capture, so it must survive.
  */
+import { and, asc, eq, inArray, isNotNull, lte } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { prisma } from "@groot/core/database";
+import { bots, db, memories } from "../../db";
 import {
   isExpired,
   MEMORY_MAX_ACTIVE,
@@ -48,29 +49,41 @@ function toRecord(row: MemoryRow): MemoryRecord {
 }
 
 async function findBotId(id: string): Promise<string> {
-  const bot = await prisma.bot.findUnique({ where: { id }, select: { id: true } });
+  const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), columns: { id: true } });
   if (!bot) throw Boom.notFound("Bot not found");
   return bot.id;
 }
 
 async function findMemory(id: string): Promise<MemoryRow> {
-  const row = await prisma.memory.findUnique({ where: { id } });
+  const row = await db.query.memories.findFirst({ where: eq(memories.id, id) });
   if (!row) throw Boom.notFound("Memory not found");
-  return row as MemoryRow;
+  return row;
 }
 
 /** Flip expired active rows to `expired` so the status column reflects reality (lazy, best-effort). */
 async function sweepExpired(botId: string): Promise<void> {
   const now = new Date();
-  const expired = await prisma.memory.findMany({
-    where: { botId, status: "active", until: { not: null, lte: now } },
-    select: { id: true },
-  });
+  const expired = await db
+    .select({ id: memories.id })
+    .from(memories)
+    .where(
+      and(
+        eq(memories.botId, botId),
+        eq(memories.status, "active"),
+        isNotNull(memories.until),
+        lte(memories.until, now),
+      ),
+    );
   if (expired.length > 0) {
-    await prisma.memory.updateMany({
-      where: { id: { in: expired.map((m) => m.id) } },
-      data: { status: "expired" },
-    });
+    await db
+      .update(memories)
+      .set({ status: "expired" })
+      .where(
+        inArray(
+          memories.id,
+          expired.map((m) => m.id),
+        ),
+      );
   }
 }
 
@@ -80,17 +93,19 @@ export async function list(id: string, includeArchived = false): Promise<MemoryR
   const statuses = includeArchived
     ? ["active", "superseded", "archived", "expired"]
     : ["active", "superseded"];
-  const rows = await prisma.memory.findMany({
-    where: { botId, status: { in: statuses } },
-    orderBy: [{ createdAt: "asc" }],
-  });
+  const rows = await db
+    .select()
+    .from(memories)
+    .where(and(eq(memories.botId, botId), inArray(memories.status, statuses)))
+    .orderBy(asc(memories.createdAt));
   return rows.map(toRecord);
 }
 
 export async function create(id: string, data: CreateMemoryDTO): Promise<MemoryRecord> {
   const botId = await findBotId(id);
-  const row = await prisma.memory.create({
-    data: {
+  const [row] = await db
+    .insert(memories)
+    .values({
       botId,
       text: data.text,
       category: data.category,
@@ -98,10 +113,10 @@ export async function create(id: string, data: CreateMemoryDTO): Promise<MemoryR
       source: "manual",
       confidence: null,
       until: data.until ? new Date(data.until) : null,
-    },
-  });
+    })
+    .returning();
   await enforceBudget(botId);
-  return toRecord(row as MemoryRow);
+  return toRecord(row!);
 }
 
 export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryRecord> {
@@ -115,14 +130,19 @@ export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryR
     next.supersededById = null;
     next.supersededAt = null;
   }
-  const updated = await prisma.memory.update({ where: { id }, data: next });
+  // Nothing to write (e.g. restoring a tombstone): the row as it is, updatedAt untouched.
+  const [updated] =
+    Object.keys(next).length > 0
+      ? await db.update(memories).set(next).where(eq(memories.id, id)).returning()
+      : [row];
+  if (!updated) throw Boom.notFound("Memory not found");
   if (data.restore) await enforceBudget(row.botId);
-  return toRecord(updated as MemoryRow);
+  return toRecord(updated);
 }
 
 export async function remove(id: string): Promise<{ deleted: true }> {
   await findMemory(id);
-  await prisma.memory.update({ where: { id }, data: { status: "deleted" } });
+  await db.update(memories).set({ status: "deleted" }).where(eq(memories.id, id));
   return { deleted: true };
 }
 
@@ -132,17 +152,22 @@ export async function remove(id: string): Promise<{ deleted: true }> {
  */
 export async function enforceBudget(botId: string): Promise<number> {
   await sweepExpired(botId);
-  const active = await prisma.memory.findMany({
-    where: { botId, status: "active" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
+  const active = await db
+    .select({ id: memories.id })
+    .from(memories)
+    .where(and(eq(memories.botId, botId), eq(memories.status, "active")))
+    .orderBy(asc(memories.createdAt));
   const overflow = active.slice(0, Math.max(0, active.length - MEMORY_MAX_ACTIVE));
   if (overflow.length > 0) {
-    await prisma.memory.updateMany({
-      where: { id: { in: overflow.map((m) => m.id) } },
-      data: { status: "archived" },
-    });
+    await db
+      .update(memories)
+      .set({ status: "archived" })
+      .where(
+        inArray(
+          memories.id,
+          overflow.map((m) => m.id),
+        ),
+      );
   }
   return active.length - overflow.length;
 }

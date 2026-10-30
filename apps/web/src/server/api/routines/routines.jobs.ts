@@ -7,13 +7,13 @@
  * (routines.watcher.ts), and the result shows in the chat as a card
  * (routines.cards.ts).
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { addJob, cancelJob } from "@groot/jobs/server/queue";
 import { registerJobHandler } from "@groot/jobs/server/worker";
-import type { SendJobOptions } from "@groot/jobs/server/adapter";
-import type { JobHandler } from "@groot/jobs/server/error-handler";
+import type { JobHandler, SendJobOptions } from "@groot/jobs/server/types";
 import { z } from "zod";
+import { db, jobs, routineRuns, routines } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import {
   startBotConversation,

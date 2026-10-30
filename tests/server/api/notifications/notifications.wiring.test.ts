@@ -6,7 +6,6 @@
  * routine's; routine outcomes render their own events.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   type NotificationSettings,
@@ -16,6 +15,7 @@ import { registerRedactor } from "@groot/core/notification/scrub";
 import type { ActivityChange, FinishedReply, WaitEvent } from "@tiny-agents/agent";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import { watchBot } from "../../../../apps/web/src/server/api/bots/bots.viewers";
+import { bots, db, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import {
   notifyRoutineRun,
   notifyVaultAlert,
@@ -75,22 +75,23 @@ let botId: string;
 let wiring: NotificationsWiring | undefined;
 
 beforeEach(async () => {
-  await prisma.routineRun.deleteMany();
-  await prisma.routine.deleteMany();
-  await prisma.bot.deleteMany();
-  const bot = await prisma.bot.create({
-    data: { name: "Ops bot", modelId: "m1", conversationId: String(CONVERSATION) },
-  });
-  botId = bot.id;
+  await db.delete(routineRuns);
+  await db.delete(routines);
+  await db.delete(bots);
+  const [bot] = await db
+    .insert(bots)
+    .values({ name: "Ops bot", modelId: "m1", conversationId: String(CONVERSATION) })
+    .returning();
+  botId = bot!.id;
 });
 
 afterEach(async () => {
   wiring?.stop();
   wiring = undefined;
   vi.useRealTimers();
-  await prisma.routineRun.deleteMany();
-  await prisma.routine.deleteMany();
-  await prisma.bot.deleteMany();
+  await db.delete(routineRuns);
+  await db.delete(routines);
+  await db.delete(bots);
 });
 
 describe("needs-input notifications", () => {
@@ -311,22 +312,21 @@ describe("run notifications", () => {
     const notifier = fakeNotifier();
     wiring = startNotifications(runtime, notifier);
     const routineConversation = CONVERSATION + 1;
-    const routine = await prisma.routine.create({
-      data: {
+    const [routine] = await db
+      .insert(routines)
+      .values({
         botId,
         name: "Digest",
         prompt: "Summarize",
         schedule: "{}",
         conversationId: String(routineConversation),
-      },
-    });
-    await prisma.routineRun.create({
-      data: {
-        routineId: routine.id,
-        scheduledFor: new Date(),
-        status: "awaiting",
-        requestId: "routine:test",
-      },
+      })
+      .returning();
+    await db.insert(routineRuns).values({
+      routineId: routine!.id,
+      scheduledFor: new Date(),
+      status: "awaiting",
+      requestId: "routine:test",
     });
     runtime.activity(true, routineConversation);
     runtime.setReplies([{ text: "", createdAt: Date.now() + 1, error: "boom" }]);

@@ -7,7 +7,8 @@
  * budget archive, watermark bump — one transaction. A malformed extraction is
  * dropped whole. Nothing here runs on the reply path.
  */
-import { prisma } from "@groot/core/database";
+import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
@@ -17,6 +18,7 @@ import {
   MEMORY_TURN_LIMIT,
   type ExtractedMemory,
 } from "./memories.domain";
+import { bots, db, memories, type AppDatabase } from "../../db";
 
 /** The minimum the capture side-call needs from the runtime's model registry. */
 export type CaptureModels = Pick<MutableModels, "getModel" | "completeSimple">;
@@ -104,19 +106,19 @@ export async function applyExtraction(
   watermark?: Date,
 ): Promise<{ created: number; superseded: number; skipped: number }> {
   if (extraction.length === 0) {
-    if (watermark) {
-      await prisma.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
-    }
+    if (watermark) setWatermark(db, botId, watermark);
     return { created: 0, superseded: 0, skipped: 0 };
   }
   let created = 0;
   let superseded = 0;
   let skipped = 0;
-  const result = await prisma.$transaction(async (tx) => {
-    const existing = await tx.memory.findMany({
-      where: { botId },
-      select: { id: true, text: true },
-    });
+  // better-sqlite3 transactions are synchronous: every query runs inside it.
+  const result = db.transaction((tx) => {
+    const existing = tx
+      .select({ id: memories.id, text: memories.text })
+      .from(memories)
+      .where(eq(memories.botId, botId))
+      .all();
     const byText = new Map(existing.map((m) => [m.text.trim().toLowerCase(), m]));
     const now = new Date();
     const seen = new Set<string>();
@@ -130,8 +132,9 @@ export async function applyExtraction(
       const validSupersedes = (item.supersedesIds ?? []).filter((sid) =>
         existing.some((m) => m.id === sid),
       );
-      const row = await tx.memory.create({
-        data: {
+      const row = tx
+        .insert(memories)
+        .values({
           botId,
           text: item.text.trim(),
           category: item.category,
@@ -139,37 +142,62 @@ export async function applyExtraction(
           source: "capture",
           confidence: item.confidence,
           until: item.until ? new Date(item.until) : null,
-        },
-      });
+        })
+        .returning({ id: memories.id })
+        .get();
       created++;
       if (validSupersedes.length > 0) {
-        await tx.memory.updateMany({
-          where: { id: { in: validSupersedes } },
-          data: { status: "superseded", supersededById: row.id, supersededAt: new Date() },
-        });
+        tx.update(memories)
+          .set({ status: "superseded", supersededById: row.id, supersededAt: new Date() })
+          .where(inArray(memories.id, validSupersedes))
+          .run();
         superseded += validSupersedes.length;
       }
     }
     // Budget inside the same commit: if archival fails, the window retries.
     // Expired rows never count toward the active budget.
-    const activeRows = await tx.memory.findMany({
-      where: { botId, status: "active", OR: [{ until: null }, { until: { gt: now } }] },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
+    const activeRows = tx
+      .select({ id: memories.id })
+      .from(memories)
+      .where(
+        and(
+          eq(memories.botId, botId),
+          eq(memories.status, "active"),
+          or(isNull(memories.until), gt(memories.until, now)),
+        ),
+      )
+      .orderBy(asc(memories.createdAt))
+      .all();
     const overflow = activeRows.slice(0, Math.max(0, activeRows.length - MEMORY_MAX_ACTIVE));
     if (overflow.length > 0) {
-      await tx.memory.updateMany({
-        where: { id: { in: overflow.map((m) => m.id) } },
-        data: { status: "archived" },
-      });
+      tx.update(memories)
+        .set({ status: "archived" })
+        .where(
+          inArray(
+            memories.id,
+            overflow.map((m) => m.id),
+          ),
+        )
+        .run();
     }
-    if (watermark) {
-      await tx.bot.update({ where: { id: botId }, data: { memoryCapturedThrough: watermark } });
-    }
+    if (watermark) setWatermark(tx, botId, watermark);
     return { created, superseded, skipped };
   });
   return result;
+}
+
+/** Bump the capture watermark; a missing bot throws (and rolls back a surrounding transaction). */
+function setWatermark(
+  handle: Pick<AppDatabase, "update">,
+  botId: string,
+  watermark: Date,
+): void {
+  const { changes } = handle
+    .update(bots)
+    .set({ memoryCapturedThrough: watermark })
+    .where(eq(bots.id, botId))
+    .run();
+  if (changes === 0) throw Boom.notFound("Bot not found");
 }
 
 interface PendingCapture {

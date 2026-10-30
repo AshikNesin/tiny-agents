@@ -12,12 +12,13 @@
  * - Routines: `notifyRoutineRun` (watcher and fire job). A blocked run
  *   (issue #87) stays quiet; the run that pauses the routine pushes once.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { registerRedactor } from "@groot/core/notification/scrub";
 import { secretRedactor, type AgentRuntime, type WaitEvent } from "@tiny-agents/agent";
+import { bots, db } from "../../db";
 import { isBotWatched } from "../bots/bots.viewers";
 import { conversationOwner } from "../bots/bots.owner";
 import {
@@ -66,11 +67,11 @@ function createBotLookup() {
     const owner = await conversationOwner(conversation);
     const row =
       owner && owner.routineId === undefined
-        ? await prisma.bot.findUnique({
-            where: { id: owner.botId },
-            select: { id: true, name: true },
+        ? await db.query.bots.findFirst({
+            where: eq(bots.id, owner.botId),
+            columns: { id: true, name: true },
           })
-        : null;
+        : undefined;
     const bot = row ? { ...row, conversationId: conversation } : undefined;
     cache.set(conversation, { bot, at: Date.now() });
     return bot;

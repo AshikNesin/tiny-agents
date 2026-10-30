@@ -11,7 +11,7 @@
  * selections. This module is the one place that does it: callers name the
  * bot and what to deliver, never the config.
  */
-import { prisma } from "@groot/core/database";
+import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
   fenceAttachment,
@@ -23,11 +23,12 @@ import {
   type ChatMessage,
   type ToolPermission,
 } from "@tiny-agents/agent";
+import { db, bots, uploads, type Upload } from "../../db";
 import { modelImage } from "../uploads/uploads.service";
 import { loadContent } from "../uploads/uploads.extraction";
 import { summarize } from "../uploads/uploads.store";
 
-/** The `Bot` row as Prisma returns it (model defined in apps/web/prisma). */
+/** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
 export interface BotRow {
   id: string;
   name: string;
@@ -76,11 +77,11 @@ type BotWithLinks = BotRow & {
 };
 
 const withLinks = {
-  skills: { select: { skillId: true } },
+  skills: { columns: { skillId: true } },
   connections: {
-    select: {
-      connectionId: true,
-      connection: { select: { slug: true, toolsCache: true, disabledTools: true } },
+    columns: { connectionId: true },
+    with: {
+      connection: { columns: { slug: true, toolsCache: true, disabledTools: true } },
     },
   },
 } as const;
@@ -132,7 +133,7 @@ export function toBot(row: BotWithLinks): Bot {
 
 /** A bot's row with its links, or 404. */
 export async function findBotRow(id: string): Promise<BotWithLinks> {
-  const bot = await prisma.bot.findUnique({ where: { id }, include: withLinks });
+  const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), with: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
   return bot;
 }
@@ -317,7 +318,7 @@ const INLINE_SEND_CHARS = 96_000;
 /** How long a send waits for extractions still running (small files finish first). */
 const EXTRACT_WAIT_MS = 5_000;
 
-type UploadRow = Awaited<ReturnType<typeof prisma.upload.findMany>>[number];
+type UploadRow = Upload;
 
 /** Re-read rows still extracting until they settle or the wait runs out. */
 async function settledRows(rows: UploadRow[]): Promise<UploadRow[]> {
@@ -326,7 +327,15 @@ async function settledRows(rows: UploadRow[]): Promise<UploadRow[]> {
   while (current.some((row) => row.kind === "file" && row.extractStatus === "pending")) {
     if (Date.now() >= deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 200));
-    const fresh = await prisma.upload.findMany({ where: { id: { in: current.map((r) => r.id) } } });
+    const fresh = await db
+      .select()
+      .from(uploads)
+      .where(
+        inArray(
+          uploads.id,
+          current.map((r) => r.id),
+        ),
+      );
     const byId = new Map(fresh.map((row) => [row.id, row]));
     current = current.map((row) => byId.get(row.id) ?? row);
   }
@@ -387,7 +396,7 @@ async function resolveAttachments(
   if (ids.length === 0) return { text: input.text };
   if (new Set(ids).size !== ids.length) throw Boom.badRequest("Duplicate attachment id");
 
-  const found = await prisma.upload.findMany({ where: { id: { in: ids } } });
+  const found = await db.select().from(uploads).where(inArray(uploads.id, ids));
   const rows = await settledRows(found);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const missing = ids.find((uploadId) => !byId.get(uploadId));

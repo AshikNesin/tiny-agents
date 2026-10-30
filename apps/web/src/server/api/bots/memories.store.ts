@@ -12,7 +12,8 @@
  * owner set the tool to Always allow, since a planted memory would reach
  * every later prompt.
  */
-import { prisma } from "@groot/core/database";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { bots, db, memories } from "../../db";
 import {
   CATEGORY_ORDER,
   extractedMemorySchema,
@@ -48,11 +49,11 @@ export function createMemoryStore(
   const writable = async (conversationId: number) => {
     const owner = await conversationOwner(conversationId);
     const bot = owner
-      ? await prisma.bot.findUnique({
-          where: { id: owner.botId },
-          select: { id: true, memoryEnabled: true },
+      ? await db.query.bots.findFirst({
+          where: eq(bots.id, owner.botId),
+          columns: { id: true, memoryEnabled: true },
         })
-      : null;
+      : undefined;
     if (!bot?.memoryEnabled) return "disabled" as const;
     // A runtime that can't be read counts as unattended (refuses, never allows).
     const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
@@ -74,21 +75,29 @@ export function createMemoryStore(
       if (typeof bot === "string") return { status: bot, removed: [] };
       const wanted = [...new Set(wordsOf(input.text))].filter((w) => !GENERIC_WORDS.has(w));
       if (wanted.length === 0) return { status: "vague", removed: [] };
-      const active = await prisma.memory.findMany({
-        where: { botId: bot.id, status: "active" },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, text: true },
-      });
+      const active = await db
+        .select({ id: memories.id, text: memories.text })
+        .from(memories)
+        .where(and(eq(memories.botId, bot.id), eq(memories.status, "active")))
+        .orderBy(asc(memories.createdAt));
       const matches = active.filter((m) => {
         const own = new Set(wordsOf(m.text));
         return wanted.every((w) => own.has(w));
       });
       if (matches.length === 0) return { status: "none", removed: [] };
       // A tombstone, as the Memory page's delete: never re-added by capture.
-      await prisma.memory.updateMany({
-        where: { id: { in: matches.map((m) => m.id) }, status: "active" },
-        data: { status: "deleted" },
-      });
+      await db
+        .update(memories)
+        .set({ status: "deleted" })
+        .where(
+          and(
+            inArray(
+              memories.id,
+              matches.map((m) => m.id),
+            ),
+            eq(memories.status, "active"),
+          ),
+        );
       return { status: "forgotten", removed: matches.map((m) => m.text) };
     },
 
@@ -96,12 +105,10 @@ export function createMemoryStore(
       // A routine's turns read its bot's memories too; only writes are refused.
       const owner = await conversationOwner(conversationId);
       if (!owner) return [];
-      const bot = await prisma.bot.findUnique({
-        where: { id: owner.botId },
-        select: {
-          memoryEnabled: true,
-          memories: { orderBy: { createdAt: "asc" } },
-        },
+      const bot = await db.query.bots.findFirst({
+        where: eq(bots.id, owner.botId),
+        columns: { memoryEnabled: true },
+        with: { memories: { orderBy: (m, { asc }) => [asc(m.createdAt)] } },
       });
       if (!bot || !bot.memoryEnabled) return [];
       const now = new Date();
