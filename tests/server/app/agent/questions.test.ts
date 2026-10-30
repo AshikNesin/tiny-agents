@@ -237,6 +237,21 @@ describe("ask_owner", () => {
     expect(call?.answers).toBeUndefined();
   }, 15_000);
 
+  it("never waits in an unattended conversation (a routine run, issue #63)", async () => {
+    const runtime = await open();
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["questions"], permissions: {}, unattended: true },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
+    expect(await until(() => finalText(events), "reply")).toMatch(/Nobody can answer questions/);
+    expect(runtime.pendingQuestions(ref)).toBe(0);
+    expect(toolCall(events)).toMatchObject({ status: "error" });
+  }, 15_000);
+
   it("rejects answers that do not fit the questions and keeps waiting", async () => {
     const runtime = await open();
     const { ref, events } = await start(runtime);

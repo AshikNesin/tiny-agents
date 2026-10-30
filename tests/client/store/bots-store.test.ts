@@ -100,6 +100,42 @@ describe("bots store — optimistic send", () => {
   });
 });
 
+describe("bots store — routine run cards (issue #63)", () => {
+  beforeEach(() => {
+    useBotsStore.setState({ chats: {} });
+  });
+
+  const card = (id: string) => ({
+    id,
+    routineId: "r",
+    routineName: "digest",
+    status: "succeeded",
+    trigger: "schedule",
+    scheduledFor: "2026-10-20T03:30:00.000Z",
+    finishedAt: "2026-10-20T03:31:00.000Z",
+    output: "ok",
+    error: null,
+  });
+
+  it("keeps cards across transcript snapshots and adds each finished run once", () => {
+    const botId = "bot-cards";
+    useBotsStore.getState().connectChat(botId);
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    emit(botId, { type: "routine-runs", runs: [card("a")] });
+    // A reconnect's transcript snapshot does not drop the cards.
+    emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
+    // Listed and followed at connect: the same run can arrive again.
+    emit(botId, { type: "routine-run", run: card("a") });
+    emit(botId, { type: "routine-run", run: card("b") });
+    expect(useBotsStore.getState().chats[botId]!.routineRuns.map((run) => run.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    // The bot's transcript is untouched: cards are not messages.
+    expect(useBotsStore.getState().chats[botId]!.messages).toEqual([]);
+  });
+});
+
 describe("bots store — stream health", () => {
   beforeEach(() => {
     listeners.clear();

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type DragEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -24,11 +24,18 @@ import {
 } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle, type ComposerSubmission } from "./ChatComposer";
 import { MessageAttachments } from "./Attachments";
+import { RoutineRunCard } from "./RoutineRunCard";
 import { browserInUse, useBrowserPanel } from "../lib/browser-panel";
 import { formatDayDivider } from "../lib/day-divider";
+import { chatTimeline } from "../lib/chat-timeline";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage, PendingMessage, QueuedMessage } from "../lib/chat-types";
+import type {
+  ChatMessage,
+  PendingMessage,
+  QueuedMessage,
+  RoutineRunCard as RoutineRunCardData,
+} from "../lib/chat-types";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -44,6 +51,7 @@ import {
 const NO_MESSAGES: ChatMessage[] = [];
 const NO_PENDING: PendingMessage[] = [];
 const NO_QUEUED: QueuedMessage[] = [];
+const NO_RUNS: RoutineRunCardData[] = [];
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -153,6 +161,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const messages = chat?.messages ?? NO_MESSAGES;
   const pending = chat?.pending ?? NO_PENDING;
   const queued = chat?.queued ?? NO_QUEUED;
+  const routineRuns = chat?.routineRuns ?? NO_RUNS;
+  // Routine results (issue #63) sit between messages by when the run finished.
+  const timeline = useMemo(() => chatTimeline(messages, routineRuns), [messages, routineRuns]);
   const busy = chat?.busy ?? false;
   const loaded = chat?.loaded ?? false;
   // Brief stream hiccups reconnect on their own; only a drop that lasts
@@ -448,7 +459,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <MessageScroller className="h-full">
             <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
               <MessageScrollerContent className="space-y-4">
-                {loaded && messages.length === 0 && pending.length === 0 && (
+                {loaded && timeline.length === 0 && pending.length === 0 && (
                   <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                     <BotAvatar name={bot.name} className="size-20" />
                     <div className="max-w-sm">
@@ -461,19 +472,29 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                     </div>
                   </div>
                 )}
-                {messages.map((message, i) => {
-                  const prev = messages[i - 1];
+                {timeline.map((item, t) => {
+                  const prev = timeline[t - 1];
                   const showDay =
-                    !prev ||
-                    new Date(prev.createdAt).toDateString() !==
-                      new Date(message.createdAt).toDateString();
+                    !prev || new Date(prev.at).toDateString() !== new Date(item.at).toDateString();
+                  const dayDivider = showDay && (
+                    <div className="text-muted-foreground flex justify-center py-2 text-xs">
+                      {formatDayDivider(item.at)}
+                    </div>
+                  );
+                  if (item.kind === "routine-run") {
+                    return (
+                      <Fragment key={`run-${item.run.id}`}>
+                        {dayDivider}
+                        <MessageScrollerItem messageId={`run-${item.run.id}`}>
+                          <RoutineRunCard run={item.run} />
+                        </MessageScrollerItem>
+                      </Fragment>
+                    );
+                  }
+                  const { message, index: i } = item;
                   return (
                     <Fragment key={message.id}>
-                      {showDay && (
-                        <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                          {formatDayDivider(message.createdAt)}
-                        </div>
-                      )}
+                      {dayDivider}
                       {dividerId === message.id && (
                         <div
                           data-testid="unread-divider"
@@ -519,10 +540,10 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                 ))}
                 {pending.length > 0 &&
                   (() => {
-                    const last = messages[messages.length - 1];
+                    const last = timeline[timeline.length - 1];
                     const showDay =
                       !last ||
-                      new Date(last.createdAt).toDateString() !==
+                      new Date(last.at).toDateString() !==
                         new Date(pending[0].createdAt).toDateString();
                     return (
                       <Fragment>

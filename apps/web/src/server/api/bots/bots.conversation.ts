@@ -1,9 +1,10 @@
 /**
- * A bot's durable conversation, kept in step with its row.
+ * A bot's durable conversations, kept in step with its row.
  *
  * The `Bot` row (app.db) is the source of truth for persona, model, tool
- * permissions and links; the durable conversation (agent.db) runs with the
- * config of its last configure. Every path that puts a message in front of a
+ * permissions and links; each durable conversation (agent.db) runs with the
+ * config of its last configure. A bot has its chat and one conversation per
+ * routine (issue #63), which runs unattended: nobody is there to approve. Every path that puts a message in front of a
  * bot (owner sends, mentions, relayed replies, bot-to-bot messages, routine
  * fires) must reconcile first, or drift (a model that gained vision, a
  * toolkit edited in the row, a connection added) silently strands old
@@ -161,10 +162,12 @@ export interface BotDraft {
  * What the bot's durable conversation runs with: persona, model and
  * capabilities: every built-in toolkit, its connections, and the automatic
  * ones (vision for text-only models, tool search for large connections).
+ * `unattended` (a routine's conversation): calls that would ask are refused.
  */
 function agentConfig(
   bot: BotDraft & { connections?: ConnectionLink[] },
   rt: Pick<AgentRuntime, "listModels">,
+  unattended = false,
 ): BotAgentConfig {
   const connections = bot.connections ?? [];
   const largeServer = connections.some(
@@ -183,6 +186,7 @@ function agentConfig(
       ],
       permissions: bot.toolPermissions,
       ...(bot.autoReview ? { autoReview: true } : {}),
+      ...(unattended ? { unattended: true } : {}),
     },
   };
 }
@@ -196,20 +200,29 @@ function enabledToolCount(connection: ConnectionLink["connection"]): number {
   return tools.filter((tool: { name?: unknown }) => !off.has(tool?.name)).length;
 }
 
-function rowConfig(row: BotWithLinks, rt: Pick<AgentRuntime, "listModels">): BotAgentConfig {
-  return agentConfig({ ...toBot(row), connections: row.connections }, rt);
+function rowConfig(
+  row: BotWithLinks,
+  rt: Pick<AgentRuntime, "listModels">,
+  unattended = false,
+): BotAgentConfig {
+  return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended);
 }
 
 /**
  * Open a fresh durable conversation for a new bot (from its draft) or an
  * existing one (by id, from its row). Returns the id to store on the row.
+ * `unattended`: a routine's conversation (issue #63) rather than a chat.
  */
 export async function startBotConversation(
   bot: string | BotDraft,
   rt: BotConversationRuntime,
+  options: { unattended?: boolean } = {},
 ): Promise<string> {
+  const unattended = options.unattended ?? false;
   const config =
-    typeof bot === "string" ? rowConfig(await findBotRow(bot), rt) : agentConfig(bot, rt);
+    typeof bot === "string"
+      ? rowConfig(await findBotRow(bot), rt, unattended)
+      : agentConfig(bot, rt, unattended);
   return String(await rt.createConversation(config));
 }
 
@@ -237,20 +250,29 @@ export interface BotSubmission {
 }
 
 /**
+ * Where a submission goes: the bot's chat (the default) or one of its
+ * routines' conversations, which run unattended (issue #63).
+ */
+export interface SubmitTarget {
+  routineConversationId: string;
+}
+
+/**
  * Deliver a message to a bot: resolve its attachments for the bot's model,
- * reconcile the conversation with the row, then submit. Throws 404 for an
- * unknown bot and rejects bad attachments before anything durable happens.
- * Returns the bot and the attachment refs stored on the entry.
+ * reconcile the target conversation with the row, then submit. Throws 404
+ * for an unknown bot and rejects bad attachments before anything durable
+ * happens. Returns the bot and the attachment refs stored on the entry.
  */
 export async function submitToBot(
   id: string,
   submission: BotSubmission,
   rt: BotConversationRuntime,
+  target?: SubmitTarget,
 ): Promise<{ bot: Bot; attachments?: AttachmentRef[] }> {
   const row = await findBotRow(id);
   const resolved = await resolveAttachments(row.modelId, submission, rt);
-  const conversation = Number(row.conversationId);
-  await rt.configure(conversation, rowConfig(row, rt));
+  const conversation = Number(target?.routineConversationId ?? row.conversationId);
+  await rt.configure(conversation, rowConfig(row, rt, target !== undefined));
   await rt.submit(conversation, {
     requestId: submission.requestId,
     text: resolved.text,

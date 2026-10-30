@@ -5,6 +5,7 @@
  */
 import { prisma } from "@groot/core/database";
 import type { SkillStore } from "@tiny-agents/agent";
+import { conversationOwner } from "../bots/bots.owner";
 import type { SkillFile } from "./skills.parse";
 
 function files(raw: string): SkillFile[] {
@@ -17,8 +18,10 @@ function files(raw: string): SkillFile[] {
 }
 
 async function assigned(conversationId: number) {
+  const owner = await conversationOwner(conversationId);
+  if (!owner) return { botId: undefined, skills: [] };
   const bot = await prisma.bot.findUnique({
-    where: { conversationId: String(conversationId) },
+    where: { id: owner.botId },
     select: {
       id: true,
       skills: { select: { skill: true }, orderBy: { skill: { name: "asc" } } },

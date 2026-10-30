@@ -82,6 +82,8 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       // state, not stream state, so it survives the replacement.
       return {
         ...event.state,
+        // Routine cards ride their own events; a transcript snapshot keeps them.
+        routineRuns: state.routineRuns,
         queued: event.state.queued ?? [],
         connected: true,
         loaded: true,
@@ -94,6 +96,13 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       };
     case "busy":
       return { ...state, busy: event.busy };
+    case "routine-runs":
+      return { ...state, routineRuns: event.runs };
+    case "routine-run":
+      // Listed and followed at connect, a run can arrive twice: keep one.
+      return state.routineRuns.some((run) => run.id === event.run.id)
+        ? state
+        : { ...state, routineRuns: [...state.routineRuns, event.run] };
     case "upsert": {
       // The confirmed user message replaces the matching optimistic echo.
       const pending =
@@ -229,6 +238,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         ...s.chats,
         [botId]: s.chats[botId] ?? {
           messages: [],
+          routineRuns: [],
           busy: false,
           queued: [],
           pending: [],
@@ -249,6 +259,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
               [botId]: {
                 ...(s.chats[botId] ?? {
                   messages: [],
+                  routineRuns: [],
                   busy: false,
                   queued: [],
                   pending: [],
@@ -302,6 +313,7 @@ export const useBotsStore = create<BotsState>((set, get) => ({
         [botId]: applyEvent(
           s.chats[botId] ?? {
             messages: [],
+            routineRuns: [],
             busy: false,
             queued: [],
             pending: [],

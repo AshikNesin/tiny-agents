@@ -10,6 +10,8 @@ import { test, expect } from "@playwright/test";
  * next-3 IST preview before saving), the created routine card, pause/resume
  * toggling, and "Run now", which dispatches synchronously through the real
  * watcher so Recent executions shows a succeeded manual run with output.
+ * The run happens in the routine's own conversation (issue #63): the bot's
+ * chat shows only its result card, never the routine's prompt or reply.
  * Waiting for the delayed queue fire is covered by the server tests.
  */
 
@@ -112,6 +114,17 @@ test.describe("Routines", () => {
     await expect(executions.getByText(/succeeded|awaiting/).first()).toBeVisible({
       timeout: 20_000,
     });
+
+    // The bot's chat shows the run as a card; the prompt and the reply stay
+    // in the routine's own conversation (a user bubble would show the raw
+    // `**Routine "…"` label).
+    const botId = await botIdOf(page, "Routine Bot");
+    await page.goto(`/chats/${botId}`);
+    const card = page.getByTestId("routine-run-card").filter({ hasText: ROUTINE_NAME });
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await expect(card.getByText("succeeded")).toBeVisible();
+    await expect(page.getByText(`**Routine "${ROUTINE_NAME}"`)).toHaveCount(0);
+    await page.goto("/routines");
 
     // The resume switch would re-arm through the queue; in this environment
     // it surfaces the queue error as a toast instead of arming. Flip it and

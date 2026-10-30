@@ -2,13 +2,14 @@
  * The app's `VaultBroker` (issue #56): what the agent toolkits are given.
  * Tool calls know their conversation, not their bot, so this resolves the
  * bot (for per-bot item scoping and the approval card) and whether the turn
- * is unattended — a routine's prompt or another bot's message — from the
- * conversation's latest user message. It never exposes a write.
+ * is unattended — a routine run or another bot's message. It never exposes a
+ * write.
  */
 import { prisma } from "@groot/core/database";
 import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
+import { conversationOwner } from "../bots/bots.owner";
 import { isUnattended, type ChatReader } from "../bots/bots.unattended";
 import {
   audit,
@@ -21,10 +22,10 @@ import {
 } from "./vault.service";
 
 async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
-  const bot = await prisma.bot.findUnique({
-    where: { conversationId: String(conversation) },
-    select: { id: true, name: true },
-  });
+  const owner = await conversationOwner(conversation);
+  const bot = owner
+    ? await prisma.bot.findUnique({ where: { id: owner.botId }, select: { id: true, name: true } })
+    : null;
   return {
     ...(bot ? { botId: bot.id, botName: bot.name } : {}),
     unattended: await isUnattended(conversation, runtime()),

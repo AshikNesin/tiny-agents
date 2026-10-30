@@ -43,10 +43,8 @@ function fakeRuntime() {
       replies = next;
     },
     wait: (event: WaitEvent) => wait.forEach((listener) => listener(event)),
-    activity: (busy: boolean) =>
-      activity.forEach((listener) =>
-        listener({ conversation: CONVERSATION, busy, approvals: 0, questions: 0 }),
-      ),
+    activity: (busy: boolean, conversation = CONVERSATION) =>
+      activity.forEach((listener) => listener({ conversation, busy, approvals: 0, questions: 0 })),
   };
 }
 
@@ -308,12 +306,19 @@ describe("run notifications", () => {
     }
   });
 
-  it("leave routine turns to the routine events", async () => {
+  it("leave routine runs (their own conversations) to the routine events", async () => {
     const runtime = fakeRuntime();
     const notifier = fakeNotifier();
     wiring = startNotifications(runtime, notifier);
+    const routineConversation = CONVERSATION + 1;
     const routine = await prisma.routine.create({
-      data: { botId, name: "Digest", prompt: "Summarize", schedule: "{}" },
+      data: {
+        botId,
+        name: "Digest",
+        prompt: "Summarize",
+        schedule: "{}",
+        conversationId: String(routineConversation),
+      },
     });
     await prisma.routineRun.create({
       data: {
@@ -323,11 +328,18 @@ describe("run notifications", () => {
         requestId: "routine:test",
       },
     });
+    runtime.activity(true, routineConversation);
+    runtime.setReplies([{ text: "", createdAt: Date.now() + 1, error: "boom" }]);
+    runtime.activity(false, routineConversation);
+    await settle();
+    expect(notifier.sent).toHaveLength(0);
+
+    // The owner's own failed reply still pushes while a routine run is working.
     runtime.activity(true);
     runtime.setReplies([{ text: "", createdAt: Date.now() + 1, error: "boom" }]);
     runtime.activity(false);
-    await settle();
-    expect(notifier.sent).toHaveLength(0);
+    await until(() => notifier.sent.length === 1, "run failure push");
+    expect(notifier.sent[0].event).toBe("run.failed");
   });
 
   it("push a long reply's end with a preview, and skip short ones", async () => {

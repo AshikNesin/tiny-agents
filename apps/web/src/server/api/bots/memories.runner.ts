@@ -52,10 +52,8 @@ export function captureWindow(
   let latestOwnerAt = since;
   let ownerExchange = false;
   for (const m of messages) {
-    if (m.role === "user") {
-      // Routine submissions predate trusted origin metadata and use this label.
-      ownerExchange = !m.peer && !m.text.startsWith('**Routine "');
-    }
+    // Routine runs live in conversations of their own (issue #63), never here.
+    if (m.role === "user") ownerExchange = !m.peer;
     if (!ownerExchange) continue;
     if (m.createdAt <= since) continue;
     // Owner turns without attached files' text (issue #58): file content is

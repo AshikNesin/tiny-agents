@@ -222,6 +222,54 @@ describe("capabilities and approvals", () => {
     expect(toolCall(events, "send_email")).toMatchObject({ status: "denied", approval: "denied" });
   }, 15_000);
 
+  it("refuses an `ask` call in an unattended conversation instead of waiting (issue #63)", async () => {
+    const mailer: Mailer = { sent: [] };
+    const runtime = await open(mailer, callThenReport("send_email", { to: "di@x.dev" }));
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mail"], permissions: {}, unattended: true },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "email di" });
+
+    expect(await until(() => finalText(events), "reply")).toMatch(/needs the owner's approval/);
+    expect(mailer.sent).toEqual([]);
+    expect(runtime.pendingApprovals(ref)).toBe(0);
+    expect(toolCall(events, "send_email")).toMatchObject({ status: "error", approval: "refused" });
+    const replies = await runtime.finishedReplies(ref);
+    expect(replies.flatMap((reply) => reply.refused ?? [])).toEqual(["send_email"]);
+  }, 15_000);
+
+  it("runs `allow` tools in an unattended conversation, and asks again once attended", async () => {
+    const mailer: Mailer = { sent: [] };
+    const runtime = await open(mailer, callThenReport("send_email", { to: "ed@x.dev" }));
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mail"], permissions: { send_email: "allow" }, unattended: true },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "email ed" });
+    expect(await until(() => finalText(events), "reply")).toBe("Sent to ed@x.dev");
+    expect((await runtime.finishedReplies(ref)).some((reply) => reply.refused)).toBe(false);
+
+    // Reconfigured as a chat (attended), an `ask` call waits for the owner again.
+    await runtime.configure(ref, {
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mail"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r2", text: "email ed again" });
+    await until(
+      () => toolCall(events, "send_email")?.status === "awaiting_approval" || undefined,
+      "approval card",
+    );
+    expect(runtime.pendingApprovals(ref)).toBe(1);
+  }, 15_000);
+
   it("runs `allow` tools unattended and hides `off` tools from the model", async () => {
     const mailer: Mailer = { sent: [] };
     const runtime = await open(mailer, callThenReport("send_email", { to: "cy@x.dev" }));

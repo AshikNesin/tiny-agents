@@ -52,6 +52,11 @@ export interface CapabilitySelection {
   permissions: Record<string, ToolPermission>;
   /** Auto-review (issue #65): a classifier may approve `ask` calls before the owner is asked. */
   autoReview?: boolean;
+  /**
+   * Nobody watches this conversation (a routine's, issue #63): a call that
+   * would ask the owner is refused instead, and auto-review never runs.
+   */
+  unattended?: boolean;
 }
 
 export function defaultPermission(tool: ToolInfo): ToolPermission {

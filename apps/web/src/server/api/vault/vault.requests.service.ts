@@ -24,6 +24,7 @@ import {
 } from "@tiny-agents/agent";
 import { browserTargetForConversation } from "../bots/browser.targets";
 import { getAgentRuntime } from "../bots/bots.runtime";
+import { conversationOwner } from "../bots/bots.owner";
 import { createItem, updateItem } from "./vault.admin.service";
 import { audit } from "./vault.service";
 
@@ -43,10 +44,10 @@ async function pending(taskId: number, runtime: RequestRuntime) {
 /** The sheet's content: metadata only. */
 export async function requestView(taskId: number, runtime: RequestRuntime = getAgentRuntime()) {
   const { conversation, request, expiresAt } = await pending(taskId, runtime);
-  const bot = await prisma.bot.findUnique({
-    where: { conversationId: String(conversation) },
-    select: { id: true, name: true },
-  });
+  const owner = await conversationOwner(conversation);
+  const bot = owner
+    ? await prisma.bot.findUnique({ where: { id: owner.botId }, select: { id: true, name: true } })
+    : null;
   const liveOrigin = await browserTabOrigin(await browserTargetForConversation(conversation));
   return {
     taskId,

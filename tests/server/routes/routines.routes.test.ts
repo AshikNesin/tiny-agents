@@ -47,7 +47,8 @@ const emptyChat = { messages: [], busy: false };
 
 function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
   return {
-    createConversation: vi.fn().mockResolvedValue(100),
+    // A routine's own conversation (issue #63); the bot's chat is 100.
+    createConversation: vi.fn().mockResolvedValue(200),
     configure: vi.fn().mockResolvedValue(undefined),
     submit: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn().mockResolvedValue(undefined),
@@ -306,9 +307,10 @@ describe("Routines API routes", () => {
     expect(run).toMatchObject({ status: "awaiting", trigger: "manual" });
     expect(run?.requestId).toMatch(/^routine:[a-z0-9]+:\d{4}-\d{2}-\d{2}T/);
 
+    // Into the routine's own conversation, never the bot's chat (100).
     const submits = vi.mocked(runtime.submit).mock.calls;
     expect(submits).toHaveLength(1);
-    expect(submits[0][0]).toBe(100);
+    expect(submits[0][0]).toBe(200);
     expect(submits[0][1].requestId).toBe(run?.requestId);
     expect(submits[0][1].text).toContain('**Routine "weekday-digest"');
     expect(submits[0][1].text).toContain("Summarize HN, only new things.");
@@ -317,6 +319,50 @@ describe("Routines API routes", () => {
     const row = await prisma.routine.findUnique({ where: { id: routine.id as string } });
     expect(row?.enabled).toBe(true);
     expect(row?.pendingJobId).toBeTypeOf("string");
+  });
+
+  it("moving a routine to another bot gives it a fresh conversation for that bot", async () => {
+    const runtime = fakeRuntime();
+    setAgentRuntimeForTests(runtime);
+    const routine = await createRoutine(app);
+    const id = routine.id as string;
+    await request(app).post(`/api/v1/routines/${id}/run`).set(authorization).expect(200);
+    expect((await prisma.routine.findUnique({ where: { id } }))?.conversationId).toBe("200");
+
+    const other = await prisma.bot.create({
+      data: { name: "Other", modelId: "m1", conversationId: "101" },
+    });
+    await request(app)
+      .patch(`/api/v1/routines/${id}`)
+      .set(authorization)
+      .send({ botId: other.id })
+      .expect(200);
+    expect((await prisma.routine.findUnique({ where: { id } }))?.conversationId).toBeNull();
+    expect(vi.mocked(runtime.abort)).toHaveBeenCalledWith(200);
+    // The run awaiting in the old conversation never gets its reply now.
+    expect(await prisma.routineRun.findFirst({ where: { routineId: id } })).toMatchObject({
+      status: "cancelled",
+    });
+  });
+
+  it("deleting a routine stops its conversation", async () => {
+    const runtime = fakeRuntime();
+    setAgentRuntimeForTests(runtime);
+    const routine = await createRoutine(app);
+    const id = routine.id as string;
+    await request(app).post(`/api/v1/routines/${id}/run`).set(authorization).expect(200);
+    await request(app).delete(`/api/v1/routines/${id}`).set(authorization).expect(200);
+    expect(vi.mocked(runtime.abort)).toHaveBeenCalledWith(200);
+    expect(vi.mocked(runtime.abort)).not.toHaveBeenCalledWith(100);
+  });
+
+  it("deleting a bot stops its routines' conversations too", async () => {
+    const runtime = fakeRuntime();
+    setAgentRuntimeForTests(runtime);
+    const routine = await createRoutine(app);
+    await request(app).post(`/api/v1/routines/${routine.id}/run`).set(authorization).expect(200);
+    await request(app).delete(`/api/v1/bots/${routine.botId}`).set(authorization).expect(200);
+    expect(vi.mocked(runtime.abort).mock.calls.map(([ref]) => ref)).toEqual([100, 200]);
   });
 
   it("run-now on a recurring routine does not disturb the scheduled chain", async () => {

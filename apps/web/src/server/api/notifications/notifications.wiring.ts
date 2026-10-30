@@ -7,8 +7,8 @@
  *   restart stays quiet; answering it before the coalescing window ends
  *   cancels the push, and one reminder follows if it is still waiting.
  * - Runs: a reply that ends in a model error, or one that ran for at least
- *   `longRunMinutes`, pushes when nobody has that chat open. Routine turns
- *   are left to the routine events.
+ *   `longRunMinutes`, pushes when nobody has that chat open. Routine runs
+ *   (their own conversations, issue #63) are left to the routine events.
  * - Routines: `notifyRoutineRun` (watcher and fire job).
  */
 import { prisma } from "@groot/core/database";
@@ -18,6 +18,7 @@ import { notificationService } from "@groot/core/notification/notification.servi
 import { registerRedactor } from "@groot/core/notification/scrub";
 import { secretRedactor, type AgentRuntime, type WaitEvent } from "@tiny-agents/agent";
 import { isBotWatched } from "../bots/bots.viewers";
+import { conversationOwner } from "../bots/bots.owner";
 import {
   approvalRequested,
   credentialRequested,
@@ -50,32 +51,28 @@ export interface NotificationsWiring {
 
 const BOT_CACHE_MS = 60_000;
 
-/** Bot name and id for a conversation, cached briefly (titles and links). */
+/**
+ * The bot behind a chat conversation, cached briefly (titles and links).
+ * A routine's conversation has none: its runs push through the routine
+ * events, and it never waits on the owner (issue #63).
+ */
 function createBotLookup() {
   const cache = new Map<number, { bot: BotRef | undefined; at: number }>();
   return async (conversation: number): Promise<BotRef | undefined> => {
     const hit = cache.get(conversation);
     if (hit && Date.now() - hit.at < BOT_CACHE_MS) return hit.bot;
-    const row = await prisma.bot.findUnique({
-      where: { conversationId: String(conversation) },
-      select: { id: true, name: true },
-    });
+    const owner = await conversationOwner(conversation);
+    const row =
+      owner && owner.routineId === undefined
+        ? await prisma.bot.findUnique({
+            where: { id: owner.botId },
+            select: { id: true, name: true },
+          })
+        : null;
     const bot = row ? { ...row, conversationId: conversation } : undefined;
     cache.set(conversation, { bot, at: Date.now() });
     return bot;
   };
-}
-
-/** Whether a routine run belongs to the turn that started at `since`. */
-async function routineTurn(botId: string, since: Date): Promise<boolean> {
-  const run = await prisma.routineRun.findFirst({
-    where: {
-      routine: { botId },
-      OR: [{ status: "awaiting" }, { finishedAt: { gte: since } }],
-    },
-    select: { id: true },
-  });
-  return run !== null;
 }
 
 export function startNotifications(
@@ -140,7 +137,6 @@ export function startNotifications(
     const replies = await runtime.finishedReplies(conversation);
     const last = replies.at(-1);
     if (!last || last.createdAt < startedAt) return;
-    if (await routineTurn(bot.id, new Date(startedAt))) return;
     if (last.error !== undefined) {
       send(runFailed(bot, last.createdAt, last.error));
       return;

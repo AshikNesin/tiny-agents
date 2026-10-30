@@ -9,6 +9,8 @@
  * questionnaire from, and resumes when the host records the owner's answers
  * or dismissal (`AgentRuntime.answerQuestions`) — also after a restart. The
  * runtime installs this capability itself, since it owns the document.
+ * A conversation nobody watches (a routine's, issue #63) gets no wait: the
+ * call returns at once and the model carries on without the answers.
  */
 import type { JsonValue } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
@@ -18,6 +20,7 @@ import {
   defineTool,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
+import { isUnattendedConversation } from "../approvals";
 import type { Capability } from "../capabilities";
 import type { OwnerAnswer, OwnerQuestion } from "../types";
 import { waitForOwner, type WaitTracker } from "../waiting";
@@ -147,6 +150,9 @@ function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly Ow
   return `The owner answered your questions:\n\n${lines.join("\n\n")}`;
 }
 
+const UNATTENDED =
+  "Nobody can answer questions here: this is a scheduled routine run, not a chat with the owner. Continue on your best judgment, say which assumptions you made, and put any open question in your reply.";
+
 const DISMISSED =
   "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.";
 
@@ -161,6 +167,16 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     // Re-running only re-attaches to the call's document (waitForOwner).
     replay: "safe",
     execute: async (args, api, context): Promise<ToolExecutionResult> => {
+      // Decided once per call, so a replay never starts waiting after all.
+      if (
+        await api.memo(
+          "questions:unattended",
+          await isUnattendedConversation(api, context),
+          context,
+        )
+      ) {
+        return { output: [{ type: "text", text: UNATTENDED }], isError: true };
+      }
       const asked = normalizeQuestions(args.questions);
       const doc = await waitForOwner(
         api,

@@ -25,7 +25,7 @@ import {
   type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
-import { gateApproved, withGatePlan } from "../approvals";
+import { gateApproved, isUnattendedConversation, withGatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
 import {
   CREDENTIAL_REQUEST_TTL_MS,
@@ -973,6 +973,12 @@ function vaultTools(options: BrowserToolkitOptions) {
     const existing = await api.snapshot(CredentialRequestDoc, api.taskId, context);
     let request = existing ? storedRequest(existing) : null;
     if (!request) {
+      // A routine's run (issue #63) has nobody to fill the sheet.
+      if (await isUnattendedConversation(api, context)) {
+        return fail(
+          "Nobody can fill credentials here: this is a scheduled routine run. Use a saved vault item, or say in your reply what is needed.",
+        );
+      }
       const tab = await peekTab(options, conversation);
       const normalized = normalizeCredentialRequest(
         args,

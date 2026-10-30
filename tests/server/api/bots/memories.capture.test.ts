@@ -15,7 +15,6 @@ import {
   captureConversation,
   resolveCaptureModelId,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
-import { composeRoutinePrompt } from "../../../../apps/web/src/server/api/routines/routines.schedule";
 
 const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
 vi.mock("@groot/core/logger", () => ({
@@ -221,7 +220,7 @@ describe("captureWindow", () => {
     expect(captureWindow([], null, "Scout").through).toBeNull();
   });
 
-  it("includes assistant context but excludes peers, routines, and their replies", () => {
+  it("includes assistant context but excludes peers and their replies", () => {
     const messages = [
       { role: "user", text: "Let's get acquainted.", createdAt: 1 },
       { role: "assistant", text: "Where do you live?", createdAt: 3 },
@@ -229,12 +228,6 @@ describe("captureWindow", () => {
       { role: "assistant", text: "Got it.", createdAt: 5 },
       { role: "user", text: "Peer's request", createdAt: 6, peer: { kind: "request" } },
       { role: "assistant", text: "Peer's answer", createdAt: 7 },
-      {
-        role: "user",
-        text: composeRoutinePrompt("Daily", "Read the news", new Date()),
-        createdAt: 8,
-      },
-      { role: "assistant", text: "Routine answer", createdAt: 9 },
     ];
     const window = captureWindow(messages, new Date(1), "Scout");
     expect(window.lines).toEqual([
@@ -382,7 +375,7 @@ describe("captureConversation skip rules", () => {
     ).toBe(messages[0].createdAt);
   });
 
-  it("leaves malformed extractions uncommitted and skips peer/routine-only windows", async () => {
+  it("leaves malformed extractions uncommitted and skips peer-only windows", async () => {
     const { botId, conversationId } = await seedBot();
     const call = sideCall(fauxAssistantMessage([fauxText("not json")]));
     await captureConversation(conversationId, {
@@ -400,9 +393,29 @@ describe("captureConversation skip rules", () => {
       readTranscript: async () => [
         { role: "user", text: "Peer ".repeat(60), peer: { kind: "request" }, createdAt: 1 },
         { role: "assistant", text: "Peer reply", createdAt: 2 },
-        { role: "user", text: composeRoutinePrompt("Daily", "News", new Date()), createdAt: 3 },
       ],
     });
+    expect(call.models.completeSimple).not.toHaveBeenCalled();
+  });
+
+  it("never captures a routine's conversation (issue #63): only the chat is a source", async () => {
+    const { botId } = await seedBot();
+    const routineConversation = conversationId();
+    await prisma.routine.create({
+      data: {
+        botId,
+        name: "Daily",
+        prompt: "News",
+        schedule: { kind: "interval", minutes: 60 },
+        conversationId: String(routineConversation),
+      },
+    });
+    const call = sideCall();
+    const readTranscript = vi.fn(async () => [
+      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+    ]);
+    await captureConversation(routineConversation, { sideCall: call, readTranscript });
+    expect(readTranscript).not.toHaveBeenCalled();
     expect(call.models.completeSimple).not.toHaveBeenCalled();
   });
 });

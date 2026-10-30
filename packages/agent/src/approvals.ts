@@ -22,6 +22,9 @@
  *   is first judged by a classifier for the tools the conversation's
  *   permissions list under `review`; an approval skips the card. Vault calls
  *   always ask. The verdict is memoized, so a replay never re-asks.
+ * - A conversation nobody watches (`unattended`, a routine's, issue #63)
+ *   never asks: a call that would wait for the owner is refused instead,
+ *   with `{ approval: "refused" }` details the host fails the run on.
  * - Every result leaves the gate scrubbed of registered secret values.
  */
 import type { Context } from "@earendil-works/chord";
@@ -38,10 +41,15 @@ import { ownerMessages, type GateReview, type ReviewVerdict } from "./reviewer";
 import { waitForOwner, type WaitTracker } from "./waiting";
 
 /**
- * Which tools of the conversation run without asking (`allow`), and which of
- * the asking ones auto-review may approve (`review`, absent when it is off).
+ * Which tools of the conversation run without asking (`allow`), which of the
+ * asking ones auto-review may approve (`review`, absent when it is off), and
+ * whether nobody is there to ask (`unattended`, absent when someone is).
  */
-export const PermissionsDoc = defineDoc<{ allow: string[]; review?: string[] }>({
+export const PermissionsDoc = defineDoc<{
+  allow: string[];
+  review?: string[];
+  unattended?: boolean;
+}>({
   kind: "tiny.permissions",
   version: 1,
   scope: "conversation",
@@ -156,6 +164,15 @@ export function gateTool(
         plan ? plan.ask : await mustAsk(tool.name, api, context),
         context,
       );
+      if (ask && (await unattendedOnce(api, context))) {
+        return {
+          output: text(
+            `${tool.name} needs the owner's approval, and nobody is here to give it: this is a scheduled routine run. It did not run. Finish without it and say what it was for.`,
+          ),
+          isError: true,
+          details: { approval: "refused" },
+        };
+      }
       // Vault uses always reach the owner: their policy, not the classifier, decides.
       const verdict =
         ask && review && !plan?.details?.vault
@@ -261,6 +278,20 @@ async function reviewOnce(
     Object.entries(verdict).filter(([, value]) => value !== undefined),
   ) as JsonObject;
   return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
+}
+
+/** Whether nobody watches the conversation, decided once per call (a replay keeps the answer). */
+async function unattendedOnce(api: ToolExecutionApi, context: Context): Promise<boolean> {
+  return api.memo("gate:unattended", await isUnattendedConversation(api, context), context);
+}
+
+/** The conversation's permissions say nobody is there to answer (a routine's, issue #63). */
+export async function isUnattendedConversation(
+  api: ToolExecutionApi,
+  context: Context,
+): Promise<boolean> {
+  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
+  return permissions?.unattended === true;
 }
 
 async function mustAsk(name: string, api: ToolExecutionApi, context: Context): Promise<boolean> {

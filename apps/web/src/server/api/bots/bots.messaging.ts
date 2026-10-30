@@ -8,6 +8,7 @@ import { prisma } from "@groot/core/database";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { submitToBot } from "./bots.conversation";
+import { conversationOwner } from "./bots.owner";
 
 /** Same shape as the ledger kinds (schema.sqlite.prisma BotMessage.kind). */
 type DeliverReason = "unknown_bot" | "self" | "loop" | "budget";
@@ -44,11 +45,15 @@ export function botToBotText(fromName: string, text: string): string {
 }
 
 export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
+  /** The sending bot; `fromRoutine` when the send comes from one of its routine runs. */
   async function senderOf(conversationId: number) {
-    return prisma.bot.findUnique({
-      where: { conversationId: String(conversationId) },
+    const owner = await conversationOwner(conversationId);
+    if (!owner) return null;
+    const bot = await prisma.bot.findUnique({
+      where: { id: owner.botId },
       select: { id: true, name: true },
     });
+    return bot ? { ...bot, fromRoutine: owner.routineId !== undefined } : null;
   }
 
   const turnBudget = createTurnBudget(rt);
@@ -100,7 +105,9 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
         data: {
           fromBotId: sender.id,
           toBotId: target.id,
-          replyToBotId: sender.id,
+          // A routine run's message gets no relayed answer: it would land in
+          // the bot's chat, which routine runs never write to (issue #63).
+          replyToBotId: sender.fromRoutine ? null : sender.id,
           kind: "send",
           requestId: input.requestId,
           sourceKey: input.sourceKey,

@@ -10,7 +10,8 @@
  *   the agent package carries no cron libraries.
  * - The recursion guard (PRD 5.6): a routine-fired turn must not manage
  *   routines. Every mutating method rejects when the calling conversation
- *   belongs to a bot with an awaiting run; list stays open.
+ *   is a routine's own (issue #63); list stays open. The owner's chat is
+ *   never one, so the owner can manage routines while a run is working.
  */
 import { prisma } from "@groot/core/database";
 import type {
@@ -20,6 +21,7 @@ import type {
   RoutineUpdateInput,
 } from "@tiny-agents/agent";
 import { HttpError } from "@groot/core/errors";
+import { conversationOwner, isRoutineConversation } from "../bots/bots.owner";
 import { describeSchedule, formatIst, parseSchedule, scheduleSchema } from "./routines.schedule";
 import * as service from "./routines.service";
 
@@ -57,23 +59,12 @@ function checkedSchedule(schedule: RoutineSchedule): RoutineSchedule {
   throw new Error(`Invalid schedule. ${notes.join(" ")}`);
 }
 
-/** True when this conversation is a routine-fired turn awaiting its reply. */
-async function inRoutineTurn(conversationId: number): Promise<boolean> {
-  const awaiting = await prisma.routineRun.count({
-    where: { status: "awaiting", routine: { bot: { conversationId: String(conversationId) } } },
-  });
-  return awaiting > 0;
-}
-
 export function createRoutineStore(): RoutineStore {
   return {
     async create(conversationId, input) {
-      if (await inRoutineTurn(conversationId)) throw new Error(RECURSION_MSG);
-      const bot = await prisma.bot.findUnique({
-        where: { conversationId: String(conversationId) },
-        select: { id: true },
-      });
-      if (!bot) throw new Error("No bot owns this conversation.");
+      if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
+      const owner = await conversationOwner(conversationId);
+      if (!owner) throw new Error("No bot owns this conversation.");
       // Exactly-once across pi-durable replays: the key is the durable tool
       // task's identity (unique per agent store, stable when the call reruns).
       const existing = input.idempotencyKey
@@ -83,7 +74,7 @@ export function createRoutineStore(): RoutineStore {
       const schedule = checkedSchedule(input.schedule);
       try {
         const routine = await service.create({
-          botId: bot.id,
+          botId: owner.botId,
           name: input.name,
           prompt: input.prompt,
           schedule,
@@ -105,7 +96,7 @@ export function createRoutineStore(): RoutineStore {
     },
 
     async update(conversationId: number, id: string, raw: RoutineUpdateInput) {
-      if (await inRoutineTurn(conversationId)) throw new Error(RECURSION_MSG);
+      if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
       const input = {
         ...raw,
         ...(raw.schedule !== undefined ? { schedule: checkedSchedule(raw.schedule) } : {}),
@@ -119,7 +110,7 @@ export function createRoutineStore(): RoutineStore {
     },
 
     async remove(conversationId, id) {
-      if (await inRoutineTurn(conversationId)) throw new Error(RECURSION_MSG);
+      if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
       const existing = await prisma.routine.findUnique({ where: { id }, select: { id: true } });
       if (!existing) return false;
       await service.remove(id);
@@ -127,7 +118,7 @@ export function createRoutineStore(): RoutineStore {
     },
 
     async runNow(conversationId, id) {
-      if (await inRoutineTurn(conversationId)) throw new Error(RECURSION_MSG);
+      if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
       try {
         return await service.runNow(id);
       } catch (error) {

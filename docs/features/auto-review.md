@@ -26,7 +26,7 @@ Turn it on per bot in **Edit bot → Tools → Auto-review**. It is off by defau
 The classifier gets three things:
 
 - the bot's instructions,
-- your latest five messages in the chat (a routine's prompt counts as yours),
+- your latest five messages in the chat,
 - the pending call: tool name and arguments.
 
 It never sees tool results, web pages or emails, which is where injected

@@ -1,9 +1,11 @@
 /**
  * routine-fire: the scheduling engine's only job. Loads the routine, applies
  * the missed-run grace policy, inserts the exactly-once run row keyed by
- * (routineId, scheduledFor), submits the labeled prompt into the bot's
- * durable conversation, and schedules the next occurrence. Fast and LLM-free:
- * completion is the watcher's job (routines.watcher.ts).
+ * (routineId, scheduledFor), submits the labeled prompt into the routine's
+ * own durable conversation (issue #63: never the bot's chat), and schedules
+ * the next occurrence. Fast and LLM-free: completion is the watcher's job
+ * (routines.watcher.ts), and the result shows in the chat as a card
+ * (routines.cards.ts).
  */
 import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
@@ -12,10 +14,13 @@ import { registerJobHandler } from "@groot/jobs/server/worker";
 import type { SendJobOptions } from "@groot/jobs/server/adapter";
 import type { JobHandler } from "@groot/jobs/server/error-handler";
 import { z } from "zod";
-import type { AgentRuntime } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { submitToBot } from "../bots/bots.conversation";
-import { notifyRoutineRun } from "../notifications/notifications.wiring";
+import {
+  startBotConversation,
+  submitToBot,
+  type BotConversationRuntime,
+} from "../bots/bots.conversation";
+import { announceRun } from "./routines.cards";
 import {
   composeRoutinePrompt,
   nextOccurrence,
@@ -107,7 +112,7 @@ export async function dispatchOccurrence(
   const scheduledFor = new Date(payload.scheduledFor);
   const routine = await prisma.routine.findUnique({
     where: { id: payload.routineId },
-    include: { bot: { select: { id: true, name: true, conversationId: true } } },
+    include: { bot: { select: { id: true, name: true } } },
   });
   // Missing routine (deleted bot cascades or routine delete): the queued job
   // is an orphan; ack and drop.
@@ -150,7 +155,7 @@ export async function dispatchOccurrence(
       },
       update: { status: "missed", finishedAt: now },
     });
-    notifyRoutineRun(
+    announceRun(
       { runId: missed.id, routineName: routine.name, bot: routine.bot },
       { status: "missed", error: `Started ${lateMinutes} min late, past the grace window.` },
     );
@@ -164,6 +169,7 @@ export async function dispatchOccurrence(
   const bot = routine.bot;
   let submitted = true;
   try {
+    const routineConversationId = await routineConversation(routine, runtime);
     await submitToBot(
       bot.id,
       {
@@ -171,12 +177,13 @@ export async function dispatchOccurrence(
         text: composeRoutinePrompt(routine.name, routine.prompt, scheduledFor, lateMinutes),
       },
       runtime,
+      { routineConversationId },
     );
   } catch (error) {
     // Auth and configuration failures (model gone, gateway missing) must not
-    // retry in a loop: the run fails once, the routine pauses, and a notice
-    // lands in the bot's chat (PRD 5.5). A model removed from the catalog
-    // fails the reconcile step, so it lands here too.
+    // retry in a loop: the run fails once, the routine pauses, and the failed
+    // run's card in the bot's chat says so (PRD 5.5). A model removed from
+    // the catalog fails the reconcile step, so it lands here too.
     submitted = false;
     const failed = await prisma.routineRun.upsert({
       where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
@@ -187,12 +194,12 @@ export async function dispatchOccurrence(
         trigger: payload.trigger,
         requestId: runRequestId(routine.id, scheduledFor),
         finishedAt: now,
-        error: submitError(error),
+        error: pausedError(error),
       },
-      update: { status: "failed", finishedAt: now, error: submitError(error) },
+      update: { status: "failed", finishedAt: now, error: pausedError(error) },
     });
-    await pauseAfterSubmitFailure(runtime, routine, bot.conversationId, error);
-    notifyRoutineRun(
+    await pauseAfterSubmitFailure(routine);
+    announceRun(
       { runId: failed.id, routineName: routine.name, bot: { id: bot.id, name: bot.name } },
       { status: "paused", error: submitError(error) },
     );
@@ -225,21 +232,47 @@ export function runRequestId(routineId: string, scheduledFor: Date): string {
   return `routine:${routineId}:${scheduledFor.toISOString()}`;
 }
 
+/**
+ * The routine's own conversation (issue #63): created from the bot's config
+ * on its first fire, then reused by every run, so a recurring routine still
+ * sees what its earlier runs said. Two fires racing the first create keep
+ * whichever stored first; the other's empty conversation is never used.
+ */
+async function routineConversation(
+  routine: { id: string; botId: string; conversationId: string | null },
+  runtime: BotConversationRuntime,
+): Promise<string> {
+  if (routine.conversationId) return routine.conversationId;
+  const created = await startBotConversation(routine.botId, runtime, { unattended: true });
+  const claimed = await prisma.routine.updateMany({
+    where: { id: routine.id, conversationId: null },
+    data: { conversationId: created },
+  });
+  if (claimed.count === 1) return created;
+  const row = await prisma.routine.findUnique({
+    where: { id: routine.id },
+    select: { conversationId: true },
+  });
+  if (!row?.conversationId) throw new Error("The routine's conversation could not be stored");
+  return row.conversationId;
+}
+
 function submitError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return `Submit failed: ${message}`.slice(0, 500);
 }
 
-/**
- * Pause a routine whose submit failed and notify the owner inside the bot's
- * chat. Best-effort: the pause commits even when the notice cannot.
- */
-async function pauseAfterSubmitFailure(
-  runtime: Pick<AgentRuntime, "submit">,
-  routine: { id: string; name: string; pendingJobId: string | null; enabled: boolean },
-  conversationId: string,
-  error: unknown,
-): Promise<void> {
+/** A failed submit's run error: the reason and that the routine is now paused. */
+function pausedError(error: unknown): string {
+  const paused = " The routine is paused: fix the bot's model or gateway, then resume it.";
+  return `${submitError(error).slice(0, 500 - paused.length)}${paused}`;
+}
+
+/** Pause a routine whose submit failed; its failed run's card tells the owner. */
+async function pauseAfterSubmitFailure(routine: {
+  id: string;
+  pendingJobId: string | null;
+}): Promise<void> {
   try {
     if (routine.pendingJobId) {
       await cancelJob({ queueName: ROUTINE_FIRE_JOB, jobId: routine.pendingJobId });
@@ -251,15 +284,6 @@ async function pauseAfterSubmitFailure(
     where: { id: routine.id },
     data: { enabled: false, nextRunAt: null, pendingJobId: null },
   });
-  // A plain submit, not submitToBot: reconciling is what may just have failed.
-  try {
-    await runtime.submit(Number(conversationId), {
-      requestId: `routine-paused:${routine.id}:${Date.now()}`,
-      text: `**Routine "${routine.name}" paused:** its prompt could not be submitted (${submitError(error)}). Fix the bot's model or gateway and resume the routine.`,
-    });
-  } catch {
-    // The failing conversation may not accept even a notice.
-  }
 }
 
 export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({

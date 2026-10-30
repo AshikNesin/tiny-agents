@@ -6,8 +6,10 @@
  */
 import { prisma } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { cancelJob } from "@groot/jobs/server/queue";
 import { jobQueueReady } from "@groot/jobs/server/client";
+import { getAgentRuntime } from "../bots/bots.runtime";
 import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
 import {
   MAX_ROUTINES,
@@ -29,6 +31,7 @@ type RoutineRow = {
   enabled: boolean;
   nextRunAt: Date | null;
   pendingJobId: string | null;
+  conversationId: string | null;
   createdAt: Date;
   updatedAt: Date;
   bot: { id: string; name: string; conversationId: string };
@@ -63,6 +66,20 @@ async function cancelPendingJob(pendingJobId: string | null): Promise<void> {
     await cancelJob({ queueName: ROUTINE_FIRE_JOB, jobId: pendingJobId });
   } catch {
     // The job may already have fired or been purged; cancellation is advisory.
+  }
+}
+
+/**
+ * Stop a routine's conversation the app no longer uses (the routine moved to
+ * another bot, or is gone). Its history stays in agent.db, like a chat's after
+ * "New chat"; a run still going there must not keep calling tools. Best effort.
+ */
+async function retireConversation(conversationId: string | null): Promise<void> {
+  if (!conversationId) return;
+  try {
+    await getAgentRuntime().abort(Number(conversationId));
+  } catch (error) {
+    logger.warn({ error, conversationId }, "Failed to stop a retired routine conversation");
   }
 }
 
@@ -143,7 +160,8 @@ export async function update(
   input: UpdateRoutineDTO,
 ): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
-  if (input.botId !== undefined && input.botId !== row.botId) await assertBotExists(input.botId);
+  const botChanged = input.botId !== undefined && input.botId !== row.botId;
+  if (botChanged) await assertBotExists(input.botId!);
   await prisma.routine.update({
     where: { id },
     data: {
@@ -151,10 +169,20 @@ export async function update(
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.schedule !== undefined ? { schedule: input.schedule } : {}),
+      // The conversation runs with the old bot's persona and tools: the next
+      // fire starts a fresh one for the new bot.
+      ...(botChanged ? { conversationId: null } : {}),
     },
   });
+  if (botChanged) {
+    await retireConversation(row.conversationId);
+    // A run still awaiting its reply there never gets one now.
+    await prisma.routineRun.updateMany({
+      where: { routineId: id, status: "awaiting" },
+      data: { status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" },
+    });
+  }
   const scheduleChanged = input.schedule !== undefined;
-  const botChanged = input.botId !== undefined && input.botId !== row.botId;
   if (scheduleChanged || botChanged) {
     // Any schedule-affecting edit re-arms from now; the old pending job dies.
     // `enabled` rides along so a schedule edit cannot silently re-enable a
@@ -192,6 +220,7 @@ export async function remove(id: string): Promise<void> {
   const row = await findRoutine(id);
   await cancelPendingJob(row.pendingJobId);
   await prisma.routine.delete({ where: { id } });
+  await retireConversation(row.conversationId);
 }
 
 export async function pause(id: string): Promise<ReturnType<typeof toApi>> {
