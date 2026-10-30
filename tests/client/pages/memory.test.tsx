@@ -115,6 +115,19 @@ describe("Memory page", () => {
     expect(within(section).getByText("superseded")).toBeTruthy();
   });
 
+  it("lists bots with memories first and folds the rest into one compact list", async () => {
+    loadPage({ b2: [memory({ id: "m9", botId: "b2", text: "Journals at night" })] });
+    mount();
+    const journal = await screen.findByLabelText("Journal Bot memories");
+    const empty = screen.getByLabelText("Bots without memories");
+    // Journal Bot (with a memory) comes before the empty list holding Helper Bot.
+    expect(journal.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(empty).getByText("Helper Bot")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Helper Bot memories")).toBeNull();
+    expect(screen.queryByText(/Nothing yet\. Chat with/)).toBeNull();
+    expect(within(empty).getByText("Learns from chats")).toBeInTheDocument();
+  });
+
   it("renders manual rows with their source line", async () => {
     loadPage({
       b1: [memory({ id: "m1", botId: "b1", source: "manual", confidence: null })],
@@ -146,8 +159,9 @@ describe("Memory page", () => {
     mount();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
-    const section = await screen.findByLabelText("Helper Bot memories");
-    await user.click(within(section).getByRole("button", { name: /add memory/i }));
+    // A bot with no memories yet sits in the compact list at the end (#95).
+    const empty = await screen.findByLabelText("Bots without memories");
+    await user.click(within(empty).getByRole("button", { name: "Add memory for Helper Bot" }));
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText(/forgets? after/i)).toBeNull();
