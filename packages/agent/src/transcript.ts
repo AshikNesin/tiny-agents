@@ -465,15 +465,19 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     );
   }
 
-  // Flag inputs that never got an answer.
+  // Flag inputs that never got an answer. Inputs that landed in the same turn
+  // (a queued message plus a steer) sit back to back and share one reply, so
+  // a run of user messages counts as answered when an assistant reply follows
+  // it; only a settlement the runtime recorded flags one inside the run.
   for (let i = 0; i < out.length; i++) {
     const message = out[i];
     if (message.role !== "user") continue;
     const next = out.slice(i + 1).find((m) => m.role !== "marker");
     if (next?.role === "assistant") continue;
-    const isLast = next === undefined;
-    if (isLast && (raw.busy || raw.live)) continue;
     const reasonCode = raw.unanswered.get(Number(message.id.slice(1)));
+    const reply = out.slice(i + 1).find((m) => m.role !== "marker" && m.role !== "user");
+    if (!reasonCode && reply?.role === "assistant") continue;
+    if (reply === undefined && (raw.busy || raw.live)) continue;
     out[i] = {
       ...message,
       status: "unanswered",

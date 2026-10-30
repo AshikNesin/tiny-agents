@@ -737,6 +737,42 @@ describe("transcript derivation", () => {
     });
   });
 
+  it("treats back-to-back inputs answered by one reply as answered", () => {
+    const messages = deriveChat(
+      rawChat([
+        userEntry(1, "queued message"),
+        userEntry(2, "steer message"),
+        assistantEntry(3, "one reply for both"),
+      ]),
+    );
+
+    expect(messages.map((message) => [message.id, message.status])).toEqual([
+      ["e1", "done"],
+      ["e2", "done"],
+      ["e3", "done"],
+    ]);
+  });
+
+  it("still flags a recorded settlement inside a run of inputs", () => {
+    const messages = deriveChat(
+      rawChat(
+        [userEntry(1, "stopped early"), userEntry(2, "asked again"), assistantEntry(3, "answer")],
+        { unanswered: new Map([[1, "aborted"]]) },
+      ),
+    );
+
+    expect(messages[0]).toMatchObject({ id: "e1", status: "unanswered" });
+    expect(messages[1]).toMatchObject({ id: "e2", status: "done" });
+  });
+
+  it("leaves trailing inputs alone while the bot is still working", () => {
+    const state = chatState(
+      rawChat([userEntry(1, "first"), userEntry(2, "second")], { busy: true }),
+    );
+
+    expect(state.messages.map((message) => message.status)).toEqual(["done", "done"]);
+  });
+
   it("emits deltas for append-only text and upserts for a changed message", () => {
     const previous: ChatState = { messages: [assistantMessage("Hel")], busy: true, queued: [] };
     const appended: ChatState = { messages: [assistantMessage("Hello")], busy: true, queued: [] };
