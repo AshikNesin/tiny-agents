@@ -1,0 +1,30 @@
+import { describe, expect, it } from "vite-plus/test";
+import { ApiError } from "@groot/shell/lib/api";
+import { loginErrorDescription } from "@groot/shell/pages/auth/Login";
+
+const apiError = (status: number, message: string) =>
+  new ApiError({ status, code: `HTTP_${status}`, message, url: "/api/v1/auth/login" });
+
+describe("loginErrorDescription", () => {
+  it("names a wrong password on 401", () => {
+    expect(loginErrorDescription(apiError(401, "Invalid email or password"), "x")).toBe(
+      "Invalid email or password.",
+    );
+  });
+
+  it("shows the server's message for other HTTP errors", () => {
+    expect(loginErrorDescription(apiError(429, "Too many attempts"), "x")).toBe(
+      "Too many attempts",
+    );
+  });
+
+  it("says the server is unreachable when fetch itself fails", () => {
+    expect(loginErrorDescription(new TypeError("Failed to fetch"), "x")).toBe(
+      "Could not reach the server. Check your connection and try again.",
+    );
+  });
+
+  it("falls back for anything else", () => {
+    expect(loginErrorDescription("boom", "Invalid credentials")).toBe("Invalid credentials");
+  });
+});

@@ -4,6 +4,7 @@ import { displayClass, h1Class } from "@groot/ui";
 import { Input } from "@groot/ui/input";
 import { Form, FormField } from "@groot/ui/form";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { ApiError } from "@groot/shell/lib/api";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,15 +26,16 @@ type LoginValues = z.infer<typeof loginSchema>;
 /** A 401 from the login endpoint is always "wrong credentials" for the
  * person typing; network-level wording ("Request failed with status code
  * 401") is for logs, not toasts. Anything else keeps its message. */
-function loginErrorDescription(error: unknown, fallback: string): string {
-  if (error && typeof error === "object") {
-    const maybe = error as { response?: { status?: number }; message?: string };
-    if (maybe.response?.status === 401) return "Invalid email or password.";
-    if (maybe.message && !maybe.message.startsWith("Request failed with status code")) {
-      return maybe.message;
-    }
+export function loginErrorDescription(error: unknown, fallback: string): string {
+  // The fetch client throws ApiError (with `status`) for HTTP errors and a
+  // TypeError when the request never reached the server.
+  if (error instanceof ApiError) {
+    return error.status === 401 ? "Invalid email or password." : error.message || fallback;
+  }
+  if (error instanceof TypeError) {
     return "Could not reach the server. Check your connection and try again.";
   }
+  if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
 
