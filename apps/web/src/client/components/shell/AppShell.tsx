@@ -12,6 +12,7 @@ import type { Bot as BotRow } from "../../lib/bots-api";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV } from "./nav";
+import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
 /**
  * Frame for every authenticated page: the sidebar on the left and the routed
@@ -44,6 +45,19 @@ export function AppShell() {
     connectActivity();
     return () => disconnectActivity();
   }, [loadBots, loadModels, connectActivity, disconnectActivity]);
+
+  // The tab says what needs you and where you are, even in the background (#90).
+  useEffect(() => {
+    document.title = documentTitle(pathname, bots);
+  }, [pathname, bots]);
+  useEffect(() => () => void (document.title = "tiny-agents"), []);
+  const waiting = waitingCount(bots);
+  useEffect(() => {
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!icon) return;
+    icon.href = waiting > 0 ? BADGED_FAVICON : "/favicon.svg";
+    return () => void (icon.href = "/favicon.svg");
+  }, [waiting]);
 
   // The drawer must not stay open across a navigation (e.g. browser back).
   useEffect(() => setMobileOpen(false), [pathname, setMobileOpen]);

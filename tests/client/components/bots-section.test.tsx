@@ -9,7 +9,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
-import { BotsSection } from "@/components/shell/BotsSection";
+import { BotRail, BotsSection } from "@/components/shell/BotsSection";
 import { useBotsStore } from "@/store/bots";
 import type { BotListEntry } from "@/lib/bots-api";
 
@@ -134,5 +134,21 @@ describe("BotsSection", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
     await waitFor(() => expect(pinMock).toHaveBeenCalled());
     await waitFor(() => expect(useBotsStore.getState().bots[0].pinnedAt).toBeNull());
+  });
+});
+
+describe("BotRail", () => {
+  it("keeps a bot that is waiting on you visible when the sidebar is folded", () => {
+    render(
+      <MemoryRouter>
+        <BotRail
+          bots={[bot("a"), bot("b", { approvals: 1 }), bot("c", { unread: true })]}
+          activeId={null}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Bot b, 1 awaiting approval" })).toHaveTextContent("1");
+    expect(screen.getByRole("link", { name: "Bot c, unread" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Bot a/ })).not.toBeInTheDocument();
   });
 });
