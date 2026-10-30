@@ -91,7 +91,8 @@ function BotRow({
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate">{bot.name}</span>
             {preview && (
-              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible">
+              // The row's menu button takes this spot on hover, focus, and while its menu is open.
+              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-state=open]]/row:invisible">
                 {relativeTime(bot.lastActivityAt)}
               </span>
             )}
@@ -102,7 +103,7 @@ function BotRow({
             </span>
           )}
         </span>
-        <span className="group-focus-within/row:hidden group-hover/row:hidden">
+        <span className="group-focus-within/row:hidden group-hover/row:hidden group-has-[[data-state=open]]/row:hidden">
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
