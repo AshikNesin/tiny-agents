@@ -37,6 +37,7 @@ import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
+import { isAssetRequest } from "./static-assets";
 
 /**
  * Node entry: SQLite on disk, uploads on the local filesystem, jobs on a
@@ -272,16 +273,6 @@ async function main(): Promise<void> {
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.once(signal, () => void shutdown(signal));
   }
-}
-
-/** Requests for build output (never an app route): /assets/* and common static files. */
-export function isAssetRequest(urlPath: string): boolean {
-  return (
-    urlPath.startsWith("/assets/") ||
-    /\.(?:js|mjs|css|map|woff2?|ttf|otf|png|jpe?g|gif|webp|avif|svg|ico|json|txt|webmanifest|wasm)$/i.test(
-      urlPath,
-    )
-  );
 }
 
 /** Production: Hono serves the API and the built client (SPA fallback to index.html). */
