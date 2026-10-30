@@ -23,7 +23,7 @@ Two storage copies per image, one consumer each:
 | `chat/<id>/original` | UI render, download       | Full quality                        |
 | `chat/<id>/model`    | LLM (inline or see_image) | Upright, <=2000px, <=4.5 MiB base64 |
 
-One Prisma `Upload` row is the single validated metadata source (kind, name,
+One `uploads` row is the single validated metadata source (kind, name,
 mime, size, dimensions). Preparation runs at upload time through Photon in a
 worker thread (pi-durable's node images helper, re-exported via
 `@tiny-agents/agent`).
@@ -218,5 +218,5 @@ user entries), as `see_image` does.
 - Native PDF blocks: pi-ai has no document content type yet.
 - The 24 h orphan sweep.
 - Upload progress percentages.
-- Moving the caps to `config.yml`. They are constants in `EXTRACT_LIMITS`
+- Moving the caps to app config. They are constants in `EXTRACT_LIMITS`
   for now.
