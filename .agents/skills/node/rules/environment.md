@@ -5,335 +5,79 @@ metadata:
   tags: environment, configuration, env, secrets
 ---
 
-# Environment Configuration in Node.js
+# Environment configuration
 
-## Project Approach: Varlock
+## Project approach: one Zod schema, zero-config development
 
-This project uses [Varlock](https://varlock.dev) for env schema validation.
-Secrets are plain environment variables — set on the hosting platform in
-production, or a git-ignored `.env` file locally. No secret manager is wired
-in.
+Environment variables are validated once at boot by `parseEnv()` in
+`packages/core/src/env.ts`. The same schema runs on Node (`process.env`) and on
+Cloudflare Workers (the bindings object), so there is no env loader, no
+generated types and no second schema file: `.env.example` documents every
+variable and is the only other place a variable is listed.
 
-### .env.schema File
+- Every variable has a development default, including the two dev-only
+  secrets in `DEV_DEFAULTS` (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`): a fresh
+  checkout boots with no `.env` at all.
+- `NODE_ENV=production` requires `JWT_SECRET_KEY` (≥ 32 characters),
+  `ADMIN_AUTH_KEY`, `ORIGIN` and `RP_ID`, and refuses the development fallbacks.
+- Empty strings count as unset (hosting platforms often set unused vars to `""`).
+- A validation failure lists every problem and aborts boot.
 
-The `.env.schema` file is the single source of truth for environment variables. It uses `@env-spec` annotations:
+### Reading values
 
-```bash
-# @env-spec - see https://varlock.dev/env-spec
+```ts
+import { env } from "@groot/core/env";
+import { config } from "@groot/core/config";
 
-# @defaultRequired=infer @defaultSensitive=true
-# @generateTypes(lang=ts, path=env.d.ts)
-
-# @type=enum(development, production, test)
-# @required @public
-NODE_ENV=development
-
-# @type=url
-# @required
-DATABASE_URL=postgresql://user:pass@localhost:5432/db
-
-# @required
-# @type=string(minLength=32)
-JWT_SECRET_KEY=your-super-secret-jwt-key-min-32-characters-long
-```
-
-Key annotations:
-
-- `@required` - Variable must be set
-- `@public` - Safe to expose to client (not a secret)
-- `@type=enum(a, b, c)` - Enum validation
-- `@type=url`, `@type=number`, `@type=boolean` - Type coercion
-- `@type=string(minLength=N)` - String validation
-- `@generateTypes(lang=ts, path=env.d.ts)` - Auto-generate TypeScript types
-
-### Running Commands
-
-All commands that need environment variables must run through varlock:
-
-```bash
-# In package.json scripts
-"dev": "varlock run -- tsx scripts/dev.ts"
-"start": "varlock run -- node dist/bundle.js"
-"test": "varlock run -- vitest run"
-```
-
-### Accessing Environment Variables
-
-Import the validated ENV object:
-
-```typescript
-import { ENV } from "varlock/env";
-
-export const env = ENV;
-
-// Usage
-const dbUrl = env.DATABASE_URL;
-const port = env.PORT;
-```
-
-For auto-loading in any file:
-
-```typescript
-import "varlock/auto-load";
-```
-
-### Local Development
-
-1. Install Varlock CLI
-2. Run `pnpm dev` — varlock loads `.env.schema` (dev defaults work zero-config)
-3. Override secrets in a git-ignored `.env` or `.env.local` file
-
-### Production
-
-1. Set every required secret via your hosting platform's env var management
-   (Coolify, Railway, docker/k8s, …) — ambient env vars always win
-2. No `.env` files needed in production
-
----
-
-## Alternative: Loading Environment Files
-
-Use Node.js built-in `--env-file` flag to load environment variables:
-
-```bash
-# Load from .env file
-node --env-file=.env app.ts
-
-# Load multiple env files (later files override earlier ones)
-node --env-file=.env --env-file=.env.local app.ts
-```
-
-### Programmatic API
-
-Load environment files programmatically with `process.loadEnvFile()`:
-
-```typescript
-import { loadEnvFile } from "node:process";
-
-// Load .env from current directory
-loadEnvFile();
-
-// Load specific file
-loadEnvFile(".env.local");
-```
-
-## Environment Variables Validation
-
-### Using env-schema with TypeBox
-
-Use [env-schema](https://github.com/fastify/env-schema) with [TypeBox](https://github.com/sinclairzx81/typebox) for type-safe environment validation:
-
-```typescript
-import { envSchema } from "env-schema";
-import { Type, Static } from "@sinclair/typebox";
-
-const schema = Type.Object({
-  PORT: Type.Number({ default: 3000 }),
-  DATABASE_URL: Type.String(),
-  API_KEY: Type.String({ minLength: 1 }),
-  LOG_LEVEL: Type.Union(
-    [Type.Literal("debug"), Type.Literal("info"), Type.Literal("warn"), Type.Literal("error")],
-    { default: "info" },
-  ),
-});
-
-type Env = Static<typeof schema>;
-
-export const env = envSchema<Env>({ schema });
-```
-
-### Using Zod
-
-Alternatively, use [Zod](https://github.com/colinhacks/zod) for validation:
-
-```typescript
-import { z } from "zod";
-
-const EnvSchema = z.object({
-  PORT: z.coerce.number().default(3000),
-  DATABASE_URL: z.string().url(),
-  API_KEY: z.string().min(1),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-});
-
-type Env = z.infer<typeof EnvSchema>;
-
-function loadEnv(): Env {
-  const result = EnvSchema.safeParse(process.env);
-
-  if (!result.success) {
-    console.error("Invalid environment variables:");
-    console.error(result.error.format());
-    process.exit(1);
-  }
-
-  return result.data;
+export function signingKey() {
+  return env.JWT_SECRET_KEY; // read inside functions, not at module top level
 }
 
-export const env = loadEnv();
-```
-
-## Avoid NODE_ENV
-
-`NODE_ENV` is an antipattern. It conflates multiple concerns into a single variable:
-
-- **Environment detection** (development vs production vs staging)
-- **Behavior toggling** (verbose logging, debug features)
-- **Optimization flags** (minification, caching)
-- **Security settings** (strict validation, HTTPS)
-
-This leads to problems:
-
-```typescript
-// BAD - NODE_ENV conflates concerns
-if (process.env.NODE_ENV === "development") {
-  enableDebugLogging(); // logging concern
-  disableRateLimiting(); // security concern
-  useMockDatabase(); // infrastructure concern
+export function pollInterval() {
+  return config.jobs.pollIntervalSeconds; // behaviour comes from config, not raw env
 }
 ```
 
-Instead, use explicit environment variables for each concern:
+`env` and `config` are live bindings that `bootstrap()` replaces before the
+first request; a module-level read sees the development defaults. Use `env`
+for secrets and raw deployment facts, `config.*` for everything that
+influences behaviour.
 
-```typescript
-// GOOD - explicit variables for each concern
-const config = {
-  logging: {
-    level: process.env.LOG_LEVEL || "info",
-    pretty: process.env.LOG_PRETTY === "true",
-  },
-  security: {
-    rateLimitEnabled: process.env.RATE_LIMIT_ENABLED !== "false",
-    httpsOnly: process.env.HTTPS_ONLY === "true",
-  },
-  database: {
-    url: process.env.DATABASE_URL,
-  },
-};
-```
+### Adding a variable
 
-This approach:
+1. Add it to `envSchema` in `packages/core/src/env.ts` with `.default()` or
+   `.optional()`. If production must set it, enforce that in `parseEnv()` next
+   to `ORIGIN` / `RP_ID`.
+2. Document it in `.env.example` (mark it `[prod-required]` when it is).
+3. If it configures behaviour, surface it through `defaultConfig()` in
+   `packages/core/src/config.ts` and read `config.x` in code.
+4. On Cloudflare: non-secret → `vars` in `wrangler.jsonc`; secret →
+   `pnpm exec wrangler secret put NAME`.
 
-- Makes configuration explicit and discoverable
-- Allows fine-grained control per environment
-- Avoids hidden behavior changes
-- Makes testing easier (toggle individual features)
+### Where values come from
 
-## Configuration Object Pattern
+| Runtime    | Source                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| Node, dev  | `.env` if present (`process.loadEnvFile` in `apps/web/src/server/entry.node.ts`), else defaults |
+| Node, prod | The platform's environment variables; no `.env` file                                            |
+| Workers    | `vars` + secrets bindings; `.dev.vars` (git-ignored) for `wrangler dev`                         |
+| Tests      | `tests/server/setup.ts` passes `{ ...process.env, NODE_ENV: "test", DATABASE_URL: ":memory:" }` |
+| Scripts    | `scripts/seed.ts`, `scripts/db-migrate.ts` read `process.env` directly                          |
 
-Create a typed configuration object:
+## Secrets
 
-```typescript
-interface Config {
-  server: {
-    port: number;
-    host: string;
-  };
-  database: {
-    url: string;
-    poolSize: number;
-  };
-  auth: {
-    jwtSecret: string;
-    jwtExpiresIn: string;
-  };
-  features: {
-    enableMetrics: boolean;
-    enableTracing: boolean;
-  };
-}
+- Never commit them. `.env`, `.env.*` and `.dev.vars` are git-ignored, and the
+  pre-commit hook runs gitleaks.
+- Generate: `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
+- Rotate immediately if one leaks.
+- In production inject them as environment variables from the platform's
+  secret store (Coolify/Railway variables, Cloudflare `wrangler secret`,
+  GitHub Actions secrets).
 
-function createConfig(): Config {
-  return {
-    server: {
-      port: parseInt(process.env.PORT || "3000", 10),
-      host: process.env.HOST || "0.0.0.0",
-    },
-    database: {
-      url: requireEnv("DATABASE_URL"),
-      poolSize: parseInt(process.env.DB_POOL_SIZE || "10", 10),
-    },
-    auth: {
-      jwtSecret: requireEnv("JWT_SECRET_KEY"),
-      jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
-    },
-    features: {
-      enableMetrics: process.env.ENABLE_METRICS === "true",
-      enableTracing: process.env.ENABLE_TRACING === "true",
-    },
-  };
-}
+## `NODE_ENV` belongs to infrastructure
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-export const config = createConfig();
-```
-
-## .env File Structure (Without Varlock)
-
-For projects not using Varlock, organize .env files properly:
-
-```bash
-# .env.schema - committed to git, documents all variables with defaults
-PORT=3000
-DATABASE_URL=postgresql://user:pass@localhost:5432/db
-API_KEY=your-api-key-here
-
-# .env - local development, NOT committed (in .gitignore)
-PORT=3000
-DATABASE_URL=postgresql://dev:dev@localhost:5432/myapp
-API_KEY=sk-dev-key-123
-
-# .env.test - test environment overrides
-DATABASE_URL=postgresql://test:test@localhost:5432/myapp_test
-```
-
-## Secrets in Production
-
-Never commit secrets to version control. Use a secrets management service:
-
-**Cloud Provider Services:**
-
-- [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
-- [Google Cloud Secret Manager](https://cloud.google.com/secret-manager)
-- [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault)
-
-**Infrastructure Tools:**
-
-- [HashiCorp Vault](https://www.vaultproject.io/)
-- [Infisical](https://infisical.com/)
-
-**Container Orchestration:**
-
-- Kubernetes Secrets
-- Docker Swarm Secrets
-
-**CI/CD Platforms:**
-
-- GitHub Actions Secrets
-- GitLab CI/CD Variables
-- CircleCI Contexts
-
-These services inject secrets as environment variables at runtime, keeping them out of your codebase and version history.
-
-## Feature Flags
-
-Implement feature flags via environment:
-
-```typescript
-const features = {
-  newDashboard: process.env.FEATURE_NEW_DASHBOARD === "true",
-  betaApi: process.env.FEATURE_BETA_API === "true",
-  darkMode: process.env.FEATURE_DARK_MODE === "true",
-};
-
-export function isFeatureEnabled(feature: keyof typeof features): boolean {
-  return features[feature] ?? false;
-}
-```
+`NODE_ENV` is checked in a handful of infrastructure places: production
+strictness in `parseEnv()`, defaults in `defaultConfig()` (log level, jobs off
+in tests), cookie flags, error-detail hiding, and the Node entry's dev/prod
+server choice. Feature code should not branch on it; add a `config` setting
+instead and branch on that.

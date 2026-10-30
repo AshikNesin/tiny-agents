@@ -1,24 +1,31 @@
-import type { Response } from "express";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { AppContext } from "../types";
 
-/**
- * Unified API envelope shape, defined once and reused by the success and
- * error paths so they can never drift.
- *
- *   success → { success: true,  data }
- *   error   → { success: false, error: { code, message, details? } }
- */
-export interface ApiErrorPayload {
-  code: string;
-  message: string;
-  details?: unknown;
+/** The JSON envelope every API response uses. The client unwraps `data`. */
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: { code: string; message: string; details?: unknown };
+  metadata?: { page?: number; limit?: number; total?: number; totalPages?: number };
 }
 
-/** Send a success envelope. `status` defaults to 200. */
-export function sendSuccess(res: Response, data: unknown, status = 200): void {
-  res.status(status).json({ success: true, data });
+export function ok<T>(c: AppContext, data: T, status: ContentfulStatusCode = 200) {
+  return c.json({ success: true, data } satisfies ApiResponse<T>, status);
 }
 
-/** Send an error envelope with the given HTTP status. */
-export function sendError(res: Response, error: ApiErrorPayload, status: number): void {
-  res.status(status).json({ success: false, error });
+export function created<T>(c: AppContext, data: T) {
+  return ok(c, data, 201);
+}
+
+export function noContent(c: AppContext) {
+  return c.body(null, 204);
+}
+
+export function fail(
+  c: AppContext,
+  error: { code: string; message: string; details?: unknown },
+  status: ContentfulStatusCode,
+) {
+  return c.json({ success: false, error } satisfies ApiResponse, status);
 }

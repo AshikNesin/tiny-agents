@@ -1,23 +1,14 @@
-export * as storageRoutes from "./storage.routes";
+export { default as storageRoutes } from "./storage.routes";
 export * as storageService from "./storage.service";
-export * as storageValidation from "./storage.schema";
-export { files, filesPromise, getFiles } from "./files";
-
-export { Files, FilesError } from "files-sdk";
+export * from "./storage.schema";
+export { storage, getStorage, setStorageAdapter } from "./storage";
+export { memoryStorage } from "./memory";
+export { r2Storage } from "./r2";
 export type {
-  Adapter,
-  AdapterCapabilities,
-  Body,
-  ByteRange,
-  DownloadOptions,
-  FileHandle,
+  StorageAdapter,
+  StorageBody,
+  StoredObject,
   ListOptions,
   ListResult,
-  OperationOptions,
-  SignedUpload,
-  SignUploadOptions,
-  StoredFile,
-  UploadOptions,
-  UploadResult,
-  UrlOptions,
-} from "files-sdk";
+  PutOptions,
+} from "./adapter";

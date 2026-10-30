@@ -1,21 +1,29 @@
 export const JOB_STATES = {
   CREATED: "created",
-  RETRY: "retry",
   ACTIVE: "active",
   COMPLETED: "completed",
-  CANCELLED: "cancelled",
   FAILED: "failed",
-  EXPIRED: "expired",
+  CANCELLED: "cancelled",
 } as const;
 
-export const VALID_JOB_STATES = Object.values(JOB_STATES);
+export type JobState = (typeof JOB_STATES)[keyof typeof JOB_STATES];
 
-export const RESERVED_QUEUE_NAMES = ["schedule", "stats", "available", "state"] as const;
+export const VALID_JOB_STATES: readonly JobState[] = Object.values(JOB_STATES);
 
-export function isValidJobState(state: string): boolean {
-  return VALID_JOB_STATES.includes(state as (typeof VALID_JOB_STATES)[number]);
+/** Path segments under `/api/v1/jobs` that cannot be used as job names. */
+export const RESERVED_QUEUE_NAMES = [
+  "schedule",
+  "stats",
+  "available",
+  "state",
+  "status",
+  "bulk-rerun",
+] as const;
+
+export function isValidJobState(state: string): state is JobState {
+  return (VALID_JOB_STATES as readonly string[]).includes(state);
 }
 
 export function isReservedQueueName(name: string): boolean {
-  return RESERVED_QUEUE_NAMES.includes(name as (typeof RESERVED_QUEUE_NAMES)[number]);
+  return (RESERVED_QUEUE_NAMES as readonly string[]).includes(name);
 }

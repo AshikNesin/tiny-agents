@@ -72,10 +72,10 @@ export function JobsFilters({
                 aria-label={
                   activeSecondaryTab ? `State: ${activeSecondaryTab.label}` : "More job states"
                 }
-                className={`inline-flex h-full items-center justify-center whitespace-nowrap rounded-sm px-2 py-1 text-sm font-medium focus-visible:outline-none ${
+                className={`inline-flex h-[calc(100%-1px)] items-center justify-center whitespace-nowrap rounded-lg border border-transparent px-1.5 py-0.5 text-sm font-medium focus-visible:outline-none ${
                   activeSecondaryTab
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground"
+                    ? "bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30"
+                    : "text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
                 }`}
               >
                 {activeSecondaryTab ? (
@@ -101,12 +101,12 @@ export function JobsFilters({
 
       <div className="flex items-center gap-2 shrink-0">
         <div className="relative w-40 lg:w-56">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder="Search..."
             value={queryParams.search}
             onChange={(e) => setQueryParams({ search: e.target.value, page: 0 })}
-            className="pl-8 h-8"
+            className="pl-9"
           />
         </div>
         {availableJobs.length > 0 && (
@@ -116,8 +116,8 @@ export function JobsFilters({
             }}
           >
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="size-3.5 md:mr-1" />
+              <Button variant="outline">
+                <Filter className="size-4" />
                 <span className="hidden md:inline max-w-[6rem] truncate">
                   {queryParams.queue !== "all" ? queryParams.queue : "Queue"}
                 </span>
@@ -126,12 +126,12 @@ export function JobsFilters({
             <DropdownMenuContent align="end" className="w-48">
               <div className="px-2 pt-1">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                   <Input
                     placeholder="Search queues..."
                     value={queueSearch}
                     onChange={(e) => setQueueSearch(e.target.value)}
-                    className="pl-7 h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                    className="pl-7 h-8 border-0 bg-transparent focus-visible:ring-0"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   />
@@ -158,8 +158,8 @@ export function JobsFilters({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <CalendarIcon className="size-3.5 md:mr-1" />
+            <Button variant="outline">
+              <CalendarIcon className="size-4" />
               <span className="hidden md:inline">
                 {queryParams.datePreset !== "all"
                   ? queryParams.datePreset.replace(/-/g, " ")
@@ -179,7 +179,7 @@ export function JobsFilters({
           </DropdownMenuContent>
         </DropdownMenu>
         {queryParams.queue !== "all" && (
-          <Badge variant="secondary" className="h-7 gap-1 whitespace-nowrap">
+          <Badge variant="secondary" className="h-9 gap-1 px-3 whitespace-nowrap">
             {queryParams.queue}
             <X
               className="size-3 cursor-pointer"
@@ -188,7 +188,7 @@ export function JobsFilters({
           </Badge>
         )}
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+          <Button variant="ghost" onClick={handleClearFilters}>
             Clear
           </Button>
         )}

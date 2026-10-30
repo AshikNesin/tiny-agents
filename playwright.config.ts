@@ -33,9 +33,8 @@ export default defineConfig({
     // pipeline itself. The token speed keeps every reply busy for a real
     // window so steering/queueing tests can send mid-reply.
     command:
-      "pnpm exec varlock run -- prisma migrate deploy && " +
-      "pnpm exec varlock run -- tsx apps/web/prisma/seed.ts && " +
-      "TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 pnpm exec varlock run -- tsx watch --max-old-space-size=512 apps/web/src/server/index.ts",
+      "pnpm exec tsx scripts/seed.ts && " +
+      "TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 pnpm exec tsx watch --max-old-space-size=512 apps/web/src/server/entry.node.ts",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 240 * 1000,

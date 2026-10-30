@@ -1,131 +1,69 @@
-import { logger, logPerformance } from "@groot/core/logger";
-import { createJobLogger } from "./logger";
-import { jobConfig } from "./config";
-import { withSentryErrorCapture, type JobHandler } from "./error-handler";
-import { getJobQueue } from "./client";
-import type { JobContext } from "./adapter";
-
-const jobHandlers = new Map<string, JobHandler<unknown>>();
-let workersStarted = false;
-
-export const registerJobHandler = <T>(name: string, handler: JobHandler<T>): void => {
-  const wrappedHandler = withSentryErrorCapture(handler as JobHandler, name);
-  jobHandlers.set(name, wrappedHandler as JobHandler<unknown>);
-  logger.debug({ jobName: name }, "Job handler registered");
-};
+import { logger } from "@groot/core/logger";
+import { config } from "@groot/core/config";
+import { isReservedQueueName } from "./constants";
+import type { JobHandler } from "./types";
+import { runTick, tickInFlight } from "./tick";
 
 /**
- * Start workers for every registered handler.
- *
- * CONTRACT: handlers must be registered first via `registerJobHandler()`
- * (typically through a `registerJobHandlers()` call in `routes.ts`, invoked
- * from `index.ts` before `startWorkers()`). With zero handlers this logs an
- * error and returns without starting workers — intended only for enqueue-
- * only processes (e.g. a web dyno whose workers run elsewhere). If this
- * process is supposed to process jobs, an empty registry is a bug: you
- * forgot to register handlers.
+ * Handler registry plus the Node polling driver. Workers do not call
+ * `startWorkers()`; their cron trigger calls `runTick()` directly.
  */
-export const startWorkers = async (): Promise<void> => {
-  if (workersStarted) {
+const handlers = new Map<string, JobHandler>();
+let timer: ReturnType<typeof setInterval> | null = null;
+
+export function registerJobHandler<T, R = unknown>(name: string, handler: JobHandler<T, R>): void {
+  if (isReservedQueueName(name)) {
+    throw new Error(`"${name}" is a reserved job name`);
+  }
+  handlers.set(name, handler as JobHandler);
+  logger.debug({ jobName: name }, "Job handler registered");
+}
+
+export function getRegisteredHandlers(): string[] {
+  return [...handlers.keys()];
+}
+
+export function getJobHandler(name: string): JobHandler | undefined {
+  return handlers.get(name);
+}
+
+/** Test helper. */
+export function clearJobHandlers(): void {
+  handlers.clear();
+}
+
+/**
+ * Start polling the queue (Node). Handlers must be registered first; with none
+ * registered this logs an error and returns, which is only right for a process
+ * that enqueues but never runs jobs.
+ */
+export async function startWorkers(): Promise<void> {
+  if (timer) {
     logger.warn("Job workers already running");
     return;
   }
-
-  if (jobHandlers.size === 0) {
+  if (handlers.size === 0) {
     logger.error(
-      "No job handlers registered — workers NOT started. Jobs will enqueue " +
-        "but never process. If this process should run workers, you forgot to " +
-        "call registerJobHandlers() (see docs/features/jobs.md) before " +
-        "startWorkers(). Safe to ignore only for enqueue-only processes.",
+      "No job handlers registered — workers NOT started. Call registerJobHandlers() before startWorkers().",
     );
     return;
   }
 
-  const queue = getJobQueue();
+  const intervalMs = config.jobs.pollIntervalSeconds * 1000;
+  timer = setInterval(() => void runTick(), intervalMs);
+  // Do not keep the process alive for the poller alone.
+  if (typeof timer === "object" && "unref" in timer) timer.unref();
 
-  const workOptions = {
-    pollingIntervalSeconds: jobConfig.pollIntervalSeconds,
-    batchSize: jobConfig.concurrency,
-  };
+  await runTick();
+  logger.info({ workerCount: handlers.size, intervalMs }, "Job workers started");
+}
 
-  // Create queues before starting workers (required by pg-boss v12+; a no-op
-  // for honker, which creates queues implicitly on enqueue).
-  await Promise.all([...jobHandlers.keys()].map((name) => queue.createQueue(name)));
+export async function stopWorkers(): Promise<void> {
+  if (timer) clearInterval(timer);
+  timer = null;
+  await tickInFlight();
+}
 
-  const started: string[] = [];
-  try {
-    await Promise.all(
-      [...jobHandlers.entries()].map(async ([name, handler]) => {
-        await queue.work(name, workOptions, async (jobs: JobContext[]) => {
-          // Process a delivered batch sequentially — handlers may not be
-          // concurrency-safe and failure semantics (throw after N) matter.
-          for (const job of jobs) {
-            const jobLogger = createJobLogger({ jobId: job.id, jobName: name });
-            const startTime = Date.now();
-
-            jobLogger.info({ data: job.data }, `Starting job ${name}`);
-
-            try {
-              await handler(job);
-              const duration = Date.now() - startTime;
-              jobLogger.info({ duration: `${duration}ms` }, `Job ${name} completed`);
-              // Standardized ops performance record (type: "performance")
-              // — escalates to warn when a job exceeds 5s so slow jobs
-              // surface without log-grepping.
-              logPerformance({
-                operation: `job_${name}`,
-                duration,
-                data: { jobId: job.id },
-              });
-            } catch (error) {
-              const duration = Date.now() - startTime;
-              jobLogger.error(
-                {
-                  duration: `${duration}ms`,
-                  error: error instanceof Error ? error.message : String(error),
-                },
-                `Job ${name} failed`,
-              );
-              logPerformance({
-                operation: `job_${name}`,
-                duration,
-                data: { jobId: job.id, failed: true },
-              });
-              throw error;
-            }
-          }
-        });
-        started.push(name);
-      }),
-    );
-  } catch (err) {
-    await Promise.allSettled(started.map((name) => queue.offWork(name)));
-    throw err;
-  }
-
-  workersStarted = true;
-  logger.info({ workerCount: jobHandlers.size }, "Job workers started");
-};
-
-export const stopWorkers = async (): Promise<void> => {
-  if (!workersStarted) {
-    return;
-  }
-
-  const queue = getJobQueue();
-
-  await Promise.all(
-    [...jobHandlers.keys()].map(async (name) => {
-      try {
-        await queue.offWork(name);
-        logger.debug({ jobName: name }, "Workers stopped");
-      } catch (error) {
-        logger.error({ jobName: name, error }, "Failed to stop workers");
-      }
-    }),
-  );
-
-  workersStarted = false;
-};
-
-export const getRegisteredHandlers = (): string[] => Array.from(jobHandlers.keys());
+export function workersRunning(): boolean {
+  return timer !== null;
+}

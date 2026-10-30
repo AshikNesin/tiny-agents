@@ -1,1 +1,1 @@
-web: pnpm run postinstall && pnpm start
+web: pnpm start

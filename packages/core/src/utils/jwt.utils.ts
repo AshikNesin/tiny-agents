@@ -1,51 +1,43 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 import ms from "ms";
-import { Boom } from "@groot/core/errors";
-import { env } from "@groot/core/env";
-import { config } from "@groot/core/config";
+import { Boom } from "../errors";
+import { env } from "../env";
+import { config } from "../config";
+import { utf8Encode } from "./encoding.utils";
+import type { AuthUser } from "../types";
 
-interface JWTPayload {
-  userId: number;
-  email: string;
+const ALGORITHM = "HS256";
+
+function secret(): Uint8Array {
+  return utf8Encode(env.JWT_SECRET_KEY);
 }
 
-const JWT_SECRET = env.JWT_SECRET_KEY;
-const JWT_EXPIRES_IN = config.auth.jwtExpiresIn;
-
-// `jwtExpiresIn` is a runtime-validated config string (e.g. "30d"); narrow it to
-// ms's `StringValue` template type (the guard below rejects anything invalid).
-export const JWT_EXPIRES_IN_MS = ms(JWT_EXPIRES_IN as ms.StringValue);
-if (!JWT_EXPIRES_IN_MS) {
-  throw new Error(
-    `Invalid JWT_EXPIRES_IN format: "${JWT_EXPIRES_IN}". Expected format like "30d", "24h", "60m", or "3600s".`,
-  );
+/** Token lifetime in milliseconds, from `config.auth.jwtExpiresIn` (e.g. "30d"). */
+export function jwtExpiresInMs(): number {
+  const parsed = ms(config.auth.jwtExpiresIn as ms.StringValue);
+  if (typeof parsed !== "number" || Number.isNaN(parsed)) {
+    throw new Error(`Invalid auth.jwtExpiresIn: ${config.auth.jwtExpiresIn}`);
+  }
+  return parsed;
 }
 
-/**
- * Generate a JWT token
- */
-export function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN as ms.StringValue,
-  });
+export async function generateToken(user: AuthUser): Promise<string> {
+  return new SignJWT({ userId: user.userId, email: user.email })
+    .setProtectedHeader({ alg: ALGORITHM })
+    .setIssuedAt()
+    .setExpirationTime(config.auth.jwtExpiresIn)
+    .sign(secret());
 }
 
-/**
- * Verify and decode a JWT token
- */
-export function verifyToken(token: string): JWTPayload {
+export async function verifyToken(token: string): Promise<AuthUser> {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-    return decoded;
+    const { payload } = await jwtVerify(token, secret(), { algorithms: [ALGORITHM] });
+    if (typeof payload.userId !== "number" || typeof payload.email !== "string") {
+      throw Boom.unauthorized("Invalid token payload");
+    }
+    return { userId: payload.userId, email: payload.email };
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      throw Boom.unauthorized("Token expired");
-    }
-    if (error instanceof jwt.JsonWebTokenError) {
-      throw Boom.unauthorized("Invalid token");
-    }
-    throw Boom.unauthorized("Token verification failed");
+    if (Boom.isHttpError(error)) throw error;
+    throw Boom.unauthorized("Invalid or expired token");
   }
 }
-
-export { jwt };

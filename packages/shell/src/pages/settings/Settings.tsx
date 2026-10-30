@@ -3,7 +3,7 @@ import { NotificationSettings } from "@groot/shell/components/NotificationSettin
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
-import { PageLayout } from "@groot/shell/components/layout/PageLayout";
+import { PageLayout } from "@groot/shell/components/layout/index";
 import { Bell, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 
 export function Settings() {

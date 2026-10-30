@@ -138,7 +138,8 @@ export ZAI_API_KEY=...   # any pi-supported provider key, or `pi` + /login
 ```
 
 To pin a provider/model instead of using pi's configured default, set
-`GROOT_RESOLVE_PROVIDER` and `GROOT_RESOLVE_MODEL` (see `.env.schema`).
+`GROOT_RESOLVE_PROVIDER` and `GROOT_RESOLVE_MODEL` (plain environment
+variables read by `.groot/resolve.ts`).
 
 ### Boilerplate checkout reuse
 

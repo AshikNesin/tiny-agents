@@ -1,112 +1,112 @@
-import dayjs from "dayjs";
-import { prisma } from "@groot/core/database";
-import { VALID_JOB_STATES, isValidJobState } from "./constants";
-import { getJobQueue } from "./client";
+import { and, asc, count, desc, eq, gt, gte, lte, sql } from "drizzle-orm";
+import { db } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
-import type {
-  FetchJobsOptions,
-  GetFailedJobsOptions,
-  GetJobsByStateOptions,
-  GetJobsOptions,
-  JobQueryResponse,
-} from "./types";
-import type { QueueJob, ScheduledJobInfo } from "./adapter";
+import { JOB_STATES, VALID_JOB_STATES, isValidJobState, type JobState } from "./constants";
+import { jobs, jobLogs, jobSchedules, type Job, type JobLog, type JobSchedule } from "./schema";
 import { getRegisteredHandlers } from "./worker";
+import type { GetJobsOptions, JobQueryResponse, JobStats } from "./types";
 
-// Get all scheduled jobs
-export const getScheduledJobs = async (): Promise<ScheduledJobInfo[]> => {
-  const queue = getJobQueue();
-  return queue.getSchedules();
-};
+function assertState(state: string): JobState {
+  if (!isValidJobState(state)) {
+    throw Boom.badRequest(
+      `Invalid job state: ${state}. Valid states: ${VALID_JOB_STATES.join(", ")}`,
+    );
+  }
+  return state;
+}
 
-// Get job by ID
-export const getJobById = async (options: {
+export async function getJobById(options: {
   queueName: string;
   jobId: string;
-}): Promise<QueueJob | null> => {
-  const queue = getJobQueue();
-  return queue.getJobById(options.queueName, options.jobId);
-};
+}): Promise<Job | null> {
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.id, options.jobId), eq(jobs.name, options.queueName)))
+    .limit(1);
+  return job ?? null;
+}
 
-// Get queue statistics (state-level counts)
-export const getQueueStats = async (): Promise<Record<string, number>> => {
-  const queue = getJobQueue();
-  return queue.getQueueStats();
-};
+export async function getQueueStats(): Promise<JobStats> {
+  const rows = await db
+    .select({ state: jobs.state, total: count() })
+    .from(jobs)
+    .groupBy(jobs.state);
+  const stats = Object.fromEntries(Object.values(JOB_STATES).map((s) => [s, 0])) as JobStats;
+  for (const row of rows) stats[row.state] = row.total;
+  return stats;
+}
 
-// Get available job/queue names — the types shown in the "Add Job" dropdown.
-//
-// This is the union of two sources:
-//   1. Registered handlers (the source of truth for triggerable job types).
-//   2. Queues the adapter knows about (jobs enqueued without a local handler).
-//
-// The merge is necessary because honker (SQLite) has no queue registry —
-// `createQueue` is a no-op and `getAvailableQueues()` only sees queues with
-// rows currently in `_honker_live`. On a fresh database the dropdown would be
-// empty despite handlers being registered. pg-boss persists queue definitions
-// on `createQueue`, so for Postgres the two sources overlap and the union is a
-// no-op.
-export const getAvailableQueues = async (): Promise<string[]> => {
-  const queue = getJobQueue();
-  const adapterQueues = await queue.getAvailableQueues();
-  const registered = getRegisteredHandlers();
-  return Array.from(new Set([...adapterQueues, ...registered])).sort();
-};
+/** Job names seen in the queue plus every registered handler. */
+export async function getAvailableQueues(): Promise<string[]> {
+  const rows = await db.selectDistinct({ name: jobs.name }).from(jobs);
+  return [...new Set([...rows.map((r) => r.name), ...getRegisteredHandlers()])].sort();
+}
 
-// Fetch jobs with filters (queue-based, for fetching from a specific queue)
-export const fetchJobs = async (options: FetchJobsOptions): Promise<QueueJob[]> => {
-  const queue = getJobQueue();
-  return queue.fetchJobs(options.queueName, options.limit ?? 50);
-};
+export async function getFailedJobs(options: { limit?: number } = {}): Promise<Job[]> {
+  return db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.state, "failed"))
+    .orderBy(desc(jobs.completedAt))
+    .limit(options.limit ?? 50);
+}
 
-// Get failed jobs (state-based query)
-export const getFailedJobs = async (options?: GetFailedJobsOptions): Promise<QueueJob[]> => {
-  const limit = options?.limit ?? 50;
-  const queue = getJobQueue();
-  return queue.getFailedJobs(limit);
-};
+export async function getJobsByState(options: {
+  state: string;
+  limit?: number;
+  offset?: number;
+}): Promise<JobQueryResponse> {
+  return getJobs({
+    state: assertState(options.state),
+    limit: options.limit,
+    offset: options.offset,
+  });
+}
 
-// Get jobs by state (state-based query with pagination)
-export const getJobsByState = async (options: GetJobsByStateOptions): Promise<JobQueryResponse> => {
-  const { state, limit = 50, offset = 0 } = options;
-  if (!isValidJobState(state)) {
-    throw Boom.badRequest(
-      `Invalid job state: ${state}. Valid states: ${VALID_JOB_STATES.join(", ")}`,
-    );
+export async function getJobs(options: GetJobsOptions = {}): Promise<JobQueryResponse> {
+  const { state, name, startDate, endDate, limit = 50, offset = 0 } = options;
+  const filters = [];
+  if (state) filters.push(eq(jobs.state, assertState(state)));
+  if (name) filters.push(eq(jobs.name, name));
+  if (startDate) {
+    const from = new Date(startDate);
+    if (Number.isNaN(from.getTime())) throw Boom.badRequest(`Invalid startDate: ${startDate}`);
+    filters.push(gte(jobs.createdAt, from));
   }
-  const queue = getJobQueue();
-  return queue.getJobsByState(state, limit, offset);
-};
+  if (endDate) {
+    const to = new Date(endDate);
+    if (Number.isNaN(to.getTime())) throw Boom.badRequest(`Invalid endDate: ${endDate}`);
+    filters.push(lte(jobs.createdAt, to));
+  }
+  const where = filters.length ? and(...filters) : undefined;
 
-// Get jobs with filters (supports state, name, date range, pagination)
-export const getJobs = async (options: GetJobsOptions): Promise<JobQueryResponse> => {
-  const { state, startDate, endDate, limit = 50, offset = 0 } = options;
-  if (state && !isValidJobState(state)) {
-    throw Boom.badRequest(
-      `Invalid job state: ${state}. Valid states: ${VALID_JOB_STATES.join(", ")}`,
-    );
-  }
-  if (startDate && !dayjs(startDate).isValid()) {
-    throw Boom.badRequest(`Invalid startDate: ${startDate}. Must be a valid date string.`);
-  }
-  if (endDate && !dayjs(endDate).isValid()) {
-    throw Boom.badRequest(`Invalid endDate: ${endDate}. Must be a valid date string.`);
-  }
-  const queue = getJobQueue();
-  return queue.getJobs({ ...options, limit, offset });
-};
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(jobs).where(where).orderBy(desc(jobs.createdAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(jobs).where(where),
+  ]);
+  return { jobs: rows, total: total! };
+}
 
-// Purge jobs by state
-export const purgeJobsByState = async (options: { state: string }): Promise<number> => {
-  const { state } = options;
-  if (!isValidJobState(state)) {
-    throw Boom.badRequest(
-      `Invalid job state: ${state}. Valid states: ${VALID_JOB_STATES.join(", ")}`,
-    );
+export async function purgeJobsByState(options: { state: string }): Promise<number> {
+  const state = assertState(options.state);
+  const deleted = await db.delete(jobs).where(eq(jobs.state, state)).returning({ id: jobs.id });
+  if (deleted.length > 0) {
+    await db.delete(jobLogs).where(sql`${jobLogs.jobId} NOT IN (SELECT ${jobs.id} FROM ${jobs})`);
   }
-  const queue = getJobQueue();
-  return queue.purgeJobsByState(state);
-};
+  return deleted.length;
+}
 
-// prisma import kept for getLogs (controller writes JobLog rows via prisma).
-export { prisma };
+export async function getScheduledJobs(): Promise<JobSchedule[]> {
+  return db.select().from(jobSchedules).orderBy(asc(jobSchedules.name));
+}
+
+export async function getJobLogs(options: { jobId: string; afterId?: number }): Promise<JobLog[]> {
+  const filters = [eq(jobLogs.jobId, options.jobId)];
+  if (options.afterId) filters.push(gt(jobLogs.id, options.afterId));
+  return db
+    .select()
+    .from(jobLogs)
+    .where(and(...filters))
+    .orderBy(asc(jobLogs.id));
+}

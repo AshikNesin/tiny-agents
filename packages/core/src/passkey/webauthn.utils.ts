@@ -1,62 +1,32 @@
 import {
   type AuthenticationResponseJSON,
   type AuthenticatorTransport,
-  type GenerateAuthenticationOptionsOpts,
-  type GenerateRegistrationOptionsOpts,
   type RegistrationResponseJSON,
-  type VerifyAuthenticationResponseOpts,
-  type VerifyRegistrationResponseOpts,
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { config } from "@groot/core/config";
+import { config } from "../config";
+import type { Passkey } from "../database";
 
-// Configuration for WebAuthn (module-private — only used in this file)
-const RP_NAME = config.passkey.rpName;
-const RP_ID = config.passkey.rpId;
-const ORIGIN = config.passkey.origin;
-
-/**
- * Interface for passkey data stored in database
- */ import type { Prisma } from "@groot/core/database";
-
-// `transports` is a Prisma `Json` column on both SQLite and Postgres, so it
-// round-trips as a JS array natively (typed as Prisma.JsonValue). At the
-// WebAuthn boundary we cast to `AuthenticatorTransport[]`.
-export interface PasskeyData {
-  id: number;
-  userId: number;
-  credentialId: string;
-  publicKey: Uint8Array<ArrayBuffer>;
-  counter: bigint;
-  deviceType: string | null;
-  backedUp: boolean;
-  transports: Prisma.JsonValue;
-  credentialName: string | null;
-  lastUsedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+function transports(passkey: Passkey): AuthenticatorTransport[] {
+  return passkey.transports as AuthenticatorTransport[];
 }
 
-/**
- * Generate registration options for a new passkey
- */
 export async function generatePasskeyRegistrationOptions(
   user: { id: number; email: string },
-  existingCredentials: PasskeyData[] = [],
+  existingCredentials: Passkey[] = [],
 ) {
-  const opts: GenerateRegistrationOptionsOpts = {
-    rpName: RP_NAME,
-    rpID: RP_ID,
+  return generateRegistrationOptions({
+    rpName: config.passkey.rpName,
+    rpID: config.passkey.rpId,
     userName: user.email,
     userDisplayName: user.email,
-    // Exclude credentials the user already has
     excludeCredentials: existingCredentials.map((passkey) => ({
       id: passkey.credentialId,
       type: "public-key",
-      transports: passkey.transports as AuthenticatorTransport[],
+      transports: transports(passkey),
     })),
     authenticatorSelection: {
       residentKey: "preferred",
@@ -64,99 +34,58 @@ export async function generatePasskeyRegistrationOptions(
       authenticatorAttachment: "platform",
     },
     attestationType: "none",
-  };
-
-  return await generateRegistrationOptions(opts);
+  });
 }
 
-/**
- * Verify passkey registration response
- */
 export async function verifyPasskeyRegistration(
   response: RegistrationResponseJSON,
   expectedChallenge: string,
 ) {
-  const opts: VerifyRegistrationResponseOpts = {
+  return verifyRegistrationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: ORIGIN,
-    expectedRPID: RP_ID,
-  };
-
-  return await verifyRegistrationResponse(opts);
+    expectedOrigin: config.passkey.origin,
+    expectedRPID: config.passkey.rpId,
+  });
 }
 
-/**
- * Generate authentication options for passkey login
- */
-export async function generatePasskeyAuthenticationOptions(userPasskeys: PasskeyData[] = []) {
-  const opts: GenerateAuthenticationOptionsOpts = {
-    rpID: RP_ID,
-    // Allow credentials from all user's passkeys
+export async function generatePasskeyAuthenticationOptions(userPasskeys: Passkey[] = []) {
+  return generateAuthenticationOptions({
+    rpID: config.passkey.rpId,
     allowCredentials: userPasskeys.map((passkey) => ({
       id: passkey.credentialId,
       type: "public-key",
-      transports: passkey.transports as AuthenticatorTransport[],
+      transports: transports(passkey),
     })),
     userVerification: "preferred",
-  };
-
-  return await generateAuthenticationOptions(opts);
+  });
 }
 
-/**
- * Verify passkey authentication response
- */
 export async function verifyPasskeyAuthentication(
   response: AuthenticationResponseJSON,
   expectedChallenge: string,
-  passkey: PasskeyData,
+  passkey: Passkey,
 ) {
-  const opts: VerifyAuthenticationResponseOpts = {
+  return verifyAuthenticationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: ORIGIN,
-    expectedRPID: RP_ID,
+    expectedOrigin: config.passkey.origin,
+    expectedRPID: config.passkey.rpId,
     credential: {
       id: passkey.credentialId,
-      publicKey: passkey.publicKey,
-      counter: Number(passkey.counter),
+      publicKey: new Uint8Array(passkey.publicKey),
+      counter: passkey.counter,
     },
-  };
-
-  return await verifyAuthenticationResponse(opts);
+  });
 }
 
-/**
- * Convert authenticator transports to database format.
- * `transports` is a Json column, so the array is stored as-is.
- */
-export function serializeTransports(transports?: readonly string[]): string[] {
-  return transports ? [...transports] : [];
-}
-
-/**
- * Generate a user-friendly device name based on authenticator info
- */
 export function generateDeviceName(
   authenticatorAttachment?: "platform" | "cross-platform",
   transports?: string[],
 ): string {
-  if (authenticatorAttachment === "platform") {
-    return "This device";
-  }
-
-  if (transports?.includes("usb")) {
-    return "Security key (USB)";
-  }
-
-  if (transports?.includes("nfc")) {
-    return "Security key (NFC)";
-  }
-
-  if (transports?.includes("ble")) {
-    return "Security key (Bluetooth)";
-  }
-
+  if (authenticatorAttachment === "platform") return "This device";
+  if (transports?.includes("usb")) return "Security key (USB)";
+  if (transports?.includes("nfc")) return "Security key (NFC)";
+  if (transports?.includes("ble")) return "Security key (Bluetooth)";
   return "Security key";
 }

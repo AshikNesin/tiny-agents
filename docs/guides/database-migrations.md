@@ -1,223 +1,68 @@
-# Database Migrations Guide
+# Database migrations
 
-How schema changes flow from a local Prisma edit to a production deployment, using Prisma Migrate.
+One engine (SQLite), one ORM (Drizzle), one migration history. The schema is
+TypeScript; migrations are generated SQL that every runtime applies the same
+way.
 
-> **Engine note:** The default database is **SQLite** (a `file:`
-> `DATABASE_URL`). Set a `postgresql://` `DATABASE_URL` to use PostgreSQL. The schema is split into
-> `schema.sqlite.prisma` / `schema.postgres.prisma`; migrations are shared.
-> See [Database Engines](../database-engines.md) for the full matrix. The
-> `DATABASE_URL_DIRECT` / pooler guidance later in this guide is
-> PostgreSQL-specific.
+## Where the schema lives
 
-## Overview
+| File                                   | Tables                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/database/schema.ts` | `users`, `passkeys`, `kv` (+ the shared `timestamps` columns)                                            |
+| `packages/jobs/src/server/schema.ts`   | `jobs`, `job_schedules`, `job_logs`                                                                      |
+| `apps/web/src/server/db/schema.ts`     | App tables (`todos`); re-exports the two above and is the single drizzle-kit entry (`drizzle.config.ts`) |
 
-Prisma Migrate generates versioned SQL files from schema changes and tracks them in the `_prisma_migrations` table, so every environment converges on the same schema state.
+Generated output: `apps/web/drizzle/NNNN_<name>.sql` plus `meta/` (snapshot +
+journal). App-owned, never synced from the boilerplate.
 
-## Development Workflow
+## Making a change
 
-### Making Schema Changes
+1. Edit a schema file.
+2. `pnpm db:generate --name add_posts` (the name is optional).
+3. Review the SQL. SQLite's `ALTER TABLE` is limited, so drizzle-kit may emit
+   a create-copy-drop sequence for column changes; check it preserves data.
+4. Apply locally: `pnpm dev` or `pnpm db:migrate`.
+5. Commit the schema change and `apps/web/drizzle/` together, with a changeset
+   (`apps/web/drizzle` is a managed surface).
 
-1. **Edit the Prisma schema**
+CI runs `pnpm db:generate` and fails if it produces a diff, so a schema edit
+without its migration never merges.
 
-   The schema is split by engine — edit **both** to keep them in parity (a unit
-   test in `tests/server/prisma/schema-parity.test.ts` enforces this):
+## How migrations are applied
 
-   ```bash
-   # Edit both schema files
-   vim apps/web/prisma/schema.sqlite.prisma
-   vim apps/web/prisma/schema.postgres.prisma
-   ```
+| Where              | How                                                                                                                                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node, dev and prod | `createSqliteDb(url, { migrationsFolder })` runs drizzle's migrator when the server boots (`entry.node.ts`). The folder is `apps/web/drizzle` in the repo and `dist/server/drizzle` next to the production bundle (`GROOT_MIGRATIONS_DIR` overrides) |
+| Script             | `pnpm db:migrate` (`scripts/db-migrate.ts`); `pnpm db:seed` also migrates first                                                                                                                                                                      |
+| Tests              | `tests/server/setup.ts` migrates a fresh in-memory database for every test file                                                                                                                                                                      |
+| Cloudflare D1      | The Worker applies pending files on its first request (`migrateD1()`); `pnpm db:migrate:worker` can run them ahead of time                                                                                                                           |
 
-   Use the `Json` type (not `String` + `JSON.stringify`) for array/JSON columns
-   — it maps to native `JSONB` on Postgres and `TEXT` on SQLite, with identical
-   generated client types. See [Database Engines](../database-engines.md).
+All three paths read the same SQL files and track what they applied in their
+own bookkeeping table (`__drizzle_migrations` on Node, `d1_migrations` on D1).
 
-2. **Create a migration**
+## Rules
 
-   Generate a migration file without applying it:
+- Never hand-write a migration and never edit one that has been applied
+  anywhere. Generate a new one.
+- No transactions in application code (D1 has none).
+- Timestamps are `integer({ mode: "timestamp_ms" })`, JSON columns are
+  `text({ mode: "json" })`, booleans `integer({ mode: "boolean" })`: the same
+  SQL runs on better-sqlite3 and D1.
+- Keep migrations small and named for what they do.
 
-   ```bash
-   pnpm db:migrate:create --name <descriptive_name>
-   ```
+## One engine, on purpose
 
-   Example:
-
-   ```bash
-   pnpm db:migrate:create --name add_user_avatar_url
-   ```
-
-3. **Review the generated SQL**
-
-   Open the new migration file in `apps/web/prisma/migrations/<timestamp>_<name>/migration.sql` and verify the SQL looks correct.
-
-4. **Apply locally**
-
-   ```bash
-   pnpm prisma migrate dev
-   ```
-
-   This applies the migration and regenerates the Prisma client.
-
-### Quick Commands
-
-| Task                           | Command                                |
-| ------------------------------ | -------------------------------------- |
-| Create migration (don't apply) | `pnpm db:migrate:create --name <name>` |
-| Apply migrations locally       | `pnpm prisma migrate dev`              |
-| View migration status          | `pnpm prisma migrate status`           |
-| Reset database                 | `pnpm prisma migrate reset`            |
-
-## Production Deployment
-
-### Automatic Migrations
-
-Migrations run automatically on deployment via the `prestart` script:
-
-```json
-{
-  "prestart": "prisma migrate deploy"
-}
-```
-
-When you push to main, your deploy platform (Coolify/Railway) runs `pnpm start`, which first executes `prestart` to apply any pending migrations.
-
-### Manual Migration (if needed)
-
-To run migrations manually in production:
-
-```bash
-# SSH into the container or use the platform's web terminal
-pnpm db:migrate
-```
-
-## One-Time Production Setup
-
-**After the first deployment** with the baseline migration, mark it as applied in production:
-
-```bash
-pnpm prisma migrate resolve --applied 20260315000000_baseline_user_models
-```
-
-This tells Prisma that the baseline migration has already been applied (since the tables already existed).
-
-## Pooled Database Connections (Supabase / PgBouncer / RDS Proxy)
-
-The Prisma **migrate/introspection engine** (used by `migrate deploy`, `migrate
-status`, `migrate diff`, `db pull`) opens its own connection and relies on
-prepared statements + session-level features. This is **incompatible with
-transaction-mode poolers** — Supabase Supavisor (port 6543), PgBouncer in
-transaction mode, RDS Proxy, Cloud SQL — and fails with:
-
-```
-Error: prepared statement "s1" already exists
-```
-
-and can hang long enough to trip platform boot timeouts (on Heroku this is a
-guaranteed crash loop: `prestart` runs `migrate deploy`, it hangs past the 60s
-R10 boot limit, the dyno is SIGKILL'd, every request 503s).
-
-### The fix
-
-`prisma.config.ts` routes the migrate engine at **`DATABASE_URL_DIRECT`** when
-set, falling back to `DATABASE_URL`:
-
-```ts
-datasource: {
-  url: ENV.DATABASE_URL_DIRECT || ENV.DATABASE_URL,
-},
-```
-
-The **runtime client is unaffected** — it uses the pooled `DATABASE_URL`
-separately via `@prisma/adapter-pg` in `packages/core/src/database.ts`.
-
-### When you need it
-
-| Environment                       | `DATABASE_URL_DIRECT`                              |
-| --------------------------------- | -------------------------------------------------- |
-| Local Postgres (dev)              | not needed (unset)                                 |
-| Direct Postgres (Coolify/Railway) | not needed (unset)                                 |
-| Supabase / Supavisor pooled       | **set** — point at the session-mode port (`:5432`) |
-| PgBouncer (transaction mode)      | **set** — point past the pooler                    |
-
-`DATABASE_URL_DIRECT` is optional and only needs to bypass the pooler. With it
-set, `prestart` → `prisma migrate deploy` connects directly and boots cleanly.
-
-### Manual migration check against a pooled DB
-
-```bash
-# Verify migrations apply cleanly via the direct connection:
-export DATABASE_URL="$DATABASE_URL_DIRECT"; pnpm db:migrate
-```
-
-## Migration Best Practices
-
-### DO
-
-- Create descriptive migration names: `add_user_preferences`, not `update_schema`
-- Review generated SQL before committing
-- Test migrations locally before pushing
-- Keep migrations small and focused
-- Add rollback notes for complex migrations
-
-### DON'T
-
-- Edit applied migrations
-- Delete migration files
-- Skip reviewing generated SQL
-- Use `prisma db push` for schema changes (it bypasses migration history and drifts dev from prod)
+SQLite everywhere: a file through better-sqlite3 on Node, D1 on Workers. There
+is no Postgres path and nothing in application code branches on the engine
+(see [ADR 0004](../adr/0004-hono-drizzle-sqlite-workers.md)). If Postgres is
+ever needed it can come back as a `pgTable` twin of the schema with its own
+drizzle config; until then one schema, one history.
 
 ## Troubleshooting
 
-### "Migration failed to apply"
-
-1. Check the error in logs
-2. Verify the database state matches expected schema
-3. If needed, manually fix and mark as applied:
-   ```bash
-   pnpm prisma migrate resolve --applied <migration_name>
-   ```
-
-### "Drift detected"
-
-The database schema differs from expected state:
-
-1. Compare local and production schemas
-2. Create a migration to reconcile differences
-3. Or reset the database (development only):
-   ```bash
-   pnpm prisma migrate reset
-   ```
-
-If the database was previously managed with `prisma db push` (no
-`_prisma_migrations` table, or rows that don't match the migrations folder),
-bring it into the migrate workflow in one safe, idempotent step:
-
-```bash
-pnpm db:baseline            # diffs live DB → schema, applies additive SQL,
-                            # marks the baseline applied, verifies
-pnpm db:baseline -- --dry-run   # generate the SQL for review without applying
-```
-
-The script refuses to apply any non-additive SQL (DROP / RENAME / ALTER COLUMN)
-and writes the generated SQL to `tmp/db-baseline-sync.sql` for review first.
-
-### "No migrations to apply"
-
-This is normal if:
-
-- All migrations are already applied
-- You're running after the baseline setup
-
-### Development Database Issues
-
-Reset the local database:
-
-```bash
-pnpm prisma migrate reset
-```
-
-## Related Documentation
-
-- [Prisma Migrate Docs](https://www.prisma.io/docs/concepts/components/prisma-migrate)
-- [Development Guide](./development.md)
-- [Architecture Guide](./architecture.md)
+- **Reset the dev database**: delete `data/dev.db*` and run `pnpm dev`.
+- **"Drizzle migrations folder not found"**: start from the repo root, or set
+  `GROOT_MIGRATIONS_DIR`.
+- **CI "Schema changed without a migration"**: run `pnpm db:generate` and commit.
+- **D1 state**: `pnpm exec wrangler d1 migrations list DB --remote`.
+- **Look at the data**: `pnpm db:studio`.

@@ -1,174 +1,132 @@
 # Quick start
 
-Get the app running, create your first user, and scaffold your first feature.
+Get the app running, sign in, and add your first feature.
 
 ## What's in the box
 
-| Area  | Capabilities                                                          |
-| ----- | --------------------------------------------------------------------- |
-| Auth  | JWT login + protected routes, Passkey/WebAuthn, admin user management |
-| API   | Feature-module pattern (`routes` + `service` + `schema`), Boom errors |
-| Jobs  | Background queue (pg-boss / honker) with dynamic handler registration |
-| Data  | Prisma (SQLite default / Postgres), Keyv key-value store              |
-| Files | S3 storage (uploads, downloads, folders, renames)                     |
-| AI    | Unified LLM API with Zod structured output                            |
-| Infra | Pino logging, Sentry error tracking, rate limiting                    |
-| UI    | Radix + Tailwind component library, layout primitives, API client     |
+| Area  | Capabilities                                                                           |
+| ----- | -------------------------------------------------------------------------------------- |
+| Auth  | JWT login (httpOnly cookie or bearer), passkeys/WebAuthn, admin user management        |
+| API   | Hono routers, Zod-validated parsing helpers, `{ success, data }` envelope, Boom errors |
+| Jobs  | Table-backed queue with retries, cron schedules, logs and a dashboard                  |
+| Data  | Drizzle ORM on SQLite (better-sqlite3 on Node, D1 on Workers), `kv` table              |
+| Files | Storage adapter: local disk on Node, R2 bucket on Workers                              |
+| AI    | Unified LLM API with Zod structured output (`@groot/ai`)                               |
+| Infra | JSON logger with request context, Sentry seam, rate limiting, health probes            |
+| UI    | Radix + Tailwind component kit, layout shell, API client                               |
 
-## 1. Set up the environment
-
-### Automated (recommended)
+## 1. Install and run
 
 ```bash
-pnpm groot:setup
-```
-
-This installs the global CLIs (varlock, portless), sets up git hooks
-(lint-staged + gitleaks), prompts for your app name and propagates it to
-`config.yml`, `package.json`, and `.env.schema`, then installs deps and
-generates the Prisma client.
-
-> Secrets are plain **environment variables** — configure them on your hosting
-> platform, or in a git-ignored `.env` file. In development, varlock provides
-> working defaults from `.env.schema`.
-
-### Manual
-
-```bash
-cp .env.schema .env
 pnpm install
-pnpm prisma generate
-pnpm db:migrate
-```
-
-> **Production secrets:** always use strong, random values.
-> `openssl rand -base64 48 | tr -d '/+=' | cut -c1-64`
-
-## 2. Install portless (one-time)
-
-```bash
-npm install -g portless
-```
-
-On the first `pnpm dev`, portless prompts you to trust a local CA certificate
-(requires sudo), enabling `https://*.localhost` with no browser warnings.
-See [Portless & HTTPS](./guides/portless-https.md).
-
-## 3. Start developing
-
-```bash
 pnpm dev
-# → https://groot.localhost
 ```
 
-## Create your first user
+`pnpm dev` creates `data/dev.db`, applies migrations, seeds a demo user and
+three todos, then starts the Node server with Vite in middleware mode (HMR on
+the same port). Nothing to configure: every environment variable has a
+development default. Copy `.env.example` to `.env` only when you want to
+override something.
+
+The app is served at **`https://groot.localhost`** via portless (first run
+asks to trust a local certificate, see [Portless & HTTPS](./guides/portless-https.md)).
+Skip portless with `PORTLESS=0 pnpm dev` → `http://localhost:3000`.
+
+Optional: `pnpm groot:setup` renames the app (package name, `app.name`,
+Worker name, `RP_NAME`) and installs portless.
+
+## 2. Sign in
+
+Email `demo@example.com`, password `demo@example.com` (from `scripts/seed.ts`).
+
+To create another user, call the admin endpoint with the development admin key:
 
 ```bash
-# Admin-only (uses X-Admin-Auth-Key)
-curl -X POST https://groot.localhost/api/v1/auth/users \
+curl -X POST http://localhost:3000/api/v1/auth/users \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Auth-Key: your-admin-key" \
-  -d '{"email":"test@example.com","password":"demo@example.com"}'
-
-# Log in → returns { token, user }
-curl -X POST https://groot.localhost/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"demo@example.com"}'
+  -H "X-Admin-Auth-Key: dev-only-admin-key" \
+  -d '{"email":"you@example.com","password":"a-long-password"}'
 ```
 
-## Create your first feature
+More recipes in [API requests](./examples/api-requests.md).
 
-A feature is a self-contained module: `routes` + `service` + `schema`
-(+ optional `jobs`).
+## 3. Add a feature
 
-### 1. Scaffold the module
+A feature is a folder under `apps/web/src/server/api/<feature>/` with a Zod
+schema, a service and a Hono router, plus a table in the app schema.
 
-```bash
-mkdir -p apps/web/src/server/api/myfeature
-```
+1. **Table** in `apps/web/src/server/db/schema.ts`:
 
-### 2. Define routes
+   ```ts
+   export const posts = sqliteTable("posts", {
+     id: integer("id").primaryKey({ autoIncrement: true }),
+     title: text("title").notNull(),
+     ...timestamps,
+   });
+   ```
 
-```ts
-// apps/web/src/server/api/myfeature/myfeature.routes.ts
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { parseId, parseBody } from "@groot/core/utils/controller.utils";
-import * as service from "./myfeature.service";
-import { createSchema } from "./myfeature.schema";
+   Then `pnpm db:generate` and commit the new file in `apps/web/drizzle/`.
 
-const router = createRouter();
+2. **Routes** in `post.routes.ts`:
 
-router.get("/", async () => service.findAll());
+   ```ts
+   import { Hono } from "hono";
+   import type { AppEnv } from "@groot/core/types";
+   import { ok } from "@groot/core/utils/api-response.utils";
+   import { parseBody, parseId } from "@groot/core/utils/controller.utils";
+   import * as service from "./post.service";
+   import { createPostSchema } from "./post.schema";
 
-router.post("/", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createSchema);
-  res.status(201);
-  return service.create({ data: payload });
-});
+   const router = new Hono<AppEnv>();
+   router.get("/", async (c) => ok(c, await service.findAll()));
+   router.post("/", async (c) =>
+     ok(c, await service.create(await parseBody(c, createPostSchema)), 201),
+   );
+   router.get("/:id", async (c) => ok(c, await service.findById(parseId(c.req.param("id")))));
+   export default router;
+   ```
 
-router.get("/:id", async (req: Request) => {
-  const id = parseId(req.params.id);
-  return service.findById({ id });
-});
+3. **Mount** it in `apps/web/src/server/app.ts` next to the other protected routers:
+   `api.route("/posts", postRoutes);`
 
-export default router;
-```
+The service and schema files, tests and background jobs are covered in
+[Development workflow](./guides/development.md); the full pattern in
+[Architecture](./guides/architecture.md).
 
-### 3. Register the routes
-
-```ts
-// apps/web/src/server/routes.ts
-import myFeatureRoutes from "./api/myfeature/myfeature.routes";
-
-export function registerRoutes(app: Express): void {
-  // ...
-  protectedRouter.use("/myfeature", myFeatureRoutes);
-}
-```
-
-See [Development workflow](./guides/development.md) for the service and schema
-files, and [Architecture](./guides/architecture.md) for the full pattern.
-
-## Use the API client
+## 4. Call it from the client
 
 ```ts
 import { apiClient } from "@groot/shell/lib/api";
 
-const data = await apiClient.get<MyType>("/todos");
-const created = await apiClient.post<MyType>("/todos", { title: "New" });
-const updated = await apiClient.put<MyType>("/todos/1", { completed: true });
-await apiClient.delete("/todos/1");
+const posts = await apiClient.get<Post[]>("/posts");
+const created = await apiClient.post<Post>("/posts", { title: "Hello" });
 ```
 
-`apiClient` is a shared Axios instance that injects the JWT and handles `401`
-(logout). See [Client](./features/client.md).
+`apiClient` is the shared Axios instance (`baseURL: /api/v1`, sends the auth
+cookie, unwraps `data`, clears auth on 401). See [Client](./features/client.md).
 
 ## Common commands
 
-| Task             | Command                |
-| ---------------- | ---------------------- |
-| Dev server       | `pnpm dev`             |
-| Apply migrations | `pnpm db:migrate`      |
-| Generate Prisma  | `pnpm prisma generate` |
-| Build            | `pnpm build`           |
-| Run prod build   | `pnpm start`           |
-| Lint + format    | `pnpm check`           |
-| Unit tests       | `pnpm test`            |
-| Tests (both DBs) | `pnpm test:all`        |
-| E2E tests        | `pnpm test:e2e`        |
+| Task                     | Command                                |
+| ------------------------ | -------------------------------------- |
+| Dev server               | `pnpm dev`                             |
+| Dev server on workerd    | `pnpm dev:worker`                      |
+| Generate a migration     | `pnpm db:generate`                     |
+| Apply migrations locally | `pnpm db:migrate` (or just `pnpm dev`) |
+| Browse the database      | `pnpm db:studio`                       |
+| Lint + format            | `pnpm check`                           |
+| Server / client tests    | `pnpm test` / `pnpm test:client`       |
+| E2E tests                | `pnpm test:e2e`                        |
+| Build / run prod bundle  | `pnpm build` / `pnpm start`            |
 
 ## Production checklist
 
-Before deploying:
+- [ ] `NODE_ENV=production`
+- [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — the server refuses the dev defaults
+- [ ] `RP_ID` and `ORIGIN` match your public domain (passkeys)
+- [ ] Node: `DATABASE_URL=file:/path/on/a/persistent/volume.db`, one replica — or deploy to [Cloudflare Workers](./guides/deploy-cloudflare.md)
+- [ ] `CORS_ALLOWED_ORIGINS` set if the API is called from another origin
+- [ ] `SENTRY_DSN` (optional)
+- [ ] `pnpm build` and `pnpm test` pass
 
-- [ ] Run `pnpm groot:setup` to configure your app
-- [ ] Configure secrets on your hosting platform (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `SECRETS_KEY`)
-- [ ] Set `DATABASE_URL` to your production database (a `file:` path for SQLite, a `postgresql://` URL for Postgres)
-- [ ] Configure passkey settings in `config.yml` (`passkey.rpId`, `passkey.rpName`, `passkey.origin`)
-- [ ] Set `SENTRY_DSN` for error tracking (optional)
-- [ ] Set `NODE_ENV=production`
-- [ ] `pnpm build` succeeds
-- [ ] `pnpm test` passes
-
-→ Next: [Architecture](./guides/architecture.md) and [API request recipes](./examples/api-requests.md).
+→ Next: [Deploy on Node](./guides/deploy.md) or [Deploy on Cloudflare](./guides/deploy-cloudflare.md).

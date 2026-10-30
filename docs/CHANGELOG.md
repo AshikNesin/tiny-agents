@@ -1,9 +1,23 @@
 # Docs Changelog
 
+## 2026-10-27
+
+- `guides/deploy.md` and `features/storage.md`: mount the Node deploy's persistent volume at `/data`, instead of `/app/data`, so it doesn't depend on the build's working directory or hide the repo's `data/` folder. Production keeps the database at `/data/prod.db` and uploads at `/data/uploads` by default, so `DATABASE_URL` and `UPLOADS_DIR` are optional
+
+## 2026-10-25
+
+- Rewrote the documentation for the Hono + Drizzle + SQLite stack that runs on Node and Cloudflare Workers ([ADR 0004](./adr/0004-hono-drizzle-sqlite-workers.md)):
+  - `README.md`, `AGENTS.md`, `docs/README.md`, quick start and setup guide: zero-config development (`pnpm install && pnpm dev`, demo user), the new tech stack, `.env.example` + `packages/core/src/env.ts` instead of a schema file
+  - Guides: architecture (`createApp()`, `bootstrap()`, the two entries), development (Hono routers + Drizzle services end to end), database migrations (drizzle-kit, SQLite only), testing (`app.request()` helpers on in-memory SQLite), deploy on Node (`pnpm start` migrates on boot) and the new `guides/deploy-cloudflare.md` (D1, R2, cron trigger, free-plan limits, first user via the admin API)
+  - `config.md` documents `config.ts` / `defineConfig()`; `kv.md` documents the `kv` table store
+  - Features: jobs (table-backed queue, `runTick()`, HTTP API with status codes), todos, storage (`StorageAdapter` contract with local/R2/memory adapters), passkeys (challenges in kv, relying party from env), client
+  - `examples/api-requests.md` with expected status codes; `sentry-source-maps.md` with the new map paths (`dist/server/*.map`, `dist/client/assets/*.map`)
+  - Removed `database-engines.md` (one engine now; the story lives in `guides/database-migrations.md`); updated the groot-sync skill tables and the node skill's environment rule
+
 ## 2026-07-17
 
 - Documented dual-database-engine support (SQLite default, PostgreSQL opt-in via `DATABASE_ENGINE`):
-  - New [Database Engines](./database-engines.md) guide covering engine selection, the `Json` parity strategy, two schema files, and the job-queue adapter pattern (pg-boss on Postgres, honker on SQLite)
+  - New `database-engines.md` guide (removed 2026-10-25) covering engine selection, the `Json` parity strategy, two schema files, and the job-queue adapter pattern (pg-boss on Postgres, honker on SQLite)
   - Updated setup, quick-start, architecture, jobs, KV, testing, and migration guides to reflect both engines
   - Added `test:sqlite` / `test:postgres` / `test:all` scripts and documented the dual-engine CI matrix workflow
 - Updated `README.md`, `AGENTS.md`, and `docs/README.md` tech-stack tables to list SQLite/PostgreSQL and pg-boss/honker

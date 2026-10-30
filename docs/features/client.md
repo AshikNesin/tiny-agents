@@ -1,6 +1,6 @@
 # Client
 
-A Vite + React 19 SPA that consumes the Express API through Axios and React
+A Vite + React 19 SPA that consumes the Hono API through Axios and React
 Query.
 
 ## Routing & layout
@@ -63,6 +63,7 @@ on the common cases (see [enforcement](#enforcement)).
 | Tabular data               | `Table`; `tableColumnHeaderClass` for grid-based tables                                                                                                                  | a raw `<table>`/`<thead>`                                                                                                                            |
 | Status / state pill        | `StatusBadge` (token-driven); `Badge` for neutral tags                                                                                                                   | a local status→color map                                                                                                                             |
 | Destructive confirmation   | `useConfirm({ destructive: true })`                                                                                                                                      | a bespoke `Dialog` (dismissible by overlay)                                                                                                          |
+| Scrolling dialog content   | `DialogBody` between `DialogHeader` and `DialogFooter` (header and footer stay pinned)                                                                                   | a hand-rolled `overflow-y-auto` wrapper                                                                                                              |
 | Icon sizing                | `size-4` / `size-3.5`                                                                                                                                                    | `h-4 w-4`                                                                                                                                            |
 | Icon spacing in a button   | nothing — `Button` already sets `gap`                                                                                                                                    | `mr-2` on the icon                                                                                                                                   |
 | Any text treatment         | `Text` / `metaLabelClass` / `monoClass` from `@groot/ui`                                                                                                                 | ad-hoc `text-*` sizes, `tracking-*`, `font-bold`, inline `font-mono` at full size                                                                    |

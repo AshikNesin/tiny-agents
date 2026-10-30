@@ -1,28 +1,13 @@
-import type { Request } from "express";
-import { type ZodSchema, z } from "zod";
-import { Boom, ErrorCode } from "@groot/core/errors";
+import { type ZodType, z } from "zod";
+import { Boom, ErrorCode } from "../errors";
+import type { AppContext, AuthUser } from "../types";
 
 /**
- * Express 5 types route params/query values loosely (params as `string | string[]`,
- * query values as `string | qs.ParsedQs | (string | qs.ParsedQs)[]`). Collapse to the
- * first string value (or undefined) before validating.
+ * Request parsing helpers. Each validates with a Zod schema and throws a
+ * structured 400 on failure, so handlers read like: parse, call service, return.
  */
-type ParamValue = string | object | undefined;
 
-function firstString(value: ParamValue): string | undefined {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return typeof first === "string" ? first : undefined;
-  }
-  return undefined;
-}
-
-/**
- * Parse raw input against a Zod schema, throwing a structured Boom error on
- * failure. Shared by `parseBody` and `parseQuery`.
- */
-function parseInput<S extends ZodSchema>(input: unknown, schema: S): z.output<S> {
+function parseInput<S extends ZodType>(input: unknown, schema: S): z.output<S> {
   const result = schema.safeParse(input ?? {});
   if (!result.success) {
     const details: Record<string, string[]> = {};
@@ -35,76 +20,58 @@ function parseInput<S extends ZodSchema>(input: unknown, schema: S): z.output<S>
   return result.data;
 }
 
-/**
- * Parse and validate ID parameter
- */
-export function parseId(value: ParamValue, paramName = "id"): number {
-  const resolved = firstString(value);
-  if (resolved === undefined || resolved === null) {
-    throw Boom.badRequest(`Missing ${paramName} parameter`);
+/** Validate the JSON body. An unparseable body is a 400, not a 500. */
+export async function parseBody<S extends ZodType>(c: AppContext, schema: S): Promise<z.output<S>> {
+  let body: unknown = {};
+  const raw = await c.req.text();
+  if (raw.trim() !== "") {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw Boom.badRequest("Invalid JSON body", undefined, ErrorCode.VALIDATION_ERROR.code);
+    }
   }
+  return parseInput(body, schema);
+}
 
-  // Validate that the entire string is numeric before parsing
-  // This prevents parseInt from accepting partial numbers like '123abc' → 123
-  if (!/^\d+$/.test(resolved)) {
-    throw Boom.badRequest(`Invalid ${paramName} format`);
-  }
+/** Validate the query string (first value wins for repeated keys). */
+export function parseQuery<S extends ZodType>(c: AppContext, schema: S): z.output<S> {
+  return parseInput(c.req.query(), schema);
+}
 
-  const id = Number.parseInt(resolved, 10);
-  if (Number.isNaN(id) || id < 1) {
-    throw Boom.badRequest(`Invalid ${paramName} format`);
-  }
+/** Validate route params. */
+export function parseParams<S extends ZodType>(c: AppContext, schema: S): z.output<S> {
+  return parseInput(c.req.param(), schema);
+}
 
+/** A positive integer route parameter such as `/:id`. */
+export function parseId(value: string | undefined, paramName = "id"): number {
+  if (value === undefined) throw Boom.badRequest(`Missing ${paramName} parameter`);
+  if (!/^\d+$/.test(value)) throw Boom.badRequest(`Invalid ${paramName} format`);
+  const id = Number.parseInt(value, 10);
+  if (id < 1) throw Boom.badRequest(`Invalid ${paramName} format`);
   return id;
 }
 
-/**
- * Parse a required string route parameter, collapsing Express 5's
- * `string | string[]` to a single string.
- */
-export function parseStringParam(value: ParamValue, paramName = "param"): string {
-  const resolved = firstString(value);
-  if (resolved === undefined || resolved === null) {
-    throw Boom.badRequest(`Missing ${paramName} parameter`);
-  }
-  return resolved;
+/** A required string route parameter. */
+export function parseStringParam(value: string | undefined, paramName = "param"): string {
+  if (value === undefined || value === "") throw Boom.badRequest(`Missing ${paramName} parameter`);
+  return value;
 }
 
-/**
- * Schema-aware request parsers.
- *
- * Parse and validate `req.body`, `req.query`, or `req.params` against a Zod
- * schema. The return type flows directly from the schema — no manual DTO
- * generic needed, so the schema is the single source of truth for both
- * runtime validation and the TypeScript type.
- *
- * @example
- * ```ts
- * import { createTodoSchema } from "./todo.schema";
- *
- * export async function create(req: Request) {
- *   const payload = parseBody(req, createTodoSchema);
- *   //    ^ type inferred from schema — no <DTO> generic
- * }
- * ```
- */
-export function parseBody<S extends ZodSchema>(req: Request, schema: S): z.output<S> {
-  return parseInput(req.body, schema);
-}
-
-export function parseQuery<S extends ZodSchema>(req: Request, schema: S): z.output<S> {
-  return parseInput(req.query, schema);
-}
-
-/**
- * Require an authenticated user on a route behind `jwtAuthMiddleware`.
- * Throws 401 if absent — defense in depth, since the middleware already
- * guarantees `req.user` is set on protected routes.
- */
-export function requireUser(req: Request): { userId: number; email: string } {
-  const user = req.user;
-  if (!user) {
-    throw Boom.unauthorized("Authentication required");
-  }
+/** The authenticated user set by `jwtAuthMiddleware`. Throws 401 if absent. */
+export function requireUser(c: AppContext): AuthUser {
+  const user = c.get("user");
+  if (!user) throw Boom.unauthorized("Authentication required");
   return user;
+}
+
+/** Client IP: Cloudflare header, then proxy header, then unknown. */
+export function clientIp(c: AppContext): string {
+  return (
+    c.req.header("cf-connecting-ip") ??
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+    c.req.header("x-real-ip") ??
+    "unknown"
+  );
 }

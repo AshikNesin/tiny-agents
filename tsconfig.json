@@ -22,8 +22,7 @@
     "packages/ai/src/**/*",
     "packages/core/src/**/*",
     "packages/jobs/src/server/**/*",
-    "packages/agent/src/**/*",
-    "env.d.ts"
+    "packages/agent/src/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }

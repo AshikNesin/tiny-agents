@@ -173,8 +173,8 @@ export function Layout({
           type="button"
           title={collapsed ? (user?.name ?? user?.email ?? "Account") : undefined}
           className={cn(
-            "flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent",
-            collapsed && "lg:justify-center lg:px-0",
+            "flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+            collapsed && "lg:size-10 lg:justify-center lg:px-0",
           )}
         >
           <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
@@ -186,7 +186,7 @@ export function Layout({
               collapsed && "lg:hidden",
             )}
           >
-            <span className="truncate text-sm font-medium">
+            <span className="truncate">
               {user?.name?.trim() || user?.email?.toLowerCase() || "Account"}
             </span>
           </span>
@@ -205,7 +205,7 @@ export function Layout({
   );
 
   return (
-    <div className={cn("min-h-dvh bg-muted/40 text-foreground", className)}>
+    <div className={cn("min-h-dvh bg-background text-foreground", className)}>
       {/* Single shared command palette dialog — mounted once. */}
       <CommandPaletteDialog groups={commandGroups} />
 
@@ -232,7 +232,7 @@ export function Layout({
       >
         {/* Top bar — mobile (sidebar toggle + brand + search icon). */}
         {useDefaultSidebar && (
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur lg:hidden">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background px-4 lg:hidden">
             <Button
               variant="ghost"
               size="icon"

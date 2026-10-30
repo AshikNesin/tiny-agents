@@ -1,6 +1,7 @@
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -43,7 +44,7 @@ export function AddJobDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button>
           <Plus className="size-4" />
           <span className="hidden md:inline">Add Job</span>
         </Button>
@@ -53,7 +54,7 @@ export function AddJobDialog({
           <DialogTitle>Add New Job</DialogTitle>
           <DialogDescription>Manually trigger a background job</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5">
+        <DialogBody className="space-y-5">
           <Field label="Job type" htmlFor="job-name">
             <JobTypeSelect
               id="job-name"
@@ -69,7 +70,7 @@ export function AddJobDialog({
             htmlFor="job-data"
             hint="The payload passed to the job handler."
           >
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-hidden rounded-xl border border-input">
               <Suspense fallback={<div className="h-[200px]" />}>
                 <CodeMirrorEditor value={data} height="200px" onChange={onDataChange} />
               </Suspense>
@@ -81,7 +82,7 @@ export function AddJobDialog({
             </Button>
             <Button onClick={onSubmit}>Add Job</Button>
           </div>
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

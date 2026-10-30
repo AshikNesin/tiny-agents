@@ -1,10 +1,10 @@
 import { jobsApi } from "./api";
 import { formatJobId, withJobToast } from "./utils";
 import { endOfDay, startOfDay, startOfMonth, subtractDays } from "@groot/shell/lib/utils";
-import type { Job, JobName, ScheduledJob } from "./types";
+import type { Job, JobName, JobSchedule } from "./types";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import { toast } from "sonner";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { secondaryOptions, STATE_TABS } from "./constants";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,7 +56,6 @@ export function useJobs() {
   const [scheduledJobData, setScheduledJobData] = useState("{}");
   const [editScheduledDialogOpen, setEditScheduledDialogOpen] = useState(false);
   const [editScheduledName, setEditScheduledName] = useState("");
-  const editScheduledKeyRef = useRef<string | undefined>(undefined);
   const [editScheduledCron, setEditScheduledCron] = useState("");
   const [editScheduledDataStr, setEditScheduledDataStr] = useState("{}");
   const [refreshing, setRefreshing] = useState(false);
@@ -377,7 +376,7 @@ export function useJobs() {
     );
   };
 
-  const handleCancelScheduledJob = async (jobName: string, key?: string) => {
+  const handleCancelScheduledJob = async (jobName: string) => {
     if (
       !(await confirm({
         title: `Cancel scheduled job "${jobName}"?`,
@@ -390,16 +389,15 @@ export function useJobs() {
     }
 
     return withJobToast(
-      () => jobsApi.cancelScheduledJob(jobName, key),
+      () => jobsApi.cancelScheduledJob(jobName),
       () => "Scheduled job has been cancelled",
       "Failed to cancel scheduled job",
       invalidateScheduled,
     );
   };
 
-  const openEditScheduledDialog = (job: ScheduledJob) => {
+  const openEditScheduledDialog = (job: JobSchedule) => {
     setEditScheduledName(job.name);
-    editScheduledKeyRef.current = job.key;
     setEditScheduledCron(job.cron);
     setEditScheduledDataStr(JSON.stringify(job.data ?? {}, null, 2));
     setEditScheduledDialogOpen(true);
@@ -413,12 +411,7 @@ export function useJobs() {
     return withJobToast(
       async () => {
         const data = JSON.parse(editScheduledDataStr);
-        await jobsApi.editScheduledJob(
-          editScheduledName,
-          editScheduledKeyRef.current,
-          editScheduledCron,
-          data,
-        );
+        await jobsApi.editScheduledJob(editScheduledName, editScheduledCron, data);
       },
       () => "Scheduled job has been updated",
       "Failed to update scheduled job",

@@ -38,21 +38,21 @@ export function JobTypeSelect({
         <Button
           variant="outline"
           id={id}
-          className="w-full justify-between h-10 px-3 text-sm font-normal"
+          className="w-full justify-between border-input pr-2.5 pl-3 font-normal hover:bg-transparent aria-expanded:bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
         >
           <span className={value ? "" : "text-muted-foreground"}>{value || "Select job type"}</span>
-          <ChevronDown className="size-4 opacity-50" />
+          <ChevronDown className="size-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
         <div className="px-2 pt-1">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search job types..."
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-7 h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+              className="pl-7 h-8 border-0 bg-transparent focus-visible:ring-0"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             />
@@ -62,11 +62,7 @@ export function JobTypeSelect({
         <div className="max-h-[180px] overflow-y-auto">
           {availableJobs.map((job) =>
             job.toLowerCase().includes(search.toLowerCase()) ? (
-              <DropdownMenuItem
-                key={job}
-                onSelect={() => onChange(job as JobName)}
-                className="text-xs"
-              >
+              <DropdownMenuItem key={job} onSelect={() => onChange(job as JobName)}>
                 {job}
               </DropdownMenuItem>
             ) : null,

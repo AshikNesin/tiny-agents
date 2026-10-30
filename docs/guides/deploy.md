@@ -1,133 +1,82 @@
-# Deploying with Railpack
+# Deploying on Node (Railpack: Coolify, Railway)
 
-How to deploy groot using [Railpack](https://railpack.com) — the build pack
-used by Coolify (≥ 4.3.1, beta) and Railway. Railpack analyzes the repo and
-generates the build plan automatically; no config file is required.
+The Node build is one process: `node dist/server/bundle.js` serves the API and
+the built client, applies migrations on boot and runs the job poller. SQLite
+lives in a file, so the host needs a persistent disk and exactly one replica.
+For a disk-less, free deploy use [Cloudflare Workers](./deploy-cloudflare.md).
 
-## Zero-config detection
+## What Railpack detects
 
-Running `railpack info` against the repo yields:
+| Signal          | Source                                                          |
+| --------------- | --------------------------------------------------------------- |
+| Runtime         | `package.json` → `engines.node` (24.x)                          |
+| Package manager | `package.json` → `packageManager` (pnpm 10)                     |
+| Install         | `pnpm install --frozen-lockfile`                                |
+| Build           | `package.json` → `scripts.build`                                |
+| Start           | `Procfile` → `web: pnpm start` (also pinned in `railpack.json`) |
 
+`pnpm build` runs Vite (client → `dist/client`) and esbuild (server →
+`dist/server/bundle.js`, workspace packages inlined, npm dependencies
+external) and copies `apps/web/drizzle` to `dist/server/drizzle`. `pnpm start`
+boots the bundle with `NODE_ENV=production`; there is no `prestart` step, the
+server migrates itself before it listens. `better-sqlite3` is the only native
+module and is installed on the host by `pnpm install`.
+
+## Coolify
+
+1. **+ New Resource → Application**, pick the repo, **Build Pack → Railpack**.
+2. **Persistent Storage**: a volume mounted at `/data`. Production stores the
+   database at `/data/prod.db` and uploads at `/data/uploads` by default, so
+   no `DATABASE_URL` is needed. Without the volume the data is lost on
+   every redeploy. Mount it outside the app directory (Railpack builds into
+   `/app`): a path like `/app/data` depends on the build's working directory
+   and hides the repo's own `data/` folder. Set **Container naming** to a consistent name (no rolling
+   updates): two processes must never share the SQLite file.
+3. **Environment variables** (table below).
+4. **Deploy.** Point the healthcheck at `/health` (returns 503 while shutting
+   down) or `/ready`.
+
+## Production environment
+
+| Variable               | Required | Value                                                               |
+| ---------------------- | -------- | ------------------------------------------------------------------- |
+| `NODE_ENV`             | yes      | `production`                                                        |
+| `DATABASE_URL`         | no       | defaults to `file:/data/prod.db` (on the volume)                    |
+| `UPLOADS_DIR`          | no       | defaults to `/data/uploads` (next to the database)                  |
+| `JWT_SECRET_KEY`       | yes      | ≥ 32 random characters                                              |
+| `ADMIN_AUTH_KEY`       | yes      | random; the `X-Admin-Auth-Key` header for user management           |
+| `RP_ID`, `ORIGIN`      | yes      | `app.example.com`, `https://app.example.com` (passkeys)             |
+| `RP_NAME`              | no       | name shown in passkey prompts                                       |
+| `CORS_ALLOWED_ORIGINS` | no       | only when another origin calls the API                              |
+| `SENTRY_DSN`           | no       | error reporting; see [Sentry source maps](../sentry-source-maps.md) |
+| `PORT`                 | injected | the platform sets it; do not override                               |
+
+The server refuses to start in production with the development fallbacks or
+with any of the required variables missing, and lists what is wrong.
+
+## First user
+
+`pnpm db:seed` is for local development. In production create the first user
+through the admin API:
+
+```bash
+curl -X POST https://app.example.com/api/v1/auth/users \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Auth-Key: $ADMIN_AUTH_KEY" \
+  -d '{"email":"you@example.com","password":"a-long-password","name":"You"}'
 ```
-↳ Detected Node
-↳ Using pnpm package manager
-↳ Found workspace with 7 packages
-↳ Found web command in Procfile
-
-Packages
-  node  │  24.x      │ package.json > engines > node
-  pnpm  │  10.32.1   │ package.json > packageManager
-
-Steps
-  install │ pnpm add -g node-gyp
-          │ pnpm install --frozen-lockfile --prefer-offline
-  build   │ pnpm run build
-
-Deploy
-  pnpm run postinstall && pnpm start
-```
-
-| Signal            | Source                                                 |
-| ----------------- | ------------------------------------------------------ |
-| Runtime + version | `package.json` → `engines.node` (24.x)                 |
-| Package manager   | `package.json` → `packageManager` (pnpm@10.x)          |
-| Install           | lockfile (`pnpm install --frozen-lockfile`)            |
-| Build             | `package.json` → `scripts.build`                       |
-| Start             | `Procfile` → `web: pnpm run postinstall && pnpm start` |
-
-## Optional: explicit `railpack.json`
-
-Railpack reads an optional `railpack.json` to override the detected plan.
-The minimum useful one pins the start command (Procfile already provides
-it — this file is mainly a hook for future customisation):
-
-```json
-{
-  "$schema": "https://schema.railpack.com",
-  "deploy": {
-    "startCommand": "pnpm run postinstall && pnpm start",
-    "aptPackages": ["libsqlite3-0"]
-  }
-}
-```
-
-`aptPackages` installs packages into the **final runtime image**. honker's
-prebuilt native binding (`honker-node-linux-x64-gnu`) dynamically links
-`libsqlite3.so.0`, which the slim railpack runtime (Debian 12) omits —
-without this the app crashes at boot with `ERR_DLOPEN_FAILED` /
-`Cannot find native binding`. (`better-sqlite3` and the `sqlite3` KV driver
-bundle their own SQLite, so they need nothing.)
-
-## What happens on deploy
-
-1. **Build** — Railpack provisions Node 24 + pnpm via mise, runs
-   `pnpm install --frozen-lockfile`, then `pnpm run build`
-   (Prisma generate → Vite client build → esbuild server bundle).
-2. **Start** — `pnpm run postinstall && pnpm start`:
-   - `postinstall` regenerates the Prisma client for the deployed engine.
-   - `prestart` (runs automatically before `start`) executes
-     `prisma migrate deploy` — migrations apply on every deploy.
-   - `start` boots `dist/bundle.js` with `NODE_ENV=production`.
-3. Health — the app exposes `/health` (no auth). Point your platform's
-   healthcheck at it.
-
-## Coolify (≥ 4.3.1)
-
-1. **+ New Resource → Application** → pick your Git repo.
-2. **Build Pack → Railpack** (beta). Everything else is auto-detected.
-3. **Persistent Storage** — add a volume mounted at `/app/data` if you use
-   the default SQLite engine — the database is a file and must survive
-   restarts. Set:
-
-   ```
-   DATABASE_URL=file:/app/data/groot.db   # or any path under the mount
-   ```
-
-   > Without a volume the SQLite file is lost on every redeploy.
-   >
-   > **Coolify + SQLite:** set **Container naming** to **Consistent name (no
-   > rolling updates)**. Rolling updates briefly run two app processes against
-   > the same SQLite file.
-
-4. **Environment variables** (Environment tab). In production varlock
-   requires real values (dev placeholders are rejected):
-
-   | Variable                       | Value                                                                               |
-   | ------------------------------ | ----------------------------------------------------------------------------------- |
-   | `NODE_ENV`                     | `production`                                                                        |
-   | `DATABASE_URL`                 | `file:/app/data/groot.db` (SQLite) or `postgresql://…`                              |
-   | `JWT_SECRET_KEY`               | random string, min 32 chars                                                         |
-   | `ADMIN_AUTH_KEY`               | random string (admin-only routes, `X-Admin-Auth-Key`)                               |
-   | `RP_NAME` / `RP_ID` / `ORIGIN` | passkey relying-party name, domain, and full origin                                 |
-   | `SECRETS_KEY`                  | random string — encrypts MCP connection secrets at rest (`openssl rand -base64 32`) |
-   | `STORAGE_DRIVER`               | `local` (default — no AWS vars needed) or `s3`                                      |
-   | `AWS_*`                        | only required when `STORAGE_DRIVER=s3` (enforced by env validation)                 |
-
-5. **Deploy.** Migrations run, the job queue boots (honker on SQLite /
-   pg-boss on Postgres), and the app serves once healthy.
 
 ## Notes
 
-- **Env vars must be present at BUILD time too.** The install step runs
-  `postinstall` → `prisma generate`, which loads `prisma.config.ts` →
-  `varlock/env` — i.e. the full env schema is validated during `pnpm install`,
-  before your app ever boots. A missing `@required=forEnv(production)` or
-  conditional var (e.g. `AWS_REGION` when `STORAGE_DRIVER=s3`) fails the BUILD
-  with a lifecycle error, not a runtime one. Set the complete production env
-  (table above) on the platform **before** the first deploy.
-- **Heroku note:** the `heroku/nodejs` buildpack exports
-  `NPM_CONFIG_LOGLEVEL=error`, and pnpm at that level suppresses all lifecycle
-  script output — a failing `postinstall`/`build` shows only
-  ` ELIFECYCLE Command failed with exit code 1.` Set the config var
-  `NPM_CONFIG_LOGLEVEL=notice` to unmask the real error (the buildpack honors
-  an existing value), then remove it once fixed.
-- **Single replica only** for SQLite: honker + better-sqlite3 assume one
-  process per database file. Scale horizontally only on Postgres.
-- **Port** — the platform injects `PORT`; the server listens on it. Don't set it.
-- **Domain** — attach your domain and make sure `RP_ID` / `ORIGIN` / CORS
-  origins match it.
-- **Postgres instead of SQLite** — attach a Postgres service and reference
-  its `DATABASE_URL`; the engine is inferred from the URL scheme
-  (`postgresql://` → Postgres + pg-boss). No volume needed.
-- **Cron jobs** — schedule via the API (`POST /api/v1/jobs/schedule`);
-  schedules persist in the database, so they survive redeploys.
+- **Uploads** go to `/data/uploads` in production (beside the database) and to
+  `./local/uploads` otherwise. Set `UPLOADS_DIR` to move them.
+- **Graceful shutdown**: on `SIGTERM` the server flips `/health` to 503, waits
+  two seconds for the load balancer, stops the job poller (waiting for the
+  in-flight tick), closes the listener and exits.
+- **Scaling**: one replica. The poller, the SQLite file and in-memory rate
+  limits all assume a single process. Need more? That is what the Workers
+  target is for.
+- **Cron jobs**: schedules live in the database (`POST /api/v1/jobs/schedule`)
+  and survive redeploys.
+- **Heroku-style buildpacks** that set `NPM_CONFIG_LOGLEVEL=error` hide pnpm
+  lifecycle output; set it to `notice` to see why a build step failed.

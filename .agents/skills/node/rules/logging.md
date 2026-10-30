@@ -7,6 +7,11 @@ metadata:
 
 # Logging in Node.js
 
+> **In groot:** use the built-in logger from `@groot/core/logger` (`logger.info(data, msg)`,
+> `logger.child(bindings)`, `createJobLogger`). It has the pino-shaped API below without the
+> dependency, so it runs on Node and Cloudflare Workers alike. The rest of this rule is the
+> general Node guidance it was modelled on.
+
 ## Use Pino
 
 Use [pino](https://github.com/pinojs/pino) for fast, structured JSON logging:

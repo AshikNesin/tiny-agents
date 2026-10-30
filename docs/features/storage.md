@@ -1,112 +1,122 @@
-# Storage Feature
+# File storage
 
-A lightweight S3 file browser with folder navigation, uploads, downloads, deletions, and renames.
+A small file browser (list, upload, download, delete, folders, rename) over a
+storage adapter. Three adapters ship; the runtime entry injects one through
+`bootstrap({ storage })` and the rest of the code uses `storage` from
+`@groot/core/storage`.
 
-> **Note:** The boilerplate ships S3 file management only. Password-protected,
-> time-limited public file sharing was removed as an opinionated feature —
-> build it in `apps/web/src/server/api/<feature>/` if your app needs it, using the core
-> S3 service.
+| Adapter                                  | File                                  | Used by                                                                                                                             |
+| ---------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `localStorage(root = "./local/uploads")` | `packages/core/src/storage/node.ts`   | `entry.node.ts` — plain files on disk, content type from the extension, empty folders pruned on delete, keys cannot escape the root |
+| `r2Storage(env.STORAGE)`                 | `packages/core/src/storage/r2.ts`     | `entry.worker.ts` — an R2 bucket binding; no credentials, no SDK                                                                    |
+| `memoryStorage()`                        | `packages/core/src/storage/memory.ts` | `tests/server/setup.ts`                                                                                                             |
 
-## Architecture Overview
+Keys are `/`-separated object paths. Folders are common prefixes, as on any
+object store; "creating" a folder writes a `<folder>/.keep` marker.
 
+## The contract (`packages/core/src/storage/adapter.ts`)
+
+```ts
+interface StorageAdapter {
+  readonly name: string;
+  put(
+    key: string,
+    body: Uint8Array | ArrayBuffer | Blob | string,
+    options?: { contentType?: string },
+  ): Promise<StoredObject>;
+  get(key: string): Promise<{ object: StoredObject; bytes: Uint8Array } | null>;
+  head(key: string): Promise<StoredObject | null>;
+  delete(keys: string[]): Promise<number>; // missing keys are ignored; returns how many existed
+  list(options?: {
+    prefix?: string;
+    delimiter?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<ListResult>;
+  copy(from: string, to: string): Promise<void>;
+}
+// StoredObject = { key, size, contentType, lastModified: Date | null }
+// ListResult   = { objects: StoredObject[]; prefixes: string[]; cursor?: string }
 ```
-Storage page → useStorage.ts (React Query) → /api/v1/storage/* (axios)
-  → Express routes → services → core S3 wrapper (core/storage)
+
+With `delimiter: "/"`, `list()` returns one folder level: the objects directly
+under `prefix` plus the sub-prefixes. Without it, every key under `prefix`.
+
+Need S3, GCS or anything else? Implement these six methods (the helpers
+`bodyToBytes`, `bodyContentType` and `groupByDelimiter` in `adapter.ts` do the
+boring parts) and pass the result to `bootstrap()` in your entry file. Nothing
+else changes.
+
+## Using it from code
+
+```ts
+import { storage } from "@groot/core/storage";
+
+await storage.put("reports/2026-10.csv", csvText, { contentType: "text/csv" });
+const found = await storage.get("reports/2026-10.csv"); // { object, bytes } or null
+const page = await storage.list({ prefix: "reports/", delimiter: "/" });
+await storage.delete(["reports/2026-10.csv"]);
 ```
 
-## Module Structure
+The higher-level operations the routes use (sorted folder listing, bulk upload,
+rename as copy + delete, recursive folder delete) are in `storage.service.ts`.
+
+## Module structure
 
 ```
 packages/core/src/storage/
-├── storage.routes.ts        # Routes + inline request handlers
-├── storage.service.ts       # Business logic
-├── storage.schema.ts    # Zod schemas
-├── storage.utils.ts         # Utility functions
-├── files.ts                 # Configured files-sdk Files instance (S3 wrapper)
-└── index.ts
+├── adapter.ts            # StorageAdapter contract + helpers
+├── storage.ts            # the `storage` proxy, setStorageAdapter(), getStorage()
+├── node.ts · r2.ts · memory.ts
+├── storage.routes.ts     # Hono router (JWT, rate-limited, 100 MB upload limit)
+├── storage.service.ts    # listFiles, uploadFile, bulkUpload, downloadFile, deleteFiles,
+│                         # getFileMetadata, createFolder, deleteFolder, renameFile, copyFile
+├── storage.schema.ts     # Zod schemas
+└── storage.utils.ts      # getContentType(), sanitizeFileName()
 ```
 
-## API Surface
+## HTTP API
 
-All endpoints require JWT auth.
+All under `/api/v1/storage`, JWT required, `storageRateLimiter` (100 requests /
+15 min per IP). Uploads also pass `uploadRateLimiter` (50 / 15 min) and a
+100 MB body limit.
 
-| Method | Path                                                       | Notes                                              |
-| ------ | ---------------------------------------------------------- | -------------------------------------------------- |
-| GET    | `/api/v1/storage/files?prefix=docs/&delimiter=/`           | List files + pseudo folders                        |
-| POST   | `/api/v1/storage/files/upload` _(multipart)_               | Single upload with optional `filePath`             |
-| POST   | `/api/v1/storage/files/bulk-upload` _(multipart)_          | Up to 50 files (`files` array)                     |
-| GET    | `/api/v1/storage/files/download?filePath=docs/invoice.pdf` | Streams file contents                              |
-| DELETE | `/api/v1/storage/files`                                    | Body: `{ "filePaths": ["docs/invoice.pdf"] }`      |
-| GET    | `/api/v1/storage/files/metadata?filePath=docs/invoice.pdf` | Size + modified timestamp                          |
-| POST   | `/api/v1/storage/folders`                                  | Body: `{ "folderPath": "docs/2025/" }`             |
-| DELETE | `/api/v1/storage/folders/:folderPath`                      | Removes folder recursively                         |
-| PUT    | `/api/v1/storage/files/rename`                             | Body: `{ "oldPath": "a.pdf", "newPath": "b.pdf" }` |
+| Method | Path                               | Notes                                                                                             |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| GET    | `/files?prefix=docs/&delimiter=/`  | One folder level, folders first then files. An empty `delimiter` lists every key under the prefix |
+| POST   | `/files/upload` _(multipart)_      | Field `file`; optional `filePath` (defaults to the file name) and `contentType`                   |
+| POST   | `/files/bulk-upload` _(multipart)_ | Field `files`, up to 50; returns `{ uploadedFiles, failedFiles }`                                 |
+| GET    | `/files/download?filePath=…`       | Raw bytes with the object's content type, `Content-Disposition: inline`                           |
+| GET    | `/files/metadata?filePath=…`       | `{ exists, size?, lastModified?, fileName }`                                                      |
+| DELETE | `/files`                           | Body `{ "filePaths": [...] }` → `{ deletedCount }`                                                |
+| POST   | `/folders`                         | Body `{ "folderPath": "docs/2026/" }` (must end with `/`)                                         |
+| DELETE | `/folders/:folderPath`             | Deletes every object under the prefix → `{ deletedCount }`                                        |
+| PUT    | `/files/rename`                    | Body `{ oldPath, newPath }` → `{ newPath }`                                                       |
 
-### Example Requests
+Every JSON route returns `200` with the `{ success, data }` envelope. curl
+examples in [API requests](../examples/api-requests.md#storage-jwt).
 
-```bash
-# Upload a file
-curl -H "Authorization: Bearer <token>" \
-  -F "file=@statement.pdf" -F "filePath=docs/statement.pdf" \
-  https://groot.localhost/api/v1/storage/files/upload
-```
+## Runtime notes
 
-## Environment Variables
+- **Node**: files live under `./local/uploads` relative to the working
+  directory (git-ignored). In production they default to `/data/uploads`, next
+  to the SQLite file (`uploadsRoot(env)` in `@groot/core/storage/node`); set
+  `UPLOADS_DIR` to use another folder.
+- **Workers**: the `STORAGE` R2 binding in `wrangler.jsonc`. Bucket bindings
+  have no signed URLs, so downloads always stream through the API. The free
+  plan includes 10 GB.
+- **Tests**: `memoryStorage()`; nothing touches the disk.
 
-AWS\_\* variables are **conditionally required** — only when
-`STORAGE_DRIVER=s3` (enforced by `.env.schema` via
-`@required=eq($STORAGE_DRIVER, s3)`). With the default `local` driver they
-can stay unset:
+## Frontend
 
-```bash
-STORAGE_DRIVER=local   # default; no AWS_* needed
-
-# or, for S3:
-STORAGE_DRIVER=s3
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
-AWS_DEFAULT_S3_BUCKET=my-bucket
-```
-
-Credentials are loaded by files-sdk from the standard AWS chain (env vars,
-IAM role, shared profile), so on AWS infra the env vars can stay unset too.
-For production, use real IAM credentials and bucket.
-
-## Core Storage Service
-
-```typescript
-// core/storage/service.ts
-export const storageService = {
-  upload: async (key: string, body: Buffer, contentType?: string) => {...},
-  download: async (key: string) => {...},
-  list: async (prefix?: string, delimiter?: string) => {...},
-  delete: async (key: string) => {...},
-  copy: async (source: string, destination: string) => {...},
-  getSignedUrl: async (key: string, expiresIn?: number) => {...},
-};
-```
-
-## Frontend Integration
-
-`packages/shell/src/pages/storage/Storage.tsx` provides:
-
-- Breadcrumb navigation + "Up" button
-- Inline uploads (single + bulk)
-- Folder creation dialog
-- File rename modal
-- Table UI with download, rename, delete actions
-
-React Query keys live in `packages/shell/src/pages/storage/hooks/useStorage.ts`.
-
-## Security & Rate Limiting
-
-- Protected routes use `jwtAuthMiddleware`
-- `storageRateLimiter`: 100 requests / 15 min
-- `uploadRateLimiter`: 50 requests / 15 min
+`packages/shell/src/pages/storage/` renders the `/storage` page (breadcrumbs,
+single and bulk uploads, folder dialog, rename, delete) with React Query hooks
+in `pages/storage/hooks/useStorage.ts`.
 
 ## Troubleshooting
 
-- **Rate limit exceeded** – Throttle uploads/deletes. Defaults in `rate-limit.middleware.ts`.
-- **Local dev without AWS** – Use LocalStack or point to a real bucket.
-- **Download shows binary** – It streams raw bytes. Use `curl -o file` or the UI.
+- **429** — rate limits; tune `config.rateLimits.storage` / `.upload`.
+- **413 on upload** — larger than 100 MB (`MAX_UPLOAD_BYTES` in `storage.routes.ts`).
+- **"Storage is not configured"** — the entry did not pass `storage` to
+  `bootstrap()`; on Workers that means the `STORAGE` binding is missing.
+- **Download prints binary** — it streams raw bytes; use `curl -o file`.

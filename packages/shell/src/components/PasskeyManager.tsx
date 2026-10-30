@@ -53,9 +53,9 @@ function PasskeyManagerSkeleton() {
         <div className="flex items-end gap-3">
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full rounded-xl" />
           </div>
-          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28 rounded-xl" />
         </div>
       </SkeletonCard>
       <Card className="gap-0 pb-0">
@@ -222,7 +222,7 @@ export function PasskeyManager() {
             {passkeys.map((passkey) => (
               <li key={passkey.id} className={cn(listRowClass, "justify-between px-5 py-4")}>
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                     <PasskeyIcon {...passkey} />
                   </div>
                   <div className="min-w-0">

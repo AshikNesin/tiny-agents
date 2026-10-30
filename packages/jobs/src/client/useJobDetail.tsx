@@ -3,7 +3,6 @@ import { formatJobId, withJobToast } from "./utils";
 import type { JobLog } from "./types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useConfirm } from "@groot/ui/primitives";
 

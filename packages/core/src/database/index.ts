@@ -1,21 +1,28 @@
-import { prisma } from "./client";
-import { logger } from "@groot/core/logger";
-import { ENV } from "varlock/env";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
-export { prisma };
-export type { PrismaClient } from "./types";
-export { Prisma } from "./types";
-export type { User, Passkey, JobLog } from "./types";
+/**
+ * The Drizzle database handle. One SQLite dialect, two drivers:
+ *
+ * - Node: better-sqlite3 (`createSqliteDb()` in `./node`), sync driver
+ * - Cloudflare Workers: D1 (`drizzle(env.DB)` from `drizzle-orm/d1`), async driver
+ *
+ * Both are awaited the same way, so application code is driver-agnostic as
+ * long as it stays on the query builder (`db.select()`, `db.insert()`, ...)
+ * and never relies on transactions, which D1 does not support.
+ *
+ * `db` is a live binding assigned by `bootstrap()` before the first request.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: driver result types differ between sync and async drivers
+export type Database = BaseSQLiteDatabase<"sync" | "async", any, Record<string, never>>;
 
-if (ENV.NODE_ENV === "development") {
-  // Prisma 7's generated `PrismaClient` type doesn't expose the query-event overload
-  // of `$on` directly, but the client is instantiated with `log: [{ level: "query", ... }]`
-  // so the event fires at runtime. Narrow the type here to access it.
-  (
-    prisma as {
-      $on(event: "query", listener: (e: { query: string; duration: number }) => void): void;
-    }
-  ).$on("query", (event) => {
-    logger.debug({ query: event.query, duration: `${event.duration}ms` }, "DB query");
-  });
+export let db: Database;
+
+export function setDb(instance: Database): void {
+  db = instance;
 }
+
+export function hasDb(): boolean {
+  return db !== undefined;
+}
+
+export * from "./schema";

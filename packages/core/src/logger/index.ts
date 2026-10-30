@@ -1,14 +1,9 @@
-import * as core from "./core";
-
-// Backwards compatibility core logger export
-export const logger = core.logger;
-export default logger;
-
-// Flat exports
+export { logger } from "./core";
+export { logger as default } from "./core";
 export * from "./core";
 export * from "./factories";
-export * from "./context";
-export * from "./trace-context";
 export * from "./breadcrumbs";
 export * from "./utils";
 export * from "./scrub";
+export { getRequestContext, runWithRequestContext, waitUntil } from "../context";
+export type { RequestContext } from "../context";

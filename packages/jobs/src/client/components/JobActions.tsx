@@ -10,30 +10,34 @@ type Actions = {
   onDelete: () => void;
 };
 
-/** State-dependent action buttons for a job (retry / re-run / resume / cancel / delete). */
+/**
+ * State-dependent action buttons for a job (retry / re-run / resume / cancel /
+ * delete). Mirrors the server's rules: retry for failed or cancelled jobs,
+ * cancel for created or active, resume for cancelled only.
+ */
 export function JobActions({ state, ...actions }: { state: Job["state"] } & Actions) {
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {state === "failed" && (
-        <Button variant="outline" onClick={actions.onRetry} size="sm">
+      {(state === "failed" || state === "cancelled") && (
+        <Button variant="outline" onClick={actions.onRetry}>
           <RefreshCw className="size-4" />
           Retry
         </Button>
       )}
       {(state === "completed" || state === "failed") && (
-        <Button variant="outline" onClick={actions.onRerun} size="sm">
+        <Button variant="outline" onClick={actions.onRerun}>
           <Play className="size-4" />
           Re-run
         </Button>
       )}
       {state === "cancelled" && (
-        <Button variant="outline" onClick={actions.onResume} size="sm">
+        <Button variant="outline" onClick={actions.onResume}>
           <Play className="size-4" />
           Resume
         </Button>
       )}
-      {(state === "active" || state === "created" || state === "retry") && (
-        <Button variant="outline" onClick={actions.onCancel} size="sm">
+      {(state === "active" || state === "created") && (
+        <Button variant="outline" onClick={actions.onCancel}>
           <X className="size-4" />
           Cancel
         </Button>
@@ -41,7 +45,6 @@ export function JobActions({ state, ...actions }: { state: Job["state"] } & Acti
       <Button
         variant="ghost"
         onClick={actions.onDelete}
-        size="sm"
         className="text-destructive hover:text-destructive"
       >
         <Trash2 className="size-4" />

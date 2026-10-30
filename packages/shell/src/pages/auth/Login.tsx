@@ -106,7 +106,7 @@ export function Login() {
       <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BrandMark className="size-5" />
             </span>
             <span className="font-heading text-base font-semibold">{brandLabel}</span>
@@ -116,7 +116,7 @@ export function Login() {
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your account to continue.</p>
 
           {isDev && (
-            <div className="mt-6 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <div className="mt-6 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Demo credentials:</span>{" "}
               demo@example.com / demo@example.com
             </div>
@@ -176,8 +176,8 @@ export function Login() {
           <ul className="mt-8 space-y-4">
             {features.map((f) => (
               <li key={f.title} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10 dark:bg-foreground/10">
-                  <f.icon className="text-primary-foreground dark:text-foreground size-4" />
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/10 dark:bg-foreground/10">
+                  <f.icon className="size-4 text-primary-foreground dark:text-foreground" />
                 </span>
                 <div>
                   <p className="text-primary-foreground dark:text-foreground text-sm font-medium">

@@ -6,15 +6,11 @@ dist/
 # Environment variables
 .env
 .env.*
-!.env.schema
+!.env.example
 
-# Auto-generated env types
-env.d.ts
 /.DS_Store
 pnpm-debug.log*
 
-/packages/core/generated
-packages/database/generated/prisma
 playwright-report/
 test-results/
 .pnpm-store/
@@ -22,8 +18,6 @@ test-results/
 # Verification screenshots (agent-run proof captures, not repo assets)
 /.screenshots/
 
-# Local config overrides
-config.local.yml
 
 # Local storage (files-sdk fs adapter dev root)
 /local/
@@ -34,6 +28,9 @@ config.local.yml
 /data/*.db.lock-journal
 /data/*.db-shm
 /data/*.db-wal
+# Production volume layout (`file:/data/prod.db`): uploads and backups sit beside it
+/data/uploads/
+/data/backups/
 
 # Scratch / generated SQL from scripts (e.g. pnpm db:baseline)
 /tmp/
@@ -51,7 +48,6 @@ service-account.json
 
 settings.local.json
 .claude/settings.local.json
-packages/core/generated
 .auto/
 .audit/
 .vitest/

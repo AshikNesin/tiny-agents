@@ -1,5 +1,28 @@
 # @groot/ui
 
+## 0.7.3
+
+### Patch Changes
+
+- [`6209997`](https://github.com/AshikNesin/groot/commit/620999778ed329ee20b55f810f80b368db158dd4) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Select: the menu gets `p-1` on its viewport (it sat on `SelectGroup`, so ungrouped items touched the menu's edge), triggers default to `w-full` instead of `w-fit` so they match the inputs beside them (pass a width class, e.g. `w-fit`, for compact triggers), and the menu aligns to the trigger's start edge instead of centring.
+
+- [`8ab9eee`](https://github.com/AshikNesin/groot/commit/8ab9eeee9b3029330f8f70d06e6cf31b3f3eb42f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `SelectContent` now defaults to `position="popper"`, a dropdown anchored below the trigger and at least as wide as it. The previous default, Radix's `"item-aligned"`, opened the list on top of the trigger, covering the selected value and the fields around it. Pass `position="item-aligned"` to keep the old behaviour.
+
+## 0.7.2
+
+### Patch Changes
+
+- [`aba55a5`](https://github.com/AshikNesin/groot/commit/aba55a5205f5c05137f1203af639f8b2e5dcd108) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Login and auth UX fixes from a production friction audit:
+
+  - Login failure toast maps 401 to "Invalid email or password." instead of surfacing the raw Axios message ("Request failed with status code 401"); network failures get a friendly line too. Same for passkey sign-in.
+  - Logout from the user menu shows a "Signed out" toast.
+  - The login page's right brand panel follows dark mode (`dark:bg-card`) instead of rendering a pure-white slab next to the dark form.
+  - Dropdown submenus open with a small `sideOffset` so they no longer overlap their parent menu.
+
+  - The command palette now closes on outside click / overlay tap (it opted
+    into `dismissOnOutsideClick`); previously only Escape or running a
+    command dismissed it.
+
 ## 0.7.1
 
 ### Patch Changes

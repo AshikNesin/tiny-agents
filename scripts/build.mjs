@@ -6,60 +6,36 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Externals shared by every build. Root package.json dependencies stay
- * external so each runtime package keeps exactly one owner (the root), and
- * the native and tooling modules below cannot be bundled by esbuild.
+ * Bundle the Node server entry to dist/server/bundle.js. Workspace packages
+ * are inlined; npm dependencies stay external and are installed on the host
+ * (`pnpm install --prod`). `pnpm check:closure` verifies every external import
+ * is a declared root dependency. The client is built separately by Vite into
+ * dist/client, and the Workers bundle by wrangler.
  */
+
+/** Never bundled, whatever the manifest says. */
 export const externalPackages = [
-  "@prisma/client",
-  ".prisma/client",
-  "@sentry/profiling-node",
+  "better-sqlite3",
   "vite",
   "vite-plus",
   "@vitejs/plugin-react",
   "lightningcss",
   "fsevents",
-  // Native modules + their optional platform packages cannot be bundled
-  // (esbuild has no ".node" loader). Keep them as runtime requires.
-  // ssh2's optional cpu-features falls in the same class: unbuilt in dev,
-  // require()'d only when present.
-  "ssh2",
-  "cpu-features",
-  // playwright-core lazily requires chromium-bidi for WebDriver-BiDi
-  // channels — a package it does not declare as a dependency, so esbuild
-  // cannot resolve it. We launch with executablePath/channel "chromium",
-  // never bidi-*; keeping the whole package external (deploy installs it
-  // from root deps) sidesteps the dead requires entirely.
-  "playwright-core",
-  "better-sqlite3",
-  "sqlite3",
-  "pg",
-  "@russellthehippie/honker-node",
-  "@russellthehippie/honker-node-linux-x64-gnu",
-  "@russellthehippie/honker-node-linux-arm64-gnu",
-  "@russellthehippie/honker-node-darwin-x64",
-  "@russellthehippie/honker-node-darwin-arm64",
-  "@russellthehippie/honker-node-win32-x64-msvc",
 ];
 
-/**
- * The esbuild options the server bundle is built with, so the closure check
- * (scripts/check-runtime-closure.mjs) inspects the real build instead of
- * reconstructing it.
- */
 export function esbuildOptions({ externals, plugins }) {
   return {
     // The upload extraction worker (issue #58) runs in its own thread, so it
-    // ships as its own file next to the bundle.
+    // ships as its own file next to the bundle (uploads.extract-runner.ts).
     entryPoints: {
-      bundle: "apps/web/src/server/index.ts",
+      bundle: "apps/web/src/server/entry.node.ts",
       "uploads-extract-worker": "apps/web/src/server/api/uploads/uploads.extract.worker.ts",
     },
-    outdir: "dist",
+    outdir: "dist/server",
     bundle: true,
     platform: "node",
     format: "esm",
-    target: "node18",
+    target: "node22",
     external: [...externals, ...externalPackages],
     plugins,
     alias: {
@@ -76,137 +52,52 @@ export function esbuildOptions({ externals, plugins }) {
   };
 }
 
-async function getExternalDependencies() {
-  const packageJsonPath = path.join(process.cwd(), "package.json");
-  const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
-  return Object.keys(packageJson.dependencies || {});
-}
+const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 
 function getSentryRelease() {
   if (process.env.SENTRY_RELEASE) return process.env.SENTRY_RELEASE;
   const sourceVersion = process.env.SOURCE_COMMIT || process.env.SOURCE_VERSION;
-  if (sourceVersion) return `${pkgName}@${sourceVersion.slice(0, 7)}`;
+  if (sourceVersion) return `${pkg.name}@${sourceVersion.slice(0, 7)}`;
   try {
-    const sha = execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
-    return `${pkgName}@${sha.slice(0, 7)}`;
+    return `${pkg.name}@${execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim().slice(0, 7)}`;
   } catch {
     return undefined;
   }
 }
 
-// App name used for Sentry release tags. Derived from package.json so child
-// repos that use a different project don't need to fork this script.
-const pkgName = JSON.parse(readFileSync("package.json", "utf-8")).name;
-
-/**
- * The generated Prisma client is bundled into dist/bundle.js, so the database
- * engine is baked in at build time. If the build environment has a different
- * DATABASE_URL scheme than the runtime one, the driver adapter and the bundled
- * client disagree and the server crashes on boot ("The Driver Adapter
- * `@prisma/adapter-pg` ... is not compatible with the provider `sqlite`").
- * Fail the build instead so the mismatch surfaces here rather than in
- * production. The check is engine-agnostic: it compares the engine inferred
- * from DATABASE_URL against the bundled client's activeProvider, so it works
- * for both sqlite and postgres builds.
- */
-async function assertBundledEngine() {
-  const dbUrl = process.env.DATABASE_URL ?? "";
-  const isPostgres = dbUrl.trim().startsWith("postgres");
-  const expected = isPostgres ? "postgresql" : "sqlite";
-  const bundle = await fs.readFile("dist/bundle.js", "utf-8");
-  const match = bundle.match(/"activeProvider":\s*"(\w+)"/);
-
-  if (!match) {
-    throw new Error("Could not find the bundled Prisma activeProvider in dist/bundle.js.");
-  }
-  if (match[1] !== expected) {
-    throw new Error(
-      `Bundled Prisma client targets "${match[1]}" but DATABASE_URL="${dbUrl}" expects ` +
-        `"${expected}". Run 'prisma generate' with the same DATABASE_URL as the build.`,
-    );
-  }
-  console.log(`✓ Bundled Prisma client matches DATABASE_URL (${dbUrl || "<empty>"} → ${expected})`);
-}
-
-/**
- * Copy static assets from apps/web/public (Vite's publicDir) to dist/public so
- * they ship with the production bundle and can be served via express.static.
- * No-op (with a warning) if the dir doesn't exist.
- */
-async function copyPublicAssets() {
-  const sourceDir = path.join(process.cwd(), "apps/web", "public");
-  const destDir = path.join(process.cwd(), "dist", "public");
-
-  try {
-    await fs.access(sourceDir);
-  } catch {
-    console.warn(`Warning: Public directory not found at ${sourceDir}. Skipping copy.`);
-    return;
-  }
-
-  await fs.rm(destDir, { recursive: true, force: true });
-  await fs.cp(sourceDir, destDir, { recursive: true });
-  console.log("✓ Public assets copied to dist/public");
-}
-
 async function build() {
-  try {
-    const externals = await getExternalDependencies();
-    const release = getSentryRelease();
-    const authToken = process.env.SENTRY_AUTH_TOKEN;
+  const externals = Object.keys(pkg.dependencies || {});
+  const release = getSentryRelease();
+  const authToken = process.env.SENTRY_AUTH_TOKEN;
+  const plugins =
+    release && authToken && process.env.SENTRY_ORG
+      ? [
+          sentryEsbuildPlugin({
+            authToken,
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT || pkg.name,
+            release: { name: release },
+            sourcemaps: { filesToDeleteAfterUpload: ["dist/server/*.map"] },
+          }),
+        ]
+      : [];
 
-    // Ensure SENTRY_RELEASE is set for consistent runtime resolution
-    if (release) {
-      process.env.SENTRY_RELEASE = release;
-    }
+  const options = esbuildOptions({ externals, plugins });
+  // Bake the release into the bundle so Sentry events match the uploaded maps.
+  if (release) options.define = { "process.env.SENTRY_RELEASE": JSON.stringify(release) };
+  const result = await esbuild.build(options);
 
-    const plugins =
-      release && authToken && process.env.SENTRY_ORG
-        ? [
-            sentryEsbuildPlugin({
-              authToken,
-              org: process.env.SENTRY_ORG,
-              project: process.env.SENTRY_PROJECT || pkgName,
-              release,
-              sourcemaps: {
-                filesToDeleteAfterUpload: [
-                  "dist/bundle.js.map",
-                  "dist/uploads-extract-worker.js.map",
-                ],
-              },
-            }),
-          ]
-        : [];
+  await fs.mkdir("tmp", { recursive: true });
+  await fs.writeFile("tmp/metafile.json", JSON.stringify(result.metafile));
 
-    const result = await esbuild.build(esbuildOptions({ externals, plugins }));
-
-    // The real build's dependency graph, so the closure check inspects what
-    // was actually emitted.
-    await fs.mkdir("tmp", { recursive: true });
-    await fs.writeFile("tmp/metafile.json", JSON.stringify(result.metafile, null, 2));
-
-    await assertBundledEngine();
-
-    // The Sentry plugin uploads the source map then deletes it when configured;
-    // otherwise drop it here so the original source (which references env names
-    // like DATABASE_URL) doesn't sit in a dist/ that express.static may serve
-    // (react-doctor/artifact-env-leak). Idempotent — force:true is a no-op once
-    // Sentry has already removed it.
-    await fs.rm("dist/bundle.js.map", { force: true });
-    await fs.rm("dist/uploads-extract-worker.js.map", { force: true });
-
-    // Write release.json for runtime release consistency
-    if (release) {
-      await fs.writeFile("dist/release.json", JSON.stringify({ release }));
-    }
-
-    await copyPublicAssets();
-
-    console.log("✓ Build successful: dist/bundle.js created.");
-  } catch (error) {
-    console.error("Build failed", error);
-    process.exit(1);
-  }
+  // Migrations travel with the server bundle so `node dist/server/bundle.js`
+  // can migrate on boot without the source tree.
+  await fs.rm("dist/server/drizzle", { recursive: true, force: true });
+  await fs.cp("apps/web/drizzle", "dist/server/drizzle", { recursive: true });
+  console.log("✓ Server bundle written to dist/server/bundle.js (+ drizzle migrations)");
 }
 
-build();
+build().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

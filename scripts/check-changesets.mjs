@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // Changeset completeness gate.
 //
-// Groot ships a published kit (packages, apps/web/prisma, .groot) to child
+// Groot ships a published kit (packages, apps/web/drizzle, .groot) to child
 // repositories. A branch that edits a managed surface without recording a
 // changeset produces unversioned drift for every consumer, and the only
 // remedy is a later backfill commit. This gate makes that a build failure
 // instead of a convention.
 //
 // Rules:
-//   1. A branch that changes files under packages/[pkg]/src, apps/web/prisma,
+//   1. A branch that changes files under packages/[pkg]/src, apps/web/drizzle,
 //      or .groot needs a changeset naming each affected package, or a
 //      reviewed no-release reason file under .changeset/no-release/.
-//   2. apps/web/prisma and .groot belong to the root "groot" package, so a
+//   2. apps/web/drizzle and .groot belong to the root "groot" package, so a
 //      changeset naming "groot" covers them.
 //   3. The release bot's own commits are exempt, because versioning PRs are
 //      the output of this gate, not its input.
@@ -37,7 +37,12 @@ const BOT_EMAIL_SUFFIX = "@users.noreply.github.com";
 // package's package.json carries its exports map, entrypoints, and published
 // file list, which is the surface a child repo consumes first, so a
 // manifest edit needs coverage even when no source file changed.
-const MANAGED_PREFIXES = ["packages/*/src", "packages/*/package.json", "apps/web/prisma", ".groot"];
+const MANAGED_PREFIXES = [
+  "packages/*/src",
+  "packages/*/package.json",
+  "apps/web/drizzle",
+  ".groot",
+];
 
 export function matchesManagedPrefix(file) {
   return MANAGED_PREFIXES.some((prefix) => {
@@ -85,9 +90,9 @@ function readPkgJsonAt(rootDir, file) {
 }
 
 // Map a packages/[pkg]/src path to its npm package name from package.json.
-// Files under apps/web/prisma or .groot map to the root package.
+// Files under apps/web/drizzle or .groot map to the root package.
 function packageNameFor(file, rootDir) {
-  if (file.startsWith("apps/web/prisma") || file.startsWith(".groot/")) {
+  if (file.startsWith("apps/web/drizzle") || file.startsWith(".groot/")) {
     return ROOT_PACKAGE;
   }
   const scopeDir = file.split("/")[1];

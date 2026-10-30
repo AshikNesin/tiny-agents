@@ -1,175 +1,121 @@
 # Setup guide
 
-Everything you need to boot the Express API, job queue, and React client —
-locally and in production.
+Everything needed to run the API, job queue and React client locally and in
+production, on Node or on Cloudflare Workers.
 
 ## Prerequisites
 
-- **Node.js 18+**
-- **pnpm** (the repo's scripts assume pnpm)
-- **portless** (install globally: `npm install -g portless`) — provides local
-  HTTPS. See [Portless & HTTPS](./guides/portless-https.md).
-- **SQLite** (default engine): nothing to install — `better-sqlite3` ships a
-  prebuilt native binary.
-- **PostgreSQL** (optional): a reachable instance via `DATABASE_URL`. Opt in
-  with a `postgresql://` URL — see [Database Engines](./database-engines.md).
+- **Node.js 24** (`engines` in `package.json`) and **pnpm**.
+- **portless** (optional, `npm install -g portless`) for `https://groot.localhost`
+  in development. See [Portless & HTTPS](./guides/portless-https.md).
+- Nothing for the database: SQLite ships inside `better-sqlite3`.
+- For Cloudflare: a Cloudflare account; `wrangler` is a dev dependency.
 
-## Quick setup
-
-### Automated (recommended)
+## Zero-config development
 
 ```bash
-pnpm groot:setup
+pnpm install
+pnpm dev
 ```
 
-This installs the global CLIs (varlock, portless), sets up git hooks
-(lint-staged + gitleaks via Vite+), prompts for your app name and propagates it
-to `config.yml`, `package.json`, and `.env.schema`, then installs deps and
-generates the Prisma client.
+Every environment variable has a development default, so no `.env` is needed.
+To override, copy `.env.example` to `.env` (git-ignored); `entry.node.ts` loads
+it with `process.loadEnvFile` when present. Sign in with
+`demo@example.com` / `demo@example.com`.
 
-Secrets are set as **real environment variables** — on your hosting platform
-in production, or a git-ignored `.env` file locally (varlock provides working
-defaults from `.env.schema` in development).
+## Environment variables
 
-### Manual
+Validated once at boot by `parseEnv()` in `packages/core/src/env.ts`; the same
+schema runs on Node (`process.env`) and Workers (bindings). Empty strings count
+as unset. In production (`NODE_ENV=production`) the variables marked
+**required** must be set and the development fallbacks are refused.
 
-Copy `.env.schema` to `.env` and configure the keys below (validated in
-`packages/core/src/env.ts`).
+| Variable                                                                                                  | Dev default                                     | Production                     | Notes                                                                  |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| `NODE_ENV`                                                                                                | `development`                                   | `production`                   | `test` is set by the test setup                                        |
+| `DATABASE_URL`                                                                                            | `file:./data/dev.db`                            | `file:/data/prod.db` (default) | Node only; Workers bind D1. `:memory:` is accepted                     |
+| `UPLOADS_DIR`                                                                                             | `./local/uploads`                               | `/data/uploads` (default)      | Node only; uploads folder. Production default sits beside the database |
+| `PORT`                                                                                                    | `3000`                                          | injected by the host           | Node only                                                              |
+| `JWT_SECRET_KEY`                                                                                          | dev-only fallback                               | **required**, ≥ 32 characters  | HS256 signing key                                                      |
+| `ADMIN_AUTH_KEY`                                                                                          | dev-only fallback                               | **required**                   | Value of the `X-Admin-Auth-Key` header                                 |
+| `RP_NAME`                                                                                                 | `Groot`                                         | optional                       | Passkey display name                                                   |
+| `RP_ID`                                                                                                   | `localhost`                                     | **required**, your domain      | Passkey relying party id                                               |
+| `ORIGIN`                                                                                                  | `http://localhost:3000`                         | **required**, `https://…`      | Passkey origin; must be a URL                                          |
+| `CORS_ALLOWED_ORIGINS`                                                                                    | empty (reflects the requesting origin)          | comma-separated list           | Only needed for cross-origin callers                                   |
+| `LOG_LEVEL`                                                                                               | `debug` (dev) / `info` (prod) / `silent` (test) | optional                       | `trace` `debug` `info` `warn` `error` `fatal` `silent`                 |
+| `SENTRY_DSN`, `SENTRY_RELEASE`, `SOURCE_COMMIT`                                                           | unset                                           | optional                       | Error reporting; see [Sentry source maps](./sentry-source-maps.md)     |
+| `SENTRY_ORG`, `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT`                                                       | unset                                           | build-time only                | Source map upload                                                      |
+| `OPENAI_API_KEY`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`, `DEFAULT_MODEL` | unset                                           | optional                       | [AI inference](./features/ai-inference.md)                             |
+| `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`                                                                 | unset                                           | optional                       | Push notification when the Node server starts in production            |
 
-#### Core
+Non-secret settings (ports, rate limits, job tuning) are derived from these in
+`packages/core/src/config.ts` and overridden in `apps/web/src/server/config.ts`
+— see [Config](./config.md). Adding a variable means adding it to `envSchema`
+and to `.env.example`.
 
-| Variable       | Description                                                                                                                                                                                                                |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`     | `development`, `production`, or `test`                                                                                                                                                                                     |
-| `PORT`         | HTTP port for Express (default `3000`; set automatically by hosts like Coolify/Railway)                                                                                                                                    |
-| `DATABASE_URL` | SQLite file path (e.g. `file:./data/dev.db`) or a Postgres connection string (`postgresql://...`). Its scheme selects the Prisma driver adapter, KV backend, and job queue. See [Database Engines](./database-engines.md). |
-| `SECRETS_KEY`  | Key that encrypts MCP connection secrets at rest (AES-256-GCM). Required before adding a connection with auth. `openssl rand -base64 32`. Changing it makes stored secrets unreadable.                                     |
-
-#### Authentication
-
-| Variable         | Description                                           |
-| ---------------- | ----------------------------------------------------- |
-| `JWT_SECRET_KEY` | Secret for signing JWT tokens (min 32 characters)     |
-| `ADMIN_AUTH_KEY` | Key for admin-only routes (`X-Admin-Auth-Key` header) |
-
-> Auth is **JWT-based**. There is no basic-auth layer. See
-> [Client auth](./features/client.md) for the request flow.
-
-#### Passkey (WebAuthn)
-
-Passkey settings live in **`config.yml`** (`passkey:` section), which resolves
-them from env vars (`{{ env.RP_NAME }}` etc.). The vars are declared in
-`.env.schema` — dev defaults work out of the box; in production they are
-required (set them to your real domain):
-
-| Variable  | Dev default             | Production example                 |
-| --------- | ----------------------- | ---------------------------------- |
-| `RP_NAME` | `Groot`                 | `Groot` (shown in passkey prompts) |
-| `RP_ID`   | `localhost`             | `yourapp.example.com`              |
-| `ORIGIN`  | `http://localhost:3000` | `https://yourapp.example.com`      |
-
-See [Passkey authentication](./features/passkey-authentication.md) and
-[Config](./config.md).
-
-#### File storage (S3)
-
-| Variable                | Description                      |
-| ----------------------- | -------------------------------- |
-| `AWS_ACCESS_KEY_ID`     | AWS access key for S3            |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key for S3            |
-| `AWS_REGION`            | AWS region (default `us-east-1`) |
-| `AWS_DEFAULT_S3_BUCKET` | S3 bucket name for file storage  |
-
-In dev/test a local mock is used; the `AWS_*` values are still required
-(anything that reads the bucket name directly).
-
-#### Monitoring
-
-| Variable            | Description                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| `SENTRY_DSN`        | Optional URL for capturing backend errors in Sentry                                         |
-| `SENTRY_RELEASE`    | Release version for Sentry (optional)                                                       |
-| `SENTRY_AUTH_TOKEN` | Build-time token for source map uploads (see [Sentry source maps](./sentry-source-maps.md)) |
-| `LOG_LEVEL`         | Verbosity: `trace`/`debug`/`info`/`warn`/`error` (default `info`)                           |
-
-> **Job queue settings live in `config.yml`** (`jobs:` section), not env vars.
-> See [Config](./config.md).
+Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 
 ## Local development
 
 ```bash
-pnpm install
-pnpm db:migrate          # apply baseline + pending migrations
-pnpm dev                 # Express + Vite dev middleware, over HTTPS
+pnpm dev                 # https://groot.localhost (portless) — migrates + seeds first
+PORTLESS=0 pnpm dev      # http://localhost:3000
+pnpm dev:worker          # the Worker in workerd with a local D1 + R2 (http://localhost:8787)
 ```
 
-- Visit **`https://groot.localhost`** for the client (portless provides HTTPS).
-- Hit **`https://groot.localhost/health`** (no auth) to confirm the API is live.
-- To bypass portless and use plain HTTP: `PORTLESS=0 pnpm dev` → `http://localhost:3000`.
+`pnpm dev` runs `scripts/dev.ts`: seed (which applies migrations), then
+`tsx watch apps/web/src/server/entry.node.ts`. In development the Node entry
+runs Vite in middleware mode, so the client has HMR on the same port as the API.
+`GET /health` confirms the API is up.
 
-> **First run?** portless will prompt you to trust a local CA certificate
-> (requires sudo). See [Portless & HTTPS](./guides/portless-https.md).
-
-## Production build
+## Production build (Node)
 
 ```bash
-pnpm build        # builds the client (Vite) and bundles the server (esbuild)
-pnpm start        # serves dist/bundle.js with NODE_ENV=production
+pnpm build        # dist/client (Vite) + dist/server/bundle.js (esbuild) + dist/server/drizzle
+pnpm start        # node dist/server/bundle.js with NODE_ENV=production
 ```
 
-In production the server:
+The bundle applies pending migrations on boot, serves `dist/client` with an
+SPA fallback (hashed assets cached for a year), starts the job poller, and
+shuts down gracefully on `SIGTERM` (flips `/health` to 503, waits for the
+in-flight job tick). Workspace packages are inlined; npm dependencies and
+`better-sqlite3` stay external and come from `pnpm install --prod` on the host.
+See [Deploy on Node](./guides/deploy.md).
 
-- Serves the prebuilt client from `dist/`.
-- Enables gzip via `compression`.
-- Boots the job queue (`initJobQueue()` + `startWorkers()`) when the HTTP
-  listener starts. On SQLite the queue runs on
-  [honker](https://github.com/russellromney/honker); on Postgres on
-  [pg-boss](https://github.com/timgit/pg-boss) — see
-  [Database Engines](./database-engines.md).
-- Runs `prisma migrate deploy` via the `prestart` hook on startup.
+## Cloudflare Workers
 
-## Database & Prisma
+Same app, different entry (`apps/web/src/server/entry.worker.ts`): D1 for the
+database, R2 for uploads, Static Assets for the client, one cron trigger for
+jobs. Secrets are Worker secrets, non-secret vars live in `wrangler.jsonc`.
+Step by step in [Deploy on Cloudflare](./guides/deploy-cloudflare.md).
 
-- The engine defaults to **SQLite** (a `file:` `DATABASE_URL`); set a
-  `postgresql://` URL for PostgreSQL. See
-  [Database Engines](./database-engines.md) for the full matrix.
-- The Prisma client is generated automatically via `pnpm install` (`postinstall`
-  runs `prisma generate`). The generated client embeds the datasource provider,
-  so **switching engines requires regenerating the client** (`pnpm prisma
-  generate`, or any `pnpm dev`/`pnpm test`).
-- Two schema files are kept in parity: `apps/web/prisma/schema.sqlite.prisma`
-  and `apps/web/prisma/schema.postgres.prisma` (a test guards they stay in sync).
-- To evolve the schema: `pnpm db:migrate:create` (then `pnpm prisma migrate dev`
-  to apply). See [Database migrations](./guides/database-migrations.md).
-- The generated client (in `packages/core/generated/prisma`) feeds both HTTP
-  handlers and job processors.
+## Database
 
-## Background job queue
+One engine, SQLite, through Drizzle. The schema is TypeScript
+(`packages/core/src/database/schema.ts`, `packages/jobs/src/server/schema.ts`,
+`apps/web/src/server/db/schema.ts`); migrations are generated SQL in
+`apps/web/drizzle/`, applied automatically by the Node server at boot and by
+the Worker on its first request. See [Database migrations](./guides/database-migrations.md).
 
-- Configuration comes from `config.yml` (`jobs:` section) — see
-  [Config](./config.md).
-- Workers register when `startWorkers()` runs in `apps/web/src/server/index.ts`.
-- The adapter is chosen by the `DATABASE_URL` scheme: pg-boss on Postgres, honker on
-  SQLite. Application code is engine-agnostic — handlers receive a normalized
-  `JobContext`.
-- On Postgres, ensure your role can create the `pgboss` schema (pg-boss
-  bootstraps its tables at startup). On SQLite, honker creates its `_honker_*`
-  tables lazily after Prisma migrates.
+## Background jobs
 
-See [Background jobs](./features/jobs.md) for the full API.
+No broker: the `jobs` table is the queue. The Node entry starts a poller
+(`startWorkers()`); on Workers the cron trigger runs one tick per minute.
+Tuning lives in `config.jobs` ([Config](./config.md)); the API and handler model
+in [Background jobs](./features/jobs.md).
 
 ## Verify the stack
 
 ```bash
-curl https://groot.localhost/health
-# then log in and use the token:
-TOKEN=$(curl -s -X POST https://groot.localhost/api/v1/auth/login \
+BASE=http://localhost:3000
+curl $BASE/health
+TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password"}' | jq -r .token)
-curl -H "Authorization: Bearer $TOKEN" https://groot.localhost/api/v1/todos
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/jobs \
+  -d '{"email":"demo@example.com","password":"demo@example.com"}' | jq -r .data.token)
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/todos
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs \
   -H "Content-Type: application/json" -d '{"jobName":"todo-summary","data":{}}'
 ```
 
-Successful responses confirm Express, Prisma, the job queue, and the JWT guard
-are all working.
+A `201` from the last call and a `completed` job a moment later on `/jobs` in
+the UI confirm the API, database, job queue and JWT guard are all working.

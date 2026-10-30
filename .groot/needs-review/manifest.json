@@ -1,0 +1,245 @@
+{
+  "fromVersion": "2.6.2",
+  "toVersion": "3.0.0",
+  "fromCommit": "9afae1d6d901ed02f0b3c82ddcd6c781229ca636",
+  "toCommit": "107888193912080853d26eee6151efd521176995",
+  "generatedAt": "2026-10-30T14:07:17.384Z",
+  "conflicts": [
+    {
+      "file": "docs/adr/README.md",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "docs/README.md",
+      "conflicts": 3,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "docs/guides/deploy.md",
+      "conflicts": 1,
+      "commits": [
+        "b89d44b feat(core): default production state to the /data volume",
+        "4349376 docs(deploy): mount the Node data volume at /data, not /app/data",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "apps/web/package.json",
+      "conflicts": 1,
+      "commits": [
+        "145fff3 chore: version packages",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)",
+        "fd314f7 chore: version packages (#130)"
+      ]
+    },
+    {
+      "file": ".gitignore",
+      "conflicts": 2,
+      "commits": [
+        "b89d44b feat(core): default production state to the /data volume",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "scripts/build.mjs",
+      "conflicts": 3,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "docs/quick-start.md",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/core/package.json",
+      "conflicts": 3,
+      "commits": [
+        "145fff3 chore: version packages",
+        "6002a46 feat: fetch-based API client, D1 migrations on first request (#135)",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)",
+        "fd314f7 chore: version packages (#130)"
+      ]
+    },
+    {
+      "file": "packages/core/src/logger/index.ts",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/core/src/notification/notification.service.ts",
+      "conflicts": 6,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/core/src/passkey/webauthn.utils.ts",
+      "conflicts": 5,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/core/src/logger/core.ts",
+      "conflicts": 2,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/core/src/storage/storage.service.ts",
+      "conflicts": 3,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/jobs/package.json",
+      "conflicts": 2,
+      "commits": [
+        "145fff3 chore: version packages",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)",
+        "fd314f7 chore: version packages (#130)"
+      ]
+    },
+    {
+      "file": "packages/jobs/src/client/components/ScheduledJobsPanel.tsx",
+      "conflicts": 1,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)",
+        "129a729 fix imports"
+      ]
+    },
+    {
+      "file": "packages/jobs/src/client/components/JobsFilters.tsx",
+      "conflicts": 1,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale"
+      ]
+    },
+    {
+      "file": "playwright.config.ts",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "tsconfig.json",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "railpack.json",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/shell/package.json",
+      "conflicts": 1,
+      "commits": [
+        "145fff3 chore: version packages",
+        "6002a46 feat: fetch-based API client, D1 migrations on first request (#135)",
+        "fd314f7 chore: version packages (#130)"
+      ]
+    },
+    {
+      "file": "packages/shell/src/components/Layout.tsx",
+      "conflicts": 1,
+      "commits": [
+        "68254db feat(ui,shell): make the warm monochrome theme groot's default look",
+        "aba55a5 fix(shell,ui): friendly login errors, logout toast, theme-aware login panel, submenu offset (tiny-agents friction #33 #34 #42 #44)"
+      ]
+    },
+    {
+      "file": "packages/shell/src/pages/auth/Login.tsx",
+      "conflicts": 2,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "aba55a5 fix(shell,ui): friendly login errors, logout toast, theme-aware login panel, submenu offset (tiny-agents friction #33 #34 #42 #44)"
+      ]
+    },
+    {
+      "file": "packages/shell/src/pages/settings/Settings.tsx",
+      "conflicts": 1,
+      "commits": [
+        "664f989 fix(shell): keep the layout barrel inside the typecheck graph (#132)"
+      ]
+    },
+    {
+      "file": "packages/shell/src/index.css",
+      "conflicts": 3,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "68254db feat(ui,shell): make the warm monochrome theme groot's default look",
+        "191f6a6 fix(shell): scan packages/* for Tailwind classes again (sidebar layout)"
+      ]
+    },
+    {
+      "file": "packages/ui/src/input.tsx",
+      "conflicts": 1,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "68254db feat(ui,shell): make the warm monochrome theme groot's default look"
+      ]
+    },
+    {
+      "file": "packages/ui/src/button.tsx",
+      "conflicts": 2,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "68254db feat(ui,shell): make the warm monochrome theme groot's default look"
+      ]
+    },
+    {
+      "file": "pnpm-workspace.yaml",
+      "conflicts": 2,
+      "commits": [
+        "c1e5177 fix(client): one copy of each CodeMirror package; bundle the Inter font files",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "packages/ui/src/select.tsx",
+      "conflicts": 1,
+      "commits": [
+        "0d4e8c0 fix(ui,shell,jobs): make every surface follow the new theme's scale",
+        "68254db feat(ui,shell): make the warm monochrome theme groot's default look",
+        "6209997 fix(ui): pad the Select menu, full-width triggers, start-aligned menu",
+        "8ab9eee fix(ui): open Select as a dropdown below the trigger by default"
+      ]
+    },
+    {
+      "file": "docs/setup-guide.md",
+      "conflicts": 2,
+      "commits": [
+        "b89d44b feat(core): default production state to the /data volume",
+        "6002a46 feat: fetch-based API client, D1 migrations on first request (#135)",
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    },
+    {
+      "file": "tests/server/setup.ts",
+      "conflicts": 1,
+      "commits": [
+        "c1fdac9 feat!: rebuild on Hono + Drizzle (SQLite) for Node and Cloudflare Workers (#133)"
+      ]
+    }
+  ]
+}

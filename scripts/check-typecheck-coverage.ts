@@ -17,7 +17,7 @@
  * matched by a package tsconfig that no script or CI step runs does not
  * count.
  *
- * What this guard does not own: tests/, scripts/, apps/web/prisma/, and any
+ * What this guard does not own: tests/, scripts/, apps/web/drizzle/, and any
  * package directory without a src/ are outside the roots. Files there are
  * invisible to every gate. Adopting them is a follow-up, not a silent
  * default.

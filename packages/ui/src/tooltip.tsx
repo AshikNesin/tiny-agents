@@ -43,7 +43,7 @@ function Tooltip({
           side={side}
           sideOffset={6}
           className={cn(
-            "z-50 overflow-hidden rounded-md border border-border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md",
+            "z-50 overflow-hidden rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground shadow-md",
             "animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-1",
             className,
           )}

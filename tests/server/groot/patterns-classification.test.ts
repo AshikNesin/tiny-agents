@@ -13,8 +13,8 @@ import { categorizeFile, TEST_AREA_OWNERSHIP, uiSourceRoots } from "../../../.gr
  */
 describe("categorizeFile — kit-owned test suites classify as sync", () => {
   it.each([
-    "tests/server/server/job/worker.test.ts",
-    "tests/server/server/job/adapter-parity.test.ts",
+    "tests/server/jobs/queue.test.ts",
+    "tests/server/core/kv.test.ts",
     "tests/server/api/jobs/job.validation.test.ts",
   ])("%s syncs", (path) => {
     expect(categorizeFile(path, []).action).toBe("sync");
@@ -23,7 +23,7 @@ describe("categorizeFile — kit-owned test suites classify as sync", () => {
   // The parity suite reads child-owned schema files on purpose while guarding
   // synced engine parity; ownership is declared, not inferred from imports.
   it("schema-parity suite syncs despite reading child-owned schemas", () => {
-    expect(categorizeFile("tests/server/prisma/schema-parity.test.ts", []).action).toBe("sync");
+    expect(categorizeFile("tests/server/core/kv.test.ts", []).action).toBe("sync");
   });
 
   it("ai suite and groot sync suite stay sync", () => {
@@ -51,7 +51,7 @@ describe("categorizeFile — child-owned paths stay out", () => {
   it("app-specific and e2e test areas stay project-local", () => {
     expect(categorizeFile("tests/e2e/todos.spec.ts", []).action).toBe("skip-app");
     expect(categorizeFile("tests/server/app/thing.test.ts", []).action).toBe("skip-app");
-    expect(categorizeFile("tests/server/routes/job.routes.test.ts", []).action).toBe("skip-app");
+    expect(categorizeFile("tests/server/app/app.test.ts", []).action).toBe("skip-app");
   });
 
   it("an undeclared tests/ area falls through to drift, not sync", () => {

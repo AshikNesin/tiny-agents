@@ -1,93 +1,63 @@
-import bcrypt from "bcryptjs";
-import { Boom } from "@groot/core/errors";
-import { prisma } from "@groot/core/database";
-import type { User } from "@groot/core/database";
-import { generateToken } from "@groot/core/utils/jwt.utils";
+import { eq } from "drizzle-orm";
+import { db, users, type User } from "../database";
+import { Boom } from "../errors";
+import { generateToken } from "../utils/jwt.utils";
+import { hashPassword, verifyPassword } from "../utils/password.utils";
 import type { CreateUserDTO, LoginDTO } from "./auth.schema";
 
-const DUMMY_HASH = "$2a$10$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
+
+/** A well-formed hash that matches nothing, so login timing is identical for unknown emails. */
+const DUMMY_HASH = `pbkdf2-sha256$100000$${"A".repeat(22)}$${"A".repeat(43)}`;
+
+const publicColumns = {
+  id: users.id,
+  email: users.email,
+  name: users.name,
+  createdAt: users.createdAt,
+};
 
 export async function findUserById(id: number): Promise<User | null> {
-  return prisma.user.findUnique({ where: { id } });
+  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return user ?? null;
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
-  return prisma.user.findUnique({ where: { email } });
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return user ?? null;
 }
-
-// ── Auth service ───────────────────────────────────────────────────────────
 
 export async function login(data: LoginDTO) {
   const user = await findUserByEmail(data.email);
-  const hash = user?.password ?? DUMMY_HASH;
-  const isValid = await bcrypt.compare(data.password, hash);
-
+  const isValid = await verifyPassword(data.password, user?.password ?? DUMMY_HASH);
   if (!user || !isValid) {
     throw Boom.unauthorized("Invalid email or password");
   }
 
-  const token = generateToken({
-    userId: user.id,
-    email: user.email,
-  });
-
-  return {
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    },
-  };
+  const token = await generateToken({ userId: user.id, email: user.email });
+  return { token, user: { id: user.id, email: user.email, name: user.name } };
 }
 
-export async function createUser(data: CreateUserDTO) {
-  const existingUser = await findUserByEmail(data.email);
-
-  if (existingUser) {
+export async function createUser(data: CreateUserDTO): Promise<PublicUser> {
+  if (await findUserByEmail(data.email)) {
     throw Boom.conflict("User with this email already exists");
   }
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
-
-  const user = await prisma.user.create({
-    data: {
-      email: data.email,
-      password: hashedPassword,
-      name: data.name,
-    },
-  });
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-  };
+  const [user] = await db
+    .insert(users)
+    .values({ email: data.email, password: await hashPassword(data.password), name: data.name })
+    .returning(publicColumns);
+  return user!;
 }
 
-export async function getUserById({ userId }: { userId: number }) {
+export async function getUserById({ userId }: { userId: number }): Promise<PublicUser> {
   const user = await findUserById(userId);
-
   if (!user) {
     throw Boom.notFound(`User with identifier '${userId}' not found`);
   }
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-  };
+  return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
 }
 
-export async function getAllUsers() {
-  return prisma.user.findMany({
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      createdAt: true,
-    },
-  });
+export async function getAllUsers(): Promise<PublicUser[]> {
+  return db.select(publicColumns).from(users).orderBy(users.id);
 }

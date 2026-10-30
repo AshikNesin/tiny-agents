@@ -1,19 +1,10 @@
-# Runs the full test suite on BOTH database engines so a regression that only
-# shows up on one engine (e.g. a SQLite-only adapter, a Postgres-only raw SQL
-# query, or a Prisma client generated for the wrong provider) is caught before
-# merge. SQLite needs no infra; the Postgres leg uses a service container.
-#
-# The dual-engine design means application code is engine-agnostic, but the
-# *generated Prisma client* and the *queue adapter* are engine-specific, so
-# both must be exercised. See docs/database-engines.md.
-
 name: Tests
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: ["main"]
+    branches: ["main", "next"]
 
 permissions:
   contents: read
@@ -24,170 +15,81 @@ concurrency:
 
 jobs:
   test:
-    name: Tests (${{ matrix.engine }})
-    # Never execute fork pull requests on the persistent, privileged runner.
+    name: Tests
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [sqlite, postgres]
-
-    # The Postgres leg needs a live Postgres to run migrations + tests against.
-    # SQLite needs nothing — it writes to a file under tmp/.
-    services:
-      postgres:
-        image: pgvector/pgvector:pg18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: groot_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
-      # Postgres: point at the service container. The test guard requires a
-      # localhost host + a _test database name. SQLite: a file under tmp/
-      # (validated by the guard). ensure-test-db.ts runs prisma generate +
-      # migrate deploy against this URL (no container management).
-      DATABASE_URL: ${{ matrix.engine == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/groot_test' || 'file:./tmp/test.db' }}
-      TEST_DATABASE_URL: ${{ matrix.engine == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/groot_test' || 'file:./tmp/test.db' }}
-      DATABASE_URL_DIRECT: ${{ matrix.engine == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/groot_test' || '' }}
-
+      NODE_ENV: test
     steps:
-      # The changeset gate needs branch history (merge-base, commit authors),
-      # so fetch the full tree rather than the default depth-1 shallow clone.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "24"
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Generate the Prisma client for THIS engine. The generated client embeds
-      # the datasource provider, so a client generated for sqlite is
-      # incompatible with the postgres driver adapter (and vice versa).
-      # ensure-test-db.ts (pretest) regenerates too, but doing it here makes
-      # failures easier to attribute.
-      - name: Generate Prisma client (${{ matrix.engine }})
-        run: pnpm exec varlock run -- prisma generate
-
-      - name: Typecheck
+      - name: Typecheck (server)
         run: pnpm exec tsc --noEmit
-
-      # The root project checks the server surface; apps/web checks the
-      # browser surface (ui, shell, jobs client) via its import closure.
-      # Coverage asserts no source escapes both programs.
-      - name: Client typecheck
+      - name: Typecheck (client)
         run: pnpm typecheck:client
-
       - name: Typecheck coverage
         run: pnpm exec tsx scripts/check-typecheck-coverage.ts
-
-      # The kit consumer fixture compiles the shipped @groot/* surface as a
-      # child project would import it, so a removed export fails CI.
       - name: Typecheck kit consumers
         run: pnpm typecheck:kit
-
       - name: Kit export guard
         run: pnpm exec tsx scripts/check-kit-exports.ts
-
-      # Release completeness: a change to a managed surface (packages,
-      # apps/web/prisma, .groot) must carry a changeset or a recorded
-      # no-release reason, or the kit ships unversioned drift to child repos.
-      # The script exempts the release bot's own commits by author. The base
-      # is the PR's own base branch, so a stacked PR is judged on its slice,
-      # not the cumulative diff of the stack below it.
       - name: Changeset gate
         run: pnpm check:changesets --base origin/${{ github.base_ref || 'main' }}
-
-      # Checks-coverage: the checks that guard UI source and synced tests all
-      # scan the directories they claim, and the token workflow's path filters
-      # reference directories that exist. Runs here (not in the token
-      # workflow) because that workflow is path-filtered and would not run at
-      # all for a change that deletes or renames a filtered directory — which
-      # is exactly this check's subject.
       - name: Checks coverage
         run: pnpm check:coverage
-
       - name: Lint & format check
         run: pnpm check
+      - name: Migrations are up to date with the schema
+        run: |
+          pnpm db:generate --name ci-check
+          if git status --porcelain apps/web/drizzle | grep -q .; then
+            echo "::error::Schema changed without a migration. Run 'pnpm db:generate' and commit apps/web/drizzle."
+            git status --porcelain apps/web/drizzle
+            exit 1
+          fi
 
-      # Migration ownership checks. Each engine boots its real job-queue
-      # package against a scratch database migrated from the engine's
-      # migration history, then fails when the runtime creates objects no
-      # migration owns (or no @@ignore model declares). SQLite compares
-      # normalized table/index definitions against honker's own bootstrap;
-      # Postgres asserts pg-boss stays inside its dedicated schema and every
-      # migrated public table has a model owner.
-      - name: Check migration ownership (sqlite)
-        if: matrix.engine == 'sqlite'
-        run: pnpm check:schema
-
-      - name: Check migration ownership (postgres)
-        if: matrix.engine == 'postgres'
-        run: pnpm check:schema:postgres
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-
-      # `pnpm test` runs pretest (ensure-test-db.ts) which creates/migrates the
-      # test DB for the active engine, then runs vitest.
-      - name: Run tests (${{ matrix.engine }})
+      - name: Server tests
         run: pnpm test
+      - name: Client tests
+        run: pnpm test:client
 
-      - name: Build
-        env:
-          DATABASE_URL: ${{ matrix.engine == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/groot_test' || 'file:./tmp/build.db' }}
+      - name: Build (client + Node server)
         run: pnpm build
-
-      # The build writes the real esbuild metafile to tmp/metafile.json; the
-      # closure check asserts every emitted external bare import has a
-      # production owner (root package.json dependencies, a Node builtin, or
-      # an explicit tested exemption).
       - name: Runtime dependency closure
         run: pnpm check:closure
+      - name: Workers bundle (wrangler dry run)
+        run: pnpm check:worker
 
-      # Boot the pruned production artifact on the SQLite leg. The prune runs
-      # in a copy of the checkout so later steps in this matrix leg keep a
-      # full dev install. stdin is closed because deploys run without one.
-      # A prod-only install skips lifecycle scripts, so pnpm rebuild builds the
-      # native modules (sqlite3 has no prebuilt for new Node ABIs) and runs the
-      # root postinstall (prisma generate). /health is the server's health
-      # endpoint (packages/core/src/server.ts).
-      - name: Pruned production boot (${{ matrix.engine }})
-        if: matrix.engine == 'sqlite'
+      - name: Pruned production boot
         env:
+          NODE_ENV: production
           JWT_SECRET_KEY: ci-boot-secret-key-0123456789abcdef0123456789
           ADMIN_AUTH_KEY: ci-admin-key
-          RP_NAME: Groot
           RP_ID: localhost
           ORIGIN: http://localhost:3999
         run: |
           set -euo pipefail
           rm -rf ../pruned-boot && mkdir -p ../pruned-boot
-          # tracked files plus the built artifact; no local/ or tmp/ state
           tar cf - $(git ls-files) dist | tar xf - -C ../pruned-boot
           cd ../pruned-boot
           pnpm install --frozen-lockfile --prod --ignore-scripts
           pnpm rebuild
-          DATABASE_URL=file:./tmp/boot.db PORT=3999 NODE_ENV=production \
-            node dist/bundle.js > boot.log 2>&1 < /dev/null &
+          DATABASE_URL=file:./tmp/boot.db PORT=3999 \
+            node dist/server/bundle.js > boot.log 2>&1 < /dev/null &
           server_pid=$!
           for i in $(seq 1 60); do
             if curl -fsS -m 5 http://localhost:3999/health; then
               echo "health endpoint answered"
+              curl -fsS -m 5 http://localhost:3999/ | grep -q '<div id="root">' && echo "client served"
               kill -TERM "$server_pid"
               for j in $(seq 1 15); do
                 kill -0 "$server_pid" 2>/dev/null || exit 0

@@ -168,7 +168,7 @@ interface JobDataViewProps {
 export function JobDataView({ label, value, showHeader = true }: JobDataViewProps) {
   if (!isPlainObject(value)) {
     return (
-      <div className={showHeader ? "rounded-lg border border-border/60" : ""}>
+      <div className={showHeader ? "rounded-xl border border-border/60" : ""}>
         {showHeader && (
           <div className="border-b border-border/60 px-4 py-3">
             <h3 className="text-sm font-medium">{label}</h3>
@@ -184,7 +184,7 @@ export function JobDataView({ label, value, showHeader = true }: JobDataViewProp
   }
 
   return (
-    <div className={showHeader ? "rounded-lg border border-border/60" : ""}>
+    <div className={showHeader ? "rounded-xl border border-border/60" : ""}>
       {showHeader && (
         <div className="border-b border-border/60 px-4 py-3">
           <h3 className="text-sm font-medium">{label}</h3>

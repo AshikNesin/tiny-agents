@@ -48,6 +48,47 @@ are _enforced_ by `pnpm check:tokens` (see [enforcement](#enforcement)).
 Content text is 14px (`text-sm`) — 16px+ is reserved for titles and display.
 `titleClass` matches `CardTitle`/`DialogTitle` by design.
 
+## Shape and size
+
+The theme is warm monochrome (tokens in `packages/shell/src/index.css`,
+`--radius: 0.75rem`). Shape and height follow one scale so neighbours line up
+and nested corners stay concentric.
+
+**Control heights** are shared by `Button`, `Input`, `SelectTrigger`,
+`InputGroup` and `TabsList`. Controls in the same row use the same size.
+
+| Size      | Height | Use for                                                   |
+| --------- | ------ | --------------------------------------------------------- |
+| `xs`      | `h-6`  | Dense inline actions                                      |
+| `sm`      | `h-7`  | Section toolbars, table-row and card-row actions          |
+| (default) | `h-9`  | Page-header actions, filter toolbars, forms, inline forms |
+| `lg`      | `h-10` | Display moments (auth forms)                              |
+
+Icon buttons follow the same steps (`icon-sm` size-7, `icon` size-9). A
+page-header refresh is `variant="outline" size="icon"`.
+
+**Radius** by role, never by whim:
+
+| Role                                                                  | Radius               |
+| --------------------------------------------------------------------- | -------------------- |
+| Controls (button, input, select trigger, textarea, input group, tabs) | `rounded-xl`         |
+| Items inside a control or menu (tab trigger, menu / select item)      | `rounded-lg`         |
+| Page surfaces (`Card`, panels, table frames)                          | `rounded-2xl`        |
+| Modal surfaces (`Dialog`, `AlertDialog`, command palette)             | `rounded-3xl`        |
+| Floating surfaces (dropdown, select menu, toast)                      | `rounded-xl`         |
+| Inset blocks (code / JSON / log blocks, notices, `Alert`), icon tiles | `rounded-xl`         |
+| Small inline (kbd, inline code), tooltip                              | `rounded-md` / `-lg` |
+| Pills (`Badge`, avatars, status dots)                                 | `rounded-full`       |
+
+A hand-rolled frame matches the primitive it stands in for: a table frame is
+`rounded-2xl bg-card ring-1 ring-foreground/10` (as `Card`); a field-like
+wrapper (a code editor in a form) is `rounded-xl border border-input` (as
+`Input`); a trigger that opens a custom menu looks like a `SelectTrigger`.
+
+**Fills**: hover and selected rows use `bg-muted` / `bg-accent` (both sit
+above `--card` in dark mode so they show on cards), with no ring. Outline
+buttons are transparent, so they take the surface they sit on.
+
 ## Rules (adapted from Kumo, re-derived for Radix)
 
 | #   | Rule                                                                                   | Enforced                     |

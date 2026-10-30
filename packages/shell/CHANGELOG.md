@@ -1,5 +1,50 @@
 # @groot/shell
 
+## 1.0.0
+
+### Major Changes
+
+- [#135](https://github.com/AshikNesin/groot/pull/135) [`6002a46`](https://github.com/AshikNesin/groot/commit/6002a46dabe53ab067472cfa03862d18e1d9fcdc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - **@groot/shell:** the API client is now plain `fetch`; axios is gone. `apiClient.client` (the axios instance) no longer exists, and failed requests throw `ApiError` (`status`, `code`, `details`, `url`) instead of an axios error. `error.message` still carries the server's message.
+
+  **@groot/core:** `migrateD1()` applies Drizzle's generated SQL migrations to a D1 database from inside the Worker (wrangler-compatible `d1_migrations` bookkeeping), so the Workers entry migrates on its first request and `wrangler deploy` is the whole deploy. `pnpm db:generate` now also writes `apps/web/drizzle/index.ts`, the list the Worker imports. The unused `send-push-notification` dependency is dropped.
+
+### Patch Changes
+
+- [`c1e5177`](https://github.com/AshikNesin/groot/commit/c1e5177f72bce07990e72f6678a210b62005d472) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix the JSON editor crashing on mount with "Unrecognized extension value in extension set": pnpm overrides now keep one copy of each `@codemirror/*` core package (the root pinned `@codemirror/state` 6.7.0 while `@codemirror/view` resolved 6.7.1). Switch from `@tailwindcss/postcss` to `@tailwindcss/vite` so the Inter font files from `@fontsource-variable/inter` are bundled; under PostCSS their relative `url()`s never resolved and production served `index.html` in their place.
+
+- [`191f6a6`](https://github.com/AshikNesin/groot/commit/191f6a6ea0efe632f8bf8fc3221f81ab01e9d0c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix the sidebar losing its layout after the switch to `@tailwindcss/vite`: that plugin scans for classes from Vite's root (`apps/web`), so classes used only in `packages/*` were dropped from the CSS. The shell stylesheet now sets Tailwind's source base back to the repo root.
+
+- Updated dependencies [[`6209997`](https://github.com/AshikNesin/groot/commit/620999778ed329ee20b55f810f80b368db158dd4), [`8ab9eee`](https://github.com/AshikNesin/groot/commit/8ab9eeee9b3029330f8f70d06e6cf31b3f3eb42f)]:
+  - @groot/ui@0.7.3
+
+## 0.11.0
+
+### Minor Changes
+
+- [`72ce54c`](https://github.com/AshikNesin/groot/commit/72ce54c32d03c89018fddb5487b4b64662953d2c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add ShellProvider so apps can override shared shell branding and login marketing copy without modifying synced shell components.
+
+### Patch Changes
+
+- [`aba55a5`](https://github.com/AshikNesin/groot/commit/aba55a5205f5c05137f1203af639f8b2e5dcd108) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Login and auth UX fixes from a production friction audit:
+
+  - Login failure toast maps 401 to "Invalid email or password." instead of surfacing the raw Axios message ("Request failed with status code 401"); network failures get a friendly line too. Same for passkey sign-in.
+  - Logout from the user menu shows a "Signed out" toast.
+  - The login page's right brand panel follows dark mode (`dark:bg-card`) instead of rendering a pure-white slab next to the dark form.
+  - Dropdown submenus open with a small `sideOffset` so they no longer overlap their parent menu.
+
+  - The command palette now closes on outside click / overlay tap (it opted
+    into `dismissOnOutsideClick`); previously only Escape or running a
+    command dismissed it.
+
+- [`7b86607`](https://github.com/AshikNesin/groot/commit/7b86607a4147a66373e1e5c3b8457d81e25a50e6) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add a passkey sign-in option to the login page.
+
+- [#132](https://github.com/AshikNesin/groot/pull/132) [`664f989`](https://github.com/AshikNesin/groot/commit/664f989db27179fd61059a1002506c27c8264023) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Import `Settings`'s `PageLayout` from the case-safe `@groot/shell/components/layout/index` barrel instead of the deep file. 129a729 fixed a macOS case-collision (bare `@groot/shell/components/layout` resolves to `components/Layout.tsx`) by moving the last two barrel importers to deep paths, which dropped the `layout/index.ts` barrel from every typechecked program and turned the typecheck-coverage guard red (`183/184`). The barrel is documented public kit surface (docs/guides/development.md), so it stays shipped and re-enters the typecheck graph through a real import.
+
+- [`e3614e4`](https://github.com/AshikNesin/groot/commit/e3614e4bce049f0cb71ee28bcb24cfeed05fd110) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add persisted light, dark, and system theme preferences across the shell.
+
+- Updated dependencies [[`aba55a5`](https://github.com/AshikNesin/groot/commit/aba55a5205f5c05137f1203af639f8b2e5dcd108)]:
+  - @groot/ui@0.7.2
+
 ## 0.10.3
 
 ### Patch Changes

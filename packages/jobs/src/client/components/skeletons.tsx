@@ -19,7 +19,7 @@ function FieldSkeleton() {
 }
 
 /** Skeleton for the {@link JobsStats} clickable stat row. */
-export function JobsStatsSkeleton({ count = 7 }: { count?: number }) {
+export function JobsStatsSkeleton({ count = 6 }: { count?: number }) {
   return (
     <Card size="sm" className="flex flex-row flex-wrap items-stretch gap-0 p-0">
       {[...Array(count)].map((_, idx) => (
@@ -71,8 +71,8 @@ export function JobDetailSkeleton() {
           <Skeleton className="mt-2 h-3 w-48 font-mono" />
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-20" />
-          <Skeleton className="h-8 w-20" />
+          <Skeleton className="h-9 w-20 rounded-xl" />
+          <Skeleton className="h-9 w-20 rounded-xl" />
         </div>
       </div>
       <div className="mt-8 space-y-6">

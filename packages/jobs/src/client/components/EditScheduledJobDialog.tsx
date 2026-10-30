@@ -1,6 +1,7 @@
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -39,7 +40,7 @@ export function EditScheduledJobDialog({
           <DialogTitle>Edit Scheduled Job</DialogTitle>
           <DialogDescription>Update cron schedule or data for "{name}"</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5">
+        <DialogBody className="space-y-5">
           <Field
             label="Cron expression"
             htmlFor="edit-scheduled-cron"
@@ -68,7 +69,7 @@ export function EditScheduledJobDialog({
             </Button>
             <Button onClick={onSubmit}>Save Changes</Button>
           </div>
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

@@ -189,15 +189,15 @@ export function JobsTable({
                       </div>
                       <div
                         className="col-span-2 text-muted-foreground"
-                        title={job.createdon ? formatLocaleDateTime(job.createdon) : "N/A"}
+                        title={job.createdAt ? formatLocaleDateTime(job.createdAt) : "N/A"}
                       >
-                        {job.createdon ? formatRelativeTime(job.createdon) : "N/A"}
+                        {job.createdAt ? formatRelativeTime(job.createdAt) : "N/A"}
                       </div>
                       <div
                         className="col-span-2 text-muted-foreground"
-                        title={job.startedon ? formatLocaleDateTime(job.startedon) : "N/A"}
+                        title={job.startedAt ? formatLocaleDateTime(job.startedAt) : "N/A"}
                       >
-                        {job.startedon ? formatRelativeTime(job.startedon) : "—"}
+                        {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
                       </div>
                       <div className="col-span-1 flex items-center justify-end gap-2">
                         <DropdownMenu>
@@ -212,7 +212,7 @@ export function JobsTable({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {job.state === "failed" && (
+                            {(job.state === "failed" || job.state === "cancelled") && (
                               <DropdownMenuItem onClick={() => onRetry(job.name, job.id)}>
                                 <RefreshCw className="size-3.5" />
                                 Retry
@@ -230,9 +230,7 @@ export function JobsTable({
                                 Resume
                               </DropdownMenuItem>
                             )}
-                            {(job.state === "active" ||
-                              job.state === "created" ||
-                              job.state === "retry") && (
+                            {(job.state === "active" || job.state === "created") && (
                               <DropdownMenuItem onClick={() => onCancel(job.name, job.id)}>
                                 <X className="size-3.5" />
                                 Cancel
@@ -279,26 +277,26 @@ export function JobsTable({
                       <div>
                         <span className="text-muted-foreground">Created</span>
                         <div className="font-medium mt-0.5">
-                          {job.createdon ? formatRelativeTime(job.createdon) : "N/A"}
+                          {job.createdAt ? formatRelativeTime(job.createdAt) : "N/A"}
                         </div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Started</span>
                         <div className="font-medium mt-0.5">
-                          {job.startedon ? formatRelativeTime(job.startedon) : "—"}
+                          {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
                         </div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Retries</span>
                         <div className="font-medium mt-0.5">
-                          {job.retrycount}/{job.retrylimit}
+                          {job.retryCount}/{job.retryLimit}
                         </div>
                       </div>
-                      {job.startedon && (
+                      {job.startedAt && (
                         <div>
                           <span className="text-muted-foreground">Duration</span>
                           <div className="font-medium mt-0.5">
-                            {formatJobDuration(job.startedon, job.completedon)}
+                            {formatJobDuration(job.startedAt, job.completedAt)}
                           </div>
                         </div>
                       )}

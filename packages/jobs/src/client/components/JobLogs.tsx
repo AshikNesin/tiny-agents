@@ -11,7 +11,7 @@ export function JobLogs({ logs }: { logs: JobLog[] }) {
         <CardTitle>Logs</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-hidden rounded-lg border border-border/60 bg-muted/30 max-h-[400px] overflow-y-auto">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30 max-h-[400px] overflow-y-auto">
           {logs.length === 0 ? (
             <div className="p-4 text-muted-foreground italic text-xs">No logs available</div>
           ) : (

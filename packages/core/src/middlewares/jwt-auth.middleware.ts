@@ -1,25 +1,13 @@
-import type { NextFunction, Request, Response } from "express";
-import { verifyToken } from "@groot/core/utils/jwt.utils";
-import { Boom } from "@groot/core/errors";
-import { extractAuthToken } from "@groot/core/utils/auth-cookie.utils";
+import { createMiddleware } from "hono/factory";
+import { Boom } from "../errors";
+import { verifyToken } from "../utils/jwt.utils";
+import { extractAuthToken } from "../utils/auth-cookie.utils";
+import type { AppEnv } from "../types";
 
-export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
-  try {
-    const token = extractAuthToken(req);
-
-    if (!token) {
-      throw Boom.unauthorized("No token provided");
-    }
-
-    const decoded = verifyToken(token);
-
-    req.user = {
-      userId: decoded.userId,
-      email: decoded.email,
-    };
-
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
+/** Requires a valid JWT (cookie or bearer) and sets `c.get("user")`. */
+export const jwtAuthMiddleware = createMiddleware<AppEnv>(async (c, next) => {
+  const token = extractAuthToken(c);
+  if (!token) throw Boom.unauthorized("No token provided");
+  c.set("user", await verifyToken(token));
+  await next();
+});

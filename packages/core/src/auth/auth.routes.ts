@@ -1,39 +1,41 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
-import { adminAuthMiddleware } from "@groot/core/middlewares/admin-auth.middleware";
-import { requireUser, parseBody } from "@groot/core/utils/controller.utils";
-import { setAuthCookie, clearAuthCookie } from "@groot/core/utils/auth-cookie.utils";
-import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
+import { Hono } from "hono";
+import { jwtAuthMiddleware } from "../middlewares/jwt-auth.middleware";
+import { adminAuthMiddleware } from "../middlewares/admin-auth.middleware";
+import { authRateLimiter } from "../middlewares/rate-limit.middleware";
+import { parseBody, requireUser } from "../utils/controller.utils";
+import { clearAuthCookie, setAuthCookie } from "../utils/auth-cookie.utils";
+import { ok } from "../utils/api-response.utils";
 import * as authService from "./auth.service";
-import { loginSchema, createUserSchema } from "./auth.schema";
+import { createUserSchema, loginSchema } from "./auth.schema";
+import type { AppEnv } from "../types";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.post("/login", authRateLimiter, async (req: Request, res: Response) => {
-  const body = parseBody(req, loginSchema);
+router.post("/login", authRateLimiter, async (c) => {
+  const body = await parseBody(c, loginSchema);
   const result = await authService.login(body);
-  setAuthCookie(res, result.token);
-  return result;
+  setAuthCookie(c, result.token);
+  return ok(c, result);
 });
 
-router.post("/logout", jwtAuthMiddleware, async (_req: Request, res: Response) => {
-  clearAuthCookie(res);
-  return { status: "logged out" };
+router.post("/logout", jwtAuthMiddleware, (c) => {
+  clearAuthCookie(c);
+  return ok(c, { status: "logged out" });
 });
 
-router.get("/me", jwtAuthMiddleware, async (req: Request) => {
-  const user = requireUser(req);
-  return await authService.getUserById({ userId: user.userId });
+router.get("/me", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  return ok(c, await authService.getUserById({ userId }));
 });
 
-router.post("/users", adminAuthMiddleware, async (req: Request) => {
-  const body = parseBody(req, createUserSchema);
-  return await authService.createUser(body);
+// Admin-only user management (X-Admin-Auth-Key header).
+router.post("/users", adminAuthMiddleware, async (c) => {
+  const body = await parseBody(c, createUserSchema);
+  return ok(c, await authService.createUser(body), 201);
 });
 
-router.get("/users", adminAuthMiddleware, async () => {
-  return await authService.getAllUsers();
+router.get("/users", adminAuthMiddleware, async (c) => {
+  return ok(c, await authService.getAllUsers());
 });
 
 export default router;

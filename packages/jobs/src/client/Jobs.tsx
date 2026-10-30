@@ -17,7 +17,7 @@ export function Jobs() {
   const actions = (
     <>
       <Button
-        variant="ghost"
+        variant="outline"
         size="icon"
         onClick={j.handleRefresh}
         disabled={j.refreshing}

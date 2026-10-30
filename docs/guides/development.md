@@ -1,209 +1,226 @@
-# Development Workflow
+# Development workflow
 
-Day-to-day commands, coding conventions, and the steps for adding a new feature end to end.
+Day-to-day commands, the conventions every module follows, and adding a
+feature end to end.
 
-## Core Commands
+## Commands
 
-```bash
-pnpm dev              # Express + Vite dev servers (hot reload)
-pnpm lint             # Vite+ (Oxlint) linting
-pnpm format           # Vite+ (Oxfmt) formatting
-pnpm check            # Lint and format check
-pnpm test             # Vitest run (server + client)
-pnpm build            # Vite client + server bundling via esbuild
-pnpm start            # Runs dist/bundle.js with NODE_ENV=production
+| Command                                                                       | What it does                                                                                                                |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                                                    | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                                   |
+| `pnpm dev:worker`                                                             | Build the client, run the Worker in workerd with a local D1 and R2                                                          |
+| `pnpm check` · `pnpm lint` · `pnpm format`                                    | Vite+ (Oxlint + Oxfmt)                                                                                                      |
+| `pnpm typecheck` · `typecheck:client` · `typecheck:kit`                       | Server + client programs · client only · the kit consumer fixture                                                           |
+| `pnpm test` · `pnpm test:watch`                                               | Server tests (Vitest, in-memory SQLite per file)                                                                            |
+| `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                        | Client tests (jsdom) · both suites · Playwright                                                                             |
+| `pnpm build`                                                                  | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                            |
+| `pnpm start`                                                                  | Run the production bundle                                                                                                   |
+| `pnpm check:worker`                                                           | Dry-run the Workers bundle into `tmp/worker-build`                                                                          |
+| `pnpm db:generate [--name x]`                                                 | drizzle-kit: schema diff → `apps/web/drizzle/NNNN_x.sql`                                                                    |
+| `pnpm db:migrate` · `pnpm db:migrate:worker`                                  | Apply migrations to the local SQLite file · to remote D1 ahead of a deploy (optional; the Worker migrates on first request) |
+| `pnpm db:seed`                                                                | Demo user + three todos (idempotent; also applies migrations)                                                               |
+| `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                                        |
+| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · workflow/test-area coverage · changeset gate                             |
+
+## Conventions
+
+| Convention           | Detail                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Validate first       | `await parseBody(c, schema)`, `parseQuery`, `parseId` — never read `c.req.json()` directly                      |
+| Return the envelope  | `ok(c, data, status?)` / `noContent(c)`; the client unwraps `data`                                              |
+| Throw Boom           | `Boom.notFound()`, `Boom.badRequest()`, …; never build error JSON by hand                                       |
+| Query builder only   | `db.select() / insert() / update() / delete()`; no transactions; raw `sql` only where Drizzle cannot express it |
+| Timestamps           | `integer({ mode: "timestamp_ms" })`; reuse `timestamps` from `@groot/core/database/schema`                      |
+| Logging              | `logger.info({ data }, "message")` from `@groot/core/logger`; no `console.log`                                  |
+| Runtime-neutral core | Web APIs in `packages/core`; `node:` only in `database/node.ts` and `storage/node.ts`                           |
+| Config, not env      | Read `config.*`; new inputs go into `envSchema` + `.env.example`, surfaced by `defaultConfig()`                 |
+| Imports              | `vite-plus/test` in tests; `@groot/core/<path>`; `@groot/jobs/server`                                           |
+| Auth guard           | Mount under the protected sub-app in `createWebApp()`; `requireUser(c)` for the caller                          |
+
+## Adding a feature end to end
+
+### 1. Table
+
+```ts
+// apps/web/src/server/db/schema.ts
+import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+import { timestamps } from "@groot/core/database/schema";
+
+export const posts = sqliteTable("posts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  body: text("body"),
+  ...timestamps,
+});
+export type Post = typeof posts.$inferSelect;
 ```
 
-Prisma helpers:
+`pnpm db:generate --name add_posts`, review `apps/web/drizzle/0001_add_posts.sql`,
+commit it. `pnpm dev` applies it on the next start.
 
-```bash
-pnpm prisma generate  # Explicit regeneration (also runs on postinstall)
-pnpm db:migrate        # Apply pending migrations (migrate deploy)
-```
+### 2. Validation schema
 
-## Coding Conventions
-
-| Convention            | Detail                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| TypeScript everywhere | Path aliases in `tsconfig.json`: `@groot/core/*` (server), `@groot/shell/*` (client) |
-| Validate first        | Use `parseBody`, `parseQuery`, `parseParams` in route handlers                       |
-| Return values         | Handlers return values directly; `createRouter` handles serialization                |
-| Boom errors           | `Boom.notFound()`, `Boom.badRequest()`, etc. for HTTP errors                         |
-| Logging               | Use `@groot/core/logger`; avoid `console.log`                                        |
-| Minimal comments      | Favor clear code over extensive documentation                                        |
-| Auth guard            | Use `jwtAuthMiddleware` for protected routes                                         |
-
-## Adding a New Feature
-
-### 1. Create Feature Directory
-
-```bash
-mkdir -p apps/web/src/server/api/myfeature
-```
-
-### 2. Define Validation Schema
-
-```typescript
-// apps/web/src/server/api/myfeature/myfeature.schema.ts
+```ts
+// apps/web/src/server/api/post/post.schema.ts
 import { z } from "zod";
 
-export const createSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
+export const createPostSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  body: z.string().optional(),
 });
-
-export type CreateDTO = z.infer<typeof createSchema>;
+export const updatePostSchema = createPostSchema.partial();
+export type CreatePostDTO = z.infer<typeof createPostSchema>;
+export type UpdatePostDTO = z.infer<typeof updatePostSchema>;
 ```
 
-### 3. Create Service
+### 3. Service
 
-```typescript
-// apps/web/src/server/api/myfeature/myfeature.service.ts
-import { prisma } from "@groot/core/database";
+```ts
+// apps/web/src/server/api/post/post.service.ts
+import { desc, eq } from "drizzle-orm";
+import { db } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
-import type { CreateDTO } from "./myfeature.schema";
+import { posts, type Post } from "../../db/schema";
+import type { CreatePostDTO, UpdatePostDTO } from "./post.schema";
 
-export async function create({ data }: { data: CreateDTO }) {
-  return prisma.myfeature.create({ data });
+export async function findAll(): Promise<Post[]> {
+  return db.select().from(posts).orderBy(desc(posts.createdAt));
 }
 
-export async function findAll() {
-  return prisma.myfeature.findMany();
+export async function findById(id: number): Promise<Post> {
+  const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+  if (!post) throw Boom.notFound("Post not found");
+  return post;
 }
 
-export async function findById({ id }: { id: number }) {
-  const item = await prisma.myfeature.findUnique({ where: { id } });
-  if (!item) {
-    throw Boom.notFound("MyFeature not found");
-  }
-  return item;
+export async function create(data: CreatePostDTO): Promise<Post> {
+  const [post] = await db.insert(posts).values(data).returning();
+  return post!;
+}
+
+export async function update(id: number, data: UpdatePostDTO): Promise<Post> {
+  await findById(id);
+  const [post] = await db.update(posts).set(data).where(eq(posts.id, id)).returning();
+  return post!;
+}
+
+export async function remove(id: number): Promise<void> {
+  await findById(id);
+  await db.delete(posts).where(eq(posts.id, id));
 }
 ```
 
-### 4. Create Routes
+### 4. Routes
 
-```typescript
-// apps/web/src/server/api/myfeature/myfeature.routes.ts
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { parseId, parseBody } from "@groot/core/utils/controller.utils";
-import * as service from "./myfeature.service";
-import { createSchema } from "./myfeature.schema";
+```ts
+// apps/web/src/server/api/post/post.routes.ts
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { ok, noContent } from "@groot/core/utils/api-response.utils";
+import { parseBody, parseId } from "@groot/core/utils/controller.utils";
+import * as service from "./post.service";
+import { createPostSchema, updatePostSchema } from "./post.schema";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.get("/", async () => {
-  return await service.findAll();
+router.get("/", async (c) => ok(c, await service.findAll()));
+router.post("/", async (c) =>
+  ok(c, await service.create(await parseBody(c, createPostSchema)), 201),
+);
+router.get("/:id", async (c) => ok(c, await service.findById(parseId(c.req.param("id")))));
+router.put("/:id", async (c) => {
+  const id = parseId(c.req.param("id"));
+  return ok(c, await service.update(id, await parseBody(c, updatePostSchema)));
 });
-
-router.post("/", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createSchema);
-  res.status(201);
-  return await service.create({ data: payload });
-});
-
-router.get("/:id", async (req: Request) => {
-  const id = parseId(req.params.id);
-  return await service.findById({ id });
+router.delete("/:id", async (c) => {
+  await service.remove(parseId(c.req.param("id")));
+  return noContent(c);
 });
 
 export default router;
 ```
 
-### 5. Register Routes
+Need the signed-in user? `const { userId } = requireUser(c);`.
 
-```typescript
-// apps/web/src/server/routes.ts
-import myFeatureRoutes from "./api/myfeature/myfeature.routes";
+### 5. Mount
 
-export function registerRoutes(app: Express): void {
-  // ... existing routes
-  protectedRouter.use("/myfeature", myFeatureRoutes);
-}
+```ts
+// apps/web/src/server/app.ts
+import postRoutes from "./api/post/post.routes";
+// inside createWebApp() → routes(app):
+api.route("/posts", postRoutes); // the `api` sub-app already runs jwtAuthMiddleware
 ```
 
-### 6. Add Tests
+### 6. Test
 
-```typescript
-// tests/server/api/myfeature/myfeature.routes.test.ts
-import { describe, it, expect, vi } from "vitest";
-import request from "supertest";
-import express from "express";
-import myFeatureRoutes from "./api/myfeature/myfeature.routes";
+```ts
+// tests/server/app/posts.test.ts
+import { describe, expect, it } from "vite-plus/test";
+import { api, createTestApp, signIn } from "../helpers";
 
-// Mock the service
-vi.mock("./api/myfeature/myfeature.service", () => ({
-  findAll: vi.fn().mockResolvedValue([]),
-  create: vi.fn().mockResolvedValue({ id: 1 }),
-}));
+const app = createTestApp();
 
-describe("MyFeature Routes", () => {
-  const app = express();
-  app.use(express.json());
-  app.use("/myfeature", myFeatureRoutes);
-
-  it("GET /myfeature returns array", async () => {
-    const res = await request(app).get("/myfeature");
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+describe("posts API", () => {
+  it("creates and reads a post", async () => {
+    const { token } = await signIn(app);
+    const created = await api<{ id: number }>(app, "/api/v1/posts", {
+      method: "POST",
+      json: { title: "Hello" },
+      token,
+    });
+    expect(created.status).toBe(201);
+    const read = await api(app, `/api/v1/posts/${created.body.data!.id}`, { token });
+    expect(read.body.data).toMatchObject({ title: "Hello" });
   });
 });
 ```
 
-## Adding Background Jobs
+Every test file gets its own in-memory database with migrations applied; see
+[Testing](./testing.md).
 
-### 1. Define Job Types
+## Adding a background job
 
-```typescript
-// myfeature.schema.ts
-export interface MyJobPayload {
-  itemId: number;
+```ts
+// apps/web/src/server/api/post/post.jobs.ts
+import { count } from "drizzle-orm";
+import { db } from "@groot/core/database";
+import { registerJobHandler, type JobContext } from "@groot/jobs/server";
+import { posts } from "../../db/schema";
+
+export async function postCountHandler(job: JobContext<{ label?: string }>) {
+  const [{ total }] = await db.select({ total: count() }).from(posts);
+  job.logger.info({ total, label: job.data?.label }, "Counted posts");
+  return { total }; // JSON-serialisable → stored as the job's output
+}
+
+export function registerPostJobs(): void {
+  registerJobHandler("post-count", postCountHandler);
 }
 ```
 
-### 2. Create Job Handler
+Add `registerPostJobs()` to `registerJobHandlers()` in `apps/web/src/server/app.ts`.
+Queue it with `await addJob("post-count", { label: "nightly" })`, through
+`POST /api/v1/jobs`, or on a cron with `scheduleJob("post-count", {}, "0 3 * * *")`.
+In tests jobs are disabled, so call `await runTick()` after `addJob()` and
+assert on the row (`tests/server/app/todo.jobs.test.ts` is the model). The full
+model is in [Background jobs](../features/jobs.md).
 
-```typescript
-// apps/web/src/server/api/myfeature/myfeature.jobs.ts
-import { registerJobHandler, type JobHandler } from "@groot/jobs/server";
-import type { MyJobPayload } from "./myfeature.schema";
+## Client tips
 
-export const myJobHandler: JobHandler<MyJobPayload> = async ({ data }) => {
-  const { itemId } = data;
-  // Job logic here
-};
+| Concern           | Where                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes            | `apps/web/src/client/App.tsx` (React Router)                                                                                                                  |
+| Data fetching     | React Query hooks next to the page (e.g. `pages/todo/hooks`)                                                                                                  |
+| API calls         | `apiClient` from `@groot/shell/lib/api` (unwraps the envelope, sends the cookie)                                                                              |
+| Auth state        | `useAuthStore` (Zustand)                                                                                                                                      |
+| UI components     | `@groot/ui`; rules in [Client](../features/client.md) and [DLS](../features/dls.md), enforced by `pnpm check:tokens`                                          |
+| Layout components | `@groot/shell/components/layout/index` (the case-safe barrel; the bare `…/layout` path collides with `components/Layout.tsx` on case-insensitive filesystems) |
 
-export function registerMyFeatureJobs(): void {
-  registerJobHandler("my-feature-job", myJobHandler);
-}
-```
+## Iteration loop
 
-### 3. Register Jobs
-
-```typescript
-// apps/web/src/server/routes.ts
-import { registerMyFeatureJobs } from "./api/myfeature/myfeature.jobs";
-
-export function registerJobHandlers(): void {
-  registerMyFeatureJobs();
-  // ... other job registrations
-}
-```
-
-## Client Development Tips
-
-| Concern           | Where                              |
-| ----------------- | ---------------------------------- |
-| Routes            | `App.tsx` (React Router)           |
-| Data fetching     | Hooks in `hooks/api` (React Query) |
-| Auth state        | `useAuthStore` (Zustand)           |
-| UI components     | `@groot/ui`                        |
-| Layout components | `@groot/shell/components/layout`   |
-
-## Iteration Loop
-
-1. Run `pnpm dev`
-2. Update feature code
-3. Run `pnpm test` for targeted coverage
-4. Run `pnpm check` before committing
-5. Update docs if behavior changes
+1. `pnpm dev` (server restarts on change via `tsx watch`; the client has HMR)
+2. Change code
+3. `pnpm test` (or `pnpm test:watch`) and `pnpm check`
+4. Schema changed? `pnpm db:generate` and commit `apps/web/drizzle/`
+5. Touched `packages/*`, `apps/web/drizzle` or `.groot`? `pnpm changeset`
+6. Update docs if behaviour changed

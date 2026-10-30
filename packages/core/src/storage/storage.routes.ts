@@ -1,124 +1,102 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import multer from "multer";
-import {
-  storageRateLimiter,
-  uploadRateLimiter,
-} from "@groot/core/middlewares/rate-limit.middleware";
-import { Boom } from "@groot/core/errors";
-import { parseBody, parseQuery } from "@groot/core/utils/controller.utils";
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { storageRateLimiter, uploadRateLimiter } from "../middlewares/rate-limit.middleware";
+import { Boom } from "../errors";
+import { parseBody, parseQuery } from "../utils/controller.utils";
+import { ok } from "../utils/api-response.utils";
 import * as storageService from "./storage.service";
 import {
-  listFilesSchema,
-  downloadFileSchema,
-  deleteFilesSchema,
-  getFileMetadataSchema,
   createFolderSchema,
+  deleteFilesSchema,
+  downloadFileSchema,
+  getFileMetadataSchema,
+  listFilesSchema,
   renameFileSchema,
 } from "./storage.schema";
 import { sanitizeFileName } from "./storage.utils";
+import type { AppEnv } from "../types";
 
-const router = createRouter();
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_BULK_FILES = 50;
 
+const router = new Hono<AppEnv>();
 router.use(storageRateLimiter);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 100 * 1024 * 1024,
-  },
+const uploadLimit = bodyLimit({ maxSize: MAX_UPLOAD_BYTES });
+
+function asFiles(value: unknown): File[] {
+  const list = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return list.filter((item): item is File => item instanceof File);
+}
+
+router.get("/files", async (c) => {
+  const query = parseQuery(c, listFilesSchema);
+  return ok(
+    c,
+    await storageService.listFiles({ prefix: query.prefix, delimiter: query.delimiter }),
+  );
 });
 
-router.get("/files", async (req: Request) => {
-  const query = parseQuery(req, listFilesSchema);
-  return await storageService.listFiles({
-    prefix: query.prefix,
-    delimiter: query.delimiter,
+router.post("/files/upload", uploadRateLimiter, uploadLimit, async (c) => {
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!(file instanceof File)) throw Boom.badRequest("No file uploaded");
+  const filePath = typeof body.filePath === "string" && body.filePath ? body.filePath : file.name;
+  const contentType =
+    typeof body.contentType === "string" && body.contentType ? body.contentType : file.type;
+  return ok(c, await storageService.uploadFile({ filePath, fileData: file, contentType }));
+});
+
+router.post("/files/bulk-upload", uploadRateLimiter, uploadLimit, async (c) => {
+  const body = await c.req.parseBody({ all: true });
+  const uploads = asFiles(body.files).slice(0, MAX_BULK_FILES);
+  if (!uploads.length) throw Boom.badRequest("No files uploaded");
+  return ok(
+    c,
+    await storageService.bulkUpload({
+      files: uploads.map((file) => ({
+        filePath: file.name,
+        fileData: file,
+        contentType: file.type,
+      })),
+    }),
+  );
+});
+
+router.get("/files/download", async (c) => {
+  const query = parseQuery(c, downloadFileSchema);
+  const file = await storageService.downloadFile({ filePath: query.filePath });
+  return c.body(file.bytes, 200, {
+    "Content-Type": file.contentType,
+    "Content-Disposition": `inline; ${sanitizeFileName(file.fileName)}`,
   });
 });
 
-router.post("/files/upload", uploadRateLimiter, upload.single("file"), async (req: Request) => {
-  const file = req.file;
-  const body = req.body;
-
-  if (!file) {
-    throw Boom.badRequest("No file uploaded");
-  }
-
-  const path = body?.filePath ?? file.originalname;
-  return await storageService.uploadFile({
-    filePath: path,
-    fileData: file.buffer,
-    contentType: body?.contentType ?? file.mimetype,
-  });
+router.delete("/files", async (c) => {
+  const body = await parseBody(c, deleteFilesSchema);
+  return ok(c, await storageService.deleteFiles({ filePaths: body.filePaths }));
 });
 
-router.post(
-  "/files/bulk-upload",
-  uploadRateLimiter,
-  upload.array("files", 50),
-  async (req: Request) => {
-    const files = req.files as Express.Multer.File[];
-
-    if (!files || !files.length) {
-      throw Boom.badRequest("No files uploaded");
-    }
-
-    const payload = files.map((file) => ({
-      filePath: file.originalname,
-      fileData: file.buffer,
-      contentType: file.mimetype,
-    }));
-
-    return await storageService.bulkUpload({ files: payload });
-  },
-);
-
-router.get("/files/download", async (req: Request, res: Response) => {
-  const query = parseQuery(req, downloadFileSchema);
-  const file = await storageService.downloadFile({
-    filePath: query.filePath,
-  });
-
-  res.setHeader("Content-Type", file.contentType ?? "application/octet-stream");
-  res.setHeader("Content-Disposition", `inline; ${sanitizeFileName(file.fileName)}`);
-  res.send(file.buffer);
+router.get("/files/metadata", async (c) => {
+  const query = parseQuery(c, getFileMetadataSchema);
+  return ok(c, await storageService.getFileMetadata({ filePath: query.filePath }));
 });
 
-router.delete("/files", async (req: Request) => {
-  const body = parseBody(req, deleteFilesSchema);
-  return await storageService.deleteFiles({
-    filePaths: body.filePaths,
-  });
+router.post("/folders", async (c) => {
+  const body = await parseBody(c, createFolderSchema);
+  return ok(c, await storageService.createFolder({ folderPath: body.folderPath }));
 });
 
-router.get("/files/metadata", async (req: Request) => {
-  const query = parseQuery(req, getFileMetadataSchema);
-  return await storageService.getFileMetadata({
-    filePath: query.filePath,
-  });
-});
-
-router.post("/folders", async (req: Request) => {
-  const body = parseBody(req, createFolderSchema);
-  return await storageService.createFolder({ folderPath: body.folderPath });
-});
-
-router.delete("/folders/:folderPath", async (req: Request<{ folderPath?: string }>) => {
-  const { folderPath } = req.params;
-  if (!folderPath) {
-    throw Boom.badRequest("Folder path is required");
-  }
+router.delete("/folders/:folderPath{.+}", async (c) => {
+  const folderPath = decodeURIComponent(c.req.param("folderPath"));
+  if (!folderPath) throw Boom.badRequest("Folder path is required");
   const normalized = folderPath.endsWith("/") ? folderPath : `${folderPath}/`;
-  return await storageService.deleteFolder({ folderPath: normalized });
+  return ok(c, await storageService.deleteFolder({ folderPath: normalized }));
 });
 
-router.put("/files/rename", async (req: Request) => {
-  const body = parseBody(req, renameFileSchema);
-  return await storageService.renameFile({
-    oldPath: body.oldPath,
-    newPath: body.newPath,
-  });
+router.put("/files/rename", async (c) => {
+  const body = await parseBody(c, renameFileSchema);
+  return ok(c, await storageService.renameFile({ oldPath: body.oldPath, newPath: body.newPath }));
 });
 
 export default router;

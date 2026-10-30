@@ -4,15 +4,16 @@ import { Card } from "@groot/ui/card";
 import { cn } from "@groot/ui/lib/utils";
 import { tableColumnHeaderClass } from "@groot/ui/table";
 import { Section } from "@groot/shell/components/layout/Section";
-import type { ScheduledJob } from "@groot/jobs/client/types";
+import type { JobSchedule } from "@groot/jobs/client/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { ScheduledJobsSkeleton } from "./skeletons";
 
 type Props = {
-  scheduledJobs: ScheduledJob[];
+  scheduledJobs: JobSchedule[];
   loading?: boolean;
-  onEdit: (job: ScheduledJob) => void;
-  onCancel: (jobName: string, key?: string) => void;
+  onEdit: (job: JobSchedule) => void;
+  /** Schedules are keyed by job name (one per name). */
+  onCancel: (jobName: string) => void;
 };
 
 /** Scheduled (cron) jobs: desktop grid + mobile cards, with edit/cancel actions. */
@@ -36,12 +37,12 @@ export function ScheduledJobsPanel({ scheduledJobs, loading, onEdit, onCancel }:
           </div>
           <div className="divide-y divide-border/40">
             {scheduledJobs.map((job) => (
-              <div key={`${job.name}-${job.key}`} className={cn(listRowGridClass, "group")}>
+              <div key={job.name} className={cn(listRowGridClass, "group")}>
                 <div className="col-span-3 font-medium text-foreground">{job.name}</div>
                 <div className="col-span-3 font-mono text-xs text-muted-foreground">{job.cron}</div>
                 <div className="col-span-2 text-muted-foreground">{job.timezone || "UTC"}</div>
                 <div className="col-span-3">
-                  <pre className="font-mono text-[11px] bg-muted px-1.5 py-1 rounded truncate max-w-xs">
+                  <pre className="font-mono text-[11px] bg-muted px-1.5 py-1 rounded-md truncate max-w-xs">
                     {JSON.stringify(job.data)}
                   </pre>
                 </div>
@@ -58,7 +59,7 @@ export function ScheduledJobsPanel({ scheduledJobs, loading, onEdit, onCancel }:
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => onCancel(job.name, job.key)}
+                    onClick={() => onCancel(job.name)}
                     className="text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Cancel schedule"
                   >
@@ -72,13 +73,13 @@ export function ScheduledJobsPanel({ scheduledJobs, loading, onEdit, onCancel }:
         {/* Mobile scheduled cards */}
         <div className="md:hidden divide-y divide-border/40">
           {scheduledJobs.map((job) => (
-            <div key={`${job.name}-${job.key}`} className="px-4 py-3 space-y-2">
+            <div key={job.name} className="px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm">{job.name}</span>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => onCancel(job.name, job.key)}
+                  onClick={() => onCancel(job.name)}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="size-3.5" />

@@ -1,101 +1,87 @@
-import type { NextFunction, Request, Response } from "express";
-import { Boom } from "@groot/core/errors";
-import { logBusinessEvent } from "@groot/core/logger";
-import { getRequestLogger } from "./request-logger.middleware";
-import { buildErrorContext } from "./error-context";
-import {
-  formatPrismaResponse,
-  formatHttpErrorResponse,
-  formatUnknownErrorResponse,
-} from "./error-response";
-import { sendError } from "@groot/core/utils/api-response.utils";
-import { isPrismaError } from "@groot/core/errors";
+import type { ErrorHandler, NotFoundHandler } from "hono";
+import { HTTPException } from "hono/http-exception";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { Boom, ErrorCode, reportError, toHttpError, type HttpError } from "../errors";
+import { env } from "../env";
+import { getBreadcrumbs, logBusinessEvent, logger } from "../logger";
+import { getRequestContext } from "../context";
+import { fail } from "../utils/api-response.utils";
+import type { AppEnv } from "../types";
 
-import { ErrorCode } from "@groot/core/errors";
-
-/**
- * Global error handling middleware
- * Catches all errors thrown in the application and sends appropriate responses
- */
-export function errorHandlerMiddleware(
-  error: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  // If response was already sent, delegate to default Express error handler
-  if (res.headersSent) {
-    next(error);
-    return;
+/** Normalise anything thrown into an HttpError (database constraints, Hono's own errors). */
+function toHttp(error: unknown): HttpError | null {
+  if (Boom.isHttpError(error)) return error;
+  const fromDb = toHttpError(error);
+  if (fromDb) return fromDb;
+  if (error instanceof HTTPException) {
+    return Boom.boomify(error, { statusCode: error.status, message: error.message });
   }
+  return null;
+}
 
-  const requestLogger = getRequestLogger(req);
-  const requestDuration = req.startTime ? Date.now() - req.startTime : undefined;
-  const errorContext = buildErrorContext(error, req, res, requestDuration);
+export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
+  const log = c.get("logger") ?? logger;
+  const context = getRequestContext();
+  const duration = context ? `${Date.now() - context.startTime}ms` : undefined;
+  const http = toHttp(error);
+  const endpoint = `${c.req.method} ${c.req.path}`;
 
-  // Log with appropriate level
-  if (Boom.isHttpError(error) && error.isOperational) {
-    requestLogger.warn(errorContext, `Operational error: ${error.message}`);
+  const errorContext = {
+    type: "application_error",
+    requestId: context?.requestId,
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      isOperational: http?.isOperational ?? false,
+    },
+    request: { method: c.req.method, path: c.req.path, userAgent: c.req.header("user-agent") },
+    performance: duration ? { requestDuration: duration } : undefined,
+    breadcrumbs: getBreadcrumbs(),
+  };
+
+  if (http?.isOperational) {
+    log.warn(errorContext, `Operational error: ${error.message}`);
     logBusinessEvent({
       event: "operational_error",
-      data: {
-        errorType: error.constructor.name,
-        errorCode: error.code,
-        errorMessage: error.message,
-        endpoint: `${req.method} ${req.path}`,
-        userAgent: req.headers?.["user-agent"],
-      },
+      data: { errorCode: http.code, errorMessage: error.message, endpoint },
       level: "warn",
     });
   } else {
-    requestLogger.error(errorContext, `System error: ${error.message}`);
-    // Sentry capture is handled by `Sentry.setupExpressErrorHandler(app)` in
-    // server.ts (registered before this middleware) — don't double-report here.
+    log.error(errorContext, `System error: ${error.message}`);
     logBusinessEvent({
       event: "system_error",
-      data: {
-        errorType: error.constructor.name,
-        errorMessage: error.message,
-        endpoint: `${req.method} ${req.path}`,
-        userAgent: req.headers?.["user-agent"],
-      },
+      data: { errorType: error.constructor.name, errorMessage: error.message, endpoint },
       level: "error",
     });
+    reportError(error, { requestId: context?.requestId, endpoint });
   }
 
-  // Handle Prisma errors
-  if (isPrismaError(error)) {
-    return formatPrismaResponse(res, error);
+  if (http) {
+    const { statusCode, message, code, data } = http.output;
+    return fail(c, { code, message, details: data }, statusCode as ContentfulStatusCode);
   }
-  // Handle HttpError (all Boom-created errors)
-  if (Boom.isHttpError(error)) {
-    formatHttpErrorResponse(res, error);
-  } else {
-    // Handle unknown errors
-    formatUnknownErrorResponse(res, error);
-  }
-}
 
-/**
- * Handle 404 errors
- */
-export function notFoundHandler(req: Request, res: Response): void {
-  const requestLogger = getRequestLogger(req);
-
-  requestLogger.warn(
+  const isDevelopment = env.NODE_ENV === "development";
+  return fail(
+    c,
     {
-      type: "not_found_error",
-      method: req.method,
-      path: req.path,
-      url: req.url,
-      userAgent: req.headers?.["user-agent"],
+      code: ErrorCode.INTERNAL_ERROR.code,
+      message: isDevelopment ? error.message : "An unexpected error occurred",
+      details: isDevelopment ? { stack: error.stack } : undefined,
     },
-    `Route not found: ${req.method} ${req.path}`,
+    ErrorCode.INTERNAL_ERROR.status as ContentfulStatusCode,
   );
+};
 
-  sendError(
-    res,
-    { code: ErrorCode.NOT_FOUND.code, message: `Cannot ${req.method} ${req.path}` },
-    ErrorCode.NOT_FOUND.status,
+export const notFoundHandler: NotFoundHandler<AppEnv> = (c) => {
+  (c.get("logger") ?? logger).warn(
+    { type: "not_found_error", method: c.req.method, path: c.req.path },
+    `Route not found: ${c.req.method} ${c.req.path}`,
   );
-}
+  return fail(
+    c,
+    { code: ErrorCode.NOT_FOUND.code, message: `Cannot ${c.req.method} ${c.req.path}` },
+    ErrorCode.NOT_FOUND.status as ContentfulStatusCode,
+  );
+};
