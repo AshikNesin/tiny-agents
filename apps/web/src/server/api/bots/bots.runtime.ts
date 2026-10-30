@@ -51,6 +51,7 @@ import { createAttachmentStore, createVisionStore } from "../uploads/uploads.sto
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
+import { sandboxHost } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -83,10 +84,8 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     // Vault (issue #56): handles only; sinks live in the browser and web toolkits.
     createVaultToolkit({ broker: vault }),
     createTodayCapability({ timeZone: unquote(env.TZ) }),
-    // Default host is the verified MagicDNS name (issue #19 runbook); the
-    // env var exists to override — e.g. the Tailscale IP if MagicDNS breaks.
     createSandboxToolkit({
-      host: unquote(env.SANDBOX_HOST) ?? "tiny-agents-vm",
+      host: sandboxHost(env),
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
       hostKeys: kvHostKeyStore(),
@@ -102,7 +101,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
       {
         sandbox: {
-          host: unquote(env.SANDBOX_HOST) ?? "tiny-agents-vm",
+          host: sandboxHost(env),
           port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
           user: unquote(env.SANDBOX_USER),
           hostKeys: kvHostKeyStore(),
@@ -134,10 +133,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
 function browserTransport(env: Env) {
   const executable = unquote(env.BROWSER_EXECUTABLE_PATH);
   if (executable) return createChromiumTransport({ executablePath: executable });
-  const sandboxHost = unquote(env.SANDBOX_HOST);
-  if (sandboxHost) {
+  const host = sandboxHost(env);
+  if (host) {
     return createRemoteCdpTransport({
-      host: sandboxHost,
+      host,
       port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
       user: unquote(env.SANDBOX_USER),
     });
