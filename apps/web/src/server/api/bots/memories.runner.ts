@@ -12,7 +12,11 @@ import {
   applyExtraction,
   type CaptureModels,
 } from "./memories.capture";
-import { MEMORY_TRIVIAL_BYTES } from "./memories.domain";
+import {
+  MEMORY_CAPTURE_CHAR_CAP,
+  MEMORY_REMOVED_IN_PROMPT,
+  MEMORY_TRIVIAL_BYTES,
+} from "./memories.domain";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -31,15 +35,20 @@ interface CaptureMessage {
   status?: string;
 }
 
+/**
+ * The transcript one capture reads: owner turns (and the replies to them)
+ * after the watermark, capped to the newest `MEMORY_CAPTURE_CHAR_CAP`
+ * characters of whole lines. `through` is still the window's end, so a long
+ * or never-captured history advances past what the cap left out instead of
+ * retrying an oversized call forever.
+ */
 export function captureWindow(
   messages: ReadonlyArray<CaptureMessage>,
   watermark: Date | null,
   botName: string,
 ): CaptureWindow {
   const since = watermark ? watermark.getTime() : 0;
-  const lines: string[] = [];
-  let turns = 0;
-  let ownerBytes = 0;
+  const entries: { line: string; ownerBytes?: number }[] = [];
   let latestOwnerAt = since;
   let ownerExchange = false;
   for (const m of messages) {
@@ -54,15 +63,27 @@ export function captureWindow(
     const text = (m.role === "user" ? stripAttachmentNotes(m.text) : m.text).trim();
     if (!text) continue;
     if (m.role === "user") {
-      lines.push(`Owner: ${text}`);
-      turns++;
-      ownerBytes += Buffer.byteLength(text, "utf8");
+      entries.push({ line: `Owner: ${text}`, ownerBytes: Buffer.byteLength(text, "utf8") });
       latestOwnerAt = Math.max(latestOwnerAt, m.createdAt);
     } else if (m.role === "assistant" && m.status !== "error") {
-      lines.push(`${botName}: ${text.slice(0, 1_500)}`);
+      entries.push({ line: `${botName}: ${text.slice(0, 1_500)}` });
     }
   }
-  return { lines, turns, ownerBytes, through: turns > 0 ? new Date(latestOwnerAt) : null };
+  const owned = entries.some((entry) => entry.ownerBytes !== undefined);
+  const kept: typeof entries = [];
+  let size = 0;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    size += entries[i].line.length + 1;
+    if (size > MEMORY_CAPTURE_CHAR_CAP && kept.length > 0) break;
+    kept.unshift(entries[i]);
+  }
+  const owner = kept.filter((entry) => entry.ownerBytes !== undefined);
+  return {
+    lines: kept.map((entry) => entry.line),
+    turns: owner.length,
+    ownerBytes: owner.reduce((sum, entry) => sum + (entry.ownerBytes ?? 0), 0),
+    through: owned ? new Date(latestOwnerAt) : null,
+  };
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -149,10 +170,19 @@ export async function captureConversation(
           `- ${m.id} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
       )
       .join("\n");
+    // The owner removed these: capture must not bring them back reworded
+    // (exact-text dedupe in applyExtraction stays the hard rail).
+    const removed = await prisma.memory.findMany({
+      where: { botId: bot.id, status: "deleted" },
+      orderBy: { updatedAt: "desc" },
+      take: MEMORY_REMOVED_IN_PROMPT,
+      select: { text: true },
+    });
     const prompt = buildCapturePrompt({
       botName: bot.name,
       transcript: window.lines.join("\n"),
       currentMemories: current,
+      removedMemories: removed.map((m) => `- ${m.text}`).join("\n") || null,
       today: new Date().toISOString().slice(0, 10),
     });
     const reply = await withTimeout(

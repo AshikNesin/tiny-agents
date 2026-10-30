@@ -19,7 +19,11 @@ import {
   fauxToolCall,
 } from "../../../../packages/agent/src/testing";
 import { createMemoryCapability, type MemoryStore } from "../../../../packages/agent/src/index";
-import { memoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
+import {
+  createMemoryStore,
+  memoryStore,
+} from "../../../../apps/web/src/server/api/bots/memories.store";
+import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
 
 let agentDir: string | null = null;
@@ -38,17 +42,20 @@ async function until<T>(read: () => T | undefined | false): Promise<T> {
 }
 
 it(
-  "remember asks before saving, then injects the saved fact into a fresh chat",
-  { timeout: 15_000 },
+  "remember asks before saving, injects the fact into a fresh chat, and forget removes it",
+  { timeout: 20_000 },
   async () => {
     const text = "The owner prefers TypeScript, never JavaScript.";
-    const capability = createMemoryCapability(memoryStore);
+    // Chat writes read the turn's author from this runtime (isUnattended).
+    let rt: AgentRuntime | undefined;
+    const store = createMemoryStore(() => rt!);
+    const capability = createMemoryCapability(store);
     expect(capability.tools).toContainEqual({
       name: "remember",
       label: "Saved memory",
       description: "Remember a fact about the owner",
     });
-    const rt = await openTestRuntime({
+    rt = await openTestRuntime({
       storePath: ":memory:",
       capabilities: [capability],
       respondWith: (context) => {
@@ -57,6 +64,12 @@ it(
         if (JSON.stringify(last).includes("Remember my preference")) {
           return {
             ...fauxAssistantMessage([fauxToolCall("remember", { text, category: "preference" })]),
+            stopReason: "toolUse",
+          };
+        }
+        if (JSON.stringify(last).includes("Forget my TypeScript")) {
+          return {
+            ...fauxAssistantMessage([fauxToolCall("forget", { text: "TypeScript" })]),
             stopReason: "toolUse",
           };
         }
@@ -117,6 +130,32 @@ it(
         [...messages.values()].find((m) => m.role === "assistant" && m.status === "done"),
       );
       expect(reply.text).toContain(text);
+
+      // "Forget …" in chat: the tool asks, tombstones, and the fact leaves the prompt.
+      await rt.submit(fresh, { requestId: "forget", text: "Forget my TypeScript preference." });
+      const forgetCall = await until(() =>
+        [...messages.values()]
+          .flatMap((m) => m.toolCalls ?? [])
+          .find((tool) => tool.name === "forget" && tool.status === "awaiting_approval"),
+      );
+      await rt.decideApproval(fresh, forgetCall.taskId!, "approved");
+      const done = await until(() =>
+        [...messages.values()]
+          .flatMap((m) => m.toolCalls ?? [])
+          .find((tool) => tool.name === "forget" && tool.status === "done"),
+      );
+      expect(done.output).toContain(text);
+      expect(await prisma.memory.findFirst({ where: { botId } })).toMatchObject({
+        status: "deleted",
+      });
+      const before = messages.size;
+      await rt.submit(fresh, { requestId: "recall-2", text: "And now?" });
+      const after = await until(() =>
+        [...messages.values()]
+          .slice(before)
+          .find((m) => m.role === "assistant" && m.status === "done"),
+      );
+      expect(after.text).toBe("No memories.");
       await next.stop();
     } finally {
       await rt.close();
@@ -125,11 +164,22 @@ it(
   },
 );
 
+/**
+ * The sections in effect for this request: pi-durable stores section changes
+ * as positional system entries, so later entries override earlier ones and
+ * `null` removes a section.
+ */
 function systemSections(context: Context): Record<string, string> {
-  const system = context.messages.find((m) => m.role === "system") as
-    | { sections?: Record<string, string> }
-    | undefined;
-  return system?.sections ?? {};
+  const effective: Record<string, string> = {};
+  for (const message of context.messages) {
+    if (message.role !== "system") continue;
+    const sections = (message as { sections?: Record<string, string | null> }).sections ?? {};
+    for (const [key, value] of Object.entries(sections)) {
+      if (value === null) delete effective[key];
+      else effective[key] = value;
+    }
+  }
+  return effective;
 }
 
 it("memory section injects active memories and the gates hold", { timeout: 15_000 }, async () => {

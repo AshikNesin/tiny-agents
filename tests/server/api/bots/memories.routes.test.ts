@@ -216,4 +216,33 @@ describe("Memories API routes", () => {
     const row = await prisma.bot.findUnique({ where: { id: botId } });
     expect(row?.memoryEnabled).toBe(false);
   });
+
+  it("starts capture from now when memory is turned back on", async () => {
+    const botId = await seedBot(app);
+    const old = new Date("2026-01-01T00:00:00.000Z");
+    await prisma.bot.update({
+      where: { id: botId },
+      data: { memoryEnabled: false, memoryCapturedThrough: old },
+    });
+    const before = Date.now();
+    await request(app)
+      .patch(`/api/v1/bots/${botId}`)
+      .set(authorization)
+      .send({ memoryEnabled: true })
+      .expect(200);
+    const row = await prisma.bot.findUnique({ where: { id: botId } });
+    expect(row?.memoryEnabled).toBe(true);
+    // What was said while memory was off is behind the watermark now.
+    expect(row!.memoryCapturedThrough!.getTime()).toBeGreaterThanOrEqual(before);
+
+    // Re-sending "on" while already on leaves the watermark alone.
+    const stamped = row!.memoryCapturedThrough!.getTime();
+    await request(app)
+      .patch(`/api/v1/bots/${botId}`)
+      .set(authorization)
+      .send({ memoryEnabled: true })
+      .expect(200);
+    const again = await prisma.bot.findUnique({ where: { id: botId } });
+    expect(again!.memoryCapturedThrough!.getTime()).toBe(stamped);
+  });
 });

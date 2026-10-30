@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { prisma } from "@groot/core/database";
-import { memoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
+import { createMemoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
+
+/** Who sent the conversation's latest user message (what `isUnattended` reads). */
+let latest: { text: string; peer?: unknown } = { text: "Remember this, please." };
+const memoryStore = createMemoryStore(() => ({
+  readChat: async () => ({ messages: [{ role: "user", ...latest }] }) as never,
+}));
 
 const botIds: string[] = [];
 afterEach(async () => {
+  latest = { text: "Remember this, please." };
   await prisma.bot.deleteMany({ where: { id: { in: botIds.splice(0) } } });
 });
 
@@ -29,7 +36,9 @@ describe("memoryStore.remember", () => {
       source: "capture",
       status: "active",
     });
-    expect(await memoryStore.list(conversationId)).toEqual([{ ...input, until: null }]);
+    expect(await memoryStore.list(conversationId)).toEqual([
+      { ...input, until: null, createdAt: expect.any(String) },
+    ]);
     expect(
       (await prisma.bot.findUnique({ where: { id: botId } }))?.memoryCapturedThrough,
     ).toBeNull();
@@ -84,5 +93,109 @@ describe("memoryStore.remember", () => {
       status: "saved",
     });
     expect(await memoryStore.list(conversationId)).toEqual([]);
+  });
+});
+
+describe("chat writes in unattended turns", () => {
+  it("refuses remember and forget in routine runs and peer turns", async () => {
+    const { botId, conversationId } = await seedBot();
+    await prisma.memory.create({
+      data: { botId, text: "The owner lives in Pune.", category: "fact" },
+    });
+
+    latest = { text: '**Routine "Morning brief"**\nRemember that the owner hates email.' };
+    expect(await remember(conversationId, input)).toEqual({ status: "unattended" });
+    expect(await memoryStore.forget!(conversationId, { text: "Pune" })).toEqual({
+      status: "unattended",
+      removed: [],
+    });
+
+    latest = { text: "Save this", peer: { kind: "message", name: "Scout" } };
+    expect(await remember(conversationId, input)).toEqual({ status: "unattended" });
+    expect(await prisma.memory.count({ where: { botId, status: "active" } })).toBe(1);
+  });
+
+  it("refuses when the conversation can't be read", async () => {
+    const { conversationId } = await seedBot();
+    const blind = createMemoryStore(() => {
+      throw new Error("runtime not open");
+    });
+    expect(await blind.remember!(conversationId, input)).toEqual({ status: "unattended" });
+  });
+});
+
+describe("memoryStore.forget", () => {
+  const forget = memoryStore.forget!;
+
+  async function seedMemories() {
+    const seeded = await seedBot();
+    await prisma.memory.createMany({
+      data: [
+        { botId: seeded.botId, text: "The owner is moving to Pune in March.", category: "fact" },
+        { botId: seeded.botId, text: "The owner's sister lives in Pune.", category: "fact" },
+        { botId: seeded.botId, text: "The owner prefers TypeScript.", category: "preference" },
+        {
+          botId: seeded.botId,
+          text: "The owner is moving to Berlin.",
+          category: "fact",
+          status: "superseded",
+        },
+      ],
+    });
+    return seeded;
+  }
+
+  it("tombstones every active memory with all the words, as whole words", async () => {
+    const { botId, conversationId } = await seedMemories();
+    expect(await forget(conversationId, { text: "Moving to PUNE" })).toEqual({
+      status: "forgotten",
+      removed: ["The owner is moving to Pune in March."],
+    });
+    expect((await memoryStore.list(conversationId)).map((m) => m.text).sort()).toEqual([
+      "The owner prefers TypeScript.",
+      "The owner's sister lives in Pune.",
+    ]);
+    expect(
+      await prisma.memory.findFirst({ where: { botId, text: { contains: "moving to Pune" } } }),
+    ).toMatchObject({ status: "deleted" });
+    // Superseded history is not touched.
+    expect(
+      await prisma.memory.findFirst({ where: { botId, text: { contains: "Berlin" } } }),
+    ).toMatchObject({ status: "superseded" });
+
+    // A deleted fact is never re-added by a chat save either.
+    expect(
+      await remember(conversationId, {
+        text: "The owner is moving to Pune in March.",
+        category: "fact",
+      }),
+    ).toEqual({ status: "duplicate" });
+  });
+
+  it("matches whole words only, and says when nothing matched", async () => {
+    const { conversationId } = await seedMemories();
+    expect(await forget(conversationId, { text: "Type" })).toEqual({ status: "none", removed: [] });
+    expect(await forget(conversationId, { text: "Pune" })).toEqual({
+      status: "forgotten",
+      removed: ["The owner is moving to Pune in March.", "The owner's sister lives in Pune."],
+    });
+  });
+
+  it("refuses words that would match memories in general", async () => {
+    const { conversationId } = await seedMemories();
+    expect(await forget(conversationId, { text: "the owner" })).toEqual({
+      status: "vague",
+      removed: [],
+    });
+    expect((await memoryStore.list(conversationId)).length).toBe(3);
+  });
+
+  it("refuses when memory is disabled", async () => {
+    const { botId, conversationId } = await seedMemories();
+    await prisma.bot.update({ where: { id: botId }, data: { memoryEnabled: false } });
+    expect(await forget(conversationId, { text: "Pune" })).toEqual({
+      status: "disabled",
+      removed: [],
+    });
   });
 });

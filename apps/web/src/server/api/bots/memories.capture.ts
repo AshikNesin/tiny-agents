@@ -29,6 +29,8 @@ export function buildCapturePrompt(input: {
   botName: string;
   transcript: string;
   currentMemories: string | null;
+  /** Memories the owner deleted, newest first: never re-added, even reworded. */
+  removedMemories?: string | null;
   today: string;
 }): string {
   return [
@@ -38,6 +40,12 @@ export function buildCapturePrompt(input: {
       ? `Current memories:\n${input.currentMemories}`
       : "Current memories: none.",
     "",
+    ...(input.removedMemories
+      ? [
+          `The owner removed these memories. Never add them again, reworded or not:\n${input.removedMemories}`,
+          "",
+        ]
+      : []),
     "Recent conversation:",
     input.transcript,
     "",
