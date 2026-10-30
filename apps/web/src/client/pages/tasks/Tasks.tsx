@@ -293,7 +293,7 @@ export function Tasks() {
                   >
                     <p
                       className={cn(
-                        "text-[15px] leading-6",
+                        "text-[15px] leading-6 [overflow-wrap:anywhere]",
                         task.status === "done" && "text-muted-foreground line-through",
                       )}
                     >
