@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   browserOpenState,
   closeBrowserSession,
+  closeBrowserTab,
   conversationBrowserTarget,
   createBrowserToolkit,
   getLiveBrowserSession,
@@ -415,6 +416,43 @@ describe("shared browser profiles", () => {
     // Each agent keeps its tab on later calls.
     await run(tk, "browser_snapshot", {}, "2");
     expect(fake.log).toContain("t1:snapshot");
+  });
+
+  it("closes a deleted agent's own tab and leaves the others (issue #88)", async () => {
+    const fake = tabbedTransport();
+    const tk = createBrowserToolkit({
+      transport: fake.transport,
+      resolveTarget,
+      profilesDir: PROFILES,
+    });
+    await run(tk, "browser_navigate", { url: "https://a.example/" }, "1");
+    await run(tk, "browser_navigate", { url: "https://b.example/" }, "2");
+
+    await closeBrowserTab({ profile: "shared", tab: "bot-2" });
+    expect(fake.log).toContain("t1:close");
+    expect(fake.log).not.toContain("t0:close");
+    expect([...getLiveBrowserSession(SHARED)!.tabs.keys()]).toEqual(["bot-1"]);
+  });
+
+  it("blanks the browser's first tab instead of closing the browser, then closes it once unused", async () => {
+    const fake = tabbedTransport();
+    const tk = createBrowserToolkit({
+      transport: fake.transport,
+      resolveTarget,
+      profilesDir: PROFILES,
+    });
+    await run(tk, "browser_navigate", { url: "https://a.example/" }, "1");
+    await run(tk, "browser_navigate", { url: "https://b.example/" }, "2");
+    const navigations = fake.log.filter((entry) => entry === "t0:navigate").length;
+
+    await closeBrowserTab({ profile: "shared", tab: "bot-1" });
+    expect(fake.log.filter((entry) => entry === "t0:navigate")).toHaveLength(navigations + 1);
+    expect(fake.log).not.toContain("t0:close");
+    expect([...getLiveBrowserSession(SHARED)!.tabs.keys()]).toEqual(["bot-2"]);
+
+    await closeBrowserTab({ profile: "shared", tab: "bot-2" });
+    expect(fake.log).toContain("t0:close");
+    expect(getLiveBrowserSession(SHARED)).toBeUndefined();
   });
 
   it("brings an agent's tab to the front when another agent acted in between", async () => {

@@ -681,6 +681,31 @@ export async function closeBrowserSession(
   }
 }
 
+/**
+ * Release one agent's tab when its bot goes away, leaving the other agents in
+ * the browser alone. A tab of its own closes. The browser's first tab cannot
+ * close without closing the browser, so it is blanked and left unassigned;
+ * a browser no agent uses any more closes outright.
+ */
+export async function closeBrowserTab(target: BrowserTarget): Promise<void> {
+  const entry = live.get(target.profile);
+  const tab = entry?.tabs.get(target.tab);
+  if (!entry || !tab) return;
+  entry.tabs.delete(target.tab);
+  if (entry.front === target.tab) entry.front = undefined;
+  if (entry.tabs.size === 0) {
+    await closeBrowserSession(target);
+    return;
+  }
+  // A transport without openTab shares one tab between agents: keep it.
+  if ([...entry.tabs.values()].includes(tab)) return;
+  if (tab === entry.session) {
+    await tab.navigate("about:blank").catch(() => undefined);
+    return;
+  }
+  await tab.close().catch(() => undefined);
+}
+
 /** Graceful shutdown: close every session so remote browsers do not outlive the app. */
 export async function closeAllBrowserSessions(): Promise<void> {
   const sessions = [...live.values()];

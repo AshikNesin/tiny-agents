@@ -11,12 +11,15 @@ import {
   ApprovalNotPendingError,
   InvalidAnswersError,
   QuestionNotPendingError,
+  closeBrowserSession,
+  closeBrowserTab,
   sanitizePeerText,
   stripPeerEnvelope,
   type AttachmentRef,
   type OwnerAnswer,
 } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
+import { browserTargetForBot } from "./browser.targets";
 import {
   findBotRow,
   startBotConversation,
@@ -220,6 +223,21 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
   }
 }
 
+/**
+ * A deleted bot's browser goes with it (issue #88): its tab in the shared
+ * browser closes, and a browser of its own closes with its profile (cookies,
+ * logins) wiped. Best effort: a browser hiccup never fails the delete.
+ */
+async function releaseBrowser(bot: { id: string; browserProfile: string }): Promise<void> {
+  const target = browserTargetForBot(bot);
+  try {
+    if (bot.browserProfile === "own") await closeBrowserSession(target, { wipeProfile: true });
+    else await closeBrowserTab(target);
+  } catch (error) {
+    logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's browser");
+  }
+}
+
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await findBotRow(id);
   // Its routines go with it (cascade), and their conversations (issue #63).
@@ -232,6 +250,7 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const deleted = await prisma.bot.delete({ where: { id: bot.id } });
   await retireConversation(rt, bot.conversationId);
   await Promise.all(routines.map((routine) => retireConversation(rt, routine.conversationId!)));
+  await releaseBrowser(bot);
   return toBot(deleted);
 }
 

@@ -154,6 +154,7 @@ export {
   normalizeCredentialRequest,
   closeAllBrowserSessions,
   closeBrowserSession,
+  closeBrowserTab,
   conversationBrowserTarget,
   createBrowserToolkit,
   setDriver,
