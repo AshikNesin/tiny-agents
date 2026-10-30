@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, Check, Clock, Copy, ExternalLink, KeyRound, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
+import { markdownComponents } from "../lib/markdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import { botsApi } from "../lib/bots-api";
@@ -726,7 +727,7 @@ export function PeerIncomingCard({
           data-slot="reply-card"
           className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
         >
-          <Streamdown>{text}</Streamdown>
+          <Streamdown components={markdownComponents}>{text}</Streamdown>
         </div>
         <CopyButton text={text} />
       </div>
@@ -777,7 +778,7 @@ function assistantView(
               data-slot="reply-card"
               className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
             >
-              <Streamdown>{message.text}</Streamdown>
+              <Streamdown components={markdownComponents}>{message.text}</Streamdown>
               {message.status === "error" && (
                 <p className="text-destructive mt-1 text-xs">
                   {message.error ?? "The model returned an error."}

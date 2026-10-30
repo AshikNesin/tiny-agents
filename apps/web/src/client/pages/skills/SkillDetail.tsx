@@ -158,8 +158,8 @@ export function SkillDetail({ id }: { id: string }) {
         <BreadcrumbItem>
           <BreadcrumbLink onClick={() => navigate("/skills")}>Skills</BreadcrumbLink>
         </BreadcrumbItem>
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbPage>{skill.name}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>

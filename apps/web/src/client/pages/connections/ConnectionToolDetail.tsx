@@ -518,14 +518,14 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
             <Link to="/connections">Connections</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbLink asChild>
             <Link to={backTo}>{tool.connection.name}</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbPage>{tool.label}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
