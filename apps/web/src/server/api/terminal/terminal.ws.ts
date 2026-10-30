@@ -7,12 +7,13 @@
  * everything the owner types.
  *
  * Close codes are a contract with the client's reconnect logic:
- *   1000 permanent — another viewer detached us, or the tmux session died;
- *        the client stops, the tab strip shows it.
+ *   1000 permanent — another viewer detached us, the tmux session died, or
+ *        it never existed (tmux's "can't find session" reaches the pane
+ *        first); the client stops, the tab strip shows it.
  *   4000 idle      — ten minutes with no frames either way; the client
  *        reconnects with a fresh ticket when the user returns.
- *   1011 attach    — the SSH attach failed after the ticket was spent; the
- *        client's retry re-fetches a ticket, whose 404 stops it for good.
+ *   1011 attach    — the SSH attach failed after the ticket was spent (the
+ *        sandbox is unreachable); the client retries with backoff.
  */
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";

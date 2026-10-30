@@ -121,6 +121,7 @@ export {
 } from "./terminal/terminal";
 export {
   createSsh2TerminalTransport,
+  type Ssh2TerminalTransport,
   type Ssh2TerminalTransportOptions,
 } from "./terminal/terminal-ssh2";
 export {

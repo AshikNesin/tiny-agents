@@ -43,8 +43,9 @@ function wsUrl(path: string): string {
 
 /**
  * Attach to tab `name`. Reconnects until `signal` aborts or `close()` is
- * called; a ticket fetch that fails with 404/409 gives up immediately (the
- * tab was killed on the VM), otherwise every failure retries.
+ * called; a ticket fetch that fails with 404/409, or a socket the server
+ * closes with 1000 (the tab was killed on the VM or never existed), gives
+ * up immediately, otherwise every failure retries.
  */
 export function connectTerminal(
   name: string,

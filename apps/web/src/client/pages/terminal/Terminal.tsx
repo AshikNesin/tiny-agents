@@ -24,7 +24,7 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, monoClass } from "@groot/ui";
+import { Button, EmptyState, ErrorState, LoadingState, monoClass } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
@@ -277,7 +277,10 @@ export function TerminalPage() {
         />
       );
     }
-    if (sessions === null || sessions.length === 0) {
+    // The first list is an SSH round trip to the VM; until it answers there
+    // is nothing to say "No tabs" about.
+    if (sessions === null) return <LoadingState text="Connecting to sandbox…" />;
+    if (sessions.length === 0) {
       return (
         <EmptyState
           icon={SquareTerminal}

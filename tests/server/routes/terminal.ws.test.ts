@@ -25,6 +25,8 @@ function fakePtyStream() {
   const resizes: Array<{ cols: number; rows: number }> = [];
   let destroyed = false;
   const stream = new Duplex({
+    // As the ssh2 binding's ChannelDuplex: a remote end closes the stream.
+    allowHalfOpen: false,
     read() {},
     write(chunk, _encoding, callback) {
       received.push(Buffer.from(chunk));
@@ -222,6 +224,29 @@ describe("terminal WS bridge", () => {
     pty.stream.destroy(); // remote end gone
     expect((await gone).code).toBe(1000);
     await vi.waitFor(() => expect(pty.destroyed).toBe(true));
+  });
+
+  it("closes 1000 after tmux's error when the session does not exist", async () => {
+    // The ticket route no longer checks has-session (issue #84): a missing
+    // tab is found by the attach itself, which prints why and exits.
+    const pty = fakePtyStream();
+    const { svc } = serviceRecording(async () => {
+      setImmediate(() => {
+        pty.stream.push(Buffer.from("can't find session: ta-term-9\r\n"));
+        pty.stream.push(null);
+      });
+      return pty.stream;
+    });
+    setTerminalServiceForTests(svc);
+    await listen();
+    const ws = connect(
+      ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-9" as never }), "ta-term-9"),
+    );
+    const message = nextMessage(ws);
+    const gone = closed(ws);
+    await opened(ws);
+    expect(await message).toContain("can't find session: ta-term-9");
+    expect((await gone).code).toBe(1000);
   });
 
   it("closes 1011 when the attach fails after the ticket was spent", async () => {
