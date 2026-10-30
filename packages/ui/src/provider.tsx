@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ToasterProps } from "sonner";
 import { ConfirmProvider } from "./primitives/confirm";
 import { Toaster } from "./sonner";
 
@@ -17,11 +18,18 @@ import { Toaster } from "./sonner";
  * providers added later should be wired in here rather than surfaced
  * individually to app authors.
  */
-export function GrootUIProvider({ children }: { children: ReactNode }) {
+export function GrootUIProvider({
+  children,
+  toaster,
+}: {
+  children: ReactNode;
+  /** Toaster overrides, e.g. a `position` that keeps toasts off the app's own controls. */
+  toaster?: ToasterProps;
+}) {
   return (
     <ConfirmProvider>
       {children}
-      <Toaster />
+      <Toaster {...toaster} />
     </ConfirmProvider>
   );
 }

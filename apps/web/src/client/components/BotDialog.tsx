@@ -153,7 +153,8 @@ export function BotDialog({
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
       onOpenChange(false);
-      toast.success(bot ? "Bot updated" : "Bot created");
+      // A new bot opens its chat, which says it all; an edit stays put.
+      if (bot) toast.success("Bot updated");
     } catch (error) {
       toast.error(errorMessage(error, "Failed to save bot"));
     } finally {

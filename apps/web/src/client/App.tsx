@@ -62,11 +62,17 @@ const SHELL_CONFIG: ShellConfig = {
   },
 };
 
+/**
+ * Toasts sit at the top: bottom-right put them over the chat composer's
+ * Send/Stop button, swallowing clicks for the few seconds they show.
+ */
+const TOASTER = { position: "top-center" } as const;
+
 /** Providers that need the router (nuqs reads and writes the URL). */
 function Root() {
   return (
     <NuqsAdapter>
-      <GrootUIProvider>
+      <GrootUIProvider toaster={TOASTER}>
         <ShellProvider config={SHELL_CONFIG}>
           <Outlet />
         </ShellProvider>
