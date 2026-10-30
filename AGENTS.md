@@ -33,14 +33,6 @@ This file is intentionally brief. Detailed guidance lives in `docs/` — start a
   reason under `.changeset/no-release/` for docs-only or internal changes;
   `pnpm check:changesets` and CI enforce this, exempting the release bot.
 
-- **Commits are the owner's, never Claude's.** Author and commit as
-  `Ashik Nesin <github@ashiknesin.com>` (set `git config user.name` /
-  `user.email` in the clone when the environment defaults to another
-  identity). No `Co-Authored-By: Claude`, `Claude-Session` or other AI
-  attribution trailers in commit messages, and no "Generated with Claude
-  Code" footer or session link in PR descriptions. `.claude/settings.json`
-  turns Claude Code's own attribution off; this rule covers everything else.
-
 ## Everyday commands
 
 `pnpm dev` · `pnpm test` · `pnpm check` · `pnpm build` · `pnpm db:migrate` ·
