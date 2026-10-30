@@ -25,7 +25,9 @@ import {
 } from "./routines.schedule";
 import type { CreateRoutineDTO, UpdateRoutineDTO } from "./routines.schema";
 
-const routineWithBot = { bot: { columns: { id: true, name: true, conversationId: true } } } as const;
+const routineWithBot = {
+  bot: { columns: { id: true, name: true, conversationId: true } },
+} as const;
 
 type RoutineRow = {
   id: string;

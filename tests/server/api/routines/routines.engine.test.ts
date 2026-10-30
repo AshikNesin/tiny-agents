@@ -8,13 +8,7 @@
  */
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  bots,
-  db,
-  jobs,
-  routineRuns,
-  routines,
-} from "../../../../apps/web/src/server/db";
+import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
 import {
   ROUTINE_FIRE_JOB,
@@ -35,7 +29,11 @@ import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 
 /** Routine-fire jobs queued so far, oldest first. */
 async function sentJobs() {
-  return db.select().from(jobs).where(eq(jobs.name, ROUTINE_FIRE_JOB)).orderBy(sql`rowid`);
+  return db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.name, ROUTINE_FIRE_JOB))
+    .orderBy(sql`rowid`);
 }
 
 async function routineRow(id: string) {

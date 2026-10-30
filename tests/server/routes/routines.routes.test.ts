@@ -20,7 +20,11 @@ type Routine = Record<string, unknown> & { id: string; botId: string };
 
 /** Routine-fire jobs on the queue table, oldest first. */
 async function fireJobs() {
-  return db.select().from(jobs).where(eq(jobs.name, ROUTINE_FIRE_JOB)).orderBy(sql`rowid`);
+  return db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.name, ROUTINE_FIRE_JOB))
+    .orderBy(sql`rowid`);
 }
 
 /** Jobs still waiting to fire. */
@@ -305,9 +309,9 @@ describe("Routines API routes", () => {
     setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app);
     const id = routine.id;
-    expect(
-      (await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status,
-    ).toBe(200);
+    expect((await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status).toBe(
+      200,
+    );
     expect((await routineRow(id))?.conversationId).toBe("200");
 
     const [other] = await db
@@ -333,9 +337,9 @@ describe("Routines API routes", () => {
     setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app);
     const id = routine.id;
-    expect(
-      (await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status,
-    ).toBe(200);
+    expect((await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status).toBe(
+      200,
+    );
     expect((await api(app, `/api/v1/routines/${id}`, { method: "DELETE", token })).status).toBe(
       200,
     );

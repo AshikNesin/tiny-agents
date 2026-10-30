@@ -25,13 +25,7 @@ interface UploadRef {
 }
 
 /** POST one file as multipart (the composer's request shape). */
-function postFile(
-  app: TestApp,
-  bytes: Uint8Array,
-  filename: string,
-  type: string,
-  field = "file",
-) {
+function postFile(app: TestApp, bytes: Uint8Array, filename: string, type: string, field = "file") {
   const form = new FormData();
   form.append(field, new File([new Uint8Array(bytes)], filename, { type }));
   return api<UploadRef>(app, "/api/v1/uploads", { method: "POST", body: form, token });
@@ -176,12 +170,7 @@ describe("uploads API", () => {
 
   it("answers an oversized file with 413 and words, not a 500", async () => {
     const app = buildApp();
-    const response = await postFile(
-      app,
-      Buffer.alloc(26 * 1024 * 1024),
-      "big.mp4",
-      "video/mp4",
-    );
+    const response = await postFile(app, Buffer.alloc(26 * 1024 * 1024), "big.mp4", "video/mp4");
     expect(response.status).toBe(413);
     expect(response.body.error?.message).toBe("Files can be up to 25 MB.");
   });

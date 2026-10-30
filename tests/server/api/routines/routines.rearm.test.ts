@@ -73,7 +73,11 @@ async function routineRow(id: string) {
 }
 
 async function fireJobs() {
-  return db.select().from(jobs).where(eq(jobs.name, ROUTINE_FIRE_JOB)).orderBy(sql`rowid`);
+  return db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.name, ROUTINE_FIRE_JOB))
+    .orderBy(sql`rowid`);
 }
 
 async function jobById(id: string) {
