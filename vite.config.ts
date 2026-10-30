@@ -1,5 +1,6 @@
 import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -54,6 +55,11 @@ export default defineConfig({
   root: "apps/web",
   plugins: [
     react(),
+    // The Vite plugin, not @tailwindcss/postcss: under PostCSS, Vite rewrites
+    // url()s after Tailwind has inlined @imports and lost their source files,
+    // so @fontsource's relative ./files/*.woff2 never resolved and the fonts
+    // 404'd to index.html in production.
+    tailwindcss(),
     ...(release && authToken && process.env.SENTRY_ORG
       ? [
           sentryVitePlugin({
@@ -61,7 +67,7 @@ export default defineConfig({
             org: process.env.SENTRY_ORG,
             project: process.env.SENTRY_PROJECT || pkgName,
             sourcemaps: {
-              filesToDeleteAfterUpload: ["dist/assets/*.map"],
+              filesToDeleteAfterUpload: ["dist/client/assets/*.map"],
             },
           }),
         ]
@@ -71,7 +77,7 @@ export default defineConfig({
     alias: aliases,
   },
   build: {
-    outDir: path.resolve(rootDir, "dist"),
+    outDir: path.resolve(rootDir, "dist/client"),
     emptyOutDir: false,
     sourcemap: true,
     rollupOptions: {
@@ -121,10 +127,6 @@ export default defineConfig({
         : undefined,
   },
   publicDir: "./public",
-
-  css: {
-    postcss: path.resolve(rootDir, "postcss.config.js"),
-  },
 
   // Linting configuration
   lint: {

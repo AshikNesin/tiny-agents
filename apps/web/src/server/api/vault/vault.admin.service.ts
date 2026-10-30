@@ -5,11 +5,12 @@
  * toolkit. Values pass through in the request scope only: nothing here stores
  * one, and every reveal is registered with the redactor and audited.
  */
-import { prisma } from "@groot/core/database";
-import { env } from "@groot/core/env";
+import { asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
+import { db, vaultAuditEvents, vaultItems } from "../../db";
+import { appEnv } from "../../env";
 import { connectConfig, primaryBackend, readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
 import { createConnectBackend } from "./backends/onepassword-connect";
@@ -53,7 +54,7 @@ function writeBackends(): Map<BackendName, VaultBackend> {
       "onepassword-connect",
       createConnectBackend({
         ...connect,
-        token: unquote(env.OP_CONNECT_ADMIN_TOKEN) ?? "",
+        token: unquote(appEnv().OP_CONNECT_ADMIN_TOKEN) ?? "",
         writable: true,
       }),
     );
@@ -183,7 +184,10 @@ export async function overview(options: { refresh?: boolean } = {}) {
     clearStatusCache();
     await syncMetadata();
   }
-  const rows = await prisma.vaultItem.findMany({ orderBy: [{ kind: "asc" }, { label: "asc" }] });
+  const rows = await db
+    .select()
+    .from(vaultItems)
+    .orderBy(asc(vaultItems.kind), asc(vaultItems.label));
   const linked = new Set(rows.map((row) => `${row.backend}:${row.externalId}`));
   const unlinked = (await candidates(options.refresh))
     .filter((item) => !linked.has(`${item.backend}:${item.externalId}`))
@@ -207,13 +211,13 @@ export async function overview(options: { refresh?: boolean } = {}) {
 
 /** Pull metadata (username, card display, TOTP, stale links) for linked items. */
 async function syncMetadata(): Promise<void> {
-  const rows = await prisma.vaultItem.findMany();
+  const rows = await db.select().from(vaultItems);
   for (const row of rows) {
     const backend = readBackends().get(row.backend as BackendName);
     if (!backend) continue;
     try {
       const summary = await backend.describe(row.externalId);
-      await prisma.vaultItem.update({ where: { id: row.id }, data: metadataOf(summary) });
+      await db.update(vaultItems).set(metadataOf(summary)).where(eq(vaultItems.id, row.id));
     } catch (error) {
       if (error instanceof BackendError && error.code === "not_found") {
         await audit({
@@ -256,11 +260,12 @@ export async function detail(handle: string) {
       backendError = (error as Error).message;
     }
   }
-  const events = await prisma.vaultAuditEvent.findMany({
-    where: { itemId: row.id },
-    orderBy: { at: "desc" },
-    take: 50,
-  });
+  const events = await db
+    .select()
+    .from(vaultAuditEvents)
+    .where(eq(vaultAuditEvents.itemId, row.id))
+    .orderBy(desc(vaultAuditEvents.at))
+    .limit(50);
   const write = writeBackends().get(row.backend as BackendName);
   return {
     item: itemView(row),
@@ -280,7 +285,7 @@ export async function detail(handle: string) {
 }
 
 async function findOrThrow(handle: string): Promise<VaultItemRow> {
-  const row = await prisma.vaultItem.findUnique({ where: { handle } });
+  const row = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) });
   if (!row) throw Boom.notFound("Vault item not found");
   return row;
 }
@@ -317,7 +322,7 @@ function policyData(policy: Partial<PolicyDTO>, kind: VaultKind) {
 }
 
 async function assertHandleFree(handle: string, except?: string): Promise<void> {
-  const existing = await prisma.vaultItem.findUnique({ where: { handle } });
+  const existing = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) });
   if (existing && existing.id !== except) throw Boom.conflict(`Handle "${handle}" is taken`);
 }
 
@@ -345,8 +350,9 @@ export async function createItem(
     backendFailure(error);
   }
   const origins = input.policy.origins.length > 0 ? input.policy.origins : originsFrom(input.urls);
-  const row = await prisma.vaultItem.create({
-    data: {
+  const [inserted] = await db
+    .insert(vaultItems)
+    .values({
       handle: input.policy.handle,
       kind: input.kind,
       backend: name,
@@ -354,8 +360,9 @@ export async function createItem(
       label: input.policy.label ?? input.title,
       ...policyData({ ...input.policy, origins }, input.kind),
       ...metadataOf(summary),
-    },
-  });
+    })
+    .returning();
+  const row = inserted!;
   candidatesCache = undefined;
   await audit({ item: row, handle: row.handle, tool: actor.via, target: name, outcome: "created" });
   return itemView(row);
@@ -379,8 +386,9 @@ export async function linkItem(input: {
     throw Boom.badRequest("This kind of 1Password item can't be used by bots");
   const origins =
     input.policy.origins.length > 0 ? input.policy.origins : originsFrom(summary.urls);
-  const row = await prisma.vaultItem.create({
-    data: {
+  const [inserted] = await db
+    .insert(vaultItems)
+    .values({
       handle: input.policy.handle,
       kind: summary.kind,
       backend: input.backend,
@@ -388,8 +396,9 @@ export async function linkItem(input: {
       label: input.policy.label ?? summary.title,
       ...policyData({ ...input.policy, origins }, summary.kind),
       ...metadataOf(summary),
-    },
-  });
+    })
+    .returning();
+  const row = inserted!;
   candidatesCache = undefined;
   await audit({
     item: row,
@@ -429,14 +438,23 @@ export async function updateItem(
   if (input.policy?.handle && input.policy.handle !== row.handle) {
     await assertHandleFree(input.policy.handle, row.id);
   }
-  const updated = await prisma.vaultItem.update({
-    where: { id: row.id },
-    data: {
-      ...(input.policy?.handle ? { handle: input.policy.handle } : {}),
-      ...policyData(input.policy ?? {}, kind),
-      ...metadata,
-    },
-  });
+  const data = {
+    ...(input.policy?.handle ? { handle: input.policy.handle } : {}),
+    ...policyData(input.policy ?? {}, kind),
+    ...metadata,
+  };
+  // Drizzle refuses an empty SET; with nothing to change the row stands as it is.
+  let updated = row;
+  if (Object.keys(data).length > 0) {
+    const [changed] = await db
+      .update(vaultItems)
+      .set(data)
+      .where(eq(vaultItems.id, row.id))
+      .returning();
+    // Deleted meanwhile (Prisma's P2025 → 404).
+    if (!changed) throw Boom.notFound("Record not found");
+    updated = changed;
+  }
   candidatesCache = undefined;
   await audit({
     item: updated,
@@ -466,7 +484,7 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
       if (!(error instanceof BackendError && error.code === "not_found")) backendFailure(error);
     }
   }
-  await prisma.vaultItem.delete({ where: { id: row.id } });
+  await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
   candidatesCache = undefined;
   await audit({
     handle: row.handle,

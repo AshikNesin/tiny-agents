@@ -1,37 +1,30 @@
-import type { Request, Response } from "express";
-import { env } from "@groot/core/env";
-import { JWT_EXPIRES_IN_MS } from "./jwt.utils";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { env } from "../env";
+import { jwtExpiresInMs } from "./jwt.utils";
+import type { AppContext } from "../types";
 
 const TOKEN_COOKIE_NAME = "token";
 
-function getCookieOptions() {
+export function setAuthCookie(c: AppContext, token: string): void {
   const isProduction = env.NODE_ENV === "production";
-  return {
+  setCookie(c, TOKEN_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? ("strict" as const) : ("lax" as const),
-    maxAge: JWT_EXPIRES_IN_MS,
+    sameSite: isProduction ? "Strict" : "Lax",
+    maxAge: Math.floor(jwtExpiresInMs() / 1000),
     path: "/",
-  };
+  });
 }
 
-export function setAuthCookie(res: Response, token: string): void {
-  res.cookie(TOKEN_COOKIE_NAME, token, getCookieOptions());
+export function clearAuthCookie(c: AppContext): void {
+  deleteCookie(c, TOKEN_COOKIE_NAME, { path: "/" });
 }
 
-export function clearAuthCookie(res: Response): void {
-  res.clearCookie(TOKEN_COOKIE_NAME, { path: "/" });
-}
-
-export function extractAuthToken(req: Request): string | undefined {
-  if (req.cookies?.[TOKEN_COOKIE_NAME]) {
-    return req.cookies[TOKEN_COOKIE_NAME];
-  }
-
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.substring(7);
-  }
-
+/** The JWT from the auth cookie, falling back to `Authorization: Bearer`. */
+export function extractAuthToken(c: AppContext): string | undefined {
+  const cookie = getCookie(c, TOKEN_COOKIE_NAME);
+  if (cookie) return cookie;
+  const header = c.req.header("authorization");
+  if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length);
   return undefined;
 }

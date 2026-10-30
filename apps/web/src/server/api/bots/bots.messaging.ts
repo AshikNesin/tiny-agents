@@ -4,13 +4,14 @@
  * target's durable conversation, so the exactly-once boundary (requestId) and
  * the delivery receipt (deliveredAt) commit together.
  */
-import { prisma } from "@groot/core/database";
+import { and, asc, eq, gte, ne } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
+import { db, botMessages, bots } from "../../db";
 import { submitToBot } from "./bots.conversation";
 import { conversationOwner } from "./bots.owner";
 
-/** Same shape as the ledger kinds (schema.sqlite.prisma BotMessage.kind). */
+/** Why a delivery was refused (the bots toolkit's reasons). */
 type DeliverReason = "unknown_bot" | "self" | "loop" | "budget";
 
 /** Loop guard: more than this many sends from one bot to one target in the window is a runaway loop. */
@@ -49,9 +50,9 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
   async function senderOf(conversationId: number) {
     const owner = await conversationOwner(conversationId);
     if (!owner) return null;
-    const bot = await prisma.bot.findUnique({
-      where: { id: owner.botId },
-      select: { id: true, name: true },
+    const bot = await db.query.bots.findFirst({
+      where: eq(bots.id, owner.botId),
+      columns: { id: true, name: true },
     });
     return bot ? { ...bot, fromRoutine: owner.routineId !== undefined } : null;
   }
@@ -61,30 +62,32 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
     async deliver(input) {
       const sender = await senderOf(input.conversationId);
       if (!sender) return { delivered: false, reason: "unknown_bot" as DeliverReason };
-      const target = await prisma.bot.findFirst({
-        where: { name: input.toName },
-        select: { id: true, name: true, conversationId: true },
+      const target = await db.query.bots.findFirst({
+        where: eq(bots.name, input.toName),
+        columns: { id: true, name: true, conversationId: true },
       });
       if (!target) return { delivered: false, reason: "unknown_bot" };
       if (target.id === sender.id) return { delivered: false, reason: "self" };
       // Per-turn budget (issue #16): the idempotency check below must run
       // first so a replayed tool task returns early without being charged.
-      const existing = await prisma.botMessage.findUnique({
-        where: { requestId: input.requestId },
+      const existing = await db.query.botMessages.findFirst({
+        where: eq(botMessages.requestId, input.requestId),
+        columns: { id: true },
       });
       if (existing) return { delivered: true };
       const sent = turnBudget.count(input.conversationId);
       if (sent >= TURN_LIMIT) return { delivered: false, reason: "budget" as DeliverReason };
 
       const since = new Date(Date.now() - LOOP_WINDOW_MS);
-      const recent = await prisma.botMessage.count({
-        where: {
-          fromBotId: sender.id,
-          toBotId: target.id,
-          kind: "send",
-          createdAt: { gte: since },
-        },
-      });
+      const recent = await db.$count(
+        botMessages,
+        and(
+          eq(botMessages.fromBotId, sender.id),
+          eq(botMessages.toBotId, target.id),
+          eq(botMessages.kind, "send"),
+          gte(botMessages.createdAt, since),
+        ),
+      );
       if (recent >= LOOP_LIMIT) return { delivered: false, reason: "loop" };
 
       // Exactly-once across pi-durable replays: a rerun of the tool task
@@ -101,19 +104,17 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
         },
         rt,
       );
-      await prisma.botMessage.create({
-        data: {
-          fromBotId: sender.id,
-          toBotId: target.id,
-          // A routine run's message gets no relayed answer: it would land in
-          // the bot's chat, which routine runs never write to (issue #63).
-          replyToBotId: sender.fromRoutine ? null : sender.id,
-          kind: "send",
-          requestId: input.requestId,
-          sourceKey: input.sourceKey,
-          text: input.text,
-          deliveredAt: new Date(),
-        },
+      await db.insert(botMessages).values({
+        fromBotId: sender.id,
+        toBotId: target.id,
+        // A routine run's message gets no relayed answer: it would land in
+        // the bot's chat, which routine runs never write to (issue #63).
+        replyToBotId: sender.fromRoutine ? null : sender.id,
+        kind: "send",
+        requestId: input.requestId,
+        sourceKey: input.sourceKey,
+        text: input.text,
+        deliveredAt: new Date(),
       });
       turnBudget.charge(input.conversationId);
       return { delivered: true, ...(queued ? { queued: true } : {}) };
@@ -121,12 +122,16 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
 
     async roster(conversationId) {
       const me = await senderOf(conversationId);
-      const bots = await prisma.bot.findMany({
-        where: me ? { id: { not: me.id } } : undefined,
-        select: { name: true, description: true, conversationId: true },
-        orderBy: { name: "asc" },
-      });
-      return bots.map(({ conversationId: botConversation, ...bot }) => ({
+      const rows = await db
+        .select({
+          name: bots.name,
+          description: bots.description,
+          conversationId: bots.conversationId,
+        })
+        .from(bots)
+        .where(me ? ne(bots.id, me.id) : undefined)
+        .orderBy(asc(bots.name));
+      return rows.map(({ conversationId: botConversation, ...bot }) => ({
         ...bot,
         busy: rt.isBusy(Number(botConversation)),
       }));

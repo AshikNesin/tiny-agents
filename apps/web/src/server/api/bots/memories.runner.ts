@@ -2,7 +2,7 @@
  * The capture runner: turn an idle conversation into an extraction side-call.
  * Only owner turns are memory sources; assistant replies supply context.
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { GATEWAY_PROVIDER, stripAttachmentNotes } from "@tiny-agents/agent";
 import type { AgentRuntime } from "@tiny-agents/agent";
@@ -17,6 +17,7 @@ import {
   MEMORY_REMOVED_IN_PROMPT,
   MEMORY_TRIVIAL_BYTES,
 } from "./memories.domain";
+import { bots, db, memories } from "../../db";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -126,15 +127,20 @@ export async function captureConversation(
   },
 ): Promise<void> {
   try {
-    const bot = await prisma.bot.findUnique({
-      where: { conversationId: String(conversationId) },
-      select: {
+    const bot = await db.query.bots.findFirst({
+      where: eq(bots.conversationId, String(conversationId)),
+      columns: {
         id: true,
         name: true,
         modelId: true,
         memoryEnabled: true,
         memoryCapturedThrough: true,
-        memories: { where: { status: "active" }, orderBy: { createdAt: "asc" } },
+      },
+      with: {
+        memories: {
+          where: (m, { eq }) => eq(m.status, "active"),
+          orderBy: (m, { asc }) => [asc(m.createdAt)],
+        },
       },
     });
     if (!bot || !bot.memoryEnabled) return;
@@ -155,10 +161,10 @@ export async function captureConversation(
     if (window.ownerBytes < MEMORY_TRIVIAL_BYTES) {
       // Advance the watermark anyway: sub-trivial chatter must not pile up
       // into a later capture window it no longer relates to.
-      await prisma.bot.update({
-        where: { id: bot.id },
-        data: { memoryCapturedThrough: window.through },
-      });
+      await db
+        .update(bots)
+        .set({ memoryCapturedThrough: window.through })
+        .where(eq(bots.id, bot.id));
       return;
     }
 
@@ -170,12 +176,12 @@ export async function captureConversation(
       .join("\n");
     // The owner removed these: capture must not bring them back reworded
     // (exact-text dedupe in applyExtraction stays the hard rail).
-    const removed = await prisma.memory.findMany({
-      where: { botId: bot.id, status: "deleted" },
-      orderBy: { updatedAt: "desc" },
-      take: MEMORY_REMOVED_IN_PROMPT,
-      select: { text: true },
-    });
+    const removed = await db
+      .select({ text: memories.text })
+      .from(memories)
+      .where(and(eq(memories.botId, bot.id), eq(memories.status, "deleted")))
+      .orderBy(desc(memories.updatedAt))
+      .limit(MEMORY_REMOVED_IN_PROMPT);
     const prompt = buildCapturePrompt({
       botName: bot.name,
       transcript: window.lines.join("\n"),

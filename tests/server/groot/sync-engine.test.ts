@@ -338,7 +338,7 @@ describe("groot sync engine (integration)", () => {
       // deliberately deleted. The child's own history is the only signal
       // that survives the classifier change, so the tracked check must run
       // on first adoption too, not only once a base exists.
-      const TARGET = "tests/server/server/kv/kv.test.ts";
+      const TARGET = "tests/server/core/kv.test.ts";
       const childCfg = join(fx.child, ".groot/boilerplate-sync.json");
 
       const writeCfg = async (exclusions: string[]): Promise<void> => {
@@ -366,10 +366,10 @@ describe("groot sync engine (integration)", () => {
       await commitAll(fx.child, "adopt kit kv suite");
 
       // Last sync ran with the OLD classifier surface, which did not own
-      // `tests/server/server/**` (trunk owned `tests/server/{ai,core,shared}`
+      // `tests/server/core/**` (trunk owned `tests/server/{ai,core,shared}`
       // — reproduced here as a project exclusion). That sync writes the
       // baseline ref WITHOUT the path, exactly like the finance child's.
-      await writeCfg(["tests/server/server/**"]);
+      await writeCfg(["tests/server/core/**"]);
       await runSync(fx.child, { mode: "apply", skipConflicts: false, force: false });
       await commitAll(fx.child, "sync under old classifier");
       const oldBaseline = await git(fx.child, "ls-tree", "-r", "--name-only", BASELINE_REF);

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
-import { AxiosError, AxiosHeaders } from "axios";
+import { ApiError } from "@groot/shell/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
@@ -110,13 +110,7 @@ describe("BotDialog", () => {
   it("shows a taken name under the Name field, in the server's words (issue #80)", async () => {
     const message = 'A bot named "Echo" already exists';
     createMock.mockRejectedValueOnce(
-      new AxiosError("Request failed with status code 409", "ERR_BAD_REQUEST", undefined, null, {
-        status: 409,
-        statusText: "Conflict",
-        headers: {},
-        config: { headers: new AxiosHeaders() },
-        data: { success: false, error: { message } },
-      }),
+      new ApiError({ status: 409, code: "CONFLICT", message, url: "/bots" }),
     );
     const onOpenChange = vi.fn();
     render(

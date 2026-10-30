@@ -3,21 +3,14 @@
  * rejects mutations from a routine's own conversation (issue #63; list stays
  * open) and never from the owner's chat, creates validate the schedule like the API, sourceKey
  * makes a replayed create return the same routine, and every save path
- * renders the sentence and next 3 IST fire times. Real SQLite test DB; the
- * queue adapter is mocked so arming routines needs no live queue.
+ * renders the sentence and next 3 IST fire times. Real SQLite test DB; arming
+ * queues on the real jobs table (no worker runs in tests).
  */
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-
-vi.mock("@groot/jobs/server/client", () => ({
-  getJobQueue: () => ({
-    send: vi.fn(async () => `job-${Math.random().toString(36).slice(2)}`),
-    cancelJob: vi.fn(async () => true),
-    createQueue: vi.fn(async () => undefined),
-  }),
-  jobQueueReady: () => true,
-}));
-
+import { addJob } from "@groot/jobs/server/queue";
+import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
+import { ROUTINE_FIRE_JOB } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import {
   createRoutineStore,
   RECURSION_MSG,
@@ -28,37 +21,51 @@ const CONVERSATION = 7;
 const ROUTINE_CONVERSATION = 70;
 
 async function seedBot(name = "Bot", conversationId = String(CONVERSATION)) {
-  return prisma.bot.create({
-    data: { name, modelId: "m1", conversationId },
-  });
+  const [bot] = await db.insert(bots).values({ name, modelId: "m1", conversationId }).returning();
+  return bot!;
 }
 
 async function seedRoutine(botId: string, conversationId?: number) {
-  return prisma.routine.create({
-    data: {
+  const [routine] = await db
+    .insert(routines)
+    .values({
       botId,
       name: "digest",
       prompt: "Do the thing.",
       schedule: { kind: "cron", expr: "0 9 * * 1-5" },
       enabled: true,
       ...(conversationId !== undefined ? { conversationId: String(conversationId) } : {}),
-    },
-  });
+    })
+    .returning();
+  return routine!;
 }
 
 /** A run of the routine waiting for its reply in the routine's conversation. */
 async function seedAwaitingRun(routineId: string) {
   const at = new Date("2026-10-21T03:30:00.000Z");
-  return prisma.routineRun.create({
-    data: {
+  const [run] = await db
+    .insert(routineRuns)
+    .values({
       routineId,
       scheduledFor: at,
       status: "awaiting",
       trigger: "schedule",
       requestId: `routine:${routineId}:${at.toISOString()}`,
       submittedAt: new Date(),
-    },
-  });
+    })
+    .returning();
+  return run!;
+}
+
+async function routineRow(id: string) {
+  return db.query.routines.findFirst({ where: eq(routines.id, id) });
+}
+
+async function clearTables() {
+  await db.delete(routineRuns);
+  await db.delete(routines);
+  await db.delete(bots);
+  await db.delete(jobs);
 }
 
 describe("routines toolkit store adapter", () => {
@@ -67,16 +74,10 @@ describe("routines toolkit store adapter", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     store = createRoutineStore();
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
+    await clearTables();
   });
 
-  afterEach(async () => {
-    await prisma.routineRun.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.bot.deleteMany();
-  });
+  afterEach(clearTables);
 
   it("creates for the calling bot and renders sentence plus next 3 IST fires", async () => {
     const bot = await seedBot();
@@ -90,7 +91,7 @@ describe("routines toolkit store adapter", () => {
     expect(routine.nextFireTimes).toHaveLength(3);
     expect(routine.nextFireTimes[0]).toMatch(/, 09:00 IST$/);
     expect(routine.enabled).toBe(true);
-    const row = await prisma.routine.findUnique({ where: { id: routine.id } });
+    const row = await routineRow(routine.id);
     expect(row?.botId).toBe(bot.id);
     expect(row?.sourceKey).toBe("pi:sess:1");
     expect(row?.enabled).toBe(true);
@@ -113,7 +114,7 @@ describe("routines toolkit store adapter", () => {
     });
     expect(second.id).toBe(first.id);
     expect(second.name).toBe("once");
-    expect(await prisma.routine.count()).toBe(1);
+    expect(await db.$count(routines)).toBe(1);
   });
 
   it("rejects schedules exactly like the API, with a readable reason", async () => {
@@ -142,7 +143,7 @@ describe("routines toolkit store adapter", () => {
         schedule: { kind: "once", at: "2026-11-01T09:00:00" },
       }),
     ).rejects.toThrow(/explicit offset/);
-    expect(await prisma.routine.count()).toBe(0);
+    expect(await db.$count(routines)).toBe(0);
   });
 
   it("rejects creates from a routine's own conversation (recursion guard)", async () => {
@@ -156,7 +157,7 @@ describe("routines toolkit store adapter", () => {
         schedule: { kind: "interval", minutes: 30 },
       }),
     ).rejects.toThrow(RECURSION_MSG);
-    expect(await prisma.routine.count({ where: { name: "loop" } })).toBe(0);
+    expect(await db.$count(routines, eq(routines.name, "loop"))).toBe(0);
   });
 
   it("update, delete, and run now are guarded too; list stays open", async () => {
@@ -169,9 +170,7 @@ describe("routines toolkit store adapter", () => {
     await expect(store.remove(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
     await expect(store.runNow(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
     // The guard rejects before any effect: still enabled, still there.
-    expect(await prisma.routine.findUnique({ where: { id: routine.id } })).toMatchObject({
-      enabled: true,
-    });
+    expect(await routineRow(routine.id)).toMatchObject({ enabled: true });
 
     const listed = await store.list(ROUTINE_CONVERSATION);
     expect(listed).toHaveLength(1);
@@ -230,18 +229,22 @@ describe("routines toolkit store adapter", () => {
 
   it("remove deletes the routine and cancels its pending job", async () => {
     const bot = await seedBot();
-    const routine = await prisma.routine.create({
-      data: {
+    const pendingJobId = await addJob(ROUTINE_FIRE_JOB, {}, { delaySeconds: 1800 });
+    const [routine] = await db
+      .insert(routines)
+      .values({
         botId: bot.id,
         name: "doomed",
         prompt: "bye",
         schedule: { kind: "interval", minutes: 30 },
         enabled: true,
-        pendingJobId: "job-42",
-      },
-    });
-    await expect(store.remove(CONVERSATION, routine.id)).resolves.toBe(true);
-    expect(await prisma.routine.findUnique({ where: { id: routine.id } })).toBeNull();
+        pendingJobId,
+      })
+      .returning();
+    await expect(store.remove(CONVERSATION, routine!.id)).resolves.toBe(true);
+    expect(await routineRow(routine!.id)).toBeUndefined();
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, pendingJobId));
+    expect(job?.state).toBe("cancelled");
   });
 
   it("paused routines render no fire times and the paused marker rides along", async () => {

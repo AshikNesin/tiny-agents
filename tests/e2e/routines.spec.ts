@@ -2,11 +2,9 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Routines e2e (issue #18 phase B), on the faux provider (echo replies, no
- * network). The Playwright webServer runs this repo's config.yml, where
- * jobs.enabled is false: the queue worker is not running, so creating an
- * ENABLED routine fails at arm time ("Job queue not initialized") and no
- * delayed fire can be observed. The spec therefore covers what this
- * environment supports: full editor flow (bot picker, schedule compile,
+ * network). Delayed queue fires are not waited for here (the server tests
+ * drive the queue with runTick()); the routine is created paused so no fire
+ * races the assertions. The spec covers the full editor flow (bot picker, schedule compile,
  * next-3 IST preview before saving), the created routine card, pause/resume
  * toggling, and "Run now", which dispatches synchronously through the real
  * watcher so Recent executions shows a succeeded manual run with output.
@@ -83,8 +81,8 @@ test.describe("Routines", () => {
     const previewTimes = dialog.getByText(/, \d{2}:\d{2} IST/);
     await expect(previewTimes).toHaveCount(3);
 
-    // This environment runs without the queue worker (config.yml keeps
-    // jobs disabled), so arming at create fails; close the dialog instead.
+    // Close the editor without saving: saving would arm the routine, and a
+    // queued fire could race the run-now assertions below.
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByRole("dialog")).not.toBeVisible();
 

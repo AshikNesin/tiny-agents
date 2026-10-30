@@ -1,191 +1,147 @@
-# Todos Feature
+# Todos feature
 
-The todo domain demonstrates the recommended feature module pattern with self-contained validation, services, and jobs.
+The todo domain is the reference feature module: one table, a Zod schema, a
+service on Drizzle, a Hono router, and two background jobs.
 
-## Module Structure
+## Module structure
 
 ```
 apps/web/src/server/api/todo/
-├── todo.routes.ts       # Route definitions + inline request handlers
-├── todo.service.ts      # Business logic (calls Prisma directly)
+├── todo.routes.ts   # Hono router, mounted at /api/v1/todos
+├── todo.service.ts  # Drizzle queries + Boom errors
 ├── todo.schema.ts   # Zod schemas
-└── todo.jobs.ts         # Background jobs
+└── todo.jobs.ts     # todo-cleanup, todo-summary handlers
+apps/web/src/server/db/schema.ts   # the `todos` table
 ```
 
-## API Surface
+## Table
 
-All routes are mounted under `/api/v1/todos` and require JWT authentication.
-
-| Method   | Path   | Description               |
-| -------- | ------ | ------------------------- |
-| `POST`   | `/`    | Create a todo             |
-| `GET`    | `/`    | List todos (latest first) |
-| `GET`    | `/:id` | Fetch a single todo       |
-| `PUT`    | `/:id` | Update title/completion   |
-| `DELETE` | `/:id` | Remove a todo             |
-
-### Request/Response Shape
-
-```typescript
-// todo.schema.ts
-export const createTodoSchema = z.object({
-  title: z.string().min(1),
-  completed: z.boolean().optional().default(false),
+```ts
+// apps/web/src/server/db/schema.ts
+export const todos = sqliteTable("todos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  completed: integer("completed", { mode: "boolean" }).notNull().default(false),
+  ...timestamps, // createdAt, updatedAt as timestamp_ms
 });
-
-export const updateTodoSchema = createTodoSchema.partial();
-
-export type CreateTodoDTO = z.infer<typeof createTodoSchema>;
-export type UpdateTodoDTO = z.infer<typeof updateTodoSchema>;
+export type Todo = typeof todos.$inferSelect;
 ```
 
-Route handlers return values directly (auto-serialized by `createRouter`).
+## API
 
-### Example Requests
+Mounted under `/api/v1/todos`, JWT required.
+
+| Method   | Path   | Body                     | Returns                       |
+| -------- | ------ | ------------------------ | ----------------------------- |
+| `GET`    | `/`    |                          | `200` todos, newest first     |
+| `POST`   | `/`    | `{ title, completed? }`  | `201` the todo                |
+| `GET`    | `/:id` |                          | `200` the todo, `404` if none |
+| `PUT`    | `/:id` | `{ title?, completed? }` | `200` the updated todo        |
+| `DELETE` | `/:id` |                          | `204`                         |
+
+Validation errors come back as
+`{ success: false, error: { code: "VALIDATION_ERROR", message, details: { title: ["Title is required"] } } }`
+with status `400`; a non-numeric id is also `400`.
 
 ```bash
-# Create
-curl -H "Authorization: Bearer <token>" \
-  -X POST https://groot.localhost/api/v1/todos \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Ship docs"}'
-
-# Toggle completion
-curl -H "Authorization: Bearer <token>" \
-  -X PUT https://groot.localhost/api/v1/todos/1 \
-  -H "Content-Type: application/json" \
-  -d '{"completed":true}'
-
-# Delete
-curl -H "Authorization: Bearer <token>" \
-  -X DELETE https://groot.localhost/api/v1/todos/1
-```
-
-Validation errors use Boom:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Title is required"
-  }
-}
+curl -H "Authorization: Bearer $TOKEN" -X POST http://localhost:3000/api/v1/todos \
+  -H "Content-Type: application/json" -d '{"title":"Ship docs"}'
+curl -H "Authorization: Bearer $TOKEN" -X PUT http://localhost:3000/api/v1/todos/1 \
+  -H "Content-Type: application/json" -d '{"completed":true}'
+curl -H "Authorization: Bearer $TOKEN" -X DELETE http://localhost:3000/api/v1/todos/1
 ```
 
 ## Implementation
 
-### Routes
-
-```typescript
-// todo.routes.ts
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { parseId, parseBody } from "@groot/core/utils/controller.utils";
-import * as todoService from "./todo.service";
-import { createTodoSchema, updateTodoSchema } from "./todo.schema";
-
-const router = createRouter();
-
-router.post("/", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createTodoSchema);
-  res.status(201);
-  return await todoService.create({ data: payload });
+```ts
+// todo.schema.ts
+export const createTodoSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  completed: z.boolean().optional().default(false),
 });
-
-router.get("/", async () => {
-  return await todoService.findAll();
-});
-
-router.get("/:id", async (req: Request) => {
-  const id = parseId(req.params.id);
-  return await todoService.findById({ id });
-});
-
-router.put("/:id", async (req: Request) => {
-  const id = parseId(req.params.id);
-  const payload = parseBody(req, updateTodoSchema);
-  return await todoService.update({ id, data: payload });
-});
-
-router.delete("/:id", async (req: Request) => {
-  const id = parseId(req.params.id);
-  return await todoService.deleteTodo({ id });
-});
-
-export default router;
+export const updateTodoSchema = createTodoSchema.partial();
 ```
 
-### Service
+```ts
+// todo.routes.ts
+const router = new Hono<AppEnv>();
 
-```typescript
+router.get("/", async (c) => ok(c, await todoService.findAll()));
+router.post("/", async (c) => {
+  const payload = await parseBody(c, createTodoSchema);
+  return ok(c, await todoService.create({ data: payload }), 201);
+});
+router.get("/:id", async (c) =>
+  ok(c, await todoService.findById({ id: parseId(c.req.param("id")) })),
+);
+router.put("/:id", async (c) => {
+  const id = parseId(c.req.param("id"));
+  const payload = await parseBody(c, updateTodoSchema);
+  return ok(c, await todoService.update({ id, data: payload }));
+});
+router.delete("/:id", async (c) => {
+  await todoService.deleteTodo({ id: parseId(c.req.param("id")) });
+  return noContent(c);
+});
+```
+
+```ts
 // todo.service.ts
-import { prisma } from "@groot/core/database";
-import { Boom } from "@groot/core/errors";
-import type { CreateTodoDTO, UpdateTodoDTO } from "./todo.schema";
-
-export async function create({ data }: { data: CreateTodoDTO }) {
-  return prisma.todo.create({ data });
+export async function findAll(): Promise<Todo[]> {
+  return db.select().from(todos).orderBy(desc(todos.createdAt), desc(todos.id));
 }
 
-export async function findById({ id }: { id: number }) {
-  const todo = await prisma.todo.findUnique({ where: { id } });
-  if (!todo) {
-    throw Boom.notFound("Todo not found");
-  }
+export async function findById({ id }: { id: number }): Promise<Todo> {
+  const [todo] = await db.select().from(todos).where(eq(todos.id, id)).limit(1);
+  if (!todo) throw Boom.notFound("Todo not found");
   return todo;
 }
+
+export async function create({ data }: { data: CreateTodoDTO }): Promise<Todo> {
+  const [todo] = await db.insert(todos).values(data).returning();
+  return todo!;
+}
 ```
 
-## Background Jobs
+The router is mounted in `apps/web/src/server/app.ts` on the protected sub-app:
+`api.route("/todos", todoRoutes)`.
 
-Defined in `todo.jobs.ts`:
+## Background jobs
 
-| Job            | Description                                                  |
-| -------------- | ------------------------------------------------------------ |
-| `todo-cleanup` | Deletes completed todos older than `daysToKeep` (default 30) |
-| `todo-summary` | Logs aggregate stats (total, completed, pending)             |
+| Job            | Data                             | Does                                                                                                         |
+| -------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `todo-cleanup` | `{ daysToKeep?: number }`        | Deletes completed todos whose `updatedAt` is older than `daysToKeep` (30); returns `{ deleted, daysToKeep }` |
+| `todo-summary` | `{ includeCompleted?: boolean }` | Counts todos; returns `{ total, completed, pending }` as the job output                                      |
 
-```typescript
+```ts
 // todo.jobs.ts
-import { registerJobHandler, type JobHandler } from "@groot/jobs/server";
-
-export const cleanupHandler: JobHandler<CleanupPayload> = async ({ data }) => {
-  const { daysToKeep = 30 } = data;
-  // Cleanup logic
-};
+export async function todoCleanupHandler(job: JobContext<TodoCleanupJobData>) {
+  const daysToKeep = job.data?.daysToKeep ?? 30;
+  const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
+  const deleted = await db
+    .delete(todos)
+    .where(and(eq(todos.completed, true), lt(todos.updatedAt, cutoff)))
+    .returning({ id: todos.id });
+  job.logger.info({ deleted: deleted.length, daysToKeep }, "Todo cleanup completed");
+  return { deleted: deleted.length, daysToKeep };
+}
 
 export function registerTodoJobs(): void {
-  registerJobHandler("todo-cleanup", cleanupHandler);
+  registerJobHandler("todo-cleanup", todoCleanupHandler);
+  registerJobHandler("todo-summary", todoSummaryHandler);
 }
 ```
 
-Jobs are registered in `routes.ts`:
+`registerTodoJobs()` is called from `registerJobHandlers()` in `app.ts`. Queue
+with `addJob("todo-cleanup", { daysToKeep: 45 })` or `POST /api/v1/jobs`; see
+[Background jobs](./jobs.md).
 
-```typescript
-import { registerTodoJobs } from "./api/todo/todo.jobs";
+## Tests
 
-export function registerJobHandlers(): void {
-  registerTodoJobs();
-}
-```
+- `tests/server/api/todos.test.ts` — the CRUD cycle and validation through `app.request()`
+- `tests/server/app/todo.jobs.test.ts` — handlers via `addJob()` + `runTick()`
 
-## React Integration
+## Client
 
-- `@groot/shell/lib/api` - API client with JWT auth
-- `apps/web/src/client/pages/todo/hooks/useTodos.ts` - React Query hooks
-- `apps/web/src/client/pages/todo/pages/Todos.tsx` - Todo page component
-
-The client automatically refetches the todo list after mutations via `queryClient.invalidateQueries`.
-
-## Database Schema
-
-```prisma
-model Todo {
-  id        Int      @id @default(autoincrement())
-  title     String
-  completed Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-```
+- `apps/web/src/client/pages/todo/` — the page and its React Query hooks
+- `@groot/shell/lib/api` — `apiClient`, which unwraps the envelope and refetches after mutations via `queryClient.invalidateQueries`

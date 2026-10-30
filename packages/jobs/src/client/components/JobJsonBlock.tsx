@@ -101,7 +101,7 @@ export function JobJsonBlock({ label, value }: { label: string; value: unknown }
         <CardTitle>{label}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-hidden rounded-lg border border-border/60">
+        <div className="overflow-hidden rounded-xl border border-border/60">
           <Suspense fallback={<div className="h-48" />}>
             <CodeMirrorEditor
               value={json}

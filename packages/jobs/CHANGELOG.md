@@ -1,5 +1,46 @@
 # @groot/jobs
 
+## 1.0.0
+
+### Major Changes
+
+- [#133](https://github.com/AshikNesin/groot/pull/133) [`c1fdac9`](https://github.com/AshikNesin/groot/commit/c1fdac9cc529d7292d9694b79b9b1fbc48df766a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rebuild the server on Hono + Drizzle (SQLite only) so the same app runs on Node and on the Cloudflare Workers free plan.
+
+  **Breaking changes**
+
+  - **HTTP layer:** Express is gone. Routers are plain `new Hono<AppEnv>()`; handlers return `ok(c, data, status?)` / `noContent(c)` (`@groot/core/utils/api-response.utils`) and read input with `await parseBody(c, schema)`, `parseQuery(c, schema)`, `parseId(c.req.param("id"))`, `requireUser(c)`. `createRouter`, `handle`, `createServer`, `setupSpaFallback`, `setupErrorHandling`, `startServer` and the Express-typed middlewares no longer exist; use `createApp({ routes })` from `@groot/core/app` and the runtime entries `apps/web/src/server/entry.node.ts` / `entry.worker.ts`.
+  - **Database:** Prisma and PostgreSQL support are removed. The schema is Drizzle TypeScript (`packages/core/src/database/schema.ts`, `packages/jobs/src/server/schema.ts`, `apps/web/src/server/db/schema.ts`), `db` comes from `@groot/core/database` and is set by `bootstrap()`, migrations are generated with `pnpm db:generate` into `apps/web/drizzle/` and applied on boot (Node) or with `pnpm db:migrate:worker` (D1). Table and column names changed (`users`, `passkeys`, `todos`, `kv`, `jobs`, `job_schedules`, `job_logs`, snake_case columns): existing databases need a fresh migration or a one-off data copy.
+  - **Jobs:** pg-boss and honker are replaced by a table-backed queue. `JobQueueAdapter`, `initJobQueue`, `getJobQueue`, the adapter subpaths, `controller` and `error-handler` are removed. Jobs are `Job` rows with camelCase fields (`runAt`, `startedAt`, `completedAt`, `retryLimit`, `retryCount`, `retryDelay`, `output`, `error`, `singletonKey`) and five states (`created`, `active`, `completed`, `failed`, `cancelled`). Handlers receive `{ id, name, data, attempt, logger }` and may return an output value. Schedules are one per job name (no `key`). `runTick()` drives the queue: polled on Node (`startWorkers()`), cron trigger on Workers, and inline after `addJob()`.
+  - **Config and env:** `config.yml`, the YAML loader and varlock are removed. Configuration is `defineConfig()` in `apps/web/src/server/config.ts` on top of `defaultConfig(env)` (`@groot/core/config`); environment variables are validated by the Zod schema in `@groot/core/env` and documented in `.env.example`. Development needs no `.env`; production requires `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `ORIGIN` and `RP_ID`.
+  - **Auth:** passwords are hashed with PBKDF2-SHA256 (WebCrypto) instead of bcrypt, JWTs are issued with `jose`. Existing bcrypt hashes are not accepted; users must reset their passwords.
+  - **KV:** Keyv is replaced by the `kv` table (`kv`, `createNamespaceKv`, `purgeExpiredKv` in `@groot/core/kv`) with a slightly different API (`list(prefix)`, `clear(prefix)`).
+  - **Logger:** pino is replaced by a small structured logger with the same call shape (`logger.info(data, msg)`, `.child()`); `createRequestLogger` now takes a plain descriptor and request context lives in `@groot/core/context`.
+  - **Storage:** the files-sdk adapter is injected through `bootstrap({ storage })`: `localStorage()` on Node, `r2Storage(env.STORAGE)` on Workers. `STORAGE_DRIVER` and the bundled S3 adapter are gone (pass `files-sdk/s3` yourself if you need it).
+  - **Build output:** the client builds to `dist/client` and the Node bundle to `dist/server/bundle.js`; `pnpm start` migrates on boot (no `prestart`).
+
+  **New**
+
+  - Cloudflare Workers target: `wrangler.jsonc` (D1, R2, Static Assets, one cron trigger), `pnpm dev:worker`, `pnpm check:worker`, `pnpm deploy:worker`, `docs/guides/deploy-cloudflare.md`.
+  - Zero-config local development (`pnpm dev` with no `.env`), `pnpm db:studio`, `pnpm db:seed`.
+
+### Patch Changes
+
+- Updated dependencies [[`c1e5177`](https://github.com/AshikNesin/groot/commit/c1e5177f72bce07990e72f6678a210b62005d472), [`b89d44b`](https://github.com/AshikNesin/groot/commit/b89d44b150dea6c256cf1c8331f5d5792d0ffd4d), [`6002a46`](https://github.com/AshikNesin/groot/commit/6002a46dabe53ab067472cfa03862d18e1d9fcdc), [`c1fdac9`](https://github.com/AshikNesin/groot/commit/c1fdac9cc529d7292d9694b79b9b1fbc48df766a), [`1ae96c1`](https://github.com/AshikNesin/groot/commit/1ae96c1e85afd0c0d2562958589b2ee2f08bacf8), [`6209997`](https://github.com/AshikNesin/groot/commit/620999778ed329ee20b55f810f80b368db158dd4), [`8ab9eee`](https://github.com/AshikNesin/groot/commit/8ab9eeee9b3029330f8f70d06e6cf31b3f3eb42f), [`191f6a6`](https://github.com/AshikNesin/groot/commit/191f6a6ea0efe632f8bf8fc3221f81ab01e9d0c9)]:
+  - @groot/shell@1.0.0
+  - @groot/core@1.0.0
+  - @groot/ui@0.7.3
+
+## 0.9.4
+
+### Patch Changes
+
+- [`129a729`](https://github.com/AshikNesin/groot/commit/129a729d3c658c6ff121a50a3741f2e2cb5ec27e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Import `PageLayout`/`Section` from their own files instead of the `components/layout` barrel. On case-insensitive filesystems (macOS) `@groot/shell/components/layout` resolved to `Layout.tsx`, which broke the dev server and typecheck.
+
+- Updated dependencies [[`2c06f72`](https://github.com/AshikNesin/groot/commit/2c06f72266b4edf9a9eaa35a1ad3814155d6d730), [`aba55a5`](https://github.com/AshikNesin/groot/commit/aba55a5205f5c05137f1203af639f8b2e5dcd108), [`7b86607`](https://github.com/AshikNesin/groot/commit/7b86607a4147a66373e1e5c3b8457d81e25a50e6), [`72ce54c`](https://github.com/AshikNesin/groot/commit/72ce54c32d03c89018fddb5487b4b64662953d2c), [`ae93587`](https://github.com/AshikNesin/groot/commit/ae93587bec63fcdab1f0885e92ff7b990294802d), [`9afae1d`](https://github.com/AshikNesin/groot/commit/9afae1d6d901ed02f0b3c82ddcd6c781229ca636), [`664f989`](https://github.com/AshikNesin/groot/commit/664f989db27179fd61059a1002506c27c8264023), [`84f82a9`](https://github.com/AshikNesin/groot/commit/84f82a9ec4c54aab0b005c495f7bd14b4d46b9db), [`e3614e4`](https://github.com/AshikNesin/groot/commit/e3614e4bce049f0cb71ee28bcb24cfeed05fd110)]:
+  - @groot/core@0.10.3
+  - @groot/shell@0.11.0
+  - @groot/ui@0.7.2
+
 ## 0.9.3
 
 ### Patch Changes

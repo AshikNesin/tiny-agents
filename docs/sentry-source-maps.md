@@ -1,94 +1,64 @@
 # Sentry source maps
 
-Configure source map uploads so Sentry shows original TypeScript file paths in
-error stack traces instead of bundled references like `dist/bundle.js:942:12`.
+Upload source maps at build time so Sentry shows original TypeScript paths
+instead of `dist/server/bundle.js:942:12`.
 
 ## Prerequisites
 
-- A Sentry account with the `groot` project set up
-- Your Sentry organization slug (e.g. `sentry`)
-- Your Sentry project slug (e.g. `groot`)
+- A Sentry project, its organization slug and project slug
+- An auth token with `organization:read`, `project:write`, `release:admin`
+  (Sentry → **Settings → Developer Settings → Organization Tokens** for CI, or a
+  personal token under **Account Settings → User Auth Tokens**)
 
-## 1. Create a Sentry Auth Token
+Never commit the token; rotate it if it leaks.
 
-There are two ways to create a token:
+## Build-time variables
 
-### Option A: Sentry Web UI (recommended)
+Set these where the build runs (Coolify → Environment Variables, available at
+build time; a CI secret; your shell):
 
-1. Log in to Sentry (https://sentry.io or your self-hosted URL)
-2. Navigate to token settings:
-   - **Organization tokens** (preferred for CI): **Settings > Organization Settings > Developer Settings > Organization Tokens**
-   - **Personal tokens**: **Settings > Account Settings > API Keys / User Auth Tokens**
-3. Click **Create Auth Token**
-4. Set a name (e.g. `groot-source-map-upload`)
-5. Select these scopes:
-   - `organization:read`
-   - `project:write`
-   - `release:admin`
-6. Click **Create Token**
-7. Copy the token — it's only shown once, so store it securely (password manager or CI secret store)
+| Variable            | Purpose                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `SENTRY_AUTH_TOKEN` | Enables the upload plugins                                    |
+| `SENTRY_ORG`        | Organization slug (also required for the plugins to activate) |
+| `SENTRY_PROJECT`    | Project slug; defaults to the package name (`groot`)          |
+| `SENTRY_RELEASE`    | Release name; see below                                       |
 
-### Option B: Sentry CLI
+Without `SENTRY_AUTH_TOKEN` and `SENTRY_ORG` the plugins are skipped and the
+build is a normal build.
 
-1. Install Sentry CLI and run:
-   ```bash
-   sentry-cli login
-   ```
-2. Open the URL shown in your terminal, sign in, and enter the device code
-3. Copy the token from the settings page or `~/.sentryclirc`
+## How it works
 
-### Token types
+| Plugin                   | Where               | Uploads                                | Deleted after upload       |
+| ------------------------ | ------------------- | -------------------------------------- | -------------------------- |
+| `@sentry/esbuild-plugin` | `scripts/build.mjs` | server maps `dist/server/*.map`        | `dist/server/*.map`        |
+| `@sentry/vite-plugin`    | `vite.config.ts`    | client maps `dist/client/assets/*.map` | `dist/client/assets/*.map` |
 
-- **Organization tokens** — bound to a single org, ideal for CI/CD (prefer this for Coolify)
-- **Personal tokens** — bound to your user, can access all orgs/projects you have access to
+Both compute the release as `SENTRY_RELEASE`, else `<package-name>@<short sha>`
+from `SOURCE_COMMIT` / `SOURCE_VERSION` / `git rev-parse HEAD`.
 
-> **Never commit the token to version control.** Rotate it immediately if you suspect a leak.
+At runtime the Node entry initialises `@sentry/node` when `SENTRY_DSN` is set
+with `release: SENTRY_RELEASE ?? SOURCE_COMMIT.slice(0, 7)`; the Worker passes
+`SENTRY_RELEASE` to `@sentry/cloudflare`. For stack traces to resolve, the
+runtime release must equal the uploaded one, so **set `SENTRY_RELEASE`
+explicitly in both the build and the runtime environment** (for example
+`groot@$(git rev-parse --short HEAD)` in CI) rather than relying on the
+fallbacks.
 
-## 2. Add Token to Coolify
+## Verify
 
-1. Open your Coolify dashboard
-2. Navigate to your `groot` application
-3. Go to **Configuration > Environment Variables**
-4. Add a new variable:
-   - **Name:** `SENTRY_AUTH_TOKEN`
-   - **Value:** `<paste your token>`
-   - Make sure it's available during **build** (not just runtime)
-5. Optionally add `SENTRY_PROJECT` (defaults to the package name) if your Sentry project is named differently
-6. Save and redeploy
-
-## 3. Verify It Works
-
-After deploying:
-
-1. Check the build logs — you should see Sentry source map upload messages
-2. Go to **Sentry > Releases** — a new release (e.g. `groot@abc1234`) should appear with source map artifacts
-3. Trigger an error and check the stack trace — it should show original file paths like `packages/core/src/storage/...` instead of `dist/bundle.js:942:12`
-
-## How It Works
-
-The build pipeline uses two Sentry plugins:
-
-| Plugin                   | Purpose                                              |
-| ------------------------ | ---------------------------------------------------- |
-| `@sentry/esbuild-plugin` | Uploads server source maps from `dist/bundle.js.map` |
-| `@sentry/vite-plugin`    | Uploads client source maps from `dist/assets/*.map`  |
-
-Both plugins only activate when `SENTRY_AUTH_TOKEN` is set. Local builds without the token work normally (plugins are skipped).
-
-A release identifier (`<package-name>@<git-sha>`, e.g. `groot@abc1234`) is computed during build and written to `dist/release.json`. At runtime, `instrument.ts` reads this file to ensure the release value matches what was uploaded to Sentry.
-
-**Project slug:** plugins upload to the project named `SENTRY_PROJECT`, falling back to `groot` (the package name) when unset. Child repos with a different Sentry project just set `SENTRY_PROJECT`.
+1. Build logs show the Sentry plugins uploading artifacts.
+2. **Sentry → Releases** lists the release with source map artifacts.
+3. Trigger an error; the stack trace shows paths like `packages/core/src/…`.
 
 ## Troubleshooting
 
-**Source maps not uploading?**
-
-- Verify `SENTRY_AUTH_TOKEN` is set in the build environment (not just runtime)
-- Check the build logs for Sentry-related errors
-- Ensure the token has the required scopes (`organization:read`, `project:write`, `release:admin`)
-
-**Stack traces still showing bundled paths?**
-
-- Confirm the release in Sentry matches the release reported by the running app
-- Check that `dist/release.json` exists in the deployed artifact
-- Source maps may take a few minutes to process after upload
+- **Nothing uploaded** — the token or `SENTRY_ORG` is missing at build time,
+  or the token lacks scopes.
+- **Still bundled paths** — the runtime release does not match the uploaded
+  release (`SENTRY_RELEASE` differs or is unset on one side), or processing is
+  still in progress.
+- **Workers** — the client maps are uploaded by `pnpm build:client`
+  (run by `pnpm deploy:worker`); the Worker bundle itself is built by wrangler,
+  which has its own `upload_source_maps` option in `wrangler.jsonc` if you want
+  server-side maps there too.

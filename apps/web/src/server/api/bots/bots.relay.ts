@@ -8,9 +8,10 @@
  * per delivery, continued conversation is the model's explicit choice via
  * message_bot (the loop guard caps that too).
  */
-import { prisma } from "@groot/core/database";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { sanitizePeerText, type AgentRuntime } from "@tiny-agents/agent";
+import { db, botMessages, bots } from "../../db";
 import { submitToBot } from "./bots.conversation";
 
 /** How a relayed reply is presented inside the receiving transcript. */
@@ -78,9 +79,9 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
       await markAnswered(row.id, replyCreatedAt);
       return true;
     }
-    const host = await prisma.bot.findUnique({
-      where: { id: row.replyToBotId },
-      select: { id: true },
+    const host = await db.query.bots.findFirst({
+      where: eq(bots.id, row.replyToBotId),
+      columns: { id: true },
     });
     if (!host) {
       await markAnswered(row.id, replyCreatedAt);
@@ -100,21 +101,31 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
   }
 
   async function markAnswered(id: string, replyCreatedAt: number) {
-    await prisma.botMessage.update({
-      where: { id },
-      data: { answeredAt: new Date(), answerReplyAt: new Date(replyCreatedAt), kind: "relay" },
-    });
+    const [updated] = await db
+      .update(botMessages)
+      .set({ answeredAt: new Date(), answerReplyAt: new Date(replyCreatedAt), kind: "relay" })
+      .where(eq(botMessages.id, id))
+      .returning({ id: botMessages.id });
+    // A row gone meanwhile (its bot deleted) fails the relay, as Prisma's update did.
+    if (!updated) throw new Error(`Bot message ${id} not found`);
   }
 
   async function relayForBot(botId: string): Promise<number> {
-    const rows = await prisma.botMessage.findMany({
-      where: { toBotId: botId, deliveredAt: { not: null }, answeredAt: null },
-      orderBy: { createdAt: "asc" },
-    });
+    const rows = await db
+      .select()
+      .from(botMessages)
+      .where(
+        and(
+          eq(botMessages.toBotId, botId),
+          isNotNull(botMessages.deliveredAt),
+          isNull(botMessages.answeredAt),
+        ),
+      )
+      .orderBy(asc(botMessages.createdAt));
     if (rows.length === 0) return 0;
-    const target = await prisma.bot.findUnique({
-      where: { id: botId },
-      select: { conversationId: true, name: true },
+    const target = await db.query.bots.findFirst({
+      where: eq(bots.id, botId),
+      columns: { conversationId: true, name: true },
     });
     if (!target) return 0;
     const replies = await assistantReplies(rt, Number(target.conversationId));
@@ -134,23 +145,26 @@ export function createBotRelay(rt: AgentRuntime): BotRelay {
   }
 
   async function relayForConversation(conversationId: number): Promise<number> {
-    const pending = await prisma.botMessage.findFirst({
-      where: {
-        deliveredAt: { not: null },
-        answeredAt: null,
-        to: { conversationId: String(conversationId) },
-      },
-      select: { toBotId: true },
-    });
+    const [pending] = await db
+      .select({ toBotId: botMessages.toBotId })
+      .from(botMessages)
+      .innerJoin(bots, eq(bots.id, botMessages.toBotId))
+      .where(
+        and(
+          isNotNull(botMessages.deliveredAt),
+          isNull(botMessages.answeredAt),
+          eq(bots.conversationId, String(conversationId)),
+        ),
+      )
+      .limit(1);
     return pending ? relayForBot(pending.toBotId) : 0;
   }
 
   async function sweep(): Promise<number> {
-    const pending = await prisma.botMessage.findMany({
-      where: { deliveredAt: { not: null }, answeredAt: null },
-      select: { toBotId: true },
-      distinct: ["toBotId"],
-    });
+    const pending = await db
+      .selectDistinct({ toBotId: botMessages.toBotId })
+      .from(botMessages)
+      .where(and(isNotNull(botMessages.deliveredAt), isNull(botMessages.answeredAt)));
     let relayed = 0;
     for (const { toBotId } of pending) relayed += await relayForBot(toBotId);
     return relayed;

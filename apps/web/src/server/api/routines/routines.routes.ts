@@ -1,58 +1,58 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as routinesService from "./routines.service";
 import { createRoutineSchema, listRunsSchema, updateRoutineSchema } from "./routines.schema";
 import { formatIst, safeParseSchedule } from "./routines.schedule";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.get("/routines", async () => routinesService.list());
+router.get("/routines", async (c) => ok(c, await routinesService.list()));
 
-router.post("/routines", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createRoutineSchema);
-  res.status(201);
+router.post("/routines", async (c) => {
+  const payload = await parseBody(c, createRoutineSchema);
   const routine = await routinesService.create(payload);
-  return { ...routine, nextFireTimes: fireTimesOf(routine.schedule) };
+  return ok(c, { ...routine, nextFireTimes: fireTimesOf(routine.schedule) }, 201);
 });
 
-router.get("/routines/runs/recent", async (req: Request) => {
-  const { limit } = parseQuery(req, listRunsSchema);
-  return { runs: await routinesService.recentRuns(limit) };
+router.get("/routines/runs/recent", async (c) => {
+  const { limit } = parseQuery(c, listRunsSchema);
+  return ok(c, { runs: await routinesService.recentRuns(limit) });
 });
 
-router.get("/routines/:id", async (req: Request) =>
-  routinesService.get(parseStringParam(req.params.id, "id")),
+router.get("/routines/:id", async (c) =>
+  ok(c, await routinesService.get(parseStringParam(c.req.param("id"), "id"))),
 );
 
-router.patch("/routines/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const payload = parseBody(req, updateRoutineSchema);
+router.patch("/routines/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, updateRoutineSchema);
   const routine = await routinesService.update(id, payload);
-  return { ...routine, nextFireTimes: fireTimesOf(routine.schedule) };
+  return ok(c, { ...routine, nextFireTimes: fireTimesOf(routine.schedule) });
 });
 
-router.delete("/routines/:id", async (req: Request) => {
-  await routinesService.remove(parseStringParam(req.params.id, "id"));
-  return { deleted: true };
+router.delete("/routines/:id", async (c) => {
+  await routinesService.remove(parseStringParam(c.req.param("id"), "id"));
+  return ok(c, { deleted: true });
 });
 
-router.post("/routines/:id/pause", async (req: Request) => {
-  return routinesService.pause(parseStringParam(req.params.id, "id"));
-});
+router.post("/routines/:id/pause", async (c) =>
+  ok(c, await routinesService.pause(parseStringParam(c.req.param("id"), "id"))),
+);
 
-router.post("/routines/:id/resume", async (req: Request) => {
-  return routinesService.resume(parseStringParam(req.params.id, "id"));
-});
+router.post("/routines/:id/resume", async (c) =>
+  ok(c, await routinesService.resume(parseStringParam(c.req.param("id"), "id"))),
+);
 
-router.post("/routines/:id/run", async (req: Request) => {
-  return routinesService.runNow(parseStringParam(req.params.id, "id"));
-});
+router.post("/routines/:id/run", async (c) =>
+  ok(c, await routinesService.runNow(parseStringParam(c.req.param("id"), "id"))),
+);
 
-router.get("/routines/:id/runs", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const { limit } = parseQuery(req, listRunsSchema);
-  return { runs: await routinesService.listRuns(id, limit) };
+router.get("/routines/:id/runs", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const { limit } = parseQuery(c, listRunsSchema);
+  return ok(c, { runs: await routinesService.listRuns(id, limit) });
 });
 
 function fireTimesOf(schedule: unknown): string[] {

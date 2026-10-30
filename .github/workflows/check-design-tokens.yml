@@ -67,7 +67,7 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      # --ignore-scripts: skip the secret-gated postinstall (varlock/prisma).
+      # --ignore-scripts: no native builds are needed for the token check.
       # The token check needs no project runtime — only rg (installed below,
       # since recent ubuntu-latest images no longer ship it) + tsx, which
       # install as normal deps.

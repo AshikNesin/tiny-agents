@@ -21,7 +21,7 @@ Browser: /terminal page
    │ WebSocket /api/v1/terminal/ws/:name?ticket=…&cols=&rows=
    │    binary frames = pty bytes both ways · text frames = control
    ▼
-Express bridge (apps/web/src/server/api/terminal/terminal.ws.ts)
+WebSocket bridge on the Node server (apps/web/src/server/api/terminal/terminal.ws.ts)
    single-use 60s ticket · Origin check · slow-client pause · bytes never logged
    ▼
 terminal service (packages/agent/src/terminal) — stateless, port-shaped

@@ -36,14 +36,14 @@ function AppSettingsSkeleton() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Skeleton className="h-5 w-64" />
         <div className="flex gap-2">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-7 w-24 rounded-xl" />
+          <Skeleton className="h-7 w-28 rounded-xl" />
         </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <Card className="gap-0 p-0">
           <div className="border-b border-border p-3">
-            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-9 w-full rounded-xl" />
           </div>
           <SkeletonList rows={3} leading="none" trailing={false} />
         </Card>
@@ -51,7 +51,7 @@ function AppSettingsSkeleton() {
           <div className="space-y-5">
             <div className="space-y-1.5">
               <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <Skeleton className="h-3 w-16" />
@@ -121,14 +121,13 @@ export function AppSettings() {
               <FormField name="key" className="flex-1">
                 <Input placeholder="e.g. featureFlags, theme, rateLimits" />
               </FormField>
-              <Button type="submit" disabled={s.isCreating} size="sm">
+              <Button type="submit" disabled={s.isCreating}>
                 {s.isCreating ? "Creating…" : "Create"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => s.setShowNewSettingForm(false)}
-                size="sm"
               >
                 Cancel
               </Button>
@@ -143,13 +142,13 @@ export function AppSettings() {
         <Card className="gap-0 p-0">
           <div className="border-b border-border p-3">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Search settings…"
                 value={s.searchQuery}
                 onChange={(e) => s.setSearchQuery(e.target.value)}
-                className="h-8 pl-8"
+                className="pl-9"
               />
             </div>
           </div>
@@ -170,8 +169,8 @@ export function AppSettings() {
                       key={setting.key}
                       onClick={() => s.selectKey(setting.key)}
                       className={cn(
-                        "w-full rounded-lg px-3 py-2 text-left",
-                        active ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-muted",
+                        "w-full rounded-xl px-3 py-2 text-left",
+                        active ? "bg-muted" : "hover:bg-muted",
                       )}
                     >
                       <div
@@ -226,7 +225,7 @@ export function AppSettings() {
                   />
                 </Field>
                 <Field label="JSON value" htmlFor="jsonEditor">
-                  <div className="overflow-hidden rounded-md border border-border">
+                  <div className="overflow-hidden rounded-xl border border-input">
                     <Suspense fallback={<div className="h-[400px]" />}>
                       <CodeMirrorEditor
                         value={s.jsonValue}

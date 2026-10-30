@@ -5,10 +5,11 @@
  * while the row records the status and metadata. Two run at a time; rows
  * still pending at boot are picked up again by the sweep.
  */
+import { and, eq } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
-import { prisma } from "@groot/core/database";
 import { logger } from "@groot/core/logger";
 import type { AttachmentContent } from "@tiny-agents/agent";
+import { db, uploads } from "../../db";
 import { defaultRunner, type ExtractRunner } from "./uploads.extract-runner";
 import { sniffFile, SniffError, type ExtractKind } from "./uploads.sniff";
 
@@ -65,12 +66,12 @@ function extensionOf(name: string): string {
 }
 
 async function extractOne(uploadId: string): Promise<void> {
-  const row = await prisma.upload.findUnique({ where: { id: uploadId } });
+  const row = await db.query.uploads.findFirst({ where: eq(uploads.id, uploadId) });
   if (!row || row.kind !== "file" || row.extractStatus !== "pending") return;
   const started = Date.now();
-  let bytes: Buffer;
+  let bytes: Uint8Array;
   try {
-    bytes = (await storageService.downloadFile({ filePath: row.storageKey })).buffer;
+    bytes = (await storageService.downloadFile({ filePath: row.storageKey })).bytes;
   } catch {
     await finish(uploadId, { extractStatus: "failed", extractError: "The file's bytes are gone." });
     return;
@@ -96,7 +97,7 @@ async function extractOne(uploadId: string): Promise<void> {
   }
   await storageService.uploadFile({
     filePath: extractKey(uploadId),
-    fileData: Buffer.from(JSON.stringify(result.content)),
+    fileData: new TextEncoder().encode(JSON.stringify(result.content)),
     contentType: "application/json",
   });
   await finish(uploadId, {
@@ -126,17 +127,19 @@ async function finish(
   data: { extractStatus: string; extractError?: string | null; extractMeta?: string },
 ): Promise<void> {
   // The upload may have been deleted meanwhile.
-  await prisma.upload
-    .updateMany({ where: { id: uploadId }, data: { ...data, extractedAt: new Date() } })
+  await db
+    .update(uploads)
+    .set({ ...data, extractedAt: new Date() })
+    .where(eq(uploads.id, uploadId))
     .catch(() => undefined);
 }
 
 /** Boot: rows left pending by a restart are extracted again. */
 export async function extractionSweep(): Promise<number> {
-  const rows = await prisma.upload.findMany({
-    where: { kind: "file", extractStatus: "pending" },
-    select: { id: true },
-  });
+  const rows = await db
+    .select({ id: uploads.id })
+    .from(uploads)
+    .where(and(eq(uploads.kind, "file"), eq(uploads.extractStatus, "pending")));
   for (const row of rows) queueExtraction(row.id);
   return rows.length;
 }
@@ -153,7 +156,7 @@ export async function loadContent(uploadId: string): Promise<AttachmentContent |
   }
   try {
     const file = await storageService.downloadFile({ filePath: extractKey(uploadId) });
-    const content = JSON.parse(file.buffer.toString("utf8")) as AttachmentContent;
+    const content = JSON.parse(new TextDecoder().decode(file.bytes)) as AttachmentContent;
     cache.set(uploadId, content);
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
     return content;

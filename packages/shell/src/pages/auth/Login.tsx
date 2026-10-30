@@ -4,6 +4,7 @@ import { displayClass, h1Class } from "@groot/ui";
 import { Input } from "@groot/ui/input";
 import { Form, FormField } from "@groot/ui/form";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { ApiError } from "@groot/shell/lib/api";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,15 +26,16 @@ type LoginValues = z.infer<typeof loginSchema>;
 /** A 401 from the login endpoint is always "wrong credentials" for the
  * person typing; network-level wording ("Request failed with status code
  * 401") is for logs, not toasts. Anything else keeps its message. */
-function loginErrorDescription(error: unknown, fallback: string): string {
-  if (error && typeof error === "object") {
-    const maybe = error as { response?: { status?: number }; message?: string };
-    if (maybe.response?.status === 401) return "Invalid email or password.";
-    if (maybe.message && !maybe.message.startsWith("Request failed with status code")) {
-      return maybe.message;
-    }
+export function loginErrorDescription(error: unknown, fallback: string): string {
+  // The fetch client throws ApiError (with `status`) for HTTP errors and a
+  // TypeError when the request never reached the server.
+  if (error instanceof ApiError) {
+    return error.status === 401 ? "Invalid email or password." : error.message || fallback;
+  }
+  if (error instanceof TypeError) {
     return "Could not reach the server. Check your connection and try again.";
   }
+  if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
 
@@ -106,7 +108,7 @@ export function Login() {
       <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BrandMark className="size-5" />
             </span>
             <span className="font-heading text-base font-semibold">{brandLabel}</span>
@@ -116,7 +118,7 @@ export function Login() {
           <p className="mt-1 text-sm text-muted-foreground">Sign in to your account to continue.</p>
 
           {isDev && (
-            <div className="mt-6 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <div className="mt-6 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Demo credentials:</span>{" "}
               demo@example.com / demo@example.com
             </div>
@@ -176,8 +178,8 @@ export function Login() {
           <ul className="mt-8 space-y-4">
             {features.map((f) => (
               <li key={f.title} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10 dark:bg-foreground/10">
-                  <f.icon className="text-primary-foreground dark:text-foreground size-4" />
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/10 dark:bg-foreground/10">
+                  <f.icon className="size-4 text-primary-foreground dark:text-foreground" />
                 </span>
                 <div>
                   <p className="text-primary-foreground dark:text-foreground text-sm font-medium">

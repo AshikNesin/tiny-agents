@@ -5,10 +5,11 @@
  * there), continue it, or delete it. Chats retired before this existed have
  * no link back to their bot and are not listed.
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { CHAT_WINDOW, pageBefore, windowChat, type AgentRuntime } from "@tiny-agents/agent";
+import { db, botChats } from "../../db";
 import { chatCards } from "../routines/routines.cards";
 import { firstMessageTitle, titlePastChat } from "./chats.title";
 import type { ChatHistoryDTO } from "./bots.schema";
@@ -25,7 +26,7 @@ export interface PastChat {
   messageCount: number;
 }
 
-const pastChatSelect = {
+const pastChatColumns = {
   id: true,
   title: true,
   startedAt: true,
@@ -33,6 +34,16 @@ const pastChatSelect = {
   lastMessagePreview: true,
   messageCount: true,
 } as const;
+
+/** The same fields for a core select (`returning`). */
+const pastChatFields = {
+  id: botChats.id,
+  title: botChats.title,
+  startedAt: botChats.startedAt,
+  endedAt: botChats.endedAt,
+  lastMessagePreview: botChats.lastMessagePreview,
+  messageCount: botChats.messageCount,
+};
 
 /** The chat a bot is leaving: its conversation, and the row fields it had. */
 export interface EndingChat {
@@ -58,9 +69,10 @@ export async function recordPastChat(
     const { messages } = await rt.readChat(Number(ending.conversationId));
     const said = messages.filter((m) => m.role === "user" || m.role === "assistant");
     if (said.length === 0) return undefined;
-    const chat = await prisma.botChat.upsert({
-      where: { conversationId: ending.conversationId },
-      create: {
+    // Recorded once per conversation: an existing row is kept as it is.
+    const [created] = await db
+      .insert(botChats)
+      .values({
         botId: ending.botId,
         conversationId: ending.conversationId,
         startedAt: ending.startedAt,
@@ -68,10 +80,16 @@ export async function recordPastChat(
         title: firstMessageTitle(said),
         lastMessagePreview: ending.lastMessagePreview,
         messageCount: said.length,
-      },
-      update: {},
-      select: pastChatSelect,
-    });
+      })
+      .onConflictDoNothing({ target: botChats.conversationId })
+      .returning(pastChatFields);
+    const chat =
+      created ??
+      (await db.query.botChats.findFirst({
+        where: eq(botChats.conversationId, ending.conversationId),
+        columns: pastChatColumns,
+      }));
+    if (!chat) return undefined;
     void titlePastChat(chat.id, {
       botName: ending.botName,
       botModelId: ending.botModelId,
@@ -89,18 +107,18 @@ export async function recordPastChat(
 
 /** A bot's past chats, the most recently ended first. */
 export async function listPastChats(botId: string): Promise<PastChat[]> {
-  return prisma.botChat.findMany({
-    where: { botId },
-    orderBy: { endedAt: "desc" },
-    select: pastChatSelect,
+  return db.query.botChats.findMany({
+    where: eq(botChats.botId, botId),
+    orderBy: desc(botChats.endedAt),
+    columns: pastChatColumns,
   });
 }
 
 /** One of the bot's past chats with its conversation; 404 for another bot's. */
 export async function findPastChat(botId: string, chatId: string) {
-  const chat = await prisma.botChat.findFirst({
-    where: { id: chatId, botId },
-    select: { ...pastChatSelect, conversationId: true },
+  const chat = await db.query.botChats.findFirst({
+    where: and(eq(botChats.id, chatId), eq(botChats.botId, botId)),
+    columns: { ...pastChatColumns, conversationId: true },
   });
   if (!chat) throw Boom.notFound("Past chat not found");
   return chat;
@@ -147,6 +165,6 @@ export async function pastChatPage(
  */
 export async function deletePastChat(botId: string, chatId: string) {
   const chat = await findPastChat(botId, chatId);
-  await prisma.botChat.delete({ where: { id: chat.id } });
+  await db.delete(botChats).where(eq(botChats.id, chat.id));
   return { deleted: true };
 }

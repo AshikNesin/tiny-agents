@@ -10,7 +10,13 @@ function formatDuration(start: string | null, end: string | null): string {
   return `${duration.toFixed(2)}s`;
 }
 
-/** Read-only metadata grid for a job (priority, retries, timestamps, retention…). */
+/** Relative time with the full locale timestamp as the hover title. */
+function Timestamp({ value, empty = "—" }: { value: string | null; empty?: string }) {
+  if (!value) return <span title="N/A">{empty}</span>;
+  return <span title={formatLocaleDateTime(value)}>{formatRelativeTime(value)}</span>;
+}
+
+/** Read-only metadata grid for a job (priority, retries, timestamps…). */
 export function JobOverview({ job }: { job: Job }) {
   return (
     <Card>
@@ -21,32 +27,22 @@ export function JobOverview({ job }: { job: Job }) {
         <DataFields>
           <DataField label="Priority">{job.priority}</DataField>
           <DataField label="Retries">
-            {job.retrycount} / {job.retrylimit}
+            {job.retryCount} / {job.retryLimit}
           </DataField>
+          <DataField label="Retry Delay">{job.retryDelay}s</DataField>
           <DataField label="Created">
-            <span title={job.createdon ? formatLocaleDateTime(job.createdon) : "N/A"}>
-              {job.createdon ? formatRelativeTime(job.createdon) : "N/A"}
-            </span>
+            <Timestamp value={job.createdAt} empty="N/A" />
+          </DataField>
+          <DataField label="Run At">
+            <Timestamp value={job.runAt} empty="N/A" />
           </DataField>
           <DataField label="Started">
-            <span title={job.startedon ? formatLocaleDateTime(job.startedon) : "N/A"}>
-              {job.startedon ? formatRelativeTime(job.startedon) : "—"}
-            </span>
+            <Timestamp value={job.startedAt} />
           </DataField>
           <DataField label="Completed">
-            <span title={job.completedon ? formatLocaleDateTime(job.completedon) : "N/A"}>
-              {job.completedon ? formatRelativeTime(job.completedon) : "—"}
-            </span>
+            <Timestamp value={job.completedAt} />
           </DataField>
-          <DataField label="Duration">{formatDuration(job.startedon, job.completedon)}</DataField>
-          <DataField label="Retry Delay">{job.retrydelay}s</DataField>
-          <DataField label="Retry Backoff">{job.retrybackoff ? "Yes" : "No"}</DataField>
-          <DataField label="Expire In">{job.expirein}</DataField>
-          <DataField label="Keep Until">
-            <span title={job.keepuntil ? formatLocaleDateTime(job.keepuntil) : "N/A"}>
-              {job.keepuntil ? formatRelativeTime(job.keepuntil) : "N/A"}
-            </span>
-          </DataField>
+          <DataField label="Duration">{formatDuration(job.startedAt, job.completedAt)}</DataField>
         </DataFields>
       </CardContent>
     </Card>

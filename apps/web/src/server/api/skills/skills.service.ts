@@ -3,7 +3,7 @@
  * import previews (paste or GitHub). Assignment needs no agent reconfigure —
  * the `skills` capability reads a bot's skills from app.db on every request.
  */
-import { prisma } from "@groot/core/database";
+import { asc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
   fetchSkillFromGitHub,
@@ -12,8 +12,9 @@ import {
   type SkillFile,
 } from "./skills.parse";
 import type { CreateSkillDTO, PreviewSkillDTO, UpdateSkillDTO } from "./skills.schema";
+import { botSkills, bots, db, skills, type Skill } from "../../db";
 
-type SkillRow = Awaited<ReturnType<typeof prisma.skill.findUniqueOrThrow>> & {
+type SkillRow = Skill & {
   bots: { botId: string }[];
 };
 
@@ -51,66 +52,72 @@ function toDTO(row: SkillRow): SkillDTO {
   };
 }
 
-const withBots = { bots: { select: { botId: true } } } as const;
+const withBots = { bots: { columns: { botId: true } } } as const;
 
 async function nameTaken(name: string, exceptId?: string): Promise<void> {
-  const existing = await prisma.skill.findUnique({ where: { name } });
+  const existing = await db.query.skills.findFirst({ where: eq(skills.name, name) });
   if (existing && existing.id !== exceptId) throw Boom.conflict(`A skill named "${name}" exists`);
 }
 
 async function setBots(skillId: string, botIds: string[]): Promise<void> {
-  const bots = await prisma.bot.findMany({ where: { id: { in: botIds } }, select: { id: true } });
-  await prisma.$transaction([
-    prisma.botSkill.deleteMany({ where: { skillId } }),
-    prisma.botSkill.createMany({ data: bots.map((bot) => ({ botId: bot.id, skillId })) }),
-  ]);
+  const found = await db.select({ id: bots.id }).from(bots).where(inArray(bots.id, botIds));
+  db.transaction((tx) => {
+    tx.delete(botSkills).where(eq(botSkills.skillId, skillId)).run();
+    if (found.length > 0) {
+      tx.insert(botSkills)
+        .values(found.map((bot) => ({ botId: bot.id, skillId })))
+        .run();
+    }
+  });
 }
 
 export async function list(): Promise<SkillDTO[]> {
-  const rows = await prisma.skill.findMany({ include: withBots, orderBy: { name: "asc" } });
+  const rows = await db.query.skills.findMany({ with: withBots, orderBy: asc(skills.name) });
   return rows.map(toDTO);
 }
 
 export async function get(id: string): Promise<SkillDTO> {
-  const row = await prisma.skill.findUnique({ where: { id }, include: withBots });
+  const row = await db.query.skills.findFirst({ where: eq(skills.id, id), with: withBots });
   if (!row) throw Boom.notFound("Skill not found");
   return toDTO(row);
 }
 
 export async function create(data: CreateSkillDTO): Promise<SkillDTO> {
   await nameTaken(data.name);
-  const row = await prisma.skill.create({
-    data: {
+  const [row] = await db
+    .insert(skills)
+    .values({
       name: data.name,
       description: data.description,
       body: data.body,
       files: JSON.stringify(data.files),
       source: data.source,
       sourceUrl: data.sourceUrl ?? null,
-    },
-  });
-  if (data.botIds) await setBots(row.id, data.botIds);
-  return get(row.id);
+    })
+    .returning({ id: skills.id });
+  if (data.botIds) await setBots(row!.id, data.botIds);
+  return get(row!.id);
 }
 
 export async function update(id: string, data: UpdateSkillDTO): Promise<SkillDTO> {
   await get(id);
   if (data.name) await nameTaken(data.name, id);
-  await prisma.skill.update({
-    where: { id },
-    data: {
-      ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.description !== undefined ? { description: data.description } : {}),
-      ...(data.body !== undefined ? { body: data.body } : {}),
-    },
-  });
+  const changes = {
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.body !== undefined ? { body: data.body } : {}),
+  };
+  // A botIds-only update writes no skill columns (and leaves updatedAt alone).
+  if (Object.keys(changes).length > 0) {
+    await db.update(skills).set(changes).where(eq(skills.id, id));
+  }
   if (data.botIds) await setBots(id, data.botIds);
   return get(id);
 }
 
 export async function remove(id: string): Promise<void> {
   await get(id);
-  await prisma.skill.delete({ where: { id } });
+  await db.delete(skills).where(eq(skills.id, id));
 }
 
 /** Parse a pasted SKILL.md or fetch a GitHub skill folder, without saving. */
@@ -119,7 +126,11 @@ export async function preview(input: PreviewSkillDTO): Promise<ParsedSkill & { e
     input.source === "paste"
       ? parseSkillMarkdown(input.content)
       : await fetchSkillFromGitHub(input.url);
-  const exists = (await prisma.skill.findUnique({ where: { name: parsed.name } })) !== null;
+  const exists =
+    (await db.query.skills.findFirst({
+      where: eq(skills.name, parsed.name),
+      columns: { id: true },
+    })) !== undefined;
   return {
     ...parsed,
     exists,

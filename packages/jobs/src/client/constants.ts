@@ -3,22 +3,14 @@
  * files only export components (react-doctor/only-export-components).
  */
 
-import type { JobName } from "./types";
+import type { JobName, JobState } from "./types";
 
-export type StateTab =
-  | "all"
-  | "active"
-  | "created"
-  | "retry"
-  | "failed"
-  | "completed"
-  | "cancelled";
+export type StateTab = "all" | JobState;
 
 export const STATE_TABS: { value: StateTab; label: string }[] = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },
   { value: "created", label: "Created" },
-  { value: "retry", label: "Retry" },
   { value: "failed", label: "Failed" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },

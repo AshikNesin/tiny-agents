@@ -9,10 +9,11 @@
  * and queued for background extraction.
  */
 import { createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { storageService } from "@groot/core/storage";
-import { prisma } from "@groot/core/database";
 import type { AttachmentRef } from "@tiny-agents/agent";
+import { db, uploads } from "../../db";
 import { imageSize, prepareImage, sniffImage } from "./uploads.prepare";
 import { extract } from "./uploads.extract";
 import { extractKey, forgetContent, queueExtraction } from "./uploads.extraction";
@@ -164,8 +165,9 @@ export async function createUpload(
     sniffedFile?.kind === "unsupported"
       ? await extract({ bytes: new Uint8Array(), kind: "unsupported", name }, sniffedFile.mime)
       : undefined;
-  const row = await prisma.upload.create({
-    data: {
+  const [row] = await db
+    .insert(uploads)
+    .values({
       id: uploadId,
       kind: isImage ? "image" : "file",
       name,
@@ -184,10 +186,10 @@ export async function createUpload(
               extractedAt: new Date(),
             }
           : { extractStatus: "pending" }),
-    },
-  });
-  if (row.extractStatus === "pending") queueExtraction(row.id);
-  return { ref: toRef(row) };
+    })
+    .returning();
+  if (row!.extractStatus === "pending") queueExtraction(row!.id);
+  return { ref: toRef(row!) };
 }
 
 function toRef(row: {
@@ -215,11 +217,11 @@ function toRef(row: {
 
 /** An upload's live extraction state, for chips and the preview drawer. */
 export async function uploadStatus(id: string) {
-  const row = await prisma.upload.findUnique({ where: { id } });
+  const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
   // Uploads from before extraction existed are read on first request.
   if (row.kind === "file" && row.extractStatus === "none") {
-    await prisma.upload.update({ where: { id }, data: { extractStatus: "pending" } });
+    await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, id));
     queueExtraction(id);
     row.extractStatus = "pending";
   }
@@ -232,16 +234,27 @@ export async function uploadStatus(id: string) {
 }
 
 export async function getUpload(id: string): Promise<AttachmentRef> {
-  const row = await prisma.upload.findUnique({ where: { id } });
+  const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
   return toRef(row);
 }
 
+function findUpload(id: string) {
+  return db.query.uploads.findFirst({ where: eq(uploads.id, id) });
+}
+
+/** A Buffer view over stored bytes (no copy): the sniffers read Buffer APIs. */
+function asBuffer(bytes: Uint8Array<ArrayBuffer>): Buffer<ArrayBuffer> {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
 /** Original bytes for the UI/download endpoint. */
-export async function originalBytes(id: string): Promise<{ bytes: Buffer; ref: AttachmentRef }> {
+export async function originalBytes(
+  id: string,
+): Promise<{ bytes: Buffer<ArrayBuffer>; ref: AttachmentRef }> {
   const ref = await getUpload(id);
   const file = await storageService.downloadFile({ filePath: `chat/${id}/original` });
-  return { bytes: file.buffer, ref };
+  return { bytes: asBuffer(file.bytes), ref };
 }
 
 /** Model-ready variant bytes for see_image and inline sends. */
@@ -250,12 +263,15 @@ export async function modelImage(
 ): Promise<
   { data: string; mimeType: string; name: string; width?: number; height?: number } | undefined
 > {
-  const row = await prisma.upload.findUnique({ where: { id } });
+  const row = await findUpload(id);
   if (!row || row.kind !== "image" || !row.modelKey) return undefined;
   const file = await storageService.downloadFile({ filePath: row.modelKey });
+  const bytes = asBuffer(file.bytes);
   return {
-    data: file.buffer.toString("base64"),
-    mimeType: file.contentType || row.mimeType,
+    data: bytes.toString("base64"),
+    // The variant's own bytes decide: local storage types objects by key
+    // extension, and `chat/<id>/model` has none.
+    mimeType: sniffImage(bytes) ?? (file.contentType || row.mimeType),
     name: row.name,
     ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
   };
@@ -263,9 +279,9 @@ export async function modelImage(
 
 /** Delete an upload: the row, the original and every derived artifact. */
 export async function deleteUpload(id: string): Promise<void> {
-  const row = await prisma.upload.findUnique({ where: { id } });
+  const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
-  await prisma.upload.delete({ where: { id } });
+  await db.delete(uploads).where(eq(uploads.id, id));
   forgetContent(id);
   const keys = [
     row.storageKey,

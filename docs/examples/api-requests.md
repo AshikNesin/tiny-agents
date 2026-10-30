@@ -1,166 +1,199 @@
 # API request recipes
 
-Copy-ready `curl` snippets for every endpoint. Replace `<jwt-token>` with the
-JWT returned by `/api/v1/auth/login`, and `<admin-key>` with your
-`ADMIN_AUTH_KEY`.
-
-> Most `/api/v1/*` routes are **JWT-protected**. Get a token first, then pass
-> it via `Authorization: Bearer <jwt-token>`. User creation is the one
-> admin-only operation (`X-Admin-Auth-Key`).
-
-## Get a token (login first)
+Copy-ready `curl` snippets for every endpoint, with the status code each one
+returns. Responses use the envelope `{ success: true, data }`; errors are
+`{ success: false, error: { code, message, details } }`.
 
 ```bash
-# Login → returns { token, user }
-TOKEN=$(curl -s -X POST https://groot.localhost/api/v1/auth/login \
+BASE=http://localhost:3000        # https://groot.localhost under portless
+ADMIN_KEY=dev-only-admin-key      # ADMIN_AUTH_KEY (the dev default)
+```
+
+> Everything under `/api/v1` except login needs a JWT. The login response sets
+> an httpOnly `token` cookie for browsers and returns the token for scripts:
+> pass it as `Authorization: Bearer $TOKEN`. User management uses the admin key
+> instead (`X-Admin-Auth-Key`).
+
+## Get a token
+
+```bash
+# 200 → { token, user }
+TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password"}' \
-  | jq -r .token)
+  -d '{"email":"demo@example.com","password":"demo@example.com"}' | jq -r .data.token)
 ```
 
-## Health check
+Wrong credentials → `401`; more than 20 attempts in 15 minutes → `429`.
+
+## Health
 
 ```bash
-curl https://groot.localhost/health
+curl $BASE/health   # 200 { status: "ok", timestamp } — 503 while shutting down
+curl $BASE/ready    # 200 { ready: true }
 ```
+
+## Users and sessions
+
+```bash
+# Create a user (admin key) → 201; duplicate email → 409
+curl -X POST $BASE/api/v1/auth/users \
+  -H "Content-Type: application/json" -H "X-Admin-Auth-Key: $ADMIN_KEY" \
+  -d '{"email":"new@example.com","password":"at-least-6-chars","name":"New User"}'
+
+# List users (admin key) → 200
+curl -H "X-Admin-Auth-Key: $ADMIN_KEY" $BASE/api/v1/auth/users
+
+# Current user (JWT) → 200
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/auth/me
+
+# Logout (JWT; clears the cookie) → 200
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/auth/logout
+```
+
+Missing admin header → `401`; wrong key → `403`.
 
 ## Todos (JWT)
 
 ```bash
-# List
-curl -H "Authorization: Bearer $TOKEN" https://groot.localhost/api/v1/todos
+# List → 200
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/todos
 
-# Create
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/todos \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Draft documentation"}'
+# Create → 201; empty title → 400 with error.details.title
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/todos \
+  -H "Content-Type: application/json" -d '{"title":"Draft documentation"}'
 
-# Toggle completion
-curl -H "Authorization: Bearer $TOKEN" -X PUT https://groot.localhost/api/v1/todos/1 \
-  -H "Content-Type: application/json" \
-  -d '{"completed":true}'
+# Read → 200; unknown id → 404; non-numeric id → 400
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/todos/1
 
-# Delete
-curl -H "Authorization: Bearer $TOKEN" -X DELETE https://groot.localhost/api/v1/todos/1
+# Update → 200
+curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/todos/1 \
+  -H "Content-Type: application/json" -d '{"completed":true}'
+
+# Delete → 204
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/todos/1
 ```
 
 ## Jobs (JWT)
 
 ```bash
-# Queue a job immediately
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/jobs \
+# Queue a job → 201 { jobId, jobName, data }
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs \
   -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-summary","data":{}}'
+  -d '{"jobName":"todo-summary","data":{},"options":{"retryLimit":1,"delaySeconds":0}}'
 
-# Schedule with cron (nightly at 3am)
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/jobs/schedule \
+# Schedule with cron (nightly at 3am, optional timezone) → 201
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/schedule \
   -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-cleanup","cron":"0 3 * * *","data":{"daysToKeep":45}}'
+  -d '{"jobName":"todo-cleanup","cron":"0 3 * * *","data":{"daysToKeep":45},"options":{"timezone":"UTC"}}'
 
-# Inspect failed jobs
-curl -H "Authorization: Bearer $TOKEN" \
-  "https://groot.localhost/api/v1/jobs/state/failed?limit=20"
+# Schedules: list → 200, edit → 200, remove → 200 (unknown name → 404)
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/schedule
+curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/jobs/schedule/todo-cleanup \
+  -H "Content-Type: application/json" -d '{"cron":"0 4 * * *"}'
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/schedule/todo-cleanup
 
-# Retry a specific job
-curl -H "Authorization: Bearer $TOKEN" -X POST \
-  https://groot.localhost/api/v1/jobs/todo-cleanup/job-123/retry
+# Dashboard queries → 200
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/stats
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/available
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs?state=completed&name=todo-summary&limit=20"
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs/state/failed?limit=20"
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs/status/failed?limit=20"
 
-# Delete a job
-curl -H "Authorization: Bearer $TOKEN" -X DELETE \
-  https://groot.localhost/api/v1/jobs/todo-cleanup/job-123
+# One job (queueName = job name) → 200; unknown → 404
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/todo-summary/$JOB_ID
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/todo-summary/$JOB_ID/logs
+
+# Actions → 200 { success: true }; wrong state → 400
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/retry
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/cancel
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/resume
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/rerun   # 200 { newJobId, queueName }
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/todo-summary/$JOB_ID       # 200 { success: true }
+
+# Bulk rerun → 200 per-job results
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/bulk-rerun \
+  -H "Content-Type: application/json" \
+  -d '{"jobs":[{"queueName":"todo-summary","jobId":"'$JOB_ID'"}]}'
+
+# Purge every job in a state → 200 { count }
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/state/cancelled
 ```
+
+Unknown job names are accepted (the job waits until a handler is registered);
+reserved names (`schedule`, `stats`, …) and bad cron expressions → `400`.
 
 ## Storage (JWT)
 
 ```bash
-# List files (optional prefix filter)
-curl -H "Authorization: Bearer $TOKEN" \
-  "https://groot.localhost/api/v1/storage/files?prefix=docs/&delimiter=/"
+# List one folder level → 200
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/storage/files?prefix=docs/&delimiter=/"
 
-# Upload a single file (multipart)
+# Upload a file (multipart) → 200 { filePath }; > 100 MB → 413
 curl -H "Authorization: Bearer $TOKEN" \
   -F "file=@document.pdf" -F "filePath=docs/document.pdf" \
-  https://groot.localhost/api/v1/storage/files/upload
+  $BASE/api/v1/storage/files/upload
 
-# Bulk upload (up to 50 files)
+# Bulk upload (up to 50 files) → 200 { uploadedFiles, failedFiles }
 curl -H "Authorization: Bearer $TOKEN" \
   -F "files=@file1.pdf" -F "files=@file2.pdf" \
-  https://groot.localhost/api/v1/storage/files/bulk-upload
+  $BASE/api/v1/storage/files/bulk-upload
 
-# Download
+# Download → 200 raw bytes; missing → 404
 curl -H "Authorization: Bearer $TOKEN" \
-  "https://groot.localhost/api/v1/storage/files/download?filePath=docs/document.pdf" -o document.pdf
+  "$BASE/api/v1/storage/files/download?filePath=docs/document.pdf" -o document.pdf
 
-# File metadata
-curl -H "Authorization: Bearer $TOKEN" \
-  "https://groot.localhost/api/v1/storage/files/metadata?filePath=docs/document.pdf"
+# Metadata → 200 { exists, size, lastModified, fileName }
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/storage/files/metadata?filePath=docs/document.pdf"
 
-# Create a folder
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/storage/folders \
-  -H "Content-Type: application/json" \
-  -d '{"folderPath":"archive/2024/"}'
+# Create a folder (path must end with /) → 200
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/storage/folders \
+  -H "Content-Type: application/json" -d '{"folderPath":"archive/2026/"}'
 
-# Rename a file
-curl -H "Authorization: Bearer $TOKEN" -X PUT https://groot.localhost/api/v1/storage/files/rename \
-  -H "Content-Type: application/json" \
-  -d '{"oldPath":"docs/old.pdf","newPath":"docs/new.pdf"}'
+# Rename → 200 { newPath }; source missing → 404
+curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/storage/files/rename \
+  -H "Content-Type: application/json" -d '{"oldPath":"docs/old.pdf","newPath":"docs/new.pdf"}'
 
-# Delete files
-curl -H "Authorization: Bearer $TOKEN" -X DELETE https://groot.localhost/api/v1/storage/files \
-  -H "Content-Type: application/json" \
-  -d '{"filePaths":["docs/document.pdf"]}'
+# Delete files → 200 { deletedCount }
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/files \
+  -H "Content-Type: application/json" -d '{"filePaths":["docs/document.pdf"]}'
+
+# Delete a folder recursively → 200 { deletedCount }
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/folders/archive/2026/
 ```
-
-## Auth & user management
-
-```bash
-# Create a new user (admin-only — uses X-Admin-Auth-Key, NOT JWT)
-curl -X POST https://groot.localhost/api/v1/auth/users \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Auth-Key: $ADMIN_KEY" \
-  -d '{"email":"newuser@example.com","password":"secure-password"}'
-
-# List all users (admin-only)
-curl -H "X-Admin-Auth-Key: $ADMIN_KEY" https://groot.localhost/api/v1/auth/users
-
-# Current user (JWT)
-curl -H "Authorization: Bearer $TOKEN" https://groot.localhost/api/v1/auth/me
-
-# Logout (JWT)
-curl -H "Authorization: Bearer $TOKEN" -X POST https://groot.localhost/api/v1/auth/logout
-```
-
-## Passkeys (WebAuthn)
-
-Passkey flows are interactive (browser mediation), so they're driven from the
-client service rather than `curl`. See
-[Passkey authentication](../features/passkey-authentication.md) for the
-endpoints (`/api/v1/passkey/register/*`, `/login/*`, `/list`).
 
 ## App settings (JWT)
 
 ```bash
-# All settings
-curl -H "Authorization: Bearer $TOKEN" https://groot.localhost/api/v1/settings
+# All settings → 200
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/settings
 
-# A single setting
-curl -H "Authorization: Bearer $TOKEN" https://groot.localhost/api/v1/settings/app-name
+# One setting → 200; unknown → 404
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/settings/app-name
 
-# Update a setting
-curl -H "Authorization: Bearer $TOKEN" -X PUT https://groot.localhost/api/v1/settings/app-name \
+# Create or update → 200 { key, value, metadata: { description?, updatedAt } }
+curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/settings/app-name \
   -H "Content-Type: application/json" \
-  -d '{"value":"My App"}'
+  -d '{"value":"My App","metadata":{"description":"Shown in the header"}}'
 
-# Delete a setting
-curl -H "Authorization: Bearer $TOKEN" -X DELETE https://groot.localhost/api/v1/settings/app-name
+# Delete → 204; unknown → 404
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/settings/app-name
 ```
+
+## Passkeys
+
+Passkey flows need the browser (`navigator.credentials`), so drive them from
+`passkeyService` in the client. Endpoints and payloads are listed in
+[Passkey authentication](../features/passkey-authentication.md#api-apiv1passkey);
+`GET /api/v1/passkey/list` and `DELETE /api/v1/passkey/:id` (`204`) work from
+`curl` with a JWT.
 
 ## Combined workflow
 
-1. Create todos via the snippet above.
-2. Queue `todo-summary` to log aggregate stats.
-3. Schedule `todo-cleanup` to prune completed todos.
-4. Open `/todos` in the client to verify.
+1. Create a few todos.
+2. Queue `todo-summary`; a moment later `GET /api/v1/jobs/todo-summary/<id>`
+   shows `state: "completed"` with the counts in `output`.
+3. Schedule `todo-cleanup` nightly.
+4. Open `/todos` and `/jobs` in the client to verify.
 
 > Tip: drop these into an `.http` file (VS Code REST client, JetBrains) for
 > faster iteration.

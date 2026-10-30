@@ -3,7 +3,8 @@
  * CRUD access to app.db's task table. Dependency direction stays one-way —
  * `@tiny-agents/agent` defines the port, apps/web implements it.
  */
-import { prisma } from "@groot/core/database";
+import { asc, desc, eq } from "drizzle-orm";
+import { db, tasks } from "../../db";
 import type { TaskPriority, TaskRecord, TaskStatus, TaskStore } from "@tiny-agents/agent";
 
 function toRecord(row: {
@@ -31,54 +32,52 @@ export const taskStore: TaskStore = {
     // Exactly-once across pi-durable replays: the key is the durable tool
     // task's identity (unique per agent store, stable when the call reruns).
     const existing = input.idempotencyKey
-      ? await prisma.task.findUnique({ where: { sourceKey: input.idempotencyKey } })
-      : null;
+      ? await db.query.tasks.findFirst({ where: eq(tasks.sourceKey, input.idempotencyKey) })
+      : undefined;
     if (existing) return toRecord(existing);
-    const row = await prisma.task.create({
-      data: {
+    const [row] = await db
+      .insert(tasks)
+      .values({
         title: input.title,
         description: input.description ?? "",
         priority: input.priority ?? "medium",
         dueAt: input.dueAt ? new Date(input.dueAt) : null,
         ...(input.idempotencyKey ? { sourceKey: input.idempotencyKey } : {}),
-      },
-    });
-    return toRecord(row);
+      })
+      .returning();
+    return toRecord(row!);
   },
 
   async list(filter) {
-    const rows = await prisma.task.findMany({
-      where: filter?.status ? { status: filter.status } : undefined,
-      orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
-    });
+    const rows = await db
+      .select()
+      .from(tasks)
+      .where(filter?.status ? eq(tasks.status, filter.status) : undefined)
+      .orderBy(asc(tasks.dueAt), desc(tasks.createdAt));
     return rows.map(toRecord);
   },
 
   async update(id, input) {
-    try {
-      const row = await prisma.task.update({
-        where: { id },
-        data: {
-          ...(input.title !== undefined ? { title: input.title } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          ...(input.priority !== undefined ? { priority: input.priority } : {}),
-          ...(input.dueAt !== undefined
-            ? { dueAt: input.dueAt ? new Date(input.dueAt) : null }
-            : {}),
-          ...(input.status !== undefined ? { status: input.status } : {}),
-          ...(input.status !== undefined
-            ? { completedAt: input.status === "done" ? new Date() : null }
-            : {}),
-        },
-      });
-      return toRecord(row);
-    } catch {
-      return undefined; // update on a missing id (P2025) — surface as tool error
-    }
+    const [row] = await db
+      .update(tasks)
+      .set({
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
+        ...(input.dueAt !== undefined ? { dueAt: input.dueAt ? new Date(input.dueAt) : null } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.status !== undefined
+          ? { completedAt: input.status === "done" ? new Date() : null }
+          : {}),
+      })
+      .where(eq(tasks.id, id))
+      .returning();
+    // A missing id updates nothing: surface it as a tool error.
+    return row ? toRecord(row) : undefined;
   },
 
   async remove(id) {
-    const deleted = await prisma.task.deleteMany({ where: { id } });
-    return deleted.count > 0;
+    const deleted = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
+    return deleted.length > 0;
   },
 };

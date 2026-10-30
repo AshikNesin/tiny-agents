@@ -8,7 +8,7 @@ When you run `pnpm dev`, the dev script uses portless:
 
 ```bash
 # What pnpm dev runs under the hood:
-NODE_ENV=development portless run --name $npm_package_name varlock run -- tsx scripts/dev.ts
+NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts
 # → Your app is available at https://groot.localhost
 ```
 
@@ -89,7 +89,7 @@ Open `https://groot.localhost` in your browser — it should load with a valid H
 The `pnpm dev` script wraps the dev server through portless:
 
 ```bash
-portless run --name groot varlock run -- tsx scripts/dev.ts
+portless run --name groot tsx scripts/dev.ts
 ```
 
 Portless:
@@ -101,7 +101,7 @@ Portless:
 
 ### Vite HMR Integration
 
-The `vite.config.ts` automatically configures Hot Module Replacement (HMR) to work over the portless HTTPS URL using the `PORTLESS_URL` environment variable that portless injects:
+The Node entry (`apps/web/src/server/entry.node.ts`) and `vite.config.ts` configure Hot Module Replacement (HMR) to work over the portless HTTPS URL using the `PORTLESS_URL` environment variable that portless injects:
 
 - WebSocket protocol: `wss://` (secure WebSocket)
 - Host: `groot.localhost`
@@ -111,13 +111,12 @@ No manual HMR configuration needed.
 
 ### Passkey (WebAuthn) Integration
 
-If you use passkey authentication, set the Relying Party origin in `config.yml`
-to match the portless URL:
+If you use passkey authentication, set the relying party in `.env` to match
+the portless URL (the defaults are `localhost` / `http://localhost:3000`):
 
-```yaml
-passkey:
-  rpId: groot.localhost
-  origin: https://groot.localhost
+```bash
+RP_ID=groot.localhost
+ORIGIN=https://groot.localhost
 ```
 
 > [!IMPORTANT]

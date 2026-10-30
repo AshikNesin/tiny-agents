@@ -16,7 +16,7 @@
 import { Boom } from "@groot/core/errors";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
-import { createPrismaLogStore, type NotificationLogStore } from "./notification.log";
+import { createDbLogStore, type NotificationLogStore } from "./notification.log";
 import {
   createKvSettingsStore,
   notificationSettingsSchema,
@@ -754,7 +754,7 @@ export const notificationService = new NotificationService({
     token: () => env.PUSHOVER_API_TOKEN,
     user: () => env.PUSHOVER_USER_KEY,
   }),
-  log: createPrismaLogStore(),
+  log: createDbLogStore(),
   settings: createKvSettingsStore(),
   origin: () => env.ORIGIN,
   requiredEnv: ["PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"],

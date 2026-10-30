@@ -1,20 +1,31 @@
 import { config } from "@groot/core/config";
-import { env } from "@groot/core/env";
+
+/** Defaults applied by `addJob()`; read lazily so app config overrides apply. */
+export function defaultJobOptions() {
+  return {
+    retryLimit: config.jobs.retryLimit,
+    retryDelaySeconds: config.jobs.retryDelaySeconds,
+    priority: 0,
+  };
+}
 
 export const jobConfig = {
-  connectionString: env.DATABASE_URL,
-  concurrency: config.jobs.concurrency,
-  pollIntervalSeconds: config.jobs.pollIntervalSeconds,
-  archiveCompletedAfterSeconds: config.jobs.archiveCompletedAfterSeconds,
-  deleteArchivedAfterSeconds: config.jobs.deleteArchivedAfterSeconds,
-  monitorStateIntervalSeconds: config.jobs.monitorStateIntervalSeconds,
-} as const;
-
-// Default options applied to all jobs unless overridden by the feature.
-// Feature-specific options are defined alongside their job handlers.
-export const defaultJobOptions = {
-  retryLimit: 3,
-  retryDelay: 60,
-  retryBackoff: true,
-  expireInSeconds: 60 * 60 * 12,
-} as const;
+  get enabled() {
+    return config.jobs.enabled;
+  },
+  get pollIntervalSeconds() {
+    return config.jobs.pollIntervalSeconds;
+  },
+  get batchSize() {
+    return config.jobs.batchSize;
+  },
+  get activeTimeoutSeconds() {
+    return config.jobs.activeTimeoutSeconds;
+  },
+  get keepCompletedDays() {
+    return config.jobs.keepCompletedDays;
+  },
+  get runInline() {
+    return config.jobs.runInline;
+  },
+};

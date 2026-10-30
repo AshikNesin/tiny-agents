@@ -1,24 +1,21 @@
 /** Skills API (issue #1 M2): the shared library, bot assignment and imports. */
-import express, { type Express } from "express";
-import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
 import { parseGitHubUrl } from "../../../apps/web/src/server/api/skills/skills.parse";
+import { bots, db, skills } from "../../../apps/web/src/server/db";
+import { api, createTestApp } from "../helpers";
 
-const authorization = {
-  Authorization: `Bearer ${generateToken({ userId: 1, email: "skills@example.com" })}`,
-};
+const token = await generateToken({ userId: 1, email: "skills@example.com" });
+const buildApp = () => createTestApp();
 
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+interface SkillBody {
+  id: string;
+  name: string;
+  source: string;
+  botIds: string[];
+  warnings: string[];
+  [key: string]: unknown;
 }
 
 const SKILL_MD = `---
@@ -30,30 +27,33 @@ description: Write the weekly report from my notes
 1. Read notes`;
 
 async function seedBot(conversationId = "900") {
-  return prisma.bot.create({
-    data: { name: "Ops", modelId: "m", conversationId },
-  });
+  const [bot] = await db
+    .insert(bots)
+    .values({ name: "Ops", modelId: "m", conversationId })
+    .returning();
+  return bot!;
 }
 
 describe("Skills API", () => {
   beforeEach(async () => {
-    await prisma.skill.deleteMany();
-    await prisma.bot.deleteMany();
+    await db.delete(skills);
+    await db.delete(bots);
   });
   afterEach(async () => {
     vi.unstubAllGlobals();
-    await prisma.skill.deleteMany();
-    await prisma.bot.deleteMany();
+    await db.delete(skills);
+    await db.delete(bots);
   });
 
   it("previews a pasted SKILL.md and creates it assigned to a bot", async () => {
     const app = buildApp();
     const bot = await seedBot();
-    const preview = await request(app)
-      .post("/api/v1/skills/preview")
-      .set(authorization)
-      .send({ source: "paste", content: SKILL_MD })
-      .expect(200);
+    const preview = await api<SkillBody>(app, "/api/v1/skills/preview", {
+      method: "POST",
+      json: { source: "paste", content: SKILL_MD },
+      token,
+    });
+    expect(preview.status).toBe(200);
     expect(preview.body.data).toMatchObject({
       name: "weekly-report",
       description: "Write the weekly report from my notes",
@@ -61,36 +61,40 @@ describe("Skills API", () => {
       exists: false,
     });
 
-    const created = await request(app)
-      .post("/api/v1/skills")
-      .set(authorization)
-      .send({ ...preview.body.data, botIds: [bot.id] })
-      .expect(201);
+    const created = await api<SkillBody>(app, "/api/v1/skills", {
+      method: "POST",
+      json: { ...preview.body.data, botIds: [bot.id] },
+      token,
+    });
+    expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({ name: "weekly-report", botIds: [bot.id] });
 
     // The agent's adapter sees it through the bot's conversation.
     expect(await skillStore.list(900)).toEqual([
       { name: "weekly-report", description: "Write the weekly report from my notes" },
     ]);
-    await request(app)
-      .post("/api/v1/skills")
-      .set(authorization)
-      .send({ name: "weekly-report", description: "dup" })
-      .expect(409);
+    const duplicate = await api(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "weekly-report", description: "dup" },
+      token,
+    });
+    expect(duplicate.status).toBe(409);
   });
 
   it("rejects SKILL.md without frontmatter or with a bad name", async () => {
     const app = buildApp();
-    await request(app)
-      .post("/api/v1/skills/preview")
-      .set(authorization)
-      .send({ source: "paste", content: "# no frontmatter" })
-      .expect(400);
-    await request(app)
-      .post("/api/v1/skills/preview")
-      .set(authorization)
-      .send({ source: "paste", content: "---\nname: Bad Name\ndescription: x\n---\nbody" })
-      .expect(400);
+    const noFrontmatter = await api(app, "/api/v1/skills/preview", {
+      method: "POST",
+      json: { source: "paste", content: "# no frontmatter" },
+      token,
+    });
+    expect(noFrontmatter.status).toBe(400);
+    const badName = await api(app, "/api/v1/skills/preview", {
+      method: "POST",
+      json: { source: "paste", content: "---\nname: Bad Name\ndescription: x\n---\nbody" },
+      token,
+    });
+    expect(badName.status).toBe(400);
   });
 
   it("imports a skill folder from GitHub with its files", async () => {
@@ -116,17 +120,18 @@ describe("Skills API", () => {
         return new Response(typeof body === "string" ? body : JSON.stringify(body));
       }),
     );
-    const preview = await request(buildApp())
-      .post("/api/v1/skills/preview")
-      .set(authorization)
-      .send({ source: "github", url: "https://github.com/acme/skills/tree/main/pdf" })
-      .expect(200);
+    const preview = await api<SkillBody>(buildApp(), "/api/v1/skills/preview", {
+      method: "POST",
+      json: { source: "github", url: "https://github.com/acme/skills/tree/main/pdf" },
+      token,
+    });
+    expect(preview.status).toBe(200);
     expect(preview.body.data).toMatchObject({
       name: "pdf",
       files: [{ path: "fill.py", content: "print(1)" }],
       sourceUrl: "https://github.com/acme/skills/tree/main/pdf",
     });
-    expect(preview.body.data.warnings[0]).toMatch(/never executed/);
+    expect(preview.body.data!.warnings[0]).toMatch(/never executed/);
   });
 
   it("parses the GitHub link shapes skills are shared as", () => {
@@ -146,16 +151,19 @@ describe("Skills API", () => {
   it("updates, reassigns and deletes skills; bots save their own through the adapter", async () => {
     const app = buildApp();
     const bot = await seedBot("901");
-    const created = await request(app)
-      .post("/api/v1/skills")
-      .set(authorization)
-      .send({ name: "triage", description: "Triage", body: "1" })
-      .expect(201);
-    await request(app)
-      .patch(`/api/v1/skills/${created.body.data.id}`)
-      .set(authorization)
-      .send({ body: "2", botIds: [bot.id] })
-      .expect(200);
+    const created = await api<SkillBody>(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "triage", description: "Triage", body: "1" },
+      token,
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.data!.id;
+    const patched = await api(app, `/api/v1/skills/${id}`, {
+      method: "PATCH",
+      json: { body: "2", botIds: [bot.id] },
+      token,
+    });
+    expect(patched.status).toBe(200);
     expect((await skillStore.get(901, "triage"))?.body).toBe("2");
 
     expect(
@@ -163,18 +171,16 @@ describe("Skills API", () => {
     ).toEqual({
       created: true,
     });
-    const list = await request(app).get("/api/v1/skills").set(authorization).expect(200);
-    expect(list.body.data.map((s: { name: string; source: string }) => [s.name, s.source])).toEqual(
-      [
-        ["inbox-zero", "bot"],
-        ["triage", "manual"],
-      ],
-    );
+    const list = await api<SkillBody[]>(app, "/api/v1/skills", { token });
+    expect(list.status).toBe(200);
+    expect(list.body.data!.map((s) => [s.name, s.source])).toEqual([
+      ["inbox-zero", "bot"],
+      ["triage", "manual"],
+    ]);
 
-    await request(app)
-      .delete(`/api/v1/skills/${created.body.data.id}`)
-      .set(authorization)
-      .expect(200);
+    const deleted = await api(app, `/api/v1/skills/${id}`, { method: "DELETE", token });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data).toEqual({ deleted: true });
     expect((await skillStore.list(901)).map((s) => s.name)).toEqual(["inbox-zero"]);
   });
 });

@@ -3,37 +3,57 @@
  * channel status, the owner's preferences, a test send, re-validation and
  * the recent log (metadata only).
  */
-import type { Request } from "express";
+import { Hono } from "hono";
 import { z } from "zod";
-import { createRouter } from "@groot/core/utils/router.utils";
+import type { AppContext, AppEnv } from "@groot/core/types";
+import { Boom, ErrorCode } from "@groot/core/errors";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseQuery } from "@groot/core/utils/controller.utils";
 import { notificationService } from "./notification.service";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
 const logQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-router.get("/status", async () => notificationService.status());
+/**
+ * The raw JSON body, validated by the service itself (its 400 names the
+ * settings). No body reads as `undefined`, like Express's `req.body`.
+ */
+async function jsonBody(c: AppContext): Promise<unknown> {
+  const raw = await c.req.text();
+  if (raw.trim() === "") return undefined;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw Boom.badRequest("Invalid JSON body", undefined, ErrorCode.VALIDATION_ERROR.code);
+  }
+}
 
-router.get("/settings", async () => ({
-  settings: await notificationService.getSettings(),
-  events: notificationService.events(),
-}));
+router.get("/status", (c) => ok(c, notificationService.status()));
 
-router.put("/settings", async (req: Request) => ({
-  settings: await notificationService.saveSettings(req.body),
-  events: notificationService.events(),
-}));
+router.get("/settings", async (c) =>
+  ok(c, {
+    settings: await notificationService.getSettings(),
+    events: notificationService.events(),
+  }),
+);
 
-router.post("/test", async () => notificationService.sendTest());
+router.put("/settings", async (c) =>
+  ok(c, {
+    settings: await notificationService.saveSettings(await jsonBody(c)),
+    events: notificationService.events(),
+  }),
+);
 
-router.post("/validate", async () => notificationService.validate());
+router.post("/test", async (c) => ok(c, await notificationService.sendTest()));
 
-router.get("/log", async (req: Request) => {
-  const { limit } = parseQuery(req, logQuerySchema);
-  return notificationService.recent(limit);
+router.post("/validate", async (c) => ok(c, await notificationService.validate()));
+
+router.get("/log", async (c) => {
+  const { limit } = parseQuery(c, logQuerySchema);
+  return ok(c, await notificationService.recent(limit));
 });
 
 export default router;

@@ -1,28 +1,29 @@
-import type { Request } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as taskService from "./task.service";
 import { createTaskSchema, updateTaskSchema } from "./task.schema";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.get("/tasks", async () => taskService.list());
+router.get("/tasks", async (c) => ok(c, await taskService.list()));
 
-router.post("/tasks", async (req: Request) => {
-  const payload = parseBody(req, createTaskSchema);
-  return taskService.create(payload);
+router.post("/tasks", async (c) => {
+  const payload = await parseBody(c, createTaskSchema);
+  return ok(c, await taskService.create(payload));
 });
 
-router.patch("/tasks/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const payload = parseBody(req, updateTaskSchema);
-  return taskService.update(id, payload);
+router.patch("/tasks/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, updateTaskSchema);
+  return ok(c, await taskService.update(id, payload));
 });
 
-router.delete("/tasks/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
+router.delete("/tasks/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   await taskService.remove(id);
-  return { deleted: true };
+  return ok(c, { deleted: true });
 });
 
 export default router;

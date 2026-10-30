@@ -8,7 +8,7 @@ import { describe, expect, it } from "vite-plus/test";
  * Changeset completeness gate (scripts/check-changesets.mjs).
  *
  * The gate turns release completeness from a convention into a check: a
- * branch that edits a managed surface (packages, apps/web/prisma, .groot)
+ * branch that edits a managed surface (packages, apps/web/drizzle, .groot)
  * without a changeset or a recorded no-release reason fails the build. The
  * pure core runs here against fixture package trees, one with a changeset
  * and one without, asserting the pass and fail verdicts the CLI reports.
@@ -115,10 +115,10 @@ describe("changesets gate", () => {
     ]);
   }, 20_000);
 
-  it("maps prisma and .groot changes to the root package", async () => {
+  it("maps migration and .groot changes to the root package", async () => {
     const { state } = await collectFixture(
       { "package.json": JSON.stringify({ name: "groot" }) },
-      ["apps/web/prisma/schema.sqlite.prisma", ".groot/lib/patterns.ts"],
+      ["apps/web/drizzle/0000_init.sql", ".groot/lib/patterns.ts"],
       [],
     );
     expect(state.managedPackages).toEqual(["groot"]);

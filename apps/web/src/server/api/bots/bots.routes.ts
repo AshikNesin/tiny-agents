@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
@@ -8,7 +9,7 @@ import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import * as pastChats from "./chats.history";
-import { initSse, writeSse, endSseOnError } from "./bots.sse";
+import { openSse } from "./bots.sse";
 import { watchBot } from "./bots.viewers";
 import { chatCards, onRoutineCard } from "../routines/routines.cards";
 import {
@@ -21,223 +22,214 @@ import {
   sendMessageSchema,
 } from "./bots.schema";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
+
+/** A positive integer task id route parameter. */
+function parseTaskId(value: string | undefined): number {
+  const taskId = Number(parseStringParam(value, "taskId"));
+  if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
+  return taskId;
+}
 
 // ── Models ────────────────────────────────────────────────────────────
 
-router.get("/models", async () => {
+router.get("/models", (c) => {
   const runtime = getAgentRuntime();
   const models = runtime.listModels();
   const override = env.DEFAULT_MODEL?.trim();
   // The faux provider (dev/E2E) answers without the gateway, so it counts as
   // configured; otherwise the real gateway env vars must all be present.
   const configured = runtime.provider === "faux" || isGatewayConfigured();
-  return {
+  return ok(c, {
     models,
     defaultModel: override && runtime.hasModel(override) ? override : models[0]?.id,
     gatewayConfigured: configured,
-  };
+  });
 });
 
 // ── Capabilities ──────────────────────────────────────────────────────
 
-router.get("/capabilities", async () => {
-  return { capabilities: getAgentRuntime().listCapabilities() };
+router.get("/capabilities", (c) => {
+  return ok(c, { capabilities: getAgentRuntime().listCapabilities() });
 });
 
-// ── Chat + activity streams (SSE; must be registered before /bots/:id) ─
+// ── Chat + activity streams (SSE) ─────────────────────────────────────
 
-router.get("/events", async (req: Request, res: Response) => {
-  const heartbeat = initSse(res);
-  const runtime = getAgentRuntime();
-  // Snapshot of current busy conversations first, then live changes.
-  writeSse(res, {
-    type: "activity",
-    busy: runtime.busyConversations().map(String),
-  });
-  const unsubscribe = runtime.onActivity((change) => {
-    writeSse(res, {
+router.get("/events", (c) =>
+  openSse(c, (sse) => {
+    const runtime = getAgentRuntime();
+    // Snapshot of current busy conversations first, then live changes.
+    sse.write({
       type: "activity",
-      conversation: String(change.conversation),
-      busy: change.busy,
-      approvals: change.approvals,
-      questions: change.questions,
+      busy: runtime.busyConversations().map(String),
     });
-  });
-  // Connection status (connected / needs sign-in / error) for the
-  // Connections page and the chat banner.
-  const unsubscribeConnections = getConnectionManager().onChange((id, state) => {
-    writeSse(res, { type: "connection", id, ...state });
-  });
-  const close = () => {
-    heartbeat.stop();
-    unsubscribe();
-    unsubscribeConnections();
-  };
-  res.on("close", close);
-  // SSE owns the response lifecycle; returning `undefined` lets the route
-  // handler wrapper no-op once headers are sent.
-  return undefined;
-});
+    sse.onClose(
+      runtime.onActivity((change) => {
+        sse.write({
+          type: "activity",
+          conversation: String(change.conversation),
+          busy: change.busy,
+          approvals: change.approvals,
+          questions: change.questions,
+        });
+      }),
+    );
+    // Connection status (connected / needs sign-in / error) for the
+    // Connections page and the chat banner.
+    sse.onClose(
+      getConnectionManager().onChange((id, state) => {
+        sse.write({ type: "connection", id, ...state });
+      }),
+    );
+  }),
+);
 
-router.get("/bots/:id/stream", async (req: Request, res: Response) => {
-  const id = parseStringParam(req.params.id, "id");
-  let subscription: { stop(): Promise<void> } | undefined;
-  try {
-    const bot = await botsService.getBot(id);
-    const heartbeat = initSse(res);
-    const unwatch = watchBot(bot.id);
-    res.on("close", unwatch);
+router.get("/bots/:id/stream", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  // Before the stream opens (unknown bot) this is a normal API error.
+  const bot = await botsService.getBot(id);
+  return openSse(c, async (sse) => {
+    sse.onClose(watchBot(bot.id));
     // Only the newest messages (issue #92): older ones load on scroll from
     // GET /bots/:id/messages, so an open or reconnect stays the same size
     // however long the conversation gets.
-    subscription = await getAgentRuntime().watchChat(
+    const subscription = await getAgentRuntime().watchChat(
       Number(bot.conversationId),
       (events) => {
-        for (const event of events) writeSse(res, event);
+        for (const event of events) sse.write(event);
       },
       { window: CHAT_WINDOW },
     );
+    sse.onClose(() => void subscription.stop());
     // Routine results (issue #63): cards beside the transcript, not in it.
     // Follow first, then list, so a run finishing in between still arrives
     // (the client dedupes by id).
-    const unfollow = onRoutineCard((botId, run) => {
-      if (botId === bot.id) writeSse(res, { type: "routine-run", run });
-    });
-    res.on("close", () => {
-      heartbeat.stop();
-      unfollow();
-      void subscription?.stop();
-    });
-    writeSse(res, { type: "routine-runs", runs: await chatCards(bot.id, bot.chatStartedAt) });
-  } catch (error) {
-    // Before headers were sent (unknown bot) this is a normal API error.
-    if (!res.headersSent) throw error;
-    endSseOnError(res, error);
-  }
-  return undefined;
+    sse.onClose(
+      onRoutineCard((botId, run) => {
+        if (botId === bot.id) sse.write({ type: "routine-run", run });
+      }),
+    );
+    sse.write({ type: "routine-runs", runs: await chatCards(bot.id, bot.chatStartedAt) });
+  });
 });
 
 // ── Bots CRUD ─────────────────────────────────────────────────────────
 
-router.post("/bots", async (req: Request, res: Response) => {
-  const payload = parseBody(req, createBotSchema);
-  res.status(201);
-  return await botsService.createBot(payload);
+router.post("/bots", async (c) => {
+  const payload = await parseBody(c, createBotSchema);
+  return ok(c, await botsService.createBot(payload), 201);
 });
 
-router.get("/bots", async () => {
-  return await botsService.listBots();
+router.get("/bots", async (c) => {
+  return ok(c, await botsService.listBots());
 });
 
-router.get("/bots/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return await botsService.getBot(id);
+router.get("/bots/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await botsService.getBot(id));
 });
 
-router.patch("/bots/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const payload = parseBody(req, updateBotSchema);
-  return await botsService.updateBot(id, payload);
+router.patch("/bots/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, updateBotSchema);
+  return ok(c, await botsService.updateBot(id, payload));
 });
 
-router.delete("/bots/:id", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return await botsService.deleteBot(id);
+router.delete("/bots/:id", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await botsService.deleteBot(id));
 });
 
 // ── Chat actions ──────────────────────────────────────────────────────
 
-router.get("/bots/:id/messages", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const query = parseQuery(req, chatHistorySchema);
-  return await botsService.chatHistory(id, query);
+router.get("/bots/:id/messages", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const query = parseQuery(c, chatHistorySchema);
+  return ok(c, await botsService.chatHistory(id, query));
 });
 
-router.post("/bots/:id/messages", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const payload = parseBody(req, sendMessageSchema);
+router.post("/bots/:id/messages", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, sendMessageSchema);
   await botsService.sendMessage(id, payload);
-  return { submitted: true };
+  return ok(c, { submitted: true });
 });
 
-router.delete("/bots/:id/messages/:requestId", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const requestId = parseStringParam(req.params.requestId, "requestId");
-  return await botsService.withdrawMessage(id, { requestId });
+router.delete("/bots/:id/messages/:requestId", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const requestId = parseStringParam(c.req.param("requestId"), "requestId");
+  return ok(c, await botsService.withdrawMessage(id, { requestId }));
 });
 
-router.post("/bots/:id/abort", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
+router.post("/bots/:id/abort", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   await botsService.abortReply(id);
-  return { aborted: true };
+  return ok(c, { aborted: true });
 });
 
-router.post("/bots/:id/reset", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return await botsService.resetConversation(id);
+router.post("/bots/:id/reset", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await botsService.resetConversation(id));
 });
 
 // ── Past chats (issue #101) ───────────────────────────────────────────
 
-router.get("/bots/:id/chats", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
+router.get("/bots/:id/chats", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
   await botsService.getBot(id);
-  return { chats: await pastChats.listPastChats(id) };
+  return ok(c, { chats: await pastChats.listPastChats(id) });
 });
 
-router.get("/bots/:id/chats/:chatId", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const chatId = parseStringParam(req.params.chatId, "chatId");
-  return await pastChats.readPastChat(id, chatId, getAgentRuntime());
+router.get("/bots/:id/chats/:chatId", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const chatId = parseStringParam(c.req.param("chatId"), "chatId");
+  return ok(c, await pastChats.readPastChat(id, chatId, getAgentRuntime()));
 });
 
-router.get("/bots/:id/chats/:chatId/messages", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const chatId = parseStringParam(req.params.chatId, "chatId");
-  const query = parseQuery(req, chatHistorySchema);
-  return await pastChats.pastChatPage(id, chatId, query, getAgentRuntime());
+router.get("/bots/:id/chats/:chatId/messages", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const chatId = parseStringParam(c.req.param("chatId"), "chatId");
+  const query = parseQuery(c, chatHistorySchema);
+  return ok(c, await pastChats.pastChatPage(id, chatId, query, getAgentRuntime()));
 });
 
-router.post("/bots/:id/chats/:chatId/continue", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const chatId = parseStringParam(req.params.chatId, "chatId");
-  return await botsService.continuePastChat(id, chatId);
+router.post("/bots/:id/chats/:chatId/continue", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const chatId = parseStringParam(c.req.param("chatId"), "chatId");
+  return ok(c, await botsService.continuePastChat(id, chatId));
 });
 
-router.delete("/bots/:id/chats/:chatId", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const chatId = parseStringParam(req.params.chatId, "chatId");
-  return await pastChats.deletePastChat(id, chatId);
+router.delete("/bots/:id/chats/:chatId", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const chatId = parseStringParam(c.req.param("chatId"), "chatId");
+  return ok(c, await pastChats.deletePastChat(id, chatId));
 });
 
-router.post("/bots/:id/approvals/:taskId", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const taskId = Number(parseStringParam(req.params.taskId, "taskId"));
-  if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
-  const payload = parseBody(req, approvalSchema);
+router.post("/bots/:id/approvals/:taskId", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const taskId = parseTaskId(c.req.param("taskId"));
+  const payload = await parseBody(c, approvalSchema);
   await botsService.decideApproval(id, { taskId, ...payload });
-  return { decided: payload.decision };
+  return ok(c, { decided: payload.decision });
 });
 
-router.post("/bots/:id/questions/:taskId", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const taskId = Number(parseStringParam(req.params.taskId, "taskId"));
-  if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
-  const payload = parseBody(req, answerQuestionsSchema);
+router.post("/bots/:id/questions/:taskId", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const taskId = parseTaskId(c.req.param("taskId"));
+  const payload = await parseBody(c, answerQuestionsSchema);
   await botsService.answerQuestions(id, { taskId, answers: payload.answers ?? null });
-  return payload.answers ? { answered: true } : { dismissed: true };
+  return ok(c, payload.answers ? { answered: true } : { dismissed: true });
 });
 
-router.post("/bots/:id/pin", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  const payload = parseBody(req, pinBotSchema);
-  return await botsService.setPinned(id, payload.pinned);
+router.post("/bots/:id/pin", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, pinBotSchema);
+  return ok(c, await botsService.setPinned(id, payload.pinned));
 });
 
-router.post("/bots/:id/read", async (req: Request) => {
-  const id = parseStringParam(req.params.id, "id");
-  return await botsService.markRead(id);
+router.post("/bots/:id/read", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await botsService.markRead(id));
 });
 
 export default router;

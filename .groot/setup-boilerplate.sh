@@ -1,37 +1,31 @@
 #!/bin/bash
-
 # Boilerplate Setup Script
 #
 # Run after cloning groot to customize it for your project:
-#   1. Verify / install global CLIs (varlock, portless)
-#   2. Install git hooks (Vite+ hooks via `pnpm prepare`)
-#   3. Ask for app name and propagate it across config.yml, package.json,
-#      and .env.schema
-#   4. Install dependencies + generate Prisma client
+#   1. Verify / install the optional portless CLI (local https dev domain)
+#   2. Ask for an app name and propagate it to package.json,
+#      apps/web/src/server/config.ts, wrangler.jsonc and .env.example
+#   3. Install dependencies (also installs the Vite+ git hooks)
 #
 # Usage:  pnpm groot:setup
-
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-print_info()  { echo -e "${BLUE}ℹ ${NC}$1"; }
+print_info()    { echo -e "${BLUE}ℹ ${NC}$1"; }
 print_success() { echo -e "${GREEN}✓${NC} $1"; }
 print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-print_error()  { echo -e "${RED}✗${NC} $1"; }
+print_error()   { echo -e "${RED}✗${NC} $1"; }
 
-# Convert app name to slug format (lowercase, hyphenated)
-# e.g., "My Cool App" -> "my-cool-app"
+# "My Cool App" -> "my-cool-app"
 to_slug() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-'
 }
 
-# Cross-platform sed in-place edit
 sed_inplace() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "$@"
@@ -40,23 +34,15 @@ sed_inplace() {
     fi
 }
 
-# ---------------------------------------------------------------
-# Step 1: Global CLI tools
-# ---------------------------------------------------------------
-
-setup_varlock() {
-    print_info "Checking varlock..."
-    if command -v varlock &> /dev/null; then
-        print_success "varlock is installed"
-    else
-        print_info "Installing varlock..."
-        curl -sSfL https://varlock.dev/install.sh | sh -s
-        print_success "varlock installed"
+check_git_repo() {
+    if ! git rev-parse --is-inside-work-tree &> /dev/null; then
+        print_error "Not a git repository. Run this script from the project root."
+        exit 1
     fi
 }
 
 setup_portless() {
-    print_info "Checking portless..."
+    print_info "Checking portless (optional: serves https://<app>.localhost in dev)..."
     if command -v portless &> /dev/null; then
         print_success "portless is installed"
         return
@@ -71,78 +57,28 @@ setup_portless() {
     fi
 }
 
-# ---------------------------------------------------------------
-# Step 2: Prerequisites — must be a git repo with deps installed
-# ---------------------------------------------------------------
-
-check_git_repo() {
-    if ! git rev-parse --is-inside-work-tree &> /dev/null; then
-        print_error "Not a git repository. Run this script from the project root."
-        exit 1
-    fi
-}
-
-install_dependencies() {
-    print_info "Installing dependencies..."
-    pnpm install
-    print_success "Dependencies installed"
-
-    # `pnpm install` auto-runs the `prepare` lifecycle script (`vp config`),
-    # which installs git hooks into .vite-hooks/ (lint-staged + gitleaks).
-    # Verify it took effect rather than assuming.
-    if git config core.hooksPath &> /dev/null; then
-        print_success "Git hooks installed via Vite+ (lint-staged + gitleaks)"
-    else
-        print_warning "Git hooks not detected. Run 'pnpm prepare' manually."
-    fi
-}
-
-# ---------------------------------------------------------------
-# Step 3: App name — propagate to config.yml, package.json, .env.schema
-# ---------------------------------------------------------------
-
-ensure_config_yml() {
-    if [ ! -f "config.yml" ]; then
-        if [ -f "config.example.yml" ]; then
-            cp config.example.yml config.yml
-            print_info "Created config.yml from config.example.yml"
-        else
-            print_error "config.yml not found and no config.example.yml to copy from!"
-            exit 1
-        fi
-    fi
-}
-
 update_app_name() {
     print_info "Configure your application name..."
-
     local current_name
-    current_name=$(grep -E '^\s+name:\s*' config.yml | head -1 | sed 's/.*name:\s*"*//;s/"\s*$//')
-    print_info "Current app name: ${current_name:-groot}"
-
+    current_name=$(grep -oE 'name: "[^"]*"' apps/web/src/server/config.ts | head -1 | sed 's/name: "//;s/"$//')
+    print_info "Current app name: ${current_name:-Groot}"
     read -rp "Enter your app name (e.g., 'My Cool App'): " app_name
     if [ -z "$app_name" ]; then
-        print_warning "No app name provided, keeping '$current_name'"
+        print_warning "No app name provided, keeping '${current_name:-Groot}'"
         return 0
     fi
-
     local slug_name
     slug_name=$(to_slug "$app_name")
     echo
 
-    # --- config.yml: app.name (human-readable) + passkey.rpName ---
-    # These are the user-facing labels shown in logs, Sentry, and passkey prompts.
-    ensure_config_yml
-    sed_inplace "s|^\([[:space:]]*\)name:[[:space:]]*\"[^\"]*\"|\1name: \"$app_name\"|" config.yml
-    sed_inplace "s|^\([[:space:]]*\)rpName:[[:space:]]*\"[^\"]*\"|\1rpName: \"$app_name\"|" config.yml
-    print_success "config.yml: app.name + passkey.rpName → '$app_name'"
+    # Human-readable name: shown in logs and passkey prompts.
+    sed_inplace "s|name: \"[^\"]*\"|name: \"$app_name\"|" apps/web/src/server/config.ts
+    print_success "apps/web/src/server/config.ts: app.name → '$app_name'"
+    sed_inplace "s|^RP_NAME=.*|RP_NAME=$app_name|" .env.example
+    print_success ".env.example: RP_NAME → '$app_name'"
 
-    # --- package.json: name (slug) ---
-    # The DB name is auto-derived from package.json name via
-    # scripts/get-local-db-connection-string.cjs, so updating it here
-    # automatically configures the local database name.
-    if command -v node &> /dev/null; then
-        node -e "
+    # Slug: package name and the Cloudflare Worker name.
+    node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 pkg.name = '$slug_name';
@@ -151,32 +87,34 @@ if (pkg.repository?.url) {
 }
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
-        print_success "package.json: name → '$slug_name'"
+    print_success "package.json: name → '$slug_name'"
+    sed_inplace "s|\"name\": \"groot\"|\"name\": \"$slug_name\"|" wrangler.jsonc
+    sed_inplace "s|\"RP_NAME\": \"Groot\"|\"RP_NAME\": \"$app_name\"|" wrangler.jsonc
+    print_success "wrangler.jsonc: name → '$slug_name'"
+}
+
+install_dependencies() {
+    print_info "Installing dependencies..."
+    pnpm install
+    print_success "Dependencies installed"
+    # `pnpm install` runs the `prepare` script (`vp config`), which installs the
+    # git hooks (lint-staged + gitleaks). Verify rather than assume.
+    if git config core.hooksPath &> /dev/null; then
+        print_success "Git hooks installed via Vite+ (lint-staged + gitleaks)"
     else
-        print_warning "Node not found — skipping package.json name update"
+        print_warning "Git hooks not detected. Run 'pnpm prepare' manually."
     fi
 }
 
-# ---------------------------------------------------------------
-# Step 4: Prisma + next steps
-# ---------------------------------------------------------------
-
 final_steps() {
-    print_info "Generating Prisma client..."
-    pnpm generate
-    print_success "Prisma client generated"
-
     echo ""
     print_info "Next steps:"
-    echo "  1. Set secrets on your hosting platform (or a git-ignored .env file locally)"
-    echo "  2. Run: pnpm dev"
+    echo "  1. pnpm dev                      # SQLite + Vite, zero config"
+    echo "  2. Sign in with demo@example.com / demo@example.com"
+    echo "  3. Deploy: docs/guides/deploy.md (Node) or docs/guides/deploy-cloudflare.md (Workers)"
     echo ""
     print_success "Setup complete!"
 }
-
-# ---------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------
 
 main() {
     echo ""
@@ -184,9 +122,7 @@ main() {
     echo "║          🚀 Groot Setup                                    ║"
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
-
     check_git_repo
-    setup_varlock
     setup_portless
     update_app_name
     install_dependencies

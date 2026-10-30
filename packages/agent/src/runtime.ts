@@ -239,9 +239,8 @@ export class AgentRuntime {
    * `StoreLockedError` when another process owns the store.
    */
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {
-    // Snapshot ambient env NOW: varlock's auto-load (imported via
-    // @groot/core/env) later strips schema vars from process.env, so reading
-    // them lazily would see undefined. Callers that swap the provider (faux
+    // Snapshot the env at open, so later changes to process.env never shift
+    // the runtime's provider config. Callers that swap the provider (faux
     // boot, tests) pass their own snapshot, e.g. without GATEWAY_MODEL_ALLOWLIST.
     const envSource: Readonly<Record<string, string | undefined>> = options.env
       ? { ...options.env }

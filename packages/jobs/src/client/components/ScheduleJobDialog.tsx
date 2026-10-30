@@ -1,6 +1,7 @@
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -42,7 +43,7 @@ export function ScheduleJobDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline">
           <CalendarIcon className="size-4" />
           <span className="hidden md:inline">Schedule</span>
         </Button>
@@ -52,7 +53,7 @@ export function ScheduleJobDialog({
           <DialogTitle>Schedule Recurring Job</DialogTitle>
           <DialogDescription>Schedule a job to run on a recurring cron schedule</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5">
+        <DialogBody className="space-y-5">
           <Field label="Job type" htmlFor="scheduled-job-name">
             <JobTypeSelect
               id="scheduled-job-name"
@@ -91,7 +92,7 @@ export function ScheduleJobDialog({
             </Button>
             <Button onClick={onSubmit}>Schedule Job</Button>
           </div>
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

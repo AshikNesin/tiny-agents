@@ -5,13 +5,15 @@
  * the connection row and hands consent URLs to the manager.
  */
 import { randomBytes } from "node:crypto";
-import { prisma } from "@groot/core/database";
+import { and, eq, isNotNull } from "drizzle-orm";
+import { Boom } from "@groot/core/errors";
 import type {
   OAuthClientInformationMixed,
   OAuthClientMetadata,
   OAuthClientProvider,
   OAuthTokens,
 } from "@tiny-agents/agent";
+import { connections, db } from "../../db";
 import { decryptJson, encryptJson } from "./secrets";
 
 /** What a connection stores about its OAuth sign-in (encrypted in `oauthEnc`). */
@@ -51,9 +53,9 @@ export function clientMetadata(): OAuthClientMetadata {
 }
 
 export async function readOAuthState(connectionId: string): Promise<OAuthState> {
-  const row = await prisma.connection.findUnique({
-    where: { id: connectionId },
-    select: { oauthEnc: true },
+  const row = await db.query.connections.findFirst({
+    where: eq(connections.id, connectionId),
+    columns: { oauthEnc: true },
   });
   return decryptJson<OAuthState>(row?.oauthEnc, {});
 }
@@ -63,18 +65,21 @@ export async function writeOAuthState(
   change: (state: OAuthState) => OAuthState,
 ): Promise<void> {
   const next = change(await readOAuthState(connectionId));
-  await prisma.connection.update({
-    where: { id: connectionId },
-    data: { oauthEnc: encryptJson(next) },
-  });
+  const updated = await db
+    .update(connections)
+    .set({ oauthEnc: encryptJson(next) })
+    .where(eq(connections.id, connectionId))
+    .returning({ id: connections.id });
+  // The connection was removed (Prisma's update threw P2025 → 404).
+  if (updated.length === 0) throw Boom.notFound("Record not found");
 }
 
 /** The connection whose pending authorization used `state`. */
 export async function connectionForState(state: string): Promise<string | undefined> {
-  const rows = await prisma.connection.findMany({
-    where: { authType: "oauth", oauthEnc: { not: null } },
-    select: { id: true, oauthEnc: true },
-  });
+  const rows = await db
+    .select({ id: connections.id, oauthEnc: connections.oauthEnc })
+    .from(connections)
+    .where(and(eq(connections.authType, "oauth"), isNotNull(connections.oauthEnc)));
   for (const row of rows) {
     try {
       if (decryptJson<OAuthState>(row.oauthEnc, {}).state === state) return row.id;

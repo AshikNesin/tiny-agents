@@ -25,7 +25,7 @@ test.describe("Storage page (authenticated)", () => {
     await page.getByRole("button", { name: /new folder/i }).click();
     await page.getByLabel("Folder Name").fill(folderName);
     await page.getByRole("button", { name: /^create$/i }).click();
-    await expect(page.getByRole("cell", { name: folderName })).toBeVisible();
+    await expect(page.getByRole("cell", { name: folderName, exact: true })).toBeVisible();
     return folderName;
   }
 
@@ -34,12 +34,12 @@ test.describe("Storage page (authenticated)", () => {
     const folderName = await createFolder(page);
 
     // Open the folder — the driver seeds it with a ".keep" placeholder file
-    await page.getByRole("cell", { name: folderName }).getByRole("button").click();
-    await expect(page.getByRole("cell", { name: ".keep" })).toBeVisible();
+    await page.getByRole("cell", { name: folderName, exact: true }).getByRole("button").click();
+    await expect(page.getByRole("cell", { name: ".keep", exact: true })).toBeVisible();
 
     // Back to root via the breadcrumb home button
     await page.getByRole("button", { name: "Go to root folder" }).click();
-    await expect(page.getByRole("cell", { name: folderName })).toBeVisible();
+    await expect(page.getByRole("cell", { name: folderName, exact: true })).toBeVisible();
 
     // Delete the folder via its row's trash button (confirms in a dialog)
     const row = page.getByRole("row").filter({
@@ -47,7 +47,7 @@ test.describe("Storage page (authenticated)", () => {
     });
     await row.getByRole("button").last().click();
     await page.getByRole("button", { name: "Delete" }).click();
-    await expect(page.getByRole("cell", { name: folderName })).not.toBeVisible();
+    await expect(page.getByRole("cell", { name: folderName, exact: true })).not.toBeVisible();
 
     // The storage driver must prune the emptied directory from disk too
     expect(existsSync(path.resolve("local/uploads", folderName))).toBe(false);
@@ -57,9 +57,10 @@ test.describe("Storage page (authenticated)", () => {
     await page.goto("/storage");
     const fileName = `e2e-upload-${Date.now()}.txt`;
 
-    // Upload through the hidden file input
+    // Upload through the page's hidden file input (#root: the FeedbackBee
+    // embed adds its own image input outside the app).
     await page
-      .locator('input[type="file"]')
+      .locator('#root input[type="file"]')
       .setInputFiles({ name: fileName, mimeType: "text/plain", buffer: Buffer.from("hello e2e") });
     const row = page.getByRole("row").filter({
       has: page.locator("td", { hasText: fileName }),

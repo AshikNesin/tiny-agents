@@ -15,7 +15,6 @@ import { monoClass } from "@groot/ui/typography";
 import { StatusBadge } from "@groot/ui";
 import { PageContainer } from "@groot/shell/components/layout/PageContainer";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
 import { JobActions } from "./components/JobActions";
 import { JobJsonBlock } from "./components/JobJsonBlock";
 import { JobLogs } from "./components/JobLogs";
@@ -99,42 +98,33 @@ export function JobDetail() {
 
       <JobJsonBlock label="Data" value={job.data} />
 
-      {job.output && <JobJsonBlock label="Output" value={job.output} />}
+      {job.output != null && <JobJsonBlock label="Output" value={job.output} />}
 
       {/* Error Details */}
-      {job.deadletter && (
+      {job.error && (
         <Card>
           <CardHeader>
             <CardTitle className="text-destructive">Error</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-destructive/10 p-4 text-xs text-destructive">
-              {job.deadletter}
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-destructive/10 p-4 text-xs text-destructive">
+              {job.error}
             </pre>
           </CardContent>
         </Card>
       )}
 
       {/* Singleton Info */}
-      {(job.singletonkey || job.singletonon) && (
+      {job.singletonKey && (
         <Card>
           <CardHeader>
             <CardTitle>Singleton</CardTitle>
           </CardHeader>
           <CardContent>
             <DataFields columns={2}>
-              {job.singletonkey && (
-                <DataField label="Key" valueClassName={monoClass}>
-                  {job.singletonkey}
-                </DataField>
-              )}
-              {job.singletonon && (
-                <DataField label="On">
-                  <span title={formatLocaleDateTime(job.singletonon)}>
-                    {formatRelativeTime(job.singletonon)}
-                  </span>
-                </DataField>
-              )}
+              <DataField label="Key" valueClassName={monoClass}>
+                {job.singletonKey}
+              </DataField>
             </DataFields>
           </CardContent>
         </Card>

@@ -1,17 +1,14 @@
 /**
  * Browser routes (issue #24): status, start, VNC ticket, resize, driver and
- * profile reset — against the app's express stack with a live fake session
+ * profile reset — against the app's Hono stack with a live fake session
  * injected into the toolkit's session map (the same seam the production
  * toolkit uses).
  */
-import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
 import { generateToken } from "@groot/core/utils/jwt.utils";
+import { api, createTestApp } from "../helpers";
+import { db, bots } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
-import express from "express";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
 import { vi } from "vite-plus/test";
 import {
   createBrowserToolkit,
@@ -25,15 +22,19 @@ import {
   resetVncTicketsForTests,
 } from "../../../apps/web/src/server/api/bots/browser.vnc";
 
-const token = generateToken({ userId: 1, email: "browser-test@example.com" });
-const authorization = { Authorization: `Bearer ${token}` };
+const token = await generateToken({ userId: 1, email: "browser-test@example.com" });
 
-function buildApp() {
-  const app = express();
-  app.use(express.json({ limit: "1mb" }));
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+type Data = any;
+
+/** A JSON request through the app, authenticated unless `anonymous`. */
+function call(
+  app: ReturnType<typeof createTestApp>,
+  path: string,
+  init: { method?: string; json?: unknown; anonymous?: boolean } = {},
+) {
+  const { anonymous, ...rest } = init;
+  return api<Data>(app, path, { ...rest, ...(anonymous ? {} : { token }) });
 }
 
 function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
@@ -109,7 +110,9 @@ describe("browser routes", () => {
   beforeEach(() => {
     setAgentRuntimeForTests(agentRuntime as never);
   });
-  const app = buildApp();
+  const app = createTestApp();
+  const get = (path: string) => call(app, path);
+  const post = (path: string, json?: unknown) => call(app, path, { method: "POST", json });
   let botId: string;
   /** New bots use the shared browser profile, in a tab of their own. */
   let target: { profile: string; tab: string };
@@ -126,12 +129,9 @@ describe("browser routes", () => {
   }
 
   beforeEach(async () => {
-    await prisma.bot.deleteMany();
-    const response = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send({ name: "B", modelId: "m", systemPrompt: "" })
-      .expect(201);
+    await db.delete(bots);
+    const response = await post("/api/v1/bots", { name: "B", modelId: "m", systemPrompt: "" });
+    expect(response.status).toBe(201);
     botId = response.body.data.id;
     target = { profile: "shared", tab: botId };
     resetVncTicketsForTests();
@@ -140,15 +140,13 @@ describe("browser routes", () => {
 
   afterEach(async () => {
     resetBrowserSessionsForTests();
-    await prisma.bot.deleteMany();
+    await db.delete(bots);
   });
 
   it("reports inactive status when no session exists", async () => {
     resetBrowserSessionsForTests();
-    const r = await request(app)
-      .get(`/api/v1/bots/${botId}/browser`)
-      .set(authorization)
-      .expect(200);
+    const r = await get(`/api/v1/bots/${botId}/browser`);
+    expect(r.status).toBe(200);
     expect(r.body.data).toEqual({
       active: false,
       profile: "shared",
@@ -163,10 +161,8 @@ describe("browser routes", () => {
   });
 
   it("reports a headless session as having no live view", async () => {
-    const r = await request(app)
-      .get(`/api/v1/bots/${botId}/browser`)
-      .set(authorization)
-      .expect(200);
+    const r = await get(`/api/v1/bots/${botId}/browser`);
+    expect(r.status).toBe(200);
     expect(r.body.data).toMatchObject({
       active: true,
       url: "https://example.com/page",
@@ -178,10 +174,8 @@ describe("browser routes", () => {
 
   it("reports a VNC session with its pixel density", async () => {
     await openFake({ vnc: true });
-    const r = await request(app)
-      .get(`/api/v1/bots/${botId}/browser`)
-      .set(authorization)
-      .expect(200);
+    const r = await get(`/api/v1/bots/${botId}/browser`);
+    expect(r.status).toBe(200);
     expect(r.body.data).toMatchObject({ active: true, mode: "vnc", scale: 2 });
   });
 
@@ -192,10 +186,8 @@ describe("browser routes", () => {
       transport: async () => next.session,
       profilesDir: "/tmp/ta-route-profiles",
     });
-    const r = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/start`)
-      .set(authorization)
-      .expect(200);
+    const r = await post(`/api/v1/bots/${botId}/browser/start`);
+    expect(r.status).toBe(200);
     expect(r.body.data).toEqual({ starting: true });
     await vi.waitFor(() => expect(getLiveBrowserSession(target)).toBeDefined());
     expect(getLiveBrowserSession(target)?.session).toBe(next.session);
@@ -209,9 +201,9 @@ describe("browser routes", () => {
       },
       profilesDir: "/tmp/ta-route-profiles",
     });
-    await request(app).post(`/api/v1/bots/${botId}/browser/start`).set(authorization).expect(200);
+    expect((await post(`/api/v1/bots/${botId}/browser/start`)).status).toBe(200);
     await vi.waitFor(async () => {
-      const r = await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization);
+      const r = await get(`/api/v1/bots/${botId}/browser`);
       expect(r.body.data.error).toContain("no sudo");
       expect(r.body.data.starting).toBe(false);
     });
@@ -219,10 +211,8 @@ describe("browser routes", () => {
 
   it("mints a one-time VNC ticket bound to this bot", async () => {
     await openFake({ vnc: true });
-    const r = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/vnc-ticket`)
-      .set(authorization)
-      .expect(200);
+    const r = await post(`/api/v1/bots/${botId}/browser/vnc-ticket`);
+    expect(r.status).toBe(200);
     expect(r.body.data.scale).toBe(2);
     const url = new URL(r.body.data.path, "http://internal");
     expect(url.pathname).toBe(`/api/v1/bots/${botId}/browser/vnc`);
@@ -232,10 +222,8 @@ describe("browser routes", () => {
     expect(redeemVncTicket(ticket, "some-other-bot")).toBeUndefined(); // wrong bot burns it
     expect(redeemVncTicket(ticket, botId)).toBeUndefined();
 
-    const again = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/vnc-ticket`)
-      .set(authorization)
-      .expect(200);
+    const again = await post(`/api/v1/bots/${botId}/browser/vnc-ticket`);
+    expect(again.status).toBe(200);
     const second = new URL(again.body.data.path, "http://internal").searchParams.get("ticket")!;
     expect(second).not.toBe(ticket);
     expect(redeemVncTicket(second, botId)).toMatchObject({ botId, target });
@@ -243,24 +231,15 @@ describe("browser routes", () => {
   });
 
   it("refuses a VNC ticket without a VNC browser or a session", async () => {
-    await request(app)
-      .post(`/api/v1/bots/${botId}/browser/vnc-ticket`)
-      .set(authorization)
-      .expect(409);
+    expect((await post(`/api/v1/bots/${botId}/browser/vnc-ticket`)).status).toBe(409);
     resetBrowserSessionsForTests();
-    await request(app)
-      .post(`/api/v1/bots/${botId}/browser/vnc-ticket`)
-      .set(authorization)
-      .expect(404);
+    expect((await post(`/api/v1/bots/${botId}/browser/vnc-ticket`)).status).toBe(404);
   });
 
   it("fits the browser window to the viewer", async () => {
     await openFake({ vnc: true });
-    const r = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/resize`)
-      .set(authorization)
-      .send({ width: 900, height: 700 })
-      .expect(200);
+    const r = await post(`/api/v1/bots/${botId}/browser/resize`, { width: 900, height: 700 });
+    expect(r.status).toBe(200);
     expect(r.body.data).toEqual({ width: 900, height: 700 });
     expect(fake.resizes).toEqual([{ width: 900, height: 700 }]);
   });
@@ -273,82 +252,60 @@ describe("browser routes", () => {
       { width: 900.5, height: 700 },
       { width: 900 },
     ]) {
-      await request(app)
-        .post(`/api/v1/bots/${botId}/browser/resize`)
-        .set(authorization)
-        .send(size)
-        .expect(400);
+      expect((await post(`/api/v1/bots/${botId}/browser/resize`, size)).status).toBe(400);
     }
     expect(fake.resizes).toEqual([]);
 
     await openFake();
-    await request(app)
-      .post(`/api/v1/bots/${botId}/browser/resize`)
-      .set(authorization)
-      .send({ width: 900, height: 700 })
-      .expect(409);
+    const headless = await post(`/api/v1/bots/${botId}/browser/resize`, {
+      width: 900,
+      height: 700,
+    });
+    expect(headless.status).toBe(409);
   });
 
   it("answers 502 instead of pretending when the window cannot be resized", async () => {
     await openFake({ vnc: true, resizeError: "Resizing the browser timed out after 10s" });
-    const r = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/resize`)
-      .set(authorization)
-      .send({ width: 900, height: 700 })
-      .expect(502);
+    const r = await post(`/api/v1/bots/${botId}/browser/resize`, { width: 900, height: 700 });
+    expect(r.status).toBe(502);
     expect(JSON.stringify(r.body)).toContain("timed out");
   });
 
   it("reports a browser that died as closed instead of live", async () => {
     await openFake({ vnc: true });
-    await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization).expect(200);
+    expect((await get(`/api/v1/bots/${botId}/browser`)).status).toBe(200);
     fake.die();
 
-    const status = await request(app)
-      .get(`/api/v1/bots/${botId}/browser`)
-      .set(authorization)
-      .expect(200);
+    const status = await get(`/api/v1/bots/${botId}/browser`);
+    expect(status.status).toBe(200);
     expect(status.body.data).toMatchObject({ active: false, mode: null, driver: null });
     // Nothing is left to resize or drive: the panel offers to open a new one.
-    await request(app)
-      .post(`/api/v1/bots/${botId}/browser/resize`)
-      .set(authorization)
-      .send({ width: 900, height: 700 })
-      .expect(404);
+    const gone = await post(`/api/v1/bots/${botId}/browser/resize`, { width: 900, height: 700 });
+    expect(gone.status).toBe(404);
     expect(fake.resizes).toEqual([]);
   });
 
   it("flips the driver and back", async () => {
-    const take = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/driver`)
-      .set(authorization)
-      .send({ driver: "human" })
-      .expect(200);
+    const take = await post(`/api/v1/bots/${botId}/browser/driver`, { driver: "human" });
+    expect(take.status).toBe(200);
     expect(take.body.data.driver).toBe("human");
     expect(getLiveBrowserSession(target)?.driver).toBe("human");
-    const release = await request(app)
-      .post(`/api/v1/bots/${botId}/browser/driver`)
-      .set(authorization)
-      .send({ driver: "agent" })
-      .expect(200);
+    const release = await post(`/api/v1/bots/${botId}/browser/driver`, { driver: "agent" });
+    expect(release.status).toBe(200);
     expect(release.body.data.driver).toBe("agent");
     expect(getLiveBrowserSession(target)?.driver).toBe("agent");
   });
 
   it("404s driver flip when no session exists", async () => {
     resetBrowserSessionsForTests();
-    await request(app)
-      .post(`/api/v1/bots/${botId}/browser/driver`)
-      .set(authorization)
-      .send({ driver: "human" })
-      .expect(404);
+    expect((await post(`/api/v1/bots/${botId}/browser/driver`, { driver: "human" })).status).toBe(
+      404,
+    );
   });
 
   it("resets the profile: closes the session and wipes it", async () => {
-    await request(app)
-      .delete(`/api/v1/bots/${botId}/browser/profile`)
-      .set(authorization)
-      .expect(200);
+    const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
+    expect(reset.status).toBe(200);
     expect(getLiveBrowserSession(target)).toBeUndefined();
     expect(fake.wipes).toEqual(["wipe"]);
   });
@@ -373,21 +330,18 @@ describe("browser routes", () => {
       },
       profilesDir: "/tmp/ta-route-profiles",
     });
-    const second = await request(app)
-      .post("/api/v1/bots")
-      .set(authorization)
-      .send({ name: "C", modelId: "m", systemPrompt: "" })
-      .expect(201);
+    const second = await post("/api/v1/bots", { name: "C", modelId: "m", systemPrompt: "" });
+    expect(second.status).toBe(201);
     const otherId: string = second.body.data.id;
 
     for (const id of [botId, otherId]) {
-      await request(app).post(`/api/v1/bots/${id}/browser/start`).set(authorization).expect(200);
+      expect((await post(`/api/v1/bots/${id}/browser/start`)).status).toBe(200);
       await vi.waitFor(() => expect(getLiveBrowserSession(target)?.tabs.has(id)).toBe(true));
     }
     expect(launches).toBe(1);
     expect(tabs).toEqual(["opened"]);
-    const first = await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization);
-    const other = await request(app).get(`/api/v1/bots/${otherId}/browser`).set(authorization);
+    const first = await get(`/api/v1/bots/${botId}/browser`);
+    const other = await get(`/api/v1/bots/${otherId}/browser`);
     expect(first.body.data).toMatchObject({
       active: true,
       profile: "shared",
@@ -397,11 +351,11 @@ describe("browser routes", () => {
   });
 
   it("gives a bot set to its own profile a browser of its own", async () => {
-    await request(app)
-      .patch(`/api/v1/bots/${botId}`)
-      .set(authorization)
-      .send({ browserProfile: "own" })
-      .expect(200);
+    const patched = await call(app, `/api/v1/bots/${botId}`, {
+      method: "PATCH",
+      json: { browserProfile: "own" },
+    });
+    expect(patched.status).toBe(200);
     const own = { profile: `bot-${botId}`, tab: botId };
     const ownFake = fakeSession();
     createBrowserToolkit({
@@ -409,16 +363,14 @@ describe("browser routes", () => {
       profilesDir: "/tmp/ta-route-profiles",
     });
 
-    const before = await request(app).get(`/api/v1/bots/${botId}/browser`).set(authorization);
+    const before = await get(`/api/v1/bots/${botId}/browser`);
     expect(before.body.data).toMatchObject({ active: false, profile: "own" });
-    await request(app).post(`/api/v1/bots/${botId}/browser/start`).set(authorization).expect(200);
+    expect((await post(`/api/v1/bots/${botId}/browser/start`)).status).toBe(200);
     await vi.waitFor(() => expect(getLiveBrowserSession(own)?.session).toBe(ownFake.session));
 
     // Resetting it wipes only its own profile; the shared browser stays up.
-    await request(app)
-      .delete(`/api/v1/bots/${botId}/browser/profile`)
-      .set(authorization)
-      .expect(200);
+    const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
+    expect(reset.status).toBe(200);
     expect(ownFake.wipes).toEqual(["wipe"]);
     expect(fake.wipes).toEqual([]);
     expect(getLiveBrowserSession(own)).toBeUndefined();
@@ -426,8 +378,10 @@ describe("browser routes", () => {
   });
 
   it("requires auth", async () => {
-    await request(app).get(`/api/v1/bots/${botId}/browser`).expect(401);
-    await request(app).post(`/api/v1/bots/${botId}/browser/vnc-ticket`).expect(401);
-    await request(app).post(`/api/v1/bots/${botId}/browser/start`).expect(401);
+    const anonymous = (path: string, method = "POST") =>
+      call(app, path, { method, anonymous: true });
+    expect((await anonymous(`/api/v1/bots/${botId}/browser`, "GET")).status).toBe(401);
+    expect((await anonymous(`/api/v1/bots/${botId}/browser/vnc-ticket`)).status).toBe(401);
+    expect((await anonymous(`/api/v1/bots/${botId}/browser/start`)).status).toBe(401);
   });
 });

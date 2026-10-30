@@ -1,11 +1,25 @@
-import { randomUUID } from "node:crypto";
-import type { Request } from "express";
-import type { Logger } from "pino";
-import { logger } from "./core";
+import { logger, type Logger } from "./core";
 
-export interface CreateRequestLoggerOptions {
-  req: Request;
-  additionalContext?: Record<string, unknown>;
+export interface RequestDescriptor {
+  requestId: string;
+  method: string;
+  url: string;
+  userAgent?: string;
+  ip?: string;
+}
+
+export function createRequestLogger(
+  request: RequestDescriptor,
+  additionalContext: Record<string, unknown> = {},
+): Logger {
+  return logger.child({
+    reqId: request.requestId,
+    method: request.method,
+    url: request.url,
+    userAgent: request.userAgent,
+    ip: request.ip,
+    ...additionalContext,
+  });
 }
 
 export interface LogBusinessEventOptions {
@@ -14,54 +28,24 @@ export interface LogBusinessEventOptions {
   level?: "info" | "warn" | "error";
 }
 
+/** Domain events worth finding later (`type: "business_event"`). */
+export function logBusinessEvent(options: LogBusinessEventOptions): void {
+  const { event, data, level = "info" } = options;
+  logger[level]({ type: "business_event", event, ...data }, `Business event: ${event}`);
+}
+
 export interface LogPerformanceOptions {
   operation: string;
   duration: number;
   data?: Record<string, unknown>;
 }
 
-// Request-aware logger factory
-export function createRequestLogger(options: CreateRequestLoggerOptions): Logger {
-  const { req, additionalContext = {} } = options;
-  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
-
-  return logger.child({
-    reqId: requestId,
-    method: req.method,
-    url: req.url,
-    userAgent: req.headers["user-agent"],
-    ip: req.ip || req.headers["x-forwarded-for"],
-    ...additionalContext,
-  });
-}
-
-// Business event logger
-export function logBusinessEvent(options: LogBusinessEventOptions): void {
-  const { event, data, level = "info" } = options;
-  logger[level](
-    {
-      type: "business_event",
-      event,
-      ...data,
-      timestamp: new Date().toISOString(),
-    },
-    `Business event: ${event}`,
-  );
-}
-
-// Performance logger — child projects instrument long-running jobs with it;
-// the level escalates with duration (debug < 1s, info < 5s, warn beyond).
+/** Timing record (`type: "performance"`); escalates to warn past 5s. */
 export function logPerformance(options: LogPerformanceOptions): void {
   const { operation, duration, data = {} } = options;
   const level = duration > 5000 ? "warn" : duration > 1000 ? "info" : "debug";
-
   logger[level](
-    {
-      type: "performance",
-      operation,
-      duration: `${duration}ms`,
-      ...data,
-    },
+    { type: "performance", operation, duration: `${duration}ms`, ...data },
     `Performance: ${operation} completed in ${duration}ms`,
   );
 }

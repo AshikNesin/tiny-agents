@@ -1,69 +1,78 @@
-import type { Request, Response } from "express";
-import { createRouter } from "@groot/core/utils/router.utils";
-import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
-import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
-import { parseId, requireUser, parseBody } from "@groot/core/utils/controller.utils";
-import { setAuthCookie } from "@groot/core/utils/auth-cookie.utils";
+import { Hono } from "hono";
+import { jwtAuthMiddleware } from "../middlewares/jwt-auth.middleware";
+import { authRateLimiter } from "../middlewares/rate-limit.middleware";
+import { parseBody, parseId, requireUser } from "../utils/controller.utils";
+import { setAuthCookie } from "../utils/auth-cookie.utils";
+import { ok, noContent } from "../utils/api-response.utils";
 import * as passkeyService from "./passkey.service";
 import {
-  verifyRegistrationSchema,
-  verifyAuthenticationSchema,
-  updatePasskeyNameSchema,
   generateAuthenticationOptionsSchema,
+  updatePasskeyNameSchema,
+  verifyAuthenticationSchema,
+  verifyRegistrationSchema,
 } from "./passkey.schema";
+import type { AppEnv } from "../types";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
-router.post("/register/options", jwtAuthMiddleware, async (req: Request) => {
-  const { userId } = requireUser(req);
-  return await passkeyService.generateRegistrationOptions({ userId });
+// Registration (signed in)
+router.post("/register/options", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  return ok(c, await passkeyService.generateRegistrationOptions({ userId }));
 });
 
-router.post("/register/verify", jwtAuthMiddleware, async (req: Request) => {
-  const { userId } = requireUser(req);
-  const payload = parseBody(req, verifyRegistrationSchema);
-  return await passkeyService.verifyRegistration({
-    userId,
-    response: payload.response,
-    credentialName: payload.credentialName,
-  });
+router.post("/register/verify", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  const payload = await parseBody(c, verifyRegistrationSchema);
+  return ok(
+    c,
+    await passkeyService.verifyRegistration({
+      userId,
+      response: payload.response,
+      credentialName: payload.credentialName,
+    }),
+  );
 });
 
-router.post("/login/options", authRateLimiter, async (req: Request) => {
-  const body = parseBody(req, generateAuthenticationOptionsSchema);
-  return await passkeyService.generateAuthenticationOptions({ email: body?.email });
+// Login (public)
+router.post("/login/options", authRateLimiter, async (c) => {
+  const body = await parseBody(c, generateAuthenticationOptionsSchema);
+  return ok(c, await passkeyService.generateAuthenticationOptions({ email: body.email }));
 });
 
-router.post("/login/verify", authRateLimiter, async (req: Request, res: Response) => {
-  const body = parseBody(req, verifyAuthenticationSchema);
+router.post("/login/verify", authRateLimiter, async (c) => {
+  const body = await parseBody(c, verifyAuthenticationSchema);
   const result = await passkeyService.verifyAuthentication({
     email: body.email,
     response: body.response,
   });
-  setAuthCookie(res, result.token);
-  return result;
+  setAuthCookie(c, result.token);
+  return ok(c, result);
 });
 
-router.get("/list", jwtAuthMiddleware, async (req: Request) => {
-  const { userId } = requireUser(req);
-  return await passkeyService.listPasskeys({ userId });
+// Management (signed in)
+router.get("/list", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  return ok(c, await passkeyService.listPasskeys({ userId }));
 });
 
-router.delete("/:id", jwtAuthMiddleware, async (req: Request) => {
-  const { userId } = requireUser(req);
-  const passkeyId = parseId(req.params.id);
-  return await passkeyService.deletePasskey({ userId, passkeyId });
+router.delete("/:id", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  await passkeyService.deletePasskey({ userId, passkeyId: parseId(c.req.param("id")) });
+  return noContent(c);
 });
 
-router.patch("/:id", jwtAuthMiddleware, async (req: Request) => {
-  const { userId } = requireUser(req);
-  const passkeyId = parseId(req.params.id);
-  const payload = parseBody(req, updatePasskeyNameSchema);
-  return await passkeyService.updatePasskeyName({
-    userId,
-    passkeyId,
-    credentialName: payload.credentialName,
-  });
+router.patch("/:id", jwtAuthMiddleware, async (c) => {
+  const { userId } = requireUser(c);
+  const payload = await parseBody(c, updatePasskeyNameSchema);
+  return ok(
+    c,
+    await passkeyService.updatePasskeyName({
+      userId,
+      passkeyId: parseId(c.req.param("id")),
+      credentialName: payload.credentialName,
+    }),
+  );
 });
 
 export default router;

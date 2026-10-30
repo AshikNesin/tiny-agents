@@ -1,5 +1,11 @@
 # @groot/ai
 
+## 0.3.0
+
+### Minor Changes
+
+- [`612b968`](https://github.com/AshikNesin/groot/commit/612b9688bee6548518c8df1b6c990bca87df45a0) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Upgrade pi-ai with Cloudflare AI Gateway provider support.
+
 ## 0.2.0
 
 ### Minor Changes

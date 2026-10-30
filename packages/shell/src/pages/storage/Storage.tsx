@@ -133,7 +133,7 @@ export function Storage({ onView }: StorageProps = {}) {
             ))}
           </div>
           {/* Desktop table placeholder */}
-          <div className="hidden overflow-hidden rounded-lg border md:block">
+          <div className="hidden overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 md:block">
             <SkeletonTable columns={5} rows={6} />
           </div>
         </>
@@ -161,7 +161,7 @@ export function Storage({ onView }: StorageProps = {}) {
           </div>
 
           {/* Desktop Table View */}
-          <div className="hidden overflow-hidden rounded-lg border md:block">
+          <div className="hidden overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 md:block">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>

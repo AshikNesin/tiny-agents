@@ -1,243 +1,171 @@
-# Testing Guide
+# Testing
 
-How to run the test suite, mock server dependencies, and keep tests passing on both database engines.
-
-Vitest powers the unit/integration tests while Supertest handles HTTP assertions. Tests are centralized in the `tests/` directory.
+Vitest (through Vite+) for server and client tests, Playwright for end to end.
+Server tests never start an HTTP server: the Hono app is called in-process with
+`app.request()` against an in-memory SQLite database.
 
 ## Commands
 
 ```bash
-pnpm test         # Single run, great for CI (SQLite by default)
-pnpm test:watch   # Watch mode during development
-pnpm test:e2e     # Playwright E2E tests
+pnpm test           # server tests, single run
+pnpm test:watch     # server tests, watch mode
+pnpm test:client    # client tests (jsdom)
+pnpm test:all       # both
+pnpm test:e2e       # Playwright (starts the dev server itself)
 ```
 
-## Running on both database engines
+## Server test setup
 
-The suite is engine-agnostic and must pass on **both** SQLite and PostgreSQL.
-The engine is selected by `DATABASE_URL` — a `file:` path (the default) runs
-SQLite, a `postgresql://` URL runs Postgres:
+`tests/server/setup.ts` runs once per test file and calls `bootstrap()` with:
 
-```bash
-pnpm test            # DATABASE_URL=file:./tmp/test.db → SQLite
-DATABASE_URL=postgresql://user:pass@localhost:5432/myapp_test \
-  TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/myapp_test pnpm test
-```
+- `NODE_ENV=test`, `DATABASE_URL=":memory:"`
+- `createSqliteDb(":memory:", { migrationsFolder: "apps/web/drizzle" })`: a
+  fresh database per file with every migration applied
+- `memoryStorage()` for uploads
+- `jobs.enabled = false`, so nothing runs in the background; tests call
+  `runTick()` when they want jobs processed
+- `logging.level = "silent"`
 
-CI runs both engines as matrix legs. To check the other engine locally, point
-`DATABASE_URL` and `TEST_DATABASE_URL` at it and re-run `pnpm test` (the
-`pretest` hook regenerates the Prisma client for that engine).
-The `pretest` hook (`scripts/ensure-test-db.ts`) provisions the right test DB
-for the active engine: it migrates a Postgres test DB reached via `DATABASE_URL`
-(a pre-provisioned Postgres in CI, or your own local Postgres) and ensures the
-`./tmp/test.db` file exists on SQLite. It also regenerates the Prisma client
-for the active engine — the generated client embeds the datasource provider, so
-switching engines without regenerating causes a runtime driver-adapter
-mismatch.
+Files are isolated from each other for free. Within a file, clear what you
+need in `beforeEach` (e.g. `await db.delete(todos)`, `clearJobHandlers()`).
 
-CI enforces both engines on every PR and push to `main` via a matrix workflow
-(`.github/workflows/test.yml`): the Postgres leg uses a `pgvector/pgvector:pg18`
-service container, SQLite needs no infra. Each leg typechecks, lints, tests
-(server + client), and builds. The honker-adapter test is SQLite-only (the
-adapter opens a SQLite file) and is `describe.skip` on Postgres.
+## Helpers (`tests/server/helpers.ts`)
 
-> See [Database Engines](../database-engines.md) for the full engine matrix.
+| Helper                                             | Does                                                                                                             |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `createTestApp()`                                  | `createWebApp()` — the real app with every router                                                                |
+| `api(app, path, { method, json, token, headers })` | Sends the request, returns `{ status, headers, body }`; `body` is the envelope, a 204 yields `{ success: true }` |
+| `signIn(app)`                                      | Creates a unique user and logs in; returns `{ token, user, email, password, cookie }`                            |
+| `adminHeaders()`                                   | `{ "x-admin-auth-key": env.ADMIN_AUTH_KEY }`                                                                     |
 
-## Test Structure
+## Layout
 
 ```
 tests/
-├── server/              # Server unit tests (vitest.config.server.ts)
-│   ├── setup.ts         # Server test setup (+ _db-guard.ts)
-│   ├── ai/              # AI provider client tests
-│   ├── api/             # Feature validation/schema tests (mirror apps/web/src/server/api)
-│   ├── groot/            # Boilerplate-sync tooling tests (.groot/** sources)
-│   ├── pages/           # Feature job-handler tests
-│   ├── prisma/          # Schema parity guard (sqlite vs postgres)
-│   ├── routes/          # Route-level (supertest) tests
-│   └── server/          # Core server module tests (job, config, storage, kv, …)
-└── client/              # Client unit tests (jsdom, default vite-plus config)
-    ├── setup.ts         # jsdom + testing-library setup
-    └── components/      # UI component tests (@groot/ui, @groot/jobs/client)
+├── server/
+│   ├── setup.ts · helpers.ts
+│   ├── core/      # @groot/core units: env, config, jwt, password, kv, logger
+│   ├── jobs/      # @groot/jobs/server: queue + tick, schedules, routes, validation, constants
+│   ├── api/       # HTTP tests for the core routers: auth, settings, storage, todos
+│   ├── app/       # app-owned: createApp, todo jobs (project-local, not synced)
+│   ├── checks/    # repo guards: changesets gate, kit exports, typecheck coverage
+│   ├── groot/     # sync tooling
+│   ├── ai/        # @groot/ai
+│   └── scripts/   # build scripts (runtime closure)
+├── client/        # jsdom + testing-library (configured in vite.config.ts)
+├── e2e/           # Playwright specs + global-setup.ts
+└── kit-consumers/ # compiled fixture for pnpm typecheck:kit (never executed)
 ```
 
-Server tests run with `pnpm test`; client tests with `pnpm test:client`
-(and `pnpm test:all` runs both suites).
+`tests/server/{core,jobs,api,groot,ai}` and `tests/client` sync with the source
+they exercise (`TEST_AREA_OWNERSHIP` in `.groot/lib/patterns.ts`);
+`tests/server/app` and `tests/e2e` stay project-local.
 
-## Server Testing Patterns
+## Patterns
 
-### Route Tests
+### An API test
 
-Test HTTP endpoints with Supertest:
+```ts
+import { describe, expect, it } from "vite-plus/test";
+import { api, createTestApp, signIn } from "../helpers";
 
-```typescript
-// tests/server/app/todo/todo.routes.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import request from "supertest";
-import express from "express";
-import todoRoutes from "../../../../apps/web/src/server/api/todo/todo.routes";
+const app = createTestApp();
 
-vi.mock("../../../../apps/web/src/server/api/todo/todo.service", () => ({
-  findAll: vi.fn().mockResolvedValue([{ id: 1, title: "Test" }]),
-  create: vi.fn().mockResolvedValue({ id: 1, title: "New" }),
-}));
-
-describe("Todo Routes", () => {
-  const app = express();
-  app.use(express.json());
-  app.use("/todos", todoRoutes);
-
-  it("GET /todos returns array", async () => {
-    const res = await request(app).get("/todos");
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+describe("todos API", () => {
+  it("creates, reads and deletes", async () => {
+    const { token } = await signIn(app);
+    const created = await api<{ id: number }>(app, "/api/v1/todos", {
+      method: "POST",
+      json: { title: "Write tests" },
+      token,
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.data!.id;
+    expect((await api(app, `/api/v1/todos/${id}`, { method: "DELETE", token })).status).toBe(204);
+    expect((await api(app, `/api/v1/todos/${id}`, { token })).status).toBe(404);
   });
 
-  it("POST /todos with valid data creates todo", async () => {
-    const res = await request(app).post("/todos").send({ title: "New Todo" });
-    expect(res.status).toBe(201);
-  });
-
-  it("POST /todos with invalid data returns 400", async () => {
-    const res = await request(app).post("/todos").send({});
+  it("rejects an invalid payload", async () => {
+    const { token } = await signIn(app);
+    const res = await api(app, "/api/v1/todos", { method: "POST", json: { title: "" }, token });
     expect(res.status).toBe(400);
+    expect(res.body.error?.details).toMatchObject({ title: [expect.any(String)] });
   });
 });
 ```
 
-### Service Tests
+### A job test
 
-Test business logic directly:
+```ts
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { eq } from "drizzle-orm";
+import { db } from "@groot/core/database";
+import { addJob, clearJobHandlers, jobs, registerJobHandler, runTick } from "@groot/jobs/server";
 
-```typescript
-// tests/server/app/todo/todo.service.test.ts
-import { describe, it, expect, vi } from "vitest";
-import * as todoService from "../../../../apps/web/src/server/api/todo/todo.service";
+beforeEach(() => clearJobHandlers());
 
-vi.mock("@groot/core/database", () => ({
-  prisma: {
-    todo: {
-      findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 1 }),
-      findUnique: vi.fn().mockResolvedValue({ id: 1 }),
-    },
-  },
-}));
-
-describe("todoService", () => {
-  it("findAll returns todos", async () => {
-    const todos = await todoService.findAll();
-    expect(Array.isArray(todos)).toBe(true);
-  });
+it("runs a job and stores its output", async () => {
+  registerJobHandler<{ n: number }>("double", (job) => ({ doubled: job.data.n * 2 }));
+  const id = await addJob("double", { n: 21 });
+  expect(await runTick()).toMatchObject({ claimed: 1, completed: 1 });
+  const [row] = await db.select().from(jobs).where(eq(jobs.id, id));
+  expect(row).toMatchObject({ state: "completed", output: { doubled: 42 } });
 });
 ```
 
-### Job Handler Tests
+### An admin route
 
-Test job handlers with mock job objects:
-
-```typescript
-// tests/server/app/todo/todo.jobs.test.ts
-import { describe, it, expect, vi } from "vitest";
-import { todoCleanupHandler } from "../../../../apps/web/src/server/api/todo/todo.jobs";
-
-vi.mock("@groot/core/logger", () => ({
-  createJobLogger: () => ({ info: vi.fn(), error: vi.fn() }),
-}));
-
-describe("Todo Jobs", () => {
-  it("cleanup handler processes data", async () => {
-    const job = { id: "test-123", data: { daysToKeep: 30 } };
-    await expect(todoCleanupHandler(job)).resolves.toBeUndefined();
-  });
+```ts
+const res = await api(app, "/api/v1/auth/users", {
+  method: "POST",
+  headers: adminHeaders(),
+  json: { email: "new@example.com", password: "a-long-password" },
 });
+expect(res.status).toBe(201);
 ```
 
-## Mocking Tips
+### Services and units
 
-### Prisma Mocking
+Call them directly; the database is real, so there is nothing to mock
+(`tests/server/core/kv.test.ts`, `tests/server/jobs/queue.test.ts`). Reach for
+`vi.mock` only for external services.
 
-```typescript
-import { vi } from "vitest";
+## Coverage checklist per route
 
-vi.mock("@groot/core/database", () => ({
-  prisma: {
-    todo: {
-      findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 1 }),
-      update: vi.fn().mockResolvedValue({ id: 1 }),
-    },
-  },
-}));
-```
+1. Success path with the right status (`200`, `201`, `204`) and body shape
+2. Validation errors (`400` with `error.details`)
+3. Auth guard (`401` without a token; `401`/`403` on admin routes)
+4. Edge cases: missing resources (`404`), bad ids, pagination limits
 
-### Job System Mocking
+## Client tests
 
-```typescript
-vi.mock("@groot/jobs/server/queue", () => ({
-  addJob: vi.fn().mockResolvedValue("job-id"),
-  scheduleJob: vi.fn().mockResolvedValue("scheduled-id"),
-}));
+Vitest + `@testing-library/react` in jsdom, aliases shared with the build:
 
-vi.mock("@groot/jobs/server/queries", () => ({
-  getJobs: vi.fn().mockResolvedValue([]),
-}));
-
-vi.mock("@groot/jobs/server/worker", () => ({
-  registerJobHandler: vi.fn(),
-}));
-```
-
-### Logger Mocking
-
-```typescript
-vi.mock("@groot/core/logger", () => ({
-  createRequestLogger: () => ({
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  }),
-  createJobLogger: () => ({
-    info: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-```
-
-## HTTP Coverage Checklist
-
-For each API route, cover:
-
-1. **Success path** – Validate `201/200` responses and response body structure
-2. **Validation errors** – Send malformed payloads to ensure validation rejects them
-3. **Auth guard** – Assert that missing JWT returns `401` (for protected routes)
-4. **Edge cases** – Missing resources, invalid IDs, pagination limits
-
-## Client Testing
-
-Use Vitest + `@testing-library/react`:
-
-```typescript
-// tests/client/components/ui/Button.test.tsx
-import { describe, it, expect } from "vitest";
+```tsx
+import { describe, expect, it } from "vite-plus/test";
 import { render, screen } from "@testing-library/react";
 import { Button } from "@groot/ui/button";
 
-describe("Button", () => {
-  it("renders with text", () => {
-    render(<Button>Click me</Button>);
-    expect(screen.getByText("Click me")).toBeInTheDocument();
-  });
-
-  it("shows loading state", () => {
-    render(<Button disabled>Loading...</Button>);
-    expect(screen.getByText("Loading...")).toBeDisabled();
-  });
+it("renders", () => {
+  render(<Button>Click me</Button>);
+  expect(screen.getByText("Click me")).toBeInTheDocument();
 });
 ```
 
-## Continuous Verification
+## End to end
 
-- Run `pnpm check` (lint + format) before opening PRs
-- Run `pnpm test:all` to verify tests pass on both database engines
-- CI (`.github/workflows/test.yml`) enforces typecheck, lint, tests, and build on both SQLite and PostgreSQL automatically
+`pnpm test:e2e` lets Playwright start the server
+(`tsx scripts/seed.ts && tsx watch apps/web/src/server/entry.node.ts` on
+`http://localhost:3000`, so the demo user exists) and runs `tests/e2e/*.spec.ts`
+in Chromium: headed locally, headless in CI. `DATABASE_URL` is inherited from
+your environment (default `file:./data/dev.db` outside production).
+
+## Continuous integration
+
+`.github/workflows/test.yml` runs, in order: typechecks (server, client,
+coverage guard, kit fixture), the kit export guard, the changeset gate, the
+checks-coverage guard, lint + format, a migration freshness check
+(`pnpm db:generate` must produce no diff), server and client tests,
+`pnpm build`, the runtime dependency closure check, a wrangler dry run, and a
+pruned production boot (`pnpm install --prod`, `node dist/server/bundle.js`,
+`/health` answers, `SIGTERM` exits cleanly).

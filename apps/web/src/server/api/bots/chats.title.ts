@@ -4,9 +4,10 @@
  * first owner message as its title, and a model title replaces it when it
  * arrives. Every failure keeps that provisional title.
  */
-import { prisma } from "@groot/core/database";
+import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes, stripPeerEnvelope, type AgentRuntime } from "@tiny-agents/agent";
+import { db, botChats } from "../../db";
 import type { CaptureModels } from "./memories.capture";
 import { resolveCaptureModel, resolveCaptureModelId } from "./memories.runner";
 
@@ -157,7 +158,7 @@ export async function titlePastChat(
     const title = cleanTitle(text);
     if (!title) return;
     // The chat may have been continued or deleted meanwhile: then nothing to name.
-    await prisma.botChat.updateMany({ where: { id: chatId }, data: { title } });
+    await db.update(botChats).set({ title }).where(eq(botChats.id, chatId));
   } catch (error) {
     logger.warn({ error, chatId }, "Chat title skipped after error");
   }

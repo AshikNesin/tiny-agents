@@ -15,10 +15,15 @@ that the code alone cannot show.
 
 ## Index
 
-| #    | Title                                                                                 | Status             |
-| ---- | ------------------------------------------------------------------------------------- | ------------------ |
-| 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md) | reinstated by 0003 |
-| 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                        | reverted by 0003   |
-| 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)               | accepted           |
-| 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)           | accepted           |
-| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)         | accepted           |
+| #    | Title                                                                                            | Status             |
+| ---- | ------------------------------------------------------------------------------------------------ | ------------------ |
+| 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md)            | reinstated by 0003 |
+| 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                                   | reverted by 0003   |
+| 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)                          | accepted           |
+| 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)                      | accepted           |
+| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                    | accepted           |
+| G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md) | accepted (groot)   |
+
+`G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
+predates it. tiny-agents runs on Node only (Chromium, ssh2, the agent store),
+so the Workers half of G4 does not apply here.

@@ -1,206 +1,174 @@
-# Background Jobs
+# Background jobs
 
-The job system powers asynchronous work with a modularized, dynamically-registered handler model. Jobs are registered at boot time and executed by dedicated workers.
+The `jobs` table is the queue. There is no broker and no adapter: `addJob()`
+inserts a row, `runTick()` claims due rows with a single `UPDATE … RETURNING`
+and runs them in-process. On Node a poller calls `runTick()` every few seconds;
+on Cloudflare Workers a cron trigger calls it once a minute; and `addJob()`
+kicks off an inline tick so a job queued from a request runs right after the
+response.
 
-The queue itself runs on an **adapter selected by the `DATABASE_URL` scheme** — [pg-boss](https://github.com/timgit/pg-boss) on PostgreSQL, [honker](https://github.com/russellromney/honker) on SQLite. Application code (handlers, enqueue API, the dashboard) is engine-agnostic and talks to a normalized `JobQueueAdapter` interface; see [Database Engines](../database-engines.md#job-queue-adapter) for the adapter design.
+Everything lives in `@groot/jobs`: `@groot/jobs/server` (queue, tick, worker,
+routes, logger, schema) and `@groot/jobs/client` (the dashboard). Handlers are
+app-owned (`apps/web/src/server/api/<feature>/<feature>.jobs.ts`).
 
-The entire jobs vertical — backend infrastructure + HTTP admin API + job logger + the dashboard UI + client types/api — lives in the **`@groot/jobs`** package:
+## Tables (`packages/jobs/src/server/schema.ts`)
 
-- `@groot/jobs/server/*` — server-side (queue adapter, worker, queries, HTTP routes, job logger)
-- `@groot/jobs/client/*` — client-side (dashboard UI, `jobsApi`, types)
+| Table           | Row                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `jobs`          | `id` (uuid), `name`, `data` (JSON), `state`, `priority`, `retryLimit`, `retryCount`, `retryDelay` (s), `runAt`, `startedAt`, `completedAt`, `output` (JSON), `error`, `singletonKey` |
+| `job_schedules` | one per job name: `cron`, `data`, `timezone`, `lastRunAt`                                                                                                                            |
+| `job_logs`      | `jobId`, `level`, `message`, `data`, `timestamp` (info and above)                                                                                                                    |
 
-Project-specific job **handlers** (e.g. `todo.jobs.ts`) + bootstrap wiring stay in `apps/web/`.
+States: `created` → `active` → `completed` | `failed` | `cancelled`.
 
-## Architecture
+## Handlers
 
-The backend job system is split into focused modules, flat under `@groot/jobs/server`:
+```ts
+import { registerJobHandler, type JobContext } from "@groot/jobs/server";
 
-| Module        | File (import path)                 | Purpose                                                                |
-| ------------- | ---------------------------------- | ---------------------------------------------------------------------- |
-| Adapter       | `@groot/jobs/server/adapter`       | `JobQueueAdapter` interface + normalized `QueueJob`/`JobContext` types |
-| Config        | `@groot/jobs/server/config`        | Configuration from `config.yml`                                        |
-| Client        | `@groot/jobs/server/client`        | Constructs the active adapter (pg-boss or honker)                      |
-| Queue         | `@groot/jobs/server/queue`         | Job queueing and scheduling                                            |
-| Queries       | `@groot/jobs/server/queries`       | Job inspection and management                                          |
-| Worker        | `@groot/jobs/server/worker`        | Handler registration and execution                                     |
-| Error Handler | `@groot/jobs/server/error-handler` | Sentry capture + logging                                               |
-| Logger        | `@groot/jobs/server/logger`        | `createJobLogger` (DB-persisted)                                       |
-| Routes        | `@groot/jobs/server/routes`        | HTTP admin API (`/api/v1/jobs`)                                        |
+export async function sendDigest(job: JobContext<{ userId: number }>) {
+  job.logger.info({ userId: job.data.userId, attempt: job.attempt }, "Sending digest");
+  // ...
+  return { sent: 1 }; // any JSON-serialisable value is stored as job.output
+}
 
-The public API is also re-exported from the barrel `@groot/jobs/server`.
-
-## Job Registration
-
-Jobs are registered dynamically in feature modules, not via static enums:
-
-```typescript
-// apps/web/src/server/api/<feature>/<feature>.jobs.ts
-import { registerJobHandler, type JobHandler } from "@groot/jobs/server";
-import type { TodoCleanupPayload } from "./todo.types";
-
-export const todoCleanupHandler: JobHandler<TodoCleanupPayload> = async ({ data }) => {
-  const { daysToKeep } = data;
-  // Cleanup logic...
-};
-
-export function registerTodoJobs(): void {
-  registerJobHandler("todo-cleanup", todoCleanupHandler);
+export function registerDigestJobs(): void {
+  registerJobHandler("send-digest", sendDigest);
 }
 ```
 
-Then register in `apps/web/src/server/routes.ts`:
+`JobContext<T>` is `{ id, name, data, attempt, logger }` (`attempt` is 1 for the
+first run). Register handlers in `registerJobHandlers()`
+(`apps/web/src/server/app.ts`); both entries call it before the first tick.
+Names must not be a reserved path segment (`schedule`, `stats`, `available`,
+`state`, `status`, `bulk-rerun`). A job whose name has no registered handler is
+never claimed and stays `created`.
 
-```typescript
-import { registerTodoJobs } from "./api/todo/todo.jobs";
+## Queueing and managing
 
-export function registerJobHandlers(): void {
-  registerTodoJobs();
-  // add future feature job registrations here
-}
+```ts
+import { addJob, scheduleJob } from "@groot/jobs/server";
+
+await addJob("send-digest", { userId: 1 });
+await addJob(
+  "send-digest",
+  { userId: 1 },
+  {
+    delaySeconds: 60, // or runAt: new Date(...)
+    priority: 5, // higher runs first
+    retryLimit: 5, // default config.jobs.retryLimit (3)
+    retryDelaySeconds: 30, // base delay, doubles per attempt; default 60
+    singletonKey: "user:1", // at most one created/active job per name + key; returns the existing id
+  },
+);
+await scheduleJob("todo-cleanup", { daysToKeep: 30 }, "0 3 * * *", { timezone: "Asia/Kolkata" });
 ```
 
-`registerJobHandlers()` **must** be called from `index.ts` before
-`startWorkers()`. `startWorkers()` with zero handlers logs an error and
-starts no workers — intended only for enqueue-only processes.
+| Function                                                                                                                                                | Does                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `addJob(name, data, options?)` → id                                                                                                                     | Insert a `created` row; triggers an inline tick when due                                                    |
+| `scheduleJob(name, data, cron, { timezone? })`                                                                                                          | Create or replace the one schedule for `name` (cron validated by croner)                                    |
+| `editScheduledJob(name, cron, data, options?)`, `cancelScheduledJob(name)`                                                                              | Update / delete a schedule                                                                                  |
+| `retryJob`, `cancelJob`, `resumeJob`, `rerunJob`, `deleteJob` (`{ queueName, jobId }`)                                                                  | failed/cancelled → created · created/active → cancelled · cancelled → created · queue a fresh copy · delete |
+| `getJobs`, `getJobById`, `getJobsByState`, `getFailedJobs`, `getQueueStats`, `getAvailableQueues`, `getScheduledJobs`, `getJobLogs`, `purgeJobsByState` | Queries (`queries.ts`)                                                                                      |
 
-## Available Jobs
+## The tick (`packages/jobs/src/server/tick.ts`)
 
-| Job            | Handler (app-owned)     | Description                                                  |
-| -------------- | ----------------------- | ------------------------------------------------------------ |
-| `todo-cleanup` | `app/todo/todo.jobs.ts` | Deletes completed todos older than `daysToKeep` (default 30) |
-| `todo-summary` | `app/todo/todo.jobs.ts` | Logs aggregate todo stats                                    |
+One `runTick()` pass:
 
-Each handler receives a normalized `JobContext` (`{ id, data }`) from the queue adapter, regardless of engine.
+1. **Schedules** — for each row in `job_schedules`, compute the next fire after
+   `lastRunAt ?? createdAt`; if it is due, compare-and-set `lastRunAt` and
+   insert a job. Two concurrent ticks can never enqueue the same fire.
+2. **Recover** — `active` jobs whose `startedAt` is older than
+   `config.jobs.activeTimeoutSeconds` (300) are put back to `created` with
+   `retryCount + 1`, or `failed` when retries are exhausted.
+3. **Claim** — up to `config.jobs.batchSize` (10) `created` jobs with
+   `runAt ≤ now` and a registered handler, ordered by priority desc, `runAt`,
+   `createdAt`, moved to `active` in one `UPDATE … WHERE id IN (subquery) RETURNING`.
+4. **Run** each claimed job sequentially. Success → `completed` with `output`.
+   A throw → `created` again with `runAt = now + retryDelay × 2^retryCount`
+   seconds (capped at 24 h) while `retryCount < retryLimit`, otherwise `failed`
+   with the error message. Failures go to `reportError()`.
+5. **Housekeeping** every 10 minutes: delete `completed`/`cancelled` jobs older
+   than `config.jobs.keepCompletedDays` (7) and their logs, and purge expired
+   kv entries.
 
-## Queueing Jobs
+Only one tick runs at a time per process; a `runTick()` call during a tick
+schedules one more pass after it.
 
-### Via Code
+## Who calls the tick
 
-```typescript
-import { addJob } from "@groot/jobs/server/queue";
+| Runtime | Driver                                                                                                                                                                                    |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node    | `startWorkers()` in `entry.node.ts`: one tick immediately, then every `config.jobs.pollIntervalSeconds` (5); `stopWorkers()` on shutdown waits for the in-flight tick                     |
+| Workers | the `scheduled` handler (cron `* * * * *` in `wrangler.jsonc`) → `ctx.waitUntil(runTick())`                                                                                               |
+| Both    | `addJob()` and `retryJob()` run an inline tick (schedules and housekeeping skipped) when `config.jobs.runInline` is true and the job is due; on Workers through the request's `waitUntil` |
+| Tests   | jobs are disabled; call `await runTick()` yourself                                                                                                                                        |
 
-await addJob("todo-cleanup", { daysToKeep: 60 });
-```
+## Configuration (`config.jobs`)
 
-### Via HTTP
+| Key                    | Default                   |
+| ---------------------- | ------------------------- |
+| `enabled`              | `true` (`false` in tests) |
+| `pollIntervalSeconds`  | `5` (Node poller)         |
+| `batchSize`            | `10`                      |
+| `retryLimit`           | `3`                       |
+| `retryDelaySeconds`    | `60`                      |
+| `activeTimeoutSeconds` | `300`                     |
+| `keepCompletedDays`    | `7`                       |
+| `runInline`            | `true`                    |
 
-```bash
-# Queue immediately
-curl -H "Authorization: Bearer <token>" \
-  -X POST https://groot.localhost/api/v1/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-cleanup","data":{"daysToKeep":60}}'
+Override in `apps/web/src/server/config.ts`; see [Config](../config.md).
 
-# Schedule with cron (runs daily at 2am)
-curl -H "Authorization: Bearer <token>" \
-  -X POST https://groot.localhost/api/v1/jobs/schedule \
-  -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-cleanup","data":{"daysToKeep":14},"cron":"0 2 * * *"}'
+## Logs
 
-# Retry a failed job
-curl -H "Authorization: Bearer <token>" \
-  -X POST https://groot.localhost/api/v1/jobs/todo-cleanup/job-123/retry
-```
+`job.logger` writes to the normal log stream and persists `info` and above to
+`job_logs`, which the dashboard shows per job. `createJobLogger({ jobId, jobName })`
+builds one outside a handler; `flushJobLogs()` waits for pending writes (the
+tick does this before marking a job done).
 
-## Job API Endpoints
+## HTTP API (`/api/v1/jobs`, JWT)
 
-All endpoints are under `/api/v1/jobs` and require JWT authentication.
+| Method | Path                                               | Body / query                                       | Returns                                        |
+| ------ | -------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------- |
+| POST   | `/`                                                | `{ jobName, data?, options? }`                     | `201` `{ jobId, jobName, data }`               |
+| POST   | `/schedule`                                        | `{ jobName, cron, data?, options?: { timezone } }` | `201` the schedule                             |
+| GET    | `/schedule`                                        |                                                    | schedules                                      |
+| PUT    | `/schedule/:jobName`                               | `{ cron, data?, options? }`                        | the schedule                                   |
+| DELETE | `/schedule/:jobName`                               |                                                    | `200` `{ success: true }`                      |
+| GET    | `/stats`                                           |                                                    | counts per state                               |
+| GET    | `/available`                                       |                                                    | `{ jobs: string[] }` (names seen + registered) |
+| GET    | `/status/failed`                                   | `?limit`                                           | failed jobs                                    |
+| GET    | `/state/:state`                                    | `?limit&offset`                                    | `{ jobs, total }`                              |
+| DELETE | `/state/:state`                                    |                                                    | `{ count }` purged                             |
+| GET    | `/`                                                | `?state&name&startDate&endDate&limit&offset`       | `{ jobs, total }`                              |
+| GET    | `/:queueName/:jobId`                               |                                                    | the job                                        |
+| GET    | `/:queueName/:jobId/logs`                          | `?afterId`                                         | log rows                                       |
+| DELETE | `/:queueName/:jobId`                               |                                                    | `200` `{ success: true }`                      |
+| POST   | `/:queueName/:jobId/retry` · `/cancel` · `/resume` |                                                    | `200` `{ success: true }`                      |
+| POST   | `/:queueName/:jobId/rerun`                         |                                                    | `{ newJobId, queueName }`                      |
+| POST   | `/bulk-rerun`                                      | `{ jobs: [{ queueName, jobId }] }`                 | per-job results                                |
 
-| Method | Path                        | Description                       |
-| ------ | --------------------------- | --------------------------------- |
-| POST   | `/`                         | Create a job                      |
-| POST   | `/schedule`                 | Schedule a job with cron          |
-| POST   | `/bulk-rerun`               | Rerun multiple jobs               |
-| GET    | `/schedule`                 | List scheduled jobs               |
-| PUT    | `/schedule/:jobName`        | Edit a scheduled job              |
-| DELETE | `/schedule/:jobName`        | Cancel a scheduled job            |
-| GET    | `/stats`                    | Aggregated counts per queue/state |
-| GET    | `/available`                | List valid job names              |
-| DELETE | `/state/:state`             | Purge all jobs in a state         |
-| GET    | `/status/failed`            | List failed jobs                  |
-| GET    | `/state/:state`             | List jobs in a state              |
-| GET    | `/`                         | List all jobs                     |
-| GET    | `/:queueName/:jobId`        | Inspect a specific job            |
-| GET    | `/:queueName/:jobId/logs`   | Fetch job logs                    |
-| DELETE | `/:queueName/:jobId`        | Delete a job                      |
-| POST   | `/:queueName/:jobId/retry`  | Retry a failed job                |
-| POST   | `/:queueName/:jobId/cancel` | Cancel a queued job               |
-| POST   | `/:queueName/:jobId/resume` | Resume a paused job               |
-| POST   | `/:queueName/:jobId/rerun`  | Rerun a completed job             |
+`queueName` is the job name. curl examples in [API requests](../examples/api-requests.md#jobs-jwt).
 
-## Configuration
+## Dashboard
 
-Configured via `config.yml` `jobs:` section (read in `@groot/jobs/server/config`):
+The `/jobs` page comes from `@groot/jobs/client`: `Jobs` and `JobDetail` pages,
+`useJobs` / `useJobDetail` hooks, `jobsApi`, and the table, stats, filter, log
+and dialog components. It talks to the API above through `apiClient`.
 
-| Key                                 | Default   | Description                   |
-| ----------------------------------- | --------- | ----------------------------- |
-| `jobs.enabled`                      | `true`    | Enable/disable job processing |
-| `jobs.concurrency`                  | `5`       | Workers per job               |
-| `jobs.pollIntervalSeconds`          | `5`       | Worker poll interval          |
-| `jobs.archiveCompletedAfterSeconds` | `604800`  | Archive window (7 days)       |
-| `jobs.deleteArchivedAfterSeconds`   | `2592000` | Deletion window (30 days)     |
-| `jobs.monitorStateIntervalSeconds`  | `60`      | Metrics interval              |
+## Reference jobs
 
-## Monitoring
+| Job            | Handler                                     | Does                                                         |
+| -------------- | ------------------------------------------- | ------------------------------------------------------------ |
+| `todo-cleanup` | `apps/web/src/server/api/todo/todo.jobs.ts` | Deletes completed todos older than `daysToKeep` (default 30) |
+| `todo-summary` | same file                                   | Counts todos; the summary is the job output                  |
 
-- **Logs**: Pino outputs job lifecycle events (queued, started, errors, completion); job logs persist to the `job_logs` table via `createJobLogger`
-- **Sentry**: Captures exceptions with tags (`component=job_queue`, `jobName`)
-- **Database**: Inspect directly — on Postgres `SELECT * FROM pgboss.job` (queue) or `job_logs` (persisted logs); on SQLite the live queue is `_honker_live` and dead-letter is `_honker_dead`.
+## Good practice
 
-## Dashboard UI
-
-The jobs dashboard (`/jobs`) lives in `@groot/jobs/client`:
-
-- `Jobs` / `JobDetail` — pages (mounted in `apps/web/.../App.tsx`)
-- `useJobs` / `useJobDetail` — page hooks (state + data)
-- `jobsApi` — client API methods (`@groot/jobs/client/api`)
-- `components/` — table, stats, filters, logs, dialogs
-
-The frontend consumes `jobsApi` (built on the shared `api` axios instance from `@groot/shell/lib/api`).
-
-## Adding a New Job
-
-1. **Define types** (in the feature's types file):
-
-```typescript
-export interface MyJobPayload {
-  someValue: string;
-}
-```
-
-2. **Create handler** (in `apps/web/src/server/api/<feature>/<feature>.jobs.ts`):
-
-```typescript
-import { registerJobHandler, type JobHandler } from "@groot/jobs/server";
-import { createJobLogger } from "@groot/jobs/server/logger";
-import type { MyJobPayload } from "./feature.types";
-
-export const myJobHandler: JobHandler<MyJobPayload> = async ({ id, data }) => {
-  const logger = createJobLogger({ jobId: id, jobName: "my-job" });
-  // Implementation
-};
-
-export function registerFeatureJobs(): void {
-  registerJobHandler("my-job", myJobHandler);
-}
-```
-
-3. **Register in `apps/web/src/server/routes.ts`**:
-
-```typescript
-import { registerFeatureJobs } from "./api/feature/feature.jobs";
-
-export function registerJobHandlers(): void {
-  registerFeatureJobs();
-}
-```
-
-4. **Queue the job** via HTTP or code
-
-## Best Practices
-
-- Keep jobs idempotent (safe to retry)
-- Keep jobs short-lived (under 5 minutes)
-- Split long workflows into chained jobs
-- Use structured error handling via Boom
-- Log meaningful context for debugging
+- Keep handlers idempotent: a crashed process re-runs them after the active timeout.
+- Keep them short. On the Workers free plan a cron run and a request each get
+  about 10 ms of CPU (waiting on D1 or `fetch` is free, computing is not).
+- Use `singletonKey` to collapse duplicate work while a job is pending.
+- Return small outputs; put large results somewhere else and return a reference.
+- Cron expressions are UTC unless a `timezone` is given.

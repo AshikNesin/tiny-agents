@@ -7,13 +7,13 @@
  * (routines.watcher.ts), and the result shows in the chat as a card
  * (routines.cards.ts).
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { addJob, cancelJob } from "@groot/jobs/server/queue";
 import { registerJobHandler } from "@groot/jobs/server/worker";
-import type { SendJobOptions } from "@groot/jobs/server/adapter";
-import type { JobHandler } from "@groot/jobs/server/error-handler";
+import type { JobHandler, SendJobOptions } from "@groot/jobs/server/types";
 import { z } from "zod";
+import { db, jobs, routineRuns, routines } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import {
   startBotConversation,
@@ -40,6 +40,22 @@ const firePayloadSchema = z.object({
 
 export interface RoutineFirePayload extends z.infer<typeof firePayloadSchema> {}
 
+/** Queue the fire job for one occurrence and point the routine's pending handle at it. */
+async function queueFire(routineId: string, scheduledFor: Date, now: Date): Promise<void> {
+  const delaySeconds = Math.max(0, Math.ceil((scheduledFor.getTime() - now.getTime()) / 1000));
+  const options: SendJobOptions = { delaySeconds };
+  const payload: RoutineFirePayload = {
+    routineId,
+    scheduledFor: scheduledFor.toISOString(),
+    trigger: "schedule",
+  };
+  const jobId = await addJob(ROUTINE_FIRE_JOB, payload, options);
+  await db
+    .update(routines)
+    .set({ nextRunAt: scheduledFor, pendingJobId: jobId })
+    .where(eq(routines.id, routineId));
+}
+
 /** Queue the occurrence job and point the routine's pending handle at it. */
 export async function enqueueOccurrence(
   routineId: string,
@@ -48,17 +64,7 @@ export async function enqueueOccurrence(
   now: Date,
 ): Promise<Date> {
   const next = nextOccurrence(schedule, from);
-  const delaySeconds = Math.max(0, Math.ceil((next.getTime() - now.getTime()) / 1000));
-  const options: SendJobOptions = { delaySeconds };
-  const jobId = await addJob(
-    ROUTINE_FIRE_JOB,
-    { routineId, scheduledFor: next.toISOString(), trigger: "schedule" },
-    options,
-  );
-  await prisma.routine.update({
-    where: { id: routineId },
-    data: { nextRunAt: next, ...(jobId ? { pendingJobId: jobId } : {}) },
-  });
+  await queueFire(routineId, next, now);
   return next;
 }
 
@@ -76,10 +82,10 @@ export async function scheduleAfterOccurrence(
   const schedule = safeParseSchedule(routine.schedule);
   if (!schedule) return;
   if (schedule.kind === "once") {
-    await prisma.routine.update({
-      where: { id: routine.id },
-      data: { enabled: false, nextRunAt: null, pendingJobId: null },
-    });
+    await db
+      .update(routines)
+      .set({ enabled: false, nextRunAt: null, pendingJobId: null })
+      .where(eq(routines.id, routine.id));
     return;
   }
   await enqueueOccurrence(routine.id, schedule, from, now);
@@ -87,32 +93,72 @@ export async function scheduleAfterOccurrence(
 
 /** Keep the run ledger bounded: newest KEEP_RUNS_PER_ROUTINE per routine. */
 async function pruneRuns(routineId: string): Promise<void> {
-  const keep = await prisma.routineRun.findMany({
-    where: { routineId },
-    orderBy: { scheduledFor: "desc" },
-    take: KEEP_RUNS_PER_ROUTINE,
-    select: { id: true },
-  });
+  const keep = await db
+    .select({ id: routineRuns.id })
+    .from(routineRuns)
+    .where(eq(routineRuns.routineId, routineId))
+    .orderBy(desc(routineRuns.scheduledFor))
+    .limit(KEEP_RUNS_PER_ROUTINE);
   if (keep.length < KEEP_RUNS_PER_ROUTINE) return;
-  await prisma.routineRun.deleteMany({
-    where: { routineId, id: { notIn: keep.map((run) => run.id) } },
-  });
+  await db.delete(routineRuns).where(
+    and(
+      eq(routineRuns.routineId, routineId),
+      notInArray(
+        routineRuns.id,
+        keep.map((run) => run.id),
+      ),
+    ),
+  );
+}
+
+/** The run row of one occurrence, created or updated in place (the exactly-once key). */
+async function upsertRun(
+  create: {
+    routineId: string;
+    scheduledFor: Date;
+    status: string;
+    trigger: string;
+    requestId: string;
+    submittedAt?: Date;
+    startedAt?: Date;
+    finishedAt?: Date;
+    error?: string;
+  },
+  update: Partial<{
+    status: string;
+    submittedAt: Date;
+    startedAt: Date;
+    finishedAt: Date;
+    error: string | null;
+  }>,
+): Promise<{ id: string }> {
+  const [row] = await db
+    .insert(routineRuns)
+    .values(create)
+    .onConflictDoUpdate({
+      target: [routineRuns.routineId, routineRuns.scheduledFor],
+      set: update,
+    })
+    .returning({ id: routineRuns.id });
+  return row!;
 }
 
 /**
  * Fire one occurrence: create-or-reuse the run row, submit the labeled
  * prompt, mark it awaiting. Idempotent on every input, so a redelivered or
  * retried queue job cannot duplicate the run or the submitted turn (the
- * pi-durable requestId dedupes the submit itself).
+ * pi-durable requestId dedupes the submit itself). `jobId` is the queue job
+ * delivering it, when there is one.
  */
 export async function dispatchOccurrence(
   payload: RoutineFirePayload,
   now: Date = new Date(),
+  jobId?: string,
 ): Promise<void> {
   const scheduledFor = new Date(payload.scheduledFor);
-  const routine = await prisma.routine.findUnique({
-    where: { id: payload.routineId },
-    include: { bot: { select: { id: true, name: true } } },
+  const routine = await db.query.routines.findFirst({
+    where: eq(routines.id, payload.routineId),
+    with: { bot: { columns: { id: true, name: true } } },
   });
   // Missing routine (deleted bot cascades or routine delete): the queued job
   // is an orphan; ack and drop.
@@ -125,8 +171,8 @@ export async function dispatchOccurrence(
   // A paused routine has no live chain; a job racing pause is a phantom fire.
   if (!routine.enabled && payload.trigger === "schedule") return;
 
-  const existing = await prisma.routineRun.findUnique({
-    where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
+  const existing = await db.query.routineRuns.findFirst({
+    where: and(eq(routineRuns.routineId, routine.id), eq(routineRuns.scheduledFor, scheduledFor)),
   });
   const alreadySubmitted = existing?.submittedAt != null;
   const lateMinutes = Math.max(0, Math.floor((now.getTime() - scheduledFor.getTime()) / 60_000));
@@ -134,17 +180,19 @@ export async function dispatchOccurrence(
   if (existing && alreadySubmitted) {
     // Redelivery of a completed dispatch: never resubmit, but repair a chain
     // whose next occurrence was never scheduled (crash between submit and
-    // enqueue) so a single delivery cannot end a recurring routine.
-    if (payload.trigger === "schedule" && routine.enabled && !routine.pendingJobId) {
+    // enqueue) so a single delivery cannot end a recurring routine. A job the
+    // queue retried after such a crash is still the routine's pending handle.
+    const chainStalled =
+      !routine.pendingJobId || (jobId !== undefined && routine.pendingJobId === jobId);
+    if (payload.trigger === "schedule" && routine.enabled && chainStalled) {
       await scheduleAfterOccurrence(routine, scheduledFor, now);
     }
     return;
   }
 
   if (!withinGrace(schedule, scheduledFor, now)) {
-    const missed = await prisma.routineRun.upsert({
-      where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
-      create: {
+    const missed = await upsertRun(
+      {
         routineId: routine.id,
         scheduledFor,
         status: "missed",
@@ -153,8 +201,8 @@ export async function dispatchOccurrence(
         finishedAt: now,
         error: `Missed: ${lateMinutes}m past slot, beyond grace`,
       },
-      update: { status: "missed", finishedAt: now },
-    });
+      { status: "missed", finishedAt: now },
+    );
     announceRun(
       { runId: missed.id, routineName: routine.name, bot: routine.bot },
       { status: "missed", error: `Started ${lateMinutes} min late, past the grace window.` },
@@ -185,9 +233,8 @@ export async function dispatchOccurrence(
     // run's card in the bot's chat says so (PRD 5.5). A model removed from
     // the catalog fails the reconcile step, so it lands here too.
     submitted = false;
-    const failed = await prisma.routineRun.upsert({
-      where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
-      create: {
+    const failed = await upsertRun(
+      {
         routineId: routine.id,
         scheduledFor,
         status: "failed",
@@ -196,8 +243,8 @@ export async function dispatchOccurrence(
         finishedAt: now,
         error: pausedError(error),
       },
-      update: { status: "failed", finishedAt: now, error: pausedError(error) },
-    });
+      { status: "failed", finishedAt: now, error: pausedError(error) },
+    );
     await pauseAfterSubmitFailure(routine);
     announceRun(
       { runId: failed.id, routineName: routine.name, bot: { id: bot.id, name: bot.name } },
@@ -207,9 +254,8 @@ export async function dispatchOccurrence(
 
   if (!submitted) return;
 
-  await prisma.routineRun.upsert({
-    where: { routineId_scheduledFor: { routineId: routine.id, scheduledFor } },
-    create: {
+  await upsertRun(
+    {
       routineId: routine.id,
       scheduledFor,
       status: "awaiting",
@@ -218,8 +264,8 @@ export async function dispatchOccurrence(
       submittedAt: now,
       startedAt: now,
     },
-    update: { status: "awaiting", submittedAt: now, startedAt: now, error: null },
-  });
+    { status: "awaiting", submittedAt: now, startedAt: now, error: null },
+  );
 
   if (payload.trigger === "schedule") {
     await scheduleAfterOccurrence(routine, scheduledFor, now);
@@ -244,14 +290,15 @@ async function routineConversation(
 ): Promise<string> {
   if (routine.conversationId) return routine.conversationId;
   const created = await startBotConversation(routine.botId, runtime, { unattended: true });
-  const claimed = await prisma.routine.updateMany({
-    where: { id: routine.id, conversationId: null },
-    data: { conversationId: created },
-  });
-  if (claimed.count === 1) return created;
-  const row = await prisma.routine.findUnique({
-    where: { id: routine.id },
-    select: { conversationId: true },
+  const claimed = await db
+    .update(routines)
+    .set({ conversationId: created })
+    .where(and(eq(routines.id, routine.id), isNull(routines.conversationId)))
+    .returning({ id: routines.id });
+  if (claimed.length === 1) return created;
+  const row = await db.query.routines.findFirst({
+    where: eq(routines.id, routine.id),
+    columns: { conversationId: true },
   });
   if (!row?.conversationId) throw new Error("The routine's conversation could not be stored");
   return row.conversationId;
@@ -280,19 +327,92 @@ async function pauseAfterSubmitFailure(routine: {
   } catch {
     // the job may already be gone; the pause below is the durable part
   }
-  await prisma.routine.update({
-    where: { id: routine.id },
-    data: { enabled: false, nextRunAt: null, pendingJobId: null },
-  });
+  await db
+    .update(routines)
+    .set({ enabled: false, nextRunAt: null, pendingJobId: null })
+    .where(eq(routines.id, routine.id));
 }
 
-export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({
-  data,
-}: {
-  data: RoutineFirePayload;
-}) => {
+/**
+ * Boot: give every armed routine whose fire job is gone its job back. An
+ * enabled routine with a `nextRunAt` must have a live (created or active)
+ * routine-fire job behind `pendingJobId`; after the move off the old queue
+ * (`db/legacy-copy.ts` clears every handle) or a job that failed for good,
+ * it has none and would never fire again.
+ *
+ * The occurrence it was waiting for is queued again as it stands: a future
+ * one at its time, an overdue one at once, where `dispatchOccurrence`
+ * applies the grace policy exactly as to a delivery delayed by downtime (a
+ * late once still fires; a recurring slot past its grace is recorded missed
+ * and the chain resumes from now). An occurrence that was already submitted
+ * (a crash between its submit and the chain) is not fired twice: the chain
+ * advances past it. Returns how many routines were re-armed.
+ */
+export async function rearmRoutines(now: Date = new Date()): Promise<number> {
+  const armed = await db
+    .select({
+      id: routines.id,
+      schedule: routines.schedule,
+      nextRunAt: routines.nextRunAt,
+      pendingJobId: routines.pendingJobId,
+    })
+    .from(routines)
+    .where(and(eq(routines.enabled, true), isNotNull(routines.nextRunAt)));
+  if (armed.length === 0) return 0;
+
+  const handles = armed
+    .map((routine) => routine.pendingJobId)
+    .filter((id): id is string => id !== null);
+  const live = new Set(
+    handles.length === 0
+      ? []
+      : (
+          await db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                inArray(jobs.id, handles),
+                eq(jobs.name, ROUTINE_FIRE_JOB),
+                inArray(jobs.state, ["created", "active"]),
+              ),
+            )
+        ).map((job) => job.id),
+  );
+
+  let rearmed = 0;
+  for (const routine of armed) {
+    if (routine.pendingJobId && live.has(routine.pendingJobId)) continue;
+    const scheduledFor = routine.nextRunAt!;
+    try {
+      if (!safeParseSchedule(routine.schedule)) {
+        logger.warn({ routineId: routine.id }, "Routine has an unparsable schedule; not re-armed");
+        continue;
+      }
+      const run = await db.query.routineRuns.findFirst({
+        where: and(
+          eq(routineRuns.routineId, routine.id),
+          eq(routineRuns.scheduledFor, scheduledFor),
+        ),
+        columns: { submittedAt: true },
+      });
+      if (run?.submittedAt) {
+        await scheduleAfterOccurrence(routine, scheduledFor, now);
+      } else {
+        await queueFire(routine.id, scheduledFor, now);
+      }
+      rearmed += 1;
+    } catch (error) {
+      logger.warn({ error, routineId: routine.id }, "Failed to re-arm a routine");
+    }
+  }
+  if (rearmed > 0) logger.info({ rearmed }, "Re-armed routines whose fire job was gone");
+  return rearmed;
+}
+
+export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {
   const payload = firePayloadSchema.parse(data as unknown);
-  await dispatchOccurrence(payload);
+  await dispatchOccurrence(payload, new Date(), id);
 };
 
 export function registerRoutineJobs(): void {

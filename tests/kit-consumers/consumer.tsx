@@ -61,24 +61,22 @@ import { Text, titleClass } from "@groot/ui/typography";
 import { Button as ButtonFromBarrel, Toaster as ToasterFromBarrel } from "@groot/ui";
 
 // @groot/jobs server surface.
-import { initJobQueue, stopJobQueue, getJobQueue } from "@groot/jobs/server";
-import { type JobQueueAdapter, type QueueJob } from "@groot/jobs/server/adapter";
-import { registerJobHandler, startWorkers, stopWorkers } from "@groot/jobs/server/worker";
-import { addJob, scheduleJob, deleteJob } from "@groot/jobs/server/queue";
-import { createJobLogger } from "@groot/jobs/server/logger";
-import { jobRoutes } from "@groot/jobs/server/routes";
-import { getJobQueue as getQueueFromModule } from "@groot/jobs/server/client";
-import { jobConfig } from "@groot/jobs/server/config";
+import { addJob as addJobFromBarrel, runTick, type JobHandler } from "@groot/jobs/server";
 import { JOB_STATES, isReservedQueueName } from "@groot/jobs/server/constants";
-import { withSentryErrorCapture } from "@groot/jobs/server/error-handler";
-import { HonkerAdapter } from "@groot/jobs/server/honker-adapter";
-import { PgBossAdapter } from "@groot/jobs/server/pgboss-adapter";
-import { createJobSchema } from "@groot/jobs/server/validation";
+import { jobs as jobsTable, type Job as JobRow } from "@groot/jobs/server/schema";
+import {
+  type JobContext,
+  type JobQueryResponse,
+  type SendJobOptions,
+} from "@groot/jobs/server/types";
+import { defaultJobOptions } from "@groot/jobs/server/config";
+import { addJob, scheduleJob, deleteJob } from "@groot/jobs/server/queue";
 import { getJobsByState } from "@groot/jobs/server/queries";
-import { type JobQueryResponse } from "@groot/jobs/server/types";
-import { create as createJobController } from "@groot/jobs/server/controller";
-
-// @groot/jobs client surface.
+import { registerJobHandler, startWorkers, stopWorkers } from "@groot/jobs/server/worker";
+import { housekeeping, nextCronRun } from "@groot/jobs/server/tick";
+import { createJobLogger, flushJobLogs } from "@groot/jobs/server/logger";
+import { jobRoutes } from "@groot/jobs/server/routes";
+import { createJobSchema } from "@groot/jobs/server/validation";
 import { jobsApi, Jobs, JobDetail } from "@groot/jobs/client";
 import { jobsApi as jobsApiFromModule } from "@groot/jobs/client/api";
 import { JobDetail as JobDetailPage } from "@groot/jobs/client/JobDetail";
@@ -115,10 +113,9 @@ import { useStorageFiles, type StorageFile } from "@groot/shell/pages/storage/ho
 import { settingsService } from "@groot/shell/services/settings";
 
 // @groot/core database singleton, errors, config, kv.
-import { prisma, type PrismaClient } from "@groot/core/database";
-import { type DbEngine, dbEngine } from "@groot/core/database/engine";
+import { db, users, type Database, type User } from "@groot/core/database";
 import { HttpError, type HttpErrorOutput } from "@groot/core/errors";
-import { config, type Config } from "@groot/core/config";
+import { config, defineConfig, type AppConfig as CoreConfig } from "@groot/core/config";
 import { kv } from "@groot/core/kv";
 import { getContentType, sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { FileInfo } from "@groot/core/storage/storage.service";
@@ -170,25 +167,24 @@ const checks = {
     Text,
   ],
   jobsServer: [
-    initJobQueue,
-    stopJobQueue,
-    getQueueFromModule,
-    jobConfig,
+    addJobFromBarrel,
+    runTick,
     isReservedQueueName,
     JOB_STATES,
-    withSentryErrorCapture,
-    HonkerAdapter,
-    PgBossAdapter,
+    jobsTable,
+    defaultJobOptions,
     createJobSchema,
     getJobsByState,
-    createJobController,
     registerJobHandler,
     startWorkers,
     stopWorkers,
     addJob,
     scheduleJob,
     deleteJob,
+    housekeeping,
+    nextCronRun,
     createJobLogger,
+    flushJobLogs,
     jobRoutes,
   ],
   jobsClient: [
@@ -229,7 +225,7 @@ const checks = {
     useStorageFiles,
     settingsService,
   ],
-  core: [prisma, dbEngine, HttpError, config, kv, getContentType, sanitizeFileName, logger],
+  core: [db, users, HttpError, config, defineConfig, kv, getContentType, sanitizeFileName, logger],
   ai: [AIClient],
 };
 export { checks };
@@ -238,44 +234,45 @@ export { checks };
 addBreadcrumb("sync", "fixture compiled", "info", { fixture: true });
 logPerformance({ operation: "fixture-compile", duration: 1 });
 
-const queue: JobQueueAdapter = getJobQueue();
-void queue;
-const queueJob: QueueJob = {
+const handler: JobHandler<{ id: number }, { ok: boolean }> = async (
+  job: JobContext<{ id: number }>,
+) => {
+  job.logger.info({ id: job.data.id }, "fixture handler");
+  return { ok: true };
+};
+void handler;
+const sendOptions: SendJobOptions = { retryLimit: 1, delaySeconds: 5, singletonKey: "fixture" };
+void sendOptions;
+const jobRow: JobRow = {
   id: "0",
   name: "example",
   data: {},
   state: "created",
   priority: 1,
-  retrylimit: 0,
-  retrycount: 0,
-  retrydelay: 0,
-  retrybackoff: false,
-  startafter: new Date(0).toISOString(),
-  startedon: null,
-  singletonkey: null,
-  singletonon: null,
-  expirein: "5m",
-  createdon: new Date(0).toISOString(),
-  completedon: null,
-  keepuntil: new Date(0).toISOString(),
+  retryLimit: 0,
+  retryCount: 0,
+  retryDelay: 0,
+  runAt: new Date(0),
+  startedAt: null,
+  completedAt: null,
+  createdAt: new Date(0),
   output: null,
-  deadletter: null,
+  error: null,
+  singletonKey: null,
 };
-void queueJob;
+void jobRow;
 const stats: JobStats = {
   active: 0,
   created: 1,
-  retry: 0,
   failed: 0,
   completed: 0,
-  expired: 0,
   cancelled: 0,
 };
 const jobName: JobName = "example.job";
 void jobName;
 const response: ApiResponse<JobStats> = { success: true, data: stats };
 void response;
-const engine: DbEngine = dbEngine;
+const engine: string = "sqlite";
 const breadcrumb: Breadcrumb = {
   timestamp: new Date().toISOString(),
   category: "fixture",
@@ -283,8 +280,10 @@ const breadcrumb: Breadcrumb = {
   level: "info",
 };
 void breadcrumb;
-const db: PrismaClient = prisma;
-void db;
+const database: Database = db;
+void database;
+const userShape: Pick<User, "id" | "email"> = { id: 1, email: "kit@example.com" };
+void userShape;
 const uploaded: FileInfo = {
   key: "tmp/kit.txt",
   name: "kit.txt",
@@ -306,7 +305,7 @@ export type ConfirmOptionsShape = ConfirmOptions;
 export type JobQueryShape = JobQueryResponse;
 export type DashboardJob = Job;
 export type StoredFile = StorageFile;
-export type AppConfig = Config;
+export type AppConfig = CoreConfig;
 export const jobStatesProbed: boolean = jobStates !== undefined;
 export const confirmHookShape: string = typeof useConfirm();
 

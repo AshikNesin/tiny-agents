@@ -1,5 +1,13 @@
 import { apiClient } from "@groot/shell/lib/api";
-import type { Job, JobLog, JobName, JobStats, ScheduledJob } from "./types";
+import type {
+  AddJobOptions,
+  Job,
+  JobLog,
+  JobName,
+  JobSchedule,
+  JobStats,
+  ScheduleJobOptions,
+} from "./types";
 
 /**
  * Jobs API client. Thin typed wrappers over the shared `apiClient` — the
@@ -85,7 +93,7 @@ export const jobsApi = {
   async addJob(
     jobName: JobName,
     data: Record<string, unknown>,
-    options?: Record<string, unknown>,
+    options?: AddJobOptions,
   ): Promise<string> {
     const result = await apiClient.post<{ jobId: string }>("/jobs", { jobName, data, options });
     return result.jobId;
@@ -96,30 +104,30 @@ export const jobsApi = {
     return result.jobs;
   },
 
-  async getScheduledJobs(): Promise<ScheduledJob[]> {
-    return apiClient.get<ScheduledJob[]>("/jobs/schedule");
+  async getScheduledJobs(): Promise<JobSchedule[]> {
+    return apiClient.get<JobSchedule[]>("/jobs/schedule");
   },
 
   async scheduleJob(
     jobName: JobName,
     cron: string,
     data: Record<string, unknown>,
-    options?: Record<string, unknown>,
-  ): Promise<void> {
-    await apiClient.post("/jobs/schedule", { jobName, data, cron, options });
+    options?: ScheduleJobOptions,
+  ): Promise<JobSchedule> {
+    return apiClient.post<JobSchedule>("/jobs/schedule", { jobName, data, cron, options });
   },
 
-  async cancelScheduledJob(jobName: string, key?: string): Promise<void> {
-    await apiClient.delete(`/jobs/schedule/${jobName}`, { key });
+  /** Schedules are keyed by job name — one per name — so this removes that name's schedule. */
+  async cancelScheduledJob(jobName: string): Promise<void> {
+    await apiClient.delete(`/jobs/schedule/${jobName}`);
   },
 
   async editScheduledJob(
     jobName: string,
-    key: string | undefined,
     cron: string,
     data: Record<string, unknown>,
-    options?: Record<string, unknown>,
-  ): Promise<void> {
-    await apiClient.put(`/jobs/schedule/${jobName}`, { key, cron, data, options });
+    options?: ScheduleJobOptions,
+  ): Promise<JobSchedule> {
+    return apiClient.put<JobSchedule>(`/jobs/schedule/${jobName}`, { cron, data, options });
   },
 };

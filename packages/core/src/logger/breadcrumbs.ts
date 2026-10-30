@@ -1,13 +1,4 @@
-/**
- * Breadcrumb tracking for debugging
- * Stores a trail of actions leading up to errors
- *
- * Exported as core infrastructure for child projects (webhook ingestion,
- * sync pipelines) even where groot's own demo app has no callers — see the
- * barrel note in packages/ui/src/index.ts. Breadcrumbs ride the request's
- * logger context and are attached verbatim to `buildErrorContext` records
- * when a request fails.
- */
+import { getRequestContext } from "../context";
 
 export interface Breadcrumb {
   timestamp: string;
@@ -17,12 +8,12 @@ export interface Breadcrumb {
   data?: Record<string, unknown>;
 }
 
-import { getLoggerContext } from "./context";
-
 const MAX_BREADCRUMBS = 50;
 
 /**
- * Add a breadcrumb to the trail
+ * Record a step on the current request's trail. Breadcrumbs are attached to
+ * error logs so a failure shows what led up to it. Outside a request context
+ * they are dropped.
  */
 export function addBreadcrumb(
   category: string,
@@ -30,39 +21,17 @@ export function addBreadcrumb(
   level: Breadcrumb["level"] = "info",
   data?: Record<string, unknown>,
 ): void {
-  const breadcrumb: Breadcrumb = {
-    timestamp: new Date().toISOString(),
-    category,
-    message,
-    level,
-    data,
-  };
-
-  const context = getLoggerContext();
-  if (!context) return; // If we aren't in a request context, simply drop it
-
-  context.breadcrumbs.push(breadcrumb);
-
-  // Keep only the last N breadcrumbs
-  if (context.breadcrumbs.length > MAX_BREADCRUMBS) {
-    context.breadcrumbs.shift();
-  }
-}
-
-/**
- * Get all breadcrumbs
- */
-export function getBreadcrumbs(): Breadcrumb[] {
-  const context = getLoggerContext();
-  if (!context) return [];
-  return [...context.breadcrumbs];
-}
-
-/**
- * Clear all breadcrumbs
- */
-export function clearBreadcrumbs(): void {
-  const context = getLoggerContext();
+  const context = getRequestContext();
   if (!context) return;
-  context.breadcrumbs.length = 0;
+  context.breadcrumbs.push({ timestamp: new Date().toISOString(), category, message, level, data });
+  if (context.breadcrumbs.length > MAX_BREADCRUMBS) context.breadcrumbs.shift();
+}
+
+export function getBreadcrumbs(): Breadcrumb[] {
+  return [...(getRequestContext()?.breadcrumbs ?? [])];
+}
+
+export function clearBreadcrumbs(): void {
+  const context = getRequestContext();
+  if (context) context.breadcrumbs.length = 0;
 }

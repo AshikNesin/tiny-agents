@@ -6,10 +6,11 @@
  * header, the same token is the routes' CSRF guard.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import bcrypt from "bcryptjs";
-import type { NextFunction, Request, Response } from "express";
+import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { prisma } from "@groot/core/database";
+import type { Middleware } from "@groot/core/types";
+import { verifyPassword as checkPassword } from "@groot/core/utils/password.utils";
+import { db, users } from "../../db";
 
 export const STEP_UP_HEADER = "x-vault-step-up";
 export const STEP_UP_TTL_MS = 5 * 60_000;
@@ -41,20 +42,25 @@ export function validStepUp(token: string | undefined, userId: number): boolean 
 }
 
 /** Route guard: a fresh step-up token from this user. */
-export function requireStepUp(req: Request, _res: Response, next: NextFunction): void {
-  const userId = req.user?.userId;
-  if (userId === undefined || !validStepUp(req.get(STEP_UP_HEADER), userId)) {
-    next(Boom.forbidden("Confirm it's you first (step-up required)", { code: "step_up_required" }));
-    return;
+export const requireStepUp: Middleware = async (c, next) => {
+  const userId = c.get("user")?.userId;
+  if (userId === undefined || !validStepUp(c.req.header(STEP_UP_HEADER), userId)) {
+    throw Boom.forbidden("Confirm it's you first (step-up required)", { code: "step_up_required" });
   }
-  next();
-}
+  await next();
+};
 
-/** The owner's password, checked against their account. */
+/**
+ * The owner's password, checked against their account. Core's check accepts
+ * both its PBKDF2 hashes and the bcrypt hashes of accounts made before groot 3.0.
+ */
 export async function verifyPassword(userId: number, password: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { password: true } });
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { password: true },
+  });
   if (!user?.password) return false;
-  return bcrypt.compare(password, user.password);
+  return checkPassword(password, user.password);
 }
 
 /** Test seam. */

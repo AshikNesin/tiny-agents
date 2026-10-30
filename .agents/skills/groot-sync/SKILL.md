@@ -10,7 +10,7 @@ metadata:
 This skill references the TypeScript sync tools at `.groot/sync.ts`,
 `.groot/resolve.ts`, and `.groot/upstream.ts`.
 
-Full documentation: [docs/sync-guide.md](../../docs/sync-guide.md)
+Full documentation: [docs/sync-guide.md](../../../docs/sync-guide.md)
 
 ## Quick Start
 
@@ -111,34 +111,35 @@ Groot uses [changesets](https://github.com/changesets/changesets) for automated 
 
 ### Always Sync (Reusable Core)
 
-| Category           | Paths                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| Workspace Packages | `packages/**` (ui, shell, core, jobs, ai — the whole kit ships to children)               |
-| App Config Files   | `apps/*/package.json`, `apps/*/tsconfig.json`                                             |
-| Tests (mirrors)    | Ownership-declared, see the table below — a test syncs when the source it exercises syncs |
-| Test Setup         | `tests/server/setup.ts`                                                                   |
-| Infrastructure     | `*.config.*`, `tsconfig.json`, `.github/workflows/**`, `scripts/**`                       |
-| Sync Tooling       | `.groot/**` (code only — state files are immutable, see below)                            |
-| Agent Skills       | `.agents/skills/**`                                                                       |
-| Documentation      | `docs/**`                                                                                 |
-| Deployment Config  | `railpack.json`, `config.example.yml`                                                     |
-| Env Template       | `.env.schema`                                                                             |
+| Category           | Paths                                                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace Packages | `packages/**` (ui, shell, core, jobs, ai — the whole kit ships to children)                                                                                           |
+| App Config Files   | `apps/*/package.json`, `apps/*/tsconfig.json`                                                                                                                         |
+| Tests (mirrors)    | Ownership-declared, see the table below — a test syncs when the source it exercises syncs                                                                             |
+| Test Setup         | `tests/server/setup.ts`                                                                                                                                               |
+| Infrastructure     | `*.config.*`, `tsconfig.json`, `tsconfig.base.json`, `.github/workflows/**`, `.vite-hooks/**`, `.gitleaks.toml`, `scripts/**`, `postcss.config.js`, `components.json` |
+| Sync Tooling       | `.groot/**` (code only — state files are immutable, see below)                                                                                                        |
+| Agent Skills       | `.agents/skills/**`                                                                                                                                                   |
+| Documentation      | `docs/**`                                                                                                                                                             |
+| Deployment Config  | `railpack.json`                                                                                                                                                       |
+| Env Template       | `.env.example`                                                                                                                                                        |
+
+`.gitignore`, `package.json` and `pnpm-workspace.yaml` match no glob but always
+go through the three-way merge (`FORCE_MERGE_FILES`).
 
 ### Test Ownership (TEST_AREA_OWNERSHIP in .groot/lib/patterns.ts)
 
 Tests are not listed by directory-name patterns. Each declared area owns the
 synced source it exercises, and a test under `tests/` syncs when its deepest
 declaring area contains it (longest prefix wins). Ownership is a declared
-maintenance fact, not inferred from imports — a suite may read child-owned
-files on purpose (the schema-parity suite guards synced engine parity while
-reading the child's own schemas).
+maintenance fact, not inferred from imports.
 
 | Test area                      | Owns (synced source)                                  |
 | ------------------------------ | ----------------------------------------------------- |
 | `tests/server/ai`              | `packages/ai/src/**`                                  |
-| `tests/server/server`          | `packages/core/src/**`, `packages/jobs/src/server/**` |
-| `tests/server/api`             | `packages/jobs/src/server/**`                         |
-| `tests/server/prisma`          | `packages/core/src/database/**`                       |
+| `tests/server/core`            | `packages/core/src/**`                                |
+| `tests/server/jobs`            | `packages/jobs/src/server/**`                         |
+| `tests/server/api`             | `packages/core/src/**`, `packages/jobs/src/server/**` |
 | `tests/server/groot`           | `.groot/**`                                           |
 | `tests/client/components/ui`   | `packages/ui/src/**`                                  |
 | `tests/client/components/jobs` | `packages/jobs/src/client/**`                         |
@@ -151,25 +152,23 @@ is missing on disk or holds no test files.
 
 ### Never Sync (App-Specific)
 
-| Category            | Paths                                                           |
-| ------------------- | --------------------------------------------------------------- |
-| App Source          | `apps/web/src/**` (project business code, both sides)           |
-| App Prisma          | `apps/web/prisma/**` (schema + migrations are immutable, below) |
-| App Entry           | `apps/web/index.html` (downstream branding)                     |
-| Project-Local Tests | `tests/server/app/**`, `tests/server/routes/**`, `tests/e2e/**` |
-| App Config          | `config.yml` (`config.example.yml` syncs instead)               |
-| Project Docs        | `README.md`                                                     |
-| Lockfile            | `pnpm-lock.yaml`                                                |
+| Category            | Paths                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| App Source          | `apps/web/src/**` (routes, entries, `config.ts`, `db/schema.ts` — both sides)               |
+| App Migrations      | `apps/web/drizzle/**` (generated by drizzle-kit from the app schema; also immutable, below) |
+| App Entry           | `apps/web/index.html` (downstream branding)                                                 |
+| Project-Local Tests | `tests/server/app/**`, `tests/e2e/**`                                                       |
+| Project Docs        | `README.md`                                                                                 |
+| Lockfile            | `pnpm-lock.yaml`                                                                            |
 
 ### Immutable Exclusions (Security - Cannot Override)
 
 These files are NEVER synced, even if removed from config:
 
 - `.env`, `.env.local`, `.env.development`, `.env.production`, `.env.*.local`
-- `apps/web/prisma/schema.prisma`, `apps/web/prisma/migrations/**`
+- `apps/web/drizzle/**`, `wrangler.jsonc` (per-project database id, bucket name, domain)
 - `node_modules/**`, `dist/**`, `.git/**`
 - `*.pem`, `*.key`, `secrets/**`
-- `packages/core/generated/**` (regenerated per project)
 - `.groot/boilerplate-sync.json`, `.groot/sync-report.json`, `.groot/needs-review/**`, `.groot/feature-request.md`, `.groot/repo-drift.md`
 
 ## Categorization (per changed file)

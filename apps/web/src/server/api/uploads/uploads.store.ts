@@ -6,7 +6,7 @@
  * - AttachmentStore (issue #58): the attachments toolkit lists, reads and
  *   copies files through their stored extraction.
  */
-import { prisma } from "@groot/core/database";
+import { eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import type {
   AttachmentStatus,
@@ -14,6 +14,7 @@ import type {
   AttachmentSummary,
   VisionStore,
 } from "@tiny-agents/agent";
+import { db, uploads, type Upload } from "../../db";
 import { loadContent, queueExtraction } from "./uploads.extraction";
 import { modelImage } from "./uploads.service";
 
@@ -29,7 +30,7 @@ export function createVisionStore(rt: IdSource): VisionStore {
   };
 }
 
-type UploadRow = NonNullable<Awaited<ReturnType<typeof prisma.upload.findUnique>>>;
+type UploadRow = Upload;
 
 const STATUSES = new Set<AttachmentStatus>(["none", "pending", "ready", "failed", "unsupported"]);
 
@@ -68,7 +69,7 @@ export function summarize(row: UploadRow): AttachmentSummary {
 /** Uploads from before extraction existed are queued the first time a bot asks. */
 async function ensureQueued(row: UploadRow): Promise<UploadRow> {
   if (row.kind !== "file" || row.extractStatus !== "none") return row;
-  await prisma.upload.update({ where: { id: row.id }, data: { extractStatus: "pending" } });
+  await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, row.id));
   queueExtraction(row.id);
   return { ...row, extractStatus: "pending" };
 }
@@ -77,14 +78,14 @@ export function createAttachmentStore(rt: IdSource): AttachmentStore {
   const scoped = async (conversationId: number, uploadId: string) => {
     const ids = await rt.attachmentIds(conversationId);
     if (!ids.includes(uploadId)) return undefined;
-    const row = await prisma.upload.findUnique({ where: { id: uploadId } });
+    const row = await db.query.uploads.findFirst({ where: eq(uploads.id, uploadId) });
     return row ? ensureQueued(row) : undefined;
   };
   return {
     async list(conversationId) {
       const ids = await rt.attachmentIds(conversationId);
       if (ids.length === 0) return [];
-      const rows = await prisma.upload.findMany({ where: { id: { in: ids } } });
+      const rows = await db.select().from(uploads).where(inArray(uploads.id, ids));
       const byId = new Map(rows.map((row) => [row.id, row]));
       const out: AttachmentSummary[] = [];
       for (const id of ids) {
@@ -107,7 +108,7 @@ export function createAttachmentStore(rt: IdSource): AttachmentStore {
       const row = await scoped(conversationId, uploadId);
       if (!row) return undefined;
       const file = await storageService.downloadFile({ filePath: row.storageKey });
-      return { name: row.name, bytes: new Uint8Array(file.buffer) };
+      return { name: row.name, bytes: new Uint8Array(file.bytes) };
     },
   };
 }

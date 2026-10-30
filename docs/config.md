@@ -1,146 +1,88 @@
-# Config System (config.yml)
+# Configuration (`config.ts`)
 
-Application settings live in `config.yml` — a YAML file at the project root. It replaces environment variables for non-secret configuration (feature flags, timeouts, provider defaults, etc.) while keeping secrets in `.env`.
+Application settings are a typed object in code, not a file. `defaultConfig(env)`
+in `packages/core/src/config.ts` derives sensible values from the validated
+environment; the app overrides what it wants in `apps/web/src/server/config.ts`
+with `defineConfig()`; `bootstrap()` merges the two before the first request.
 
-## Quick Start
+```ts
+import { config } from "@groot/core/config";
 
-1. Copy the example file:
-
-   ```bash
-   cp config.example.yml config.yml
-   ```
-
-2. Edit `config.yml` for your environment.
-
-3. Access config in code:
-
-   ```typescript
-   import { config } from "@groot/core/config";
-
-   config.app.name; // "Groot"
-   config.logging.level; // "info"
-   ```
-
-The config is loaded eagerly on first import, validated with Zod, and deep-frozen — any mutation throws at runtime.
-
-## Structure
-
-The file is split into environment sections. The `default` section is the base, and the section matching `NODE_ENV` (e.g., `development`, `production`, `test`) is deep-merged on top:
-
-```yaml
-default:
-  logging:
-    level: "info"
-
-development:
-  logging:
-    level: "debug"
-
-production:
-  logging:
-    level: "warn"
+config.app.name; // "Groot"
+config.jobs.pollIntervalSeconds; // 5
 ```
 
-Running with `NODE_ENV=production` merges `default` + `production`, resulting in `logging.level: "warn"`.
+## Overriding
 
-### Merge Rules
+```ts
+// apps/web/src/server/config.ts
+import { defineConfig } from "@groot/core/config";
 
-- **Objects** merge recursively — nested keys override individually.
-- **Arrays** replace entirely — they do not concatenate.
-- **Scalars** override directly.
+export const appConfig = defineConfig({
+  app: { name: "Groot" },
+  jobs: { batchSize: 25 },
+});
 
-```yaml
-default:
-  cors:
-    origins:
-      - "http://localhost:3000"
-
-production:
-  cors:
-    origins:
-      - "https://example.com"
+// Or branch on the validated env:
+export const appConfig = defineConfig((env) => ({
+  rateLimits: { auth: { windowMs: 60_000, max: env.NODE_ENV === "production" ? 10 : 1000 } },
+}));
 ```
 
-In production, `cors.origins` is `["https://example.com"]` (replaced), not a concatenation of both arrays.
+Overrides deep-merge over the defaults (objects merge, arrays and scalars
+replace, `undefined` is ignored). `defineConfig` is an identity helper that
+gives you type checking and completion for `DeepPartial<AppConfig>`.
 
-## Environment Variables
+## Settings
 
-Use `{{ env.VARIABLE_NAME }}` to inject an env var into a config value:
+| Path                        | Default                                             | Source                                   |
+| --------------------------- | --------------------------------------------------- | ---------------------------------------- |
+| `app.name`                  | `"Groot"`                                           | app override                             |
+| `app.port`                  | `3000`                                              | `PORT`                                   |
+| `cors.origins`              | `[]` (reflect the requesting origin)                | `CORS_ALLOWED_ORIGINS` (comma-separated) |
+| `auth.jwtExpiresIn`         | `"30d"`                                             |                                          |
+| `jobs.enabled`              | `true` (`false` when `NODE_ENV=test`)               |                                          |
+| `jobs.pollIntervalSeconds`  | `5` — Node poller interval                          |                                          |
+| `jobs.batchSize`            | `10` — max jobs claimed per tick                    |                                          |
+| `jobs.retryLimit`           | `3`                                                 |                                          |
+| `jobs.retryDelaySeconds`    | `60` — base delay, doubles per attempt (max 24 h)   |                                          |
+| `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this is retried  |                                          |
+| `jobs.keepCompletedDays`    | `7` — completed/cancelled jobs + logs deleted after |                                          |
+| `jobs.runInline`            | `true` — `addJob()` runs a tick immediately         |                                          |
+| `logging.level`             | `debug` dev / `info` prod / `silent` test           | `LOG_LEVEL`                              |
+| `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                |
+| `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                  |
+| `passkey.origin`            | `"http://localhost:3000"`                           | `ORIGIN`                                 |
+| `rateLimits.auth`           | 20 requests / 15 min per IP                         |                                          |
+| `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                          |
+| `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                          |
+| `sentry.dsn`                | `""`                                                | `SENTRY_DSN`                             |
 
-```yaml
-production:
-  cors:
-    origins:
-      - "{{ env.CORS_ALLOWED_ORIGINS }}"
-```
+## Env vs config
 
-If the env var is not set, the server throws a startup error with a clear message telling you which variable is missing.
+- **`env`** (`packages/core/src/env.ts`) is the raw, validated environment:
+  secrets and deployment facts. Read it for `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`,
+  `DATABASE_URL`. See [Setup guide](./setup-guide.md#environment-variables).
+- **`config`** is behaviour: what the app does with those facts. Feature code
+  reads `config.*`.
+- A new tunable goes into `AppConfig` + `defaultConfig()`; a new deployment
+  input goes into `envSchema` + `.env.example` and is surfaced through
+  `defaultConfig()` if code needs it.
 
-**Secrets stay in `.env`** — never put API keys, JWT secrets, or credentials directly in `config.yml`. Reference them via `{{ env.VAR }}` when needed, or let the code read them from `env` directly (which is the typical pattern for secrets like `JWT_SECRET_KEY`).
+Both are live bindings replaced by `bootstrap()`, so read them inside functions,
+not at module top level (module-level reads see the development defaults).
 
-## Local Overrides
-
-Create `config.local.yml` (git-ignored) for machine-specific overrides. It follows the same structure and merges on top of `config.yml`:
-
-```yaml
-# config.local.yml
-default:
-  logging:
-    level: "trace"
-```
-
-This is useful for debugging without modifying the shared config.
-
-## Available Settings
-
-| Path                                | Type       | Default                     | Description                                           |
-| ----------------------------------- | ---------- | --------------------------- | ----------------------------------------------------- |
-| `app.name`                          | `string`   | `"Groot"`                   | Application name                                      |
-| `app.isProduction`                  | `boolean`  | `false`                     | Production mode flag                                  |
-| `app.port`                          | `number`   | `3000`                      | HTTP port                                             |
-| `cors.origins`                      | `string[]` | `[]`                        | Allowed CORS origins                                  |
-| `auth.jwtExpiresIn`                 | `string`   | `"30d"`                     | JWT token expiration                                  |
-| `jobs.enabled`                      | `boolean`  | `true`                      | Enable background job processing                      |
-| `jobs.concurrency`                  | `number`   | `5`                         | Worker concurrency                                    |
-| `jobs.pollIntervalSeconds`          | `number`   | `5`                         | Worker poll interval                                  |
-| `jobs.archiveCompletedAfterSeconds` | `number`   | `604800`                    | Archive completed jobs after (7 days)                 |
-| `jobs.deleteArchivedAfterSeconds`   | `number`   | `2592000`                   | Delete archived jobs after (30 days)                  |
-| `jobs.monitorStateIntervalSeconds`  | `number`   | `60`                        | Queue state monitor interval                          |
-| `logging.level`                     | `enum`     | `"info"`                    | Log level: `debug`, `info`, `warn`, `error`, `silent` |
-| `logging.format`                    | `enum`     | `"json"`                    | Log format: `json`, `text`                            |
-| `passkey.rpName`                    | `string`   | `"Groot"`                   | WebAuthn relying party name                           |
-| `passkey.rpId`                      | `string`   | `"localhost"`               | WebAuthn relying party ID                             |
-| `passkey.origin`                    | `string`   | `"https://groot.localhost"` | WebAuthn origin                                       |
-| `sentry.dsn`                        | `string`   | `""`                        | Sentry DSN for error tracking                         |
-
-## Validation
-
-The Zod schema (`packages/core/src/config/config.schema.ts`) validates the merged config at startup. Invalid values throw a `Boom.internal` error with the exact path and message:
+## Boot order
 
 ```
-Invalid config.yml:
-  config.logging.level — Invalid enum value. Expected 'debug' | 'info' | 'warn' | 'error' | 'silent'
+bootstrap({ env, config, db, storage, reportError })
+  loadEnv(source)          parse + validate, dev defaults outside production
+  setConfig(overrides)     defaultConfig(env) ⊕ defineConfig(...)
+  configureLogger()        level from config.logging.level, pretty outside production
+  setDb(...)               the Drizzle handle (better-sqlite3 or D1)
+  setStorageAdapter(...)   StorageAdapter (local, R2 or memory), if given
+  setErrorReporter(...)    Sentry or anything else, if given
 ```
 
-Missing optional fields fall back to their Zod defaults — you only need to specify what you want to override.
-
-## Architecture
-
-```
-config.yml
-  config.local.yml (optional)
-    ↓ parse YAML
-    ↓ merge default + current NODE_ENV section
-    ↓ layer config.local.yml on top
-    ↓ resolve {{ env.VAR }} references
-    ↓ validate with Zod schema
-    ↓ deep freeze
-  config singleton (typed, immutable)
-```
-
-Key files:
-
-- `config.yml` / `config.example.yml` — YAML configuration
-- `packages/core/src/config/config.schema.ts` — Zod schema with types and defaults
-- `packages/core/src/config/config.loader.ts` — Loading, merging, resolution
-- `packages/core/src/config/index.ts` — Exports the `config` singleton
+Called once per process on Node (`entry.node.ts`), once per isolate on Workers
+(`entry.worker.ts`), and once per test file (`tests/server/setup.ts`).

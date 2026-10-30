@@ -1,10 +1,8 @@
-import express, { type Express } from "express";
-import request from "supertest";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { prisma } from "@groot/core/database";
-import { errorHandlerMiddleware } from "@groot/core/middlewares/error-handler.middleware";
 import { generateToken } from "@groot/core/utils/jwt.utils";
-import { registerRoutes } from "../../../apps/web/src/server/routes";
+import { api, createTestApp } from "../helpers";
+import { db, botChats, bots } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { setChatTitler } from "../../../apps/web/src/server/api/bots/chats.title";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
@@ -14,8 +12,7 @@ import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
  * owner can list, read (paged like the live chat), continue or delete.
  */
 
-const token = generateToken({ userId: 1, email: "past-chats-test@example.com" });
-const authorization = { Authorization: `Bearer ${token}` };
+const token = await generateToken({ userId: 1, email: "past-chats-test@example.com" });
 
 type Msg = {
   id: string;
@@ -71,36 +68,34 @@ const agentRuntime = {
   close: vi.fn().mockResolvedValue(undefined),
 };
 
-function buildApp(): Express {
-  const app = express();
-  app.use(express.json());
-  registerRoutes(app);
-  app.use(errorHandlerMiddleware);
-  return app;
+const app = createTestApp();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+type Data = any;
+
+/** An authenticated JSON request through the app. */
+function call(path: string, init: { method?: string; json?: unknown } = {}) {
+  return api<Data>(app, path, { ...init, token });
 }
 
 async function createBot(name = "Travel"): Promise<{ id: string; conversationId: string }> {
-  const response = await request(buildApp())
-    .post("/api/v1/bots")
-    .set(authorization)
-    .send({ name, systemPrompt: "Plan trips.", modelId: "known-model" })
-    .expect(201);
+  const response = await call("/api/v1/bots", {
+    method: "POST",
+    json: { name, systemPrompt: "Plan trips.", modelId: "known-model" },
+  });
+  expect(response.status).toBe(201);
   return response.body.data as { id: string; conversationId: string };
 }
 
 async function newChat(botId: string): Promise<{ conversationId: string }> {
-  const response = await request(buildApp())
-    .post(`/api/v1/bots/${botId}/reset`)
-    .set(authorization)
-    .expect(200);
+  const response = await call(`/api/v1/bots/${botId}/reset`, { method: "POST" });
+  expect(response.status).toBe(200);
   return response.body.data as { conversationId: string };
 }
 
 async function listChats(botId: string) {
-  const response = await request(buildApp())
-    .get(`/api/v1/bots/${botId}/chats`)
-    .set(authorization)
-    .expect(200);
+  const response = await call(`/api/v1/bots/${botId}/chats`);
+  expect(response.status).toBe(200);
   return response.body.data.chats as Array<Record<string, unknown>>;
 }
 
@@ -111,12 +106,12 @@ describe("Past chats", () => {
     nextConversation = 100;
     setAgentRuntimeForTests(agentRuntime as never);
     setChatTitler(undefined);
-    await prisma.bot.deleteMany();
+    await db.delete(bots);
   });
 
   afterEach(async () => {
     setChatTitler(undefined);
-    await prisma.bot.deleteMany();
+    await db.delete(bots);
   });
 
   it("records the chat New chat leaves, titled by its first owner message", async () => {
@@ -138,8 +133,8 @@ describe("Past chats", () => {
     ]);
     // The conversation id stays server-side.
     expect(chats[0]).not.toHaveProperty("conversationId");
-    const row = await prisma.botChat.findFirstOrThrow({ where: { botId: bot.id } });
-    expect(row.conversationId).toBe(bot.conversationId);
+    const row = await db.query.botChats.findFirst({ where: eq(botChats.botId, bot.id) });
+    expect(row?.conversationId).toBe(bot.conversationId);
   });
 
   it("records nothing for an empty chat", async () => {
@@ -162,7 +157,7 @@ describe("Past chats", () => {
   });
 
   it("404s for an unknown bot and for another bot's chat", async () => {
-    await request(buildApp()).get("/api/v1/bots/nope/chats").set(authorization).expect(404);
+    expect((await call("/api/v1/bots/nope/chats")).status).toBe(404);
 
     const travel = await createBot("Travel");
     const finance = await createBot("Finance");
@@ -170,14 +165,10 @@ describe("Past chats", () => {
     await newChat(travel.id);
     const [chat] = await listChats(travel.id);
 
-    await request(buildApp())
-      .get(`/api/v1/bots/${finance.id}/chats/${chat.id}`)
-      .set(authorization)
-      .expect(404);
-    await request(buildApp())
-      .delete(`/api/v1/bots/${finance.id}/chats/${chat.id}`)
-      .set(authorization)
-      .expect(404);
+    expect((await call(`/api/v1/bots/${finance.id}/chats/${chat.id}`)).status).toBe(404);
+    expect(
+      (await call(`/api/v1/bots/${finance.id}/chats/${chat.id}`, { method: "DELETE" })).status,
+    ).toBe(404);
   });
 
   it("reads the newest window and pages older messages", async () => {
@@ -187,10 +178,8 @@ describe("Past chats", () => {
     await newChat(bot.id);
     const [chat] = await listChats(bot.id);
 
-    const read = await request(buildApp())
-      .get(`/api/v1/bots/${bot.id}/chats/${chat.id}`)
-      .set(authorization)
-      .expect(200);
+    const read = await call(`/api/v1/bots/${bot.id}/chats/${chat.id}`);
+    expect(read.status).toBe(200);
     const view = read.body.data as {
       chat: { id: string };
       state: { messages: Msg[]; hasMore: boolean; cursor: string };
@@ -201,11 +190,9 @@ describe("Past chats", () => {
     expect(view.state.hasMore).toBe(true);
     expect(view.runs).toEqual([]);
 
-    const page = await request(buildApp())
-      .get(`/api/v1/bots/${bot.id}/chats/${chat.id}/messages`)
-      .query({ before: view.state.cursor, limit: 50 })
-      .set(authorization)
-      .expect(200);
+    const query = new URLSearchParams({ before: view.state.cursor, limit: "50" });
+    const page = await call(`/api/v1/bots/${bot.id}/chats/${chat.id}/messages?${query}`);
+    expect(page.status).toBe(200);
     expect(page.body.data).toMatchObject({ hasMore: false });
     expect((page.body.data.messages as Msg[]).map((m) => m.text)).toEqual(turns.slice(0, 5));
   });
@@ -216,16 +203,17 @@ describe("Past chats", () => {
     await newChat(bot.id);
     say(101, "Current topic", "ok");
     const [old] = await listChats(bot.id);
-    const startedAt = (await prisma.botChat.findUniqueOrThrow({ where: { id: String(old.id) } }))
-      .startedAt;
+    const startedAt = (await db.query.botChats.findFirst({
+      where: eq(botChats.id, String(old.id)),
+    }))!.startedAt;
 
-    const response = await request(buildApp())
-      .post(`/api/v1/bots/${bot.id}/chats/${old.id}/continue`)
-      .set(authorization)
-      .expect(200);
+    const response = await call(`/api/v1/bots/${bot.id}/chats/${old.id}/continue`, {
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
 
     expect(response.body.data).toMatchObject({ conversationId: "100" });
-    const row = await prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
+    const row = (await db.query.bots.findFirst({ where: eq(bots.id, bot.id) }))!;
     expect(row.chatStartedAt).toEqual(startedAt);
     // The chat it left is stopped and listed; the continued one is not.
     expect(agentRuntime.abort).toHaveBeenCalledWith(101);
@@ -242,14 +230,13 @@ describe("Past chats", () => {
     await newChat(bot.id);
     const [two] = await listChats(bot.id);
 
-    await request(buildApp())
-      .delete(`/api/v1/bots/${bot.id}/chats/${two.id}`)
-      .set(authorization)
-      .expect(200);
+    expect(
+      (await call(`/api/v1/bots/${bot.id}/chats/${two.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual(["One"]);
 
-    await request(buildApp()).delete(`/api/v1/bots/${bot.id}`).set(authorization).expect(200);
-    expect(await prisma.botChat.count({ where: { botId: bot.id } })).toBe(0);
+    expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(await db.$count(botChats, eq(botChats.botId, bot.id))).toBe(0);
   });
 
   it("still starts a new chat when the old transcript cannot be read", async () => {

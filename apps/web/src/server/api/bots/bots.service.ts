@@ -1,9 +1,9 @@
 /**
- * Bot CRUD + chat actions over Prisma. Everything that touches a bot's
+ * Bot CRUD + chat actions over Drizzle. Everything that touches a bot's
  * durable conversation (create, reconcile, submit) goes through
  * `bots.conversation.ts`; this module adds the row bookkeeping around it.
  */
-import { prisma } from "@groot/core/database";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
@@ -18,6 +18,17 @@ import {
   type AttachmentRef,
   type OwnerAnswer,
 } from "@tiny-agents/agent";
+import {
+  db,
+  botChats,
+  botConnections,
+  botMessages,
+  bots,
+  botSkills,
+  connections,
+  routines,
+  skills,
+} from "../../db";
 import { getAgentRuntime } from "./bots.runtime";
 import { browserTargetForBot } from "./browser.targets";
 import {
@@ -106,9 +117,9 @@ function isUnread(
 }
 
 export async function listBots(rt: BotAgentRuntime = runtime()) {
-  const bots = await prisma.bot.findMany({ orderBy: { lastActivityAt: "desc" } });
+  const rows = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
   const busy = new Set(rt.busyConversations());
-  return bots.map((bot) => {
+  return rows.map((bot) => {
     const ref = Number(bot.conversationId);
     return toListEntry(bot, busy.has(ref), {
       approvals: rt.pendingApprovals(ref),
@@ -133,7 +144,7 @@ function nameKey(name: string): string {
  * SQL: SQLite has no case-insensitive `mode`, and the roster is small.
  */
 async function assertNameFree(name: string, selfId?: string): Promise<void> {
-  const rows = await prisma.bot.findMany({ select: { id: true, name: true } });
+  const rows = await db.select({ id: bots.id, name: bots.name }).from(bots);
   const taken = rows.find((row) => row.id !== selfId && nameKey(row.name) === nameKey(name));
   if (taken) throw Boom.conflict(`A bot named "${taken.name}" already exists`);
 }
@@ -156,8 +167,9 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
   );
   // If the row insert fails the durable conversation is left orphaned — the
   // same end state as bot deletion, which Phase 2 cleanup will sweep.
-  const row = await prisma.bot.create({
-    data: {
+  const [row] = await db
+    .insert(bots)
+    .values({
       name: data.name,
       description: data.description,
       systemPrompt: data.systemPrompt,
@@ -168,8 +180,9 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
-    },
-  });
+    })
+    .returning();
+  if (!row) throw new Error("Bot insert returned no row");
   if (data.skillIds || data.connectionIds) {
     await setLinks(row.id, data.skillIds, data.connectionIds);
     return reconcileBotConversation(row.id, rt);
@@ -180,26 +193,32 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
 /** Replace a bot's skill and/or connection assignments (unknown ids are ignored). */
 async function setLinks(botId: string, skillIds?: string[], connectionIds?: string[]) {
   if (skillIds) {
-    const skills = await prisma.skill.findMany({
-      where: { id: { in: skillIds } },
-      select: { id: true },
+    const known = await db
+      .select({ id: skills.id })
+      .from(skills)
+      .where(inArray(skills.id, skillIds));
+    db.transaction((tx) => {
+      tx.delete(botSkills).where(eq(botSkills.botId, botId)).run();
+      if (known.length > 0) {
+        tx.insert(botSkills)
+          .values(known.map((skill) => ({ botId, skillId: skill.id })))
+          .run();
+      }
     });
-    await prisma.$transaction([
-      prisma.botSkill.deleteMany({ where: { botId } }),
-      prisma.botSkill.createMany({ data: skills.map((skill) => ({ botId, skillId: skill.id })) }),
-    ]);
   }
   if (connectionIds) {
-    const connections = await prisma.connection.findMany({
-      where: { id: { in: connectionIds } },
-      select: { id: true },
+    const known = await db
+      .select({ id: connections.id })
+      .from(connections)
+      .where(inArray(connections.id, connectionIds));
+    db.transaction((tx) => {
+      tx.delete(botConnections).where(eq(botConnections.botId, botId)).run();
+      if (known.length > 0) {
+        tx.insert(botConnections)
+          .values(known.map((connection) => ({ botId, connectionId: connection.id })))
+          .run();
+      }
     });
-    await prisma.$transaction([
-      prisma.botConnection.deleteMany({ where: { botId } }),
-      prisma.botConnection.createMany({
-        data: connections.map((connection) => ({ botId, connectionId: connection.id })),
-      }),
-    ]);
   }
 }
 
@@ -213,23 +232,44 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);
-  await prisma.bot.update({
-    where: { id },
-    data: {
-      ...(data.toolPermissions !== undefined
-        ? { toolPermissions: JSON.stringify(data.toolPermissions) }
-        : {}),
-      ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.description !== undefined ? { description: data.description } : {}),
-      ...(data.systemPrompt !== undefined ? { systemPrompt: data.systemPrompt } : {}),
-      ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
-      ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
-      ...(memoryResumed ? { memoryCapturedThrough: new Date() } : {}),
-      ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
-      ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
-    },
+  await updateRow(id, {
+    ...(data.toolPermissions !== undefined
+      ? { toolPermissions: JSON.stringify(data.toolPermissions) }
+      : {}),
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.systemPrompt !== undefined ? { systemPrompt: data.systemPrompt } : {}),
+    ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
+    ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
+    ...(memoryResumed ? { memoryCapturedThrough: new Date() } : {}),
+    ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
+    ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
   });
   return reconcileBotConversation(id, rt);
+}
+
+/**
+ * Update one bot row. A row that vanished since the caller read it is a 404,
+ * as Prisma's `update` reported it (P2025).
+ */
+async function updateRow(id: string, data: Partial<typeof bots.$inferInsert>): Promise<void> {
+  const changes = Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  ) as Partial<typeof bots.$inferInsert>;
+  if (Object.keys(changes).length === 0) {
+    // Nothing to change (e.g. a PATCH of links only): Prisma treated an empty
+    // update as a no-op, while Drizzle refuses an empty SET. Still a 404 when
+    // the row is gone.
+    const row = await db.query.bots.findFirst({ where: eq(bots.id, id), columns: { id: true } });
+    if (!row) throw Boom.notFound("Record not found");
+    return;
+  }
+  const [updated] = await db
+    .update(bots)
+    .set(changes)
+    .where(eq(bots.id, id))
+    .returning({ id: bots.id });
+  if (!updated) throw Boom.notFound("Record not found");
 }
 
 /**
@@ -264,15 +304,16 @@ async function releaseBrowser(bot: { id: string; browserProfile: string }): Prom
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await findBotRow(id);
   // Its routines go with it (cascade), and their conversations (issue #63).
-  const routines = await prisma.routine.findMany({
-    where: { botId: bot.id, conversationId: { not: null } },
-    select: { conversationId: true },
-  });
+  const routineRows = await db
+    .select({ conversationId: routines.conversationId })
+    .from(routines)
+    .where(and(eq(routines.botId, bot.id), isNotNull(routines.conversationId)));
   // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
   // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
-  const deleted = await prisma.bot.delete({ where: { id: bot.id } });
+  const [deleted] = await db.delete(bots).where(eq(bots.id, bot.id)).returning();
+  if (!deleted) throw Boom.notFound("Record not found");
   await retireConversation(rt, bot.conversationId);
-  await Promise.all(routines.map((routine) => retireConversation(rt, routine.conversationId!)));
+  await Promise.all(routineRows.map((routine) => retireConversation(rt, routine.conversationId!)));
   await releaseBrowser(bot);
   return toBot(deleted);
 }
@@ -298,12 +339,9 @@ export async function sendMessage(
     },
     rt,
   );
-  await prisma.bot.update({
-    where: { id },
-    data: {
-      lastActivityAt: new Date(),
-      lastMessagePreview: previewOf(input.text, attachments).slice(0, 120),
-    },
+  await updateRow(id, {
+    lastActivityAt: new Date(),
+    lastMessagePreview: previewOf(input.text, attachments).slice(0, 120),
   });
   if (input.mentions && input.mentions.length > 0) {
     await deliverMentions(bot, input, rt);
@@ -348,16 +386,19 @@ async function deliverMentions(
   input: { requestId: string; text: string; mentions?: string[] },
   rt: BotAgentRuntime,
 ): Promise<void> {
-  const targets = await prisma.bot.findMany({
-    where: { id: { in: input.mentions ?? [] }, NOT: { id: host.id } },
-    select: { id: true },
-  });
+  const targets = await db
+    .select({ id: bots.id })
+    .from(bots)
+    .where(and(inArray(bots.id, input.mentions ?? []), ne(bots.id, host.id)));
   if (targets.length === 0) return;
   const ownerContext = `[From the owner, in ${host.name}'s chat]`;
   for (const target of targets) {
     const requestId = `mention-${input.requestId}-${target.id}`;
     try {
-      const existing = await prisma.botMessage.findUnique({ where: { requestId } });
+      const existing = await db.query.botMessages.findFirst({
+        where: eq(botMessages.requestId, requestId),
+        columns: { id: true },
+      });
       if (existing) continue;
       await submitToBot(
         target.id,
@@ -368,16 +409,14 @@ async function deliverMentions(
         },
         rt,
       );
-      await prisma.botMessage.create({
-        data: {
-          fromBotId: null,
-          toBotId: target.id,
-          replyToBotId: host.id,
-          kind: "mention",
-          requestId,
-          text: input.text,
-          deliveredAt: new Date(),
-        },
+      await db.insert(botMessages).values({
+        fromBotId: null,
+        toBotId: target.id,
+        replyToBotId: host.id,
+        kind: "mention",
+        requestId,
+        text: input.text,
+        deliveredAt: new Date(),
       });
     } catch (error) {
       logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
@@ -431,16 +470,13 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
   // Fresh conversation; the old one stays in agent.db as a past chat
   // (issue #101), and any reply still running there is stopped.
   const conversationId = await startBotConversation(id, rt);
-  await prisma.bot.update({
-    where: { id },
-    data: {
-      conversationId,
-      // A fresh thread: routine results from before it stay out of it.
-      chatStartedAt: new Date(),
-      lastReadAt: new Date(),
-      lastMessagePreview: null,
-      lastActivityAt: new Date(),
-    },
+  await updateRow(id, {
+    conversationId,
+    // A fresh thread: routine results from before it stay out of it.
+    chatStartedAt: new Date(),
+    lastReadAt: new Date(),
+    lastMessagePreview: null,
+    lastActivityAt: new Date(),
   });
   await retireConversation(rt, old.conversationId);
   await recordPastChat(endingChat(old), rt);
@@ -460,19 +496,28 @@ export async function continuePastChat(
 ) {
   const old = await findBotRow(id);
   const past = await findPastChat(id, chatId);
-  await prisma.$transaction([
-    prisma.botChat.delete({ where: { id: past.id } }),
-    prisma.bot.update({
-      where: { id },
-      data: {
+  db.transaction((tx) => {
+    // Both rows must still be there (Prisma's delete/update threw P2025 otherwise).
+    const removed = tx
+      .delete(botChats)
+      .where(eq(botChats.id, past.id))
+      .returning({ id: botChats.id })
+      .all();
+    if (removed.length === 0) throw Boom.notFound("Record not found");
+    const moved = tx
+      .update(bots)
+      .set({
         conversationId: past.conversationId,
         chatStartedAt: past.startedAt,
         lastReadAt: new Date(),
         lastMessagePreview: past.lastMessagePreview,
         lastActivityAt: new Date(),
-      },
-    }),
-  ]);
+      })
+      .where(eq(bots.id, id))
+      .returning({ id: bots.id })
+      .all();
+    if (moved.length === 0) throw Boom.notFound("Record not found");
+  });
   await retireConversation(rt, old.conversationId);
   await recordPastChat(endingChat(old), rt);
   return reconcileBotConversation(id, rt);
@@ -483,13 +528,13 @@ export async function setPinned(id: string, pinned: boolean) {
   const row = await findBotRow(id);
   // Re-pinning an already pinned bot keeps its place in the pinned group.
   const pinnedAt = pinned ? (row.pinnedAt ?? new Date()) : null;
-  await prisma.bot.update({ where: { id }, data: { pinnedAt } });
+  await updateRow(id, { pinnedAt });
   return getBot(id);
 }
 
 export async function markRead(id: string) {
   await findBotRow(id);
-  await prisma.bot.update({ where: { id }, data: { lastReadAt: new Date() } });
+  await updateRow(id, { lastReadAt: new Date() });
   return getBot(id);
 }
 
@@ -511,10 +556,7 @@ export async function decideApproval(
   const bot = toBot(await findBotRow(id));
   if (input.decision === "approved" && input.alwaysAllow) {
     const toolPermissions = { ...bot.toolPermissions, [input.alwaysAllow]: "allow" as const };
-    await prisma.bot.update({
-      where: { id },
-      data: { toolPermissions: JSON.stringify(toolPermissions) },
-    });
+    await updateRow(id, { toolPermissions: JSON.stringify(toolPermissions) });
     await reconcileBotConversation(id, rt);
   }
   try {
@@ -560,10 +602,12 @@ export async function recordReply(
   // the transcript card does.
   const payload = last.role === "user" ? stripPeerEnvelope(last.text) : last.text;
   const preview = payload.replace(/\s+/g, " ").trim().slice(0, 120);
-  await prisma.bot
-    .updateMany({
-      where: { conversationId },
-      data: { lastMessagePreview: preview || null, lastActivityAt: new Date(last.createdAt) },
-    })
-    .catch(() => undefined);
+  try {
+    await db
+      .update(bots)
+      .set({ lastMessagePreview: preview || null, lastActivityAt: new Date(last.createdAt) })
+      .where(eq(bots.conversationId, conversationId));
+  } catch {
+    // Best effort, as before: the list fields catch up on the next reply.
+  }
 }

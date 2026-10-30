@@ -5,7 +5,8 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import express from "express";
+import { getRequestListener } from "@hono/node-server";
+import { Hono } from "hono";
 import type { ConnectItem } from "../../../../apps/web/src/server/api/vault/backends/onepassword-mapping";
 
 export interface FakeConnect {
@@ -28,64 +29,55 @@ export async function startFakeConnect(): Promise<FakeConnect> {
     ],
     requests: [] as { method: string; path: string; token: string }[],
   };
-  const app = express();
-  app.use(express.json());
-  app.use((req, res, next) => {
-    const token = (req.get("authorization") ?? "").replace(/^Bearer /, "");
-    state.requests.push({ method: req.method, path: req.path, token });
+  const app = new Hono();
+  app.use(async (c, next) => {
+    const token = (c.req.header("authorization") ?? "").replace(/^Bearer /, "");
+    state.requests.push({ method: c.req.method, path: c.req.path, token });
     const grant = state.tokens.get(token);
-    if (!grant) {
-      res.status(401).json({ status: 401, message: "Invalid token" });
-      return;
-    }
-    const vault = req.path.match(/^\/v1\/vaults\/([^/]+)/)?.[1];
+    if (!grant) return c.json({ status: 401, message: "Invalid token" }, 401);
+    const vault = c.req.path.match(/^\/v1\/vaults\/([^/]+)/)?.[1];
     if (vault && !grant.vaults.includes(vault)) {
-      res.status(403).json({ status: 403, message: "No access" });
-      return;
+      return c.json({ status: 403, message: "No access" }, 403);
     }
-    if (req.method !== "GET" && !grant.write) {
-      res.status(403).json({ status: 403, message: "Read only" });
-      return;
+    if (c.req.method !== "GET" && !grant.write) {
+      return c.json({ status: 403, message: "Read only" }, 403);
     }
-    next();
+    await next();
   });
-  app.get("/v1/vaults", (req, res) => {
-    const grant = state.tokens.get((req.get("authorization") ?? "").slice(7))!;
-    res.json(state.vaults.filter((v) => grant.vaults.includes(v.id)));
+  app.get("/v1/vaults", (c) => {
+    const grant = state.tokens.get((c.req.header("authorization") ?? "").slice(7))!;
+    return c.json(state.vaults.filter((v) => grant.vaults.includes(v.id)));
   });
-  app.get("/v1/vaults/:vault/items", (req, res) => {
-    res.json(
+  app.get("/v1/vaults/:vault/items", (c) =>
+    c.json(
       [...state.items.values()]
-        .filter((item) => item.vault.id === req.params.vault)
+        .filter((item) => item.vault.id === c.req.param("vault"))
         .map(({ fields: _fields, ...summary }) => summary),
-    );
-  });
-  app.get("/v1/vaults/:vault/items/:id", (req, res) => {
-    const item = state.items.get(req.params.id);
-    if (!item || item.vault.id !== req.params.vault) {
-      res.status(404).json({ status: 404, message: "Not found" });
-      return;
+    ),
+  );
+  app.get("/v1/vaults/:vault/items/:id", (c) => {
+    const item = state.items.get(c.req.param("id"));
+    if (!item || item.vault.id !== c.req.param("vault")) {
+      return c.json({ status: 404, message: "Not found" }, 404);
     }
-    res.json(item);
+    return c.json(item);
   });
-  app.post("/v1/vaults/:vault/items", (req, res) => {
-    const item = { ...(req.body as ConnectItem), id: randomUUID() };
+  app.post("/v1/vaults/:vault/items", async (c) => {
+    const item = { ...(await c.req.json<ConnectItem>()), id: randomUUID() };
     state.items.set(item.id, item);
-    res.json(item);
+    return c.json(item);
   });
-  app.put("/v1/vaults/:vault/items/:id", (req, res) => {
-    if (!state.items.has(req.params.id)) {
-      res.status(404).end();
-      return;
-    }
-    state.items.set(req.params.id, { ...(req.body as ConnectItem), id: req.params.id });
-    res.json(state.items.get(req.params.id));
+  app.put("/v1/vaults/:vault/items/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!state.items.has(id)) return c.body(null, 404);
+    state.items.set(id, { ...(await c.req.json<ConnectItem>()), id });
+    return c.json(state.items.get(id));
   });
-  app.delete("/v1/vaults/:vault/items/:id", (req, res) => {
-    state.items.delete(req.params.id);
-    res.status(204).end();
+  app.delete("/v1/vaults/:vault/items/:id", (c) => {
+    state.items.delete(c.req.param("id"));
+    return c.body(null, 204);
   });
-  const server: Server = createServer(app);
+  const server: Server = createServer(getRequestListener(app.fetch));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,

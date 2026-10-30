@@ -1,7 +1,7 @@
 import { Card } from "@groot/ui/card";
 import { StatTile } from "@groot/ui/stat-tile";
 import type { JobStats } from "@groot/jobs/client/types";
-import { Activity, CheckCircle, Clock, RefreshCw, X, XCircle } from "lucide-react";
+import { Activity, CheckCircle, Clock, X, XCircle } from "lucide-react";
 import { JobsStatsSkeleton } from "./skeletons";
 
 type StatItem = {
@@ -29,7 +29,7 @@ export function JobsStats({ stats, statsLoading, activeState, onSelectState }: P
     {
       key: "all",
       label: "Total",
-      value: stats.active + stats.created + stats.retry + stats.failed + stats.completed,
+      value: stats.active + stats.created + stats.failed + stats.completed + stats.cancelled,
       colorClass: "text-foreground",
       icon: <Activity className="size-3.5" />,
     },
@@ -46,13 +46,6 @@ export function JobsStats({ stats, statsLoading, activeState, onSelectState }: P
       value: stats.created,
       colorClass: "text-muted-foreground",
       icon: <Clock className="size-3.5" />,
-    },
-    {
-      key: "retry",
-      label: "Retry",
-      value: stats.retry,
-      colorClass: "text-warning",
-      icon: <RefreshCw className="size-3.5" />,
     },
     {
       key: "failed",

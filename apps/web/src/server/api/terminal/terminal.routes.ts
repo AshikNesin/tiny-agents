@@ -4,10 +4,12 @@
  * here — attach traffic goes through the ticketed WebSocket bridge in
  * `terminal.ws.ts`.
  */
+import { Hono } from "hono";
 import { z } from "zod";
 import { Boom } from "@groot/core/errors";
-import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
-import { createRouter } from "@groot/core/utils/router.utils";
+import type { AppEnv } from "@groot/core/types";
+import { ok } from "@groot/core/utils/api-response.utils";
+import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import {
   parseSessionName,
   type SessionName,
@@ -24,7 +26,7 @@ import {
 import { issueTerminalTicket } from "./terminal.ws";
 import { getTerminalService } from "./terminal.instance";
 
-const router = createRouter();
+const router = new Hono<AppEnv>();
 
 // xterm.js is legible from 2x2 up; the ceilings bound a hostile client.
 const createSchema = z.object({
@@ -58,31 +60,30 @@ const statusDto = (status: TerminalStatus) =>
       ? { kind: status.kind, message: status.message }
       : { kind: status.kind };
 
-router.get("/terminal/sessions", async () => {
+router.get("/terminal/sessions", async (c) => {
   const { status, sessions } = await getTerminalService().list();
-  return { status: statusDto(status), sessions: sessions.map(sessionDto) };
+  return ok(c, { status: statusDto(status), sessions: sessions.map(sessionDto) });
 });
 
-router.post("/terminal/sessions", async (req, res) => {
-  const body = await parseBody(req, createSchema);
+router.post("/terminal/sessions", async (c) => {
+  const body = await parseBody(c, createSchema);
   try {
     const created = await getTerminalService().create(
       body.cols ?? DEFAULT_COLS,
       body.rows ?? DEFAULT_ROWS,
     );
-    res.status(201);
-    return sessionDto(created);
+    return ok(c, sessionDto(created), 201);
   } catch (error) {
     throw mapCreateError(error);
   }
 });
 
-router.delete("/terminal/sessions/:name", async (req) => {
-  const name = nameParam(parseStringParam(req.params.name, "name"));
-  const force = req.query.force === "1";
+router.delete("/terminal/sessions/:name", async (c) => {
+  const name = nameParam(parseStringParam(c.req.param("name"), "name"));
+  const force = c.req.query("force") === "1";
   try {
     await getTerminalService().kill(name, { force });
-    return { deleted: true };
+    return ok(c, { deleted: true });
   } catch (error) {
     if (error instanceof SessionNotFoundError) throw Boom.notFound(error.message);
     if (error instanceof SessionBusyError) {
@@ -96,14 +97,14 @@ router.delete("/terminal/sessions/:name", async (req) => {
 // No has-session pre-check: it cost a full SSH round trip before the socket
 // could open (issue #84). Attaching to a missing tab ends the pty at once,
 // tmux prints why, and the bridge closes 1000, so the client stops.
-router.post("/terminal/sessions/:name/ticket", async (req) => {
-  const name = nameParam(parseStringParam(req.params.name, "name"));
-  return {
+router.post("/terminal/sessions/:name/ticket", async (c) => {
+  const name = nameParam(parseStringParam(c.req.param("name"), "name"));
+  return ok(c, {
     path: `/api/v1/terminal/ws/${encodeURIComponent(name)}?ticket=${issueTerminalTicket({
-      userId: req.user!.userId,
+      userId: requireUser(c).userId,
       name,
     })}`,
-  };
+  });
 });
 
 function mapCreateError(error: unknown): unknown {
