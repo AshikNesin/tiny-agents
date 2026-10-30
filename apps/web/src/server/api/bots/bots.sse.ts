@@ -130,6 +130,6 @@ export function endSseOnError(sse: SseStream, error: unknown): void {
  * process (the durable conversation resumes there).
  */
 export function endAllSse(): void {
-  for (const sse of [...openStreams]) sse.end();
+  for (const sse of openStreams) sse.end();
   openStreams.clear();
 }

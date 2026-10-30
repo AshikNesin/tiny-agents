@@ -326,6 +326,24 @@ describe("Bots API routes", () => {
     });
   });
 
+  it("patches only a bot's links without touching its row fields", async () => {
+    const bot = await createBot();
+
+    const response = await call(`/api/v1/bots/${bot.id}`, {
+      method: "PATCH",
+      json: { skillIds: [], connectionIds: [] },
+    });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ id: bot.id, skillIds: [], connectionIds: [] });
+    await expect(findBot(bot.id)).resolves.toMatchObject({ name: createPayload.name });
+
+    const missing = await call("/api/v1/bots/no-such-bot", {
+      method: "PATCH",
+      json: { skillIds: [] },
+    });
+    expect(missing.status).toBe(404);
+  });
+
   it("submits, aborts, and deletes through the runtime before removing the bot row", async () => {
     const bot = await createBot();
 
@@ -779,12 +797,13 @@ describe("Bots API routes", () => {
     const unknown = await call(withQuery("/api/v1/bots/no-such-bot/messages", { before: "e7" }));
     expect(unknown.status).toBe(404);
     // Malformed: missing, not a message id, or a limit out of range.
-    for (const query of [
+    const malformed: Record<string, string>[] = [
       {},
       { before: "live" },
       { before: "e7", limit: "0" },
       { before: "e7", limit: "101" },
-    ]) {
+    ];
+    for (const query of malformed) {
       expect((await call(withQuery(path, query))).status).toBe(400);
     }
     // Well-formed, but not (or no longer) in the transcript.

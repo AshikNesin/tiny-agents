@@ -27,7 +27,12 @@ async function seed() {
   const chat = Math.floor(Math.random() * 1_000_000_000);
   const [bot] = await db
     .insert(bots)
-    .values({ name: randomUUID(), modelId: "m", conversationId: String(chat), browserProfile: "own" })
+    .values({
+      name: randomUUID(),
+      modelId: "m",
+      conversationId: String(chat),
+      browserProfile: "own",
+    })
     .returning();
   botIds.push(bot!.id);
   const [routine] = await db

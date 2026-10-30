@@ -230,9 +230,9 @@ describe("Past chats", () => {
     await newChat(bot.id);
     const [two] = await listChats(bot.id);
 
-    expect((await call(`/api/v1/bots/${bot.id}/chats/${two.id}`, { method: "DELETE" })).status).toBe(
-      200,
-    );
+    expect(
+      (await call(`/api/v1/bots/${bot.id}/chats/${two.id}`, { method: "DELETE" })).status,
+    ).toBe(200);
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual(["One"]);
 
     expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);

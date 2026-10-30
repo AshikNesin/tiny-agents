@@ -257,7 +257,10 @@ describe("browser routes", () => {
     expect(fake.resizes).toEqual([]);
 
     await openFake();
-    const headless = await post(`/api/v1/bots/${botId}/browser/resize`, { width: 900, height: 700 });
+    const headless = await post(`/api/v1/bots/${botId}/browser/resize`, {
+      width: 900,
+      height: 700,
+    });
     expect(headless.status).toBe(409);
   });
 

@@ -253,9 +253,20 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
  * as Prisma's `update` reported it (P2025).
  */
 async function updateRow(id: string, data: Partial<typeof bots.$inferInsert>): Promise<void> {
+  const changes = Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  ) as Partial<typeof bots.$inferInsert>;
+  if (Object.keys(changes).length === 0) {
+    // Nothing to change (e.g. a PATCH of links only): Prisma treated an empty
+    // update as a no-op, while Drizzle refuses an empty SET. Still a 404 when
+    // the row is gone.
+    const row = await db.query.bots.findFirst({ where: eq(bots.id, id), columns: { id: true } });
+    if (!row) throw Boom.notFound("Record not found");
+    return;
+  }
   const [updated] = await db
     .update(bots)
-    .set(data)
+    .set(changes)
     .where(eq(bots.id, id))
     .returning({ id: bots.id });
   if (!updated) throw Boom.notFound("Record not found");

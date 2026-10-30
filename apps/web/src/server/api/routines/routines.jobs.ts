@@ -147,11 +147,13 @@ async function upsertRun(
  * Fire one occurrence: create-or-reuse the run row, submit the labeled
  * prompt, mark it awaiting. Idempotent on every input, so a redelivered or
  * retried queue job cannot duplicate the run or the submitted turn (the
- * pi-durable requestId dedupes the submit itself).
+ * pi-durable requestId dedupes the submit itself). `jobId` is the queue job
+ * delivering it, when there is one.
  */
 export async function dispatchOccurrence(
   payload: RoutineFirePayload,
   now: Date = new Date(),
+  jobId?: string,
 ): Promise<void> {
   const scheduledFor = new Date(payload.scheduledFor);
   const routine = await db.query.routines.findFirst({
@@ -178,8 +180,11 @@ export async function dispatchOccurrence(
   if (existing && alreadySubmitted) {
     // Redelivery of a completed dispatch: never resubmit, but repair a chain
     // whose next occurrence was never scheduled (crash between submit and
-    // enqueue) so a single delivery cannot end a recurring routine.
-    if (payload.trigger === "schedule" && routine.enabled && !routine.pendingJobId) {
+    // enqueue) so a single delivery cannot end a recurring routine. A job the
+    // queue retried after such a crash is still the routine's pending handle.
+    const chainStalled =
+      !routine.pendingJobId || (jobId !== undefined && routine.pendingJobId === jobId);
+    if (payload.trigger === "schedule" && routine.enabled && chainStalled) {
       await scheduleAfterOccurrence(routine, scheduledFor, now);
     }
     return;
@@ -405,9 +410,9 @@ export async function rearmRoutines(now: Date = new Date()): Promise<number> {
   return rearmed;
 }
 
-export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ data }) => {
+export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {
   const payload = firePayloadSchema.parse(data as unknown);
-  await dispatchOccurrence(payload);
+  await dispatchOccurrence(payload, new Date(), id);
 };
 
 export function registerRoutineJobs(): void {

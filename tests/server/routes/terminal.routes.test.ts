@@ -174,7 +174,7 @@ describe("terminal routes", () => {
     });
     const res = await call(app, "POST", "/api/v1/terminal/sessions", { json: {} });
     expect(res.status).toBe(503);
-    expect(res.body.error.message).toContain("Cannot reach the sandbox");
+    expect(res.body.error?.message).toContain("Cannot reach the sandbox");
   });
 
   it("deletes a session, honors ?force=1, 404s unknown names", async () => {
@@ -206,8 +206,8 @@ describe("terminal routes", () => {
     });
     const res = await call(app, "DELETE", "/api/v1/terminal/sessions/ta-term-1");
     expect(res.status).toBe(409);
-    expect(res.body.error.message).toContain("vim");
-    expect(res.body.error.details).toEqual({ process: "vim" });
+    expect(res.body.error?.message).toContain("vim");
+    expect(res.body.error?.details).toEqual({ process: "vim" });
   });
 
   it("mints a single-use ticket bound to name+user, with no SSH round trip", async () => {

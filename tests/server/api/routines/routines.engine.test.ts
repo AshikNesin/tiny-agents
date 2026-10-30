@@ -237,6 +237,35 @@ describe("routine-fire dispatch", () => {
     expect(vi.mocked(runtime.submit).mock.calls).toHaveLength(1); // no duplicate submit
   });
 
+  it("a job the queue retries after a crash past the submit repairs the chain", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    // The delivering job is still the pending handle: the crash came before
+    // the next occurrence was queued.
+    const [delivering] = await db
+      .insert(jobs)
+      .values({ id: "job-retried", name: ROUTINE_FIRE_JOB, state: "active", runAt: SLOT })
+      .returning();
+    await db
+      .update(routines)
+      .set({ nextRunAt: SLOT, pendingJobId: delivering!.id })
+      .where(eq(routines.id, routine.id));
+    await db.insert(routineRuns).values({
+      routineId: routine.id,
+      scheduledFor: SLOT,
+      status: "awaiting",
+      requestId: runRequestId(routine.id, SLOT),
+      submittedAt: ON_TIME,
+    });
+
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME, delivering!.id);
+
+    expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
+    const row = await routineRow(routine.id);
+    expect(row?.nextRunAt?.toISOString()).toBe("2026-10-22T03:30:00.000Z");
+    expect(row?.pendingJobId).not.toBe(delivering!.id);
+    expect((await sentJobs()).filter((job) => job.state === "created")).toHaveLength(1);
+  });
+
   it("an overdue occurrence beyond grace is recorded missed and never submitted", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" }); // grace 120m
     const veryLate = new Date(SLOT.getTime() + 3 * 60 * 60_000);
