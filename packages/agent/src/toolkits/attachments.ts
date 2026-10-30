@@ -423,18 +423,21 @@ export function createAttachmentsToolkit(
     {
       name: "list_attachments",
       label: "Listed attachments",
+      askLabel: "list attachments",
       description: "List the files attached in this chat",
       readOnly: true,
     },
     {
       name: "read_attachment",
       label: "Read an attachment",
+      askLabel: "read an attachment",
       description: "Read an attached file's contents",
       readOnly: true,
     },
     {
       name: "search_attachment",
       label: "Searched an attachment",
+      askLabel: "search an attachment",
       description: "Search an attached file",
       readOnly: true,
     },
@@ -498,6 +501,7 @@ export function createAttachmentsToolkit(
     toolInfo.push({
       name: "copy_attachment_to_sandbox",
       label: "Copied an attachment to the sandbox",
+      askLabel: "copy an attachment to the sandbox",
       description: "Copy an attached file to the sandbox VM",
       readOnly: false,
     });

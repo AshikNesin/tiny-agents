@@ -49,6 +49,7 @@ const NO_MESSAGES: ChatMessage[] = [];
 const NO_PENDING: PendingMessage[] = [];
 const NO_QUEUED: QueuedMessage[] = [];
 const NO_RUNS: RoutineRunCard[] = [];
+const NO_TOOL_LABELS: { done: ToolLabels; ask: ToolLabels } = { done: {}, ask: {} };
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -116,7 +117,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const [toolLabels, setToolLabels] = useState<ToolLabels>({});
+  const [toolLabels, setToolLabels] = useState<{ done: ToolLabels; ask: ToolLabels }>(
+    NO_TOOL_LABELS,
+  );
   const [confirmReset, setConfirmReset] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -133,19 +136,20 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     return () => disconnectChat(bot.id);
   }, [bot.id, bot.conversationId, connectChat, disconnectChat]);
 
-  // Tool labels for the transcript rows come from the capability catalog.
+  // Tool labels for the transcript rows (past tense) and the approval cards
+  // (imperative) come from the capability catalog.
   useEffect(() => {
     void botsApi
       .capabilities()
-      .then((capabilities) =>
-        setToolLabels(
-          Object.fromEntries(
-            capabilities.flatMap((capability) =>
-              capability.tools.map((tool) => [tool.name, tool.label]),
-            ),
+      .then((capabilities) => {
+        const tools = capabilities.flatMap((capability) => capability.tools);
+        setToolLabels({
+          done: Object.fromEntries(tools.map((tool) => [tool.name, tool.label])),
+          ask: Object.fromEntries(
+            tools.flatMap((tool) => (tool.askLabel ? [[tool.name, tool.askLabel]] : [])),
           ),
-        ),
-      )
+        });
+      })
       .catch(() => undefined);
   }, []);
 
@@ -529,7 +533,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                           message={message}
                           botName={bot.name}
                           botId={bot.id}
-                          toolLabels={toolLabels}
+                          toolLabels={toolLabels.done}
+                          toolAskLabels={toolLabels.ask}
                         />
                       </MessageScrollerItem>
                     </Fragment>

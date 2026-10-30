@@ -214,6 +214,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
       {
         name: ASK_OWNER,
         label: "Asked you questions",
+        askLabel: "ask you questions",
         description: "Ask you clarifying questions and wait for your answers",
         readOnly: true,
       },

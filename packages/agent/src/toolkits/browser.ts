@@ -26,7 +26,7 @@ import {
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
 import { gateApproved, isUnattendedConversation, withGatePlan } from "../approvals";
-import type { Capability } from "../capabilities";
+import type { Capability, ToolInfo } from "../capabilities";
 import {
   CREDENTIAL_REQUEST_TTL_MS,
   credentialSubject,
@@ -196,29 +196,48 @@ let toolkitOptions: BrowserToolkitOptions = {};
 export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capability {
   profilesRoot = options.profilesDir ?? "./data/browser-profiles";
   toolkitOptions = options;
-  const tools: { name: string; label: string; description: string; readOnly?: boolean }[] = [
+  const tools: ToolInfo[] = [
     {
       name: "browser_navigate",
       label: "Opened a page",
+      askLabel: "open a page",
       description: "Open a URL in the bot's browser.",
     },
     {
       name: "browser_snapshot",
       label: "Read the page",
+      askLabel: "read the page",
       description: "Snapshot the page's interactive elements with refs.",
       readOnly: true,
     },
-    { name: "browser_click", label: "Clicked", description: "Click an element by ref." },
-    { name: "browser_type", label: "Typed into", description: "Type text into an element by ref." },
+    {
+      name: "browser_click",
+      label: "Clicked",
+      askLabel: "click on the page",
+      description: "Click an element by ref.",
+    },
+    {
+      name: "browser_type",
+      label: "Typed into",
+      askLabel: "type into the page",
+      description: "Type text into an element by ref.",
+    },
     {
       name: "browser_press_key",
       label: "Pressed a key",
+      askLabel: "press a key",
       description: "Press a key (Enter, Tab, Escape, arrows).",
     },
-    { name: "browser_scroll", label: "Scrolled", description: "Scroll the page up or down." },
+    {
+      name: "browser_scroll",
+      label: "Scrolled",
+      askLabel: "scroll the page",
+      description: "Scroll the page up or down.",
+    },
     {
       name: "browser_screenshot",
       label: "Captured the screen",
+      askLabel: "capture the screen",
       description: "JPEG screenshot for visual questions.",
       readOnly: true,
     },
@@ -788,18 +807,20 @@ function describe(error: unknown): string {
 // server → page over CDP; results only say which fields were filled.
 // ---------------------------------------------------------------------------
 
-function vaultToolInfos(options: BrowserToolkitOptions) {
+function vaultToolInfos(options: BrowserToolkitOptions): ToolInfo[] {
   return [
     ...(options.vault
       ? [
           {
             name: "browser_fill_secret",
             label: "Filled a saved login",
+            askLabel: "fill a saved login",
             description: "Fill a vault login or card into the page without seeing it.",
           },
           {
             name: "browser_enter_code",
             label: "Entered a one-time code",
+            askLabel: "enter a one-time code",
             description: "Fill a 2FA code from the vault, or ask you for it.",
           },
         ]
@@ -809,6 +830,7 @@ function vaultToolInfos(options: BrowserToolkitOptions) {
           {
             name: "request_credentials",
             label: "Asked you to sign in",
+            askLabel: "ask you to sign in",
             description: "Ask you to type a sign-in, code or card into a secure sheet.",
             // The owner's submit is the consent.
             readOnly: true,

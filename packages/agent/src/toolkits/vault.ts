@@ -180,6 +180,7 @@ export function createVaultToolkit(options: VaultToolkitOptions = {}): Capabilit
       {
         name: "vault_list",
         label: "Listed vault items",
+        askLabel: "list vault items",
         description: "List the vault items the bot may use (handles only)",
         readOnly: true,
       },

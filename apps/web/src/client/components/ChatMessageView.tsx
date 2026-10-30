@@ -227,15 +227,18 @@ function statusIcon(call: ChatToolCall) {
   }
 }
 
-/** The approval card: an AI Elements Confirmation built on Item. */
+/**
+ * The approval card: an AI Elements Confirmation built on Item. `ask` is the
+ * imperative phrase completing "<bot> wants to …" (issue #85).
+ */
 function ApprovalCard({
   call,
-  label,
+  ask,
   botId,
   botName,
 }: {
   call: ChatToolCall;
-  label: string;
+  ask: string;
   botId: string;
   botName: string;
 }) {
@@ -255,7 +258,7 @@ function ApprovalCard({
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
-          {botName} wants to {label.toLowerCase()}
+          {botName} wants to {ask}
           {summarizeArgs(call) ? ` — “${summarizeArgs(call)}”` : ""}
         </ItemTitle>
         <ItemDescription>Nothing runs until you answer.</ItemDescription>
@@ -272,7 +275,7 @@ function ApprovalCard({
           variant="ghost"
           disabled={busy}
           onClick={() => decide("approved", call.name)}
-          title={`Approve and stop asking about ${label}`}
+          title={`Approve, and let ${botName} ${ask} without asking`}
         >
           Always allow
         </Button>
@@ -439,11 +442,13 @@ function ToolDetailBlock({
 function ToolRow({
   call,
   label,
+  ask,
   botId,
   botName,
 }: {
   call: ChatToolCall;
   label: string;
+  ask: string;
   botId: string;
   botName: string;
 }) {
@@ -500,7 +505,7 @@ function ToolRow({
     }
     return (
       <div data-waiting={`approval:${call.taskId}`}>
-        <ApprovalCard call={call} label={label} botId={botId} botName={botName} />
+        <ApprovalCard call={call} ask={ask} botId={botId} botName={botName} />
       </div>
     );
   }
@@ -602,11 +607,22 @@ export function toolLabel(labels: ToolLabels, name: string): string {
   return name.replace(/_/g, " ");
 }
 
+/**
+ * What a tool call asks to do, completing "<bot> wants to …": the tool's
+ * imperative label from the catalog, else "use <display name>" (connection
+ * tools have no imperative label).
+ */
+export function toolAskLabel(askLabels: ToolLabels, labels: ToolLabels, name: string): string {
+  return askLabels[name] ?? `use ${toolLabel(labels, name)}`;
+}
+
 export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
   botId?: string;
   toolLabels?: ToolLabels;
+  /** Tool name → imperative label for approval cards ("open a page"). */
+  toolAskLabels?: ToolLabels;
 }
 
 /**
@@ -620,6 +636,7 @@ export function ChatMessageView({
   botName,
   botId,
   toolLabels = {},
+  toolAskLabels = {},
 }: ChatMessageViewProps) {
   if (message.role === "marker") {
     return (
@@ -672,7 +689,7 @@ export function ChatMessageView({
     );
   }
 
-  return assistantView(message, { botName, botId, toolLabels });
+  return assistantView(message, { botName, botId, toolLabels, toolAskLabels });
 }
 
 /** One peer-traffic user message as a Grok-style attributed card. */
@@ -790,9 +807,9 @@ export function PeerIncomingCard({
 
 function assistantView(
   message: ChatMessage,
-  ctx: { botName: string; botId?: string; toolLabels: ToolLabels },
+  ctx: { botName: string; botId?: string; toolLabels: ToolLabels; toolAskLabels: ToolLabels },
 ) {
-  const { botName, botId, toolLabels } = ctx;
+  const { botName, botId, toolLabels, toolAskLabels } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -808,6 +825,7 @@ function assistantView(
                 key={`${call.id}-${i}-${call.name}`}
                 call={call}
                 label={toolLabel(toolLabels, call.name)}
+                ask={toolAskLabel(toolAskLabels, toolLabels, call.name)}
                 botId={botId ?? ""}
                 botName={botName}
               />

@@ -109,6 +109,7 @@ export function createBotsToolkit(store: BotMessagingStore): Capability {
       {
         name: "message_bot",
         label: "Messaged bot",
+        askLabel: "message another bot",
         description: "Send a message to another bot",
       },
     ],

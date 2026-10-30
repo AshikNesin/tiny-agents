@@ -116,7 +116,10 @@ export type UploadText =
 
 export interface ToolInfo {
   name: string;
+  /** Past tense, for the transcript ("Opened a page"). */
   label: string;
+  /** Completes "<bot> wants to …" ("open a page"); connection tools have none. */
+  askLabel?: string;
   description: string;
   readOnly?: boolean;
   askOnly?: boolean;

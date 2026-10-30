@@ -129,16 +129,24 @@ export function createSkillsCapability(store: SkillStore): Capability {
       sections: [listing],
     }),
     tools: [
-      { name: "load_skill", label: "Using skill", description: "Load a skill", readOnly: true },
+      {
+        name: "load_skill",
+        label: "Using skill",
+        askLabel: "use a skill",
+        description: "Load a skill",
+        readOnly: true,
+      },
       {
         name: "read_skill_file",
         label: "Read skill file",
+        askLabel: "read a skill file",
         description: "Read a skill's file",
         readOnly: true,
       },
       {
         name: "save_skill",
         label: "Saved skill",
+        askLabel: "save a skill",
         description: "Save a workflow as a skill",
         askOnly: true,
       },

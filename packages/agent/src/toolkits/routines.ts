@@ -278,16 +278,37 @@ export function createRoutinesToolkit(
     description: "Schedule recurring or one-time routines for the owner",
     extension: createRoutinesExtension(store, options),
     tools: [
-      { name: "create_routine", label: "Created routine", description: "Create a routine" },
+      {
+        name: "create_routine",
+        label: "Created routine",
+        askLabel: "create a routine",
+        description: "Create a routine",
+      },
       {
         name: "list_routines",
         label: "Listed routines",
+        askLabel: "list routines",
         description: "List routines",
         readOnly: true,
       },
-      { name: "update_routine", label: "Updated routine", description: "Update a routine" },
-      { name: "delete_routine", label: "Deleted routine", description: "Delete a routine" },
-      { name: "run_routine_now", label: "Ran routine now", description: "Run a routine now" },
+      {
+        name: "update_routine",
+        label: "Updated routine",
+        askLabel: "update a routine",
+        description: "Update a routine",
+      },
+      {
+        name: "delete_routine",
+        label: "Deleted routine",
+        askLabel: "delete a routine",
+        description: "Delete a routine",
+      },
+      {
+        name: "run_routine_now",
+        label: "Ran routine now",
+        askLabel: "run a routine now",
+        description: "Run a routine now",
+      },
     ],
   };
 }
