@@ -5,7 +5,7 @@
  * live extraction state) and GET /uploads/:id/text (extracted text as JSON
  * for the read-only preview; never HTML).
  */
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { Boom } from "@groot/core/errors";
 import { uploadRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
@@ -25,12 +25,37 @@ function parseUploadId(req: Request): string {
   return id;
 }
 
+/** Largest attachment accepted (the composer checks the same limit first). */
+export const MAX_UPLOAD_MB = 25;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: 1 },
 });
 
-router.post("/uploads", uploadRateLimiter, upload.single("file"), async (req: Request) => {
+/**
+ * multer's limit errors are the client's doing: answer 413/400 with words
+ * instead of letting them reach the generic handler as a 500 system error.
+ */
+function singleFile(req: Request, res: Response, next: NextFunction): void {
+  upload.single("file")(req, res, (error: unknown) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") {
+        next(Boom.entityTooLarge(`Files can be up to ${MAX_UPLOAD_MB} MB.`));
+        return;
+      }
+      if (error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE") {
+        next(Boom.badRequest('Upload one file at a time, in the "file" field.'));
+        return;
+      }
+      next(Boom.badRequest(error.message));
+      return;
+    }
+    next(error);
+  });
+}
+
+router.post("/uploads", uploadRateLimiter, singleFile, async (req: Request) => {
   const file = req.file;
   if (!file) throw Boom.badRequest("No file uploaded");
   const stored = await uploadsService.createUpload({

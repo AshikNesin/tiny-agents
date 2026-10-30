@@ -155,6 +155,19 @@ describe("uploads API", () => {
       .expect(400);
   });
 
+  it("answers an oversized file with 413 and words, not a 500", async () => {
+    const app = buildApp();
+    const response = await request(app)
+      .post("/api/v1/uploads")
+      .set(authorization)
+      .attach("file", Buffer.alloc(26 * 1024 * 1024), {
+        filename: "big.mp4",
+        contentType: "video/mp4",
+      })
+      .expect(413);
+    expect(response.body.error.message).toBe("Files can be up to 25 MB.");
+  });
+
   it("serves files as attachments, never inline", async () => {
     const app = buildApp();
     const response = await request(app)

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
 import { activeMentionToken, mentionableBots, mentionedBotIds } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
-import { StagedAttachment, type StagedItem } from "./Attachments";
+import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
 import {
   MentionAutocomplete,
   type MentionAutocompleteHandle,
@@ -24,6 +24,8 @@ import { errorMessage } from "../lib/errors";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
+/** The server's per-file limit (uploads.routes.ts MAX_UPLOAD_MB), checked before uploading. */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
@@ -160,6 +162,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
       const name = file.name || `pasted-image-${++pasteCount.current}.png`;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        const error = `${name} is ${humanSize(file.size)}; files can be up to 25 MB.`;
+        setStaged((current) => [...current, { key, name, status: "error", error, previewUrl }]);
+        toast.error(error);
+        continue;
+      }
       setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
       botsApi
         .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
@@ -175,15 +183,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           );
         })
         .catch((error) => {
+          const message = errorMessage(error, "Upload failed");
+          // The 64px tile has no room for the reason; say it once, readably.
+          toast.error(`${name}: ${message}`);
           setStaged((current) =>
             current.map((item) =>
-              item.key === key
-                ? {
-                    ...item,
-                    status: "error",
-                    error: errorMessage(error, "Upload failed"),
-                  }
-                : item,
+              item.key === key ? { ...item, status: "error", error: message } : item,
             ),
           );
         });

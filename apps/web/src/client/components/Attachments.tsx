@@ -5,7 +5,7 @@ import { Button } from "@groot/ui/button";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
 import { FilePreviewDialog, statusLabel, useUploadStatus } from "./FilePreview";
 
-function humanSize(size: number): string {
+export function humanSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
@@ -63,8 +63,10 @@ export function StagedAttachment({
       )}
       {failed && (
         <div
-          className="text-destructive absolute inset-0 flex items-center justify-center bg-background/80 p-1 text-center text-[10px]"
+          className="text-destructive bg-background absolute inset-0 flex items-center justify-center p-1 text-center text-[10px] leading-tight"
           title={attachment.error}
+          role="img"
+          aria-label={`${attachment.name}: ${attachment.error ?? "upload failed"}`}
         >
           Upload failed
         </div>
