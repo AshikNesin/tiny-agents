@@ -9,7 +9,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/shell/lib/utils";
 import type { BotListEntry } from "../../lib/bots-api";
-import { groupBots, visibleRecent } from "../../lib/bot-groups";
+import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
 import { railBots } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
@@ -69,6 +69,8 @@ function BotRow({
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const pinned = bot.pinnedAt !== null;
+  const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
+  const previewId = `bot-preview-${bot.id}`;
 
   return (
     <li className="group/row relative">
@@ -76,14 +78,30 @@ function BotRow({
         to={`/chats/${bot.id}`}
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
+        aria-label={railLabel(bot)}
+        aria-describedby={preview ? previewId : undefined}
         className={cn(
-          "flex h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
+          "flex min-h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
           "focus-visible:ring-sidebar-ring focus-visible:ring-1",
           active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
         )}
       >
         <BotAvatar name={bot.name} className="size-6" />
-        <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+            {preview && (
+              <span className="text-fg-tertiary shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible">
+                {relativeTime(bot.lastActivityAt)}
+              </span>
+            )}
+          </span>
+          {preview && (
+            <span id={previewId} className="text-muted-foreground block truncate text-xs">
+              {preview}
+            </span>
+          )}
+        </span>
         <span className="group-focus-within/row:hidden group-hover/row:hidden">
           <RowStatus bot={bot} active={active} />
         </span>

@@ -372,6 +372,11 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           >
             <BotAvatar name={bot.name} className="size-5" />
             <span className="truncate">{bot.name}</span>
+            {bot.description && (
+              <span className="text-muted-foreground hidden min-w-0 truncate font-normal lg:inline">
+                {bot.description}
+              </span>
+            )}
             <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
           </button>
           <div className="ml-auto flex shrink-0 items-center">

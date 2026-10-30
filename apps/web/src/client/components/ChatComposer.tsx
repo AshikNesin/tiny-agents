@@ -24,6 +24,7 @@ import { errorMessage } from "../lib/errors";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
+const MENTION_TIP_KEY = "tiny-agents:mention-tip-seen";
 /** The server's per-file limit (uploads.routes.ts MAX_UPLOAD_MB), checked before uploading. */
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
@@ -108,6 +109,25 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
+  // The @ tip lives under the composer (not in the placeholder, where a long
+  // bot name wrapped it onto two lines) until the owner has used a mention.
+  const [mentionTipSeen, setMentionTipSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(MENTION_TIP_KEY) === "1";
+    } catch {
+      return true;
+    }
+  });
+  const mentionTip = !mentionTipSeen && mentionCandidates.length > 0;
+  useEffect(() => {
+    if (mentionTipSeen || !text.includes("@")) return;
+    setMentionTipSeen(true);
+    try {
+      window.localStorage.setItem(MENTION_TIP_KEY, "1");
+    } catch {
+      // Storage blocked: the tip just shows again next time.
+    }
+  }, [text, mentionTipSeen]);
   // The overlay follows the caret inside the mention token, so it needs
   // the caret on every keystroke; `mentionClosed` covers Escape.
   const mention = activeMentionToken(text, caret);
@@ -359,11 +379,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 void send(e.altKey ? "followUp" : "steer");
               }
             }}
-            placeholder={
-              mentionCandidates.length > 0
-                ? `Message ${bot.name} (type @ to tag another bot)`
-                : `Message ${bot.name}`
-            }
+            placeholder={`Message ${bot.name}`}
             rows={1}
             disabled={!enabled}
             className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
@@ -416,13 +432,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             pill, fading in and out inside the reserved gutter. */}
         {!coarsePointer && (
           <p
-            aria-hidden={!busy}
+            aria-hidden={!busy && !mentionTip}
             data-testid="composer-hint"
             className={`text-muted-foreground/60 pointer-events-none absolute inset-x-0 top-full mt-1 truncate text-center text-[11px] leading-4 transition-opacity duration-200 ${
-              busy ? "opacity-100" : "opacity-0"
+              busy || mentionTip ? "opacity-100" : "opacity-0"
             }`}
           >
-            Enter to steer · Alt+Enter to queue · Esc to stop
+            {busy
+              ? "Enter to steer · Alt+Enter to queue · Esc to stop"
+              : "Type @ to tag another bot"}
           </p>
         )}
         {mentionOpen && mention && (

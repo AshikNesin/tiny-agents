@@ -35,8 +35,43 @@ import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { errorMessage } from "../lib/errors";
 
-/** Round hover action beside a bubble; always visible on touch, where there is no hover. */
-function CopyButton({ text }: { text: string }) {
+/** "14:05" today, "Mon 14:05" this week, "12 Oct, 14:05" before; the full date in the tooltip. */
+function messageTime(at: number, now = Date.now()): { short: string; full: string } {
+  const date = new Date(at);
+  const time = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const full = date.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" });
+  const sameDay = new Date(now).toDateString() === date.toDateString();
+  if (sameDay) return { short: time, full };
+  if (now - at < 6 * 24 * 60 * 60_000) {
+    return { short: `${date.toLocaleDateString(undefined, { weekday: "short" })} ${time}`, full };
+  }
+  const day = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return { short: `${day}, ${time}`, full };
+}
+
+/**
+ * Round hover actions beside a bubble: when it was sent, and copy. Always
+ * visible on touch, where there is no hover.
+ */
+function CopyButton({ text, at }: { text: string; at?: number }) {
+  const stamp = at ? messageTime(at) : undefined;
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-0.5">
+      <CopyAction text={text} />
+      {stamp && (
+        <time
+          dateTime={new Date(at!).toISOString()}
+          title={stamp.full}
+          className="text-fg-tertiary text-[11px] leading-none whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+        >
+          {stamp.short}
+        </time>
+      )}
+    </div>
+  );
+}
+
+function CopyAction({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -625,7 +660,7 @@ export function ChatMessageView({
           )}
           {text && (
             <div className="flex max-w-full min-w-0 items-center gap-2">
-              <CopyButton text={text} />
+              <CopyButton text={text} at={message.createdAt || undefined} />
               <div className={USER_PILL}>
                 <p className="whitespace-pre-wrap">{text}</p>
               </div>
@@ -803,7 +838,7 @@ function assistantView(
                 <p className="text-destructive mt-1 text-xs">{message.error}</p>
               )}
             </div>
-            {message.text && <CopyButton text={message.text} />}
+            {message.text && <CopyButton text={message.text} at={message.createdAt || undefined} />}
           </div>
         )}
         {/* Nothing visible yet: dots, unless a running tool row or the
