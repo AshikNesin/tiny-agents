@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { LoadingSpinner } from "@groot/ui/loading-spinner";
 import { useAuthStore } from "@groot/shell/store/auth";
@@ -10,6 +10,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const hasCheckedAuth = useAuthStore((state) => state.hasCheckedAuth);
+  const location = useLocation();
 
   if (!hasCheckedAuth) {
     return (
@@ -20,7 +21,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Remember where the visitor was headed so login can send them back.
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return <>{children}</>;
