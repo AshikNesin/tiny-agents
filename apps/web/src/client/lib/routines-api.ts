@@ -20,6 +20,8 @@ export interface Routine {
   scheduleDescription: string;
   enabled: boolean;
   nextRunAt: string | null;
+  /** A one-time routine whose time has passed: finished, not paused. */
+  done?: boolean;
   createdAt: string;
   updatedAt: string;
 }

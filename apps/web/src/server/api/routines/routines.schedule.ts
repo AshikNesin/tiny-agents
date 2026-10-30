@@ -131,6 +131,22 @@ export function periodMinutes(schedule: Schedule): number | undefined {
   }
 }
 
+/** A one-time schedule whose instant has already passed (it ran, or never can). */
+export function isSpentOnce(schedule: Schedule, now: Date): boolean {
+  return schedule.kind === "once" && new Date(schedule.at).getTime() <= now.getTime();
+}
+
+/** Lateness in words: "7m", "3h 12m", "2 days". */
+export function formatLateness(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 24 * 60) {
+    const rest = minutes % 60;
+    return rest ? `${Math.floor(minutes / 60)}h ${rest}m` : `${minutes / 60}h`;
+  }
+  const days = Math.floor(minutes / (24 * 60));
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
 /** Lateness grace: half the period, clamped to [5, 120] minutes (PRD 5.5). */
 export function graceMinutes(periodMin: number): number {
   return Math.min(120, Math.max(5, Math.round(periodMin / 2)));
@@ -192,7 +208,9 @@ export function composeRoutineLabel(
   lateByMinutes?: number,
 ): string {
   const late =
-    lateByMinutes !== undefined && lateByMinutes > 0 ? ` (late by ${lateByMinutes}m)` : "";
+    lateByMinutes !== undefined && lateByMinutes > 0
+      ? ` (late by ${formatLateness(lateByMinutes)})`
+      : "";
   return `**Routine "${name}" (scheduled ${formatIst(scheduledFor)})${late}:**`;
 }
 

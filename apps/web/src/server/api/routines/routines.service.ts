@@ -14,6 +14,7 @@ import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routi
 import {
   MAX_ROUTINES,
   describeSchedule,
+  isSpentOnce,
   nextOccurrence,
   safeParseSchedule,
   type Schedule,
@@ -49,6 +50,8 @@ function toApi(row: RoutineRow) {
     scheduleDescription: schedule ? describeSchedule(schedule) : "Unknown schedule",
     enabled: row.enabled,
     nextRunAt: row.nextRunAt,
+    // A one-time routine past its instant is finished, not paused.
+    done: !row.enabled && schedule !== undefined && isSpentOnce(schedule, new Date()),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -131,8 +134,23 @@ export async function get(id: string): Promise<ReturnType<typeof toApi>> {
   return toApi(await findRoutine(id));
 }
 
+/** A one-time routine must point at the future when it is created or rescheduled. */
+function assertFutureOnce(schedule: Schedule): void {
+  if (isSpentOnce(schedule, new Date())) {
+    throw Boom.badRequest("Pick a time in the future for a one-time routine");
+  }
+}
+
+/** Re-enabling a one-time routine whose time has passed would arm a slot that already ran. */
+function assertCanArm(schedule: Schedule): void {
+  if (isSpentOnce(schedule, new Date())) {
+    throw Boom.badRequest("This one-time routine already ran. Pick a new time to run it again.");
+  }
+}
+
 export async function create(input: CreateRoutineDTO): Promise<ReturnType<typeof toApi>> {
   await assertBotExists(input.botId);
+  assertFutureOnce(input.schedule);
   const count = await prisma.routine.count();
   if (count >= MAX_ROUTINES) {
     throw Boom.badRequest(`Routine limit reached (${MAX_ROUTINES})`);
@@ -160,6 +178,7 @@ export async function update(
   input: UpdateRoutineDTO,
 ): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
+  if (input.schedule !== undefined) assertFutureOnce(input.schedule);
   const botChanged = input.botId !== undefined && input.botId !== row.botId;
   if (botChanged) await assertBotExists(input.botId!);
   await prisma.routine.update({
@@ -208,6 +227,7 @@ export async function update(
     if (input.enabled && !row.enabled) {
       const schedule = safeParseSchedule(row.schedule);
       if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
+      assertCanArm(schedule);
       await armRoutine(id, schedule, new Date());
     } else if (!input.enabled && row.enabled) {
       await disarmRoutine(id, row.pendingJobId);
@@ -233,7 +253,10 @@ export async function resume(id: string): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
   const schedule = safeParseSchedule(row.schedule);
   if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
-  if (!row.enabled) await armRoutine(id, schedule, new Date());
+  if (!row.enabled) {
+    assertCanArm(schedule);
+    await armRoutine(id, schedule, new Date());
+  }
   return get(id);
 }
 
@@ -284,6 +307,7 @@ export async function recentRuns(limit: number) {
 
 /** The next N fire times of a schedule from now, for previews and echoes (PRD 5.2). */
 export function previewFireTimes(schedule: Schedule, from: Date, count = 3): Date[] {
+  if (schedule.kind === "once") return [nextOccurrence(schedule, from)];
   const times: Date[] = [];
   let cursor = from;
   for (let i = 0; i < count; i++) {

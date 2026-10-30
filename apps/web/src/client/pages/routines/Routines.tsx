@@ -354,12 +354,14 @@ function RoutineCard({
           >
             {routine.enabled && routine.nextRunAt
               ? `Next run ${formatIst(routine.nextRunAt)}`
-              : "Paused"}
+              : routine.done
+                ? "Done · edit to pick a new time"
+                : "Paused"}
           </p>
         </div>
         <Switch
           checked={routine.enabled}
-          disabled={busy}
+          disabled={busy || routine.done}
           onCheckedChange={onToggle}
           aria-label={routine.enabled ? `Pause ${routine.name}` : `Resume ${routine.name}`}
         />
@@ -487,7 +489,9 @@ function compileSchedule(
   switch (form.kind) {
     case "once": {
       if (!form.onceAt) return { error: "Pick a date and time (IST)" };
-      return { schedule: { kind: "once", at: onceAtFromIstInput(form.onceAt) } };
+      const at = onceAtFromIstInput(form.onceAt);
+      if (new Date(at).getTime() <= Date.now()) return { error: "Pick a time in the future" };
+      return { schedule: { kind: "once", at } };
     }
     case "daily": {
       const [hour, minute] = form.dailyTime.split(":").map(Number);
@@ -686,6 +690,7 @@ function RoutineEditor({
                   <Input
                     type="datetime-local"
                     aria-label="Run at (IST)"
+                    min={istInputFromAt(new Date().toISOString())}
                     value={form.onceAt}
                     onChange={(e) => set("onceAt", e.target.value)}
                   />
