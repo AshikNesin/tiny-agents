@@ -5,12 +5,10 @@
  * is unattended — a routine run or another bot's message. It never exposes a
  * write.
  */
-import { eq } from "drizzle-orm";
-import { bots, db } from "../../db";
-import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { conversationOwner, isUnattended, type ChatReader } from "../bots/bots.owner";
+import { vaultAlert } from "./vault.alerts";
 import {
   audit,
   findItem,
@@ -23,15 +21,9 @@ import {
 
 async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
   const owner = await conversationOwner(conversation);
-  const bot = owner
-    ? await db.query.bots.findFirst({
-        where: eq(bots.id, owner.botId),
-        columns: { id: true, name: true },
-      })
-    : undefined;
   return {
-    ...(bot ? { botId: bot.id, botName: bot.name } : {}),
-    unattended: await isUnattended(conversation, runtime()),
+    ...(owner ? { botId: owner.bot.id, botName: owner.bot.name } : {}),
+    unattended: await isUnattended(conversation, runtime(), owner ?? null),
   };
 }
 
@@ -60,7 +52,7 @@ export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): 
       const bot = context.botName ?? "A bot";
       // Approvals push through the gate's wait (notifications.wiring.ts).
       if (plan.refused === "refused_origin") {
-        notifyVaultAlert(
+        vaultAlert(
           "refused",
           "Vault: refused fill",
           `${bot} tried to use ${use.handle} on ${hostOf(use.target)}, which the item doesn't allow (possible prompt injection).`,

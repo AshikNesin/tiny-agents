@@ -1,13 +1,20 @@
 /**
- * McpManager (issue #1 M3): owns the live MCP client of every connection.
+ * ConnectionManager (issue #1 M3): owns the whole life of every remote MCP
+ * connection, from its row to the live client and the capability bots see.
  *
  * - At boot each connection's capability is installed from its cached tool
  *   list right away (so interrupted calls can resume and bots keep their
  *   tools), then connected in the background — `/health` never waits on it.
- * - Calls wait briefly for a (re)connect; dropped connections reconnect with
- *   backoff.
- * - A tool-list change re-installs the capability and re-applies the
- *   configuration of the bots that use it (their permissions are per tool).
+ * - A row change (created, url or secret edited) starts a fresh connect
+ *   attempt that supersedes any in flight: every attempt carries the entry's
+ *   generation and discards its own result once a newer one has started or
+ *   the connection was removed. Dropped connections reconnect with backoff.
+ * - A tool-list change re-installs the capability and Reconciles the bots
+ *   that use it (their permissions are per tool). Bots linked or unlinked by
+ *   the owner are Reconciled here too, each bot once per change, however
+ *   many steps of the change asked for it.
+ * - `tool_search` is installed while any connection defers its tools
+ *   (more than MCP_DEFER_THRESHOLD) and uninstalled once none does.
  * - A server that needs (re)authorization marks the connection
  *   "needs_auth" and withdraws its tools until the owner signs in (D11).
  * - Tools the owner turned off on the connection are never installed, so no
@@ -54,12 +61,22 @@ type ManagedRuntime = Pick<
 interface Live extends ConnectionLiveState {
   connection?: McpConnection;
   connecting?: Promise<void>;
+  /** Bumped by every fresh attempt and by removal; an attempt that sees another value is stale. */
+  generation: number;
   retry?: ReturnType<typeof setTimeout>;
   attempt: number;
   authorizationUrl?: string;
 }
 
 const MAX_BACKOFF_MS = 5 * 60_000;
+/** How long a row change waits for its connect attempt before answering. */
+export const CONNECT_WAIT_MS = 15_000;
+/** How long a tool call waits for a (re)connect. */
+const CALL_WAIT_MS = 30_000;
+
+const TOOL_SEARCH_ID = "tool-search";
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
 
 export function parseTools(raw: string): McpToolInfo[] {
   try {
@@ -83,6 +100,12 @@ export function parseDisabledTools(raw: string): Set<string> {
 export class ConnectionManager {
   readonly #live = new Map<string, Live>();
   readonly #listeners = new Set<(id: string, state: ConnectionLiveState) => void>();
+  /** Connections whose installed tools are deferred behind `tool_search`. */
+  readonly #deferred = new Set<string>();
+  #toolSearchInstalled = false;
+  /** Bots waiting for one Reconcile; flushed together on the next tick. */
+  readonly #reconcilePending = new Set<string>();
+  #reconcileFlush: Promise<void> | undefined;
   #runtime: ManagedRuntime | undefined;
   #closed = false;
 
@@ -109,36 +132,71 @@ export class ConnectionManager {
     return () => this.#listeners.delete(listener);
   }
 
-  /** (Re)connect a connection now; resolves once it is connected or has failed. */
+  /** Connect unless an attempt is already running; resolves when that attempt settles. */
   connect(id: string): Promise<void> {
     const live = this.#entry(id);
-    if (live.connecting) return live.connecting;
+    return live.connecting ?? this.#begin(id, live);
+  }
+
+  /**
+   * The row changed (created, or its url, auth or secret edited): connect
+   * afresh, superseding any attempt in flight, and wait for the result up to
+   * `waitMs` so the caller can report the live state.
+   */
+  async rowChanged(id: string, waitMs = CONNECT_WAIT_MS): Promise<void> {
+    const live = this.#entry(id);
+    await Promise.race([this.#begin(id, live), sleep(waitMs)]);
+  }
+
+  /** Links between bots and connections changed: Reconcile each bot once. */
+  botsChanged(botIds: Iterable<string>): Promise<void> {
+    return this.#reconcile(botIds);
+  }
+
+  #begin(id: string, live: Live): Promise<void> {
+    live.generation += 1;
+    const generation = live.generation;
     clearTimeout(live.retry);
-    live.connecting = this.#connect(id, live).finally(() => {
-      live.connecting = undefined;
+    live.connecting = this.#connect(id, live, generation).finally(() => {
+      if (live.generation === generation) live.connecting = undefined;
     });
     return live.connecting;
   }
 
-  async #connect(id: string, live: Live): Promise<void> {
+  async #connect(id: string, live: Live, generation: number): Promise<void> {
+    // Superseded by a newer attempt, removed, or shutting down: this attempt
+    // owns nothing any more and must not write state or install anything.
+    const stale = () =>
+      this.#closed || live.generation !== generation || this.#live.get(id) !== live;
     const row = await findConnection(id);
-    if (!row || this.#closed) return;
+    if (!row || stale()) return;
     this.#set(id, { status: "connecting" });
-    await live.connection?.close().catch(() => undefined);
+    const previous = live.connection;
     live.connection = undefined;
+    await previous?.close().catch(() => undefined);
+    if (stale()) return;
+    let connection: McpConnection | undefined;
     try {
-      const connection = await connectMcp({
+      const auth = await this.#auth(row, live);
+      if (stale()) return;
+      connection = await connectMcp({
         url: row.url,
         transport: row.transport as McpTransportKind,
-        ...(await this.#auth(row, live)),
-        onToolsChanged: (tools) => void this.#toolsChanged(id, tools),
+        ...auth,
+        onToolsChanged: (tools) => {
+          if (live.connection === connection && !stale()) void this.#toolsChanged(id, tools);
+        },
         onClose: () => {
-          if (live.connection !== connection || this.#closed) return;
+          if (live.connection !== connection || stale()) return;
           live.connection = undefined;
           this.#set(id, { status: "error", error: "Connection closed" });
           this.#scheduleRetry(id, live);
         },
       });
+      if (stale()) {
+        await connection.close().catch(() => undefined);
+        return;
+      }
       live.connection = connection;
       live.attempt = 0;
       live.authorizationUrl = undefined;
@@ -149,14 +207,16 @@ export class ConnectionManager {
           .where(eq(connections.id, id));
       }
       await this.#toolsChanged(id, connection.tools);
+      if (stale()) return;
       this.#set(id, { status: "connected" });
     } catch (error) {
+      if (stale()) return;
       if (error instanceof SecretsKeyMissingError) {
         this.#set(id, { status: "error", error: error.message });
         return;
       }
       if (row.authType === "oauth" && isUnauthorized(error)) {
-        this.#withdraw(row.slug);
+        this.#withdraw(id, row.slug);
         this.#set(id, { status: "needs_auth", error: "Sign in to use this connection" });
         return;
       }
@@ -191,7 +251,7 @@ export class ConnectionManager {
   }
 
   #scheduleRetry(id: string, live: Live): void {
-    if (this.#closed) return;
+    if (this.#closed || this.#live.get(id) !== live) return;
     live.attempt += 1;
     const delay = Math.min(MAX_BACKOFF_MS, 2_000 * 2 ** (live.attempt - 1));
     clearTimeout(live.retry);
@@ -199,10 +259,10 @@ export class ConnectionManager {
     live.retry.unref?.();
   }
 
-  /** Persist a new tool list, re-install the capability and re-apply affected bots. */
+  /** Persist a new tool list, re-install the capability and Reconcile the bots using it. */
   async #toolsChanged(id: string, tools: McpToolInfo[]): Promise<void> {
     const row = await findConnection(id);
-    if (!row) return;
+    if (!row || !this.#live.has(id)) return;
     const changed = JSON.stringify(parseTools(row.toolsCache)) !== JSON.stringify(tools);
     if (changed) {
       await db
@@ -211,7 +271,7 @@ export class ConnectionManager {
         .where(eq(connections.id, id));
     }
     this.#install(row, tools);
-    if (changed) await this.reconfigureBots(id);
+    if (changed) await this.#reconcileLinked(id);
   }
 
   #install(row: ConnectionRow, allTools: McpToolInfo[]): void {
@@ -227,44 +287,74 @@ export class ConnectionManager {
       }),
     );
     // A server with many tools defers them; the model finds them via tool_search.
-    if (tools.length > MCP_DEFER_THRESHOLD) {
-      this.#runtime?.installCapability(createToolSearchCapability());
-    }
+    if (tools.length > MCP_DEFER_THRESHOLD) this.#deferred.add(row.id);
+    else this.#deferred.delete(row.id);
+    this.#syncToolSearch();
+  }
+
+  #withdraw(id: string, slug: string): void {
+    this.#runtime?.uninstallCapability(connectionCapabilityId(slug));
+    this.#deferred.delete(id);
+    this.#syncToolSearch();
+  }
+
+  /** `tool_search` lives exactly as long as some connection defers its tools. */
+  #syncToolSearch(): void {
+    const wanted = this.#deferred.size > 0;
+    if (wanted === this.#toolSearchInstalled) return;
+    if (wanted) this.#runtime?.installCapability(createToolSearchCapability());
+    else this.#runtime?.uninstallCapability(TOOL_SEARCH_ID);
+    this.#toolSearchInstalled = wanted;
   }
 
   /**
    * Re-install from the cached tool list after the owner turned tools on or
-   * off, then re-apply the bots that use the connection. A connection waiting
-   * for sign-in stays withdrawn.
+   * off, then Reconcile the bots that use the connection. A connection
+   * waiting for sign-in stays withdrawn.
    */
   async reinstall(id: string): Promise<void> {
     const row = await findConnection(id);
     if (!row) return;
     if (this.status(id).status !== "needs_auth") this.#install(row, parseTools(row.toolsCache));
-    await this.reconfigureBots(id);
+    await this.#reconcileLinked(id);
   }
 
-  #withdraw(slug: string): void {
-    this.#runtime?.uninstallCapability(connectionCapabilityId(slug));
+  /** Reconcile every bot linked to the connection. */
+  async #reconcileLinked(id: string): Promise<void> {
+    const links = await db
+      .select({ botId: botConnections.botId })
+      .from(botConnections)
+      .where(eq(botConnections.connectionId, id));
+    await this.#reconcile(links.map((link) => link.botId));
   }
 
-  /** Re-apply the configuration of every bot using the connection. */
-  async reconfigureBots(id: string): Promise<void> {
-    const links = await db.select().from(botConnections).where(eq(botConnections.connectionId, id));
-    for (const link of links) {
-      try {
-        if (this.#runtime) await reconcileBotConversation(link.botId, this.#runtime);
-      } catch (error) {
-        logger.warn({ error, botId: link.botId }, "Failed to re-apply bot capabilities");
+  /**
+   * Reconcile each bot once, however many steps of one change asked: the
+   * requests of a tick are flushed together on the next one.
+   */
+  #reconcile(botIds: Iterable<string>): Promise<void> {
+    for (const botId of botIds) this.#reconcilePending.add(botId);
+    if (this.#reconcilePending.size === 0) return Promise.resolve();
+    this.#reconcileFlush ??= sleep(0).then(async () => {
+      const batch = [...this.#reconcilePending];
+      this.#reconcilePending.clear();
+      this.#reconcileFlush = undefined;
+      for (const botId of batch) {
+        try {
+          if (this.#runtime) await reconcileBotConversation(botId, this.#runtime);
+        } catch (error) {
+          logger.warn({ error, botId }, "Failed to re-apply bot capabilities");
+        }
       }
-    }
+    });
+    return this.#reconcileFlush;
   }
 
   /** Call a tool, waiting briefly for a (re)connect. */
   async call(id: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal) {
     let live = this.#entry(id);
     if (!live.connection) {
-      await Promise.race([this.connect(id), new Promise((r) => setTimeout(r, 30_000))]);
+      await Promise.race([this.connect(id), sleep(CALL_WAIT_MS)]);
       live = this.#entry(id);
     }
     if (!live.connection) {
@@ -299,7 +389,7 @@ export class ConnectionManager {
     if (!row) throw Boom.notFound("Record not found");
     const provider = createOAuthProvider(id, () => undefined);
     await mcpAuth(provider, { serverUrl: row.url, authorizationCode: code });
-    await this.connect(id);
+    await this.rowChanged(id);
     return id;
   }
 
@@ -307,13 +397,23 @@ export class ConnectionManager {
     return Boolean((await readOAuthState(id)).tokens);
   }
 
-  /** Close and forget a connection (removed by the owner). */
-  async remove(id: string, slug: string): Promise<void> {
+  /**
+   * The connection was deleted: cancel any attempt in flight, close the
+   * client, withdraw its tools and Reconcile the bots that used it. The
+   * entry is gone for good; a stale attempt never brings it back.
+   */
+  async remove(id: string, slug: string, botIds: Iterable<string> = []): Promise<void> {
     const live = this.#live.get(id);
     this.#live.delete(id);
-    clearTimeout(live?.retry);
-    await live?.connection?.close().catch(() => undefined);
-    this.#withdraw(slug);
+    if (live) {
+      live.generation += 1;
+      clearTimeout(live.retry);
+      const connection = live.connection;
+      live.connection = undefined;
+      await connection?.close().catch(() => undefined);
+    }
+    this.#withdraw(id, slug);
+    await this.#reconcile(botIds);
   }
 
   async close(): Promise<void> {
@@ -330,14 +430,16 @@ export class ConnectionManager {
   #entry(id: string): Live {
     let live = this.#live.get(id);
     if (!live) {
-      live = { status: "connecting", attempt: 0 };
+      live = { status: "connecting", attempt: 0, generation: 0 };
       this.#live.set(id, live);
     }
     return live;
   }
 
+  /** Record and announce a state; a removed connection has none to record. */
   #set(id: string, state: ConnectionLiveState): void {
-    const live = this.#entry(id);
+    const live = this.#live.get(id);
+    if (!live) return;
     live.status = state.status;
     live.error = state.error;
     for (const listener of this.#listeners) {

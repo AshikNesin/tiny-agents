@@ -60,6 +60,7 @@ export {
   type VaultItemMeta,
   type VaultKind,
   type VaultOutcome,
+  type VaultTargetKind,
   type VaultPlan,
   type VaultRefusal,
   type VaultUse,

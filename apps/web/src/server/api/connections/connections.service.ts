@@ -1,7 +1,8 @@
 /**
- * Remote MCP connections (issue #1 M3): CRUD, bot enablement, test and
- * sign-in. Live state (connected / needs sign-in / error) comes from the
- * ConnectionManager; secrets are write-only from the API's point of view.
+ * Remote MCP connections (issue #1 M3): rows, DTOs, validation and the
+ * playground. Everything live (connecting, tools, Reconciling bots, sign-in)
+ * is the ConnectionManager's; this module tells it what changed. Secrets
+ * are write-only from the API's point of view.
  */
 import { asc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -21,8 +22,6 @@ import {
   vaultItems,
   type Connection,
 } from "../../db";
-import { reconcileBotConversation } from "../bots/bots.conversation";
-import { getAgentRuntime } from "../bots/bots.runtime";
 import {
   getConnectionManager,
   parseDisabledTools,
@@ -150,6 +149,7 @@ async function uniqueSlug(name: string): Promise<string> {
   }
 }
 
+/** Replace the connection's bot links; the manager Reconciles every bot that gained or lost it. */
 async function setBots(connectionId: string, botIds: string[]): Promise<void> {
   const before = await db
     .select()
@@ -168,12 +168,7 @@ async function setBots(connectionId: string, botIds: string[]): Promise<void> {
     }
   });
   const affected = new Set([...before.map((link) => link.botId), ...bots.map((bot) => bot.id)]);
-  for (const botId of affected) await reconcileBotConversation(botId, getAgentRuntime());
-}
-
-/** Wait for the first connect attempt, but never longer than `ms`. */
-async function settle(id: string, ms = 15_000): Promise<void> {
-  await Promise.race([getConnectionManager().connect(id), new Promise((r) => setTimeout(r, ms))]);
+  await getConnectionManager().botsChanged(affected);
 }
 
 export async function list(): Promise<ConnectionDTO[]> {
@@ -218,7 +213,7 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionDTO> 
     })
     .returning();
   const id = row!.id;
-  await settle(id);
+  await getConnectionManager().rowChanged(id);
   if (data.botIds) await setBots(id, data.botIds);
   return get(id);
 }
@@ -255,21 +250,22 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
   if (Object.keys(changes).length > 0) {
     await db.update(connections).set(changes).where(eq(connections.id, id));
   }
-  if (reconnect) await settle(id);
+  if (reconnect) await getConnectionManager().rowChanged(id);
   if (data.botIds) await setBots(id, data.botIds);
   return get(id);
 }
 
 export async function remove(id: string): Promise<void> {
   const connection = await get(id);
-  await getConnectionManager().remove(id, connection.slug);
+  // The row (and its bot links) go first, so a connect attempt racing the
+  // delete finds nothing to connect and the Reconcile sees the links gone.
   await db.delete(connections).where(eq(connections.id, id));
-  for (const botId of connection.botIds) await reconcileBotConversation(botId, getAgentRuntime());
+  await getConnectionManager().remove(id, connection.slug, connection.botIds);
 }
 
 export async function reconnect(id: string): Promise<ConnectionDTO> {
   await get(id);
-  await settle(id);
+  await getConnectionManager().rowChanged(id);
   return get(id);
 }
 

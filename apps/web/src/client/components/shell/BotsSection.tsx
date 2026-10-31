@@ -10,24 +10,14 @@ import {
 import { cn } from "@groot/shell/lib/utils";
 import type { BotListEntry } from "../../lib/bots-api";
 import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
-import { railBots } from "../../lib/attention";
+import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 
-/** What the bot is waiting on the owner for, e.g. "1 awaiting approval, 2 questions for you". */
-function waitingLabel({ approvals, questions }: BotListEntry): string {
-  return [
-    approvals > 0 ? `${approvals} awaiting approval` : "",
-    questions > 0 ? `${questions} ${questions === 1 ? "question" : "questions"} for you` : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
-
 /** Trailing state of a row: waiting on the owner (approvals, questions) > replying > unread. */
 function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
-  const waiting = bot.approvals + bot.questions;
+  const { waiting, replying, unread } = attentionOf(bot);
   if (waiting > 0) {
     return (
       <span
@@ -38,7 +28,7 @@ function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
       </span>
     );
   }
-  if (bot.replying) {
+  if (replying) {
     return (
       <span role="status" aria-label="Replying" className="flex items-center gap-0.5">
         {[0, 1, 2].map((i) => (
@@ -51,7 +41,7 @@ function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
       </span>
     );
   }
-  if (bot.unread && !active) {
+  if (unread && !active) {
     return <span aria-label="Unread" className="bg-primary block size-2 shrink-0 rounded-full" />;
   }
   return null;
@@ -79,7 +69,7 @@ function BotRow({
         to={`/chats/${bot.id}`}
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
-        aria-label={railLabel(bot)}
+        aria-label={stateLabel(bot)}
         aria-describedby={preview ? previewId : undefined}
         className={cn(
           "flex min-h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
@@ -209,13 +199,6 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
   );
 }
 
-/** A bot's state in words, for the rail's labels and tooltips. */
-function railLabel(bot: BotListEntry): string {
-  const waiting = waitingLabel(bot);
-  const state = waiting || (bot.replying ? "replying" : bot.unread ? "unread" : "");
-  return state ? `${bot.name}, ${state}` : bot.name;
-}
-
 /**
  * The collapsed sidebar's bots (issue #90): the open one, pinned ones and any
  * that needs attention, as avatars with their state on top, so a bot waiting
@@ -227,8 +210,8 @@ export function BotRail({ bots, activeId }: { bots: BotListEntry[]; activeId: st
   return (
     <nav aria-label="Bots" className="flex flex-col items-center gap-1.5 py-2">
       {shown.map((bot) => {
-        const waiting = bot.approvals + bot.questions;
-        const label = railLabel(bot);
+        const { waiting, replying, unread } = attentionOf(bot);
+        const label = stateLabel(bot);
         return (
           <Link
             key={bot.id}
@@ -247,9 +230,9 @@ export function BotRail({ bots, activeId }: { bots: BotListEntry[]; activeId: st
               <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4">
                 {waiting}
               </span>
-            ) : bot.replying ? (
+            ) : replying ? (
               <span className="bg-fg-tertiary absolute top-0.5 right-0.5 block size-2 animate-pulse rounded-full" />
-            ) : bot.unread && bot.id !== activeId ? (
+            ) : unread && bot.id !== activeId ? (
               <span className="bg-primary absolute top-0.5 right-0.5 block size-2 rounded-full" />
             ) : null}
           </Link>

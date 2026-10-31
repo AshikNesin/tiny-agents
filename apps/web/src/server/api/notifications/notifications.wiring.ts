@@ -12,15 +12,19 @@
  * - Routines: `notifyRoutineRun` (watcher and fire job). A blocked run
  *   (issue #87) stays quiet; the run that pauses the routine pushes once.
  */
-import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { registerRedactor } from "@groot/core/notification/scrub";
-import { secretRedactor, type AgentRuntime, type WaitEvent } from "@tiny-agents/agent";
-import { bots, db } from "../../db";
+import {
+  finishedReplyOf,
+  secretRedactor,
+  type AgentRuntime,
+  type WaitEvent,
+} from "@tiny-agents/agent";
 import { isBotWatched } from "../bots/bots.viewers";
-import { conversationOwner } from "../bots/bots.owner";
+import { chatOwner } from "../bots/bots.owner";
+import type { SettledConversation, SettledStep } from "../bots/bots.settled";
 import {
   approvalRequested,
   credentialRequested,
@@ -36,7 +40,7 @@ import {
   type BotRef,
   type RoutineFailure,
   type RoutineRunRef,
-  type VaultAlertKind,
+  type VaultAlertKind as EventVaultAlertKind,
   vaultAlert,
 } from "./notifications.events";
 
@@ -46,36 +50,22 @@ export type Notifier = Pick<
   "notify" | "cancel" | "getSettings" | "defineEvents"
 >;
 
-export type NotificationsRuntime = Pick<AgentRuntime, "onWait" | "onActivity" | "finishedReplies">;
+export type NotificationsRuntime = Pick<AgentRuntime, "onWait">;
 
 export interface NotificationsWiring {
+  /** The settled step: a failed or long reply reaches the owner's phone. */
+  onSettled: SettledStep;
   stop(): void;
 }
 
-const BOT_CACHE_MS = 60_000;
-
 /**
- * The bot behind a chat conversation, cached briefly (titles and links).
- * A routine's conversation has none: its runs push through the routine
- * events, and it never waits on the owner (issue #63).
+ * The bot behind a chat conversation (titles and links). A routine's
+ * conversation has none: its runs push through the routine events, and it
+ * never waits on the owner (issue #63).
  */
-function createBotLookup() {
-  const cache = new Map<number, { bot: BotRef | undefined; at: number }>();
-  return async (conversation: number): Promise<BotRef | undefined> => {
-    const hit = cache.get(conversation);
-    if (hit && Date.now() - hit.at < BOT_CACHE_MS) return hit.bot;
-    const owner = await conversationOwner(conversation);
-    const row =
-      owner && owner.routineId === undefined
-        ? await db.query.bots.findFirst({
-            where: eq(bots.id, owner.botId),
-            columns: { id: true, name: true },
-          })
-        : undefined;
-    const bot = row ? { ...row, conversationId: conversation } : undefined;
-    cache.set(conversation, { bot, at: Date.now() });
-    return bot;
-  };
+async function botFor(conversation: number): Promise<BotRef | undefined> {
+  const bot = await chatOwner(conversation);
+  return bot ? { id: bot.id, name: bot.name, conversationId: conversation } : undefined;
 }
 
 export function startNotifications(
@@ -85,9 +75,7 @@ export function startNotifications(
   notifier.defineEvents(NOTIFICATION_EVENTS);
   // Vault values this process resolved never reach a push either.
   const offRedactor = registerRedactor((text) => secretRedactor.scrub(text));
-  const botFor = createBotLookup();
   const reminders = new Map<string, ReturnType<typeof setTimeout>>();
-  const runStarts = new Map<number, number>();
 
   const send = (n: Notification) => notifier.notify(n);
 
@@ -134,40 +122,34 @@ export function startNotifications(
     );
   });
 
-  async function onIdle(conversation: number, startedAt: number): Promise<void> {
-    const bot = await botFor(conversation);
+  /**
+   * The reply that just finished: the Turn's last finished message. A reply
+   * from before this run (the conversation settled without a new Turn) is
+   * not news.
+   */
+  async function onSettled({ conversationId, chat, startedAt }: SettledConversation) {
+    // A run that was already going at boot has no start: nothing to measure against.
+    if (startedAt === undefined) return;
+    const bot = await botFor(conversationId);
     if (!bot || isBotWatched(bot.id)) return;
-    const replies = await runtime.finishedReplies(conversation);
-    const last = replies.at(-1);
-    if (!last || last.createdAt < startedAt) return;
-    if (last.error !== undefined) {
-      send(runFailed(bot, last.createdAt, last.error));
+    const state = await chat();
+    const last = state.messages.findLast((message) => message.role === "assistant");
+    const reply = last ? finishedReplyOf(last) : undefined;
+    if (!reply || reply.createdAt < startedAt) return;
+    if (reply.error !== undefined) {
+      send(runFailed(bot, reply.createdAt, reply.error));
       return;
     }
     const { longRunMinutes } = await notifier.getSettings();
     const minutes = Math.floor((Date.now() - startedAt) / 60_000);
-    if (minutes >= longRunMinutes) send(runLongDone(bot, last.createdAt, minutes, last.text));
+    if (minutes >= longRunMinutes) send(runLongDone(bot, reply.createdAt, minutes, reply.text));
   }
 
-  const offActivity = runtime.onActivity((change) => {
-    const conversation = Number(change.conversation);
-    if (change.busy) {
-      if (!runStarts.has(conversation)) runStarts.set(conversation, Date.now());
-      return;
-    }
-    const startedAt = runStarts.get(conversation);
-    runStarts.delete(conversation);
-    if (startedAt === undefined) return;
-    void onIdle(conversation, startedAt).catch((error: unknown) =>
-      logger.warn({ error }, "Run notification failed"),
-    );
-  });
-
   return {
+    onSettled: { name: "run notifications", run: onSettled },
     stop() {
       offRedactor();
       offWait();
-      offActivity();
       for (const timer of reminders.values()) clearTimeout(timer);
       reminders.clear();
     },
@@ -203,7 +185,7 @@ export type RoutineOutcome =
 
 /** A vault security alert (reveal, delete, refused fill). Cannot be switched off. */
 export function notifyVaultAlert(
-  kind: VaultAlertKind,
+  kind: EventVaultAlertKind,
   title: string,
   message: string,
   notifier: Pick<Notifier, "notify"> = notificationService,

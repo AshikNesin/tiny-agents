@@ -3,9 +3,10 @@
  * plus the single create/edit bot dialog the sidebar and chat header share.
  */
 import { create } from "zustand";
-import { botsApi, type Bot } from "../lib/bots-api";
 import { toast } from "sonner";
+import type { Bot } from "../lib/bots-api";
 import { errorMessage } from "../lib/errors";
+import { useBotsStore } from "./bots";
 
 export const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
 
@@ -27,12 +28,9 @@ interface UiState {
   /** Bot being edited; null while creating. */
   editingBot: Bot | null;
   openCreateBot: () => void;
-  /** Fetches the full bot first: the list entry lacks the editable fields. */
+  /** Loads the full bot first: the list entry lacks the editable fields. */
   openEditBot: (botId: string) => Promise<void>;
   setBotDialogOpen: (open: boolean) => void;
-  /** Bumped after every save so an open chat refetches its full bot. */
-  savedTick: number;
-  markSaved: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -53,13 +51,12 @@ export const useUiStore = create<UiState>((set) => ({
   openCreateBot: () => set({ botDialogOpen: true, editingBot: null, mobileOpen: false }),
   openEditBot: async (botId) => {
     try {
-      const bot = await botsApi.get(botId);
+      // Fresh: the form must start from what the server has now.
+      const bot = await useBotsStore.getState().loadBot(botId, { fresh: true });
       set({ botDialogOpen: true, editingBot: bot, mobileOpen: false });
     } catch (error) {
       toast.error(errorMessage(error, "Failed to load bot"));
     }
   },
   setBotDialogOpen: (botDialogOpen) => set({ botDialogOpen }),
-  savedTick: 0,
-  markSaved: () => set((state) => ({ savedTick: state.savedTick + 1 })),
 }));

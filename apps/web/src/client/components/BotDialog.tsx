@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,16 @@ import { connectionsApi, type ConnectionSummary } from "../lib/connections-api";
 import { BotAvatar } from "./BotAvatar";
 import { errorMessage } from "../lib/errors";
 import {
+  canSaveDraft,
+  draftFrom,
+  draftPayload,
+  draftProblem,
+  fallbackModelId,
+  SYSTEM_PROMPT_MAX,
+  toggleId,
+  type BotDraft,
+} from "../lib/bot-draft";
+import {
   applyPreset,
   COLLAPSE_OVER,
   groupValue,
@@ -43,9 +53,6 @@ import {
   toolTitle,
   type ToolInfo,
 } from "../lib/tool-permissions";
-
-/** The server caps the persona at ~24 KB (bots.schema.ts). */
-const SYSTEM_PROMPT_MAX = 24_576;
 
 interface BotDialogProps {
   open: boolean;
@@ -72,13 +79,19 @@ export function BotDialog({
   onSaved,
   onDeleted,
 }: BotDialogProps) {
-  const [name, setName] = useState("");
+  const fallbackModel = fallbackModelId(defaultModelId, models);
+  const [draft, setDraft] = useState<BotDraft>(() => draftFrom(bot, fallbackModel));
+  const edit = <K extends keyof BotDraft>(key: K, value: BotDraft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+  const { name, description, systemPrompt, modelId, toolPermissions, browserProfile, autoReview } =
+    draft;
+  const setToolPermissions = (
+    next: (current: Record<string, ToolPermission>) => Record<string, ToolPermission>,
+  ) => setDraft((current) => ({ ...current, toolPermissions: next(current.toolPermissions) }));
+
   /** The server's refusal of the name (another bot has it, issue #80). */
   const [nameError, setNameError] = useState<string | null>(null);
   const [tab, setTab] = useState("profile");
-  const [description, setDescription] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [modelId, setModelId] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -86,31 +99,29 @@ export function BotDialog({
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
-  const [toolPermissions, setToolPermissions] = useState<Record<string, ToolPermission>>({});
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
-  const [browserProfile, setBrowserProfile] = useState<BrowserProfile>("shared");
-  const [autoReview, setAutoReview] = useState(false);
   const [toolQuery, setToolQuery] = useState("");
   /** Toolkits the user opened or closed; the rest follow their size. */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  // The form starts over when the dialog opens, and only then: a model
+  // catalog that arrives while it is open must not wipe the owner's edits.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    setName(bot?.name ?? "");
-    setNameError(null);
-    setTab("profile");
-    setDescription(bot?.description ?? "");
-    setSystemPrompt(bot?.systemPrompt ?? "");
-    setModelId(bot?.modelId ?? defaultModelId ?? models[0]?.id ?? "");
-    setToolPermissions(bot?.toolPermissions ?? {});
-    setSelectedSkills(bot?.skillIds ?? []);
-    setSelectedConnections(bot?.connectionIds ?? []);
-    setBrowserProfile(bot?.browserProfile ?? "shared");
-    setAutoReview(bot?.autoReview ?? false);
-    setToolQuery("");
-    setExpanded({});
-  }, [open, bot, defaultModelId, models]);
+    if (open && !wasOpen.current) {
+      setDraft(draftFrom(bot, fallbackModel));
+      setNameError(null);
+      setTab("profile");
+      setToolQuery("");
+      setExpanded({});
+    }
+    wasOpen.current = open;
+  }, [open, bot, fallbackModel]);
+
+  // A new bot opened before the catalog loaded takes the default once it is known.
+  useEffect(() => {
+    if (!open || fallbackModel === undefined) return;
+    setDraft((current) => (current.modelId ? current : { ...current, modelId: fallbackModel }));
+  }, [open, fallbackModel]);
 
   useEffect(() => {
     if (!open) return;
@@ -155,23 +166,14 @@ export function BotDialog({
   );
 
   const save = async () => {
-    if (!name.trim() || !modelId) {
-      toast.error("Name and model are required");
+    const problem = draftProblem(draft);
+    if (problem) {
+      toast.error(problem);
       return;
     }
     setSaving(true);
     try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim(),
-        systemPrompt,
-        modelId,
-        toolPermissions,
-        skillIds: selectedSkills,
-        connectionIds: selectedConnections,
-        browserProfile,
-        autoReview,
-      };
+      const payload = draftPayload(draft);
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
       onOpenChange(false);
@@ -218,7 +220,7 @@ export function BotDialog({
             id="bot-name"
             value={name}
             onChange={(e) => {
-              setName(e.target.value);
+              edit("name", e.target.value);
               setNameError(null);
             }}
             placeholder="e.g. Research helper"
@@ -240,7 +242,7 @@ export function BotDialog({
         <Input
           id="bot-description"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => edit("description", e.target.value)}
           placeholder="One line, shown under the name"
           maxLength={200}
         />
@@ -251,7 +253,7 @@ export function BotDialog({
         <ModelSelector
           models={models}
           value={modelId}
-          onChange={setModelId}
+          onChange={(next) => edit("modelId", next)}
           unknownValue={modelMissing ? bot?.modelId : undefined}
         />
       </div>
@@ -261,7 +263,7 @@ export function BotDialog({
         <Textarea
           id="bot-prompt"
           value={systemPrompt}
-          onChange={(e) => setSystemPrompt(e.target.value)}
+          onChange={(e) => edit("systemPrompt", e.target.value)}
           placeholder="Who is this bot? How should it reply?"
           rows={6}
           maxLength={SYSTEM_PROMPT_MAX}
@@ -359,7 +361,7 @@ export function BotDialog({
         type="single"
         value={browserProfile}
         onValueChange={(next: string) => {
-          if (next) setBrowserProfile(next as BrowserProfile);
+          if (next) edit("browserProfile", next as BrowserProfile);
         }}
         spacing={0}
         size="sm"
@@ -499,7 +501,11 @@ export function BotDialog({
                 tools.
               </p>
             </div>
-            <Switch checked={autoReview} onCheckedChange={setAutoReview} aria-label="Auto-review" />
+            <Switch
+              checked={autoReview}
+              onCheckedChange={(on) => edit("autoReview", on)}
+              aria-label="Auto-review"
+            />
           </div>
         </>
       )}
@@ -513,17 +519,16 @@ export function BotDialog({
         <div>
           <p className={`${metaLabelClass} mb-1.5`}>Connections</p>
           {connections.map((connection) => {
-            const enabled = selectedConnections.includes(connection.id);
+            const enabled = draft.connectionIds.includes(connection.id);
             return (
               <div key={connection.id} className="flex items-center gap-3 py-1.5">
                 <Switch
                   checked={enabled}
                   onCheckedChange={(checked) =>
-                    setSelectedConnections((current) =>
-                      checked
-                        ? [...current, connection.id]
-                        : current.filter((id) => id !== connection.id),
-                    )
+                    setDraft((current) => ({
+                      ...current,
+                      connectionIds: toggleId(current.connectionIds, connection.id, checked),
+                    }))
                   }
                   aria-label={`Enable ${connection.name}`}
                 />
@@ -552,7 +557,7 @@ export function BotDialog({
         </p>
       )}
       {skills.map((skill) => {
-        const enabled = selectedSkills.includes(skill.id);
+        const enabled = draft.skillIds.includes(skill.id);
         return (
           <div
             key={skill.id}
@@ -565,9 +570,10 @@ export function BotDialog({
             <Switch
               checked={enabled}
               onCheckedChange={(checked) =>
-                setSelectedSkills((current) =>
-                  checked ? [...current, skill.id] : current.filter((id) => id !== skill.id),
-                )
+                setDraft((current) => ({
+                  ...current,
+                  skillIds: toggleId(current.skillIds, skill.id, checked),
+                }))
               }
               aria-label={`Assign ${skill.name}`}
             />
@@ -662,7 +668,7 @@ export function BotDialog({
               <Button
                 className="max-sm:flex-1"
                 onClick={save}
-                disabled={saving || !name.trim() || !modelId}
+                disabled={saving || !canSaveDraft(draft)}
               >
                 {saving ? "Saving…" : bot ? "Save changes" : "Create bot"}
               </Button>

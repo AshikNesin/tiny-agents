@@ -34,7 +34,6 @@ export function AppShell() {
   const botDialogOpen = useUiStore((s) => s.botDialogOpen);
   const setBotDialogOpen = useUiStore((s) => s.setBotDialogOpen);
   const editingBot = useUiStore((s) => s.editingBot);
-  const markSaved = useUiStore((s) => s.markSaved);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
@@ -131,14 +130,15 @@ export function AppShell() {
   }, [bots, navigate, openCreateBot, theme, setTheme, logout]);
 
   const onSaved = (bot: BotRow) => {
+    // The saved row is the full bot: the open chat and the next edit read it.
+    useBotsStore.getState().setFullBot(bot);
     void loadBots();
-    markSaved();
     // Creating a bot drops you straight into its chat (messenger model).
     if (!editingBot) navigate(`/chats/${bot.id}`);
   };
 
   const onDeleted = (bot: BotRow) => {
-    useBotsStore.getState().resetChat(bot.id);
+    useBotsStore.getState().forgetBot(bot.id);
     void loadBots();
     if (matchPath("/chats/:botId", pathname)?.params.botId === bot.id) {
       navigate("/chats", { replace: true });

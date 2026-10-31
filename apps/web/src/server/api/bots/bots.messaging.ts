@@ -49,11 +49,7 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
   async function senderOf(conversationId: number) {
     const owner = await conversationOwner(conversationId);
     if (!owner) return null;
-    const bot = await db.query.bots.findFirst({
-      where: eq(bots.id, owner.botId),
-      columns: { id: true, name: true },
-    });
-    return bot ? { ...bot, fromRoutine: owner.routineId !== undefined } : null;
+    return { id: owner.bot.id, name: owner.bot.name, fromRoutine: owner.kind === "routine" };
   }
 
   const turnBudget = createTurnBudget(rt);

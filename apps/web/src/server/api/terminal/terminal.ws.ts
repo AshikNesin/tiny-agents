@@ -1,8 +1,8 @@
 /**
  * Terminal WebSocket bridge (issue #28): pipes a browser xterm.js tab to a
- * tmux attach on the sandbox VM. Same shape as the VNC bridge
- * (browser.vnc.ts): browsers cannot set WS headers, so the page first calls
- * the JWT-protected ticket route and presents the ticket here. Binary
+ * tmux attach on the sandbox VM. The page first calls the JWT-protected
+ * ticket route and presents the ticket here; tickets and the Origin check
+ * are shared with the VNC bridge (../ws/upgrade.ts). Binary
  * frames are raw pty bytes both ways and are never logged — they are
  * everything the owner types.
  *
@@ -15,17 +15,13 @@
  *   1011 attach    — the SSH attach failed after the ticket was spent (the
  *        sandbox is unreachable); the client retries with backoff.
  */
-import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
-import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
-import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import { isOriginAllowed } from "../bots/browser.vnc";
 import { parseSessionName, type PtyStream, type SessionName } from "@tiny-agents/agent";
+import { createTicketStore, isOriginAllowed, onUpgrade, rejectUpgrade } from "../ws/upgrade";
 import { getTerminalService } from "./terminal.instance";
 
-const TICKET_TTL_MS = 60_000;
 const PING_INTERVAL_MS = 30_000;
 const IDLE_TIMEOUT_MS = 10 * 60_000;
 /** Stop reading the VM while this much is queued for a slow client. */
@@ -42,39 +38,25 @@ const clampRows = (n: number) => Math.min(300, Math.max(2, n));
 interface Ticket {
   userId: number;
   name: SessionName;
-  expiresAt: number;
 }
 
-const tickets = new Map<string, Ticket>();
+const tickets = createTicketStore<Ticket>({
+  perUserLimit: TICKET_RATE_LIMIT,
+  // 429, not 409: the client reads ticket-409 as "tab gone, stop forever".
+  limitMessage: "Too many terminal tickets requested. Wait a moment.",
+});
 
-export function issueTerminalTicket(input: Omit<Ticket, "expiresAt">): string {
-  const now = Date.now();
-  for (const [key, ticket] of tickets) if (ticket.expiresAt <= now) tickets.delete(key);
-  const mints = [...tickets.values()].filter((t) => t.userId === input.userId).length;
-  if (mints >= TICKET_RATE_LIMIT) {
-    // 429, not 409: the client reads ticket-409 as "tab gone, stop forever".
-    throw Boom.tooManyRequests("Too many terminal tickets requested. Wait a moment.");
-  }
-  const ticket = randomBytes(24).toString("base64url");
-  tickets.set(ticket, { ...input, expiresAt: now + TICKET_TTL_MS });
-  return ticket;
+export function issueTerminalTicket(input: Ticket): string {
+  return tickets.issue(input);
 }
 
 /** Single use: a redeemed (or expired) ticket is gone either way. */
 export function redeemTerminalTicket(ticket: string, name: SessionName): Ticket | undefined {
-  const found = tickets.get(ticket);
-  tickets.delete(ticket);
-  if (!found || found.expiresAt <= Date.now() || found.name !== name) return undefined;
-  return found;
+  return tickets.redeem(ticket, (found) => found.name === name);
 }
 
 export function resetTerminalTicketsForTests(): void {
-  tickets.clear();
-}
-
-function reject(socket: Duplex, status: string): void {
-  socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-  socket.destroy();
+  tickets.reset();
 }
 
 export interface TerminalWsOptions {
@@ -93,21 +75,11 @@ export function attachTerminalWs(
   const wss = new WebSocketServer({ noServer: true });
   const originAllowed = options.isOriginAllowed ?? isOriginAllowed;
 
-  httpServer.on("upgrade", (req, socket, head) => {
-    const url = new URL(req.url ?? "/", "http://internal");
-    const match = PATH.exec(url.pathname);
-    if (!match) {
-      // Nobody else listening for upgrades means nobody will ever answer.
-      if (httpServer.listenerCount("upgrade") <= 1) socket.destroy();
-      return;
-    }
-    if (!originAllowed(req)) return reject(socket, "403 Forbidden");
-
-    const rawName = decodeURIComponent(match[1]!);
-    const name = parseSessionName(rawName);
-    if (!name) return reject(socket, "400 Bad Request");
+  onUpgrade(httpServer, PATH, originAllowed, ({ req, socket, head, url, params }) => {
+    const name = parseSessionName(params[0]!);
+    if (!name) return rejectUpgrade(socket, "400 Bad Request");
     const ticket = redeemTerminalTicket(url.searchParams.get("ticket") ?? "", name);
-    if (!ticket) return reject(socket, "401 Unauthorized");
+    if (!ticket) return rejectUpgrade(socket, "401 Unauthorized");
 
     const cols = clampCols(Number(url.searchParams.get("cols") ?? 120) || 120);
     const rows = clampRows(Number(url.searchParams.get("rows") ?? 34) || 34);

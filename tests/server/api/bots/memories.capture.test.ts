@@ -7,7 +7,7 @@ import {
   buildCapturePrompt,
   parseExtraction,
   applyExtraction,
-  startMemoryCapture,
+  createMemoryCapture,
   type CaptureModels,
 } from "../../../../apps/web/src/server/api/bots/memories.capture";
 import {
@@ -429,21 +429,15 @@ describe("captureConversation skip rules", () => {
   });
 });
 
-describe("startMemoryCapture debounce", () => {
+const settledChat = async () => ({ messages: [], busy: false, queued: [] });
+
+describe("memory capture debounce (a settled step)", () => {
   it("fires on the quiet window and pushes back on new turns", async () => {
     vi.useFakeTimers();
-    const listeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
     const captureNow = vi.fn().mockResolvedValue(undefined);
-    const stop = startMemoryCapture(
-      {
-        onActivity: (l) => {
-          listeners.add(l);
-          return () => listeners.delete(l);
-        },
-      },
-      { models: undefined, captureNow, quietMs: 100, turnLimit: 6 },
-    );
-    const emit = (busy: boolean) => listeners.forEach((l) => l({ conversation: 7, busy }));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
+    const emit = (_busy: boolean) =>
+      void capture.onSettled.run({ conversationId: 7, chat: settledChat });
     emit(false); // turn 1
     vi.advanceTimersByTime(50);
     emit(false); // turn 2 pushes the window back
@@ -451,25 +445,16 @@ describe("startMemoryCapture debounce", () => {
     expect(captureNow).not.toHaveBeenCalled();
     vi.advanceTimersByTime(50);
     expect(captureNow).toHaveBeenCalledWith(7);
-    stop();
+    capture.stop();
     vi.useRealTimers();
   });
 
   it("does not run a second capture while one is inflight", async () => {
     vi.useFakeTimers();
-    const listeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
     const gates: Array<() => void> = [];
     const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
-    const stop = startMemoryCapture(
-      {
-        onActivity: (l) => {
-          listeners.add(l);
-          return () => listeners.delete(l);
-        },
-      },
-      { models: undefined, captureNow, quietMs: 100_000, turnLimit: 3 },
-    );
-    const emit = () => listeners.forEach((l) => l({ conversation: 9, busy: false }));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    const emit = () => void capture.onSettled.run({ conversationId: 9, chat: settledChat });
     emit();
     emit();
     emit();
@@ -488,30 +473,40 @@ describe("startMemoryCapture debounce", () => {
     emit();
     await vi.advanceTimersByTimeAsync(0);
     expect(captureNow).toHaveBeenCalledTimes(2);
-    stop();
+    capture.stop();
+    vi.useRealTimers();
+  });
+
+  it("re-arms the quiet window for turns that settled during a capture", async () => {
+    vi.useFakeTimers();
+    const gates: Array<() => void> = [];
+    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 10 });
+    const emit = () => void capture.onSettled.run({ conversationId: 11, chat: settledChat });
+    emit();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    emit(); // settles while the capture runs: not lost
+    gates[0]!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(captureNow).toHaveBeenCalledTimes(2);
+    capture.stop();
     vi.useRealTimers();
   });
 
   it("forces a capture at the turn limit", async () => {
     vi.useFakeTimers();
-    const listeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
     const captureNow = vi.fn().mockResolvedValue(undefined);
-    const stop = startMemoryCapture(
-      {
-        onActivity: (l) => {
-          listeners.add(l);
-          return () => listeners.delete(l);
-        },
-      },
-      { models: undefined, captureNow, quietMs: 100_000, turnLimit: 3 },
-    );
-    const emit = () => listeners.forEach((l) => l({ conversation: 9, busy: false }));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    const emit = () => void capture.onSettled.run({ conversationId: 9, chat: settledChat });
     emit();
     emit();
     expect(captureNow).not.toHaveBeenCalled();
     emit();
     expect(captureNow).toHaveBeenCalledWith(9);
-    stop();
+    capture.stop();
     vi.useRealTimers();
   });
 });

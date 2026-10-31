@@ -17,6 +17,7 @@ import {
   ConnectionManager,
   setConnectionManagerForTests,
 } from "../../../apps/web/src/server/api/connections/connections.manager";
+import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
 
@@ -65,10 +66,17 @@ interface TestMcpServer {
   url: string;
   server: Server;
   tokens: Set<string>;
+  /** Hold every request this long first (a slow server, for race tests). */
+  delayMs: number;
 }
 
-function buildMcp(name: string) {
+function buildMcp(name: string, extraTools = 0) {
   const mcp = new McpServer({ name, version: "1.0.0" });
+  for (let i = 0; i < extraTools; i++) {
+    mcp.registerTool(`tool_${i}`, { description: `Tool ${i}`, inputSchema: {} }, async () => ({
+      content: [{ type: "text", text: String(i) }],
+    }));
+  }
   mcp.registerTool(
     "echo",
     {
@@ -85,8 +93,9 @@ function buildMcp(name: string) {
 }
 
 /** Stateless Streamable HTTP MCP server requiring `x-api-key: secret123`. */
-async function startMcpServer(): Promise<TestMcpServer> {
+async function startMcpServer(extraTools = 0): Promise<TestMcpServer> {
   const tokens = new Set<string>(["secret123"]);
+  const state = { delayMs: 0 };
   const { server, port } = await listen(async (req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
     if (path !== "/mcp") {
@@ -97,6 +106,7 @@ async function startMcpServer(): Promise<TestMcpServer> {
       res.writeHead(405).end();
       return;
     }
+    if (state.delayMs > 0) await new Promise((r) => setTimeout(r, state.delayMs));
     if (!tokens.has(String(req.headers["x-api-key"] ?? ""))) {
       res.writeHead(401, { "content-type": "application/json" }).end(
         JSON.stringify({
@@ -108,7 +118,7 @@ async function startMcpServer(): Promise<TestMcpServer> {
       return;
     }
     // Stateless: one server+transport per request, closed with the response.
-    const mcp = buildMcp("demo-mcp");
+    const mcp = buildMcp("demo-mcp", extraTools);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -117,8 +127,21 @@ async function startMcpServer(): Promise<TestMcpServer> {
     await mcp.connect(transport);
     await transport.handleRequest(req, res, await readJson(req));
   });
-  return { url: `http://127.0.0.1:${port}/mcp`, server, tokens };
+  return {
+    url: `http://127.0.0.1:${port}/mcp`,
+    server,
+    tokens,
+    get delayMs() {
+      return state.delayMs;
+    },
+    set delayMs(ms: number) {
+      state.delayMs = ms;
+    },
+  };
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const DEMO = { name: "Demo", authType: "header", headerName: "x-api-key", secret: "secret123" };
 
 describe("MCP connections (header auth, streamable http)", () => {
   let mcpServer: TestMcpServer;
@@ -392,6 +415,125 @@ describe("MCP connections (header auth, streamable http)", () => {
     expect(removed.data).toEqual({ deleted: true });
     expect(await db.$count(connections)).toBe(0);
     expect(runtimeCalls.uninstall).toContain("mcp:demo");
+  }, 30_000);
+});
+
+describe("MCP connection lifecycle (the manager owns it)", () => {
+  let mcpServer: TestMcpServer;
+  let manager: ConnectionManager;
+  let runtimeCalls: { install: string[]; uninstall: string[] };
+  let configured: number[];
+  let changes: string[];
+
+  async function startManager(server: TestMcpServer) {
+    mcpServer = server;
+    runtimeCalls = { install: [], uninstall: [] };
+    configured = [];
+    changes = [];
+    setAgentRuntimeForTests({
+      configure: async () => undefined,
+      installCapability: () => undefined,
+      uninstallCapability: () => undefined,
+    } as never);
+    manager = new ConnectionManager();
+    setConnectionManagerForTests(manager);
+    manager.onChange((_id, state) => changes.push(state.status));
+    await manager.start({
+      installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
+      uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
+      configure: async (conversationId: number) => void configured.push(conversationId),
+      listModels: () => [],
+    } as never);
+  }
+
+  beforeEach(async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    await db.delete(bots);
+    await startManager(await startMcpServer());
+  });
+
+  afterEach(async () => {
+    await manager.close();
+    setConnectionManagerForTests(undefined);
+    setAgentRuntimeForTests(undefined as never);
+    await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
+    await db.delete(botConnections);
+    await db.delete(connections);
+    await db.delete(bots);
+  });
+
+  const createDemo = (app: TestApp, extra: Record<string, unknown> = {}) =>
+    call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, url: mcpServer.url, ...extra },
+    });
+
+  it("a row change during a connect supersedes it: the old attempt's result is dropped", async () => {
+    const app = buildApp();
+    const created = await createDemo(app);
+    const id = created.data.id;
+    expect(created.data.status).toBe("connected");
+
+    // Attempt 1 would succeed (right secret) but is slow; attempt 2 (wrong
+    // secret) starts meanwhile and fails at once. The slow success must not
+    // overwrite the newer failure.
+    mcpServer.delayMs = 800;
+    void manager.rowChanged(id, 0);
+    await sleep(20);
+    mcpServer.delayMs = 0;
+    const patched = await call(app, `/api/v1/connections/${id}`, 200, {
+      method: "PATCH",
+      json: { secret: "wrong" },
+    });
+    expect(patched.data.status).toBe("error");
+    await sleep(1_200);
+    expect(manager.status(id).status).toBe("error");
+  }, 30_000);
+
+  it("removing a connection cancels its connect attempt and never brings it back", async () => {
+    const app = buildApp();
+    const created = await createDemo(app);
+    const id = created.data.id;
+    const installsBefore = runtimeCalls.install.length;
+
+    mcpServer.delayMs = 800;
+    void manager.rowChanged(id, 0);
+    await sleep(20);
+    await call(app, `/api/v1/connections/${id}`, 200, { method: "DELETE" });
+    expect(runtimeCalls.uninstall).toContain("mcp:demo");
+    changes = [];
+    mcpServer.delayMs = 0;
+    await sleep(1_200);
+    // No state, no capability, no announcement from the attempt that outlived the row.
+    expect(manager.status(id)).toEqual({ status: "connecting" });
+    expect(runtimeCalls.install.length).toBe(installsBefore);
+    expect(changes).toEqual([]);
+  }, 30_000);
+
+  it("creating a connection with bots Reconciles each bot once", async () => {
+    const app = buildApp();
+    const [bot] = await db
+      .insert(bots)
+      .values({ name: "Ops", modelId: "m", conversationId: "960" })
+      .returning();
+    await createDemo(app, { botIds: [bot!.id] });
+    expect(configured.filter((c) => c === 960)).toHaveLength(1);
+  }, 30_000);
+
+  it("installs tool_search while any connection defers its tools, and uninstalls it after the last", async () => {
+    await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
+    await manager.close();
+    await startManager(await startMcpServer(MCP_DEFER_THRESHOLD));
+    const app = buildApp();
+    const first = await createDemo(app, { name: "Big one" });
+    const second = await createDemo(app, { name: "Big two" });
+    expect(runtimeCalls.install.filter((id) => id === "tool-search")).toHaveLength(1);
+
+    await call(app, `/api/v1/connections/${first.data.id}`, 200, { method: "DELETE" });
+    expect(runtimeCalls.uninstall).not.toContain("tool-search");
+    await call(app, `/api/v1/connections/${second.data.id}`, 200, { method: "DELETE" });
+    expect(runtimeCalls.uninstall).toContain("tool-search");
   }, 30_000);
 });
 

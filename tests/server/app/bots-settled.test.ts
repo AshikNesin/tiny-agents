@@ -23,6 +23,20 @@ describe("settle", () => {
     expect(readChat).not.toHaveBeenCalled();
   });
 
+  it("tells the steps when the reply started, from the busy flip", async () => {
+    const seen: (number | undefined)[] = [];
+    await settle({ readChat: vi.fn() } as never, 5, [
+      { name: "a", run: async (c) => seen.push(c.startedAt) },
+    ]);
+    await settle(
+      { readChat: vi.fn() } as never,
+      5,
+      [{ name: "a", run: async (c) => seen.push(c.startedAt) }],
+      1234,
+    );
+    expect(seen).toEqual([undefined, 1234]);
+  });
+
   it("keeps going past a failed step", async () => {
     const ran: string[] = [];
     await settle({ readChat: vi.fn() } as never, 5, [

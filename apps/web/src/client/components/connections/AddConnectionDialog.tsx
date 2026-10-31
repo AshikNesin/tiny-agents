@@ -15,7 +15,8 @@ import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { connectionsApi, type Connection, type TestResult } from "../../lib/connections-api";
-import { errorMessage, openOAuthPopup } from "./connection-status";
+import { connectionAuth } from "../../lib/connection-auth";
+import { errorMessage } from "./connection-status";
 
 type AuthType = "none" | "header" | "oauth";
 
@@ -113,42 +114,44 @@ export function AddConnectionDialog({
     }
   };
 
-  const save = async () => {
+  // Runs in the click itself: an OAuth sign-in opens its popup before the
+  // first await, then waits for the connection to exist.
+  const save = () => {
     if (!canSave) return;
     setSaving(true);
-    try {
-      const connection = await connectionsApi.create({
-        name: form.name.trim(),
-        url: form.url.trim(),
-        authType: form.authType,
-        ...(form.authType === "header"
-          ? { headerName: form.headerName.trim() || "x-api-key", secret: form.secret }
-          : {}),
-        ...(form.authType === "oauth" && form.clientId.trim()
-          ? {
-              clientId: form.clientId.trim(),
-              ...(form.clientSecret ? { clientSecret: form.clientSecret } : {}),
-            }
-          : {}),
-      });
-      if (form.authType === "oauth") {
-        try {
-          const { authorizationUrl } = await connectionsApi.authorize(connection.id);
-          if (authorizationUrl) {
-            if (!openOAuthPopup(authorizationUrl))
-              toast.error("Allow pop-ups to finish signing in");
+    const created = connectionsApi.create({
+      name: form.name.trim(),
+      url: form.url.trim(),
+      authType: form.authType,
+      ...(form.authType === "header"
+        ? { headerName: form.headerName.trim() || "x-api-key", secret: form.secret }
+        : {}),
+      ...(form.authType === "oauth" && form.clientId.trim()
+        ? {
+            clientId: form.clientId.trim(),
+            ...(form.clientSecret ? { clientSecret: form.clientSecret } : {}),
           }
-        } catch (error) {
-          toast.error(errorMessage(error, "Could not start sign-in"));
-        }
+        : {}),
+    });
+    const signIn =
+      form.authType === "oauth"
+        ? connectionAuth.signIn(created.then((connection) => connection.id))
+        : undefined;
+    void (async () => {
+      try {
+        const connection = await created;
+        const outcome = await signIn;
+        if (outcome?.status === "blocked") toast.error("Allow pop-ups to finish signing in");
+        else if (outcome?.status === "failed")
+          toast.error(errorMessage(outcome.error, "Could not start sign-in"));
+        toast.success("Connection added");
+        onCreated(connection);
+      } catch (error) {
+        toast.error(errorMessage(error, "Failed to add connection"));
+      } finally {
+        setSaving(false);
       }
-      toast.success("Connection added");
-      onCreated(connection);
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to add connection"));
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   return (
@@ -315,7 +318,7 @@ export function AddConnectionDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={() => void save()} disabled={!canSave}>
+            <Button onClick={save} disabled={!canSave}>
               Save
             </Button>
           </div>

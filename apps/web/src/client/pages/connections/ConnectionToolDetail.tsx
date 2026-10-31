@@ -40,7 +40,7 @@ import {
   type ConnectionToolDetail as ToolDetail,
   type ToolCallResult,
 } from "../../lib/connections-api";
-import { subscribeSse } from "../../lib/sse";
+import { onConnectionChange } from "../../store/bots";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../components/connections/connection-status";
 import {
@@ -453,13 +453,13 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    const events = subscribeSse("/api/v1/events", (event) => {
-      const typed = event as { type?: string; id?: string };
-      if (typed.type === "connection" && typed.id === id) void refresh();
-    });
-    return () => events.close();
-  }, [id, refresh]);
+  useEffect(
+    () =>
+      onConnectionChange((change) => {
+        if (change.id === id) void refresh();
+      }),
+    [id, refresh],
+  );
 
   const toggle = async (enabled: boolean) => {
     if (!tool) return;

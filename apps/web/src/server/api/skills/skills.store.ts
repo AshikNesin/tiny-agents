@@ -4,7 +4,7 @@
  * stays one-way — `@tiny-agents/agent` defines the port, apps/web implements it.
  */
 import { asc, eq } from "drizzle-orm";
-import { botSkills, bots, db, skills } from "../../db";
+import { botSkills, db, skills } from "../../db";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
 import type { SkillFile } from "./skills.parse";
@@ -21,11 +21,7 @@ function files(raw: string): SkillFile[] {
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
   if (!owner) return { botId: undefined, skills: [] };
-  const bot = await db.query.bots.findFirst({
-    where: eq(bots.id, owner.botId),
-    columns: { id: true },
-  });
-  if (!bot) return { botId: undefined, skills: [] };
+  const bot = owner.bot;
   const links = await db
     .select({ skill: skills })
     .from(botSkills)

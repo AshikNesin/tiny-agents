@@ -24,13 +24,4 @@ export function authDescription(connection: Pick<Connection, "authType" | "heade
   return "No authentication";
 }
 
-export function openOAuthPopup(url: string): boolean {
-  const popup = window.open(
-    url,
-    "tiny-agents-oauth",
-    "popup=yes,width=640,height=720,scrollbars=yes",
-  );
-  return popup !== null;
-}
-
 export { errorMessage } from "../../lib/errors";

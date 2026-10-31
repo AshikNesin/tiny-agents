@@ -1,7 +1,7 @@
 /**
- * "A bot needs you", outside the expanded sidebar (issue #90): the tab title
- * and favicon carry the count of approvals and questions waiting on the
- * owner, and the collapsed rail keeps the bots that matter in view.
+ * "A bot needs you" (issue #90): what a bot's list entry says about it, read
+ * in one place for every surface: the sidebar row, the collapsed rail, the
+ * tab title and the favicon.
  */
 import { matchPath } from "react-router-dom";
 import type { BotListEntry } from "./bots-api";
@@ -9,9 +9,43 @@ import { APP_NAV } from "../components/shell/nav";
 
 const APP_NAME = "tiny-agents";
 
+/** What the list entry says the bot needs, in order of urgency. */
+export interface BotAttention {
+  /** Approvals plus Questions waiting on the owner. */
+  waiting: number;
+  replying: boolean;
+  unread: boolean;
+}
+
+type AttentionFields = Pick<BotListEntry, "approvals" | "questions" | "replying" | "unread">;
+
+export function attentionOf(bot: AttentionFields): BotAttention {
+  return { waiting: bot.approvals + bot.questions, replying: bot.replying, unread: bot.unread };
+}
+
+/** What the bot is waiting on the owner for, e.g. "1 awaiting approval, 2 questions for you". */
+export function waitingLabel({
+  approvals,
+  questions,
+}: Pick<BotListEntry, "approvals" | "questions">): string {
+  return [
+    approvals > 0 ? `${approvals} awaiting approval` : "",
+    questions > 0 ? `${questions} ${questions === 1 ? "question" : "questions"} for you` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** A bot's state in words, for the rail's labels and tooltips. */
+export function stateLabel(bot: AttentionFields & { name: string }): string {
+  const { replying, unread } = attentionOf(bot);
+  const state = waitingLabel(bot) || (replying ? "replying" : unread ? "unread" : "");
+  return state ? `${bot.name}, ${state}` : bot.name;
+}
+
 /** Approvals plus questions waiting on the owner, across every bot. */
 export function waitingCount(bots: readonly BotListEntry[]): number {
-  return bots.reduce((sum, bot) => sum + bot.approvals + bot.questions, 0);
+  return bots.reduce((sum, bot) => sum + attentionOf(bot).waiting, 0);
 }
 
 /** What the current page is called: the open bot's name, or the section's. */
@@ -40,18 +74,20 @@ export function railBots(
   activeId: string | null,
   limit = 8,
 ): { shown: BotListEntry[]; hiddenWaiting: number } {
-  const rank = (bot: BotListEntry) =>
-    bot.approvals + bot.questions > 0
+  const rank = (bot: BotListEntry) => {
+    const { waiting, replying, unread } = attentionOf(bot);
+    return waiting > 0
       ? 0
-      : bot.replying
+      : replying
         ? 1
-        : bot.unread
+        : unread
           ? 2
           : bot.id === activeId
             ? 3
             : bot.pinnedAt
               ? 4
               : 5;
+  };
   const relevant = bots
     .map((bot, index) => ({ bot, index, rank: rank(bot) }))
     .filter((entry) => entry.rank < 5)
@@ -59,7 +95,7 @@ export function railBots(
   const shown = relevant.slice(0, limit).map((entry) => entry.bot);
   const hiddenWaiting = relevant
     .slice(limit)
-    .reduce((sum, { bot }) => sum + bot.approvals + bot.questions, 0);
+    .reduce((sum, { bot }) => sum + attentionOf(bot).waiting, 0);
   return { shown, hiddenWaiting };
 }
 

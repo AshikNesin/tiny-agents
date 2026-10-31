@@ -100,6 +100,69 @@ describe("BotDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("keeps the owner's edits when the model catalog arrives after the dialog opened", async () => {
+    const { rerender } = render(
+      <BotDialog open onOpenChange={() => {}} models={[]} bot={null} onSaved={() => {}} />,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Name"), "Ada");
+    // Nothing to save on yet: no model is known.
+    expect(screen.getByRole("button", { name: /create bot/i })).toBeDisabled();
+
+    // The catalog loads (a dialog opened right after start-up).
+    rerender(
+      <BotDialog
+        open
+        onOpenChange={() => {}}
+        models={models}
+        defaultModelId="test-model"
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue("Ada");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Test Model (faux)" })).toBeTruthy(),
+    );
+    expect(screen.getByRole("button", { name: /create bot/i })).toBeEnabled();
+  });
+
+  it("starts the form over only when it opens again", async () => {
+    const { rerender } = render(
+      <BotDialog
+        open
+        onOpenChange={() => {}}
+        models={models}
+        defaultModelId="test-model"
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Name"), "Ada");
+    rerender(
+      <BotDialog
+        open={false}
+        onOpenChange={() => {}}
+        models={models}
+        defaultModelId="test-model"
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    rerender(
+      <BotDialog
+        open
+        onOpenChange={() => {}}
+        models={models}
+        defaultModelId="test-model"
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+  });
+
   it("offers no delete while creating", () => {
     render(
       <BotDialog open onOpenChange={() => {}} models={models} bot={null} onSaved={() => {}} />,

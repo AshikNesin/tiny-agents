@@ -8,6 +8,7 @@
  * dropped whole. Nothing here runs on the reply path.
  */
 import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import type { SettledStep } from "./bots.settled";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
@@ -22,10 +23,6 @@ import { bots, db, memories, type AppDatabase } from "../../db";
 
 /** The minimum the capture side-call needs from the runtime's model registry. */
 export type CaptureModels = Pick<MutableModels, "getModel" | "completeSimple">;
-
-export interface CaptureRuntime {
-  onActivity(listener: (change: { conversation: number; busy: boolean }) => void): () => void;
-}
 
 export function buildCapturePrompt(input: {
   botName: string;
@@ -201,62 +198,78 @@ interface PendingCapture {
   turns: number;
 }
 
+export interface MemoryCapture {
+  /** The settled step: each finished Turn arms the conversation's capture window. */
+  onSettled: SettledStep;
+  stop(): void;
+}
+
 /**
- * The activity-feed listener. Arms a debounce per conversation; the quiet
- * window pushes back on every turn and the turn limit forces a capture.
- * Losing a pending timer to a restart costs latency, never facts: the
- * watermark only advances on committed captures.
+ * Memory capture's debounce (issue #22 phase B). Every settled Turn pushes a
+ * per-conversation quiet window back; the window, or the turn limit, runs
+ * one capture. One capture runs per conversation at a time: Turns that
+ * settle meanwhile keep counting and re-arm the window once it is done, so
+ * none is lost. Losing a pending timer to a restart costs latency, never
+ * facts: the watermark only advances on committed captures.
  */
-export function startMemoryCapture(
-  runtime: CaptureRuntime,
-  deps: {
-    models: CaptureModels | undefined;
-    captureNow: (conversationId: number) => Promise<void>;
-    quietMs?: number;
-    turnLimit?: number;
-  },
-): () => void {
+export function createMemoryCapture(deps: {
+  captureNow: (conversationId: number) => Promise<void>;
+  quietMs?: number;
+  turnLimit?: number;
+}): MemoryCapture {
   const quietMs = deps.quietMs ?? MEMORY_QUIET_MS;
   const turnLimit = deps.turnLimit ?? MEMORY_TURN_LIMIT;
   const pending = new Map<number, PendingCapture>();
-  // One capture per conversation at a time: overlapping captures could both
-  // pass dedupe against the same rows and an older run could overwrite a
-  // newer watermark.
   const inflight = new Set<number>();
+  /** Conversations that settled again while their capture ran. */
+  const missed = new Set<number>();
 
   const run = (conversationId: number) => {
-    if (inflight.has(conversationId)) return;
+    if (inflight.has(conversationId)) {
+      missed.add(conversationId);
+      return;
+    }
     inflight.add(conversationId);
     void deps
       .captureNow(conversationId)
       .catch((error: unknown) => logger.error({ error }, "Memory capture failed"))
-      .finally(() => inflight.delete(conversationId));
+      .finally(() => {
+        inflight.delete(conversationId);
+        if (missed.delete(conversationId)) {
+          // The Turns that settled meanwhile wait for the quiet window again.
+          const turns = pending.get(conversationId)?.turns ?? 1;
+          arm(conversationId, turns, { waitAnyway: true });
+        }
+      });
   };
 
-  const arm = (conversationId: number, turns: number) => {
+  const arm = (conversationId: number, turns: number, options: { waitAnyway?: boolean } = {}) => {
     const state = pending.get(conversationId) ?? { timer: null, turns: 0 };
     state.turns = turns;
     if (state.timer) clearTimeout(state.timer);
-    if (turns >= turnLimit) {
-      pending.set(conversationId, { timer: null, turns: 0 });
+    if (turns >= turnLimit && !options.waitAnyway) {
+      pending.delete(conversationId);
       run(conversationId);
       return;
     }
     state.timer = setTimeout(() => {
-      pending.set(conversationId, { timer: null, turns: 0 });
+      pending.delete(conversationId);
       run(conversationId);
     }, quietMs);
     pending.set(conversationId, state);
   };
 
-  const stop = runtime.onActivity((change) => {
-    if (change.busy) return;
-    arm(change.conversation, (pending.get(change.conversation)?.turns ?? 0) + 1);
-  });
-
-  return () => {
-    stop();
-    for (const state of pending.values()) if (state.timer) clearTimeout(state.timer);
-    pending.clear();
+  return {
+    onSettled: {
+      name: "memory capture",
+      run: ({ conversationId }) => {
+        arm(conversationId, (pending.get(conversationId)?.turns ?? 0) + 1);
+        return Promise.resolve();
+      },
+    },
+    stop() {
+      for (const state of pending.values()) if (state.timer) clearTimeout(state.timer);
+      pending.clear();
+    },
   };
 }

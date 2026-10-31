@@ -25,7 +25,7 @@ import {
   type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
-import { gateApproved, isUnattendedConversation, withGatePlan } from "../approvals";
+import { isUnattendedConversation, withGatePlan } from "../approvals";
 import type { Capability, ToolInfo } from "../capabilities";
 import {
   CREDENTIAL_REQUEST_TTL_MS,
@@ -37,10 +37,10 @@ import {
   type CredentialFieldType,
   type CredentialRequest,
 } from "../credentials";
-import { hasGrant, SecretValue, VAULT_RULE, vaultGrant, type VaultBroker } from "../vault";
+import { SecretValue, VAULT_RULE, type VaultBroker } from "../vault";
 import { waitForOwner, type WaitTracker } from "../waiting";
 import { OriginMismatchError, type SecretFill, type SecretFillField } from "./browser-fill";
-import { safeMessage, vaultGatePlan } from "./vault";
+import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 import { checkPublicUrl } from "./web";
 
 /** Where a session is while it opens; `installing` is the one-time VM setup. */
@@ -1133,21 +1133,17 @@ function vaultTools(options: BrowserToolkitOptions) {
               if (args.ref) assertRefShape(args.ref);
               const s = await withDriverTurn(options, Number(api.conversationId));
               const origin = await currentOrigin(s.session);
-              const use = {
-                handle: args.handle,
-                tool: "browser_fill_secret",
-                target: origin,
-                conversation: Number(api.conversationId),
-                granted: await hasGrant(api, vaultGrant(args.handle), context),
-              };
-              const planned = await api.memo<{ target?: string }>("vault:use", context);
-              if (planned?.target && planned.target !== origin) {
-                await broker.record(use, "refused_origin", "page moved after planning");
-                return fail(ORIGIN_MOVED(origin));
-              }
               let chosen = "password" as FillableField;
-              const result = await broker.use(
-                { ...use, approved: await gateApproved(api, context) },
+              const result = await useFromSink(
+                broker,
+                api,
+                context,
+                {
+                  handle: args.handle,
+                  tool: "browser_fill_secret",
+                  targetKind: "origin",
+                  target: origin,
+                },
                 (item) => {
                   chosen = args.field ?? (item.kind === "card" ? "card" : "password");
                   if (chosen === "card") {
@@ -1212,6 +1208,7 @@ function vaultTools(options: BrowserToolkitOptions) {
                   };
                   return s.session.fillSecret!(fill);
                 },
+                ORIGIN_MOVED,
               );
               const filled = [
                 ...new Set(result.filled.map((key) => key.replace(/_(month|year)$/, ""))),
@@ -1243,7 +1240,12 @@ function vaultTools(options: BrowserToolkitOptions) {
           if (!/^https?:\/\//.test(origin)) {
             return { refuse: "Open the sign-in or checkout page in the browser first." };
           }
-          return { handle: args.handle, tool: "browser_fill_secret", target: origin };
+          return {
+            handle: args.handle,
+            tool: "browser_fill_secret",
+            targetKind: "origin",
+            target: origin,
+          };
         }),
       ),
       withGatePlan(
@@ -1283,21 +1285,17 @@ function vaultTools(options: BrowserToolkitOptions) {
               if (!args.handle) return await askOwner();
               const s = await withDriverTurn(options, Number(api.conversationId));
               const origin = await currentOrigin(s.session);
-              const use = {
-                handle: args.handle,
-                tool: "browser_enter_code",
-                target: origin,
-                conversation: Number(api.conversationId),
-                granted: await hasGrant(api, vaultGrant(args.handle), context),
-              };
-              const planned = await api.memo<{ target?: string }>("vault:use", context);
-              if (planned?.target && planned.target !== origin) {
-                await broker.record(use, "refused_origin", "page moved after planning");
-                return fail(ORIGIN_MOVED(origin));
-              }
               let hasSeed = true;
-              const result = await broker.use(
-                { ...use, approved: await gateApproved(api, context) },
+              const result = await useFromSink(
+                broker,
+                api,
+                context,
+                {
+                  handle: args.handle,
+                  tool: "browser_enter_code",
+                  targetKind: "origin",
+                  target: origin,
+                },
                 (item) => {
                   hasSeed = item.hasTotp;
                   return item.hasTotp ? ["totp"] : [];
@@ -1316,6 +1314,7 @@ function vaultTools(options: BrowserToolkitOptions) {
                         ],
                       })
                     : { filled: [] },
+                ORIGIN_MOVED,
               );
               if (!hasSeed) return await askOwner();
               if (result.filled.length === 0) {
@@ -1344,7 +1343,12 @@ function vaultTools(options: BrowserToolkitOptions) {
           const origin = await currentOrigin(tab.session);
           if (!/^https?:\/\//.test(origin))
             return { refuse: "Open the page asking for the code first." };
-          return { handle: args.handle, tool: "browser_enter_code", target: origin };
+          return {
+            handle: args.handle,
+            tool: "browser_enter_code",
+            targetKind: "origin",
+            target: origin,
+          };
         }),
       ),
     );

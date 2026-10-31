@@ -241,6 +241,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       const plan = await broker!.plan({
         handle: secret.handle,
         tool: "run_command",
+        targetKind: "command",
         target: args.command,
         conversation: Number(api.conversationId),
         granted: false,
@@ -257,6 +258,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           {
             handle: secret.handle,
             tool: "run_command",
+            targetKind: "command",
             target: args.command,
             conversation: Number(api.conversationId),
             granted: false,
@@ -366,6 +368,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
                 {
                   handle: secrets[index].handle,
                   tool: "run_command",
+                  targetKind: "command",
                   target: args.command,
                   conversation: Number(api.conversationId),
                   granted: false,
@@ -411,6 +414,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
             {
               handle: secret.handle,
               tool: "run_command",
+              targetKind: "command",
               target: (args as RunArgs).command,
               conversation: Number(api.conversationId),
               granted: false,

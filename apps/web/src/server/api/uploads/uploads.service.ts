@@ -6,7 +6,8 @@
  * Images get a model-ready variant (EXIF-upright, resized, base64-bounded)
  * prepared at upload time so the send click never waits on Photon. Every
  * other file is sniffed (issue #58: the stored MIME is what the bytes are)
- * and queued for background extraction.
+ * and handed to extraction (uploads.extraction.ts), which owns its state
+ * from there.
  */
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -14,9 +15,15 @@ import { Boom } from "@groot/core/errors";
 import { storageService } from "@groot/core/storage";
 import type { AttachmentRef } from "@tiny-agents/agent";
 import { db, uploads } from "../../db";
-import { imageSize, prepareImage, sniffImage } from "./uploads.prepare";
-import { extract } from "./uploads.extract";
-import { extractKey, forgetContent, queueExtraction } from "./uploads.extraction";
+import { asBuffer, imageSize, prepareImage, sniffImage } from "./uploads.prepare";
+import {
+  cancelExtraction,
+  ensureExtracting,
+  extractKey,
+  forgetContent,
+  initialExtraction,
+  startExtraction,
+} from "./uploads.extraction";
 import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 
 /** Max original sizes (issue #17 limits table). */
@@ -160,11 +167,6 @@ export async function createUpload(
     });
   }
 
-  // Types we can't read are settled now; the rest extract in the background.
-  const unreadable =
-    sniffedFile?.kind === "unsupported"
-      ? await extract({ bytes: new Uint8Array(), kind: "unsupported", name }, sniffedFile.mime)
-      : undefined;
   const [row] = await db
     .insert(uploads)
     .values({
@@ -177,18 +179,10 @@ export async function createUpload(
       modelKey,
       storageKey: originalKey,
       sha256: createHash("sha256").update(input.bytes).digest("hex"),
-      ...(isImage
-        ? {}
-        : unreadable && unreadable.status !== "ready"
-          ? {
-              extractStatus: unreadable.status,
-              extractError: unreadable.error,
-              extractedAt: new Date(),
-            }
-          : { extractStatus: "pending" }),
+      ...(await initialExtraction(sniffedFile, name)),
     })
     .returning();
-  if (row!.extractStatus === "pending") queueExtraction(row!.id);
+  startExtraction(row!, sniffedFile?.kind);
   return { ref: toRef(row!) };
 }
 
@@ -217,14 +211,9 @@ function toRef(row: {
 
 /** An upload's live extraction state, for chips and the preview drawer. */
 export async function uploadStatus(id: string) {
-  const row = await findUpload(id);
-  if (!row) throw Boom.notFound("Unknown upload");
-  // Uploads from before extraction existed are read on first request.
-  if (row.kind === "file" && row.extractStatus === "none") {
-    await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, id));
-    queueExtraction(id);
-    row.extractStatus = "pending";
-  }
+  const found = await findUpload(id);
+  if (!found) throw Boom.notFound("Unknown upload");
+  const row = await ensureExtracting(found);
   return {
     ref: toRef(row),
     status: row.extractStatus,
@@ -243,11 +232,6 @@ function findUpload(id: string) {
   return db.query.uploads.findFirst({ where: eq(uploads.id, id) });
 }
 
-/** A Buffer view over stored bytes (no copy): the sniffers read Buffer APIs. */
-function asBuffer(bytes: Uint8Array<ArrayBuffer>): Buffer<ArrayBuffer> {
-  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-}
-
 /** Original bytes for the UI/download endpoint. */
 export async function originalBytes(
   id: string,
@@ -257,30 +241,12 @@ export async function originalBytes(
   return { bytes: asBuffer(file.bytes), ref };
 }
 
-/** Model-ready variant bytes for see_image and inline sends. */
-export async function modelImage(
-  id: string,
-): Promise<
-  { data: string; mimeType: string; name: string; width?: number; height?: number } | undefined
-> {
-  const row = await findUpload(id);
-  if (!row || row.kind !== "image" || !row.modelKey) return undefined;
-  const file = await storageService.downloadFile({ filePath: row.modelKey });
-  const bytes = asBuffer(file.bytes);
-  return {
-    data: bytes.toString("base64"),
-    // The variant's own bytes decide: local storage types objects by key
-    // extension, and `chat/<id>/model` has none.
-    mimeType: sniffImage(bytes) ?? (file.contentType || row.mimeType),
-    name: row.name,
-    ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
-  };
-}
-
 /** Delete an upload: the row, the original and every derived artifact. */
 export async function deleteUpload(id: string): Promise<void> {
   const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
+  // A job still running for it writes nothing more (no orphan extract.json).
+  cancelExtraction(id);
   await db.delete(uploads).where(eq(uploads.id, id));
   forgetContent(id);
   const keys = [

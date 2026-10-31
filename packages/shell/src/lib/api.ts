@@ -74,6 +74,19 @@ function buildUrl(path: string, params?: Params): string {
  * request; what a 401 means is up to whoever subscribes to `onUnauthorized`
  * (the session store in `@groot/shell/store/auth`).
  */
+/** Per-request extras every verb accepts. */
+export interface ExtraOptions {
+  /** Headers added to the request (a step-up token, an idempotency key). */
+  headers?: Record<string, string>;
+}
+
+export interface RequestOptions extends ExtraOptions {
+  params?: Params;
+  body?: unknown;
+  /** The endpoint may answer with no data; return `undefined` instead of throwing. */
+  emptyOk?: boolean;
+}
+
 class ApiClient {
   private readonly unauthorizedHandlers = new Set<(event: UnauthorizedEvent) => void>();
 
@@ -88,9 +101,9 @@ class ApiClient {
   private async send(
     method: string,
     path: string,
-    options: { params?: Params; body?: unknown } = {},
+    options: RequestOptions = {},
   ): Promise<Response> {
-    const headers = new Headers({ accept: "application/json" });
+    const headers = new Headers({ accept: "application/json", ...options.headers });
     let body: BodyInit | undefined;
     if (options.body instanceof FormData) {
       body = options.body; // the browser sets multipart/form-data with the boundary
@@ -150,31 +163,40 @@ class ApiClient {
     return envelope.data;
   }
 
-  private async call<T>(
-    method: string,
-    path: string,
-    options?: { params?: Params; body?: unknown },
-  ): Promise<T> {
+  private async call<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
     return this.unwrap<T>(
       await this.envelope<T>(await this.send(method, path, options), path),
       path,
     );
   }
 
-  async get<T>(url: string, params?: Params): Promise<T> {
-    return this.call<T>("GET", url, { params });
+  /**
+   * Any verb with the full set of options: query params, a JSON (or
+   * FormData) body, extra headers such as a step-up token, and `emptyOk`
+   * for an endpoint that may answer with no data (as DELETE does), in which
+   * case the result is whatever data came back or `undefined`.
+   */
+  async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    const verb = method.toUpperCase();
+    if (!options.emptyOk) return this.call<T>(verb, path, options);
+    const envelope = await this.envelope<T>(await this.send(verb, path, options), path);
+    return envelope.data as T;
   }
 
-  async post<T>(url: string, data?: unknown): Promise<T> {
-    return this.call<T>("POST", url, { body: data });
+  async get<T>(url: string, params?: Params, options?: ExtraOptions): Promise<T> {
+    return this.call<T>("GET", url, { ...options, params });
   }
 
-  async put<T>(url: string, data?: unknown): Promise<T> {
-    return this.call<T>("PUT", url, { body: data });
+  async post<T>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
+    return this.call<T>("POST", url, { ...options, body: data });
   }
 
-  async patch<T>(url: string, data?: unknown): Promise<T> {
-    return this.call<T>("PATCH", url, { body: data });
+  async put<T>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
+    return this.call<T>("PUT", url, { ...options, body: data });
+  }
+
+  async patch<T>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
+    return this.call<T>("PATCH", url, { ...options, body: data });
   }
 
   /**
@@ -182,9 +204,8 @@ class ApiClient {
    * (204 No Content), so this does not throw on missing data — it returns
    * whatever data is present (typed by the caller) or `undefined`.
    */
-  async delete<T = unknown>(url: string, data?: unknown): Promise<T> {
-    const envelope = await this.envelope<T>(await this.send("DELETE", url, { body: data }), url);
-    return envelope.data as T;
+  async delete<T = unknown>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
+    return this.request<T>("DELETE", url, { ...options, body: data, emptyOk: true });
   }
 
   /** Upload `FormData` — the browser sets the multipart Content-Type + boundary. */

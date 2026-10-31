@@ -50,12 +50,24 @@ export interface VaultItemMeta {
   tools: string[];
 }
 
+/**
+ * What a sink sends a value to, which decides how an item's policy applies:
+ * - `origin`: a page; the item must list the exact origin.
+ * - `host`: a request; the item must list the host.
+ * - `command`: code the model wrote, run confined to the item's hosts, so
+ *   the item must name some; every use asks.
+ * - `connection`: an MCP connection the owner linked the item to.
+ */
+export type VaultTargetKind = "origin" | "host" | "command" | "connection";
+
 /** One intended use of an item: what policy, the approval card and the audit see. */
 export interface VaultUse {
   handle: string;
-  /** The sink tool ("browser_fill_secret", "http_request", …). */
+  /** The sink tool ("browser_fill_secret", "http_request", …); the item's policy may name it. */
   tool: string;
-  /** Origin, host or command the value goes to. */
+  /** How the policy reads `target`. */
+  targetKind: VaultTargetKind;
+  /** Origin, host, command or connection the value goes to. */
   target: string;
   conversation: number;
   /** The owner granted this handle for the whole conversation. */
@@ -103,7 +115,9 @@ export type VaultOutcome =
   | "denied"
   | "expired"
   | VaultRefusal
-  | "backend_error";
+  | "backend_error"
+  /** The value was resolved but the sink failed; nothing is known to have been used. */
+  | "sink_error";
 
 /** Implemented in apps/web; injected into toolkits. */
 export interface VaultBroker {

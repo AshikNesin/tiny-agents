@@ -22,7 +22,8 @@ import {
   type CredentialRequest,
   type SecretFillField,
 } from "@tiny-agents/agent";
-import { bots, db, vaultItems } from "../../db";
+import { logger } from "@groot/core/logger";
+import { db, vaultItems } from "../../db";
 import { browserTargetForConversation } from "../bots/browser.targets";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { conversationOwner } from "../bots/bots.owner";
@@ -46,12 +47,7 @@ async function pending(taskId: number, runtime: RequestRuntime) {
 export async function requestView(taskId: number, runtime: RequestRuntime = getAgentRuntime()) {
   const { conversation, request, expiresAt } = await pending(taskId, runtime);
   const owner = await conversationOwner(conversation);
-  const bot = owner
-    ? await db.query.bots.findFirst({
-        where: eq(bots.id, owner.botId),
-        columns: { id: true, name: true },
-      })
-    : undefined;
+  const bot = owner ? { id: owner.bot.id, name: owner.bot.name } : undefined;
   const liveOrigin = await browserTabOrigin(await browserTargetForConversation(conversation));
   return {
     taskId,
@@ -179,12 +175,30 @@ async function save(
   return undefined;
 }
 
+/** Requests a submit is filling right now: a second submit of one waits for nothing and is refused. */
+const submitting = new Set<number>();
+
 export async function submitRequest(
   taskId: number,
   input: { values: Record<string, string>; save: boolean },
   runtime: RequestRuntime = getAgentRuntime(),
 ) {
+  if (submitting.has(taskId)) throw Boom.conflict("This request is being filled already.");
+  submitting.add(taskId);
+  try {
+    return await fillRequest(taskId, input, runtime);
+  } finally {
+    submitting.delete(taskId);
+  }
+}
+
+async function fillRequest(
+  taskId: number,
+  input: { values: Record<string, string>; save: boolean },
+  runtime: RequestRuntime,
+) {
   const { conversation, request } = await pending(taskId, runtime);
+  const botId = (await conversationOwner(conversation))?.bot.id;
   const filled = checkValues(request, input.values);
   for (const { value } of filled) secretRedactor.register(value);
   const target = await browserTargetForConversation(conversation);
@@ -192,6 +206,7 @@ export async function submitRequest(
   if (live !== request.origin) {
     await audit({
       handle: "(credential request)",
+      botId,
       conversationId: conversation,
       taskId,
       tool: "credential_request",
@@ -225,28 +240,36 @@ export async function submitRequest(
       "No matching fields were found on the page. Open the live browser to check it, then try again.",
     );
   }
+  // The page is filled: from here the request settles whatever else fails.
   let savedHandle: string | undefined;
+  let saveFailed = false;
   if (input.save) {
-    savedHandle = await save(
-      request,
-      filled.filter(({ field }) => field.type !== "otp" && field.type !== "cvc"),
-    );
+    try {
+      savedHandle = await save(
+        request,
+        filled.filter(({ field }) => field.type !== "otp" && field.type !== "cvc"),
+      );
+    } catch (error) {
+      saveFailed = true;
+      logger.warn({ error, taskId }, "Filled the page but could not save the login to the vault");
+    }
   }
   await audit({
     handle: savedHandle ?? "(credential request)",
+    botId,
     conversationId: conversation,
     taskId,
     tool: "credential_request",
     target: request.origin,
     outcome: "filled",
-    reason: `keys: ${result.filled.join(", ")}`,
+    reason: `keys: ${result.filled.join(", ")}${saveFailed ? " (save to vault failed)" : ""}`,
   });
   await runtime.settleCredentialRequest(taskId, {
     status: "filled",
     filled: result.filled,
     ...(savedHandle ? { savedHandle } : {}),
   });
-  return { filled: result.filled, savedHandle: savedHandle ?? null };
+  return { filled: result.filled, savedHandle: savedHandle ?? null, saveFailed };
 }
 
 export async function cancelRequest(taskId: number, runtime: RequestRuntime = getAgentRuntime()) {
@@ -254,6 +277,7 @@ export async function cancelRequest(taskId: number, runtime: RequestRuntime = ge
   await runtime.settleCredentialRequest(taskId, { status: "cancelled" });
   await audit({
     handle: "(credential request)",
+    botId: (await conversationOwner(conversation))?.bot.id,
     conversationId: conversation,
     taskId,
     tool: "credential_request",

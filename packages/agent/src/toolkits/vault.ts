@@ -14,13 +14,15 @@ import {
   type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
-import type { GateHooks, GatePlan } from "../approvals";
+import { gateApproved, type GateHooks, type GatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
 import {
   hasGrant,
   VAULT_RULE,
   vaultGrant,
   VaultError,
+  type SecretField,
+  type SecretValues,
   type VaultBroker,
   type VaultItemMeta,
   type VaultUse,
@@ -113,6 +115,39 @@ export function vaultGatePlan<TArgs>(
       if (use) await broker.record(use as unknown as VaultUse, decision);
     },
   };
+}
+
+/** The use a call was gated for: what its sink and a denial are audited against. */
+export type IntendedUse = Omit<VaultUse, "granted" | "conversation">;
+
+/**
+ * Use an item from inside a gated sink tool: the one sequence every sink
+ * follows, so none repeats it. Resolves the conversation's grant and the
+ * gate's decision, refuses (and audits) a target that moved since the call
+ * was planned, then hands the fields to the sink through the broker. Throws
+ * `VaultError`; `moved` words the refusal for a target that changed.
+ */
+export async function useFromSink<T>(
+  broker: VaultBroker,
+  api: ToolExecutionApi,
+  context: Context,
+  intended: IntendedUse,
+  fields: readonly SecretField[] | ((item: VaultItemMeta) => readonly SecretField[]),
+  sink: (values: SecretValues, item: VaultItemMeta) => Promise<T>,
+  moved: (actual: string) => string = (actual) =>
+    `The target is now ${actual}, not the one this call was approved for. Nothing was used.`,
+): Promise<T> {
+  const use: VaultUse = {
+    ...intended,
+    conversation: Number(api.conversationId),
+    granted: await hasGrant(api, vaultGrant(intended.handle), context),
+  };
+  const planned = await api.memo<{ target?: string }>("vault:use", context);
+  if (planned?.target && planned.target !== use.target) {
+    await broker.record(use, "refused_origin", "target moved after planning");
+    throw new VaultError("refused_origin", moved(use.target));
+  }
+  return broker.use({ ...use, approved: await gateApproved(api, context) }, fields, sink);
 }
 
 /** A fixed message for a failed vault use: never a raw backend or page error. */

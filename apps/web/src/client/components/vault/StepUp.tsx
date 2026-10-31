@@ -34,18 +34,24 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const pending = useRef<((ok: boolean) => void) | null>(null);
+  // Everyone who asked while the prompt is open: one confirmation (or one
+  // dismissal) answers them all, and none is left waiting forever.
+  const pending = useRef<((ok: boolean) => void)[]>([]);
 
   const ask = () =>
     new Promise<boolean>((resolve) => {
-      pending.current = resolve;
-      setPassword("");
-      setOpen(true);
+      const first = pending.current.length === 0;
+      pending.current.push(resolve);
+      if (first) {
+        setPassword("");
+        setOpen(true);
+      }
     });
 
   const settle = (ok: boolean) => {
-    pending.current?.(ok);
-    pending.current = null;
+    const waiting = pending.current;
+    pending.current = [];
+    for (const resolve of waiting) resolve(ok);
     setOpen(false);
     setPassword("");
   };

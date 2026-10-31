@@ -20,6 +20,7 @@ import {
   type VaultKind,
   type VaultOutcome,
   type VaultPlan,
+  type VaultTargetKind,
   type VaultUse,
 } from "@tiny-agents/agent";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
@@ -40,9 +41,6 @@ export const KIND_DEFAULT_TOOLS: Record<VaultKind, string[]> = {
   identity: [],
   api_key: ["http_request", "mcp"],
 };
-
-/** Tools that fill a page: their target is an origin. */
-const BROWSER_TOOLS = new Set(["browser_fill_secret", "browser_enter_code", "credential_request"]);
 
 export const UNKNOWN_HANDLE = (handle: string) => `No vault item \`${handle}\`. Call vault_list.`;
 
@@ -218,32 +216,94 @@ export async function listFor(scope: {
     .map(toMeta);
 }
 
-function targetAllowed(row: VaultItemRow, tool: string, target: string): boolean {
-  if (BROWSER_TOOLS.has(tool)) {
-    const origin = normalizeOrigin(target);
-    return origin !== undefined && parseList(row.originsJson).includes(origin);
+/** Whether the item's policy lets a value go to this target, read by the target's kind. */
+function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string): boolean {
+  switch (kind) {
+    case "origin": {
+      const origin = normalizeOrigin(target);
+      return origin !== undefined && parseList(row.originsJson).includes(origin);
+    }
+    case "host":
+      return parseList(row.hostsJson)
+        .map((h) => h.toLowerCase())
+        .includes(target.toLowerCase());
+    // Commands run confined to the item's hosts, so it must name some.
+    case "command":
+      return parseList(row.hostsJson).length > 0;
+    // The owner linked the item to the connection itself.
+    case "connection":
+      return true;
+    default:
+      return false;
   }
-  if (tool === "http_request") {
-    return parseList(row.hostsJson)
-      .map((h) => h.toLowerCase())
-      .includes(target.toLowerCase());
+}
+
+function targetRefusal(row: VaultItemRow, use: Pick<VaultUse, "handle" | "targetKind" | "target">) {
+  switch (use.targetKind) {
+    case "origin":
+      return `Vault item \`${use.handle}\` only fills on ${parseList(row.originsJson).join(", ") || "no origin yet"}, not ${use.target}.`;
+    case "command":
+      return `Vault item \`${use.handle}\` names no hosts a command may reach; the owner must add them on the Vault page.`;
+    default:
+      return `Vault item \`${use.handle}\` may not be sent to ${use.target}.`;
   }
-  // Sandbox commands run confined to the item's hosts, so it must name some.
-  if (tool === "run_command") return parseList(row.hostsJson).length > 0;
-  // MCP connections: the owner linked the item to the connection itself.
-  return tool === "mcp";
 }
 
 type Refusal = Extract<VaultPlan, { refused: string }>;
 
+/** What a policy check is about: the use, minus the conversation a connection's use has none of. */
+type PolicyUse = Pick<VaultUse, "handle" | "tool" | "targetKind" | "target">;
+
+/**
+ * The one policy check: why this row may not be used this way, or nothing.
+ * `botScoped` is false for a use with no bot behind it (a connection the
+ * owner linked the item to). Checks the backend last, so a refusal never
+ * costs a backend round-trip.
+ */
+async function policyRefusal(
+  row: VaultItemRow | null,
+  use: PolicyUse,
+  who: UseContext,
+  botScoped = true,
+): Promise<{ refused: Refusal["refused"]; message: string; reason?: string } | undefined> {
+  // A bot that may not see an item learns nothing about it.
+  if (!row || (botScoped && !botAllowed(row, who.botId))) {
+    return { refused: "unknown_handle", message: UNKNOWN_HANDLE(use.handle) };
+  }
+  if (row.disabled) {
+    return { refused: "disabled", message: `Vault item \`${use.handle}\` is disabled.` };
+  }
+  if (!effectiveTools(row).includes(use.tool)) {
+    return {
+      refused: "refused_policy",
+      message: `Vault item \`${use.handle}\` can't be used by ${use.tool}.`,
+    };
+  }
+  if (!targetAllowed(row, use.targetKind, use.target)) {
+    return { refused: "refused_origin", message: targetRefusal(row, use) };
+  }
+  if (who.unattended && (row.kind === "card" || !row.allowUnattended)) {
+    return {
+      refused: "refused_unattended",
+      message: `Vault item \`${use.handle}\` can't be used without the owner present (routines and messages from other bots). Ask the owner in the chat.`,
+    };
+  }
+  const status = await backendStatus(row.backend as BackendName);
+  if (status.state !== "ready") {
+    return {
+      refused: "vault_locked",
+      message: "The vault is locked or unreachable. Ask the owner to check Settings → Vault.",
+      reason: status.code ?? status.detail,
+    };
+  }
+  return undefined;
+}
+
 /** The policy decision for a use; audits refusals. Resolves no value. */
 export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan> {
   const row = await findItem(use.handle);
-  const refuse = async (
-    refused: Refusal["refused"],
-    message: string,
-    reason?: string,
-  ): Promise<Refusal> => {
+  const refusal = await policyRefusal(row, use, who);
+  if (refusal) {
     await audit({
       ...(row ? { item: row } : {}),
       handle: use.handle,
@@ -251,57 +311,27 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
       conversationId: use.conversation,
       tool: use.tool,
       target: use.target,
-      outcome: refused,
-      reason: reason ?? message,
+      outcome: refusal.refused,
+      reason: refusal.reason ?? refusal.message,
       unattended: who.unattended,
     });
-    return { refused, message };
-  };
-  // A bot that may not see an item learns nothing about it.
-  if (!row || !botAllowed(row, who.botId))
-    return refuse("unknown_handle", UNKNOWN_HANDLE(use.handle));
-  if (row.disabled) return refuse("disabled", `Vault item \`${use.handle}\` is disabled.`);
-  if (!effectiveTools(row).includes(use.tool)) {
-    return refuse("refused_policy", `Vault item \`${use.handle}\` can't be used by ${use.tool}.`);
+    return { refused: refusal.refused, message: refusal.message };
   }
-  if (!targetAllowed(row, use.tool, use.target)) {
-    return refuse(
-      "refused_origin",
-      BROWSER_TOOLS.has(use.tool)
-        ? `Vault item \`${use.handle}\` only fills on ${parseList(row.originsJson).join(", ") || "no origin yet"}, not ${use.target}.`
-        : use.tool === "run_command"
-          ? `Vault item \`${use.handle}\` names no hosts a command may reach; the owner must add them on the Vault page.`
-          : `Vault item \`${use.handle}\` may not be sent to ${use.target}.`,
-    );
-  }
-  if (who.unattended && (row.kind === "card" || !row.allowUnattended)) {
-    return refuse(
-      "refused_unattended",
-      `Vault item \`${use.handle}\` can't be used without the owner present (routines and messages from other bots). Ask the owner in the chat.`,
-    );
-  }
-  const status = await backendStatus(row.backend as BackendName);
-  if (status.state !== "ready") {
-    return refuse(
-      "vault_locked",
-      "The vault is locked or unreachable. Ask the owner to check Settings → Vault.",
-      status.code ?? status.detail,
-    );
-  }
-  const approval = effectiveApproval(row);
+  const item = row!;
+  const approval = effectiveApproval(item);
   const card: VaultCard = {
-    handle: row.handle,
-    label: row.label,
-    kind: row.kind as VaultKind,
+    handle: item.handle,
+    label: item.label,
+    kind: item.kind as VaultKind,
     tool: use.tool,
     target: use.target,
     ...(who.botName ? { bot: who.botName } : {}),
-    ...(row.username ? { username: row.username } : {}),
+    ...(item.username ? { username: item.username } : {}),
   };
-  const meta = parseJson<{ brand: string; last4: string }>(row.cardMetaJson);
+  const meta = parseJson<{ brand: string; last4: string }>(item.cardMetaJson);
   if (meta) card.card = { brand: meta.brand, last4: meta.last4 };
-  // A sandbox command is code the model wrote holding the secret: every use asks.
-  const everyUse = approval === "every_use" || use.tool === "run_command";
+  // A command is code the model wrote holding the secret: every use asks.
+  const everyUse = approval === "every_use" || use.targetKind === "command";
   return {
     approve: everyUse || (approval === "per_conversation" && !use.granted),
     grantable: !everyUse,
@@ -358,6 +388,39 @@ export async function useItem<T>(
   }
   const meta = toMeta(row);
   const wanted = typeof fields === "function" ? fields(meta) : fields;
+  const values = await resolveValues(row, wanted, base);
+  let result: T;
+  try {
+    result = await sink(values, meta);
+  } catch (error) {
+    // The audit says what happened, not what was meant: a sink that threw
+    // used nothing it can vouch for.
+    const movedAway = error instanceof Error && error.name === "OriginMismatchError";
+    await audit({
+      ...base,
+      outcome: movedAway ? "refused_origin" : "sink_error",
+      reason: movedAway
+        ? "page origin changed before the fill"
+        : `the sink failed: ${error instanceof Error ? error.name : "error"}`,
+    });
+    throw error;
+  }
+  await audit({ ...base, outcome: use.approved ? "approved_used" : "used" });
+  await markUsed(row.id, who.botName ?? null);
+  return result;
+}
+
+/**
+ * Resolve the wanted fields from the item's backend, registering each with
+ * the redactor. A field the item has no value for is left out (a card
+ * without a saved security code); none at all, or a backend failure, is
+ * audited and thrown as a `VaultError`.
+ */
+async function resolveValues(
+  row: VaultItemRow,
+  wanted: readonly SecretField[],
+  base: Omit<AuditInput, "outcome" | "reason">,
+): Promise<SecretValues> {
   const backend = readBackends().get(row.backend as BackendName);
   if (!backend) {
     await audit({ ...base, outcome: "vault_locked", reason: "backend not configured" });
@@ -371,46 +434,32 @@ export async function useItem<T>(
         secretRedactor.register(value);
         values[field] = value;
       } catch (error) {
-        // A card without a saved security code still fills its number.
         if (!(error instanceof BackendError && error.code === "missing_field")) throw error;
       }
     }
     if (wanted.length > 0 && Object.keys(values).length === 0) {
       throw new BackendError("missing_field", "none of the fields hold a value");
     }
+    return values;
   } catch (error) {
     const code = error instanceof BackendError ? error.code : "failed";
     await audit({ ...base, outcome: "backend_error", reason: code });
     if (code === "missing_field") {
-      throw new VaultError("missing_field", `Vault item \`${use.handle}\` has no value for that.`);
+      throw new VaultError("missing_field", `Vault item \`${base.handle}\` has no value for that.`);
     }
     throw new VaultError(
       "backend_error",
       "The vault backend failed. The owner can see why on the Vault page.",
     );
   }
-  let outcome: VaultOutcome = use.approved ? "approved_used" : "used";
-  let reason: string | undefined;
-  try {
-    return await sink(values, meta);
-  } catch (error) {
-    if (error instanceof Error && error.name === "OriginMismatchError") {
-      outcome = "refused_origin";
-      reason = "page origin changed before the fill";
-    } else {
-      reason = "the sink failed";
-    }
-    throw error;
-  } finally {
-    await audit({ ...base, outcome, ...(reason ? { reason } : {}) });
-    if (outcome !== "refused_origin") {
-      await db
-        .update(vaultItems)
-        .set({ lastUsedAt: new Date(), lastUsedBy: who.botName ?? null })
-        .where(eq(vaultItems.id, row.id))
-        .catch(() => undefined);
-    }
-  }
+}
+
+async function markUsed(itemId: string, by: string | null): Promise<void> {
+  await db
+    .update(vaultItems)
+    .set({ lastUsedAt: new Date(), lastUsedBy: by })
+    .where(eq(vaultItems.id, itemId))
+    .catch(() => undefined);
 }
 
 /**
@@ -422,32 +471,24 @@ export async function useItem<T>(
  */
 export async function resolveConnectionSecret(handle: string, slug: string): Promise<string> {
   const row = await findItem(handle);
-  const base = { handle, tool: "mcp", target: `mcp:${slug}` };
-  const fail = async (outcome: VaultOutcome, message: string): Promise<never> => {
-    await audit({ ...base, ...(row ? { item: row } : {}), outcome, reason: message });
+  const use: PolicyUse = { handle, tool: "mcp", targetKind: "connection", target: `mcp:${slug}` };
+  const base = { ...(row ? { item: row } : {}), handle, tool: use.tool, target: use.target };
+  // No bot behind a connection: the owner linked the item to it, and nobody
+  // is "present", so neither the bot scope nor the unattended rule applies.
+  const refusal = await policyRefusal(row, use, { unattended: false }, false);
+  if (refusal) {
+    const message = `Vault item "${handle}": ${refusal.message}`;
+    await audit({ ...base, outcome: refusal.refused, reason: refusal.reason ?? refusal.message });
     throw new Error(message);
-  };
-  if (!row) return fail("unknown_handle", `Vault item "${handle}" not found`);
-  if (row.disabled) return fail("disabled", `Vault item "${handle}" is disabled`);
-  if (!effectiveTools(row).includes("mcp")) {
-    return fail("refused_policy", `Vault item "${handle}" doesn't allow MCP connections`);
   }
-  const backend = readBackends().get(row.backend as BackendName);
-  if (!backend) return fail("vault_locked", "The vault backend is not configured");
+  const item = row!;
+  let values: SecretValues;
   try {
-    const value = await backend.resolve(row.externalId, backendField(row, "value"));
-    secretRedactor.register(value);
-    await audit({ ...base, item: row, outcome: "used" });
-    await db
-      .update(vaultItems)
-      .set({ lastUsedAt: new Date(), lastUsedBy: `mcp:${slug}` })
-      .where(eq(vaultItems.id, row.id))
-      .catch(() => undefined);
-    return value.reveal();
+    values = await resolveValues(item, ["value"], base);
   } catch (error) {
-    return fail(
-      "backend_error",
-      error instanceof BackendError ? error.message : "Vault backend failed",
-    );
+    throw new Error(error instanceof VaultError ? error.message : "Vault backend failed");
   }
+  await audit({ ...base, outcome: "used" });
+  await markUsed(item.id, `mcp:${slug}`);
+  return values.value!.reveal();
 }

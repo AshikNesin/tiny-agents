@@ -39,6 +39,7 @@ import {
   type MemoryRecord,
 } from "../../lib/bots-api";
 import { errorMessage } from "../../lib/errors";
+import { useBotsStore } from "../../store/bots";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: "Preferences",
@@ -83,7 +84,10 @@ export function MemoryPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await botsApi.list();
+      // One list for the whole app: the store's, reloaded so a bot made
+      // elsewhere shows up here too.
+      await useBotsStore.getState().loadBots();
+      const list = useBotsStore.getState().bots;
       const lists = await Promise.all(list.map((bot) => botsApi.listMemories(bot.id)));
       setBots(list);
       setMemories(Object.fromEntries(list.map((bot, i) => [bot.id, lists[i].memories])));

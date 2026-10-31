@@ -12,7 +12,7 @@ import {
 } from "@groot/core/notification/notification.settings";
 import type { Notification } from "@groot/core/notification/notifier";
 import { registerRedactor } from "@groot/core/notification/scrub";
-import type { ActivityChange, FinishedReply, WaitEvent } from "@tiny-agents/agent";
+import type { ChatMessage, FinishedReply, WaitEvent } from "@tiny-agents/agent";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import { watchBot } from "../../../../apps/web/src/server/api/bots/bots.viewers";
 import { bots, db, routineRuns, routines } from "../../../../apps/web/src/server/db";
@@ -25,26 +25,48 @@ import {
 
 const CONVERSATION = 4242;
 
+/** A finished reply as the transcript holds it. */
+const asMessage = (reply: FinishedReply, index: number): ChatMessage => ({
+  id: `a${index}`,
+  role: "assistant",
+  text: reply.text,
+  status: reply.error !== undefined ? "error" : "done",
+  ...(reply.error !== undefined ? { error: reply.error } : {}),
+  createdAt: reply.createdAt,
+});
+
+/**
+ * The wait feed, plus `activity`: busy records the run's start and idle runs
+ * the wiring's settled step the way bots.settled.ts would, with the replies
+ * set so far as the transcript.
+ */
 function fakeRuntime() {
   const wait = new Set<(event: WaitEvent) => void>();
-  const activity = new Set<(change: ActivityChange) => void>();
+  const starts = new Map<number, number>();
   let replies: FinishedReply[] = [];
   return {
     onWait: (listener: (event: WaitEvent) => void) => {
       wait.add(listener);
       return () => wait.delete(listener);
     },
-    onActivity: (listener: (change: ActivityChange) => void) => {
-      activity.add(listener);
-      return () => activity.delete(listener);
-    },
-    finishedReplies: async () => replies,
     setReplies: (next: FinishedReply[]) => {
       replies = next;
     },
     wait: (event: WaitEvent) => wait.forEach((listener) => listener(event)),
-    activity: (busy: boolean, conversation = CONVERSATION) =>
-      activity.forEach((listener) => listener({ conversation, busy, approvals: 0, questions: 0 })),
+    activity: (busy: boolean, conversation = CONVERSATION) => {
+      if (busy) {
+        if (!starts.has(conversation)) starts.set(conversation, Date.now());
+        return;
+      }
+      const startedAt = starts.get(conversation);
+      starts.delete(conversation);
+      const messages = replies.map(asMessage);
+      void wiring!.onSettled.run({
+        conversationId: conversation,
+        chat: async () => ({ messages, busy: false, queued: [] }),
+        ...(startedAt !== undefined ? { startedAt } : {}),
+      });
+    },
   };
 }
 

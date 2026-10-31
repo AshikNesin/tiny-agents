@@ -9,9 +9,8 @@ import { inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { fenceAttachment, UNTRUSTED_RULE, type AttachmentRef } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
-import { loadContent } from "./uploads.extraction";
-import { modelImage } from "./uploads.service";
-import { summarize } from "./uploads.store";
+import { loadContent, waitUntilSettled } from "./uploads.extraction";
+import { modelImage, summarize } from "./uploads.store";
 
 /** One send's resolved content: blocks for the model, refs for the entry. */
 export interface ResolvedSend {
@@ -28,28 +27,6 @@ const INLINE_SEND_CHARS = 96_000;
 const EXTRACT_WAIT_MS = 5_000;
 
 type UploadRow = Upload;
-
-/** Re-read rows still extracting until they settle or the wait runs out. */
-async function settledRows(rows: UploadRow[], waitMs: number): Promise<UploadRow[]> {
-  const deadline = Date.now() + waitMs;
-  let current = rows;
-  while (current.some((row) => row.kind === "file" && row.extractStatus === "pending")) {
-    if (Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const fresh = await db
-      .select()
-      .from(uploads)
-      .where(
-        inArray(
-          uploads.id,
-          current.map((r) => r.id),
-        ),
-      );
-    const byId = new Map(fresh.map((row) => [row.id, row]));
-    current = current.map((row) => byId.get(row.id) ?? row);
-  }
-  return current;
-}
 
 /**
  * One file as the model meets it (issue #58): a reference line with its id
@@ -108,7 +85,7 @@ export async function resolveAttachments(
   if (new Set(ids).size !== ids.length) throw Boom.badRequest("Duplicate attachment id");
 
   const found = await db.select().from(uploads).where(inArray(uploads.id, ids));
-  const rows = await settledRows(found, waitMs);
+  const rows = await waitUntilSettled(found, waitMs);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const missing = ids.find((uploadId) => !byId.get(uploadId));
   if (missing) throw Boom.notFound(`Unknown attachment "${missing}"`);

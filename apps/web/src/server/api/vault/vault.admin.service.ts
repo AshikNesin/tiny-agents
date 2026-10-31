@@ -7,7 +7,7 @@
  */
 import { asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { notifyVaultAlert } from "../notifications/notifications.wiring";
+import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
 import { db, vaultAuditEvents, vaultItems } from "../../db";
 import { appEnv } from "../../env";
@@ -493,7 +493,7 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
     outcome: "deleted",
     reason: options.purge ? "deleted in the backend" : "unlinked only",
   });
-  notifyVaultAlert(
+  vaultAlert(
     "deleted",
     "Vault item deleted",
     `${row.label} (${row.handle}) was ${options.purge ? "deleted" : "unlinked"} in the Vault UI.`,
@@ -522,7 +522,7 @@ export async function reveal(handle: string, field: ValueField, purpose: "reveal
     outcome: purpose === "copy" ? "copied" : "revealed",
   });
   if (purpose === "reveal") {
-    notifyVaultAlert(
+    vaultAlert(
       "revealed",
       "Vault value revealed",
       `The ${field.replace(/_/g, " ")} of ${row.label} (${row.handle}) was revealed in the Vault UI.`,

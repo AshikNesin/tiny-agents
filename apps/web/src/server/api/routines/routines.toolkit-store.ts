@@ -63,8 +63,8 @@ function checkedSchedule(schedule: RoutineSchedule): RoutineSchedule {
 export function createRoutineStore(): RoutineStore {
   return {
     async create(conversationId, input) {
-      if (await isRoutineConversation(conversationId)) throw new Error(RECURSION_MSG);
       const owner = await conversationOwner(conversationId);
+      if (owner?.kind === "routine") throw new Error(RECURSION_MSG);
       if (!owner) throw new Error("No bot owns this conversation.");
       // Exactly-once across pi-durable replays: the key is the durable tool
       // task's identity (unique per agent store, stable when the call reruns).
@@ -78,7 +78,7 @@ export function createRoutineStore(): RoutineStore {
       const schedule = checkedSchedule(input.schedule);
       try {
         const routine = await service.create({
-          botId: owner.botId,
+          botId: owner.bot.id,
           name: input.name,
           prompt: input.prompt,
           schedule,

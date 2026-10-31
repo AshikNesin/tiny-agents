@@ -114,3 +114,8 @@ export function imageSize(
   }
   return undefined;
 }
+
+/** A Buffer view over stored bytes (no copy): the sniffers read Buffer APIs. */
+export function asBuffer(bytes: Uint8Array<ArrayBuffer>): Buffer<ArrayBuffer> {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}

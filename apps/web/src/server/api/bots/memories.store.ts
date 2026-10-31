@@ -13,7 +13,7 @@
  * every later prompt.
  */
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { bots, db, memories } from "../../db";
+import { db, memories } from "../../db";
 import {
   CATEGORY_ORDER,
   extractedMemorySchema,
@@ -47,17 +47,11 @@ export function createMemoryStore(
   /** The bot behind the conversation, when memory may change in this turn. */
   const writable = async (conversationId: number) => {
     const owner = await conversationOwner(conversationId);
-    const bot = owner
-      ? await db.query.bots.findFirst({
-          where: eq(bots.id, owner.botId),
-          columns: { id: true, memoryEnabled: true },
-        })
-      : undefined;
-    if (!bot?.memoryEnabled) return "disabled" as const;
+    if (!owner?.bot.memoryEnabled) return "disabled" as const;
     // A runtime that can't be read counts as unattended (refuses, never allows).
     const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
-    if (await isUnattended(conversationId, reader)) return "unattended" as const;
-    return bot;
+    if (await isUnattended(conversationId, reader, owner)) return "unattended" as const;
+    return owner.bot;
   };
 
   return {
@@ -103,15 +97,13 @@ export function createMemoryStore(
     async list(conversationId: number) {
       // A routine's turns read its bot's memories too; only writes are refused.
       const owner = await conversationOwner(conversationId);
-      if (!owner) return [];
-      const bot = await db.query.bots.findFirst({
-        where: eq(bots.id, owner.botId),
-        columns: { memoryEnabled: true },
-        with: { memories: { orderBy: (m, { asc }) => [asc(m.createdAt)] } },
+      if (!owner?.bot.memoryEnabled) return [];
+      const rows = await db.query.memories.findMany({
+        where: eq(memories.botId, owner.bot.id),
+        orderBy: (m, { asc }) => [asc(m.createdAt)],
       });
-      if (!bot || !bot.memoryEnabled) return [];
       const now = new Date();
-      return bot.memories
+      return rows
         .filter(
           (m) =>
             m.status === "active" && !isExpired({ until: m.until?.toISOString() ?? null }, now),

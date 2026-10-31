@@ -13,10 +13,10 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
-import { gateApproved, withGatePlan } from "../approvals";
+import { withGatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
-import { hasGrant, VAULT_RULE, vaultGrant, type VaultBroker } from "../vault";
-import { safeMessage, vaultGatePlan } from "./vault";
+import { VAULT_RULE, type VaultBroker } from "../vault";
+import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 
 export interface WebToolkitOptions {
   /** TinyFish API key. Search and Fetch stay hidden without it. */
@@ -306,14 +306,15 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
               requestFollowingRedirects(url, args.method ?? "GET", headers, args.body, auth);
             try {
               const response = args.auth
-                ? await broker.use(
+                ? await useFromSink(
+                    broker,
+                    api,
+                    context,
                     {
                       handle: args.auth,
                       tool: "http_request",
+                      targetKind: "host",
                       target: url.host,
-                      conversation: Number(api.conversationId),
-                      granted: await hasGrant(api, vaultGrant(args.auth), context),
-                      approved: await gateApproved(api, context),
                     },
                     ["value"],
                     async (values, item) => {
@@ -351,7 +352,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
           } catch {
             return { refuse: `Not a valid URL: ${args.url}` };
           }
-          return { handle: args.auth, tool: "http_request", target: host };
+          return { handle: args.auth, tool: "http_request", targetKind: "host", target: host };
         }),
       )
     : undefined;

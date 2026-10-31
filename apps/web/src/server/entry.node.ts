@@ -19,7 +19,7 @@ import { agentDbPath, appEnv, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
 import { asCoreDatabase } from "./db";
 import { openAppDatabase } from "./db/legacy-copy";
-import { startNotifications } from "./api/notifications/notifications.wiring";
+import { startNotifications, notifyVaultAlert } from "./api/notifications/notifications.wiring";
 import { extractionSweep } from "./api/uploads/uploads.extraction";
 import { systemStarted } from "./api/notifications/notifications.events";
 import {
@@ -32,8 +32,9 @@ import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { createDeliveries } from "./api/bots/bots.delivery";
 import { onConversationSettled } from "./api/bots/bots.settled";
+import { setVaultAlertSink } from "./api/vault/vault.alerts";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
-import { startMemoryCapture } from "./api/bots/memories.capture";
+import { createMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
@@ -165,6 +166,8 @@ async function main(): Promise<void> {
   // credentials; never blocks the agent.
   const notifications = startNotifications(runtime);
   notificationService.start();
+  // The vault raises owner alerts through a port; pushes are their destination.
+  setVaultAlertSink((kind, title, message) => notifyVaultAlert(kind, title, message));
 
   // Upload extraction (issue #58): files a restart interrupted extract again.
   void extractionSweep().catch((error: unknown) =>
@@ -179,6 +182,22 @@ async function main(): Promise<void> {
   const deliveries = createDeliveries(runtime);
   const routineRuns = startRoutinesWatcher(runtime);
   void deliveries.sweep().catch(() => undefined);
+  // Memory capture (issue #22 phase B): settled Turns arm a debounce; the
+  // quiet window or 6 turns later one side-call extracts durable facts off
+  // the reply path. Faux mode never makes capture calls.
+  const memoryCapture = fauxMode()
+    ? undefined
+    : createMemoryCapture({
+        captureNow: (conversationId) =>
+          captureConversation(conversationId, {
+            sideCall: {
+              models: runtime.models,
+              hasModel: (id) => runtime.hasModel(id),
+              modelId: appEnv().MEMORY_CAPTURE_MODEL,
+            },
+            readTranscript: async (id) => (await runtime.readChat(id)).messages,
+          }),
+      });
   onConversationSettled(runtime, [
     { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
     { name: "routine runs", run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat) },
@@ -190,27 +209,9 @@ async function main(): Promise<void> {
         if (last?.role === "assistant") await recordReply(String(c.conversationId), last);
       },
     },
+    notifications.onSettled,
+    ...(memoryCapture ? [memoryCapture.onSettled] : []),
   ]);
-
-  // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
-  // window or 6 turns later one side-call extracts durable facts off the
-  // reply path. Faux mode never makes capture calls.
-  let stopMemoryCapture: (() => void) | undefined;
-  if (!fauxMode()) {
-    const captureModelId = appEnv().MEMORY_CAPTURE_MODEL;
-    stopMemoryCapture = startMemoryCapture(runtime, {
-      models: runtime.models,
-      captureNow: (conversationId) =>
-        captureConversation(conversationId, {
-          sideCall: {
-            models: runtime.models,
-            hasModel: (id) => runtime.hasModel(id),
-            modelId: captureModelId,
-          },
-          readTranscript: async (id) => (await runtime.readChat(id)).messages,
-        }),
-    });
-  }
 
   // Past-chat titles (issue #101): one lightweight side-call per "New chat"
   // names the chat that ended. Faux mode keeps the first-message titles.
@@ -258,7 +259,7 @@ async function main(): Promise<void> {
     await closeAllBrowserSessions();
     // Disarm capture debounce timers before the runtime closes: a firing
     // timer would call into a closed store.
-    stopMemoryCapture?.();
+    memoryCapture?.stop();
     notifications.stop();
     notificationService.stop();
     await getConnectionManager().close();

@@ -11,6 +11,8 @@ const openCallbacks: Array<() => void> = [];
 vi.mock("../../../apps/web/src/client/lib/bots-api", () => ({
   botsApi: {
     list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    read: vi.fn().mockResolvedValue(undefined),
     models: vi
       .fn()
       .mockResolvedValue({ models: [], defaultModel: undefined, gatewayConfigured: true }),
@@ -28,7 +30,8 @@ vi.mock("../../../apps/web/src/client/lib/sse", () => ({
   ),
 }));
 
-import { useBotsStore } from "../../../apps/web/src/client/store/bots";
+import { onConnectionChange, useBotsStore } from "../../../apps/web/src/client/store/bots";
+import { botsApi, type Bot, type BotListEntry } from "../../../apps/web/src/client/lib/bots-api";
 
 const emit = (botId: string, event: unknown) =>
   useBotsStore.getState().applyChatEvent(botId, event as never);
@@ -424,34 +427,51 @@ describe("bots store — queued messages while busy (issue #9)", () => {
   });
 });
 
+function listEntry(id: string, conversationId: string, overrides: Partial<BotListEntry> = {}) {
+  return {
+    id,
+    conversationId,
+    name: `Bot ${id}`,
+    description: "",
+    modelId: "m",
+    lastMessagePreview: null,
+    lastActivityAt: "2026-10-23T00:00:00.000Z",
+    lastReadAt: null,
+    unread: false,
+    replying: false,
+    approvals: 0,
+    questions: 0,
+    pinnedAt: null,
+    ...overrides,
+  } satisfies BotListEntry;
+}
+
+/** A list request the test answers when it wants to. */
+function deferredList() {
+  let resolve!: (bots: BotListEntry[]) => void;
+  const promise = new Promise<BotListEntry[]>((r) => {
+    resolve = r;
+  });
+  vi.mocked(botsApi.list).mockReturnValueOnce(promise);
+  return resolve;
+}
+
 describe("bots store — activity feed", () => {
   beforeEach(() => {
     listeners.clear();
     useBotsStore.getState().disconnectActivity();
+    vi.mocked(botsApi.list).mockReset();
+    vi.mocked(botsApi.list).mockResolvedValue([]);
+    useBotsStore.setState({ bots: [listEntry("b1", "7")], loading: false });
   });
 
-  it("updates the approvals and questions badge while the bot is still replying", () => {
-    useBotsStore.setState({
-      bots: [
-        {
-          id: "b1",
-          conversationId: "7",
-          name: "Bot",
-          description: "",
-          modelId: "m",
-          lastMessagePreview: null,
-          lastActivityAt: "2026-10-23T00:00:00.000Z",
-          lastReadAt: null,
-          unread: false,
-          replying: false,
-          approvals: 0,
-          questions: 0,
-          pinnedAt: null,
-        },
-      ],
-    });
+  const feed = () => {
     useBotsStore.getState().connectActivity();
-    const onEvent = listeners.get("/api/v1/events")!;
+    return listeners.get("/api/v1/events")!;
+  };
+
+  it("updates the approvals and questions badge while the bot is still replying", () => {
+    const onEvent = feed();
     onEvent({ type: "activity", conversation: "7", busy: true, approvals: 0 });
     // A tool call now waits for the owner: same busy run, new count.
     onEvent({ type: "activity", conversation: "7", busy: true, approvals: 1 });
@@ -459,5 +479,108 @@ describe("bots store — activity feed", () => {
     // The bot asks the owner questions: same run, its own count.
     onEvent({ type: "activity", conversation: "7", busy: true, approvals: 0, questions: 2 });
     expect(useBotsStore.getState().bots[0]).toMatchObject({ approvals: 0, questions: 2 });
+  });
+
+  it("keeps a waiting badge that arrived while an older list request was in flight", async () => {
+    const onEvent = feed();
+    // A list request starts (another bot went idle)…
+    const answer = deferredList();
+    const load = useBotsStore.getState().loadBots();
+    // …then this bot asks for an approval, mid-run.
+    onEvent({ type: "activity", conversation: "7", busy: true, approvals: 1 });
+    expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: true, approvals: 1 });
+    // The stale list lands last: it knows nothing of the approval.
+    answer([listEntry("b1", "7", { lastMessagePreview: "newer preview" })]);
+    await load;
+    expect(useBotsStore.getState().bots[0]).toMatchObject({
+      replying: true,
+      approvals: 1,
+      lastMessagePreview: "newer preview",
+    });
+    // A list request that starts after the badge retires the patch: the
+    // server's answer is the truth from then on.
+    vi.mocked(botsApi.list).mockResolvedValueOnce([listEntry("b1", "7")]);
+    await useBotsStore.getState().loadBots();
+    expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: false, approvals: 0 });
+  });
+
+  it("keeps a pin and a read mark made while a list request was in flight", async () => {
+    const answer = deferredList();
+    const load = useBotsStore.getState().loadBots();
+    useBotsStore.setState({ bots: [listEntry("b1", "7", { unread: true })] });
+    useBotsStore.getState().markRead("b1");
+    answer([listEntry("b1", "7", { unread: true })]);
+    await load;
+    expect(useBotsStore.getState().bots[0]!.unread).toBe(false);
+  });
+
+  it("refetches once after a reply ends, and not for a conversation that is nobody's chat", async () => {
+    vi.useFakeTimers();
+    try {
+      const onEvent = feed();
+      onEvent({ type: "activity", conversation: "7", busy: true });
+      expect(useBotsStore.getState().bots[0]!.replying).toBe(true);
+      // A routine's conversation and a retired chat: no row, no list request.
+      onEvent({ type: "activity", conversation: "42", busy: false });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(botsApi.list).not.toHaveBeenCalled();
+      // The chat's reply ends: replying clears at once; preview and unread
+      // come from one list request, however many idles land together.
+      onEvent({ type: "activity", conversation: "7", busy: false });
+      onEvent({ type: "activity", conversation: "7", busy: false });
+      expect(useBotsStore.getState().bots[0]!.replying).toBe(false);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(botsApi.list).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks who is replying from the feed's opening snapshot", () => {
+    useBotsStore.setState({ bots: [listEntry("b1", "7"), listEntry("b2", "8")] });
+    const onEvent = feed();
+    onEvent({ type: "activity", busy: ["8"] });
+    expect(useBotsStore.getState().bots.map((bot) => bot.replying)).toEqual([false, true]);
+  });
+
+  it("keeps MCP connection status from the same feed and tells subscribers", () => {
+    const onEvent = feed();
+    const seen: unknown[] = [];
+    const off = onConnectionChange((change) => seen.push(change));
+    onEvent({ type: "connection", id: "c1", status: "connected" });
+    onEvent({ type: "connection", id: "c2", status: "error", error: "refused" });
+    expect(useBotsStore.getState().connections).toEqual({
+      c1: { status: "connected" },
+      c2: { status: "error", error: "refused" },
+    });
+    expect(seen).toHaveLength(2);
+    off();
+    onEvent({ type: "connection", id: "c1", status: "connecting" });
+    expect(seen).toHaveLength(2);
+  });
+});
+
+describe("bots store — full bots", () => {
+  beforeEach(() => {
+    useBotsStore.setState({ fullBots: {}, bots: [listEntry("b1", "7")] });
+    vi.mocked(botsApi.get).mockReset();
+  });
+
+  it("loads a full bot once and serves it from the cache until asked for a fresh one", async () => {
+    const row = { id: "b1", name: "Bot", conversationId: "7" } as unknown as Bot;
+    vi.mocked(botsApi.get).mockResolvedValue(row);
+    expect(await useBotsStore.getState().loadBot("b1")).toBe(row);
+    expect(await useBotsStore.getState().loadBot("b1")).toBe(row);
+    expect(botsApi.get).toHaveBeenCalledTimes(1);
+    await useBotsStore.getState().loadBot("b1", { fresh: true });
+    expect(botsApi.get).toHaveBeenCalledTimes(2);
+    // A save hands the store the row: no refetch needed afterwards.
+    const saved = { ...row, name: "Renamed" };
+    useBotsStore.getState().setFullBot(saved);
+    expect(await useBotsStore.getState().loadBot("b1")).toBe(saved);
+    // Gone: both rows and the chat go.
+    useBotsStore.getState().forgetBot("b1");
+    expect(useBotsStore.getState().fullBots).toEqual({});
+    expect(useBotsStore.getState().bots).toEqual([]);
   });
 });

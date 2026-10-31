@@ -20,6 +20,7 @@ import {
   clearStatusCache,
   planUse,
   useItem,
+  resolveConnectionSecret,
 } from "../../../apps/web/src/server/api/vault/vault.service";
 import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import {
@@ -236,6 +237,7 @@ describe("vault policy", () => {
   const use = (target: string, overrides: Partial<Parameters<typeof planUse>[0]> = {}) => ({
     handle: "github",
     tool: "browser_fill_secret",
+    targetKind: "origin" as const,
     target,
     conversation: 1,
     granted: false,
@@ -259,12 +261,55 @@ describe("vault policy", () => {
     ).toMatchObject({ approve: false });
   });
 
+  it("audits a sink that failed as sink_error, not as used", async () => {
+    await expect(
+      useItem(
+        { ...use("https://github.com"), approved: true },
+        { unattended: false, botName: "Bot" },
+        ["password"],
+        async () => {
+          throw new Error("page gone");
+        },
+      ),
+    ).rejects.toThrow("page gone");
+    const [row] = await db.select().from(vaultItems).where(eq(vaultItems.handle, "github"));
+    expect(row?.lastUsedAt).toBeNull();
+    const outcomes = (
+      await db.select().from(vaultAuditEvents).where(ne(vaultAuditEvents.tool, "vault_ui"))
+    ).map((e) => [e.outcome, e.reason]);
+    expect(outcomes).toEqual([["sink_error", "the sink failed: Error"]]);
+  });
+
+  it("resolves a connection's secret through the same policy, without a bot scope", async () => {
+    // An api_key allows mcp by default; scoping it to a bot does not shut
+    // the connection out, since the owner linked the item to the connection.
+    const response = await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
+        kind: "api_key",
+        title: "gh-mcp",
+        values: { value: CANARY },
+        policy: { handle: "gh-mcp", bots: ["some-bot"] },
+      },
+    });
+    expect(response.status).toBe(201);
+    expect(await resolveConnectionSecret("gh-mcp", "github")).toBe(CANARY);
+    const [row] = await db.select().from(vaultItems).where(eq(vaultItems.handle, "gh-mcp"));
+    expect(row?.lastUsedBy).toBe("mcp:github");
+    await db.update(vaultItems).set({ disabled: true }).where(eq(vaultItems.handle, "gh-mcp"));
+    await expect(resolveConnectionSecret("gh-mcp", "github")).rejects.toThrow(/disabled/);
+    await expect(resolveConnectionSecret("nope", "github")).rejects.toThrow(/No vault item/);
+  });
+
   it("refuses unknown handles, other tools and unattended runs, and audits each", async () => {
     expect(
       await planUse(use("https://github.com", { handle: "nope" }), { unattended: false }),
     ).toMatchObject({ refused: "unknown_handle" });
     expect(
-      await planUse(use("api.github.com", { tool: "http_request" }), { unattended: false }),
+      await planUse(use("api.github.com", { tool: "http_request", targetKind: "host" }), {
+        unattended: false,
+      }),
     ).toMatchObject({ refused: "refused_policy" });
     expect(await planUse(use("https://github.com"), { unattended: true })).toMatchObject({
       refused: "refused_unattended",
@@ -318,6 +363,7 @@ describe("sandbox command policy", () => {
   const use = (handle: string) => ({
     handle,
     tool: "run_command",
+    targetKind: "command" as const,
     target: "gh api user",
     conversation: 1,
     granted: true,
@@ -364,6 +410,7 @@ describe("card fills", () => {
       {
         handle: "visa",
         tool: "browser_fill_secret",
+        targetKind: "origin",
         target: "https://shop.example.com",
         conversation: 1,
         granted: false,
@@ -446,7 +493,11 @@ describe("credential request submit", () => {
       { values: { email: "ana@example.com", password: CANARY }, save: true },
       runtime as never,
     );
-    expect(result).toEqual({ filled: ["email", "password"], savedHandle: "hi-nesin-io" });
+    expect(result).toEqual({
+      filled: ["email", "password"],
+      savedHandle: "hi-nesin-io",
+      saveFailed: false,
+    });
     expect(fills).toEqual([
       {
         origin: "https://hi.nesin.io",

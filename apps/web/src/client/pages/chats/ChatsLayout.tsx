@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { botsApi, type Bot as BotRow } from "../../lib/bots-api";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
@@ -41,10 +40,9 @@ export function ChatWorkspace() {
   const openCreateBot = useUiStore((s) => s.openCreateBot);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const savedTick = useUiStore((s) => s.savedTick);
+  const loadBot = useBotsStore((s) => s.loadBot);
+  const setFullBot = useBotsStore((s) => s.setFullBot);
   useFocusParam();
-
-  const [fullBot, setFullBot] = useState<BotRow | null>(null);
 
   // `/chats?new=1` (older links, the command palette) opens the create dialog.
   useEffect(() => {
@@ -59,22 +57,14 @@ export function ChatWorkspace() {
   const currentId = currentListBot?.id;
   const currentConversation = currentListBot?.conversationId;
 
-  // The chat needs fields the list entry lacks; refetch after an edit
-  // (savedTick) or when "New chat" moves the bot to a fresh conversation.
+  // The chat needs fields the list entry lacks: the store's full row, read
+  // fresh on open and again when "New chat" moves the bot to a fresh
+  // conversation. A save updates the row in the store, so no refetch then.
+  const fullBot = useBotsStore((s) => (currentId ? (s.fullBots[currentId] ?? null) : null));
   useEffect(() => {
-    if (!currentId) {
-      setFullBot(null);
-      return;
-    }
-    let cancelled = false;
-    void botsApi
-      .get(currentId)
-      .then((bot) => !cancelled && setFullBot(bot))
-      .catch(() => !cancelled && setFullBot(null));
-    return () => {
-      cancelled = true;
-    };
-  }, [currentId, currentConversation, savedTick]);
+    if (!currentId) return;
+    void loadBot(currentId, { fresh: true }).catch(() => undefined);
+  }, [currentId, currentConversation, loadBot]);
 
   const noBots = bots.length === 0 && !loading;
   const desktop = useSyncExternalStore(subscribeDesktop, isDesktop, () => false);
@@ -102,7 +92,7 @@ export function ChatWorkspace() {
           key={`${fullBot.id}-${chatId}`}
           bot={fullBot}
           chatId={chatId}
-          onContinued={(fresh) => setFullBot(fresh)}
+          onContinued={setFullBot}
         />
       ) : fullBot && currentListBot ? (
         <ChatPane
@@ -111,7 +101,7 @@ export function ChatWorkspace() {
           models={models}
           gatewayConfigured={gatewayConfigured}
           onEditBot={() => void openEditBot(fullBot.id)}
-          onBotReset={(fresh) => setFullBot(fresh)}
+          onBotReset={setFullBot}
         />
       ) : (
         <>

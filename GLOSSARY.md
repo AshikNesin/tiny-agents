@@ -33,8 +33,16 @@ _Avoid_: exchange, round (a turn has several tool rounds)
 One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` owns every state change and the card and push that follow.
 _Avoid_: job, execution
 
+**Vault use**:
+One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit; `useFromSink` in the agent package is the one sequence every sink follows.
+_Avoid_: fill, lookup, secret access
+
+**Sink**:
+The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header. A sink declares its target kind; it never sees policy.
+_Avoid_: consumer, client
+
 **Settled**:
-A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs and updates the bot list, in that order, from one read of the transcript (`bots.settled.ts`).
+A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript and one record of when the reply started (`bots.settled.ts`). Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
 
 **Question**:

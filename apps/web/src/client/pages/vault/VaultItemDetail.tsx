@@ -53,6 +53,7 @@ const OUTCOME_LABEL: Record<string, string> = {
   disabled: "refused: disabled",
   vault_locked: "refused: vault locked",
   backend_error: "backend error",
+  sink_error: "failed before use",
   created: "created",
   updated: "updated",
   linked: "linked",

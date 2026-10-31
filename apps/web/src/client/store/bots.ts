@@ -1,18 +1,30 @@
 /**
  * Bot list + chat state store.
  *
- * - `bots` is refetched on activity-feed events (typing started/stopped,
- *   which also refreshes previews + unread badges).
+ * - `bots` is the list the sidebar shows. The app's one `/events` feed keeps
+ *   it live: a bot's replying state and its waiting counts (approvals,
+ *   questions) are patched in as they change, and a reply that finished
+ *   refetches the list for its preview and unread flag. A patch made while
+ *   a list request is in flight outlives that request's response, so a
+ *   badge never flickers off because an older list landed late.
+ * - `fullBots` holds the full rows the chat and the edit dialog need, by id.
+ * - `connections` is the live MCP connection status from the same feed.
  * - `chats` holds per-bot ChatState fed by the SSE stream: snapshot first,
  *   then minimal diffs applied in order. Reconnects receive a fresh snapshot.
  */
 import { create } from "zustand";
 import { toast } from "sonner";
-import { botsApi, type BotListEntry, type ModelInfo } from "../lib/bots-api";
+import { botsApi, type Bot, type BotListEntry, type ModelInfo } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { ChatEvent, ChatState } from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";
 import { mergeSnapshot, oldestEntryId, prependOlder } from "../lib/chat-history";
+
+/** An MCP connection's live state, as the events feed last reported it. */
+export interface ConnectionLive {
+  status: string;
+  error?: string;
+}
 
 interface BotsState {
   bots: BotListEntry[];
@@ -21,6 +33,10 @@ interface BotsState {
   gatewayConfigured: boolean;
   defaultModel?: string;
   models: ModelInfo[];
+  /** Full rows by id, fetched on demand (the chat, the edit dialog). */
+  fullBots: Record<string, Bot>;
+  /** Live MCP connection status by id (the Connections pages' badges). */
+  connections: Record<string, ConnectionLive>;
 
   loadBots: () => Promise<void>;
   loadModels: () => Promise<void>;
@@ -28,6 +44,15 @@ interface BotsState {
   markRead: (botId: string) => void;
   /** Optimistic pin/unpin; rolls back and toasts if the server refuses. */
   togglePin: (botId: string) => Promise<void>;
+  /**
+   * The full bot, from the cache unless `fresh`. Rejects when it cannot be
+   * loaded (gone, offline); the cached row, if any, stays.
+   */
+  loadBot: (botId: string, options?: { fresh?: boolean }) => Promise<Bot>;
+  /** A full row the app just received (a save, New chat, a continued Past chat). */
+  setFullBot: (bot: Bot) => void;
+  /** The bot is gone: drop its rows and its chat. */
+  forgetBot: (botId: string) => void;
 
   // Per-bot chat
   chats: Record<string, ChatState>;
@@ -53,6 +78,41 @@ let activityConnection: { close(): void } | null = null;
 const chatConnections = new Map<string, { close(): void }>();
 /** Sequence of `loadBots` calls; a response from an older call is dropped. */
 let botsRequest = 0;
+
+/**
+ * Local changes to list entries (replying, waiting counts, pin, read), each
+ * stamped in order. A list response reflects only what the server knew when
+ * the request started, so the patches made after that are re-applied over
+ * it rather than lost; a later response that started after a patch carries
+ * its result and retires it.
+ */
+interface ListPatch {
+  seq: number;
+  apply: (bot: BotListEntry) => BotListEntry;
+}
+let patchSeq = 0;
+let patches: ListPatch[] = [];
+
+function applyPatches(bots: BotListEntry[], list: readonly ListPatch[]): BotListEntry[] {
+  if (list.length === 0) return bots;
+  return bots.map((bot) => list.reduce((next, patch) => patch.apply(next), bot));
+}
+
+/** A reply ended: its preview and unread flag come from the list. Bursts refetch once. */
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+const REFRESH_COALESCE_MS = 300;
+
+export type ConnectionChange = { type: "connection"; id: string; status: string; error?: string };
+const connectionListeners = new Set<(change: ConnectionChange) => void>();
+
+/**
+ * Follow MCP connection changes from the app's one events feed (the
+ * Connections pages refetch what they show). Returns the unsubscribe.
+ */
+export function onConnectionChange(listener: (change: ConnectionChange) => void): () => void {
+  connectionListeners.add(listener);
+  return () => connectionListeners.delete(listener);
+}
 
 /** Attachment ids of a message, for echo matching (empty texts collide). */
 function attachmentIds(message: { attachments?: { uploadId: string }[] }): string[] {
@@ -190,191 +250,243 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
   }
 }
 
-export const useBotsStore = create<BotsState>((set, get) => ({
-  bots: [],
-  loading: false,
-  error: null,
-  gatewayConfigured: false,
-  defaultModel: undefined,
-  models: [],
+export const useBotsStore = create<BotsState>((set, get) => {
+  /** Change list entries now, and keep the change over any list request already in flight. */
+  const patchBots = (apply: (bot: BotListEntry) => BotListEntry) => {
+    const patch = { seq: ++patchSeq, apply };
+    patches.push(patch);
+    set((state) => ({ bots: applyPatches(state.bots, [patch]) }));
+  };
+  const patchBot = (botId: string, fields: Partial<BotListEntry>) =>
+    patchBots((bot) => (bot.id === botId ? { ...bot, ...fields } : bot));
 
-  loadBots: async () => {
-    // Loads overlap (mount, a create, activity events). Only the newest
-    // may land: an older list answering last would drop a bot that was just
-    // created, and the chat route would treat its link as stale.
-    const request = ++botsRequest;
-    set({ loading: true, error: null });
-    try {
-      const bots = await botsApi.list();
-      if (request !== botsRequest) return;
-      set({ bots, loading: false });
-    } catch (error) {
-      if (request !== botsRequest) return;
-      set({
-        loading: false,
-        error: errorMessage(error, "Failed to load bots"),
-      });
-    }
-  },
+  const scheduleRefresh = () => {
+    if (refreshTimer) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      get().refreshBotsInBackground();
+    }, REFRESH_COALESCE_MS);
+  };
 
-  loadModels: async () => {
-    try {
-      const { models, defaultModel, gatewayConfigured } = await botsApi.models();
-      set({ gatewayConfigured, models, defaultModel: defaultModel ?? models[0]?.id });
-    } catch {
-      // Banner state stays as-is; the chat pane shows its own error.
-    }
-  },
+  return {
+    bots: [],
+    loading: false,
+    error: null,
+    gatewayConfigured: false,
+    defaultModel: undefined,
+    models: [],
+    fullBots: {},
+    connections: {},
 
-  togglePin: async (botId) => {
-    const current = get().bots.find((bot) => bot.id === botId);
-    if (!current) return;
-    const pinned = current.pinnedAt === null;
-    const setPinnedAt = (pinnedAt: string | null) =>
-      set((state) => ({
-        bots: state.bots.map((bot) => (bot.id === botId ? { ...bot, pinnedAt } : bot)),
-      }));
-    setPinnedAt(pinned ? new Date().toISOString() : null);
-    try {
-      const updated = await botsApi.pin(botId, pinned);
-      setPinnedAt(updated.pinnedAt);
-    } catch (error) {
-      setPinnedAt(current.pinnedAt);
-      toast.error(errorMessage(error, "Failed to update pin"));
-    }
-  },
-
-  refreshBotsInBackground: () => {
-    void get()
-      .loadBots()
-      .catch(() => undefined);
-  },
-
-  markRead: (botId) => {
-    // The durable marker lives on the bot row (server lastReadAt); it is
-    // frozen into chat state as `unreadFrom` at connect time, so there is
-    // nothing to advance here — just clear the badge and persist.
-    set((state) => ({
-      bots: state.bots.map((bot) => (bot.id === botId ? { ...bot, unread: false } : bot)),
-    }));
-    void botsApi.read(botId).catch(() => undefined);
-  },
-
-  chats: {},
-
-  connectChat: (botId) => {
-    if (chatConnections.has(botId)) return;
-    // Freeze the pre-open read marker: everything newer arrived while the
-    // owner was away and renders below the "new messages" divider. The
-    // live marker advances via markRead; this one stays put for the open
-    // session (WhatsApp-style unread divider).
-    // The Bot (full) and BotListEntry (list) rows both carry lastReadAt.
-    const bot = get().bots.find((b) => b.id === botId);
-    const marker = bot?.lastReadAt;
-    const unreadFrom = marker ? Date.parse(marker) : null;
-    set((s) => ({
-      chats: {
-        ...s.chats,
-        [botId]: s.chats[botId] ?? emptyChat(Number.isNaN(unreadFrom) ? null : unreadFrom),
-      },
-    }));
-    const connection = subscribeSse(
-      `/api/v1/bots/${botId}/stream`,
-      (event) => get().applyChatEvent(botId, event as ChatEvent),
-      {
-        onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
-        onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
-      },
-    );
-    chatConnections.set(botId, connection);
-  },
-
-  disconnectChat: (botId) => {
-    chatConnections.get(botId)?.close();
-    chatConnections.delete(botId);
-    // The cached transcript keeps rendering on the next visit, but it is
-    // stale until that visit's first snapshot arrives.
-    set((s) => {
-      const chat = s.chats[botId];
-      return chat
-        ? { chats: { ...s.chats, [botId]: { ...chat, connected: false, loaded: false } } }
-        : {};
-    });
-  },
-
-  resetChat: (botId) => {
-    get().disconnectChat(botId);
-    set((s) => {
-      const chats = { ...s.chats };
-      delete chats[botId];
-      return { chats };
-    });
-  },
-
-  loadOlder: async (botId) => {
-    const chat = get().chats[botId];
-    const before = chat ? oldestEntryId(chat.messages) : undefined;
-    if (!chat || !chat.hasMore || chat.loadingOlder || !before) return;
-    const patch = (next: Partial<ChatState>) =>
-      set((s) => {
-        const current = s.chats[botId];
-        return current ? { chats: { ...s.chats, [botId]: { ...current, ...next } } } : s;
-      });
-    patch({ loadingOlder: true });
-    try {
-      const page = await botsApi.history(botId, before);
-      const current = get().chats[botId];
-      // A new chat or a fresh snapshot meanwhile: this page no longer fits.
-      if (!current || oldestEntryId(current.messages) !== before)
-        return patch({ loadingOlder: false });
-      patch({ ...prependOlder(current.messages, page), loadingOlder: false });
-    } catch {
-      // Stay loadable: the next scroll to the top tries again.
-      patch({ loadingOlder: false });
-    }
-  },
-
-  applyChatEvent: (botId, event) => {
-    if (event.type === "ping") return;
-    set((s) => ({
-      chats: { ...s.chats, [botId]: applyEvent(s.chats[botId] ?? emptyChat(), event) },
-    }));
-  },
-
-  connectActivity: () => {
-    if (activityConnection) return;
-    activityConnection = subscribeSse("/api/v1/events", (event) => {
-      const typed = event as ChatEvent;
-      if (typed.type !== "activity") return;
-      if (!("conversation" in typed)) {
-        get().refreshBotsInBackground();
-        return;
+    loadBots: async () => {
+      // Loads overlap (mount, a create, activity events). Only the newest
+      // may land: an older list answering last would drop a bot that was just
+      // created, and the chat route would treat its link as stale.
+      const request = ++botsRequest;
+      const since = patchSeq;
+      set({ loading: true, error: null });
+      try {
+        const bots = await botsApi.list();
+        if (request !== botsRequest) return;
+        // Patches older than this request are in its response (or the
+        // server overruled them); the newer ones ride on top of it.
+        patches = patches.filter((patch) => patch.seq > since);
+        set({ bots: applyPatches(bots, patches), loading: false });
+      } catch (error) {
+        if (request !== botsRequest) return;
+        set({
+          loading: false,
+          error: errorMessage(error, "Failed to load bots"),
+        });
       }
-      if (typed.busy) {
+    },
+
+    loadModels: async () => {
+      try {
+        const { models, defaultModel, gatewayConfigured } = await botsApi.models();
+        set({ gatewayConfigured, models, defaultModel: defaultModel ?? models[0]?.id });
+      } catch {
+        // Banner state stays as-is; the chat pane shows its own error.
+      }
+    },
+
+    togglePin: async (botId) => {
+      const current = get().bots.find((bot) => bot.id === botId);
+      if (!current) return;
+      const pinned = current.pinnedAt === null;
+      patchBot(botId, { pinnedAt: pinned ? new Date().toISOString() : null });
+      try {
+        const updated = await botsApi.pin(botId, pinned);
+        patchBot(botId, { pinnedAt: updated.pinnedAt });
+      } catch (error) {
+        patchBot(botId, { pinnedAt: current.pinnedAt });
+        toast.error(errorMessage(error, "Failed to update pin"));
+      }
+    },
+
+    refreshBotsInBackground: () => {
+      void get()
+        .loadBots()
+        .catch(() => undefined);
+    },
+
+    markRead: (botId) => {
+      // The durable marker lives on the bot row (server lastReadAt); it is
+      // frozen into chat state as `unreadFrom` at connect time, so there is
+      // nothing to advance here — just clear the badge and persist.
+      patchBot(botId, { unread: false });
+      void botsApi.read(botId).catch(() => undefined);
+    },
+
+    loadBot: async (botId, { fresh = false } = {}) => {
+      const cached = get().fullBots[botId];
+      if (cached && !fresh) return cached;
+      const bot = await botsApi.get(botId);
+      get().setFullBot(bot);
+      return bot;
+    },
+
+    setFullBot: (bot) => {
+      set((state) => ({ fullBots: { ...state.fullBots, [bot.id]: bot } }));
+    },
+
+    forgetBot: (botId) => {
+      get().resetChat(botId);
+      set((state) => {
+        const fullBots = { ...state.fullBots };
+        delete fullBots[botId];
+        return { fullBots, bots: state.bots.filter((bot) => bot.id !== botId) };
+      });
+    },
+
+    chats: {},
+
+    connectChat: (botId) => {
+      if (chatConnections.has(botId)) return;
+      // Freeze the pre-open read marker: everything newer arrived while the
+      // owner was away and renders below the "new messages" divider. The
+      // live marker advances via markRead; this one stays put for the open
+      // session (WhatsApp-style unread divider).
+      // The Bot (full) and BotListEntry (list) rows both carry lastReadAt.
+      const bot = get().bots.find((b) => b.id === botId);
+      const marker = bot?.lastReadAt;
+      const unreadFrom = marker ? Date.parse(marker) : null;
+      set((s) => ({
+        chats: {
+          ...s.chats,
+          [botId]: s.chats[botId] ?? emptyChat(Number.isNaN(unreadFrom) ? null : unreadFrom),
+        },
+      }));
+      const connection = subscribeSse(
+        `/api/v1/bots/${botId}/stream`,
+        (event) => get().applyChatEvent(botId, event as ChatEvent),
+        {
+          onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
+          onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
+        },
+      );
+      chatConnections.set(botId, connection);
+    },
+
+    disconnectChat: (botId) => {
+      chatConnections.get(botId)?.close();
+      chatConnections.delete(botId);
+      // The cached transcript keeps rendering on the next visit, but it is
+      // stale until that visit's first snapshot arrives.
+      set((s) => {
+        const chat = s.chats[botId];
+        return chat
+          ? { chats: { ...s.chats, [botId]: { ...chat, connected: false, loaded: false } } }
+          : {};
+      });
+    },
+
+    resetChat: (botId) => {
+      get().disconnectChat(botId);
+      set((s) => {
+        const chats = { ...s.chats };
+        delete chats[botId];
+        return { chats };
+      });
+    },
+
+    loadOlder: async (botId) => {
+      const chat = get().chats[botId];
+      const before = chat ? oldestEntryId(chat.messages) : undefined;
+      if (!chat || !chat.hasMore || chat.loadingOlder || !before) return;
+      const patch = (next: Partial<ChatState>) =>
+        set((s) => {
+          const current = s.chats[botId];
+          return current ? { chats: { ...s.chats, [botId]: { ...current, ...next } } } : s;
+        });
+      patch({ loadingOlder: true });
+      try {
+        const page = await botsApi.history(botId, before);
+        const current = get().chats[botId];
+        // A new chat or a fresh snapshot meanwhile: this page no longer fits.
+        if (!current || oldestEntryId(current.messages) !== before)
+          return patch({ loadingOlder: false });
+        patch({ ...prependOlder(current.messages, page), loadingOlder: false });
+      } catch {
+        // Stay loadable: the next scroll to the top tries again.
+        patch({ loadingOlder: false });
+      }
+    },
+
+    applyChatEvent: (botId, event) => {
+      if (event.type === "ping") return;
+      set((s) => ({
+        chats: { ...s.chats, [botId]: applyEvent(s.chats[botId] ?? emptyChat(), event) },
+      }));
+    },
+
+    connectActivity: () => {
+      if (activityConnection) return;
+      activityConnection = subscribeSse("/api/v1/events", (event) => {
+        const typed = event as ChatEvent;
+        if (typed.type === "connection") {
+          const { id, status, error } = typed;
+          set((state) => ({
+            connections: {
+              ...state.connections,
+              [id]: { status, ...(error !== undefined ? { error } : {}) },
+            },
+          }));
+          for (const listener of connectionListeners) listener(typed);
+          return;
+        }
+        if (typed.type !== "activity") return;
+        if (!("conversation" in typed)) {
+          // The feed (re)opened with who is replying now. Anything missed
+          // while it was down is in the list.
+          const busy = new Set(typed.busy);
+          patchBots((bot) => ({ ...bot, replying: busy.has(bot.conversationId) }));
+          get().refreshBotsInBackground();
+          return;
+        }
+        const { conversation, approvals, questions } = typed;
+        // A routine's or a retired chat's conversation is nobody's row.
+        if (!get().bots.some((bot) => bot.conversationId === conversation)) return;
+        const counts = {
+          ...(approvals !== undefined ? { approvals } : {}),
+          ...(questions !== undefined ? { questions } : {}),
+        };
         // A tool waiting for approval or answers pauses a busy run: the
         // counts arrive here, mid-run, and the badge must not wait for the
         // reply to end.
-        const { approvals, questions } = typed;
-        set((state) => ({
-          bots: state.bots.map((bot) =>
-            bot.conversationId === typed.conversation
-              ? {
-                  ...bot,
-                  replying: true,
-                  ...(approvals !== undefined ? { approvals } : {}),
-                  ...(questions !== undefined ? { questions } : {}),
-                }
-              : bot,
-          ),
-        }));
-        return;
-      }
-      get().refreshBotsInBackground();
-    });
-  },
+        patchBots((bot) =>
+          bot.conversationId === conversation ? { ...bot, replying: typed.busy, ...counts } : bot,
+        );
+        // The reply that ended changed the preview and unread flag.
+        if (!typed.busy) scheduleRefresh();
+      });
+    },
 
-  disconnectActivity: () => {
-    activityConnection?.close();
-    activityConnection = null;
-  },
-}));
+    disconnectActivity: () => {
+      activityConnection?.close();
+      activityConnection = null;
+      clearTimeout(refreshTimer);
+      refreshTimer = undefined;
+    },
+  };
+});

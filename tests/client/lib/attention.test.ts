@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { BotListEntry } from "@/lib/bots-api";
-import { BADGED_FAVICON, documentTitle, pageLabel, railBots, waitingCount } from "@/lib/attention";
+import {
+  attentionOf,
+  BADGED_FAVICON,
+  documentTitle,
+  pageLabel,
+  railBots,
+  stateLabel,
+  waitingCount,
+  waitingLabel,
+} from "@/lib/attention";
 
 function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
   return {
@@ -23,6 +32,21 @@ function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
 
 describe("attention", () => {
   const bots = [bot("a", { approvals: 1 }), bot("b", { questions: 2 }), bot("c")];
+
+  it("reads a bot's attention once: waiting counts approvals and questions together", () => {
+    expect(attentionOf(bot("a", { approvals: 1, questions: 2, replying: true }))).toEqual({
+      waiting: 3,
+      replying: true,
+      unread: false,
+    });
+    expect(waitingLabel(bot("a", { approvals: 1, questions: 2 }))).toBe(
+      "1 awaiting approval, 2 questions for you",
+    );
+    expect(stateLabel(bot("a", { questions: 1 }))).toBe("Bot a, 1 question for you");
+    expect(stateLabel(bot("a", { replying: true }))).toBe("Bot a, replying");
+    expect(stateLabel(bot("a", { unread: true }))).toBe("Bot a, unread");
+    expect(stateLabel(bot("a"))).toBe("Bot a");
+  });
 
   it("counts approvals and questions across bots", () => {
     expect(waitingCount(bots)).toBe(3);

@@ -9,6 +9,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import { botsApi } from "../../lib/bots-api";
 import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
 import { createRfb, type RfbClient } from "../../lib/novnc";
+import { reconnectingSocket } from "../../lib/reconnecting-socket";
 import { remoteWindowSize } from "../../lib/remote-window";
 
 export type VncState = "connecting" | "live" | "reconnecting";
@@ -26,7 +27,6 @@ interface VncViewProps {
   onState: (state: VncState) => void;
 }
 
-const BACKOFF_SECONDS = [1, 3, 5, 10, 20, 30];
 /** Short: entering full screen should not leave the old window size on screen for long. */
 const RESIZE_DEBOUNCE_MS = 150;
 /** A failed fit is retried this many times, this far apart. */
@@ -90,64 +90,48 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     [paste],
   );
 
-  // Connection lifecycle: ticket -> noVNC -> reconnect with backoff.
+  // Connection lifecycle: ticket -> noVNC -> reconnect with backoff. The
+  // reconnecting socket owns the attempts; this transport only knows noVNC.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    let cancelled = false;
-    let attempt = 0;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-
-    const scheduleRetry = () => {
-      onStateRef.current("reconnecting");
-      const delay = BACKOFF_SECONDS[Math.min(attempt, BACKOFF_SECONDS.length - 1)]! * 1000;
-      attempt += 1;
-      retry = setTimeout(() => void connect(), delay);
-    };
-
-    const connect = async () => {
-      if (cancelled) return;
-      onStateRef.current(attempt === 0 ? "connecting" : "reconnecting");
-      try {
-        const ticket = await botsApi.browserVncTicket(botId);
-        if (cancelled) return;
-        const rfb = await createRfb(host, socketUrl(ticket.path), ticket.scale);
-        if (cancelled) {
-          rfb.disconnect();
-          return;
-        }
-        rfbRef.current = rfb;
-        rfb.viewOnly = !interactiveRef.current;
-        rfb.addEventListener("connect", () => {
-          attempt = 0;
-          onStateRef.current("live");
-          if (interactiveRef.current) rfb.focus({ preventScroll: true });
-          setTimeout(() => fitRef.current(), 300);
-        });
-        rfb.addEventListener("disconnect", () => {
-          if (rfbRef.current === rfb) rfbRef.current = null;
-          if (!cancelled) scheduleRetry();
-        });
-        rfb.addEventListener("clipboard", (event) => {
-          const text = (event as CustomEvent<{ text: string }>).detail.text;
-          void navigator.clipboard?.writeText(text).catch(() => {
-            /* the browser may refuse without a user gesture; Paste still works */
-          });
-        });
-      } catch {
-        // No ticket (session gone) or no socket: the panel's status poll
+    const socket = reconnectingSocket<{ path: string; scale: number }, RfbClient>(
+      {
+        // No ticket (session gone) retries too: the panel's status poll
         // removes this view when the session is truly gone.
-        if (!cancelled) scheduleRetry();
-      }
-    };
-    void connect();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(retry);
-      rfbRef.current?.disconnect();
-      rfbRef.current = null;
-    };
+        ticket: () => botsApi.browserVncTicket(botId),
+        open: async (ticket, events) => {
+          const rfb = await createRfb(host, socketUrl(ticket.path), ticket.scale);
+          rfbRef.current = rfb;
+          rfb.viewOnly = !interactiveRef.current;
+          rfb.addEventListener("connect", () => {
+            events.live();
+            if (interactiveRef.current) rfb.focus({ preventScroll: true });
+            setTimeout(() => fitRef.current(), 300);
+          });
+          rfb.addEventListener("disconnect", () => {
+            if (rfbRef.current === rfb) rfbRef.current = null;
+            events.dropped();
+          });
+          rfb.addEventListener("clipboard", (event) => {
+            const text = (event as CustomEvent<{ text: string }>).detail.text;
+            void navigator.clipboard?.writeText(text).catch(() => {
+              /* the browser may refuse without a user gesture; Paste still works */
+            });
+          });
+          return rfb;
+        },
+        close: (rfb) => {
+          if (rfbRef.current === rfb) rfbRef.current = null;
+          rfb.disconnect();
+        },
+      },
+      (state) => {
+        // "closed" only follows this effect's own cleanup.
+        if (state !== "closed") onStateRef.current(state);
+      },
+    );
+    return () => socket.close();
   }, [botId]);
 
   // Fit the remote Chrome window to the viewer. noVNC resizes the display

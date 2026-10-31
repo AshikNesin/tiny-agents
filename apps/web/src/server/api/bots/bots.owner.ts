@@ -1,46 +1,72 @@
 /**
  * Who is behind a conversation, and behind its current turn. A bot has its
  * chat (`Bot.conversationId`) and one conversation per routine
- * (`Routine.conversationId`, issue #63). Tool calls know their
- * conversation, not their bot, so every lookup from a conversation to its
- * bot goes through here: a routine's turn gets its bot's skills, browser,
- * memories and vault items like the chat does. Writes the owner must make
- * themselves (vault uses, memory changes) ask `isUnattended`.
+ * (`Routine.conversationId`, issue #63); a conversation neither names any
+ * more was retired by "New chat" (a Past chat) or belongs to a deleted bot.
+ *
+ * Tool calls know their conversation, not their bot, so every lookup from a
+ * conversation to its bot goes through here, and comes back with the bot
+ * row's tool-facing fields: callers ask questions, they never join. A
+ * routine's turn gets its bot's skills, browser, memories and vault items
+ * like the chat does; writes the owner must make themselves (vault uses,
+ * memory changes) ask `isUnattended`.
  */
 import { eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { db, bots, routines } from "../../db";
 
-export interface ConversationOwner {
-  botId: string;
-  /** Set when the conversation is a routine's, not the bot's chat. */
-  routineId?: string;
+/** The bot behind a conversation: the fields tool-side callers act on. */
+export interface ConversationBot {
+  id: string;
+  name: string;
+  modelId: string;
+  browserProfile: string;
+  memoryEnabled: boolean;
 }
 
-/** The bot (and routine) behind a conversation; undefined for a retired one. */
+export type ConversationOwner =
+  /** The bot's own chat: the owner writes here. */
+  | { kind: "chat"; bot: ConversationBot }
+  /** One of the bot's routines runs here, unattended (issue #63). */
+  | { kind: "routine"; bot: ConversationBot; routineId: string };
+
+const botColumns = {
+  id: true,
+  name: true,
+  modelId: true,
+  browserProfile: true,
+  memoryEnabled: true,
+} as const;
+
+/** The bot (and routine) behind a conversation; undefined for a retired or deleted one. */
 export async function conversationOwner(
   conversation: number | string,
 ): Promise<ConversationOwner | undefined> {
   const ref = String(conversation);
   const bot = await db.query.bots.findFirst({
     where: eq(bots.conversationId, ref),
-    columns: { id: true },
+    columns: botColumns,
   });
-  if (bot) return { botId: bot.id };
+  if (bot) return { kind: "chat", bot };
   const routine = await db.query.routines.findFirst({
     where: eq(routines.conversationId, ref),
-    columns: { id: true, botId: true },
+    columns: { id: true },
+    with: { bot: { columns: botColumns } },
   });
-  return routine ? { botId: routine.botId, routineId: routine.id } : undefined;
+  return routine ? { kind: "routine", bot: routine.bot, routineId: routine.id } : undefined;
+}
+
+/** The bot whose chat this is; undefined for a routine's, a Past chat or a deleted bot's. */
+export async function chatOwner(
+  conversation: number | string,
+): Promise<ConversationBot | undefined> {
+  const owner = await conversationOwner(conversation);
+  return owner?.kind === "chat" ? owner.bot : undefined;
 }
 
 /** Whether the conversation is a routine's: every turn in it is a routine run. */
 export async function isRoutineConversation(conversation: number | string): Promise<boolean> {
-  const routine = await db.query.routines.findFirst({
-    where: eq(routines.conversationId, String(conversation)),
-    columns: { id: true },
-  });
-  return routine !== undefined;
+  return (await conversationOwner(conversation))?.kind === "routine";
 }
 
 export type ChatReader = Pick<AgentRuntime, "readChat">;
@@ -49,11 +75,17 @@ export type ChatReader = Pick<AgentRuntime, "readChat">;
  * True when the turn is not the owner's own: a routine run (its own
  * conversation, issue #63) or a peer delivery in the chat (another bot, a
  * relayed reply or a mention), read from the latest user message. Unknown
- * counts as unattended, which only ever refuses more.
+ * counts as unattended, which only ever refuses more. Pass `owner` when it
+ * was already looked up.
  */
-export async function isUnattended(conversation: number, runtime: ChatReader): Promise<boolean> {
+export async function isUnattended(
+  conversation: number,
+  runtime: ChatReader,
+  owner?: ConversationOwner | null,
+): Promise<boolean> {
   try {
-    if (await isRoutineConversation(conversation)) return true;
+    const resolved = owner === undefined ? await conversationOwner(conversation) : owner;
+    if (resolved?.kind === "routine") return true;
     const state = await runtime.readChat(conversation);
     const last = state.messages.findLast((message) => message.role === "user");
     if (!last) return true;

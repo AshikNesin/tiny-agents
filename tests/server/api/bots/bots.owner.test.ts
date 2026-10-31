@@ -9,6 +9,7 @@ import { inArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { db, botSkills, bots, routines, skills } from "../../../../apps/web/src/server/db";
 import {
+  chatOwner,
   conversationOwner,
   isRoutineConversation,
   isUnattended,
@@ -56,12 +57,22 @@ const reader = (last: { text: string; peer?: unknown }) => ({
 describe("conversationOwner", () => {
   it("resolves a bot's chat and its routines' conversations to the bot", async () => {
     const { bot, routine, chat, routineConversation } = await seed();
-    expect(await conversationOwner(chat)).toEqual({ botId: bot.id });
+    const fields = {
+      id: bot.id,
+      name: bot.name,
+      modelId: "m",
+      browserProfile: "own",
+      memoryEnabled: true,
+    };
+    expect(await conversationOwner(chat)).toEqual({ kind: "chat", bot: fields });
     expect(await conversationOwner(routineConversation)).toEqual({
-      botId: bot.id,
+      kind: "routine",
+      bot: fields,
       routineId: routine.id,
     });
     expect(await conversationOwner(chat + 2)).toBeUndefined();
+    expect(await chatOwner(chat)).toEqual(fields);
+    expect(await chatOwner(routineConversation)).toBeUndefined();
     expect(await isRoutineConversation(chat)).toBe(false);
     expect(await isRoutineConversation(routineConversation)).toBe(true);
   });
@@ -78,6 +89,9 @@ describe("isUnattended", () => {
     // A chat message that looks like a routine label is still the owner's.
     expect(await isUnattended(chat, reader({ text: '**Routine "digest":** hi' }))).toBe(false);
     expect(await isUnattended(chat, reader({ text: "hi", peer: { kind: "message" } }))).toBe(true);
+    // A caller that already looked the owner up passes it: no second lookup, same answer.
+    const known = await conversationOwner(routineConversation);
+    expect(await isUnattended(routineConversation, owner, known)).toBe(true);
   });
 });
 

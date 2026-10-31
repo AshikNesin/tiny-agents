@@ -10,7 +10,8 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { connectionsApi, type Connection } from "../../lib/connections-api";
-import { subscribeSse } from "../../lib/sse";
+import { connectionAuth } from "../../lib/connection-auth";
+import { onConnectionChange } from "../../store/bots";
 import { AddConnectionDialog } from "../../components/connections/AddConnectionDialog";
 import {
   ConnectionStatusBadge,
@@ -62,12 +63,15 @@ export function ConnectionsList() {
     }
   }, []);
 
+  // Status changes ride the app's one events feed; a finished sign-in too.
   useEffect(() => {
     void refresh();
-    const events = subscribeSse("/api/v1/events", (event) => {
-      if ((event as { type?: string }).type === "connection") void refresh();
-    });
-    return () => events.close();
+    const offChange = onConnectionChange(() => void refresh());
+    const offSignIn = connectionAuth.onCompleted(undefined, () => void refresh());
+    return () => {
+      offChange();
+      offSignIn();
+    };
   }, [refresh]);
 
   const groups = useMemo(

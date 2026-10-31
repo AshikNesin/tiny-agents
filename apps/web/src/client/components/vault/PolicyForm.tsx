@@ -2,14 +2,14 @@
  * Who and what may use a vault item: its handle, where it fills or is sent,
  * which bots and tools may use it, and when you're asked. Never a value.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Checkbox } from "@groot/ui/checkbox";
 import { Field } from "@groot/ui/form";
 import { Input } from "@groot/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { Textarea } from "@groot/ui/textarea";
-import { botsApi, type BotListEntry } from "../../lib/bots-api";
 import type { VaultApproval, VaultKind, VaultPolicy } from "../../lib/vault-api";
+import { useBotsStore } from "../../store/bots";
 import { Switch } from "../ui/switch";
 
 const APPROVAL_LABEL: Record<VaultApproval, string> = {
@@ -62,14 +62,11 @@ export function PolicyForm({
   defaultTools: string[];
   idPrefix?: string;
 }) {
-  const [bots, setBots] = useState<BotListEntry[]>([]);
+  // The bot list the shell already keeps live.
+  const bots = useBotsStore((s) => s.bots);
   const [originsText, setOriginsText] = useState(value.origins.join("\n"));
   const [hostsText, setHostsText] = useState(value.hosts.join("\n"));
   const [toolsText, setToolsText] = useState(value.tools.join(", "));
-
-  useEffect(() => {
-    void botsApi.list().then(setBots, () => setBots([]));
-  }, []);
 
   const set = <K extends keyof VaultPolicy>(key: K, next: VaultPolicy[K]) =>
     onChange({ ...value, [key]: next });

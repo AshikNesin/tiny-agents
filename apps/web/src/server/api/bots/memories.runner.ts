@@ -18,6 +18,7 @@ import {
   MEMORY_TRIVIAL_BYTES,
 } from "./memories.domain";
 import { bots, db, memories } from "../../db";
+import { chatOwner } from "./bots.owner";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -127,8 +128,12 @@ export async function captureConversation(
   },
 ): Promise<void> {
   try {
+    // Only a bot's own chat is captured: a routine's conversation holds the
+    // routine's work, not the owner's facts (issue #63).
+    const owner = await chatOwner(conversationId);
+    if (!owner) return;
     const bot = await db.query.bots.findFirst({
-      where: eq(bots.conversationId, String(conversationId)),
+      where: eq(bots.id, owner.id),
       columns: {
         id: true,
         name: true,

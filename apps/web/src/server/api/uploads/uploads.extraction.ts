@@ -1,26 +1,48 @@
 /**
- * Background extraction (issue #58): each new file upload is queued, its
- * original bytes are extracted in a worker (`uploads.extract-runner.ts`),
- * and the result is stored next to the original as `chat/<id>/extract.json`
- * while the row records the status and metadata. Two run at a time; rows
- * still pending at boot are picked up again by the sweep.
+ * An upload's extraction (issue #58), from the moment its bytes are sniffed
+ * to the text a bot reads. This module owns every value `extractStatus`
+ * takes and every move between them:
+ *
+ *   sniffed ─┬─ unsupported / failed   (settled at upload: nothing to read)
+ *            └─ pending ──┬─ ready     (extract.json stored next to the original)
+ *                         ├─ failed
+ *                         └─ (deleted: the job is cancelled, nothing written)
+ *   none (uploaded before extraction existed) ─ pending, the first time a bot asks
+ *
+ * Extraction runs in a worker (`uploads.extract-runner.ts`), two at a time,
+ * and the result is stored as `chat/<id>/extract.json` while the row records
+ * status and metadata. A send that needs the text waits on the job itself,
+ * not on the table; rows still pending at boot are picked up by the sweep.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import { logger } from "@groot/core/logger";
 import type { AttachmentContent } from "@tiny-agents/agent";
-import { db, uploads } from "../../db";
+import { db, uploads, type Upload } from "../../db";
+import { extract } from "./uploads.extract";
 import { defaultRunner, type ExtractRunner } from "./uploads.extract-runner";
-import { sniffFile, SniffError, type ExtractKind } from "./uploads.sniff";
+import { sniffFile, SniffError, type ExtractKind, type SniffResult } from "./uploads.sniff";
 
 const CONCURRENCY = 2;
 const CACHE_SIZE = 8;
 
 export const extractKey = (uploadId: string) => `chat/${uploadId}/extract.json`;
 
+type UploadRow = Upload;
+
+interface Job {
+  /** The kind the upload was sniffed as, when the caller already knows it. */
+  kind?: ExtractKind;
+  done: Promise<void>;
+  settle: () => void;
+}
+
 let runner: ExtractRunner = defaultRunner;
 const queue: string[] = [];
-const queued = new Set<string>();
+/** Queued and running jobs by upload id. */
+const jobs = new Map<string, Job>();
+/** Uploads deleted while their job was queued or running: the job writes nothing. */
+const cancelled = new Set<string>();
 let active = 0;
 let idle: Promise<void> = Promise.resolve();
 let markIdle: (() => void) | undefined;
@@ -35,27 +57,118 @@ export function extractionIdle(): Promise<void> {
   return idle;
 }
 
-export function queueExtraction(uploadId: string): void {
-  if (queued.has(uploadId)) return;
-  if (active === 0 && queue.length === 0) {
-    idle = new Promise((resolve) => (markIdle = resolve));
+/**
+ * The extraction columns a new upload row starts with: images have none;
+ * a type nothing can read is settled now, with the reason; everything else
+ * is pending and extracts in the background once the row exists.
+ */
+export async function initialExtraction(
+  sniffed: SniffResult | undefined,
+  name: string,
+): Promise<Partial<Pick<UploadRow, "extractStatus" | "extractError" | "extractedAt">>> {
+  if (!sniffed) return {};
+  if (sniffed.kind === "unsupported") {
+    const result = await extract(
+      { bytes: new Uint8Array(), kind: "unsupported", name },
+      sniffed.mime,
+    );
+    if (result.status !== "ready") {
+      return { extractStatus: result.status, extractError: result.error, extractedAt: new Date() };
+    }
   }
-  queued.add(uploadId);
+  return { extractStatus: "pending" };
+}
+
+/** A row just inserted: queue its extraction if it is pending. */
+export function startExtraction(
+  row: Pick<UploadRow, "id" | "kind" | "extractStatus">,
+  kind?: ExtractKind,
+): void {
+  if (row.kind === "file" && row.extractStatus === "pending") void queueExtraction(row.id, kind);
+}
+
+/** Uploads from before extraction existed are queued the first time anyone asks. */
+export async function ensureExtracting<T extends UploadRow>(row: T): Promise<T> {
+  if (row.kind !== "file" || row.extractStatus !== "none") return row;
+  await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, row.id));
+  void queueExtraction(row.id);
+  return { ...row, extractStatus: "pending" };
+}
+
+/**
+ * The rows as they stand once their extractions have settled, or after
+ * `waitMs` for those still running: a send inlines small files that finish
+ * in time and leaves the rest to the tools.
+ */
+export async function waitUntilSettled(rows: UploadRow[], waitMs: number): Promise<UploadRow[]> {
+  const pending = rows.filter((row) => row.kind === "file" && row.extractStatus === "pending");
+  if (pending.length === 0) return rows;
+  const settling = pending.map((row) => jobs.get(row.id)?.done ?? queueExtraction(row.id));
+  await Promise.race([Promise.all(settling), sleep(waitMs)]);
+  const fresh = await db
+    .select()
+    .from(uploads)
+    .where(
+      inArray(
+        uploads.id,
+        pending.map((row) => row.id),
+      ),
+    );
+  const byId = new Map(fresh.map((row) => [row.id, row]));
+  return rows.map((row) => byId.get(row.id) ?? row);
+}
+
+/**
+ * The upload is being deleted: a queued job is dropped, a running one
+ * writes nothing more (and removes what it wrote). The row and its bytes
+ * are the caller's to delete.
+ */
+export function cancelExtraction(uploadId: string): void {
+  const job = jobs.get(uploadId);
+  if (!job) return;
+  cancelled.add(uploadId);
+  const queuedAt = queue.indexOf(uploadId);
+  if (queuedAt !== -1) {
+    queue.splice(queuedAt, 1);
+    retire(uploadId);
+  }
+}
+
+/** Queue an extraction (idempotent); resolves when its job has settled. */
+export function queueExtraction(uploadId: string, kind?: ExtractKind): Promise<void> {
+  const existing = jobs.get(uploadId);
+  if (existing) return existing.done;
+  if (jobs.size === 0) idle = new Promise((resolve) => (markIdle = resolve));
+  let settle!: () => void;
+  const done = new Promise<void>((resolve) => (settle = resolve));
+  jobs.set(uploadId, { kind, done, settle });
   queue.push(uploadId);
   pump();
+  return done;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
+
+function retire(uploadId: string): void {
+  const job = jobs.get(uploadId);
+  jobs.delete(uploadId);
+  cancelled.delete(uploadId);
+  job?.settle();
+  if (jobs.size === 0) markIdle?.();
 }
 
 function pump(): void {
   while (active < CONCURRENCY && queue.length > 0) {
     const uploadId = queue.shift()!;
+    const job = jobs.get(uploadId);
+    if (!job) continue;
     active += 1;
-    void extractOne(uploadId)
+    void extractOne(uploadId, job.kind)
       .catch((error: unknown) => logger.warn({ error, uploadId }, "upload.extract.failed"))
       .finally(() => {
         active -= 1;
-        queued.delete(uploadId);
-        if (active === 0 && queue.length === 0) markIdle?.();
-        else pump();
+        retire(uploadId);
+        pump();
       });
   }
 }
@@ -65,9 +178,10 @@ function extensionOf(name: string): string {
   return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-async function extractOne(uploadId: string): Promise<void> {
+async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): Promise<void> {
   const row = await db.query.uploads.findFirst({ where: eq(uploads.id, uploadId) });
   if (!row || row.kind !== "file" || row.extractStatus !== "pending") return;
+  if (cancelled.has(uploadId)) return;
   const started = Date.now();
   let bytes: Uint8Array;
   try {
@@ -76,17 +190,20 @@ async function extractOne(uploadId: string): Promise<void> {
     await finish(uploadId, { extractStatus: "failed", extractError: "The file's bytes are gone." });
     return;
   }
-  let kind: ExtractKind;
-  try {
-    kind = sniffFile(bytes, extensionOf(row.name)).kind;
-  } catch (error) {
-    await finish(uploadId, {
-      extractStatus: "failed",
-      extractError: error instanceof SniffError ? error.message : "Unrecognised file.",
-    });
-    return;
+  let kind = kindHint;
+  if (!kind) {
+    try {
+      kind = sniffFile(bytes, extensionOf(row.name)).kind;
+    } catch (error) {
+      await finish(uploadId, {
+        extractStatus: "failed",
+        extractError: error instanceof SniffError ? error.message : "Unrecognised file.",
+      });
+      return;
+    }
   }
   const result = await runner({ bytes: new Uint8Array(bytes), kind, name: row.name }, row.mimeType);
+  if (cancelled.has(uploadId)) return;
   if (result.status !== "ready") {
     await finish(uploadId, { extractStatus: result.status, extractError: result.error });
     logger.info(
@@ -122,16 +239,22 @@ async function extractOne(uploadId: string): Promise<void> {
   );
 }
 
+/** Record a job's outcome. A row deleted meanwhile keeps nothing: the bytes written for it go too. */
 async function finish(
   uploadId: string,
   data: { extractStatus: string; extractError?: string | null; extractMeta?: string },
 ): Promise<void> {
-  // The upload may have been deleted meanwhile.
-  await db
-    .update(uploads)
-    .set({ ...data, extractedAt: new Date() })
-    .where(eq(uploads.id, uploadId))
-    .catch(() => undefined);
+  const updated = cancelled.has(uploadId)
+    ? []
+    : await db
+        .update(uploads)
+        .set({ ...data, extractedAt: new Date() })
+        .where(eq(uploads.id, uploadId))
+        .returning({ id: uploads.id })
+        .catch(() => []);
+  if (updated.length === 0 && data.extractStatus === "ready") {
+    await storageService.deleteFiles({ filePaths: [extractKey(uploadId)] }).catch(() => undefined);
+  }
 }
 
 /** Boot: rows left pending by a restart are extracted again. */
@@ -140,7 +263,7 @@ export async function extractionSweep(): Promise<number> {
     .select({ id: uploads.id })
     .from(uploads)
     .where(and(eq(uploads.kind, "file"), eq(uploads.extractStatus, "pending")));
-  for (const row of rows) queueExtraction(row.id);
+  for (const row of rows) void queueExtraction(row.id);
   return rows.length;
 }
 

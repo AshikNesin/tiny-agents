@@ -15,8 +15,28 @@ import type {
   VisionStore,
 } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
-import { loadContent, queueExtraction } from "./uploads.extraction";
-import { modelImage } from "./uploads.service";
+import { ensureExtracting, loadContent } from "./uploads.extraction";
+import { asBuffer, sniffImage } from "./uploads.prepare";
+
+/** Model-ready variant bytes for see_image and inline sends. */
+export async function modelImage(
+  id: string,
+): Promise<
+  { data: string; mimeType: string; name: string; width?: number; height?: number } | undefined
+> {
+  const row = await db.query.uploads.findFirst({ where: eq(uploads.id, id) });
+  if (!row || row.kind !== "image" || !row.modelKey) return undefined;
+  const file = await storageService.downloadFile({ filePath: row.modelKey });
+  const bytes = asBuffer(file.bytes);
+  return {
+    data: bytes.toString("base64"),
+    // The variant's own bytes decide: local storage types objects by key
+    // extension, and `chat/<id>/model` has none.
+    mimeType: sniffImage(bytes) ?? (file.contentType || row.mimeType),
+    name: row.name,
+    ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
+  };
+}
 
 type IdSource = { attachmentIds(conversationId: number): Promise<string[]> };
 
@@ -66,20 +86,12 @@ export function summarize(row: UploadRow): AttachmentSummary {
   };
 }
 
-/** Uploads from before extraction existed are queued the first time a bot asks. */
-async function ensureQueued(row: UploadRow): Promise<UploadRow> {
-  if (row.kind !== "file" || row.extractStatus !== "none") return row;
-  await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, row.id));
-  queueExtraction(row.id);
-  return { ...row, extractStatus: "pending" };
-}
-
 export function createAttachmentStore(rt: IdSource): AttachmentStore {
   const scoped = async (conversationId: number, uploadId: string) => {
     const ids = await rt.attachmentIds(conversationId);
     if (!ids.includes(uploadId)) return undefined;
     const row = await db.query.uploads.findFirst({ where: eq(uploads.id, uploadId) });
-    return row ? ensureQueued(row) : undefined;
+    return row ? ensureExtracting(row) : undefined;
   };
   return {
     async list(conversationId) {
@@ -90,7 +102,7 @@ export function createAttachmentStore(rt: IdSource): AttachmentStore {
       const out: AttachmentSummary[] = [];
       for (const id of ids) {
         const row = byId.get(id);
-        if (row) out.push(summarize(await ensureQueued(row)));
+        if (row) out.push(summarize(await ensureExtracting(row)));
       }
       return out;
     },

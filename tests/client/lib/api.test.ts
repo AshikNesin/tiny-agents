@@ -51,6 +51,23 @@ describe("apiClient", () => {
     expect(sent(uploadMock).headers.get("content-type")).toBeNull();
   });
 
+  it("adds per-request headers and lets request() accept an empty answer", async () => {
+    const fetchMock = respond(200, { success: true, data: { ok: true } });
+    await apiClient.post("/vault/items", { a: 1 }, { headers: { "X-Vault-Step-Up": "t0k" } });
+    expect(sent(fetchMock).headers.get("x-vault-step-up")).toBe("t0k");
+    expect(sent(fetchMock).headers.get("accept")).toBe("application/json");
+
+    const emptyMock = respond(200, { success: true });
+    await expect(
+      apiClient.request("patch", "/vault/items/x", { body: {}, emptyOk: true }),
+    ).resolves.toBeUndefined();
+    expect(sent(emptyMock).init.method).toBe("PATCH");
+    respond(200, { success: true });
+    await expect(apiClient.request("patch", "/vault/items/x", { body: {} })).rejects.toMatchObject({
+      code: "NO_DATA",
+    });
+  });
+
   it("throws an ApiError carrying the server's error envelope", async () => {
     respond(400, {
       success: false,

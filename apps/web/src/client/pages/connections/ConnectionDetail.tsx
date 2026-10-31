@@ -29,23 +29,16 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
-import { botsApi, type BotListEntry } from "../../lib/bots-api";
 import { connectionsApi, type Connection } from "../../lib/connections-api";
-import { subscribeSse } from "../../lib/sse";
+import { connectionAuth } from "../../lib/connection-auth";
+import { onConnectionChange, useBotsStore } from "../../store/bots";
 import { BotAvatar } from "../../components/BotAvatar";
 import { Switch } from "../../components/ui/switch";
 import {
   ConnectionStatusBadge,
   authDescription,
   errorMessage,
-  openOAuthPopup,
 } from "../../components/connections/connection-status";
-
-interface OauthMessage {
-  type?: string;
-  id?: string;
-  error?: string;
-}
 
 function toolsMeta(tools: Connection["tools"]): string {
   const count = tools.length === 1 ? "1 tool" : `${tools.length} tools`;
@@ -70,7 +63,8 @@ export function ConnectionDetail({ id }: { id: string }) {
   const navigate = useNavigate();
   const [connection, setConnection] = useState<Connection | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [bots, setBots] = useState<BotListEntry[] | null>(null);
+  // The bot list the shell already keeps live; null only before its first load.
+  const bots = useBotsStore((s) => (s.loading && s.bots.length === 0 ? null : s.bots));
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -89,32 +83,25 @@ export function ConnectionDetail({ id }: { id: string }) {
     setLoadError(null);
     setConfirmRemove(false);
     void refresh();
-    void botsApi
-      .list()
-      .then(setBots)
-      .catch(() => setBots([]));
   }, [refresh]);
 
-  useEffect(() => {
-    const events = subscribeSse("/api/v1/events", (event) => {
-      const typed = event as { type?: string; id?: string };
-      if (typed.type === "connection" && typed.id === id) void refresh();
-    });
-    return () => events.close();
-  }, [id, refresh]);
+  useEffect(
+    () =>
+      onConnectionChange((change) => {
+        if (change.id === id) void refresh();
+      }),
+    [id, refresh],
+  );
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data as OauthMessage | null;
-      if (data?.type !== "tiny-agents:oauth") return;
-      if (data.id && data.id !== id) return;
-      if (data.error) toast.error(data.error);
-      else toast.success("Signed in");
-      void refresh();
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [id, refresh]);
+  useEffect(
+    () =>
+      connectionAuth.onCompleted(id, ({ error }) => {
+        if (error) toast.error(error);
+        else toast.success("Signed in");
+        void refresh();
+      }),
+    [id, refresh],
+  );
 
   const reconnect = async () => {
     setBusy(true);
@@ -128,20 +115,17 @@ export function ConnectionDetail({ id }: { id: string }) {
     }
   };
 
-  const signIn = async () => {
+  // Runs in the click itself: the popup must open before any await.
+  const signIn = () => {
     setBusy(true);
-    try {
-      const { authorizationUrl } = await connectionsApi.authorize(id);
-      if (!authorizationUrl) {
-        toast.error("No sign-in URL returned");
-        return;
-      }
-      if (!openOAuthPopup(authorizationUrl)) toast.error("Allow pop-ups to finish signing in");
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to start sign-in"));
-    } finally {
+    const started = connectionAuth.signIn(id);
+    void started.then((outcome) => {
+      if (outcome.status === "no_url") toast.error("No sign-in URL returned");
+      else if (outcome.status === "blocked") toast.error("Allow pop-ups to finish signing in");
+      else if (outcome.status === "failed")
+        toast.error(errorMessage(outcome.error, "Failed to start sign-in"));
       setBusy(false);
-    }
+    });
   };
 
   const toggleBot = async (botId: string, enable: boolean) => {
@@ -249,7 +233,7 @@ export function ConnectionDetail({ id }: { id: string }) {
           <CardTitle>Status</CardTitle>
           <CardAction className="flex gap-2">
             {connection.status === "needs_auth" && (
-              <Button onClick={() => void signIn()} disabled={busy}>
+              <Button onClick={signIn} disabled={busy}>
                 <LogIn className="size-4" />
                 Sign in
               </Button>
