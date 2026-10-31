@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": "../..",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "jsx": "react-jsx",
     "paths": {
       "@groot/ui": ["../../packages/ui/src/index.ts"],

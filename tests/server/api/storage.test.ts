@@ -72,6 +72,44 @@ describe("storage API", () => {
     ).toBe(404);
   });
 
+  it("renaming a file onto its own path keeps it", async () => {
+    const { token } = await signIn(app);
+    await storage.put("same/keep.txt", "keep me");
+    const renamed = await api(app, "/api/v1/storage/files/rename", {
+      method: "PUT",
+      json: { oldPath: "same/keep.txt", newPath: "same/keep.txt" },
+      token,
+    });
+    expect(renamed.status).toBe(200);
+    expect(await storage.head("same/keep.txt")).not.toBeNull();
+    const missing = await api(app, "/api/v1/storage/files/rename", {
+      method: "PUT",
+      json: { oldPath: "same/none.txt", newPath: "same/none.txt" },
+      token,
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it("serves active content as an attachment with nosniff", async () => {
+    const { token } = await signIn(app);
+    await storage.put("active/x.svg", "<svg onload=alert(1)/>", { contentType: "image/svg+xml" });
+    const svg = await app.request("/api/v1/storage/files/download?filePath=active/x.svg", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(svg.headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect(svg.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("rejects an uploaded file name containing a slash", async () => {
+    const { token } = await signIn(app);
+    const response = await api(app, "/api/v1/storage/files/upload", {
+      method: "POST",
+      body: uploadForm([new File(["x"], "sub/x.txt")]),
+      token,
+    });
+    expect(response.status).toBe(400);
+  });
+
   it("uploads several files into the given folder in one request", async () => {
     const { token } = await signIn(app);
     const response = await api<UploadResult>(app, "/api/v1/storage/files/upload", {

@@ -123,6 +123,11 @@ import { formatRelativeTime } from "@groot/shell/lib/utils";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useStorageFiles, type StorageFile } from "@groot/shell/pages/storage/hooks/useStorage";
 import { useAppSettings, type AppSetting } from "@groot/shell/hooks/useAppSettings";
+// Shell pages and guards an app mounts as routes (or leaves out).
+import { Login } from "@groot/shell/pages/auth/Login";
+import { Settings } from "@groot/shell/pages/settings/Settings";
+import { Storage } from "@groot/shell/pages/storage/Storage";
+import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 
 // @groot/core database singleton, errors, config, kv.
 import { db, users, type Database, type User } from "@groot/core/database";
@@ -249,6 +254,7 @@ const checks = {
     jobsKeys,
     STATE_TABS,
   ],
+  shellPages: [Login, Settings, Storage, ProtectedRoute],
   shell: [
     Layout,
     PageLayout,

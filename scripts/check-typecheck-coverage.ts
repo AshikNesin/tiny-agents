@@ -11,7 +11,7 @@
  *
  * What this guard owns: every .ts and .tsx file under the enumerated roots
  * must be a member of at least one program that CI typechecks (the root
- * tsconfig.json and apps/web/tsconfig.json), and every repo-owned .d.ts
+ * tsconfig.json, apps/web/tsconfig.json and the kit-consumer fixture), and every repo-owned .d.ts
  * under those roots must pass a dedicated declarations pass. Membership is
  * what tsc actually compiles: include globs plus the import closure. A file
  * matched by a package tsconfig that no script or CI step runs does not
@@ -29,7 +29,14 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CHECKED_PROJECTS = ["tsconfig.json", "apps/web/tsconfig.json"];
+// The kit-consumer fixture (`pnpm typecheck:kit`) imports every public kit
+// entrypoint, so kit code is covered whether or not an app uses it: a child
+// that never mounts jobs or storage still typechecks them.
+const CHECKED_PROJECTS = [
+  "tsconfig.json",
+  "apps/web/tsconfig.json",
+  "tests/kit-consumers/tsconfig.json",
+];
 const SOURCE_EXTENSION = /\.(ts|tsx)$/;
 const DECLARATION_EXTENSION = /\.d\.ts$/;
 

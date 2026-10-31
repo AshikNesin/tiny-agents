@@ -14,13 +14,26 @@ export interface CreateAppOptions {
    * the app is not ready and `undefined` once it is.
    */
   readiness?: () => string | undefined;
-  /** Max JSON body size for API routes. Storage uploads set their own limit. */
+  /** Max JSON body size for API routes. Upload endpoints (`uploadPaths`) set their own limit. */
   bodyLimitBytes?: number;
   /**
-   * Path prefixes whose routes enforce their own body limit (multipart
-   * uploads), in addition to `/api/v1/storage/`.
+   * Multipart endpoints that enforce their own size caps, so the JSON body
+   * limit skips them (groot's storage upload is always one). Exact paths, or a
+   * prefix ending in `*`.
    */
-  ownBodyLimit?: string[];
+  uploadPaths?: string[];
+  /**
+   * Public endpoints any website may call without credentials (embeddable
+   * widgets, tracking pixels): they answer `Access-Control-Allow-Origin: *`
+   * and skip the app's credentialed CORS allow-list. Exact paths, or a prefix
+   * ending in `*` (`"/api/public/*"`).
+   */
+  openCorsPaths?: string[];
+}
+
+/** True when `path` is one of the `openCorsPaths` (exact, or `prefix*`). */
+function matchesPath(paths: readonly string[], path: string): boolean {
+  return paths.some((p) => (p.endsWith("*") ? path.startsWith(p.slice(0, -1)) : path === p));
 }
 
 let shuttingDown = false;
@@ -39,18 +52,19 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const limit = bodyLimit({ maxSize: options.bodyLimitBytes ?? 1024 * 1024 });
 
+  const openPaths = options.openCorsPaths ?? [];
+  const openCors = cors({ origin: "*" });
+  const appCors = cors({
+    origin: (origin) =>
+      config.cors.origins.length === 0 || config.cors.origins.includes(origin) ? origin : null,
+    credentials: true,
+  });
+
   app.use(requestLoggerMiddleware);
-  app.use(
-    cors({
-      origin: (origin) =>
-        config.cors.origins.length === 0 || config.cors.origins.includes(origin) ? origin : null,
-      credentials: true,
-    }),
-  );
-  const ownLimit = ["/api/v1/storage/", ...(options.ownBodyLimit ?? [])];
-  app.use("/api/*", (c, next) =>
-    ownLimit.some((prefix) => c.req.path.startsWith(prefix)) ? next() : limit(c, next),
-  );
+  app.use((c, next) => (matchesPath(openPaths, c.req.path) ? openCors(c, next) : appCors(c, next)));
+  // Upload endpoints set their own (larger) limits; everything else under /api is JSON.
+  const uploadPaths = ["/api/v1/storage/files/upload", ...(options.uploadPaths ?? [])];
+  app.use("/api/*", (c, next) => (matchesPath(uploadPaths, c.req.path) ? next() : limit(c, next)));
 
   const probe = () => {
     if (shuttingDown) return { status: 503 as const, body: { status: "shutting_down" } };

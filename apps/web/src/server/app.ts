@@ -29,13 +29,13 @@ export function registerJobHandlers(): void {
  * Upload routes take multipart bodies far larger than the JSON limit; they
  * enforce their own size caps.
  */
-const OWN_BODY_LIMIT = ["/api/v1/uploads"];
+const UPLOAD_PATHS = ["/api/v1/uploads*"];
 
 /** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
 export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
   return createApp({
     ...options,
-    ownBodyLimit: OWN_BODY_LIMIT,
+    uploadPaths: UPLOAD_PATHS,
     routes(app) {
       // Public
       app.route("/api/v1/auth", authRoutes);

@@ -1,34 +1,18 @@
 {
   "fromVersion": "3.0.0",
   "toVersion": "3.0.0",
-  "fromCommit": "82e7defebb8bd475481b68603be07902e8b39394",
-  "toCommit": "a4b4a7683fda7e71fc238cea99f2b05e3c15e637",
-  "generatedAt": "2026-10-31T05:46:58.770Z",
+  "fromCommit": "a4b4a7683fda7e71fc238cea99f2b05e3c15e637",
+  "toCommit": "29c96e120320efe5da8d04bfa75caaeb97a9409a",
+  "generatedAt": "2026-10-31T16:46:18.785Z",
   "conflicts": [
     {
-      "file": "docs/guides/deploy.md",
-      "conflicts": 3,
-      "commits": ["a4b4a76 perf: sentry loading", "84750cd Docs cleanup"]
-    },
-    {
-      "file": "docs/adr/README.md",
-      "conflicts": 1,
-      "commits": ["84750cd Docs cleanup"]
-    },
-    {
-      "file": ".gitignore",
-      "conflicts": 1,
-      "commits": ["84750cd Docs cleanup", "6861735 chore: ignore everything inside data/"]
-    },
-    {
-      "file": "docs/README.md",
-      "conflicts": 4,
-      "commits": ["84750cd Docs cleanup"]
-    },
-    {
-      "file": "scripts/db-migrate.ts",
+      "file": "packages/core/src/app.ts",
       "conflicts": 2,
-      "commits": ["84750cd Docs cleanup"]
+      "commits": [
+        "29c96e1 core: createApp({ uploadPaths }) exempts app upload endpoints from the JSON body limit",
+        "1f59d1b Address code comments",
+        "869db96 chore: enhance cors"
+      ]
     }
   ]
 }
