@@ -24,15 +24,19 @@ export default defineConfig({
   webServer: {
     // Start the dev server directly via tsx (bypassing the `pnpm dev` portless
     // wrapper, which conflicts with Playwright's port-availability check).
-    // Migrations + seed run first so the demo user exists. The command inherits
-    // DATABASE_URL from the environment, so e2e runs on the same
-    // engine as the rest of the suite (SQLite by default).
-    // TINY_AGENTS_FAUX=1 swaps the Cloudflare gateway for a scripted echo model: no network, no keys — e2e exercises the durable
-    // pipeline itself. The token speed keeps every reply busy for a real
-    // window so steering/queueing tests can send mid-reply.
+    // E2e runs on its own throwaway SQLite file — wiped each run, then
+    // migrations + seed run first so the demo user exists — so it never
+    // depends on (or disturbs) the developer's `data/dev.db`. Set
+    // DATABASE_URL to run against a different engine instead.
+    // TINY_AGENTS_FAUX=1 swaps the Cloudflare gateway for a scripted echo
+    // model: no network, no keys — e2e exercises the durable pipeline
+    // itself. The token speed keeps every reply busy for a real window so
+    // steering/queueing tests can send mid-reply.
     command:
-      "pnpm exec tsx scripts/seed.ts && " +
-      "TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 pnpm exec tsx watch --max-old-space-size=512 apps/web/src/server/entry.node.ts",
+      "rm -f data/e2e.db data/e2e.db-shm data/e2e.db-wal && " +
+      "DATABASE_URL=file:./data/e2e.db pnpm exec tsx scripts/seed.ts && " +
+      "DATABASE_URL=file:./data/e2e.db TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 " +
+      "pnpm exec tsx watch --max-old-space-size=512 apps/web/src/server/entry.node.ts",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 240 * 1000,

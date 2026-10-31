@@ -1,17 +1,10 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Settings,
-  LayoutDashboard,
-  CheckSquare,
-  HardDrive,
-  Briefcase,
-  LogOut,
-  Search,
-  type LucideIcon,
-} from "lucide-react";
-import { useAuthStore } from "@groot/shell/store/auth";
+import { LogOut, Search, type LucideIcon } from "lucide-react";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
+import { useShellConfig } from "@groot/shell/lib/shell-config";
+import { THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
+import { useSignOut } from "@groot/shell/hooks/useSignOut";
 import { Dialog, DialogContent, DialogTitle } from "@groot/ui/dialog";
 import {
   Command,
@@ -41,41 +34,33 @@ export interface CommandGroupEntry {
   id?: string;
 }
 
-/** Button that opens the shared command palette dialog. */
-export function CommandPaletteTrigger({ iconOnly = false }: { iconOnly?: boolean }) {
+/** Icon button that opens the shared command palette dialog. */
+export function CommandPaletteTrigger() {
   const setOpen = useCommandPaletteStore((state) => state.setOpen);
   return (
     <button
       type="button"
       onClick={() => setOpen(true)}
       aria-label="Search (⌘K)"
-      className={
-        iconOnly
-          ? "inline-flex size-8 items-center justify-center rounded-xl text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-          : "inline-flex items-center justify-between whitespace-nowrap focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input hover:bg-accent hover:text-accent-foreground px-4 py-2 relative h-9 w-full justify-start rounded-xl bg-muted/50 text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-40 lg:w-64"
-      }
+      className="inline-flex size-8 items-center justify-center rounded-xl text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
     >
-      {iconOnly ? (
-        <Search className="size-4" />
-      ) : (
-        <>
-          <span className="hidden lg:inline-flex">Search...</span>
-          <span className="inline-flex lg:hidden">Search...</span>
-          <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] hidden h-5 select-none items-center gap-1 rounded-md border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-            <span className="text-xs">Cmd</span>K
-          </kbd>
-        </>
-      )}
+      <Search className="size-4" />
     </button>
   );
 }
 
-/** The actual command palette dialog — render this once at the app root. */
-export function CommandPaletteDialog({ groups }: { groups?: CommandGroupEntry[] }) {
+/**
+ * The command palette dialog: render once at the app root. It lists the
+ * `ShellConfig.nav` destinations, then the app's own `groups`, then the
+ * built-in Theme and Account (log out) commands.
+ */
+export function CommandPaletteDialog({ groups = [] }: { groups?: CommandGroupEntry[] }) {
   const open = useCommandPaletteStore((state) => state.open);
   const setOpen = useCommandPaletteStore((state) => state.setOpen);
   const navigate = useNavigate();
-  const logout = useAuthStore((state) => state.logout);
+  const { nav } = useShellConfig();
+  const { setTheme } = useTheme();
+  const signOut = useSignOut();
 
   const runCommand = React.useCallback(
     (command: () => unknown) => {
@@ -85,46 +70,36 @@ export function CommandPaletteDialog({ groups }: { groups?: CommandGroupEntry[] 
     [setOpen],
   );
 
-  const handleLogout = () => {
-    runCommand(() => {
-      logout();
-      navigate("/login");
-    });
-  };
-
-  const resolvedGroups: CommandGroupEntry[] = groups ?? [
+  const resolvedGroups: CommandGroupEntry[] = [
+    ...(nav.length > 0
+      ? [
+          {
+            id: "shell-navigation",
+            heading: "Navigation",
+            items: nav.map((item) => ({
+              id: item.to,
+              label: item.label,
+              icon: item.icon,
+              onSelect: () => navigate(item.to),
+            })),
+          },
+        ]
+      : []),
+    ...groups,
     {
-      heading: "Navigation",
-      items: [
-        {
-          label: "Dashboard",
-          icon: LayoutDashboard,
-          onSelect: () => runCommand(() => navigate("/")),
-        },
-        { label: "Todos", icon: CheckSquare, onSelect: () => runCommand(() => navigate("/todos")) },
-        {
-          label: "Storage",
-          icon: HardDrive,
-          onSelect: () => runCommand(() => navigate("/storage")),
-        },
-        { label: "Jobs", icon: Briefcase, onSelect: () => runCommand(() => navigate("/jobs")) },
-        {
-          label: "Settings",
-          icon: Settings,
-          onSelect: () => runCommand(() => navigate("/settings")),
-        },
-      ],
+      id: "shell-theme",
+      heading: "Theme",
+      items: THEME_OPTIONS.map(({ value, label, icon }) => ({
+        id: `theme-${value}`,
+        label: `${label} theme`,
+        icon,
+        onSelect: () => setTheme(value),
+      })),
     },
     {
+      id: "shell-account",
       heading: "Account",
-      items: [
-        {
-          label: "Logout",
-          icon: LogOut,
-          onSelect: handleLogout,
-          variant: "destructive",
-        },
-      ],
+      items: [{ label: "Log out", icon: LogOut, onSelect: signOut, variant: "destructive" }],
     },
   ];
 
@@ -170,15 +145,5 @@ export function CommandPaletteDialog({ groups }: { groups?: CommandGroupEntry[] 
         </Command>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** @deprecated Use `CommandPaletteTrigger` for the button and `CommandPaletteDialog` for the dialog. */
-export function CommandPalette({ iconOnly = false }: { iconOnly?: boolean }) {
-  return (
-    <>
-      <CommandPaletteTrigger iconOnly={iconOnly} />
-      <CommandPaletteDialog />
-    </>
   );
 }

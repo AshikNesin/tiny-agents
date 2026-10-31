@@ -46,6 +46,12 @@ describe("env", () => {
     expect(defaultDatabaseUrl("production")).toBe("file:/data/prod.db");
   });
 
+  it("drops variables outside the schema", () => {
+    const env = parseEnv({ SOURCE_COMMIT: "abc", OPENAI_API_KEY: "sk-test" });
+    expect(env).not.toHaveProperty("SOURCE_COMMIT");
+    expect(env).not.toHaveProperty("OPENAI_API_KEY");
+  });
+
   it("ignores non-string binding values (Workers env objects)", () => {
     const env = parseEnv({ DB: { prepare() {} } as unknown as string, PORT: "4000" });
     expect(env.PORT).toBe(4000);

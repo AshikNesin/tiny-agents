@@ -10,12 +10,10 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import {
-  bodyContentType,
   bodyToBytes,
-  groupByDelimiter,
+  listKeys,
   type ListOptions,
   type ListResult,
-  type PutOptions,
   type StorageAdapter,
   type StorageBody,
   type StoredObject,
@@ -44,8 +42,9 @@ export function uploadsRoot(
 
 /**
  * Filesystem storage for Node. Objects are plain files under `root`; the
- * content type is derived from the extension on read. Directories left empty
- * by a delete are pruned so "folders" disappear like they do on object stores.
+ * content type is derived from the extension. Directories left empty by a
+ * delete are pruned so "folders" disappear like they do on object stores.
+ * A key that resolves outside `root` is rejected.
  */
 export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter {
   const absoluteRoot = path.resolve(root);
@@ -57,13 +56,6 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     }
     return target;
   };
-
-  const toObject = (key: string, size: number, mtime: Date): StoredObject => ({
-    key,
-    size,
-    contentType: getContentType(key),
-    lastModified: mtime,
-  });
 
   const pruneEmptyParents = async (file: string): Promise<void> => {
     let dir = path.dirname(file);
@@ -77,7 +69,7 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     }
   };
 
-  /** Every file key under `dir`, relative to the root, sorted. */
+  /** Every file key under `dir`, relative to the root. */
   const walk = async (dir: string): Promise<string[]> => {
     let entries: import("node:fs").Dirent[];
     try {
@@ -91,13 +83,15 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
       if (entry.isDirectory()) keys.push(...(await walk(full)));
       else keys.push(path.relative(absoluteRoot, full).split(path.sep).join("/"));
     }
-    return keys.sort();
+    return keys;
   };
 
   const headKey = async (key: string): Promise<StoredObject | null> => {
+    const file = resolve(key);
     try {
-      const info = await stat(resolve(key));
-      return info.isFile() ? toObject(key, info.size, info.mtime) : null;
+      const info = await stat(file);
+      if (!info.isFile()) return null;
+      return { key, size: info.size, contentType: getContentType(key), lastModified: info.mtime };
     } catch {
       return null;
     }
@@ -106,16 +100,11 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
   return {
     name: "local",
 
-    async put(key: string, body: StorageBody, options?: PutOptions) {
+    async put(key: string, body: StorageBody) {
       const file = resolve(key);
       await mkdir(path.dirname(file), { recursive: true });
-      const bytes = await bodyToBytes(body);
-      await writeFile(file, bytes);
-      const object = (await headKey(key))!;
-      return {
-        ...object,
-        contentType: bodyContentType(body, options?.contentType ?? object.contentType),
-      };
+      await writeFile(file, await bodyToBytes(body));
+      return (await headKey(key))!;
     },
 
     async get(key: string) {
@@ -133,30 +122,21 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     head: headKey,
 
     async delete(keys: string[]) {
-      let deleted = 0;
       for (const key of keys) {
-        const file = resolve(key);
         if (!(await headKey(key))) continue;
+        const file = resolve(key);
         await rm(file, { force: true });
         await pruneEmptyParents(file);
-        deleted += 1;
       }
-      return deleted;
     },
 
     async list(options: ListOptions = {}): Promise<ListResult> {
       const prefix = options.prefix ?? "";
-      // Walk the deepest directory that fully contains the prefix.
-      const dirPart = prefix.includes("/") ? prefix.slice(0, prefix.lastIndexOf("/") + 1) : "";
-      const keys = (await walk(dirPart ? resolve(dirPart) : absoluteRoot)).filter((key) =>
-        key.startsWith(prefix),
-      );
-      const describe = async (key: string) => (await headKey(key))!;
-      if (!options.delimiter) {
-        return { objects: await Promise.all(keys.map(describe)), prefixes: [] };
-      }
-      const { direct, prefixes } = groupByDelimiter(keys, prefix, options.delimiter);
-      return { objects: await Promise.all(direct.map(describe)), prefixes };
+      // Walk only the deepest directory that fully contains the prefix.
+      const dirPart = prefix.slice(0, prefix.lastIndexOf("/") + 1);
+      const page = listKeys(await walk(dirPart ? resolve(dirPart) : absoluteRoot), options);
+      const objects = await Promise.all(page.keys.map(async (key) => (await headKey(key))!));
+      return { objects, prefixes: page.prefixes, cursor: page.cursor };
     },
 
     async copy(from: string, to: string) {

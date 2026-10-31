@@ -34,6 +34,11 @@ export async function parseBody<S extends ZodType>(c: AppContext, schema: S): Pr
   return parseInput(body, schema);
 }
 
+/** Validate a multipart or urlencoded form; repeated fields arrive as arrays. */
+export async function parseForm<S extends ZodType>(c: AppContext, schema: S): Promise<z.output<S>> {
+  return parseInput(await c.req.parseBody({ all: true }), schema);
+}
+
 /** Validate the query string (first value wins for repeated keys). */
 export function parseQuery<S extends ZodType>(c: AppContext, schema: S): z.output<S> {
   return parseInput(c.req.query(), schema);

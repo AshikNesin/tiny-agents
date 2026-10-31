@@ -322,7 +322,7 @@ async function pauseAfterSubmitFailure(routine: {
 }): Promise<void> {
   try {
     if (routine.pendingJobId) {
-      await cancelJob({ queueName: ROUTINE_FIRE_JOB, jobId: routine.pendingJobId });
+      await cancelJob(routine.pendingJobId);
     }
   } catch {
     // the job may already be gone; the pause below is the durable part

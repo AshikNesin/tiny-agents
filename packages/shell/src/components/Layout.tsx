@@ -8,9 +8,7 @@ import {
   CommandPaletteDialog,
   type CommandGroupEntry,
 } from "./CommandPalette";
-import { SidebarNav, type NavItem, type SidebarBrand } from "./SidebarNav";
-
-export type { NavItem };
+import { SidebarNav } from "./SidebarNav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,59 +24,20 @@ import {
 import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
-import { isTheme, type Theme, useTheme } from "@groot/shell/lib/theme";
-import { toast } from "sonner";
-import {
-  MoreHorizontal,
-  LogOut,
-  Settings as SettingsIcon,
-  HardDrive,
-  Briefcase,
-  PanelLeftClose,
-  PanelLeft,
-  Moon,
-  Monitor,
-  Sun,
-  type LucideIcon,
-} from "lucide-react";
+import { isTheme, THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
+import { useSignOut } from "@groot/shell/hooks/useSignOut";
+import { MoreHorizontal, LogOut, PanelLeftClose, PanelLeft, Monitor } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_KEY = "groot.sidebar.collapsed";
 
-const NAV_ITEMS: NavItem[] = [{ name: "Todos", href: "/todos", icon: "check-square" }];
-
-/** A single entry in the sidebar footer user dropdown. */
-export interface UserMenuItem {
-  label: string;
-  icon?: LucideIcon;
-  /** Internal route — navigated via react-router. */
-  to?: string;
-  /** External URL — opens in a new tab. */
-  href?: string;
-  /** Imperative handler (e.g. logout). Mutually exclusive with `to`/`href`. */
-  onSelect?: () => void;
-  /** Render a `DropdownMenuSeparator` above this item. */
-  separatorBefore?: boolean;
-  variant?: "default" | "destructive";
-  /** Stable React key. Defaults to `label`; set when labels may duplicate. */
-  id?: string;
-}
-
 export interface LayoutProps {
   /**
-   * Custom header / nav. When omitted, the default shell sidebar renders
-   * (logo + command palette + user menu). Pass your own to brand the app shell
-   * without reimplementing the surrounding layout. When set, the sidebar
-   * offset and mobile top bar are disabled so a custom header owns the whole
-   * top of the page.
+   * Custom header / nav. When set, the shell's sidebar, its offset and the
+   * mobile top bar are not rendered, so the header owns the top of the page;
+   * the ⌘K palette and the routed `<Outlet/>` stay.
    */
   header?: ReactNode;
-  /** Sidebar nav items. Defaults to the groot Todos entry. Ignored when `header` is set. */
-  navItems?: NavItem[];
-  /** Brand block (logo + label). Defaults to the groot brand. Ignored when `header` is set. */
-  brand?: SidebarBrand;
-  /** Footer user-menu entries. Defaults to Storage/Jobs/Settings + Log out. Ignored when `header` is set. */
-  userMenuItems?: UserMenuItem[];
-  /** Command-palette groups. Defaults to the groot Navigation + Account groups. */
+  /** Extra ⌘K groups, listed after the `ShellConfig.nav` destinations and before Theme and Account. */
   commandGroups?: CommandGroupEntry[];
   /**
    * Whether `<main>` gets the shell's default horizontal + vertical padding.
@@ -99,21 +58,17 @@ export interface LayoutProps {
  */
 export function Layout({
   header,
-  navItems,
-  brand,
-  userMenuItems,
   commandGroups,
   padded = true,
   mainClassName,
   className,
 }: LayoutProps) {
-  const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const location = useLocation();
   const toggleCommandPalette = useCommandPaletteStore((state) => state.toggle);
-  const config = useShellConfig();
-  const resolvedBrand = brand ?? config.brand ?? undefined;
+  const { brand, nav } = useShellConfig();
+  const signOut = useSignOut();
 
   // When a custom header is supplied the default sidebar (and its offset /
   // mobile bar) is disabled so the header owns the full top of the page.
@@ -147,24 +102,7 @@ export function Layout({
     return () => document.removeEventListener("keydown", down);
   }, [toggleCommandPalette]);
 
-  const handleLogout = () => {
-    logout();
-    toast.success("Signed out", { description: "You have been logged out safely." });
-    navigate("/login");
-  };
-
-  const resolvedUserMenu: UserMenuItem[] = userMenuItems ?? [
-    { label: "Storage", icon: HardDrive, to: "/storage" },
-    { label: "Jobs", icon: Briefcase, to: "/jobs" },
-    { label: "Settings", icon: SettingsIcon, to: "/settings" },
-    {
-      separatorBefore: true,
-      label: "Log out",
-      icon: LogOut,
-      onSelect: handleLogout,
-      variant: "destructive",
-    },
-  ];
+  const menuNav = nav.filter((item) => !item.primary);
 
   const userMenuFooter = (
     <DropdownMenu>
@@ -196,10 +134,21 @@ export function Layout({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-52">
-        {userMenuItems === undefined && <ThemeMenu />}
-        {resolvedUserMenu.map((item) => (
-          <UserMenuRow key={item.id ?? item.label} item={item} navigate={navigate} />
+        <ThemeMenu />
+        {menuNav.map(({ to, label, icon: Icon }) => (
+          <DropdownMenuItem key={to} onClick={() => navigate(to)}>
+            {Icon ? <Icon className="size-4" /> : null}
+            <span>{label}</span>
+          </DropdownMenuItem>
         ))}
+        {menuNav.length > 0 && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          onClick={signOut}
+          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+        >
+          <LogOut className="size-4" />
+          <span>Log out</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -211,8 +160,8 @@ export function Layout({
 
       {header ?? (
         <SidebarNav
-          items={navItems ?? NAV_ITEMS}
-          brand={resolvedBrand}
+          items={nav.filter((item) => item.primary)}
+          brand={brand}
           pathname={location.pathname}
           open={sidebarOpen}
           onOpenChange={setSidebarOpen}
@@ -245,11 +194,11 @@ export function Layout({
                 <PanelLeft className="size-4" />
               )}
             </Button>
-            <Link to={resolvedBrand?.to ?? "/"} className="text-sm font-semibold">
-              {resolvedBrand?.label ?? "Groot"}
+            <Link to={brand.to} className="text-sm font-semibold">
+              {brand.label}
             </Link>
             <div className="ml-auto">
-              <CommandPaletteTrigger iconOnly />
+              <CommandPaletteTrigger />
             </div>
           </header>
         )}
@@ -271,12 +220,6 @@ export function Layout({
     </div>
   );
 }
-
-const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon }> = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-];
 
 export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
@@ -305,37 +248,6 @@ export function ThemeMenu() {
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       <DropdownMenuSeparator />
-    </>
-  );
-}
-
-/** Renders one user-menu row, honoring `to` / `href` / `onSelect` + separators. */
-function UserMenuRow({ item, navigate }: { item: UserMenuItem; navigate: (to: string) => void }) {
-  const Icon = item.icon;
-  const handleClick = () => {
-    if (item.onSelect) item.onSelect();
-    else if (item.to) navigate(item.to);
-  };
-  const itemClassName = cn(
-    item.variant === "destructive" &&
-      "text-destructive focus:text-destructive focus:bg-destructive/10",
-  );
-  return (
-    <>
-      {item.separatorBefore && <DropdownMenuSeparator />}
-      {item.href ? (
-        <DropdownMenuItem asChild className={itemClassName}>
-          <a href={item.href} target="_blank" rel="noopener noreferrer">
-            {Icon ? <Icon className="size-4" /> : null}
-            <span>{item.label}</span>
-          </a>
-        </DropdownMenuItem>
-      ) : (
-        <DropdownMenuItem onClick={handleClick} className={itemClassName}>
-          {Icon ? <Icon className="size-4" /> : null}
-          <span>{item.label}</span>
-        </DropdownMenuItem>
-      )}
     </>
   );
 }

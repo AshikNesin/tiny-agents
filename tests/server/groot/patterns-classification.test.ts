@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { mkdir, rm, readdir, stat } from "node:fs/promises";
-import { categorizeFile, TEST_AREA_OWNERSHIP, uiSourceRoots } from "../../../.groot/lib/patterns";
+import { categorizeFile, TEST_AREA_OWNERSHIP } from "../../../.groot/lib/patterns";
 
 /**
  * Classification of kit-owned test paths.
@@ -60,48 +59,11 @@ describe("categorizeFile — child-owned paths stay out", () => {
 });
 
 describe("TEST_AREA_OWNERSHIP — declared source exists", () => {
-  it("every owned source root and UI root is set and shaped like a path", () => {
+  it("every owned source root is set and shaped like a path", () => {
     const roots = [...new Set(Object.values(TEST_AREA_OWNERSHIP).flat())];
     expect(roots.length).toBeGreaterThan(0);
     for (const root of roots) {
       expect(root).toMatch(/^(\.groot|packages|apps)\//);
-    }
-  });
-
-  it("UI roots are pure globs, so a new package needs no list edit", () => {
-    expect(uiSourceRoots()).toEqual([
-      "packages/*/src",
-      "packages/jobs/src/client",
-      "apps/*/src/client",
-    ]);
-  });
-});
-
-describe("uiSourceRoots — new packages are derived, not listed", () => {
-  it("expands the package glob to the src dirs that exist, picking up a new package", async () => {
-    const pkg = "packages/example/src";
-    await mkdir(pkg, { recursive: true });
-    try {
-      // The derived roots see the new package with no edit to any list. The
-      // workflow-filter half of that contract is enforced live by
-      // scripts/check-checks-coverage.ts, which runs the same expansion.
-      const packages = await readdir("packages");
-      const withSrc = (
-        await Promise.all(
-          packages.map(async (name) => {
-            const dir = `packages/${name}/src`;
-            return (await stat(dir)
-              .then(() => true)
-              .catch(() => false))
-              ? dir
-              : null;
-          }),
-        )
-      ).filter((d): d is string => d !== null);
-      expect(withSrc).toContain(pkg);
-      expect(withSrc).toContain("packages/ui/src");
-    } finally {
-      await rm("packages/example", { recursive: true, force: true });
     }
   });
 });

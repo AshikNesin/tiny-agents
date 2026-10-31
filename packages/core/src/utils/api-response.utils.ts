@@ -14,10 +14,6 @@ export function ok<T>(c: AppContext, data: T, status: ContentfulStatusCode = 200
   return c.json({ success: true, data } satisfies ApiResponse<T>, status);
 }
 
-export function created<T>(c: AppContext, data: T) {
-  return ok(c, data, 201);
-}
-
 export function noContent(c: AppContext) {
   return c.body(null, 204);
 }

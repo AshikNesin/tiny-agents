@@ -1,43 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@groot/shell/lib/api";
+// Leaf module, not the `@groot/core/storage` barrel: the barrel's graph
+// reaches the server middlewares (`node:async_hooks`), which the client
+// tsconfig has no types for.
+import type { FileInfo, UploadFilesResult } from "@groot/core/storage/storage.schema";
 
-export interface StorageFile {
-  key: string;
-  name: string;
-  size: number;
-  lastModified: string;
-  isDirectory: boolean;
-}
+/** Aliases of the core wire types in `@groot/core/storage` (type-only
+ *  imports, erased at build) — kept under the names clients already import. */
+export type StorageFile = FileInfo;
+export type UploadResult = UploadFilesResult;
 
 const storageKeys = {
   root: ["storage"] as const,
-  files: (prefix: string) => [...storageKeys.root, "files", prefix] as const,
+  files: (folder: string) => [...storageKeys.root, "files", folder] as const,
 };
 
-export function useStorageFiles(prefix: string) {
+/** One folder level; `folder` is `""` for the root or a path ending with `/`. */
+export function useStorageFiles(folder: string) {
   return useQuery({
-    queryKey: storageKeys.files(prefix),
-    queryFn: () =>
-      apiClient.get<StorageFile[]>("/storage/files", {
-        prefix: prefix || undefined,
-        delimiter: "/",
-      }),
+    queryKey: storageKeys.files(folder),
+    queryFn: () => apiClient.get<StorageFile[]>("/storage/files", { folder: folder || undefined }),
   });
 }
 
-export function useUploadFile() {
+/** Upload one or many files into `folder` in a single request. */
+export function useUploadFiles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { file: File; filePath?: string; contentType?: string }) => {
+    mutationFn: async (params: { files: File[]; folder: string }) => {
       const formData = new FormData();
-      formData.append("file", params.file);
-      if (params.filePath) {
-        formData.append("filePath", params.filePath);
-      }
-      if (params.contentType) {
-        formData.append("contentType", params.contentType);
-      }
-      return apiClient.postForm<{ filePath: string }>("/storage/files/upload", formData);
+      for (const file of params.files) formData.append("file", file);
+      formData.append("folder", params.folder);
+      return apiClient.postForm<UploadResult>("/storage/files/upload", formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: storageKeys.root });
@@ -48,8 +42,7 @@ export function useUploadFile() {
 export function useDeleteFiles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (filePaths: string[]) =>
-      apiClient.delete<{ deletedCount: number }>("/storage/files", { filePaths }),
+    mutationFn: (filePaths: string[]) => apiClient.delete<void>("/storage/files", { filePaths }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: storageKeys.root });
     },

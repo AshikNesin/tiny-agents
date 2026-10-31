@@ -48,7 +48,7 @@ export default defineConfig({
   // Git hooks configuration
   staged: {
     "*": "vp check --fix",
-    "*.{ts,tsx,css}": "npm run check:tokens",
+    "*.{ts,tsx,css}": "pnpm check:tokens",
   },
 
   // Vite build configuration - build from apps/web

@@ -23,7 +23,7 @@ packages/core/src/                 # Boilerplate (synced)
 packages/jobs/src/server/          # queue, tick, worker, dashboard API — see features/jobs.md
 
 apps/web/src/server/               # App-owned (not synced)
-├── app.ts                         # createWebApp(): mounts every router; registerJobHandlers()
+├── app.ts                         # startWebApp(): bootstrap + register job handlers + createWebApp()
 ├── config.ts                      # defineConfig() overrides
 ├── entry.node.ts · entry.worker.ts
 ├── db/schema.ts                   # app tables; drizzle-kit entry (re-exports core + jobs tables)
@@ -94,10 +94,11 @@ export async function findById(id: number) {
 | ------------------------------------------------- | ---------------------------------------------------------------------- |
 | `parseBody(c, schema)` (async)                    | JSON body through Zod; bad JSON or validation → 400 with field details |
 | `parseQuery(c, schema)`, `parseParams(c, schema)` | Query string / route params through Zod                                |
+| `await parseForm(c, schema)`                      | Multipart / urlencoded body through Zod (repeated fields are arrays)   |
 | `parseId(value)`, `parseStringParam(value)`       | Positive integer id / required string param, else 400                  |
 | `requireUser(c)`                                  | The JWT user (`{ userId, email }`), else 401                           |
 | `clientIp(c)`                                     | `cf-connecting-ip`, `x-forwarded-for`, `x-real-ip`, or `unknown`       |
-| `ok(c, data, status = 200)`, `created(c, data)`   | `{ success: true, data }`                                              |
+| `ok(c, data, status = 200)`                       | `{ success: true, data }`                                              |
 | `noContent(c)`                                    | 204                                                                    |
 | `fail(c, error, status)`                          | `{ success: false, error }` (used by the error handler)                |
 
@@ -120,12 +121,15 @@ all and is the drizzle-kit entry. See [Database migrations](./database-migration
 ## Bootstrap and the two runtimes
 
 `bootstrap({ env, config, db, storage, reportError })` wires, in order, env →
-config → logger → db → storage → error reporter. Each entry calls it once:
+config → logger → db → storage → error reporter. Both entries, the scripts and
+the test setup call it through `startWebApp(runtime)` in
+`apps/web/src/server/app.ts`, which also registers the job handlers and builds
+the app; an entry only builds its adapters:
 
 |          | `entry.node.ts`                                                                               | `entry.worker.ts`                              |
 | -------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | env      | `process.env` (+ `.env` via `process.loadEnvFile` when present)                               | Worker vars + secrets bindings                 |
-| db       | `createSqliteDb(DATABASE_URL, { migrationsFolder })`, migrates on boot                        | `drizzle(env.DB)` (D1)                         |
+| db       | `openDatabase(DATABASE_URL)` (`db/node.ts`), migrates on boot                                 | `drizzle(env.DB)` (D1)                         |
 | storage  | `localStorage(uploadsRoot(env))` → `/data/uploads` in production, `./local/uploads` otherwise | `r2Storage(env.STORAGE)`                       |
 | errors   | `@sentry/node` when `SENTRY_DSN` is set                                                       | `@sentry/cloudflare` `withSentry`              |
 | client   | Vite middleware (dev) / `dist/client` + SPA fallback (prod)                                   | Static Assets; `run_worker_first` for `/api/*` |
@@ -183,16 +187,17 @@ cookie and also returns the token for non-browser clients.
 
 ## Client
 
-React Router 7 (`apps/web/src/client/App.tsx`), Zustand
-(`@groot/shell/store/auth`), React Query + Axios (`@groot/shell/lib/api`,
-`baseURL: /api/v1`, sends the cookie, unwraps `data`), `@groot/ui` primitives.
-See [Client](../features/client.md).
+React Router 7 (`apps/web/src/client/App.tsx`), the session store
+(`@groot/shell/store/auth`, Zustand: the user, sign-in and sign-out; the JWT
+stays in the HttpOnly cookie), React Query over a `fetch` client
+(`@groot/shell/lib/api`: `/api/v1` prefix, sends the cookie, unwraps `data`,
+throws `ApiError`), `@groot/ui` primitives. See [Client](../features/client.md).
 
 ## Adding a feature
 
 1. Table in `apps/web/src/server/db/schema.ts` → `pnpm db:generate` → commit `apps/web/drizzle/`.
 2. `apps/web/src/server/api/<feature>/` with `.schema.ts`, `.service.ts`, `.routes.ts` (+ `.jobs.ts`).
-3. Mount the router in `createWebApp()`; register jobs in `registerJobHandlers()`.
+3. Mount the router in `createWebApp()`; register jobs in `startWebApp()`.
 4. New env var? Add it to `envSchema` (`packages/core/src/env.ts`) and `.env.example`; expose it through `defaultConfig()` if code needs it.
 5. Tests in `tests/server/app/` using `createTestApp()` + `api()`.
 

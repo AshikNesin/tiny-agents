@@ -61,8 +61,8 @@ drizzle config; until then one schema, one history.
 ## Troubleshooting
 
 - **Reset the dev database**: delete `data/dev.db*` and run `pnpm dev`.
-- **"Drizzle migrations folder not found"**: start from the repo root, or set
-  `GROOT_MIGRATIONS_DIR`.
+- **"Drizzle migrations folder not found"**: run from the repo root; the folder
+  is `apps/web/drizzle` here and `dist/server/drizzle` next to the bundle.
 - **CI "Schema changed without a migration"**: run `pnpm db:generate` and commit.
 - **D1 state**: `pnpm exec wrangler d1 migrations list DB --remote`.
 - **Look at the data**: `pnpm db:studio`.

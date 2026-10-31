@@ -1,34 +1,70 @@
 # Client
 
-A Vite + React 19 SPA that consumes the Hono API through Axios and React
-Query.
+A Vite + React 19 SPA that consumes the Hono API through a small `fetch`
+client and React Query.
 
 ## Routing & layout
 
 Routes are defined in `apps/web/src/client/App.tsx`:
 
-| Route                   | Component            | Auth      |
-| ----------------------- | -------------------- | --------- |
-| `/login`                | `Login`              | Public    |
-| `/` → `/todos` (index)  | `Todos`              | Protected |
-| `/storage`              | `Storage`            | Protected |
-| `/jobs`, `/jobs/:q/:id` | `Jobs` / `JobDetail` | Protected |
-| `/settings`             | `Settings`           | Protected |
+| Route                  | Component            | Auth      |
+| ---------------------- | -------------------- | --------- |
+| `/login`               | `Login`              | Public    |
+| `/` → `/todos` (index) | `Todos`              | Protected |
+| `/storage`             | `Storage`            | Protected |
+| `/jobs`, `/jobs/:id`   | `Jobs` / `JobDetail` | Protected |
+| `/settings`            | `Settings`           | Protected |
 
 `ProtectedRoute` checks `useAuthStore` and redirects unauthenticated users to
-`/login`. `Layout` renders the nav bar, user info, and an `<Outlet>` for nested
-routes.
+`/login`. `Layout` renders the sidebar, the account menu, the ⌘K palette and an
+`<Outlet>` for nested routes.
 
-## Authentication flow
+## Navigation (`ShellConfig`)
 
-The app uses **JWT auth** (not basic auth):
+`<ShellProvider config={…}>` (`@groot/shell/lib/shell-config`) describes the
+shell once:
 
-1. `pages/Login.tsx` posts credentials to `/api/v1/auth/login` → receives a
-   `{ token, user }` response.
-2. `useAuthStore` (Zustand) stores the JWT in `localStorage` under `auth`.
-3. `@groot/shell/lib/api` (the shared Axios instance) reads the token in a
-   request interceptor and injects `Authorization: Bearer <token>` on every
-   request. A response interceptor logs the user out on `401`.
+| Field   | Drives                                                                                                                  |
+| ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `brand` | `{ label, icon?, to? }`: the sidebar, mobile bar and login logo; defaults to Groot, `LayoutDashboard`, `/`              |
+| `nav`   | `{ label, icon?, to, primary? }[]`: `primary` entries are sidebar rows, the rest account-menu rows; all are ⌘K commands |
+| `login` | `{ tagline?, description?, features? }`: the login brand panel                                                          |
+
+The shell always adds the theme submenu and **Log out** (one action: end the
+session, toast, go to `/login`) to the account menu, and Theme and Account
+groups to ⌘K. `Layout` takes `commandGroups` for app-specific ⌘K groups
+(listed between Navigation and Theme), `header` to replace the sidebar and
+mobile bar with your own, and `padded`, `mainClassName`, `className`.
+
+`App.tsx` keeps a `PAGES` list of `NavDestination & { element }`: it is both
+`ShellConfig.nav` and the routes, so a page with a place in the navigation is
+declared once. Routes without a nav entry (`jobs/:queueName/:jobId`) are
+written out as usual.
+
+## Transport and session
+
+`apiClient` (`@groot/shell/lib/api`) is pure transport on `fetch`: it prefixes
+`/api/v1`, sends the cookie (`credentials: "include"`), JSON-encodes bodies
+(`FormData` goes as multipart), unwraps the `{ success, data }` envelope and
+throws an `ApiError` (`status`, `code`, `message`, `details`, `url`) for any
+non-2xx response. It knows nothing about sessions: `apiClient.onUnauthorized(handler)`
+reports each 401 with its `path` and `sentAt` time.
+
+The session is `useAuthStore` (`@groot/shell/store/auth`, Zustand). The server
+keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
+
+| Member                                          | Does                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled |
+| `login(email, password)` / `loginWithPasskey()` | Sign in (`/auth/login`, or the WebAuthn ceremony); reject with the original error  |
+| `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                    |
+| `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                  |
+| `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call           |
+| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password.")                   |
+
+The store installs the 401 hook: a 401 for a request sent during the current
+session clears it, so `ProtectedRoute` redirects to `/login`. A 401 for a
+request sent before the last sign-in or sign-out is ignored.
 
 ## Data fetching
 
@@ -55,7 +91,7 @@ on the common cases (see [enforcement](#enforcement)).
 | Need                       | Use                                                                                                                                                                      | Don't                                                                                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A bordered surface         | `Card` (+ `CardHeader`/`CardContent`/`CardFooter`)                                                                                                                       | `rounded-xl border bg-card` on a `div`                                                                                                               |
-| Page title / chrome        | `PageLayout` (or `PageContainer` + `PageHeader`)                                                                                                                         | a hand-written `<h1>` or `max-w-* mx-auto`                                                                                                           |
+| Page title / chrome        | `PageLayout`                                                                                                                                                             | a hand-written `<h1>` or `max-w-* mx-auto`                                                                                                           |
 | In-page section heading    | `Section` (`title`, `meta`, `description`, `actions`)                                                                                                                    | a `text-sm font-medium` span + a count span                                                                                                          |
 | Empty list / nothing found | `EmptyState`                                                                                                                                                             | an ad-hoc icon + heading + copy stack                                                                                                                |
 | Failed load                | `ErrorState` (+ a retry `action`)                                                                                                                                        | ditto, tinted red                                                                                                                                    |
@@ -79,17 +115,13 @@ classes (`gray-*`, `red-*`, …) are allowed _only_ in
 
 ### Enforcement
 
-`scripts/check-design-tokens.ts` greps every client dir
-(`packages/ui/src`, `packages/shell/src`, `packages/jobs/src/client`,
-`apps/web/src/client`) for both token and structural drift. It runs:
+`scripts/check-design-tokens.ts` greps every client dir (`packages/*/src` and
+`apps/*/src/client`, so a new package or app is covered without an edit) for
+both token and structural drift. It runs:
 
 - on every commit via the `vp staged` pre-commit hook (`vite.config.ts`), and
-- in CI via `.github/workflows/check-design-tokens.yml`, which catches
+- in CI as a step of `.github/workflows/test.yml`, which catches
   `--no-verify` commits.
-
-When adding a new client source directory, add it to **both** `SRC_DIRS` in the
-script and the workflow's `paths:` filters — a missing filter makes the CI job
-silently skip instead of fail.
 
 ## Layering (import rules)
 
@@ -103,7 +135,8 @@ silently skip instead of fail.
 
 ## Extending the client
 
-1. Add a route in `App.tsx` (nest under `ProtectedRoute` if it needs auth).
+1. Add the page to `PAGES` in `App.tsx` (route, sidebar or account-menu row
+   and ⌘K entry in one line), or a plain `<Route>` if it has no nav entry.
 2. Create a React Query hook in the feature's `hooks/` that calls `/api/v1/*`.
 3. Compose the UI in `pages/`, using the shared layout + toasts.
 4. For global state, prefer Zustand slices or React Query caches over ad-hoc

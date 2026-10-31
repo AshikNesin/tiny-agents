@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Breadcrumb } from "./logger/breadcrumbs";
+import type { Breadcrumb } from "./logger";
 
 /**
  * Per-request context, available anywhere in the call tree without threading

@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { runWithRequestContext } from "../context";
-import { createRequestLogger } from "../logger";
+import { logger } from "../logger";
 import { clientIp } from "../utils/controller.utils";
 import type { AppEnv } from "../types";
 
@@ -21,8 +21,8 @@ export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) 
     waitUntil = undefined;
   }
 
-  const log = createRequestLogger({
-    requestId,
+  const log = logger.child({
+    reqId: requestId,
     method: c.req.method,
     url: c.req.path,
     userAgent: c.req.header("user-agent"),

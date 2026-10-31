@@ -20,7 +20,7 @@ feature end to end.
 | `pnpm db:migrate` · `pnpm db:migrate:worker`                                  | Apply migrations to the local SQLite file · to remote D1 ahead of a deploy (optional; the Worker migrates on first request) |
 | `pnpm db:seed`                                                                | Demo user + three todos (idempotent; also applies migrations)                                                               |
 | `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                                        |
-| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · workflow/test-area coverage · changeset gate                             |
+| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area ownership coverage · changeset gate                            |
 
 ## Conventions
 
@@ -198,7 +198,7 @@ export function registerPostJobs(): void {
 }
 ```
 
-Add `registerPostJobs()` to `registerJobHandlers()` in `apps/web/src/server/app.ts`.
+Add `registerPostJobs()` to the registrations in `startWebApp()` (`apps/web/src/server/app.ts`).
 Queue it with `await addJob("post-count", { label: "nightly" })`, through
 `POST /api/v1/jobs`, or on a cron with `scheduleJob("post-count", {}, "0 3 * * *")`.
 In tests jobs are disabled, so call `await runTick()` after `addJob()` and
@@ -207,14 +207,14 @@ model is in [Background jobs](../features/jobs.md).
 
 ## Client tips
 
-| Concern           | Where                                                                                                                                                         |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes            | `apps/web/src/client/App.tsx` (React Router)                                                                                                                  |
-| Data fetching     | React Query hooks next to the page (e.g. `pages/todo/hooks`)                                                                                                  |
-| API calls         | `apiClient` from `@groot/shell/lib/api` (unwraps the envelope, sends the cookie)                                                                              |
-| Auth state        | `useAuthStore` (Zustand)                                                                                                                                      |
-| UI components     | `@groot/ui`; rules in [Client](../features/client.md) and [DLS](../features/dls.md), enforced by `pnpm check:tokens`                                          |
-| Layout components | `@groot/shell/components/layout/index` (the case-safe barrel; the bare `…/layout` path collides with `components/Layout.tsx` on case-insensitive filesystems) |
+| Concern           | Where                                                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Routes            | `apps/web/src/client/App.tsx` (React Router)                                                                         |
+| Data fetching     | React Query hooks next to the page (e.g. `pages/todo/hooks`)                                                         |
+| API calls         | `apiClient` from `@groot/shell/lib/api` (unwraps the envelope, sends the cookie)                                     |
+| Auth state        | `useAuthStore` (Zustand)                                                                                             |
+| UI components     | `@groot/ui`; rules in [Client](../features/client.md) and [DLS](../features/dls.md), enforced by `pnpm check:tokens` |
+| Layout components | `@groot/shell/components/layout/PageLayout` (deep path; the bare `…/layout` collides with `components/Layout.tsx`)   |
 
 ## Iteration loop
 

@@ -42,7 +42,7 @@ Groot uses [changesets](https://github.com/changesets/changesets) for versioning
 | ------- | ------------------------------------ | ----------------------------------------- |
 | `patch` | Bug fixes, typo corrections          | `fix(core): handle null in error handler` |
 | `minor` | New features, non-breaking additions | `feat(ui): add DatePicker component`      |
-| `major` | Breaking changes requiring migration | `feat!: change createRequestLogger API`   |
+| `major` | Breaking changes requiring migration | `feat!: change the logger sink API`       |
 
 ### Writing a Changeset (for AI Agents)
 
@@ -216,7 +216,7 @@ pnpm groot:upstream
 # Dry run — see what would be upstreamed
 pnpm groot:upstream --dry-run
 
-# Upstream all modified synced files
+# Upstream every file that merges cleanly onto groot
 pnpm groot:upstream --all
 ```
 
@@ -230,11 +230,22 @@ pnpm groot:upstream --all
 
 ### How It Works
 
-1. Compares local synced files against the last synced version in groot
-2. Shows modified files with diff stats (e.g., `+5 -2`)
-3. In interactive mode, lets you select which files to upstream
-4. Creates a branch on groot (`upstream/<app-name>/<date>`)
-5. Opens a PR on the groot repo via `gh pr create`
+Upstream is sync with the sides swapped: groot is the side being written and
+your change is the incoming one.
+
+1. Finds every synced file you changed since the last sync, against the same
+   base sync uses (the `refs/groot/baseline` snapshot, else groot at
+   `last_sync.commit`)
+2. Three-way merges each change onto groot HEAD, so anything groot changed
+   since your last sync is kept rather than reverted
+3. Shows the files that merge cleanly with diff stats against groot HEAD
+   (e.g., `+5 -2`). Files where groot changed the same lines are listed as
+   conflicts and left out — run `pnpm groot:sync`, resolve, then upstream
+   again. Files groot has deleted since are listed and skipped
+4. In interactive mode, lets you select which files to upstream
+5. Clones groot fresh, re-merges the selected files onto that clone, and
+   creates a branch (`upstream/<app-name>/<date>`)
+6. Opens a PR on the groot repo via `gh pr create`
 
 ### What Can Be Upstreamed
 
@@ -278,6 +289,17 @@ and authenticate it:
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 export ZAI_API_KEY=...   # any pi-supported provider key, or `pi` + /login
+```
+
+### Upgrading a pre-2.0 project
+
+Projects still on the flat `client/src` + `server/src` layout must move to the
+workspace layout before syncing. The one-time `migrate-layout.ts` script that
+does this was removed after v2.4.1; run it from that tag, in the project root:
+
+```bash
+git -C ~/Code/groot show v2.4.1:.groot/migrate-layout.ts > /tmp/migrate-layout.ts
+pnpm exec tsx /tmp/migrate-layout.ts --check   # dry run; drop --check to apply
 ```
 
 ### Changeset version not detected

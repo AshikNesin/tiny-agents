@@ -70,20 +70,20 @@ model response never reaches disk. It follows `AGENTS.md` conventions (fed in
 as the system prompt). Resolved entries are pruned from the manifest and
 `pnpm check` runs at the end to verify.
 
-**`package.json` is resolved deterministically, never by the AI agent.** It is
-the most conflict-prone file and the one where a malformed result (trailing
-comma, duplicate key) breaks the whole toolchain. `resolve.ts` instead merges
-only `scripts` / `dependencies` / `devDependencies` programmatically (3-way:
-unmodified-locally → adopt upstream; modified-locally → local wins); every
-other top-level key is copied verbatim from the local file. The pure merge
-logic lives in `.groot/package-json-merge.ts`. It falls back to the AI agent
-only when the merge can't be handled programmatically (e.g. a side isn't valid
-JSON), so a package.json-only resolve needs neither the pi CLI nor a boilerplate
-checkout.
+**The root `package.json` merges deterministically during sync, never through
+`git merge-file`.** It is the most conflict-prone file and the one where a
+malformed result (trailing comma, duplicate key) breaks the whole toolchain.
+The reconcile step (`.groot/lib/reconcile.ts`) merges only `scripts` /
+`dependencies` / `devDependencies` (3-way: unmodified-locally → adopt
+upstream; modified-locally → local wins) and copies every other top-level key
+verbatim from the local file; the pure merge logic lives in
+`.groot/lib/package-json-merge.ts`. It only reaches the manifest when that
+merge cannot run (a side isn't valid JSON, or a managed section isn't an
+object), and `groot:resolve` then treats it like any other file.
 
 > Requires the pi CLI (`npm install -g --ignore-scripts @earendil-works/pi-coding-agent`)
 > and authentication (any pi-supported provider key, e.g. `export ZAI_API_KEY=...`,
-> or `pi` + /login) — **only when a non-`package.json` conflict is present**.
+> or `pi` + /login).
 
 When you are operating inside an agent session (e.g. Droid) you may instead
 resolve the manifest's files directly with your own editing tools — the
@@ -92,12 +92,14 @@ messages explaining the change.
 
 ### Upstream (child → groot)
 
-Push child-repo bug fixes back to the boilerplate:
+Push child-repo bug fixes back to the boilerplate. Upstream is sync with the
+sides swapped (`planUpstream` in `.groot/lib/engine.ts`):
 
-1. **Compares local files** against last synced version
-2. **Shows modified synced files** with diff stats
-3. **Interactive selection** of which files to upstream
-4. **Creates PR on groot** via GitHub CLI (`gh`)
+1. **Finds changed synced files** — every synced file modified locally since the last sync, against the same base sync uses (baseline snapshot, else groot at `last_sync.commit`)
+2. **Three-way merges onto groot HEAD** — groot's changes since the last sync are kept; overlapping edits are listed as conflicts and left out (sync first, then upstream); files groot deleted are skipped
+3. **Shows the clean candidates** with diff stats against groot HEAD
+4. **Interactive selection** of which files to upstream (`--all` takes every clean one)
+5. **Creates PR on groot** via GitHub CLI (`gh`), re-merging onto a fresh clone first
 
 ### Versioning (changesets)
 

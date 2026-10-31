@@ -44,27 +44,34 @@ HTTPS everywhere except `localhost`.
 | POST   | `/register/options` | JWT    |                                 | `200` creation options           |
 | POST   | `/register/verify`  | JWT    | `{ response, credentialName? }` | `200` the passkey                |
 | POST   | `/login/options`    | public | `{ email? }`                    | `200` request options            |
-| POST   | `/login/verify`     | public | `{ email?, response }`          | `200` `{ token, user }` + cookie |
+| POST   | `/login/verify`     | public | `{ response }`                  | `200` `{ token, user }` + cookie |
 | GET    | `/list`             | JWT    |                                 | `200` the user's passkeys        |
 | PATCH  | `/:id`              | JWT    | `{ credentialName }`            | `200` the passkey                |
 | DELETE | `/:id`              | JWT    |                                 | `204`                            |
 
 The login routes share the auth rate limit (20 requests / 15 min per IP).
-Passkey rows never expose the public key or credential id.
+
+A passkey comes back as `{ id, credentialName, kind, label, backedUp, canDelete,
+lastUsedAt, createdAt }`, never with the public key or credential id. The server
+decides what the client shows: `kind` is `"security-key"` (USB, NFC or
+Bluetooth transports), `"synced"` (a `multiDevice` credential) or `"device"`;
+`label` names it ("Security key (USB)", "Synced passkey", "Device-bound
+passkey"); `canDelete` is `false` for the user's last passkey, which `DELETE`
+refuses.
 
 ## Client
 
 ```ts
 import { passkeyService } from "@groot/shell/services/passkey";
 
-passkeyService.isPasskeySupported(); // WebAuthn available in this browser
-await passkeyService.isPlatformAuthenticatorAvailable(); // Face ID / Touch ID / Hello present
 await passkeyService.registerPasskey("My laptop"); // signed in
-const { token, user } = await passkeyService.loginWithPasskey("user@example.com");
 await passkeyService.listPasskeys();
 await passkeyService.updatePasskeyName(passkeyId, "Work laptop");
 await passkeyService.deletePasskey(passkeyId);
 ```
+
+Passkey sign-in is part of the session: `useAuthStore.getState().loginWithPasskey()`
+(`@groot/shell/store/auth`) runs the browser ceremony and starts the session.
 
 ```tsx
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";

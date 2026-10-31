@@ -19,7 +19,7 @@ test-results/
 /.screenshots/
 
 
-# Local storage (files-sdk fs adapter dev root)
+# Development uploads root (UPLOADS_DIR default: ./local/uploads)
 /local/
 # SQLite database files (dev/test data). Keep the dir tracked but ignore contents.
 /data/*.db
@@ -32,7 +32,7 @@ test-results/
 /data/uploads/
 /data/backups/
 
-# Scratch / generated SQL from scripts (e.g. pnpm db:baseline)
+# Scratch output from scripts (e.g. pnpm check:worker bundles in tmp/worker-build)
 /tmp/
 
 # Sensitive files
@@ -47,7 +47,12 @@ service-account.json
 .groot/sync-report.json
 
 settings.local.json
-.claude/settings.local.json
 .auto/
 .audit/
 .vitest/
+
+# Cloudflare Workers local state (wrangler dev)
+.wrangler/
+
+# wrangler dev secrets (copy from .dev.vars.example)
+.dev.vars

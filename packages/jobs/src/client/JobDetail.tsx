@@ -26,7 +26,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 export function JobDetail() {
   const navigate = useNavigate();
-  const { job, loading, error, logs, retry, cancel, resume, deleteJob, rerun } = useJobDetail();
+  const { job, loading, error, logs } = useJobDetail();
 
   if (loading) {
     return (
@@ -58,16 +58,7 @@ export function JobDetail() {
     );
   }
 
-  const actions = (
-    <JobActions
-      state={job.state}
-      onRetry={retry}
-      onRerun={rerun}
-      onResume={resume}
-      onCancel={cancel}
-      onDelete={deleteJob}
-    />
-  );
+  const actions = <JobActions job={job} onDeleted={() => navigate("/jobs")} />;
 
   const breadcrumb = (
     <Breadcrumb>

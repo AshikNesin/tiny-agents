@@ -5,7 +5,7 @@
  * the same port.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { defaultDatabaseUrl } from "@groot/core/env";
+import { parseEnv } from "@groot/core/env";
 
 let devServer: ChildProcess | null = null;
 let isShuttingDown = false;
@@ -23,7 +23,7 @@ function run(cmd: string, args: string[]): Promise<void> {
 }
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL || defaultDatabaseUrl(process.env.NODE_ENV);
+  const databaseUrl = parseEnv(process.env).DATABASE_URL;
   console.log(`\n🗄️  SQLite database: ${databaseUrl}\n`);
 
   console.log("👤 Applying migrations and seeding...\n");

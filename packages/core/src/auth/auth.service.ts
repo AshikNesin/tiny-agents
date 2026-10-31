@@ -3,7 +3,7 @@ import { db, users, type User } from "../database";
 import { Boom } from "../errors";
 import { generateToken } from "../utils/jwt.utils";
 import { hashPassword, needsRehash, verifyPassword } from "../utils/password.utils";
-import type { CreateUserDTO, LoginDTO } from "./auth.schema";
+import type { CreateUserDTO, LoginDTO, SessionUser } from "./auth.schema";
 
 export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
 
@@ -27,7 +27,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   return user ?? null;
 }
 
-export async function login(data: LoginDTO) {
+export async function login(data: LoginDTO): Promise<{ token: string; user: SessionUser }> {
   const user = await findUserByEmail(data.email);
   const isValid = await verifyPassword(data.password, user?.password ?? DUMMY_HASH);
   if (!user || !isValid) {

@@ -15,6 +15,9 @@
  * sync safely (only when the local file is unmodified since last sync), and
  * nothing is written until every decision has been computed. The baseline ref
  * and config are advanced last, so a mid-apply crash never loses state.
+ *
+ * Upstream (child → groot) is the same reconciliation with the sides swapped:
+ * groot is the side being written, the child's copy is the incoming change.
  */
 import { readFile, writeFile, mkdir, rm, chmod } from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -22,9 +25,9 @@ import { loadConfig, saveConfig, type SyncConfig } from "./config";
 import { categorizeFile, validateFilePath } from "./patterns";
 import {
   git,
+  blobSha,
   showBlob,
   listTree,
-  hasCommit,
   resolveCommit,
   resolveDefaultBranch,
   resolveLatestVersion,
@@ -37,6 +40,7 @@ import {
 } from "./git";
 import { acquireBoilerplate, releaseBoilerplate } from "./acquire";
 import { readBaselineInfo, writeBaseline, BASELINE_REF } from "./baseline";
+import { openMergeBase, writeManifest } from "./sync-state";
 import { reconcileFile } from "./reconcile";
 import { extractChangelog, findBreakingChanges } from "./changelog";
 
@@ -83,42 +87,17 @@ export interface SyncResult {
   skipped: { immutable: string[]; appSpecific: string[] };
 }
 
-export interface ConflictManifest {
-  fromVersion: string | null;
-  toVersion: string | null;
-  fromCommit: string;
-  toCommit: string;
-  generatedAt: string;
-  conflicts: { file: string; conflicts: number; commits: string[] }[];
-}
+const REPORT_RELATIVE_PATH = ".groot/sync-report.json";
 
-export const MANIFEST_RELATIVE_PATH = ".groot/needs-review/manifest.json";
-export const REPORT_RELATIVE_PATH = ".groot/sync-report.json";
-
-// ============================================================
-// BASE SOURCE - where base content is read from
-// ============================================================
-
-interface BaseSource {
-  description: string;
-  entries(): Promise<TreeEntry[]>;
-  read(path: string): Promise<Buffer | null>;
-}
-
-function refBaseSource(projectRoot: string): BaseSource {
-  return {
-    description: `local baseline snapshot (${BASELINE_REF})`,
-    entries: () => listTree(projectRoot, BASELINE_REF),
-    read: (path) => showBlob(projectRoot, BASELINE_REF, path),
-  };
-}
-
-function cloneBaseSource(cloneDir: string, commit: string): BaseSource {
-  return {
-    description: `boilerplate checkout at ${commit.slice(0, 7)}`,
-    entries: () => listTree(cloneDir, commit),
-    read: (path) => showBlob(cloneDir, commit, path),
-  };
+/** Synced regular files of a tree, keyed by path. */
+function syncedBlobs(entries: TreeEntry[], exclusions: string[]): Map<string, TreeEntry> {
+  const synced = new Map<string, TreeEntry>();
+  for (const entry of entries) {
+    if (entry.type !== "blob" || entry.mode === "120000") continue;
+    if (!validateFilePath(entry.path).valid) continue;
+    if (categorizeFile(entry.path, exclusions).action === "sync") synced.set(entry.path, entry);
+  }
+  return synced;
 }
 
 // ============================================================
@@ -142,55 +121,19 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
   try {
     const cloneDir = repo.dir;
     // Independent reads on the clone — run concurrently.
-    const [targetCommit, latestVersion, lastSyncReachable] = await Promise.all([
+    const [targetCommit, latestVersion, base] = await Promise.all([
       resolveCommit(cloneDir, "HEAD"),
       resolveLatestVersion(cloneDir),
-      hasCommit(cloneDir, config.last_sync.commit),
+      openMergeBase(projectRoot, cloneDir, config.last_sync.commit),
     ]);
-
-    // --- Resolve the base source: prefer the local baseline snapshot; fall
-    // back to the boilerplate clone at the recorded last-sync commit.
-    const lastSyncSha = lastSyncReachable
-      ? await resolveCommit(cloneDir, config.last_sync.commit)
-      : config.last_sync.commit;
-
-    const baselineInfo = await readBaselineInfo(projectRoot);
-    const baselineMatches =
-      baselineInfo !== null && shaMatches(baselineInfo.boilerplateCommit, lastSyncSha);
-
-    let baseSource: BaseSource;
-    if (baselineMatches) {
-      baseSource = refBaseSource(projectRoot);
-    } else if (lastSyncReachable) {
-      baseSource = cloneBaseSource(cloneDir, lastSyncSha);
-    } else {
-      throw new Error(
-        [
-          `Last sync commit ${config.last_sync.commit} is not reachable in the boilerplate`,
-          `checkout at ${cloneDir}, and no matching local baseline snapshot (${BASELINE_REF})`,
-          `exists. Run \`git fetch --unshallow\` (or a full fetch) in the boilerplate checkout,`,
-          `or fix last_sync.commit in .groot/boilerplate-sync.json.`,
-        ].join("\n"),
-      );
-    }
-    console.log(`Base: ${baseSource.description}`);
+    const lastSyncSha = base.commit;
+    const lastSyncReachable = base.reachable;
+    console.log(`Base: ${base.description}`);
 
     // --- Candidate set: union of synced files in boilerplate HEAD and in the
     // baseline (the latter catches upstream deletions).
-    const isSynced = (path: string): boolean =>
-      validateFilePath(path).valid && categorizeFile(path, exclusions).action === "sync";
-
-    const theirsEntries = new Map<string, TreeEntry>();
-    for (const entry of await listTree(cloneDir, targetCommit)) {
-      if (entry.type !== "blob" || entry.mode === "120000") continue;
-      if (isSynced(entry.path)) theirsEntries.set(entry.path, entry);
-    }
-
-    const baseEntries = new Map<string, TreeEntry>();
-    for (const entry of await baseSource.entries()) {
-      if (entry.type !== "blob" || entry.mode === "120000") continue;
-      if (isSynced(entry.path)) baseEntries.set(entry.path, entry);
-    }
+    const theirsEntries = syncedBlobs(await listTree(cloneDir, targetCommit), exclusions);
+    const baseEntries = syncedBlobs(await base.entries(), exclusions);
 
     const candidates = [...new Set([...theirsEntries.keys(), ...baseEntries.keys()])].sort();
 
@@ -260,10 +203,13 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
         }
 
         const ours = await readFile(localPath).catch(() => null);
-        const base = baseEntry ? await baseSource.read(path) : null;
+        const baseContent = baseEntry ? await base.read(path) : null;
         const theirs = theirsEntry ? await showBlob(cloneDir, targetCommit, path) : null;
 
-        const outcome = await reconcileFile({ path, ours, base, theirs }, gitMergeFile);
+        const outcome = await reconcileFile(
+          { path, ours, base: baseContent, theirs },
+          gitMergeFile,
+        );
         const executable = theirsEntry?.mode === "100755";
 
         switch (outcome.kind) {
@@ -339,8 +285,6 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
         targetCommit,
         version: latestVersion?.version ?? null,
         theirsEntries: [...theirsEntries.values()],
-        baselineAlreadyCurrent:
-          baselineInfo !== null && shaMatches(baselineInfo.boilerplateCommit, targetCommit),
       });
     }
 
@@ -415,26 +359,19 @@ async function applyChanges(
 
   // Always record conflicts in the manifest so `pnpm groot:resolve` can act on
   // them regardless of whether markers were written to disk. When there are no
-  // conflicts, drop any stale manifest from a previous run.
-  const manifestPath = join(projectRoot, MANIFEST_RELATIVE_PATH);
-  if (result.conflicts.length > 0) {
-    const manifest: ConflictManifest = {
-      fromVersion: result.fromVersion,
-      toVersion: result.toVersion,
-      fromCommit: result.fromCommit,
-      toCommit: result.toCommit,
-      generatedAt: new Date().toISOString(),
-      conflicts: result.conflicts.map((c) => ({
-        file: c.file,
-        conflicts: c.conflicts,
-        commits: c.commits,
-      })),
-    };
-    await mkdir(dirname(manifestPath), { recursive: true });
-    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-  } else {
-    await rm(manifestPath, { force: true });
-  }
+  // conflicts, this drops any stale manifest from a previous run.
+  await writeManifest(projectRoot, {
+    fromVersion: result.fromVersion,
+    toVersion: result.toVersion,
+    fromCommit: result.fromCommit,
+    toCommit: result.toCommit,
+    generatedAt: new Date().toISOString(),
+    conflicts: result.conflicts.map((c) => ({
+      file: c.file,
+      conflicts: c.conflicts,
+      commits: c.commits,
+    })),
+  });
 }
 
 async function advanceState(
@@ -445,10 +382,10 @@ async function advanceState(
     targetCommit: string;
     version: string | null;
     theirsEntries: TreeEntry[];
-    baselineAlreadyCurrent: boolean;
   },
 ): Promise<void> {
-  if (!target.baselineAlreadyCurrent) {
+  const baseline = await readBaselineInfo(projectRoot);
+  if (baseline === null || !shaMatches(baseline.boilerplateCommit, target.targetCommit)) {
     await writeBaseline(
       projectRoot,
       cloneDir,
@@ -520,4 +457,126 @@ async function writeSyncReport(projectRoot: string, result: SyncResult): Promise
     skipped: result.skipped,
   };
   await writeFile(join(projectRoot, REPORT_RELATIVE_PATH), JSON.stringify(report, null, 2) + "\n");
+}
+
+// ============================================================
+// UPSTREAM - the same reconciliation with the sides swapped
+// ============================================================
+
+/**
+ * What a child's change does to groot. Groot is the side being written
+ * (ours = groot HEAD), the child's copy is the incoming change (theirs), and
+ * the last sync is the base — so groot's changes since then are kept and
+ * overlapping edits surface as conflicts instead of being reverted.
+ */
+export type UpstreamOutcome =
+  | { kind: "ready"; content: Buffer | string }
+  | { kind: "up-to-date" }
+  | { kind: "conflict"; conflicts: number }
+  | { kind: "binary-conflict" }
+  | { kind: "deleted-in-groot" };
+
+export interface UpstreamItem {
+  file: string;
+  /** Groot at the last sync. */
+  base: Buffer;
+  /** The child's working-tree copy. */
+  local: Buffer;
+  /** Groot HEAD the plan was computed against, or null when groot deleted the file. */
+  groot: Buffer | null;
+  outcome: UpstreamOutcome;
+}
+
+export interface UpstreamPlan {
+  baseCommit: string;
+  grootCommit: string;
+  /** Synced files the child changed since the last sync that groot does not already have. */
+  items: UpstreamItem[];
+}
+
+export async function mergeIntoGroot(
+  file: string,
+  base: Buffer,
+  local: Buffer,
+  groot: Buffer | null,
+): Promise<UpstreamOutcome> {
+  const outcome = await reconcileFile(
+    { path: file, ours: groot, base, theirs: local },
+    gitMergeFile,
+  );
+  switch (outcome.kind) {
+    case "identical":
+      return { kind: "up-to-date" };
+    case "auto-apply":
+    case "auto-merged":
+      return { kind: "ready", content: outcome.content };
+    case "conflict":
+      return { kind: "conflict", conflicts: outcome.conflicts };
+    case "binary-conflict":
+      return { kind: "binary-conflict" };
+    case "kept-local-deletion":
+      return { kind: "deleted-in-groot" };
+    default:
+      // The remaining outcomes need a missing base or child copy, which
+      // upstream never passes.
+      throw new Error(`Unexpected ${outcome.kind} reconciling ${file} for upstream`);
+  }
+}
+
+/** Every synced file the child changed since the last sync, merged onto `grootDir` HEAD. */
+export async function planUpstream(projectRoot: string, grootDir: string): Promise<UpstreamPlan> {
+  const config = await loadConfig(projectRoot);
+  const [grootCommit, base] = await Promise.all([
+    resolveCommit(grootDir, "HEAD"),
+    openMergeBase(projectRoot, grootDir, config.last_sync.commit),
+  ]);
+  console.log(`Base: ${base.description}`);
+
+  const baseEntries = syncedBlobs(await base.entries(), config.additional_exclusions);
+  const items: UpstreamItem[] = [];
+  await Promise.all(
+    [...baseEntries.values()].map(async (entry) => {
+      // Local deletions are not upstreamed.
+      const local = await readFile(join(projectRoot, entry.path)).catch(() => null);
+      // Hashing locally skips a git call per unmodified file; a mismatch only
+      // means "compare the bytes".
+      if (local === null || blobSha(local) === entry.sha) return;
+      const baseContent = await base.read(entry.path);
+      if (baseContent === null || local.equals(baseContent)) return;
+
+      const groot = await showBlob(grootDir, grootCommit, entry.path);
+      const outcome = await mergeIntoGroot(entry.path, baseContent, local, groot);
+      if (outcome.kind === "up-to-date") return;
+      items.push({ file: entry.path, base: baseContent, local, groot, outcome });
+    }),
+  );
+  items.sort((a, b) => a.file.localeCompare(b.file));
+
+  return { baseCommit: base.commit, grootCommit, items };
+}
+
+/**
+ * Write `items` into the groot working tree at `grootDir`, re-merging each
+ * against that tree's copy so the result is exact even when it is not the
+ * commit the plan was computed against. Nothing is written when any item no
+ * longer merges cleanly; those files are returned in `unmerged`.
+ */
+export async function applyUpstream(
+  grootDir: string,
+  items: UpstreamItem[],
+): Promise<{ written: string[]; unmerged: string[] }> {
+  const writes: { file: string; content: Buffer | string }[] = [];
+  const unmerged: string[] = [];
+  for (const item of items) {
+    const groot = await readFile(join(grootDir, item.file)).catch(() => null);
+    const outcome = await mergeIntoGroot(item.file, item.base, item.local, groot);
+    if (outcome.kind === "ready") writes.push({ file: item.file, content: outcome.content });
+    else if (outcome.kind !== "up-to-date") unmerged.push(item.file);
+  }
+  if (unmerged.length > 0) return { written: [], unmerged };
+
+  for (const { file, content } of writes) {
+    await writeFile(join(grootDir, file), content);
+  }
+  return { written: writes.map((w) => w.file), unmerged };
 }

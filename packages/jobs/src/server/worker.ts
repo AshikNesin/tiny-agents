@@ -1,6 +1,5 @@
 import { logger } from "@groot/core/logger";
 import { config } from "@groot/core/config";
-import { isReservedQueueName } from "./constants";
 import type { JobHandler } from "./types";
 import { runTick, tickInFlight } from "./tick";
 
@@ -12,9 +11,6 @@ const handlers = new Map<string, JobHandler>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 export function registerJobHandler<T, R = unknown>(name: string, handler: JobHandler<T, R>): void {
-  if (isReservedQueueName(name)) {
-    throw new Error(`"${name}" is a reserved job name`);
-  }
   handlers.set(name, handler as JobHandler);
   logger.debug({ jobName: name }, "Job handler registered");
 }
@@ -62,8 +58,4 @@ export async function stopWorkers(): Promise<void> {
   if (timer) clearInterval(timer);
   timer = null;
   await tickInFlight();
-}
-
-export function workersRunning(): boolean {
-  return timer !== null;
 }

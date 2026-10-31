@@ -20,8 +20,8 @@
  * Oxlint has no built-in rule for banning string patterns inside className
  * attributes, so this script is the enforcement mechanism. It runs from the
  * pre-commit hook (`vp staged` → `npm run check:tokens`) and from CI
- * (.github/workflows/check-design-tokens.yml), which is the non-bypassable
- * layer for `--no-verify` commits.
+ * (.github/workflows/test.yml), which is the non-bypassable layer for
+ * `--no-verify` commits.
  *
  * Usage:  tsx scripts/check-design-tokens.ts
  * Exit:   0 = clean, 1 = violations found.
@@ -29,17 +29,15 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { uiSourceRoots } from "../.groot/lib/patterns";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
 /**
- * Directories that ship client-side UI, derived from the one ownership map in
- * .groot/lib/patterns.ts (packages named there + every app's client tree).
- * scripts/check-checks-coverage.ts fails when the workflow path filters and
- * this list disagree, so a new UI root cannot be added to one copy only.
+ * Directories that ship client-side UI. Globs, so a new package or app is
+ * scanned without editing this list.
  */
-const SRC_DIRS = [...new Set(uiSourceRoots().flatMap((root) => expandRoot(root)))].sort();
+const UI_ROOTS = ["packages/*/src", "apps/*/src/client"];
+const SRC_DIRS = [...new Set(UI_ROOTS.flatMap((root) => expandRoot(root)))].sort();
 
 /** Expand a root pattern (may contain one `*` segment) to existing dirs. */
 function expandRoot(root: string): string[] {

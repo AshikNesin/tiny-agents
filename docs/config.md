@@ -56,18 +56,27 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `rateLimits.auth`           | 20 requests / 15 min per IP                         |                                          |
 | `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                          |
 | `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                          |
-| `sentry.dsn`                | `""`                                                | `SENTRY_DSN`                             |
+| `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                             |
+| `sentry.release`            | unset                                               | `SENTRY_RELEASE`                         |
 
 ## Env vs config
 
-- **`env`** (`packages/core/src/env.ts`) is the raw, validated environment:
-  secrets and deployment facts. Read it for `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`,
-  `DATABASE_URL`. See [Setup guide](./setup-guide.md#environment-variables).
-- **`config`** is behaviour: what the app does with those facts. Feature code
-  reads `config.*`.
-- A new tunable goes into `AppConfig` + `defaultConfig()`; a new deployment
-  input goes into `envSchema` + `.env.example` and is surfaced through
-  `defaultConfig()` if code needs it.
+- **`env`** (`packages/core/src/env.ts`) holds secrets and runtime facts:
+  what differs between deployments and has no sensible default in code
+  (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `DATABASE_URL`, `SENTRY_DSN`, ...). It is
+  validated once by `parseEnv()` at boot, and every key in `envSchema` is read
+  through the validated `env` or surfaced through `defaultConfig()`, never from
+  `process.env`. See [Setup guide](./setup-guide.md#environment-variables).
+- **`config`** holds tunables with defaults: what the app does with those
+  facts. `defaultConfig(env)` sets them, `defineConfig()` overrides them, and
+  feature code reads `config.*`.
+- Adding a variable means adding it to `envSchema` and `.env.example`, plus a
+  field in `AppConfig` and `defaultConfig()` when it tunes behaviour. A new
+  tunable with no deployment input goes into `AppConfig` + `defaultConfig()`
+  only.
+- Build-time variables (`SOURCE_COMMIT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`,
+  `SENTRY_PROJECT`) are read by `scripts/build.mjs` and `vite.config.ts` and
+  are not in the schema.
 
 Both are live bindings replaced by `bootstrap()`, so read them inside functions,
 not at module top level (module-level reads see the development defaults).

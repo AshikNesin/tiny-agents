@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gt, gte, lte, sql } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
-import { JOB_STATES, VALID_JOB_STATES, isValidJobState, type JobState } from "./constants";
+import { JOB_STATES, VALID_JOB_STATES, isValidJobState, type JobState } from "../lifecycle";
 import { jobs, jobLogs, jobSchedules, type Job, type JobLog, type JobSchedule } from "./schema";
 import { getRegisteredHandlers } from "./worker";
 import type { GetJobsOptions, JobQueryResponse, JobStats } from "./types";
@@ -15,15 +15,8 @@ function assertState(state: string): JobState {
   return state;
 }
 
-export async function getJobById(options: {
-  queueName: string;
-  jobId: string;
-}): Promise<Job | null> {
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(and(eq(jobs.id, options.jobId), eq(jobs.name, options.queueName)))
-    .limit(1);
+export async function getJobById(jobId: string): Promise<Job | null> {
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
   return job ?? null;
 }
 
@@ -41,27 +34,6 @@ export async function getQueueStats(): Promise<JobStats> {
 export async function getAvailableQueues(): Promise<string[]> {
   const rows = await db.selectDistinct({ name: jobs.name }).from(jobs);
   return [...new Set([...rows.map((r) => r.name), ...getRegisteredHandlers()])].sort();
-}
-
-export async function getFailedJobs(options: { limit?: number } = {}): Promise<Job[]> {
-  return db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.state, "failed"))
-    .orderBy(desc(jobs.completedAt))
-    .limit(options.limit ?? 50);
-}
-
-export async function getJobsByState(options: {
-  state: string;
-  limit?: number;
-  offset?: number;
-}): Promise<JobQueryResponse> {
-  return getJobs({
-    state: assertState(options.state),
-    limit: options.limit,
-    offset: options.offset,
-  });
 }
 
 export async function getJobs(options: GetJobsOptions = {}): Promise<JobQueryResponse> {

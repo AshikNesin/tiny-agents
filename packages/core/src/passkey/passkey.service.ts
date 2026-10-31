@@ -8,12 +8,15 @@ import type {
 } from "@simplewebauthn/server";
 import { Boom } from "../errors";
 import { logger } from "../logger";
-import { db, passkeys, type Passkey, type User } from "../database";
+import { db, passkeys, type Passkey } from "../database";
 import { findUserById, findUserByEmail } from "../auth/auth.service";
+import type { SessionUser } from "../auth/auth.schema";
+import type { PasskeySummary } from "./passkey.schema";
 import { generateToken } from "../utils/jwt.utils";
 import { fromBase64Url, utf8Decode } from "../utils/encoding.utils";
 import { createNamespaceKv } from "../kv";
 import {
+  describePasskey,
   generateDeviceName,
   generatePasskeyAuthenticationOptions,
   generatePasskeyRegistrationOptions,
@@ -21,14 +24,31 @@ import {
   verifyPasskeyRegistration,
 } from "./webauthn.utils";
 
+// The wire type lives in passkey.schema; re-exported here so existing imports
+// from passkey.service keep working.
+export type { PasskeySummary };
+
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const challengeKv = createNamespaceKv("passkey:challenge");
 
-/** Public shape of a passkey: no key material, no credential id. */
-export type PasskeySummary = Omit<Passkey, "publicKey" | "credentialId">;
+function toSummary(passkey: Passkey, total: number): PasskeySummary {
+  return {
+    id: passkey.id,
+    credentialName: passkey.credentialName,
+    ...describePasskey(passkey),
+    backedUp: passkey.backedUp,
+    canDelete: total > 1,
+    lastUsedAt: passkey.lastUsedAt?.toISOString() ?? null,
+    createdAt: passkey.createdAt.toISOString(),
+  };
+}
 
-function toSummary({ publicKey: _publicKey, credentialId: _credentialId, ...rest }: Passkey) {
-  return rest;
+async function countPasskeys(userId: number): Promise<number> {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(passkeys)
+    .where(eq(passkeys.userId, userId));
+  return total;
 }
 
 async function storeChallenge(challenge: string): Promise<void> {
@@ -132,7 +152,7 @@ export async function verifyRegistration({
     .returning();
 
   logger.info({ userId, passkeyId: passkey!.id, credentialName: name }, "Passkey registered");
-  return toSummary(passkey!);
+  return toSummary(passkey!, await countPasskeys(userId));
 }
 
 export async function generateAuthenticationOptions({
@@ -154,8 +174,7 @@ export async function verifyAuthentication({
   response,
 }: {
   response: AuthenticationResponseJSON;
-  email?: string;
-}): Promise<{ token: string; user: Omit<User, "password"> }> {
+}): Promise<{ token: string; user: SessionUser }> {
   const challenge = extractChallengeFromResponse(response);
   if (!(await consumeChallenge(challenge))) {
     throw Boom.badRequest("Challenge not found or expired");
@@ -193,7 +212,8 @@ export async function verifyAuthentication({
 }
 
 export async function listPasskeys({ userId }: { userId: number }): Promise<PasskeySummary[]> {
-  return (await passkeysForUser(userId)).map(toSummary);
+  const rows = await passkeysForUser(userId);
+  return rows.map((passkey) => toSummary(passkey, rows.length));
 }
 
 async function findOwnedPasskey(userId: number, passkeyId: number): Promise<Passkey> {
@@ -214,12 +234,7 @@ export async function deletePasskey({
   userId: number;
 }): Promise<void> {
   await findOwnedPasskey(userId, passkeyId);
-
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(passkeys)
-    .where(eq(passkeys.userId, userId));
-  if (total === 1) {
+  if ((await countPasskeys(userId)) === 1) {
     throw Boom.badRequest("Cannot delete the last passkey. Please add another passkey first.");
   }
 
@@ -243,5 +258,5 @@ export async function updatePasskeyName({
     .where(eq(passkeys.id, passkeyId))
     .returning();
   logger.info({ userId, passkeyId, credentialName }, "Passkey renamed");
-  return toSummary(updated!);
+  return toSummary(updated!, await countPasskeys(userId));
 }

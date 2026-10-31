@@ -1,20 +1,13 @@
 import { Boom } from "../errors";
 import { logger } from "../logger";
 import { createNamespaceKv } from "../kv";
-import type { UpsertAppSettingDTO } from "./app-settings.schema";
+import type { AppSetting, UpsertAppSettingDTO } from "./app-settings.schema";
 
 const appSettingsKv = createNamespaceKv("APP_SETTING");
 
-export interface AppSettingMetadata {
-  description?: string;
-  updatedAt: string;
-}
-
-export interface AppSetting<T = unknown> {
-  key: string;
-  value: T;
-  metadata?: AppSettingMetadata;
-}
+// Declared in the schema module (zod-only) so the client can import the wire
+// type without dragging the service's server graph along.
+export type { AppSetting, AppSettingMetadata } from "./app-settings.schema";
 
 export async function get<T = unknown>({ key }: { key: string }): Promise<AppSetting<T>> {
   const setting = await appSettingsKv.get<AppSetting<T>>(key);

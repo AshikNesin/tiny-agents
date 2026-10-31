@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vite-plus/test";
 import { api, createTestApp, signIn } from "../helpers";
 import { createNamespaceKv } from "@groot/core/kv";
+import { db, passkeys } from "@groot/core/database";
 
 const app = createTestApp();
+
+interface PasskeyRow {
+  id: number;
+  credentialName: string | null;
+  kind: string;
+  label: string;
+  canDelete: boolean;
+}
+
+async function storePasskey(
+  userId: number,
+  values: { transports: string[]; deviceType: string | null; credentialName: string },
+) {
+  await db.insert(passkeys).values({
+    userId,
+    credentialId: `cred-${crypto.randomUUID()}`,
+    publicKey: Buffer.from([1, 2, 3]),
+    ...values,
+  });
+}
 
 /** clientDataJSON as a browser would send it: base64url JSON carrying the challenge. */
 function clientData(challenge: string): string {
@@ -93,6 +114,63 @@ describe("passkey API", () => {
       },
     });
     expect(malformed.status).toBe(400);
+  });
+
+  it("says how to show each passkey and whether it can be deleted", async () => {
+    const { token, user } = await signIn(app);
+    const list = async () =>
+      (await api<PasskeyRow[]>(app, "/api/v1/passkey/list", { token })).body.data!;
+
+    await storePasskey(user.id, {
+      transports: ["usb", "nfc"],
+      deviceType: "singleDevice",
+      credentialName: "YubiKey",
+    });
+    const [only] = await list();
+    expect(only).toMatchObject({
+      credentialName: "YubiKey",
+      kind: "security-key",
+      label: "Security key (USB, NFC)",
+      canDelete: false,
+    });
+    expect(only).not.toHaveProperty("publicKey");
+    expect(only).not.toHaveProperty("credentialId");
+
+    await storePasskey(user.id, {
+      transports: ["internal", "hybrid"],
+      deviceType: "multiDevice",
+      credentialName: "Phone",
+    });
+    await storePasskey(user.id, {
+      transports: ["internal"],
+      deviceType: "singleDevice",
+      credentialName: "Laptop",
+    });
+    const rows = await list();
+    expect(Object.fromEntries(rows.map((r) => [r.credentialName, [r.kind, r.label]]))).toEqual({
+      YubiKey: ["security-key", "Security key (USB, NFC)"],
+      Phone: ["synced", "Synced passkey"],
+      Laptop: ["device", "Device-bound passkey"],
+    });
+    expect(rows.every((r) => r.canDelete)).toBe(true);
+
+    for (const row of rows.slice(1)) {
+      expect(
+        (await api(app, `/api/v1/passkey/${row.id}`, { method: "DELETE", token })).status,
+      ).toBe(204);
+    }
+    const [last] = await list();
+    expect(last!.canDelete).toBe(false);
+    const refused = await api(app, `/api/v1/passkey/${last!.id}`, { method: "DELETE", token });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error?.message).toMatch(/last passkey/);
+
+    const renamed = await api<PasskeyRow>(app, `/api/v1/passkey/${last!.id}`, {
+      method: "PATCH",
+      json: { credentialName: "Renamed" },
+      token,
+    });
+    expect(renamed.body.data).toMatchObject({ credentialName: "Renamed", canDelete: false });
   });
 
   it("lists, renames and guards passkeys per user", async () => {

@@ -21,8 +21,4 @@ export function setDb(instance: Database): void {
   db = instance;
 }
 
-export function hasDb(): boolean {
-  return db !== undefined;
-}
-
 export * from "./schema";

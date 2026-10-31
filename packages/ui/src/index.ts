@@ -1,9 +1,9 @@
 /**
  * UI component barrel — single import surface for all primitives.
  *
- *   import { Button, Dialog, Input } from "@/ui";
+ *   import { Button, Dialog, Input } from "@groot/ui";
  *
- * Design tokens live in client/src/index.css (Tailwind v4 CSS-first: oklch
+ * Design tokens live in packages/shell/src/index.css (Tailwind v4 CSS-first: oklch
  * `@theme inline` variables) and are surfaced via semantic Tailwind classes
  * (bg-primary, text-foreground, border-border, …). Do not use raw palette
  * colors (gray-*, red-*, …) outside index.css.
@@ -37,15 +37,7 @@ export * from "./select";
 export { StatusBadge } from "./status-badge";
 export type { StatusVariant } from "./status-badge";
 export * from "./table";
-export {
-  Text,
-  metaLabelClass,
-  monoClass,
-  titleClass,
-  h1Class,
-  statClass,
-  displayClass,
-} from "./typography";
+export { Text, metaLabelClass, monoClass, h1Class, statClass, displayClass } from "./typography";
 export { DataField, DataFields } from "./display";
 export { listRowClass, listRowGridClass } from "./list-row";
 export { StatTile } from "./stat-tile";

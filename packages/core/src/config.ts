@@ -1,5 +1,5 @@
 import { env, type Env } from "./env";
-import type { LogLevel } from "./logger/core";
+import type { LogLevel } from "./logger";
 
 /**
  * Application configuration: typed defaults derived from `env`, overridden by
@@ -33,7 +33,8 @@ export interface AppConfig {
   logging: { level: LogLevel };
   passkey: { rpName: string; rpId: string; origin: string };
   rateLimits: { auth: RateLimitWindow; storage: RateLimitWindow; upload: RateLimitWindow };
-  sentry: { dsn: string };
+  /** Error reporting. The entries start Sentry only when `dsn` is set. */
+  sentry: { dsn: string; release?: string };
 }
 
 export type DeepPartial<T> = {
@@ -75,7 +76,7 @@ export function defaultConfig(e: Env): AppConfig {
       storage: { windowMs: fifteenMinutes, max: 100 },
       upload: { windowMs: fifteenMinutes, max: 50 },
     },
-    sentry: { dsn: e.SENTRY_DSN ?? "" },
+    sentry: { dsn: e.SENTRY_DSN ?? "", release: e.SENTRY_RELEASE },
   };
 }
 

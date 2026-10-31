@@ -7,34 +7,29 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { Input } from "@groot/ui/input";
+import { useAvailableJobs } from "@groot/jobs/client/queries";
 import type { JobName } from "@groot/jobs/client/types";
+import { useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 
 type Props = {
   id: string;
   value: JobName | "";
   onChange: (value: JobName) => void;
-  search: string;
-  onSearchChange: (value: string) => void;
-  availableJobs: string[];
+  disabled?: boolean;
 };
 
-/** Searchable job-type picker used by the Add-Job and Schedule-Job dialogs. */
-export function JobTypeSelect({
-  id,
-  value,
-  onChange,
-  search,
-  onSearchChange,
-  availableJobs,
-}: Props) {
+/** Searchable job-type picker used by the add-job and schedule dialogs. */
+export function JobTypeSelect({ id, value, onChange, disabled }: Props) {
+  const availableJobs = useAvailableJobs();
+  const [search, setSearch] = useState("");
   return (
     <DropdownMenu
       onOpenChange={(open) => {
-        if (!open) onSearchChange("");
+        if (!open) setSearch("");
       }}
     >
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
           variant="outline"
           id={id}
@@ -51,7 +46,7 @@ export function JobTypeSelect({
             <Input
               placeholder="Search job types..."
               value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-7 h-8 border-0 bg-transparent focus-visible:ring-0"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
@@ -62,7 +57,7 @@ export function JobTypeSelect({
         <div className="max-h-[180px] overflow-y-auto">
           {availableJobs.map((job) =>
             job.toLowerCase().includes(search.toLowerCase()) ? (
-              <DropdownMenuItem key={job} onSelect={() => onChange(job as JobName)}>
+              <DropdownMenuItem key={job} onSelect={() => onChange(job)}>
                 {job}
               </DropdownMenuItem>
             ) : null,

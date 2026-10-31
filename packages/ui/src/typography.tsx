@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./lib/utils";
 
 /**
- * The type scale is CLOSED. These sizes (and PageHeader's h1) are the only
+ * The type scale is CLOSED. These sizes (and PageLayout's h1) are the only
  * text sizes in the app; pages never pick a `text-*` size ad hoc. Rules and
  * rationale: docs/features/dls.md (adapted from Cloudflare Kumo's design
  * skill, MIT).
@@ -15,8 +15,8 @@ export const metaLabelClass =
 export const monoClass = "font-mono text-[0.9em]";
 
 /** In-page heading (a `Section` title, card title, or standalone label). */
-export const titleClass = "font-heading text-base leading-snug font-medium";
-/** Routed-page title — the one sanctioned `<h1>` treatment (`PageHeader`). */
+const titleClass = "font-heading text-base leading-snug font-medium";
+/** Routed-page title — the one sanctioned `<h1>` treatment (`PageLayout`). */
 export const h1Class = "text-xl font-semibold text-foreground sm:text-2xl";
 /** Standalone numeric value (a metric, not a heading). */
 export const statClass = "text-xl font-semibold tabular-nums";

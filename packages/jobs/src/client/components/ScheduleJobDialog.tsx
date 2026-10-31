@@ -9,91 +9,118 @@ import {
   DialogTrigger,
 } from "@groot/ui/dialog";
 import { Input } from "@groot/ui/input";
-import { Textarea } from "@groot/ui/textarea";
 import { Field } from "@groot/ui/form";
+import { jobsApi } from "@groot/jobs/client/api";
+import { jobsKeys } from "@groot/jobs/client/queries";
+import type { JobSchedule } from "@groot/jobs/client/types";
+import { withJobToast } from "@groot/jobs/client/utils";
+import { JobDataEditor } from "./JobDataEditor";
 import { JobTypeSelect } from "./JobTypeSelect";
-import type { JobTypeDialogFields } from "@groot/jobs/client/constants";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Calendar as CalendarIcon } from "lucide-react";
 
-type Props = JobTypeDialogFields & {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  cron: string;
-  onCronChange: (value: string) => void;
-  data: string;
-  onDataChange: (value: string) => void;
-  onSubmit: () => void;
+type Props = {
+  /** Edit this schedule; omit to create a new one. */
+  schedule?: JobSchedule;
+  /** Defaults to the "Schedule" header button. */
+  trigger?: ReactNode;
 };
 
-/** Schedule a recurring job on a cron expression. Renders its own trigger. */
-export function ScheduleJobDialog({
-  open,
-  onOpenChange,
-  name,
-  onNameChange,
-  cron,
-  onCronChange,
-  data,
-  onDataChange,
-  typeSearch,
-  onTypeSearchChange,
-  availableJobs,
-  onSubmit,
-}: Props) {
+/**
+ * Create or edit a recurring cron schedule. Schedules are keyed by job name,
+ * so editing keeps the name and saves through the same upsert as creating.
+ */
+export function ScheduleJobDialog({ schedule, trigger }: Props) {
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <CalendarIcon className="size-4" />
-          <span className="hidden md:inline">Schedule</span>
-        </Button>
+        {trigger ?? (
+          <Button variant="outline">
+            <CalendarIcon className="size-4" />
+            <span className="hidden md:inline">Schedule</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Schedule Recurring Job</DialogTitle>
-          <DialogDescription>Schedule a job to run on a recurring cron schedule</DialogDescription>
+          <DialogTitle>{schedule ? "Edit Scheduled Job" : "Schedule Recurring Job"}</DialogTitle>
+          <DialogDescription>
+            {schedule
+              ? `Update the cron schedule or data for "${schedule.name}"`
+              : "Schedule a job to run on a recurring cron schedule"}
+          </DialogDescription>
         </DialogHeader>
-        <DialogBody className="space-y-5">
-          <Field label="Job type" htmlFor="scheduled-job-name">
-            <JobTypeSelect
-              id="scheduled-job-name"
-              value={name}
-              onChange={onNameChange}
-              search={typeSearch}
-              onSearchChange={onTypeSearchChange}
-              availableJobs={availableJobs}
-            />
-          </Field>
-          <Field
-            label="Cron expression"
-            htmlFor="scheduled-job-cron"
-            hint={`Example: "*/5 * * * *" runs every 5 minutes`}
-          >
-            <Input
-              id="scheduled-job-cron"
-              value={cron}
-              onChange={(e) => onCronChange(e.target.value)}
-              placeholder="*/5 * * * *"
-            />
-          </Field>
-          <Field label="Job data (JSON)" htmlFor="scheduled-job-data">
-            <Textarea
-              id="scheduled-job-data"
-              value={data}
-              onChange={(e) => onDataChange(e.target.value)}
-              placeholder='{"key": "value"}'
-              rows={10}
-              className="font-mono text-[0.9em]"
-            />
-          </Field>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={onSubmit}>Schedule Job</Button>
-          </div>
-        </DialogBody>
+        <ScheduleJobForm schedule={schedule} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Mounted only while the dialog is open, so every opening starts from the saved values. */
+function ScheduleJobForm({ schedule, onDone }: { schedule?: JobSchedule; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(schedule?.name ?? "");
+  const [cron, setCron] = useState(schedule?.cron ?? "");
+  const [data, setData] = useState(() => JSON.stringify(schedule?.data ?? {}, null, 2));
+
+  const submit = () => {
+    if (!name || !cron) {
+      toast.error("Error", {
+        description: "Please select a job name and provide a cron expression",
+      });
+      return;
+    }
+    return withJobToast(
+      () =>
+        jobsApi.scheduleJob(
+          name,
+          cron,
+          JSON.parse(data),
+          schedule?.timezone ? { timezone: schedule.timezone } : undefined,
+        ),
+      () => (schedule ? "Scheduled job has been updated" : "Job has been scheduled"),
+      schedule ? "Failed to update scheduled job" : "Failed to schedule job",
+      () => {
+        onDone();
+        void queryClient.invalidateQueries({ queryKey: jobsKeys.scheduled });
+      },
+    );
+  };
+
+  return (
+    <DialogBody className="space-y-5">
+      <Field label="Job type" htmlFor="scheduled-job-name">
+        <JobTypeSelect
+          id="scheduled-job-name"
+          value={name}
+          onChange={setName}
+          disabled={Boolean(schedule)}
+        />
+      </Field>
+      <Field
+        label="Cron expression"
+        htmlFor="scheduled-job-cron"
+        hint={`Example: "*/5 * * * *" runs every 5 minutes`}
+      >
+        <Input
+          id="scheduled-job-cron"
+          value={cron}
+          onChange={(e) => setCron(e.target.value)}
+          placeholder="*/5 * * * *"
+        />
+      </Field>
+      <Field label="Job data (JSON)" htmlFor="scheduled-job-data">
+        <JobDataEditor value={data} onChange={setData} />
+      </Field>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button onClick={() => void submit()}>{schedule ? "Save Changes" : "Schedule Job"}</Button>
+      </div>
+    </DialogBody>
   );
 }

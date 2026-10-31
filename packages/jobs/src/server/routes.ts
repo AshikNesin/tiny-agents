@@ -8,10 +8,8 @@ import * as queries from "./queries";
 import {
   bulkRerunSchema,
   createJobSchema,
-  editScheduledJobSchema,
   getJobsSchema,
   getLogsQuerySchema,
-  paginationQuerySchema,
   scheduleJobSchema,
 } from "./validation";
 
@@ -25,8 +23,8 @@ jobRoutes.post("/", async (c) => {
 });
 
 jobRoutes.post("/bulk-rerun", async (c) => {
-  const { jobs } = await parseBody(c, bulkRerunSchema);
-  return ok(c, await queue.rerunJobs(jobs));
+  const { jobIds } = await parseBody(c, bulkRerunSchema);
+  return ok(c, await queue.rerunJobs(jobIds));
 });
 
 // Schedules
@@ -35,12 +33,6 @@ jobRoutes.get("/schedule", async (c) => ok(c, await queries.getScheduledJobs()))
 jobRoutes.post("/schedule", async (c) => {
   const { jobName, data, cron, options } = await parseBody(c, scheduleJobSchema);
   return ok(c, await queue.scheduleJob(jobName, data, cron, options), 201);
-});
-
-jobRoutes.put("/schedule/:jobName", async (c) => {
-  const jobName = parseStringParam(c.req.param("jobName"), "jobName");
-  const { cron, data, options } = await parseBody(c, editScheduledJobSchema);
-  return ok(c, await queue.editScheduledJob(jobName, cron, data, options));
 });
 
 jobRoutes.delete("/schedule/:jobName", async (c) => {
@@ -54,17 +46,6 @@ jobRoutes.get("/stats", async (c) => ok(c, await queries.getQueueStats()));
 
 jobRoutes.get("/available", async (c) => ok(c, { jobs: await queries.getAvailableQueues() }));
 
-jobRoutes.get("/status/failed", async (c) => {
-  const { limit } = parseQuery(c, paginationQuerySchema);
-  return ok(c, await queries.getFailedJobs({ limit }));
-});
-
-jobRoutes.get("/state/:state", async (c) => {
-  const state = parseStringParam(c.req.param("state"), "state");
-  const { limit, offset } = parseQuery(c, paginationQuerySchema);
-  return ok(c, await queries.getJobsByState({ state, limit, offset }));
-});
-
 jobRoutes.delete("/state/:state", async (c) => {
   const state = parseStringParam(c.req.param("state"), "state");
   return ok(c, { count: await queries.purgeJobsByState({ state }) });
@@ -72,45 +53,41 @@ jobRoutes.delete("/state/:state", async (c) => {
 
 jobRoutes.get("/", async (c) => ok(c, await queries.getJobs(parseQuery(c, getJobsSchema))));
 
-// Single job
-const target = (c: { req: { param(name: string): string | undefined } }) => ({
-  queueName: parseStringParam(c.req.param("queueName"), "queueName"),
-  jobId: parseStringParam(c.req.param("jobId"), "jobId"),
-});
+// Single job (`:jobId` is the uuid primary key)
+const jobIdParam = (c: { req: { param(name: string): string | undefined } }) =>
+  parseStringParam(c.req.param("jobId"), "jobId");
 
-jobRoutes.get("/:queueName/:jobId", async (c) => {
-  const job = await queries.getJobById(target(c));
-  if (!job) throw Boom.notFound("Job not found");
+jobRoutes.get("/:jobId", async (c) => {
+  const job = await queries.getJobById(jobIdParam(c));
+  if (!job) throw Boom.notFound("Job not found", null, "JOB_NOT_FOUND");
   return ok(c, job);
 });
 
-jobRoutes.get("/:queueName/:jobId/logs", async (c) => {
+jobRoutes.get("/:jobId/logs", async (c) => {
   const { afterId } = parseQuery(c, getLogsQuerySchema);
-  return ok(c, await queries.getJobLogs({ jobId: target(c).jobId, afterId }));
+  return ok(c, await queries.getJobLogs({ jobId: jobIdParam(c), afterId }));
 });
 
-jobRoutes.delete("/:queueName/:jobId", async (c) => {
-  await queue.deleteJob(target(c));
+jobRoutes.delete("/:jobId", async (c) => {
+  await queue.deleteJob(jobIdParam(c));
   return ok(c, { success: true });
 });
 
-jobRoutes.post("/:queueName/:jobId/retry", async (c) => {
-  await queue.retryJob(target(c));
+jobRoutes.post("/:jobId/retry", async (c) => {
+  await queue.retryJob(jobIdParam(c));
   return ok(c, { success: true });
 });
 
-jobRoutes.post("/:queueName/:jobId/cancel", async (c) => {
-  await queue.cancelJob(target(c));
+jobRoutes.post("/:jobId/cancel", async (c) => {
+  await queue.cancelJob(jobIdParam(c));
   return ok(c, { success: true });
 });
 
-jobRoutes.post("/:queueName/:jobId/resume", async (c) => {
-  await queue.resumeJob(target(c));
+jobRoutes.post("/:jobId/resume", async (c) => {
+  await queue.resumeJob(jobIdParam(c));
   return ok(c, { success: true });
 });
 
-jobRoutes.post("/:queueName/:jobId/rerun", async (c) => {
-  const { queueName } = target(c);
-  const newJobId = await queue.rerunJob(target(c));
-  return ok(c, { newJobId, queueName });
+jobRoutes.post("/:jobId/rerun", async (c) => {
+  return ok(c, { newJobId: await queue.rerunJob(jobIdParam(c)) });
 });

@@ -1,55 +1,28 @@
 import { Button } from "@groot/ui/button";
+import { allowedJobActions } from "../../lifecycle";
+import { JOB_ACTION_UI } from "@groot/jobs/client/constants";
 import type { Job } from "@groot/jobs/client/types";
-import { Play, RefreshCw, Trash2, X } from "lucide-react";
+import { useJobActions } from "@groot/jobs/client/useJobActions";
 
-type Actions = {
-  onRetry: () => void;
-  onRerun: () => void;
-  onResume: () => void;
-  onCancel: () => void;
-  onDelete: () => void;
-};
-
-/**
- * State-dependent action buttons for a job (retry / re-run / resume / cancel /
- * delete). Mirrors the server's rules: retry for failed or cancelled jobs,
- * cancel for created or active, resume for cancelled only.
- */
-export function JobActions({ state, ...actions }: { state: Job["state"] } & Actions) {
+/** The actions the job's state allows, as buttons (job detail header). */
+export function JobActions({ job, onDeleted }: { job: Job; onDeleted?: () => void }) {
+  const { run } = useJobActions({ onDeleted });
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {(state === "failed" || state === "cancelled") && (
-        <Button variant="outline" onClick={actions.onRetry}>
-          <RefreshCw className="size-4" />
-          Retry
-        </Button>
-      )}
-      {(state === "completed" || state === "failed") && (
-        <Button variant="outline" onClick={actions.onRerun}>
-          <Play className="size-4" />
-          Re-run
-        </Button>
-      )}
-      {state === "cancelled" && (
-        <Button variant="outline" onClick={actions.onResume}>
-          <Play className="size-4" />
-          Resume
-        </Button>
-      )}
-      {(state === "active" || state === "created") && (
-        <Button variant="outline" onClick={actions.onCancel}>
-          <X className="size-4" />
-          Cancel
-        </Button>
-      )}
-      <Button
-        variant="ghost"
-        onClick={actions.onDelete}
-        className="text-destructive hover:text-destructive"
-      >
-        <Trash2 className="size-4" />
-        Delete
-      </Button>
+      {allowedJobActions(job.state).map((action) => {
+        const { label, icon: Icon, destructive } = JOB_ACTION_UI[action];
+        return (
+          <Button
+            key={action}
+            variant={destructive ? "ghost" : "outline"}
+            onClick={() => void run(action, job)}
+            className={destructive ? "text-destructive hover:text-destructive" : undefined}
+          >
+            <Icon className="size-4" />
+            {label}
+          </Button>
+        );
+      })}
     </div>
   );
 }

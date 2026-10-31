@@ -4,13 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./auth": "./src/auth/index.ts",
     "./database": "./src/database/index.ts",
     "./errors": "./src/errors/index.ts",
     "./kv": "./src/kv/index.ts",
     "./logger": "./src/logger/index.ts",
-    "./passkey": "./src/passkey/index.ts",
-    "./settings": "./src/settings/index.ts",
     "./storage": "./src/storage/index.ts",
     "./*": "./src/*.ts"
   },

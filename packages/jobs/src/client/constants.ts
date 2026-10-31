@@ -3,9 +3,12 @@
  * files only export components (react-doctor/only-export-components).
  */
 
-import type { JobName, JobState } from "./types";
+import type { JobAction, JobState } from "./types";
+import { Play, RefreshCw, Trash2, X, type LucideIcon } from "lucide-react";
 
 export type StateTab = "all" | JobState;
+
+export const JOBS_PAGE_SIZE = 50;
 
 export const STATE_TABS: { value: StateTab; label: string }[] = [
   { value: "all", label: "All" },
@@ -21,13 +24,21 @@ const PRIMARY_TABS: StateTab[] = ["all", "active", "failed", "completed"];
 export const primaryOptions = STATE_TABS.filter((t) => PRIMARY_TABS.includes(t.value));
 export const secondaryOptions = STATE_TABS.filter((t) => !PRIMARY_TABS.includes(t.value));
 
-/** Shared fields for dialogs that pick a job type via the searchable dropdown. */
-export type JobTypeDialogFields = {
-  name: JobName | "";
-  onNameChange: (value: JobName) => void;
-  typeSearch: string;
-  onTypeSearchChange: (value: string) => void;
-  availableJobs: string[];
+/** Human-readable, capitalized label for a job state (e.g. "Active", "Failed"). */
+export function stateLabel(state: string): string {
+  return STATE_TABS.find((t) => t.value === state)?.label ?? state;
+}
+
+/** Label, icon and tone for each lifecycle action button / menu item. */
+export const JOB_ACTION_UI: Record<
+  JobAction,
+  { label: string; icon: LucideIcon; destructive?: boolean }
+> = {
+  retry: { label: "Retry", icon: RefreshCw },
+  rerun: { label: "Re-run", icon: Play },
+  resume: { label: "Resume", icon: Play },
+  cancel: { label: "Cancel", icon: X },
+  delete: { label: "Delete", icon: Trash2, destructive: true },
 };
 
 /** Patch shape for the URL-synced query params (matches the nuqs setter). */

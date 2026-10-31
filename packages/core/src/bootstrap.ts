@@ -1,10 +1,10 @@
 import { loadEnv, type Env, type EnvSource } from "./env";
 import { setConfig, config, type ConfigOverrides } from "./config";
-import { configureLogger } from "./logger/core";
+import { configureLogger } from "./logger";
 import { setDb, type Database } from "./database";
 import { setStorageAdapter } from "./storage/storage";
 import type { StorageAdapter } from "./storage/adapter";
-import { setErrorReporter, type ErrorReporter } from "./errors/report";
+import { setErrorReporter, type ErrorReporter } from "./errors";
 
 export interface BootstrapOptions {
   /** `process.env` on Node, the bindings object on Workers. */
@@ -20,8 +20,6 @@ export interface BootstrapOptions {
   storage?: StorageAdapter | ((env: Env) => StorageAdapter);
   /** Where unexpected errors go (Sentry, ...). */
   reportError?: ErrorReporter;
-  /** Human-readable logs. Defaults to on outside production. */
-  prettyLogs?: boolean;
 }
 
 /**
@@ -34,7 +32,7 @@ export function bootstrap(options: BootstrapOptions): void {
   setConfig(options.config);
   configureLogger({
     level: config.logging.level,
-    pretty: options.prettyLogs ?? env.NODE_ENV !== "production",
+    pretty: env.NODE_ENV !== "production",
     base: { service: config.app.name.toLowerCase(), env: env.NODE_ENV },
   });
   setDb(typeof options.db === "function" ? options.db(env) : options.db);

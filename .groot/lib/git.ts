@@ -8,6 +8,7 @@ import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
 export const exec = promisify(execFile);
@@ -29,6 +30,11 @@ export async function showBlob(dir: string, ref: string, path: string): Promise<
   } catch {
     return null;
   }
+}
+
+/** Git's SHA-1 object id for `content` as a blob, computed without spawning git. */
+export function blobSha(content: Buffer): string {
+  return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
 }
 
 export interface TreeEntry {

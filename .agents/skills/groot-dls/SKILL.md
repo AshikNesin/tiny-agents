@@ -24,8 +24,8 @@ sanctioned type scale and the rationale for each rule.
 
 ## The non-negotiables
 
-1. **Closed type scale.** `Text` / `titleClass` / `h1Class` / `statClass` /
-   `displayClass` / `monoClass` / `metaLabelClass` from `@groot/ui` are the only
+1. **Closed type scale.** `Text` / `h1Class` / `statClass` / `displayClass` /
+   `monoClass` / `metaLabelClass` from `@groot/ui` are the only
    text treatments. Never write a new `text-*` size in page code.
 2. **Semantic tokens only.** `text-foreground`, `bg-muted`, `border-border`,
    `text-destructive`, `text-success`, … Raw palette classes live only in
@@ -42,7 +42,7 @@ sanctioned type scale and the rationale for each rule.
    90% size. `text-xs`/`text-[11px]` mono (smaller than prose) is also fine.
 7. **Icons: `size-4` / `size-3.5`.** Square `h-N w-N` is legacy. Inside
    Button/DropdownMenuItem/Badge, drop `mr-2` — they already set `gap`.
-8. **Composition over hand-rolling.** Page titles → `PageLayout`/`PageHeader`;
+8. **Composition over hand-rolling.** Page titles → `PageLayout`;
    sections → `Section`; surfaces → `Card`; empty/failed states →
    `EmptyState`/`ErrorState`; loading → `Skeleton*`; tables → `Table` +
    `tableColumnHeaderClass`; status → `StatusBadge`.

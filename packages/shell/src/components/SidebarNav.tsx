@@ -1,59 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "@groot/ui/lib/utils";
-import {
-  CheckSquare,
-  HardDrive,
-  Briefcase,
-  Settings as SettingsIcon,
-  LayoutDashboard,
-  PanelLeftClose,
-  PanelLeft,
-  type LucideIcon,
-} from "lucide-react";
+import { Circle, PanelLeftClose, PanelLeft } from "lucide-react";
+import type { NavDestination, ShellBrand } from "@groot/shell/lib/shell-config";
 import { CommandPaletteTrigger } from "./CommandPalette";
 
-export type NavIcon = "dashboard" | "check-square" | "hard-drive" | "briefcase" | "settings";
-
-export interface NavItem {
-  name: string;
-  href: string;
-  /** String key (resolved via the built-in icon map) or a LucideIcon directly. */
-  icon: NavIcon | LucideIcon;
-  exact?: boolean;
-  badge?: ReactNode;
-}
-
-export interface SidebarBrand {
-  /** Brand label shown next to the logo mark. */
-  label: string;
-  /** Logo mark icon; defaults to `LayoutDashboard`. */
-  icon?: LucideIcon;
-  /** Link destination; defaults to `/`. */
-  to?: string;
-}
-
-const ICONS: Record<NavIcon, LucideIcon> = {
-  dashboard: LayoutDashboard,
-  "check-square": CheckSquare,
-  "hard-drive": HardDrive,
-  briefcase: Briefcase,
-  settings: SettingsIcon,
-};
-
-/** Resolve a NavItem.icon (string key or component) to a LucideIcon. */
-function resolveIcon(icon: NavIcon | LucideIcon): LucideIcon {
-  return typeof icon === "string" ? (ICONS[icon] ?? LayoutDashboard) : icon;
-}
-
-const DEFAULT_BRAND: Required<SidebarBrand> = {
-  label: "Groot",
-  icon: LayoutDashboard,
-  to: "/",
-};
-
 interface SidebarNavProps {
-  items: NavItem[];
+  items: NavDestination[];
   pathname: string;
   /** Mobile drawer open state. */
   open: boolean;
@@ -62,8 +15,7 @@ interface SidebarNavProps {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   footer?: ReactNode;
-  /** Brand block (logo + label). Defaults to the groot brand. */
-  brand?: SidebarBrand;
+  brand: Required<ShellBrand>;
 }
 
 const ICON_BTN =
@@ -92,24 +44,20 @@ export function SidebarNav({
   collapsed,
   onCollapsedChange,
   footer,
-  brand = DEFAULT_BRAND,
+  brand,
 }: SidebarNavProps) {
-  const isActive = (item: NavItem) =>
-    item.exact
-      ? pathname === item.href
-      : pathname === item.href || pathname.startsWith(item.href + "/");
+  const isActive = (item: NavDestination) =>
+    pathname === item.to || pathname.startsWith(item.to + "/");
 
-  const BrandMark = brand.icon ?? DEFAULT_BRAND.icon;
-  const brandTo = brand.to ?? DEFAULT_BRAND.to;
-  const brandLabel = brand.label ?? DEFAULT_BRAND.label;
+  const { icon: BrandMark, to: brandTo, label: brandLabel } = brand;
 
   const navLinks = items.map((item) => {
-    const Icon = resolveIcon(item.icon);
+    const Icon = item.icon ?? Circle;
     const active = isActive(item);
     return (
       <Link
-        key={item.href}
-        to={item.href}
+        key={item.to}
+        to={item.to}
         onClick={() => onOpenChange(false)}
         className={cn(
           NAV_ROW,
@@ -123,22 +71,21 @@ export function SidebarNav({
             active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
           )}
         />
-        <span className="flex-1 whitespace-nowrap">{item.name}</span>
-        {item.badge}
+        <span className="flex-1 whitespace-nowrap">{item.label}</span>
       </Link>
     );
   });
 
   const iconNavLinks = items.map((item) => {
-    const Icon = resolveIcon(item.icon);
+    const Icon = item.icon ?? Circle;
     const active = isActive(item);
     return (
       <Link
-        key={item.href}
-        to={item.href}
+        key={item.to}
+        to={item.to}
         onClick={() => onOpenChange(false)}
-        title={item.name}
-        aria-label={item.name}
+        title={item.label}
+        aria-label={item.label}
         className={cn(
           NAV_ROW,
           "size-9 justify-center",
@@ -192,7 +139,7 @@ export function SidebarNav({
             </Link>
 
             <div className="flex items-center gap-0.5">
-              <CommandPaletteTrigger iconOnly />
+              <CommandPaletteTrigger />
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
@@ -220,7 +167,7 @@ export function SidebarNav({
             >
               <PanelLeft className="size-4" />
             </button>
-            <CommandPaletteTrigger iconOnly />
+            <CommandPaletteTrigger />
           </div>
           <nav className="flex flex-1 flex-col items-center gap-0.5 px-2 py-2">{iconNavLinks}</nav>
           {/* The account menu stays reachable on the rail (Layout's footer
@@ -239,7 +186,7 @@ export function SidebarNav({
             </Link>
 
             <div className="flex items-center gap-0.5">
-              <CommandPaletteTrigger iconOnly />
+              <CommandPaletteTrigger />
               <button
                 type="button"
                 onClick={() => onCollapsedChange(true)}

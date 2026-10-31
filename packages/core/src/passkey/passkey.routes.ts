@@ -42,10 +42,7 @@ router.post("/login/options", authRateLimiter, async (c) => {
 
 router.post("/login/verify", authRateLimiter, async (c) => {
   const body = await parseBody(c, verifyAuthenticationSchema);
-  const result = await passkeyService.verifyAuthentication({
-    email: body.email,
-    response: body.response,
-  });
+  const result = await passkeyService.verifyAuthentication({ response: body.response });
   setAuthCookie(c, result.token);
   return ok(c, result);
 });

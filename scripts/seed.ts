@@ -4,6 +4,7 @@
  * starts empty (tasks replace groot's demo todos). A pre-Drizzle database is
  * copied into the new layout first, as the server would on boot.
  */
+import { pathToFileURL } from "node:url";
 import { eq } from "drizzle-orm";
 import { bootstrap } from "@groot/core/bootstrap";
 import { db, users } from "@groot/core/database";
@@ -18,7 +19,8 @@ export const SEED_USER = {
   name: "Demo User",
 };
 
-async function main() {
+/** Boot against `DATABASE_URL` (migrations applied) and make sure the demo data exists. */
+export async function seed(): Promise<void> {
   bootstrap({
     env: process.env,
     config: { logging: { level: "warn" } },
@@ -47,7 +49,9 @@ async function main() {
   console.log("   📝 Task list starts empty (tasks replace demo todos)");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seed().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

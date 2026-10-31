@@ -2,43 +2,28 @@
 /**
  * Groot Upstream - Push child-repo fixes back to boilerplate
  *
+ * Upstream is sync with the sides swapped (see `planUpstream` in
+ * `lib/engine.ts`): every synced file the child changed since its last sync is
+ * three-way merged onto groot HEAD, with the last sync as the base. Groot's
+ * own changes since then are kept; files where both sides changed the same
+ * lines are reported as conflicts and left out of the PR.
+ *
  * Usage:
  *   pnpm groot:upstream           - Interactive mode: select files to upstream
  *   pnpm groot:upstream --dry-run - Show what would be upstreamed (no changes)
- *   pnpm groot:upstream --all     - Upstream all modified synced files
+ *   pnpm groot:upstream --all     - Upstream every file that merges cleanly
  */
-import { readFile, mkdir, rm, copyFile, access } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { loadConfig, type SyncConfig } from "./lib/config";
-import { categorizeFile, validateFilePath } from "./lib/patterns";
 import { exec, resolveDefaultBranch } from "./lib/git";
-import { acquireBoilerplate, releaseBoilerplate, type AcquiredRepo } from "./lib/acquire";
+import { acquireBoilerplate, releaseBoilerplate } from "./lib/acquire";
+import { planUpstream, applyUpstream, type UpstreamItem, type UpstreamPlan } from "./lib/engine";
 
 // ============================================================
-// PATTERN MATCHING - shared with sync.ts via lib/patterns
-// ============================================================
-
-function isUpstreamCandidate(
-  filePath: string,
-  additionalExclusions: string[],
-): { eligible: boolean; reason: string } {
-  const { action } = categorizeFile(filePath, additionalExclusions);
-  switch (action) {
-    case "sync":
-      return { eligible: true, reason: "Matches sync pattern" };
-    case "skip-immutable":
-      return { eligible: false, reason: "Immutable exclusion (security)" };
-    case "skip-app":
-      return { eligible: false, reason: "Matches skip pattern" };
-    default:
-      return { eligible: false, reason: "Does not match any sync pattern" };
-  }
-}
-
-// ============================================================
-// DIFF HELPERS
+// DIFF STATS
 // ============================================================
 
 interface DiffStats {
@@ -46,42 +31,23 @@ interface DiffStats {
   removed: number;
 }
 
-async function getDiffStats(
-  filePath: string,
-  localContent: string,
-  boilerplateContent: string,
-  tempDir: string,
-): Promise<DiffStats> {
-  // Write both versions to temp files and diff them
-  const { writeFile: writeTmp } = await import("node:fs/promises");
-  const localTmp = join(tempDir, `_upstream_local_${Date.now()}`);
-  const bpTmp = join(tempDir, `_upstream_bp_${Date.now()}`);
-
+/** Line counts of the change from `before` to `after` (zero for binary files). */
+async function diffStats(before: Buffer, after: Buffer | string): Promise<DiffStats> {
+  const dir = await mkdtemp(join(tmpdir(), "groot-upstream-diff-"));
   try {
-    await writeTmp(localTmp, localContent);
-    await writeTmp(bpTmp, boilerplateContent);
-
-    const { stdout } = await exec("diff", ["--unified=0", bpTmp, localTmp]).catch((err) => {
-      // diff exits with 1 when files differ — that's expected
-      if (err.stdout) return { stdout: err.stdout as string };
+    await writeFile(join(dir, "before"), before);
+    await writeFile(join(dir, "after"), after);
+    const { stdout } = await exec("git", ["diff", "--no-index", "--numstat", "before", "after"], {
+      cwd: dir,
+    }).catch((err) => {
+      // git diff --no-index exits 1 when the files differ — that's expected
+      if (typeof err.stdout === "string") return { stdout: err.stdout as string };
       throw err;
     });
-
-    const lines = stdout.split("\n");
-    let added = 0;
-    let removed = 0;
-
-    for (const line of lines) {
-      // Skip diff headers
-      if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")) continue;
-      if (line.startsWith("+")) added++;
-      else if (line.startsWith("-")) removed++;
-    }
-
-    return { added, removed };
+    const [added, removed] = stdout.split("\t");
+    return { added: Number(added) || 0, removed: Number(removed) || 0 };
   } finally {
-    await rm(localTmp, { force: true }).catch(() => {});
-    await rm(bpTmp, { force: true }).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
   }
 }
 
@@ -166,7 +132,7 @@ async function getChildAppName(projectRoot: string): Promise<string> {
 // ============================================================
 
 interface UpstreamCandidate {
-  filePath: string;
+  item: UpstreamItem;
   stats: DiffStats;
 }
 
@@ -215,92 +181,10 @@ async function promptSelection(candidates: UpstreamCandidate[]): Promise<Upstrea
 }
 
 // ============================================================
-// FIND MODIFIED SYNCED FILES
-// ============================================================
-
-async function findModifiedSyncedFiles(
-  projectRoot: string,
-  config: SyncConfig,
-  defaultBranch: string,
-): Promise<{ candidates: UpstreamCandidate[]; repo: AcquiredRepo }> {
-  // Prefer a clean local boilerplate checkout at ~/Code/<name>; fall back to a
-  // fresh clone. Either way, the returned repo handle tells the caller whether
-  // it owns (and must clean up) the directory.
-  const repo = await acquireBoilerplate({
-    repoUrl: config.boilerplate.repo,
-    name: config.boilerplate.name,
-    defaultBranch,
-    purpose: "upstream-diff",
-    ensureCommitReachable: config.last_sync.commit,
-  });
-  const tempDir = repo.dir;
-
-  try {
-    // List all files at the last_sync commit that match sync patterns
-    const { stdout: treeOutput } = await exec("git", [
-      "-C",
-      tempDir,
-      "ls-tree",
-      "-r",
-      "--name-only",
-      config.last_sync.commit,
-    ]);
-
-    const allBoilerplateFiles = treeOutput.split("\n").filter(Boolean);
-    const candidates: UpstreamCandidate[] = [];
-
-    for (const filePath of allBoilerplateFiles) {
-      // Security: Validate path
-      const validation = validateFilePath(filePath);
-      if (!validation.valid) continue;
-
-      // Check if this file is eligible for upstream
-      const { eligible } = isUpstreamCandidate(filePath, config.additional_exclusions);
-      if (!eligible) continue;
-
-      // Check if the local file exists
-      const localPath = join(projectRoot, filePath);
-      try {
-        await access(localPath);
-      } catch {
-        continue; // File doesn't exist locally, skip
-      }
-
-      // Get boilerplate content at last_sync commit
-      let boilerplateContent: string;
-      try {
-        const { stdout } = await exec("git", ["show", `${config.last_sync.commit}:${filePath}`], {
-          cwd: tempDir,
-        });
-        boilerplateContent = stdout;
-      } catch {
-        continue; // File doesn't exist at that commit
-      }
-
-      // Read local content
-      const localContent = await readFile(localPath, "utf-8");
-
-      // If they differ, this file was locally modified
-      if (localContent !== boilerplateContent) {
-        const stats = await getDiffStats(filePath, localContent, boilerplateContent, tempDir);
-        candidates.push({ filePath, stats });
-      }
-    }
-
-    return { candidates, repo };
-  } catch (err) {
-    // Clean up on error — only if we own the directory.
-    await releaseBoilerplate(repo);
-    throw err;
-  }
-}
-
-// ============================================================
 // CREATE UPSTREAM PR
 // ============================================================
 
 async function createUpstreamPR(
-  projectRoot: string,
   config: SyncConfig,
   selected: UpstreamCandidate[],
   childAppName: string,
@@ -328,15 +212,25 @@ async function createUpstreamPR(
 
     await exec("git", ["-C", tempDir, "checkout", "-b", branchName]);
 
-    // Copy selected files from child repo into the groot clone
-    for (const { filePath } of selected) {
-      const src = join(projectRoot, filePath);
-      const dest = join(tempDir, filePath);
-
-      await mkdir(dirname(dest), { recursive: true });
-      await copyFile(src, dest);
-      console.log(`  + ${filePath}`);
+    // Merge the selected files onto this clone's copy of groot
+    const { written, unmerged } = await applyUpstream(
+      tempDir,
+      selected.map((c) => c.item),
+    );
+    if (unmerged.length > 0) {
+      throw new Error(
+        [
+          `groot ${defaultBranch} changed since the files were listed, and these no longer merge cleanly:`,
+          ...unmerged.map((f) => `  ${f}`),
+          "",
+          "Run `pnpm groot:sync`, then `pnpm groot:upstream` again.",
+        ].join("\n"),
+      );
     }
+    if (written.length === 0) {
+      throw new Error(`groot ${defaultBranch} already has every selected change.`);
+    }
+    written.forEach((f) => console.log(`  + ${f}`));
 
     // Stage and commit
     await exec("git", ["-C", tempDir, "add", "."]);
@@ -350,7 +244,8 @@ async function createUpstreamPR(
 
     // Build PR body
     const fileList = selected
-      .map((c) => `- \`${c.filePath}\` (+${c.stats.added} -${c.stats.removed})`)
+      .filter((c) => written.includes(c.item.file))
+      .map((c) => `- \`${c.item.file}\` (+${c.stats.added} -${c.stats.removed})`)
       .join("\n");
 
     const prBody = [
@@ -394,6 +289,13 @@ async function createUpstreamPR(
 
 type Mode = "dry-run" | "interactive" | "all";
 
+function printSection(title: string, files: string[]): void {
+  if (files.length === 0) return;
+  console.log(`### ${title} (${files.length})`);
+  files.forEach((f) => console.log(`  ${f}`));
+  console.log();
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
@@ -421,61 +323,80 @@ async function main() {
     resolveDefaultBranch(config.boilerplate.repo),
   ]);
 
-  // 4. Find modified synced files
-  let diffRepo: AcquiredRepo | undefined;
-  let candidates: UpstreamCandidate[];
-
+  // 4. Merge every locally-changed synced file onto groot HEAD. Prefers a clean
+  //    local checkout at ~/Code/<name>; never deletes one it did not create.
+  const repo = await acquireBoilerplate({
+    repoUrl: config.boilerplate.repo,
+    name: config.boilerplate.name,
+    defaultBranch,
+    purpose: "upstream-diff",
+    ensureCommitReachable: config.last_sync.commit,
+  });
+  let plan: UpstreamPlan;
   try {
-    const result = await findModifiedSyncedFiles(projectRoot, config, defaultBranch);
-    candidates = result.candidates;
-    diffRepo = result.repo;
-  } catch (err) {
-    throw new Error(
-      `Failed to identify modified files: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    plan = await planUpstream(projectRoot, repo.dir);
   } finally {
-    // Clean up the diff checkout — only if we created it (never a reused ~/Code checkout).
-    if (diffRepo) {
-      await releaseBoilerplate(diffRepo);
-    }
+    await releaseBoilerplate(repo);
   }
 
+  const byKind = (kind: UpstreamItem["outcome"]["kind"]): string[] =>
+    plan.items.filter((i) => i.outcome.kind === kind).map((i) => i.file);
+  const candidates: UpstreamCandidate[] = await Promise.all(
+    plan.items.flatMap((item) =>
+      item.outcome.kind === "ready"
+        ? [
+            diffStats(item.groot ?? Buffer.alloc(0), item.outcome.content).then((stats) => ({
+              item,
+              stats,
+            })),
+          ]
+        : [],
+    ),
+  );
+
+  // 5. Display candidates and the files that cannot be upstreamed as-is
+  printSection(
+    "Conflicts — groot changed the same lines since your last sync; run `pnpm groot:sync` first",
+    byKind("conflict"),
+  );
+  printSection(
+    "Binary Conflicts — changed on both sides, reconcile manually",
+    byKind("binary-conflict"),
+  );
+  printSection(
+    "Deleted in groot since your last sync — not upstreamed",
+    byKind("deleted-in-groot"),
+  );
+
   if (candidates.length === 0) {
-    console.log("All synced files are up to date with boilerplate.\n");
+    console.log("No local changes to synced files can be upstreamed.\n");
     return;
   }
 
-  // 5. Display candidates
   console.log(`### Modified Synced Files (candidates for upstream)`);
   candidates.forEach((c, i) => {
-    console.log(`  ${i + 1}. ${c.filePath} (+${c.stats.added} -${c.stats.removed})`);
+    console.log(`  ${i + 1}. ${c.item.file} (+${c.stats.added} -${c.stats.removed})`);
   });
   console.log();
 
   // 6. Dry run stops here
   if (dryRun) {
-    console.log(`Found ${candidates.length} file(s) that differ from boilerplate.`);
+    console.log(`Found ${candidates.length} file(s) that merge cleanly onto groot.`);
     console.log("Run without --dry-run to upstream changes.\n");
     return;
   }
 
   // 7. Select files
-  let selected: UpstreamCandidate[];
-
-  if (all) {
-    selected = candidates;
-  } else {
-    selected = await promptSelection(candidates);
-  }
+  const selected = all ? candidates : await promptSelection(candidates);
 
   console.log(`\n### Selected for Upstream`);
   selected.forEach((c) => {
-    console.log(`  ${c.filePath}`);
+    console.log(`  ${c.item.file}`);
   });
   console.log();
 
   // 8. Create upstream PR
-  const prUrl = await createUpstreamPR(projectRoot, config, selected, childAppName, defaultBranch);
+  const prUrl = await createUpstreamPR(config, selected, childAppName, defaultBranch);
 
   console.log(`✓ Created PR: ${prUrl}\n`);
 }

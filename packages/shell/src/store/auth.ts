@@ -1,132 +1,150 @@
 import { create } from "zustand";
-import { apiClient } from "@groot/shell/lib/api";
-import { passkeyService } from "@groot/shell/services/passkey";
+import { startAuthentication } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { ApiError, apiClient } from "@groot/shell/lib/api";
+import type { SessionUser } from "@groot/core/auth/auth.schema";
+
+/** The signed-in user, as `/auth/me` and both sign-in routes return it.
+ *  Defined once in `@groot/core` (type-only import, erased at build). */
+export type { SessionUser };
 
 interface AuthState {
+  user: SessionUser | null;
   isAuthenticated: boolean;
-  user: { id: number; email: string; name: string | null } | null;
-  isLoading: boolean;
-  error: string | null;
+  /** False until the first `checkAuth()` settles. */
   hasCheckedAuth: boolean;
-  /** Bumped on any auth-state change so stale 401s can be ignored. */
+  /**
+   * Bumped on every sign-in and sign-out. A request that records it when sent
+   * can tell whether its 401 belongs to the current session.
+   */
   generation: number;
 
-  // Actions
-  login: (email: string, password: string) => Promise<void>;
-  /** Login with a passkey (WebAuthn). Optional email disambiguates the user. */
-  loginWithPasskey: (email?: string) => Promise<void>;
+  /** Sign in with email and password. Word a rejection with `loginErrorDescription`. */
+  login: (email: string, password: string) => Promise<SessionUser>;
+  /** Sign in with a passkey (WebAuthn). Word a rejection with `loginErrorDescription`. */
+  loginWithPasskey: () => Promise<SessionUser>;
+  /** Clear the server cookie and the local session. Never rejects. */
   logout: () => Promise<void>;
+  /** Resolve the session from the cookie on app load. */
   checkAuth: () => Promise<void>;
+  /** End the local session without a server call (the cookie is already gone). */
   clearAuth: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: false,
-  user: null,
-  isLoading: false,
-  error: null,
-  hasCheckedAuth: false,
-  generation: 0,
+/**
+ * The wording a person sees when sign-in fails. A 401 is always "wrong
+ * credentials" for the person typing; a `TypeError` from `fetch` means the
+ * request never reached the server.
+ */
+export function loginErrorDescription(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    return error.status === 401 ? "Invalid email or password." : error.message || fallback;
+  }
+  if (error instanceof TypeError) {
+    return "Could not reach the server. Check your connection and try again.";
+  }
+  if (error instanceof Error && error.name === "NotAllowedError") {
+    return "Passkey sign-in was cancelled or not allowed. Please try again.";
+  }
+  if (error instanceof Error && error.name === "NotSupportedError") {
+    return "Passkeys are not supported in this browser.";
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
 
-  /**
-   * Login with email and password (JWT)
-   */
-  login: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user } = await apiClient.login(email, password);
-      set((s) => ({
-        isAuthenticated: true,
-        user,
-        isLoading: false,
-        generation: s.generation + 1,
-      }));
-    } catch (error) {
-      set({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Login failed",
+async function passkeySignIn(): Promise<SessionUser> {
+  const optionsJSON = await apiClient.post<PublicKeyCredentialRequestOptionsJSON>(
+    "/passkey/login/options",
+    {},
+  );
+  const response = await startAuthentication({ optionsJSON });
+  try {
+    const { user } = await apiClient.post<{ user: SessionUser }>("/passkey/login/verify", {
+      response,
+    });
+    return user;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      throw new Error("This passkey could not be verified. Try another one or use your password.", {
+        cause: error,
       });
+    }
+    throw error;
+  }
+}
+
+/** When `generation` last changed (`performance.now()`), for the 401 hook below. */
+let generationChangedAt = 0;
+
+/**
+ * The client session: who is signed in, how they sign in and out, and what a
+ * 401 means. The server keeps the session in an HttpOnly cookie, so this
+ * holds only the user.
+ */
+export const useAuthStore = create<AuthState>((set) => {
+  const change = (user: SessionUser | null) => {
+    generationChangedAt = performance.now();
+    set((s) => ({ user, isAuthenticated: user !== null, generation: s.generation + 1 }));
+  };
+
+  const signIn = async (run: () => Promise<SessionUser>) => {
+    try {
+      const user = await run();
+      change(user);
+      return user;
+    } catch (error) {
+      set({ user: null, isAuthenticated: false });
       throw error;
     }
-  },
+  };
 
-  /**
-   * Login with a passkey (WebAuthn). Delegates the browser ceremony to
-   * passkeyService; on success the server sets the same HttpOnly cookie as
-   * password login, so the rest of the app is unaffected.
-   */
-  loginWithPasskey: async (email?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user } = await passkeyService.loginWithPasskey(email);
-      set((s) => ({
-        isAuthenticated: true,
-        user,
-        isLoading: false,
-        generation: s.generation + 1,
-      }));
-    } catch (error) {
-      set({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Passkey authentication failed",
-      });
-      throw error;
-    }
-  },
+  return {
+    user: null,
+    isAuthenticated: false,
+    hasCheckedAuth: false,
+    generation: 0,
 
-  /**
-   * Logout
-   */
-  logout: async () => {
-    try {
-      await apiClient.logout();
-    } finally {
-      set((s) => ({
-        isAuthenticated: false,
-        user: null,
-        error: null,
-        generation: s.generation + 1,
-      }));
-    }
-  },
+    login: (email, password) =>
+      signIn(async () => {
+        const { user } = await apiClient.post<{ user: SessionUser }>("/auth/login", {
+          email,
+          password,
+        });
+        return user;
+      }),
 
-  /**
-   * Check authentication status on app load
-   */
-  checkAuth: async () => {
-    set({ isLoading: true });
-    try {
-      const user = await apiClient.getCurrentUser();
-      set({
-        isAuthenticated: !!user,
-        user,
-        isLoading: false,
-        hasCheckedAuth: true,
-      });
-    } catch {
-      set({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        hasCheckedAuth: true,
-      });
-    }
-  },
+    loginWithPasskey: () => signIn(passkeySignIn),
 
-  /**
-   * Clear auth state without a server call. Used by the API 401 interceptor
-   * when the session expires mid-session — <ProtectedRoute> reacts and
-   * navigates to /login.
-   */
-  clearAuth: () =>
-    set((s) => ({
-      isAuthenticated: false,
-      user: null,
-      error: null,
-      generation: s.generation + 1,
-    })),
-}));
+    logout: async () => {
+      try {
+        await apiClient.post("/auth/logout");
+      } catch {
+        // An expired cookie answers 401; the local session ends either way.
+      }
+      change(null);
+    },
+
+    checkAuth: async () => {
+      let user: SessionUser | null = null;
+      try {
+        user = await apiClient.get<SessionUser>("/auth/me");
+      } catch {
+        // No session cookie, or an expired one.
+      }
+      change(user);
+      set({ hasCheckedAuth: true });
+    },
+
+    clearAuth: () => change(null),
+  };
+});
+
+// A 401 mid-session means the cookie expired: drop the user so
+// <ProtectedRoute> sends them to /login. A 401 for a request sent before the
+// last sign-in or sign-out belongs to an earlier session and is ignored.
+apiClient.onUnauthorized(({ sentAt }) => {
+  if (useAuthStore.getState().isAuthenticated && sentAt >= generationChangedAt) {
+    useAuthStore.getState().clearAuth();
+  }
+});

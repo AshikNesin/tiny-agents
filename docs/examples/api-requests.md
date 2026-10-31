@@ -81,39 +81,36 @@ curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{"jobName":"todo-summary","data":{},"options":{"retryLimit":1,"delaySeconds":0}}'
 
-# Schedule with cron (nightly at 3am, optional timezone) → 201
+# Schedule with cron (nightly at 3am, optional timezone) → 201.
+# Posting again for the same jobName replaces that schedule (this is how you edit one).
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/schedule \
   -H "Content-Type: application/json" \
   -d '{"jobName":"todo-cleanup","cron":"0 3 * * *","data":{"daysToKeep":45},"options":{"timezone":"UTC"}}'
 
-# Schedules: list → 200, edit → 200, remove → 200 (unknown name → 404)
+# Schedules: list → 200, remove → 200 (unknown name → 404)
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/schedule
-curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/jobs/schedule/todo-cleanup \
-  -H "Content-Type: application/json" -d '{"cron":"0 4 * * *"}'
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/schedule/todo-cleanup
 
 # Dashboard queries → 200
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/stats
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/available
 curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs?state=completed&name=todo-summary&limit=20"
-curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs/state/failed?limit=20"
-curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs/status/failed?limit=20"
 
-# One job (queueName = job name) → 200; unknown → 404
-curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/todo-summary/$JOB_ID
-curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/todo-summary/$JOB_ID/logs
+# One job by id → 200; unknown → 404
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/$JOB_ID
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/$JOB_ID/logs
 
 # Actions → 200 { success: true }; wrong state → 400
-curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/retry
-curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/cancel
-curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/resume
-curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/todo-summary/$JOB_ID/rerun   # 200 { newJobId, queueName }
-curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/todo-summary/$JOB_ID       # 200 { success: true }
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/retry
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/cancel
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/resume
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/rerun   # 200 { newJobId }
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/$JOB_ID       # 200 { success: true }
 
 # Bulk rerun → 200 per-job results
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/bulk-rerun \
   -H "Content-Type: application/json" \
-  -d '{"jobs":[{"queueName":"todo-summary","jobId":"'$JOB_ID'"}]}'
+  -d '{"jobIds":["'$JOB_ID'"]}'
 
 # Purge every job in a state → 200 { count }
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/state/cancelled
@@ -125,35 +122,28 @@ reserved names (`schedule`, `stats`, …) and bad cron expressions → `400`.
 ## Storage (JWT)
 
 ```bash
-# List one folder level → 200
-curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/storage/files?prefix=docs/&delimiter=/"
+# List one folder level → 200 (omit folder for the root)
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/storage/files?folder=docs/"
 
-# Upload a file (multipart) → 200 { filePath }; > 100 MB → 413
+# Upload one or more files (multipart, up to 50) into a folder
+# → 200 { uploadedFiles, failedFiles }; > 100 MB → 413
 curl -H "Authorization: Bearer $TOKEN" \
-  -F "file=@document.pdf" -F "filePath=docs/document.pdf" \
+  -F "file=@document.pdf" -F "file=@notes.txt" -F "folder=docs/" \
   $BASE/api/v1/storage/files/upload
-
-# Bulk upload (up to 50 files) → 200 { uploadedFiles, failedFiles }
-curl -H "Authorization: Bearer $TOKEN" \
-  -F "files=@file1.pdf" -F "files=@file2.pdf" \
-  $BASE/api/v1/storage/files/bulk-upload
 
 # Download → 200 raw bytes; missing → 404
 curl -H "Authorization: Bearer $TOKEN" \
   "$BASE/api/v1/storage/files/download?filePath=docs/document.pdf" -o document.pdf
 
-# Metadata → 200 { exists, size, lastModified, fileName }
-curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/storage/files/metadata?filePath=docs/document.pdf"
-
-# Create a folder (path must end with /) → 200
+# Create a folder → 200 { folderPath: "archive/2026/" }
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/storage/folders \
-  -H "Content-Type: application/json" -d '{"folderPath":"archive/2026/"}'
+  -H "Content-Type: application/json" -d '{"folderPath":"archive/2026"}'
 
 # Rename → 200 { newPath }; source missing → 404
 curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/storage/files/rename \
   -H "Content-Type: application/json" -d '{"oldPath":"docs/old.pdf","newPath":"docs/new.pdf"}'
 
-# Delete files → 200 { deletedCount }
+# Delete files → 204 (missing files are ignored)
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/files \
   -H "Content-Type: application/json" -d '{"filePaths":["docs/document.pdf"]}'
 
@@ -190,7 +180,7 @@ Passkey flows need the browser (`navigator.credentials`), so drive them from
 ## Combined workflow
 
 1. Create a few todos.
-2. Queue `todo-summary`; a moment later `GET /api/v1/jobs/todo-summary/<id>`
+2. Queue `todo-summary`; a moment later `GET /api/v1/jobs/<id>`
    shows `state: "completed"` with the counts in `output`.
 3. Schedule `todo-cleanup` nightly.
 4. Open `/todos` and `/jobs` in the client to verify.

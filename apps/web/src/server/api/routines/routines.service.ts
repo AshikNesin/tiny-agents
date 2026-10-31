@@ -14,7 +14,7 @@ import { logger } from "@groot/core/logger";
 import { cancelJob } from "@groot/jobs/server/queue";
 import { bots, db, routineRuns, routines } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { ROUTINE_FIRE_JOB, dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
+import { dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
 import {
   MAX_ROUTINES,
   describeSchedule,
@@ -79,7 +79,7 @@ async function findRoutine(id: string): Promise<RoutineRow> {
 async function cancelPendingJob(pendingJobId: string | null): Promise<void> {
   if (!pendingJobId) return;
   try {
-    await cancelJob({ queueName: ROUTINE_FIRE_JOB, jobId: pendingJobId });
+    await cancelJob(pendingJobId);
   } catch {
     // The job may already have fired or been purged; cancellation is advisory.
   }

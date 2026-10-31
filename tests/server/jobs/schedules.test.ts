@@ -4,7 +4,6 @@ import { db } from "@groot/core/database";
 import {
   cancelScheduledJob,
   clearJobHandlers,
-  editScheduledJob,
   getJobs,
   getScheduledJobs,
   jobSchedules,
@@ -34,14 +33,16 @@ describe("schedules", () => {
     expect(await getScheduledJobs()).toHaveLength(1);
   });
 
-  it("edits and cancels", async () => {
+  it("edits through the upsert without re-firing, and cancels", async () => {
     await scheduleJob("weekly", null, "0 9 * * 1");
-    await editScheduledJob("weekly", "0 10 * * 1", { changed: true });
+    const lastRunAt = new Date(Date.now() - 60_000);
+    await db.update(jobSchedules).set({ lastRunAt }).where(eq(jobSchedules.name, "weekly"));
+    await scheduleJob("weekly", { changed: true }, "0 10 * * 1");
     expect((await getScheduledJobs())[0]).toMatchObject({
       cron: "0 10 * * 1",
       data: { changed: true },
+      lastRunAt,
     });
-    await expect(editScheduledJob("missing", "* * * * *", null)).rejects.toThrow(/not found/);
     await cancelScheduledJob("weekly");
     await expect(cancelScheduledJob("weekly")).rejects.toThrow(/not found/);
   });

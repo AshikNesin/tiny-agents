@@ -26,3 +26,15 @@ export const createUserSchema = z.object({
 });
 
 export type CreateUserDTO = z.infer<typeof createUserSchema>;
+
+/**
+ * The signed-in user as `POST /auth/login`, `POST /passkey/login/verify`
+ * and `GET /auth/me` return it — the shape the client session store keeps.
+ * This is the wire type the client imports (type-only). (`/auth/me` also
+ * returns `createdAt`; clients must not rely on it.)
+ */
+export interface SessionUser {
+  id: number;
+  email: string;
+  name: string | null;
+}

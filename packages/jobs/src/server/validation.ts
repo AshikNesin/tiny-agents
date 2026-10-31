@@ -25,14 +25,8 @@ export const scheduleJobSchema = z.object({
   options: scheduleOptionsSchema,
 });
 
-export const editScheduledJobSchema = z.object({
-  cron: z.string().min(1),
-  data: z.unknown().optional(),
-  options: scheduleOptionsSchema,
-});
-
 export const bulkRerunSchema = z.object({
-  jobs: z.array(z.object({ queueName: z.string().min(1), jobId: z.string().min(1) })).min(1),
+  jobIds: z.array(z.string().min(1)).min(1),
 });
 
 export const paginationQuerySchema = z.object({
@@ -50,7 +44,3 @@ export const getJobsSchema = paginationQuerySchema.extend({
 export const getLogsQuerySchema = z.object({
   afterId: z.coerce.number().int().min(0).optional(),
 });
-
-export type CreateJobDTO = z.infer<typeof createJobSchema>;
-export type ScheduleJobDTO = z.infer<typeof scheduleJobSchema>;
-export type EditScheduledJobDTO = z.infer<typeof editScheduledJobSchema>;

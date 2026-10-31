@@ -15,6 +15,8 @@ import {
   type JobsQueryPatch,
   type StateTab,
 } from "@groot/jobs/client/constants";
+import { useAvailableJobs } from "@groot/jobs/client/queries";
+import { useState } from "react";
 import { Calendar as CalendarIcon, Filter, MoreHorizontal, Search, X } from "lucide-react";
 
 type QueryParams = {
@@ -29,9 +31,6 @@ type Props = {
   setQueryParams: (patch: JobsQueryPatch) => void;
   activeSecondaryTab?: { value: StateTab; label: string };
   hasActiveFilters: boolean;
-  availableJobs: string[];
-  queueSearch: string;
-  setQueueSearch: (value: string) => void;
   handlePresetChange: (value: string) => void;
   handleClearFilters: () => void;
 };
@@ -42,12 +41,11 @@ export function JobsFilters({
   setQueryParams,
   activeSecondaryTab,
   hasActiveFilters,
-  availableJobs,
-  queueSearch,
-  setQueueSearch,
   handlePresetChange,
   handleClearFilters,
 }: Props) {
+  const availableJobs = useAvailableJobs();
+  const [queueSearch, setQueueSearch] = useState("");
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <Tabs

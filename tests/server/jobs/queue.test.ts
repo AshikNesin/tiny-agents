@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { config } from "@groot/core/config";
 import {
+  JOB_ACTIONS,
+  VALID_JOB_STATES,
   addJob,
+  canApplyJobAction,
   cancelJob,
   clearJobHandlers,
   deleteJob,
@@ -17,6 +20,7 @@ import {
   resumeJob,
   retryJob,
   runTick,
+  type JobAction,
 } from "@groot/jobs/server";
 
 async function load(id: string) {
@@ -114,9 +118,10 @@ describe("queue + tick", () => {
     expect(third).not.toBe(first);
   });
 
-  it("rejects reserved names", async () => {
-    await expect(addJob("stats", {})).rejects.toThrow(/Invalid job name/);
-    expect(() => registerJobHandler("schedule", () => undefined)).toThrow(/reserved/);
+  it("rejects an empty job name; route words are fine as names", async () => {
+    await expect(addJob("", {})).rejects.toThrow(/Invalid job name/);
+    registerJobHandler("stats", () => undefined);
+    expect((await load(await addJob("stats", {}))).name).toBe("stats");
   });
 
   it("supports cancel, resume, retry, rerun and delete", async () => {
@@ -125,28 +130,83 @@ describe("queue + tick", () => {
     });
     const id = await addJob("manual", { x: 1 }, { retryLimit: 0 });
 
-    await cancelJob({ queueName: "manual", jobId: id });
+    await cancelJob(id);
     expect((await load(id)).state).toBe("cancelled");
-    await expect(cancelJob({ queueName: "manual", jobId: id })).rejects.toThrow(
-      /Only pending or active/,
-    );
+    await expect(cancelJob(id)).rejects.toThrow(/Cannot cancel a cancelled job/);
 
-    await resumeJob({ queueName: "manual", jobId: id });
+    await resumeJob(id);
     expect((await load(id)).state).toBe("created");
 
     await runTick();
     expect((await load(id)).state).toBe("failed");
 
-    await retryJob({ queueName: "manual", jobId: id });
+    await retryJob(id);
     expect(await load(id)).toMatchObject({ state: "created", error: null });
-    await expect(resumeJob({ queueName: "manual", jobId: id })).rejects.toThrow(/Only cancelled/);
+    await expect(resumeJob(id)).rejects.toThrow(/Cannot resume a created job/);
+    await expect(rerunJob(id)).rejects.toThrow(/Cannot rerun a created job/);
 
-    const copy = await rerunJob({ queueName: "manual", jobId: id });
+    await runTick();
+    const copy = await rerunJob(id);
     expect((await load(copy)).data).toEqual({ x: 1 });
 
-    await deleteJob({ queueName: "manual", jobId: copy });
-    expect(await getJobById({ queueName: "manual", jobId: copy })).toBeNull();
-    await expect(deleteJob({ queueName: "other", jobId: id })).rejects.toThrow(/Job not found/);
+    await deleteJob(copy);
+    expect(await getJobById(copy)).toBeNull();
+    await deleteJob(id);
+    await expect(deleteJob(id)).rejects.toThrow(/Job not found/);
+    await expect(cancelJob("missing")).rejects.toThrow(/Job not found/);
+  });
+
+  it("accepts exactly the actions the lifecycle allows from each state", async () => {
+    expect(VALID_JOB_STATES).toEqual(["created", "active", "completed", "failed", "cancelled"]);
+    const calls = {
+      retry: retryJob,
+      rerun: rerunJob,
+      resume: resumeJob,
+      cancel: cancelJob,
+      delete: deleteJob,
+    } satisfies Record<JobAction, unknown>;
+    for (const state of VALID_JOB_STATES) {
+      for (const action of Object.keys(JOB_ACTIONS) as JobAction[]) {
+        const id = await addJob("matrix", null);
+        await db.update(jobs).set({ state }).where(eq(jobs.id, id));
+        const accepted = await calls[action](id).then(
+          () => true,
+          () => false,
+        );
+        expect(accepted, `${action} from ${state}`).toBe(canApplyJobAction(action, state));
+      }
+    }
+  });
+
+  it("does not let a stale cancel or retry overwrite a job that moved on", async () => {
+    registerJobHandler("quick", () => "done");
+    const id = await addJob("quick", null);
+    // The dashboard still shows the job as created; the tick finishes it first.
+    await runTick();
+    await expect(cancelJob(id)).rejects.toThrow(/Cannot cancel a completed job/);
+    await expect(retryJob(id)).rejects.toThrow(/Cannot retry a completed job/);
+    expect(await load(id)).toMatchObject({ state: "completed", output: "done" });
+  });
+
+  it("keeps a job cancelled while it was running", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => (started = resolve));
+    registerJobHandler("slow", async () => {
+      started();
+      await gate;
+      return "late";
+    });
+    const id = await addJob("slow", null);
+
+    const tick = runTick();
+    await running;
+    await cancelJob(id);
+    release();
+
+    expect(await tick).toMatchObject({ claimed: 1 });
+    expect(await load(id)).toMatchObject({ state: "cancelled", output: null });
   });
 
   it("recovers jobs stuck in active past the timeout", async () => {

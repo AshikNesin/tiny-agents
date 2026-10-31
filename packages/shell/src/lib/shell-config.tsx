@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { LayoutDashboard, type LucideIcon } from "lucide-react";
 
 export interface LoginFeature {
   icon: LucideIcon;
@@ -7,32 +7,32 @@ export interface LoginFeature {
   desc: string;
 }
 
-/** A destination row in the profile menu (replaces the old sidebar nav). */
+/**
+ * One place the app can go. Every destination is a ⌘K command; a `primary`
+ * one is also a sidebar row, the rest are rows in the account (profile) menu.
+ */
 export interface NavDestination {
   label: string;
   icon?: LucideIcon;
   to: string;
+  primary?: boolean;
 }
 
+export interface ShellBrand {
+  label: string;
+  /** Logo mark; defaults to `LayoutDashboard`. */
+  icon?: LucideIcon;
+  /** Where the logo links; defaults to `/`. */
+  to?: string;
+}
 export interface ShellConfig {
-  brand?: {
-    label: string;
-    icon?: LucideIcon;
-    to?: string;
-  };
-  /** Rows shown in the profile menu. Empty disables the menu rows. */
+  brand?: ShellBrand;
+  /** The app's destinations, in display order. Logout and the theme menu are always added. */
   nav?: NavDestination[];
   /**
-   * `floating` (default): every page's TopBar carries the circular back
-   * button and profile menu. `sidebar`: the app renders its own persistent
-   * sidebar, so TopBar drops both from md up and keeps title + actions.
-   */
-  pageChrome?: "floating" | "sidebar";
-  /**
-   * Opens the app's own navigation (e.g. its sidebar as a phone drawer).
-   * With `pageChrome: "sidebar"`, phones then get one menu button where the
-   * back button and profile circle were, so every page navigates the same
-   * way. Pages that set `backTo` keep their back button.
+   * tiny-agents: opens the app's own navigation (its sidebar as a phone
+   * drawer). PageLayout renders a phone-only menu button that calls this on
+   * pages without `backTo`; desktop chrome belongs to the app's sidebar.
    */
   openNav?: () => void;
   login?: {
@@ -48,6 +48,13 @@ export function ShellProvider({ config, children }: { config: ShellConfig; child
   return <ShellConfigContext.Provider value={config}>{children}</ShellConfigContext.Provider>;
 }
 
+/** The provided config with the shell's defaults filled in. */
 export function useShellConfig() {
-  return useContext(ShellConfigContext);
+  const config = useContext(ShellConfigContext);
+  const brand: Required<ShellBrand> = {
+    label: config.brand?.label ?? "Groot",
+    icon: config.brand?.icon ?? LayoutDashboard,
+    to: config.brand?.to ?? "/",
+  };
+  return { ...config, brand, nav: config.nav ?? [] };
 }

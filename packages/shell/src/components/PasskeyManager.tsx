@@ -16,8 +16,17 @@ import { Label } from "@groot/ui/label";
 import { Badge } from "@groot/ui/badge";
 import { Skeleton, SkeletonCard, SkeletonList } from "@groot/ui/loading-skeleton";
 import { useConfirm } from "@groot/ui/primitives";
-import { KeyRound, Smartphone, ShieldCheck, Plus, Pencil, Trash2, Fingerprint } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import {
+  Cloud,
+  KeyRound,
+  Smartphone,
+  Plus,
+  Pencil,
+  Trash2,
+  Fingerprint,
+  type LucideIcon,
+} from "lucide-react";
+import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Form, FormField } from "@groot/ui/form";
@@ -31,16 +40,11 @@ const passkeyNameSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
 });
 
-function PasskeyIcon({ deviceType, transports }: Passkey): ReactNode {
-  if (deviceType === "platform") return <Smartphone className="size-5" />;
-  if (transports.includes("usb")) return <KeyRound className="size-5" />;
-  return <ShieldCheck className="size-5" />;
-}
-
-function formatDate(date: Date | null): string {
-  if (!date) return "Never";
-  return formatDisplayDate(date);
-}
+const KIND_ICONS: Record<Passkey["kind"], LucideIcon> = {
+  "security-key": KeyRound,
+  synced: Cloud,
+  device: Smartphone,
+};
 
 /**
  * Placeholder mirroring the "Add a passkey" form and the passkey list while
@@ -115,21 +119,9 @@ export function PasskeyManager() {
   };
 
   const handleDeletePasskey = async (passkey: Passkey) => {
-    const isLast = passkeys.length === 1;
     const confirmed = await confirm({
       title: "Delete passkey",
-      description: (
-        <>
-          Are you sure you want to delete “{passkey.credentialName || "this passkey"}”? You won’t be
-          able to use it to sign in anymore.
-          {isLast && (
-            <span className="mt-2 block font-medium text-destructive">
-              This is your last passkey. Make sure you can still access your account with a
-              password.
-            </span>
-          )}
-        </>
-      ),
+      description: `Are you sure you want to delete “${passkey.credentialName || "this passkey"}”? You won’t be able to use it to sign in anymore.`,
       confirmLabel: "Delete",
       destructive: true,
     });
@@ -219,43 +211,55 @@ export function PasskeyManager() {
           />
         ) : (
           <ul className="divide-y divide-border">
-            {passkeys.map((passkey) => (
-              <li key={passkey.id} className={cn(listRowClass, "justify-between px-5 py-4")}>
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                    <PasskeyIcon {...passkey} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {passkey.credentialName || "Unnamed passkey"}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>Added {formatDate(passkey.createdAt)}</span>
-                      {passkey.lastUsedAt && (
-                        <span>Last used {formatDate(passkey.lastUsedAt)}</span>
-                      )}
-                      {passkey.backedUp && <Badge variant="secondary">Backed up</Badge>}
+            {passkeys.map((passkey) => {
+              const KindIcon = KIND_ICONS[passkey.kind];
+              return (
+                <li key={passkey.id} className={cn(listRowClass, "justify-between px-5 py-4")}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"
+                      title={passkey.label}
+                    >
+                      <KindIcon className="size-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {passkey.credentialName || "Unnamed passkey"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{passkey.label}</span>
+                        <span>Added {formatDisplayDate(passkey.createdAt)}</span>
+                        {passkey.lastUsedAt && (
+                          <span>Last used {formatDisplayDate(passkey.lastUsedAt)}</span>
+                        )}
+                        {passkey.backedUp && <Badge variant="secondary">Backed up</Badge>}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button size="sm" variant="ghost" onClick={() => setPasskeyToEdit(passkey)}>
-                    <Pencil className="size-3.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeletePasskey(passkey)}
-                    disabled={deleteMutation.isPending}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete
-                  </Button>
-                </div>
-              </li>
-            ))}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={() => setPasskeyToEdit(passkey)}>
+                      <Pencil className="size-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeletePasskey(passkey)}
+                      disabled={!passkey.canDelete || deleteMutation.isPending}
+                      title={
+                        passkey.canDelete
+                          ? undefined
+                          : "Add another passkey before deleting this one"
+                      }
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

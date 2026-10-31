@@ -1,6 +1,7 @@
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   AddJobOptions,
+  BulkRerunResult,
   Job,
   JobLog,
   JobName,
@@ -29,60 +30,36 @@ export const jobsApi = {
     return apiClient.get<{ jobs: Job[]; total: number }>("/jobs", options);
   },
 
-  async getJob(queueName: string, jobId: string): Promise<Job> {
-    return apiClient.get<Job>(`/jobs/${queueName}/${jobId}`);
+  async getJob(jobId: string): Promise<Job> {
+    return apiClient.get<Job>(`/jobs/${jobId}`);
   },
 
-  async getJobLogs(queueName: string, jobId: string, afterId?: number): Promise<JobLog[]> {
-    return apiClient.get<JobLog[]>(
-      `/jobs/${queueName}/${jobId}/logs`,
-      afterId ? { afterId } : undefined,
-    );
+  async getJobLogs(jobId: string, afterId?: number): Promise<JobLog[]> {
+    return apiClient.get<JobLog[]>(`/jobs/${jobId}/logs`, afterId ? { afterId } : undefined);
   },
 
-  async retryJob(queueName: string, jobId: string): Promise<void> {
-    await apiClient.post(`/jobs/${queueName}/${jobId}/retry`);
+  async retryJob(jobId: string): Promise<void> {
+    await apiClient.post(`/jobs/${jobId}/retry`);
   },
 
-  async cancelJob(queueName: string, jobId: string): Promise<void> {
-    await apiClient.post(`/jobs/${queueName}/${jobId}/cancel`);
+  async cancelJob(jobId: string): Promise<void> {
+    await apiClient.post(`/jobs/${jobId}/cancel`);
   },
 
-  async resumeJob(queueName: string, jobId: string): Promise<void> {
-    await apiClient.post(`/jobs/${queueName}/${jobId}/resume`);
+  async resumeJob(jobId: string): Promise<void> {
+    await apiClient.post(`/jobs/${jobId}/resume`);
   },
 
-  async deleteJob(queueName: string, jobId: string): Promise<void> {
-    await apiClient.delete(`/jobs/${queueName}/${jobId}`);
+  async deleteJob(jobId: string): Promise<void> {
+    await apiClient.delete(`/jobs/${jobId}`);
   },
 
-  async rerunJob(
-    queueName: string,
-    jobId: string,
-  ): Promise<{ newJobId: string; queueName: string }> {
-    return apiClient.post<{ newJobId: string; queueName: string }>(
-      `/jobs/${queueName}/${jobId}/rerun`,
-    );
+  async rerunJob(jobId: string): Promise<{ newJobId: string }> {
+    return apiClient.post<{ newJobId: string }>(`/jobs/${jobId}/rerun`);
   },
 
-  async rerunJobs(jobs: { queueName: string; jobId: string }[]): Promise<
-    Array<{
-      queueName: string;
-      jobId: string;
-      success: boolean;
-      newJobId?: string | null;
-      error?: string;
-    }>
-  > {
-    return apiClient.post<
-      Array<{
-        queueName: string;
-        jobId: string;
-        success: boolean;
-        newJobId?: string | null;
-        error?: string;
-      }>
-    >("/jobs/bulk-rerun", { jobs });
+  async rerunJobs(jobIds: string[]): Promise<BulkRerunResult[]> {
+    return apiClient.post<BulkRerunResult[]>("/jobs/bulk-rerun", { jobIds });
   },
 
   async purgeJobsByState(state: string): Promise<{ deletedCount: number }> {
@@ -108,6 +85,7 @@ export const jobsApi = {
     return apiClient.get<JobSchedule[]>("/jobs/schedule");
   },
 
+  /** Create or replace the schedule for `jobName` (one per name). */
   async scheduleJob(
     jobName: JobName,
     cron: string,
@@ -120,14 +98,5 @@ export const jobsApi = {
   /** Schedules are keyed by job name — one per name — so this removes that name's schedule. */
   async cancelScheduledJob(jobName: string): Promise<void> {
     await apiClient.delete(`/jobs/schedule/${jobName}`);
-  },
-
-  async editScheduledJob(
-    jobName: string,
-    cron: string,
-    data: Record<string, unknown>,
-    options?: ScheduleJobOptions,
-  ): Promise<JobSchedule> {
-    return apiClient.put<JobSchedule>(`/jobs/schedule/${jobName}`, { cron, data, options });
   },
 };

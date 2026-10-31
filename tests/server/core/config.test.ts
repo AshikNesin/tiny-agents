@@ -19,6 +19,15 @@ describe("config", () => {
     expect(defaultConfig(parseEnv({ LOG_LEVEL: "warn" })).logging.level).toBe("warn");
   });
 
+  it("feeds Sentry from the validated env", () => {
+    expect(defaultConfig(parseEnv({})).sentry).toEqual({ dsn: "", release: undefined });
+    expect(
+      defaultConfig(
+        parseEnv({ SENTRY_DSN: "https://key@sentry.example/1", SENTRY_RELEASE: "groot@abc1234" }),
+      ).sentry,
+    ).toEqual({ dsn: "https://key@sentry.example/1", release: "groot@abc1234" });
+  });
+
   it("deep-merges overrides and replaces arrays", () => {
     const env = parseEnv({});
     const config = buildConfig(env, {

@@ -132,7 +132,7 @@ export function registerTodoJobs(): void {
 }
 ```
 
-`registerTodoJobs()` is called from `registerJobHandlers()` in `app.ts`. Queue
+`registerTodoJobs()` is registered by `startWebApp()` in `app.ts`. Queue
 with `addJob("todo-cleanup", { daysToKeep: 45 })` or `POST /api/v1/jobs`; see
 [Background jobs](./jobs.md).
 

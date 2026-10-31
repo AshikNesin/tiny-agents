@@ -2,6 +2,7 @@ import type { R2Bucket, R2Object } from "@cloudflare/workers-types";
 import {
   bodyContentType,
   bodyToBytes,
+  MAX_LIST_LIMIT,
   type ListOptions,
   type ListResult,
   type PutOptions,
@@ -46,20 +47,21 @@ export function r2Storage(bucket: R2Bucket): StorageAdapter {
     },
 
     async delete(keys: string[]) {
-      let deleted = 0;
-      for (const key of keys) if (await bucket.head(key)) deleted += 1;
       // R2 accepts up to 1000 keys per call.
       for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
-      return deleted;
     },
 
     async list(options: ListOptions = {}): Promise<ListResult> {
-      const page = await bucket.list({
+      const listOptions = {
         prefix: options.prefix,
         delimiter: options.delimiter,
         cursor: options.cursor,
-        limit: options.limit,
-      });
+        limit: Math.min(options.limit ?? MAX_LIST_LIMIT, MAX_LIST_LIMIT),
+        // Without it, listed objects carry no content type. The runtime supports
+        // it; the default (oldest compat date) typings do not declare it.
+        include: ["httpMetadata"],
+      };
+      const page = await bucket.list(listOptions);
       return {
         objects: page.objects.map(toObject),
         prefixes: page.delimitedPrefixes,

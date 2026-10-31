@@ -1,9 +1,22 @@
-import { settingsService } from "@groot/shell/services/settings";
 import { useState } from "react";
+import { apiClient } from "@groot/shell/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToastMutation } from "./useToastMutation";
 
+// Wire type from the zod-only schema leaf; the service module's graph is
+// server-side (logger, kv) and must not enter the client type graph.
+import type { AppSetting } from "@groot/core/settings/app-settings.schema";
+
 const SETTINGS_KEY = ["app-settings"] as const;
+
+// The wire type is declared once in @groot/core (type-only import, erased at
+// build); re-exported under the name clients already import.
+export type { AppSetting };
+
+const settingPath = (key: string) => `/settings/${encodeURIComponent(key)}`;
+
+const upsertSetting = (key: string, value: unknown, description?: string) =>
+  apiClient.put<AppSetting>(settingPath(key), { value, metadata: { description } });
 
 /**
  * State + mutations for the AppSettings page. The settings list comes from a
@@ -16,7 +29,7 @@ export function useAppSettings() {
 
   const { data: settings = [], isLoading } = useQuery({
     queryKey: SETTINGS_KEY,
-    queryFn: () => settingsService.getSettings(),
+    queryFn: () => apiClient.get<AppSetting[]>("/settings"),
   });
 
   const [userSelectedKey, setUserSelectedKey] = useState<string | null>(null);
@@ -56,10 +69,7 @@ export function useAppSettings() {
       } catch {
         throw new Error("Invalid JSON format");
       }
-      return settingsService.upsertSetting(vars.key, {
-        value: parsedValue,
-        metadata: { description: vars.description || undefined },
-      });
+      return upsertSetting(vars.key, parsedValue, vars.description || undefined);
     },
     {
       success: (data) => `"${data.key}" updated successfully`,
@@ -68,21 +78,17 @@ export function useAppSettings() {
     },
   );
 
-  const deleteMutation = useToastMutation((key: string) => settingsService.deleteSetting(key), {
+  const deleteMutation = useToastMutation((key: string) => apiClient.delete(settingPath(key)), {
     success: "Setting deleted successfully",
     error: { title: "Delete failed", description: "Unable to delete setting" },
     onSuccess: invalidate,
   });
 
-  const createMutation = useToastMutation(
-    (key: string) =>
-      settingsService.upsertSetting(key, { value: {}, metadata: { description: "New setting" } }),
-    {
-      success: (data) => `"${data.key}" created successfully`,
-      error: { title: "Create failed", description: "Unable to create setting" },
-      onSuccess: invalidate,
-    },
-  );
+  const createMutation = useToastMutation((key: string) => upsertSetting(key, {}, "New setting"), {
+    success: (data) => `"${data.key}" created successfully`,
+    error: { title: "Create failed", description: "Unable to create setting" },
+    onSuccess: invalidate,
+  });
 
   const save = () => {
     if (!selectedKey) return;

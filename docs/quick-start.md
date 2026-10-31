@@ -102,8 +102,9 @@ const posts = await apiClient.get<Post[]>("/posts");
 const created = await apiClient.post<Post>("/posts", { title: "Hello" });
 ```
 
-`apiClient` is the shared Axios instance (`baseURL: /api/v1`, sends the auth
-cookie, unwraps `data`, clears auth on 401). See [Client](./features/client.md).
+`apiClient` is a thin `fetch` client: it prefixes `/api/v1`, sends the session
+cookie, unwraps `data` and throws an `ApiError` on failure; a 401 signs the user
+out. See [Client](./features/client.md).
 
 ## Common commands
 

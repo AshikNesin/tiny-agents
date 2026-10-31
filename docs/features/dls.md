@@ -34,19 +34,19 @@ are _enforced_ by `pnpm check:tokens` (see [enforcement](#enforcement)).
 
 ## The type scale
 
-| Class / component                     | Treatment                                                                | Use for                                    |
-| ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------ |
-| `Text variant="title"` / `titleClass` | `font-heading text-base leading-snug font-medium`                        | Section titles, card titles, dialog titles |
-| `Text variant="body"`                 | `text-sm` (14px)                                                         | Body, labels, buttons, data — the default  |
-| `Text variant="meta"`                 | `text-xs text-muted-foreground`                                          | Timestamps, counts, helper copy            |
-| `Text variant="code"` / `monoClass`   | `font-mono text-[0.9em]`                                                 | Inline ids, cron expressions, tokens       |
-| `Text variant="stat"` / `statClass`   | `text-xl font-semibold tabular-nums`                                     | Standalone metric values (not headings)    |
-| `PageHeader` h1 / `h1Class`           | `text-xl font-semibold sm:text-2xl`                                      | Routed-page title — the only `<h1>`        |
-| `displayClass`                        | `text-3xl font-semibold leading-tight`                                   | Marketing/display moments (auth panels)    |
-| `metaLabelClass`                      | `text-[11px] font-medium uppercase tracking-wider text-muted-foreground` | Column headers, dl labels, stat captions   |
+| Class / component                   | Treatment                                                                | Use for                                    |
+| ----------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------ |
+| `Text variant="title"`              | `font-heading text-base leading-snug font-medium`                        | Section titles, card titles, dialog titles |
+| `Text variant="body"`               | `text-sm` (14px)                                                         | Body, labels, buttons, data — the default  |
+| `Text variant="meta"`               | `text-xs text-muted-foreground`                                          | Timestamps, counts, helper copy            |
+| `Text variant="code"` / `monoClass` | `font-mono text-[0.9em]`                                                 | Inline ids, cron expressions, tokens       |
+| `Text variant="stat"` / `statClass` | `text-xl font-semibold tabular-nums`                                     | Standalone metric values (not headings)    |
+| `PageLayout` h1 / `h1Class`         | `text-xl font-semibold sm:text-2xl`                                      | Routed-page title — the only `<h1>`        |
+| `displayClass`                      | `text-3xl font-semibold leading-tight`                                   | Marketing/display moments (auth panels)    |
+| `metaLabelClass`                    | `text-[11px] font-medium uppercase tracking-wider text-muted-foreground` | Column headers, dl labels, stat captions   |
 
 Content text is 14px (`text-sm`) — 16px+ is reserved for titles and display.
-`titleClass` matches `CardTitle`/`DialogTitle` by design.
+The `title` variant matches `CardTitle`/`DialogTitle` by design.
 
 ## Shape and size
 
@@ -119,11 +119,11 @@ The DLS ships the recurring higher-order patterns as components (evidence:
 each was hand-rolled in ≥3 places across groot/child projects before
 centralization):
 
-| Component                           | Idiom                                                                                           | Predecessors                                                                |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `DataField` / `DataFields`          | Read-only label/value grid (`dt`/`dd`) — display counterpart to form-`Field` (`@groot/ui/form`) | JobOverview local `Field`, JobDetail hand-rolled ×2, JobDataView xs variant |
-| `StatTile`                          | Metric tile (meta label + icon + `statClass` value); button variant for filter-stats            | JobsStats inline tile                                                       |
-| `listRowClass` / `listRowGridClass` | Interactive list-row treatments as class constants (rows stay semantic `<li>`/`<button>`)       | 5 hand-rolled rows across jobs/shell/web; 86 files in child projects        |
+| Component                           | Idiom                                                                                           | Predecessors                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `DataField` / `DataFields`          | Read-only label/value grid (`dt`/`dd`) — display counterpart to form-`Field` (`@groot/ui/form`) | JobOverview local `Field`, JobDetail hand-rolled ×2                  |
+| `StatTile`                          | Metric tile (meta label + icon + `statClass` value); button variant for filter-stats            | JobsStats inline tile                                                |
+| `listRowClass` / `listRowGridClass` | Interactive list-row treatments as class constants (rows stay semantic `<li>`/`<button>`)       | 5 hand-rolled rows across jobs/shell/web; 86 files in child projects |
 
 **Pull, don't push:** components are added when a pattern recurs, not
 preemptively. Charts, date pickers, comboboxes, tag inputs, meters, and
@@ -134,7 +134,7 @@ for the Kumo-dependency reasoning).
 ## Enforcement
 
 `scripts/check-design-tokens.ts` greps all client dirs for drift and runs from
-the pre-commit hook and CI (`.github/workflows/check-design-tts.yml`). It now
+the pre-commit hook and CI (a step of `.github/workflows/test.yml`). It now
 has 9 rules: the original 5 plus `tracking-modified`, `font-bold`,
 `transition-colors-hover`, and `inline-mono-full-step`. Exemptions are
 intentional and documented in the rule's `allow` list:

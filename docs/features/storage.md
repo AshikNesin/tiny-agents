@@ -26,7 +26,7 @@ interface StorageAdapter {
   ): Promise<StoredObject>;
   get(key: string): Promise<{ object: StoredObject; bytes: Uint8Array } | null>;
   head(key: string): Promise<StoredObject | null>;
-  delete(keys: string[]): Promise<number>; // missing keys are ignored; returns how many existed
+  delete(keys: string[]): Promise<void>;
   list(options?: {
     prefix?: string;
     delimiter?: string;
@@ -39,13 +39,31 @@ interface StorageAdapter {
 // ListResult   = { objects: StoredObject[]; prefixes: string[]; cursor?: string }
 ```
 
-With `delimiter: "/"`, `list()` returns one folder level: the objects directly
-under `prefix` plus the sub-prefixes. Without it, every key under `prefix`.
+The semantics every adapter follows:
+
+- **Keys** are `/`-separated paths with no leading or trailing `/`.
+- **`put`** creates or replaces, and resolves with what `head` reports afterwards.
+- **`get` / `head`** resolve to `null` for a missing key.
+- **`delete`** removes the keys and ignores missing ones. It returns nothing:
+  object stores delete blindly, and a count would cost one `head` per key.
+- **`list`** walks keys in ascending order. With `delimiter: "/"` it returns one
+  folder level (the objects directly under `prefix` plus the sub-prefixes);
+  without it, every key under `prefix`. A page holds at most `limit` entries
+  (objects plus prefixes, default and maximum 1000); `cursor` is set only when
+  more exist, and passing it back reads the next page.
+- **`copy`** replaces `to` with the bytes and content type of `from`, and throws
+  when `from` is missing.
+- **`contentType`** is the type given to `put`, else the Blob's type, else
+  `application/octet-stream`. The local adapter has no metadata store and
+  derives it from the extension instead.
+
+`tests/server/core/storage-adapters.test.ts` runs one contract suite against
+all three adapters (local on a temp directory, R2 on an in-memory bucket fake).
 
 Need S3, GCS or anything else? Implement these six methods (the helpers
-`bodyToBytes`, `bodyContentType` and `groupByDelimiter` in `adapter.ts` do the
-boring parts) and pass the result to `bootstrap()` in your entry file. Nothing
-else changes.
+`bodyToBytes`, `bodyContentType` and `listKeys` in `adapter.ts` do the boring
+parts), add it to the contract suite, and pass it to `bootstrap()` in your
+entry file. Nothing else changes.
 
 ## Using it from code
 
@@ -58,8 +76,9 @@ const page = await storage.list({ prefix: "reports/", delimiter: "/" });
 await storage.delete(["reports/2026-10.csv"]);
 ```
 
-The higher-level operations the routes use (sorted folder listing, bulk upload,
-rename as copy + delete, recursive folder delete) are in `storage.service.ts`.
+The higher-level operations the routes use (sorted folder listing, multi-file
+upload, rename as copy + delete, recursive folder delete) are in
+`storage.service.ts`, exported as `storageService` from `@groot/core/storage`.
 
 ## Module structure
 
@@ -69,9 +88,9 @@ packages/core/src/storage/
 ├── storage.ts            # the `storage` proxy, setStorageAdapter(), getStorage()
 ├── node.ts · r2.ts · memory.ts
 ├── storage.routes.ts     # Hono router (JWT, rate-limited, 100 MB upload limit)
-├── storage.service.ts    # listFiles, uploadFile, bulkUpload, downloadFile, deleteFiles,
-│                         # getFileMetadata, createFolder, deleteFolder, renameFile, copyFile
-├── storage.schema.ts     # Zod schemas
+├── storage.service.ts    # listFiles, uploadFile, uploadFiles, downloadFile, deleteFiles,
+│                         # createFolder, deleteFolder, renameFile, copyFile
+├── storage.schema.ts     # Zod schemas; file and folder paths are validated here
 └── storage.utils.ts      # getContentType(), sanitizeFileName()
 ```
 
@@ -81,19 +100,23 @@ All under `/api/v1/storage`, JWT required, `storageRateLimiter` (100 requests /
 15 min per IP). Uploads also pass `uploadRateLimiter` (50 / 15 min) and a
 100 MB body limit.
 
-| Method | Path                               | Notes                                                                                             |
-| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
-| GET    | `/files?prefix=docs/&delimiter=/`  | One folder level, folders first then files. An empty `delimiter` lists every key under the prefix |
-| POST   | `/files/upload` _(multipart)_      | Field `file`; optional `filePath` (defaults to the file name) and `contentType`                   |
-| POST   | `/files/bulk-upload` _(multipart)_ | Field `files`, up to 50; returns `{ uploadedFiles, failedFiles }`                                 |
-| GET    | `/files/download?filePath=…`       | Raw bytes with the object's content type, `Content-Disposition: inline`                           |
-| GET    | `/files/metadata?filePath=…`       | `{ exists, size?, lastModified?, fileName }`                                                      |
-| DELETE | `/files`                           | Body `{ "filePaths": [...] }` → `{ deletedCount }`                                                |
-| POST   | `/folders`                         | Body `{ "folderPath": "docs/2026/" }` (must end with `/`)                                         |
-| DELETE | `/folders/:folderPath`             | Deletes every object under the prefix → `{ deletedCount }`                                        |
-| PUT    | `/files/rename`                    | Body `{ oldPath, newPath }` → `{ newPath }`                                                       |
+| Method | Path                          | Notes                                                                                                  |
+| ------ | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/files?folder=docs/`         | One folder level, folders first then files. Omit `folder` for the root                                 |
+| POST   | `/files/upload` _(multipart)_ | Field `file`, repeated for up to 50 files; optional `folder`. Returns `{ uploadedFiles, failedFiles }` |
+| GET    | `/files/download?filePath=…`  | Raw bytes with the object's content type, `Content-Disposition: inline`                                |
+| DELETE | `/files`                      | Body `{ "filePaths": [...] }` → `204`; missing files are ignored                                       |
+| PUT    | `/files/rename`               | Body `{ oldPath, newPath }` → `{ newPath }`                                                            |
+| POST   | `/folders`                    | Body `{ "folderPath": "docs/2026" }` → `{ folderPath: "docs/2026/" }`; writes a `.keep` marker         |
+| DELETE | `/folders/:folderPath`        | Deletes every object under the prefix → `{ deletedCount }`                                             |
 
-Every JSON route returns `200` with the `{ success, data }` envelope. curl
+Paths are checked once, by the schemas in `storage.schema.ts`: a file path has
+no leading, trailing or doubled `/` and no `.` or `..` segment, and an upload's
+file names are single segments. A folder is normalised to `""` (the root) or
+`a/b/`, so `folder=docs`, `folder=/docs/` and `folder=docs/` are the same.
+Anything else is a `400`.
+
+Every JSON route returns `200` with the `{ success, data }` envelope, except `DELETE /files` (`204`). curl
 examples in [API requests](../examples/api-requests.md#storage-jwt).
 
 ## Runtime notes
@@ -105,7 +128,7 @@ examples in [API requests](../examples/api-requests.md#storage-jwt).
 - **Workers**: the `STORAGE` R2 binding in `wrangler.jsonc`. Bucket bindings
   have no signed URLs, so downloads always stream through the API. The free
   plan includes 10 GB.
-- **Tests**: `memoryStorage()`; nothing touches the disk.
+- **Tests**: `memoryStorage()`; nothing touches the disk outside the adapter contract suite.
 
 ## Frontend
 

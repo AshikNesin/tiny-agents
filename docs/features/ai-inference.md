@@ -20,6 +20,20 @@ for await (const chunk of ai.stream("Write a short story...")) {
 
 API keys are read automatically from standard env vars (e.g. `OPENAI_API_KEY`), or pass `apiKey` in the config to override.
 
+The gateway keys and `DEFAULT_MODEL` are also in the validated env (`packages/core/src/env.ts`), so app code can pass them explicitly instead of relying on the SDK fallback:
+
+```typescript
+import { env } from "@groot/core/env";
+
+const ai = new AI({
+  provider: "cloudflare-ai-gateway",
+  model: env.DEFAULT_MODEL ?? "claude-sonnet-4-5",
+  apiKey: env.CLOUDFLARE_API_KEY,
+});
+```
+
+Provider keys themselves (e.g. `OPENAI_API_KEY`) are not in `envSchema`: the SDKs read them from `process.env`, and nothing in groot's code path needs them validated.
+
 ## Cloudflare AI Gateway
 
 pi-ai includes Cloudflare AI Gateway as a built-in provider:

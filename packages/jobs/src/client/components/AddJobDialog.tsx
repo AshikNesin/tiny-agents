@@ -9,40 +9,22 @@ import {
   DialogTrigger,
 } from "@groot/ui/dialog";
 import { Field } from "@groot/ui/form";
+import { jobsApi } from "@groot/jobs/client/api";
+import { jobsKeys } from "@groot/jobs/client/queries";
+import { formatJobId, withJobToast } from "@groot/jobs/client/utils";
+import { JobDataEditor } from "./JobDataEditor";
 import { JobTypeSelect } from "./JobTypeSelect";
-import type { JobTypeDialogFields } from "@groot/jobs/client/constants";
-import { lazy, Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
-const CodeMirrorEditor = lazy(() =>
-  import("@groot/shell/components/CodeMirrorEditor").then((m) => ({
-    default: m.CodeMirrorEditor,
-  })),
-);
-
-type Props = JobTypeDialogFields & {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  data: string;
-  onDataChange: (value: string) => void;
-  onSubmit: () => void;
-};
-
 /** Manually trigger a one-off job. Renders its own trigger. */
-export function AddJobDialog({
-  open,
-  onOpenChange,
-  name,
-  onNameChange,
-  data,
-  onDataChange,
-  typeSearch,
-  onTypeSearchChange,
-  availableJobs,
-  onSubmit,
-}: Props) {
+export function AddJobDialog() {
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="size-4" />
@@ -54,36 +36,60 @@ export function AddJobDialog({
           <DialogTitle>Add New Job</DialogTitle>
           <DialogDescription>Manually trigger a background job</DialogDescription>
         </DialogHeader>
-        <DialogBody className="space-y-5">
-          <Field label="Job type" htmlFor="job-name">
-            <JobTypeSelect
-              id="job-name"
-              value={name}
-              onChange={onNameChange}
-              search={typeSearch}
-              onSearchChange={onTypeSearchChange}
-              availableJobs={availableJobs}
-            />
-          </Field>
-          <Field
-            label="Job data (JSON)"
-            htmlFor="job-data"
-            hint="The payload passed to the job handler."
-          >
-            <div className="overflow-hidden rounded-xl border border-input">
-              <Suspense fallback={<div className="h-[200px]" />}>
-                <CodeMirrorEditor value={data} height="200px" onChange={onDataChange} />
-              </Suspense>
-            </div>
-          </Field>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={onSubmit}>Add Job</Button>
-          </div>
-        </DialogBody>
+        <AddJobForm onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Mounted only while the dialog is open, so every opening starts from a blank draft. */
+function AddJobForm({ onDone }: { onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [data, setData] = useState("{}");
+
+  const submit = () => {
+    if (!name) {
+      toast.error("Error", { description: "Please select a job name" });
+      return;
+    }
+    return withJobToast(
+      () => jobsApi.addJob(name, JSON.parse(data)),
+      (jobId) => (
+        <span>
+          Job has been added to the queue.{" "}
+          <Link to={`/jobs/${jobId}`} className="underline font-medium hover:text-foreground">
+            View job ({formatJobId(jobId)})
+          </Link>
+        </span>
+      ),
+      "Failed to add job",
+      () => {
+        onDone();
+        void queryClient.invalidateQueries({ queryKey: jobsKeys.list });
+        void queryClient.invalidateQueries({ queryKey: jobsKeys.stats });
+      },
+    );
+  };
+
+  return (
+    <DialogBody className="space-y-5">
+      <Field label="Job type" htmlFor="job-name">
+        <JobTypeSelect id="job-name" value={name} onChange={setName} />
+      </Field>
+      <Field
+        label="Job data (JSON)"
+        htmlFor="job-data"
+        hint="The payload passed to the job handler."
+      >
+        <JobDataEditor value={data} onChange={setData} />
+      </Field>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button onClick={() => void submit()}>Add Job</Button>
+      </div>
+    </DialogBody>
   );
 }

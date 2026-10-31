@@ -37,9 +37,11 @@ build is a normal build.
 Both compute the release as `SENTRY_RELEASE`, else `<package-name>@<short sha>`
 from `SOURCE_COMMIT` / `SOURCE_VERSION` / `git rev-parse HEAD`.
 
-At runtime the Node entry initialises `@sentry/node` when `SENTRY_DSN` is set
-with `release: SENTRY_RELEASE ?? SOURCE_COMMIT.slice(0, 7)`; the Worker passes
-`SENTRY_RELEASE` to `@sentry/cloudflare`. For stack traces to resolve, the
+At runtime both entries read `config.sentry`, which `defaultConfig()` fills
+from the validated `SENTRY_DSN` and `SENTRY_RELEASE`: the Node entry
+initialises `@sentry/node` when the DSN is set, and the Worker passes both to
+`@sentry/cloudflare`. The Node bundle bakes the release it uploaded under in as
+the default for `SENTRY_RELEASE`; a runtime value still wins. For stack traces to resolve, the
 runtime release must equal the uploaded one, so **set `SENTRY_RELEASE`
 explicitly in both the build and the runtime environment** (for example
 `groot@$(git rev-parse --short HEAD)` in CI) rather than relying on the

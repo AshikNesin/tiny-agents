@@ -5,7 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./*": "./src/*"
+    "./capabilities": "./src/capabilities.ts",
+    "./client": "./src/client.ts",
+    "./messages": "./src/messages.ts",
+    "./model": "./src/model.ts",
+    "./prompt": "./src/prompt.ts",
+    "./schema": "./src/schema.ts",
+    "./types": "./src/types.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.4.0",

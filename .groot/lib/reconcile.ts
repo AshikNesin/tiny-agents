@@ -23,7 +23,7 @@
  *     else                    → 3-way merge → auto-merged | conflict
  */
 import { twoWayConflictMarkers, type MergeFileResult } from "./git";
-import { mergePackageJson, PACKAGE_JSON_FILENAME } from "../package-json-merge";
+import { mergePackageJson, PACKAGE_JSON_FILENAME } from "./package-json-merge";
 
 export interface FileSides {
   path: string;

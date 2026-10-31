@@ -54,7 +54,4 @@ export const kv = sqliteTable("kv", {
 });
 
 export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 export type Passkey = typeof passkeys.$inferSelect;
-export type NewPasskey = typeof passkeys.$inferInsert;
-export type KvRow = typeof kv.$inferSelect;

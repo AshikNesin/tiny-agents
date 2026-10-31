@@ -5,8 +5,13 @@
   },
   "last_sync": {
     "version": "3.0.0",
-    "commit": "107888193912080853d26eee6151efd521176995",
-    "date": "2026-10-30T14:07:17.491Z"
+    "commit": "82e7defebb8bd475481b68603be07902e8b39394",
+    "date": "2026-10-31T03:45:21.717Z"
   },
-  "additional_exclusions": ["packages/agent/**", "tests/server/api/todos.test.ts"]
+  "additional_exclusions": [
+    "packages/agent/**",
+    "packages/core/src/notification/**",
+    "tests/server/api/todos.test.ts",
+    "tests/server/core/notification.test.ts"
+  ]
 }

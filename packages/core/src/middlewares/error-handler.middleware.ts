@@ -1,29 +1,17 @@
 import type { ErrorHandler, NotFoundHandler } from "hono";
-import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { Boom, ErrorCode, reportError, toHttpError, type HttpError } from "../errors";
+import { ErrorCode, reportError, toHttpError } from "../errors";
 import { env } from "../env";
-import { getBreadcrumbs, logBusinessEvent, logger } from "../logger";
+import { getBreadcrumbs, logger } from "../logger";
 import { getRequestContext } from "../context";
 import { fail } from "../utils/api-response.utils";
 import type { AppEnv } from "../types";
-
-/** Normalise anything thrown into an HttpError (database constraints, Hono's own errors). */
-function toHttp(error: unknown): HttpError | null {
-  if (Boom.isHttpError(error)) return error;
-  const fromDb = toHttpError(error);
-  if (fromDb) return fromDb;
-  if (error instanceof HTTPException) {
-    return Boom.boomify(error, { statusCode: error.status, message: error.message });
-  }
-  return null;
-}
 
 export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
   const log = c.get("logger") ?? logger;
   const context = getRequestContext();
   const duration = context ? `${Date.now() - context.startTime}ms` : undefined;
-  const http = toHttp(error);
+  const http = toHttpError(error);
   const endpoint = `${c.req.method} ${c.req.path}`;
 
   const errorContext = {
@@ -40,20 +28,12 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
     breadcrumbs: getBreadcrumbs(),
   };
 
+  // One line per failure: the request logger adds the `→ status` line. The
+  // record already carries the request, the timing and the breadcrumbs.
   if (http?.isOperational) {
     log.warn(errorContext, `Operational error: ${error.message}`);
-    logBusinessEvent({
-      event: "operational_error",
-      data: { errorCode: http.code, errorMessage: error.message, endpoint },
-      level: "warn",
-    });
   } else {
     log.error(errorContext, `System error: ${error.message}`);
-    logBusinessEvent({
-      event: "system_error",
-      data: { errorType: error.constructor.name, errorMessage: error.message, endpoint },
-      level: "error",
-    });
     reportError(error, { requestId: context?.requestId, endpoint });
   }
 

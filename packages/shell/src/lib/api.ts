@@ -1,8 +1,4 @@
-import { useAuthStore } from "@groot/shell/store/auth";
-
-/**
- * Standard API response envelope (mirrors the server's `api-response.utils`).
- */
+/** Standard API response envelope (mirrors the server's `api-response.utils`). */
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -50,6 +46,12 @@ export class ApiError extends Error {
   }
 }
 
+/** A 401 response, with when its request was sent (a `performance.now()` timestamp). */
+export interface UnauthorizedEvent {
+  path: string;
+  sentAt: number;
+}
+
 type Params = Record<string, unknown>;
 
 const BASE_URL = "/api/v1";
@@ -66,26 +68,28 @@ function buildUrl(path: string, params?: Params): string {
 }
 
 /**
- * API client — the single surface for backend calls, on plain `fetch`. Unwraps
+ * API client: the single surface for backend calls, on plain `fetch`. Unwraps
  * the `{ success, data }` envelope and throws an `ApiError` on failure so
- * callers get typed values directly. Auth state lives in the Zustand store
- * (`useAuthStore`), not here; the cookie travels with every request.
- *
- * Note: this module imports `useAuthStore` for the 401 handler, and the store
- * imports `apiClient` for its actions. That cycle is safe — neither references
- * the other at module load, only inside functions called later.
+ * callers get typed values directly. The session cookie travels with every
+ * request; what a 401 means is up to whoever subscribes to `onUnauthorized`
+ * (the session store in `@groot/shell/store/auth`).
  */
 class ApiClient {
+  private readonly unauthorizedHandlers = new Set<(event: UnauthorizedEvent) => void>();
+
+  /** Run `handler` on every 401 response. Returns an unsubscribe function. */
+  onUnauthorized(handler: (event: UnauthorizedEvent) => void): () => void {
+    this.unauthorizedHandlers.add(handler);
+    return () => {
+      this.unauthorizedHandlers.delete(handler);
+    };
+  }
+
   private async send(
     method: string,
     path: string,
     options: { params?: Params; body?: unknown } = {},
   ): Promise<Response> {
-    // Stamp the request with the current auth generation so a delayed 401
-    // from a previous session (issued before a logout / re-login) is ignored
-    // instead of clearing the freshly authenticated session.
-    const generation = useAuthStore.getState().generation;
-
     const headers = new Headers({ accept: "application/json" });
     let body: BodyInit | undefined;
     if (options.body instanceof FormData) {
@@ -95,22 +99,15 @@ class ApiClient {
       body = JSON.stringify(options.body);
     }
 
+    const sentAt = performance.now();
     const response = await fetch(buildUrl(path, options.params), {
       method,
       headers,
       body,
       credentials: "include",
     });
-
-    // On a real 401 (session expired mid-session) clear auth so <ProtectedRoute>
-    // navigates to /login. Skip the initial auth probe, login calls and stale 401s.
     if (response.status === 401) {
-      const isAuthEndpoint = path.includes("/auth/me") || path.includes("/auth/login");
-      const onLoginPage = window.location.pathname === "/login";
-      const isStale = generation !== useAuthStore.getState().generation;
-      if (!isAuthEndpoint && !onLoginPage && !isStale) {
-        useAuthStore.getState().clearAuth();
-      }
+      for (const handler of this.unauthorizedHandlers) handler({ path, sentAt });
     }
     return response;
   }
@@ -200,32 +197,6 @@ class ApiClient {
     const response = await this.send("GET", url, { params });
     if (!response.ok) await this.envelope(response, url); // throws with the server's message
     return response.blob();
-  }
-
-  /** Login with email and password. Server sets the HttpOnly cookie. */
-  async login(
-    email: string,
-    password: string,
-  ): Promise<{ token: string; user: { id: number; email: string; name: string | null } }> {
-    return this.post("/auth/login", { email, password });
-  }
-
-  /** Logout — clears the server cookie. */
-  async logout(): Promise<void> {
-    await this.envelope(await this.send("POST", "/auth/logout"), "/auth/logout");
-  }
-
-  /** Get the current authenticated user, or null if not signed in. */
-  async getCurrentUser(): Promise<{ id: number; email: string; name: string | null } | null> {
-    try {
-      const envelope = await this.envelope<{ id: number; email: string; name: string | null }>(
-        await this.send("GET", "/auth/me"),
-        "/auth/me",
-      );
-      return envelope.data ?? null;
-    } catch {
-      return null;
-    }
   }
 }
 

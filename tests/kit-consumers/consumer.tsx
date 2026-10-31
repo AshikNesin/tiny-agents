@@ -55,23 +55,33 @@ import { StatusBadge, type StatusVariant } from "@groot/ui/status-badge";
 import { Table, TableBody } from "@groot/ui/table";
 import { Tabs, TabsList } from "@groot/ui/tabs";
 import { Textarea } from "@groot/ui/textarea";
-import { Text, titleClass } from "@groot/ui/typography";
+import { Text } from "@groot/ui/typography";
 
 // The @groot/ui barrel, alongside the subpaths above.
 import { Button as ButtonFromBarrel, Toaster as ToasterFromBarrel } from "@groot/ui";
 
 // @groot/jobs server surface.
 import { addJob as addJobFromBarrel, runTick, type JobHandler } from "@groot/jobs/server";
-import { JOB_STATES, isReservedQueueName } from "@groot/jobs/server/constants";
+import {
+  JOB_STATES,
+  allowedJobActions,
+  canApplyJobAction,
+  type JobAction,
+} from "@groot/jobs/lifecycle";
 import { jobs as jobsTable, type Job as JobRow } from "@groot/jobs/server/schema";
 import {
   type JobContext,
   type JobQueryResponse,
   type SendJobOptions,
 } from "@groot/jobs/server/types";
+import {
+  type Job as WireJob,
+  type JobLog as WireJobLog,
+  type JobSchedule as WireJobSchedule,
+} from "@groot/jobs/server/wire-types";
 import { defaultJobOptions } from "@groot/jobs/server/config";
+import { getJobs } from "@groot/jobs/server/queries";
 import { addJob, scheduleJob, deleteJob } from "@groot/jobs/server/queue";
-import { getJobsByState } from "@groot/jobs/server/queries";
 import { registerJobHandler, startWorkers, stopWorkers } from "@groot/jobs/server/worker";
 import { housekeeping, nextCronRun } from "@groot/jobs/server/tick";
 import { createJobLogger, flushJobLogs } from "@groot/jobs/server/logger";
@@ -85,7 +95,6 @@ import { type Job, type JobStats, type JobName } from "@groot/jobs/client/types"
 import { formatJobId } from "@groot/jobs/client/utils";
 import { STATE_TABS } from "@groot/jobs/client/constants";
 import { JobJsonBlock } from "@groot/jobs/client/components/JobJsonBlock";
-import { JobDataView } from "@groot/jobs/client/components/JobDataView";
 import { JobsTable } from "@groot/jobs/client/components/JobsTable";
 import { JobLogs } from "@groot/jobs/client/components/JobLogs";
 import { JobsFilters } from "@groot/jobs/client/components/JobsFilters";
@@ -95,22 +104,25 @@ import { JobOverview } from "@groot/jobs/client/components/JobOverview";
 import { JobTypeSelect } from "@groot/jobs/client/components/JobTypeSelect";
 import { AddJobDialog } from "@groot/jobs/client/components/AddJobDialog";
 import { ScheduleJobDialog } from "@groot/jobs/client/components/ScheduleJobDialog";
-import { EditScheduledJobDialog } from "@groot/jobs/client/components/EditScheduledJobDialog";
+import { JobDataEditor } from "@groot/jobs/client/components/JobDataEditor";
 import { ScheduledJobsPanel } from "@groot/jobs/client/components/ScheduledJobsPanel";
-import { JobsProvider, useJobDataLink } from "@groot/jobs/client/components/JobDataLinkContext";
 import { JobsTableSkeleton } from "@groot/jobs/client/components/skeletons";
 import { useJobs } from "@groot/jobs/client/useJobs";
+import { jobsKeys, useAvailableJobs } from "@groot/jobs/client/queries";
+import { useJobActions } from "@groot/jobs/client/useJobActions";
 import { useJobDetail } from "@groot/jobs/client/useJobDetail";
 
 // @groot/shell pages, transport, and state.
 import { Layout } from "@groot/shell/components/Layout";
+import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
+import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { PageContainer } from "@groot/shell/components/layout/PageContainer";
 import { apiClient, type ApiResponse } from "@groot/shell/lib/api";
 import { formatRelativeTime } from "@groot/shell/lib/utils";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useStorageFiles, type StorageFile } from "@groot/shell/pages/storage/hooks/useStorage";
-import { settingsService } from "@groot/shell/services/settings";
+import { useAppSettings, type AppSetting } from "@groot/shell/hooks/useAppSettings";
 
 // @groot/core database singleton, errors, config, kv.
 import { db, users, type Database, type User } from "@groot/core/database";
@@ -120,8 +132,29 @@ import { kv } from "@groot/core/kv";
 import { getContentType, sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { FileInfo } from "@groot/core/storage/storage.service";
 
-// @groot/ai client.
-import { AIClient, type PromptDefinition } from "@groot/ai";
+// @groot/ai: the barrel and every explicit subpath.
+import {
+  AI,
+  AIClient,
+  definePrompt,
+  getModelCapabilities,
+  maxReasoningEffort,
+  resolveModel,
+  toPiContext,
+  zodToTypeBox,
+  type PromptDefinition,
+  type PromptMessage,
+} from "@groot/ai";
+import { AIClient as AIClientFromModule, type CompleteParams } from "@groot/ai/client";
+import {
+  getModelCapabilities as capabilitiesFromModule,
+  type ModelCapabilities,
+} from "@groot/ai/capabilities";
+import { toPiContext as toPiContextFromModule } from "@groot/ai/messages";
+import { resolveModel as resolveModelFromModule } from "@groot/ai/model";
+import { definePrompt as definePromptFromModule } from "@groot/ai/prompt";
+import { zodToTypeBox as zodToTypeBoxFromModule } from "@groot/ai/schema";
+import { Type, type AIConfig, type AnyModel } from "@groot/ai/types";
 
 // typeof checks: the imported values carry the shapes downstream code relies on.
 const checks = {
@@ -169,12 +202,13 @@ const checks = {
   jobsServer: [
     addJobFromBarrel,
     runTick,
-    isReservedQueueName,
     JOB_STATES,
+    allowedJobActions,
+    canApplyJobAction,
     jobsTable,
     defaultJobOptions,
+    getJobs,
     createJobSchema,
-    getJobsByState,
     registerJobHandler,
     startWorkers,
     stopWorkers,
@@ -196,7 +230,6 @@ const checks = {
     JobDetailPage,
     formatJobId,
     JobJsonBlock,
-    JobDataView,
     JobsTable,
     JobLogs,
     JobsFilters,
@@ -206,13 +239,14 @@ const checks = {
     JobTypeSelect,
     AddJobDialog,
     ScheduleJobDialog,
-    EditScheduledJobDialog,
+    JobDataEditor,
     ScheduledJobsPanel,
-    JobsProvider,
-    useJobDataLink,
     JobsTableSkeleton,
     useJobs,
+    useJobActions,
     useJobDetail,
+    useAvailableJobs,
+    jobsKeys,
     STATE_TABS,
   ],
   shell: [
@@ -223,10 +257,26 @@ const checks = {
     formatRelativeTime,
     useAuthStore,
     useStorageFiles,
-    settingsService,
+    useAppSettings,
   ],
   core: [db, users, HttpError, config, defineConfig, kv, getContentType, sanitizeFileName, logger],
-  ai: [AIClient],
+  ai: [
+    AI,
+    AIClient,
+    AIClientFromModule,
+    definePrompt,
+    definePromptFromModule,
+    getModelCapabilities,
+    capabilitiesFromModule,
+    maxReasoningEffort,
+    resolveModel,
+    resolveModelFromModule,
+    toPiContext,
+    toPiContextFromModule,
+    zodToTypeBox,
+    zodToTypeBoxFromModule,
+    Type,
+  ],
 };
 export { checks };
 
@@ -288,23 +338,41 @@ const uploaded: FileInfo = {
   key: "tmp/kit.txt",
   name: "kit.txt",
   size: 1,
-  lastModified: new Date(),
+  lastModified: new Date().toISOString(),
   isDirectory: false,
 };
 void uploaded;
+const wireJobIds: WireJob["id"][] = ["j1"];
+const wireLogLevels: WireJobLog["level"][] = ["info"];
+const wireScheduleCrons: WireJobSchedule["cron"][] = ["* * * * *"];
+void [wireJobIds, wireLogLevels, wireScheduleCrons];
 const status: StatusVariant = "info";
+const shellConfig: ShellConfig = {
+  brand: { label: "Kit", to: "/" },
+  nav: [{ label: "Kit", to: "/kit", primary: true }],
+};
+const commandGroups: CommandGroupEntry[] = [
+  { heading: "Kit", items: [{ label: "Compile", onSelect: () => undefined }] },
+];
 
 // Signature and type baselines a child project relies on. Exported so the
 // compiler and linter both treat each as used kit surface.
 export type JobHandlerPrompt = PromptDefinition<string, JobStats>;
+export type AiMessage = PromptMessage;
+export type AiConfigShape = AIConfig;
+export type AiModel = AnyModel;
+export type AiCapabilities = ModelCapabilities;
+export type AiComplete = CompleteParams;
 export type ErrorShape = HttpErrorOutput["code"];
 export const jobStates: typeof JOB_STATES = JOB_STATES;
+export const failedJobActions: JobAction[] = allowedJobActions("failed");
 export type ConfirmHook = ReturnType<typeof useConfirm>;
 export type ButtonSize = ButtonProps["size"];
 export type ConfirmOptionsShape = ConfirmOptions;
 export type JobQueryShape = JobQueryResponse;
 export type DashboardJob = Job;
 export type StoredFile = StorageFile;
+export type KitSetting = AppSetting;
 export type AppConfig = CoreConfig;
 export const jobStatesProbed: boolean = jobStates !== undefined;
 export const confirmHookShape: string = typeof useConfirm();
@@ -313,11 +381,13 @@ function KitConsumerPage({ children }: { children: ReactNode }) {
   return (
     <GrootUIProvider>
       <TooltipProvider>
-        <Layout navItems={[]} />
+        <ShellProvider config={shellConfig}>
+          <Layout header={<span />} commandGroups={commandGroups} padded={false} />
+        </ShellProvider>
         <PageLayout title="Kit consumers">
           <Card>
             <CardContent>
-              <Text className={titleClass}>Kit surface</Text>
+              <Text variant="title">Kit surface</Text>
               <p className={cn(listRowClass, listRowGridClass)}>
                 <Badge variant="default">fixture</Badge>
                 <StatusBadge status={status} label="compiled" />
@@ -353,7 +423,9 @@ function KitConsumerPage({ children }: { children: ReactNode }) {
 export function KitConsumers() {
   const confirm = useConfirm();
   const storageFiles = useStorageFiles("tmp/");
+  const appSettings = useAppSettings();
   void confirm;
   void storageFiles;
+  void appSettings;
   return <KitConsumerPage>consumer fixture compiled</KitConsumerPage>;
 }

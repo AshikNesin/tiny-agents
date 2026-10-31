@@ -1,7 +1,8 @@
 /**
- * Vitest setup for server tests: a fresh in-memory SQLite database per test
- * file (migrations applied), in-memory file storage, jobs disabled so tests
- * drive `runTick()` explicitly, silent logs.
+ * Vitest setup for server tests: the app's boot sequence against a fresh
+ * in-memory SQLite database per test file (migrations applied) and in-memory
+ * file storage. `NODE_ENV=test` disables the job queue, so tests drive
+ * `runTick()` explicitly; logs are silent.
  */
 import { bootstrap } from "@groot/core/bootstrap";
 import { memoryStorage } from "@groot/core/storage/memory";
@@ -18,5 +19,4 @@ bootstrap({
   // The app schema is attached so app code can use relational queries.
   db: asCoreDatabase(createAppDb(":memory:", { migrationsFolder: "apps/web/drizzle" })),
   storage: memoryStorage(),
-  prettyLogs: false,
 });

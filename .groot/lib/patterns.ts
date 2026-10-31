@@ -1,8 +1,8 @@
 /**
  * Single source of truth for what syncs between groot and child repos.
  *
- * Shared by `sync.ts`, `resolve.ts`, and `upstream.ts` so the pattern lists
- * can never drift apart between tools again.
+ * The sync engine classifies with it in both directions (`groot:sync` and
+ * `groot:upstream`), so the two can never disagree about what is synced.
  */
 import { normalize } from "node:path";
 import micromatch from "micromatch";
@@ -95,33 +95,12 @@ function ownedTestPath(filePath: string): boolean {
   return bestArea !== "";
 }
 
-/**
- * UI source roots: every directory that ships client-side UI. One list for
- * the design-token check, the checks-coverage script, and the workflow path
- * filters, replacing the hand-synced copies (audit: check-design-tokens.ts
- * SRC_DIRS vs the check-design-tokens.yml paths could drift separately).
- *
- * Both sides are globs, so a new UI root is created, never listed: a new
- * package UI root is `packages/<name>/src`, a new app UI tree is any
- * `apps/<name>/src/client`. scripts/check-checks-coverage.ts maps these
- * globs onto concrete directories and fails when the workflow path filters
- * do not carry the same globs.
- */
-const PACKAGE_UI_ROOT_GLOBS = ["packages/*/src", "packages/jobs/src/client"];
-
-/** Glob covering every app's client UI directory. */
-const APP_UI_ROOT_GLOBS = ["apps/*/src/client"];
-
-export function uiSourceRoots(): string[] {
-  return [...PACKAGE_UI_ROOT_GLOBS, ...APP_UI_ROOT_GLOBS];
-}
-
 // ============================================================
 // SYNC PATTERNS - Files that should be synced (and upstreamed)
 // ============================================================
 
 export const SYNC_PATTERNS: readonly string[] = [
-  // All workspace packages are boilerplate (ui, client, server, database).
+  // All workspace packages are boilerplate (ui, shell, core, jobs, ai).
   // Child repos get the full packages/ tree; business logic lives in apps/.
   "packages/**",
 
@@ -146,8 +125,6 @@ export const SYNC_PATTERNS: readonly string[] = [
 
   // Deployment config (railpack) — shared by all downstream apps.
   "railpack.json",
-
-  // Env template (the live .env is git-ignored).
 
   // Sync tooling — keep the sync tool itself up to date.
   // State files (boilerplate-sync.json, sync-report.json) and project-only
@@ -183,8 +160,6 @@ export const SKIP_PATTERNS: readonly string[] = [
   // Project-local tests (app routes, end-to-end).
   "tests/server/app/**",
   "tests/e2e/**",
-
-  // Project-owned live app config (config.example.yml is synced instead).
 
   // Other (project-owned docs and lockfile)
   "README.md",

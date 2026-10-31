@@ -2,7 +2,7 @@
 /**
  * Kit export guard.
  *
- * @groot/ui and @groot/jobs declare every public entrypoint explicitly. A
+ * @groot/ui, @groot/jobs and @groot/ai declare every public entrypoint explicitly. A
  * wildcard export ("./*") accepts any file that lands in src, so the public
  * surface would drift silently. This guard keeps three sets in agreement:
  * the explicit keys in each package's exports map, the source files under
@@ -47,6 +47,16 @@ const PACKAGES: PackageRule[] = [
     manifest: "packages/jobs/package.json",
     keyForSpecifier: (specifier) =>
       specifier.startsWith("@groot/jobs/") ? `.${specifier.slice("@groot/jobs".length)}` : null,
+  },
+  {
+    name: "@groot/ai",
+    manifest: "packages/ai/package.json",
+    keyForSpecifier: (specifier) =>
+      specifier === "@groot/ai"
+        ? "."
+        : specifier.startsWith("@groot/ai/")
+          ? `.${specifier.slice("@groot/ai".length)}`
+          : null,
   },
 ];
 

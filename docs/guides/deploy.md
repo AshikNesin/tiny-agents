@@ -55,6 +55,7 @@ the `chromium` apt package to the runtime image for the browser toolkit.
 | `RP_NAME`              | no       | name shown in passkey prompts                                |
 | `CORS_ALLOWED_ORIGINS` | no       | only when another origin calls the API                       |
 | `SENTRY_DSN`           | no       | error reporting (defaults to tiny-agents' project DSN)       |
+| `SENTRY_RELEASE`       | no       | defaults to the release the build uploaded source maps under |
 | `PORT`                 | injected | the platform sets it; do not override                        |
 
 The server refuses to start in production with the development fallbacks or

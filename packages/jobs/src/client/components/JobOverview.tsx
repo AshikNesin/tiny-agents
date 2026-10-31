@@ -1,13 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@groot/ui/card";
 import { DataField, DataFields } from "@groot/ui/display";
-import { formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
+import { formatDuration, formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
 import type { Job } from "@groot/jobs/client/types";
-import dayjs from "dayjs";
 
-function formatDuration(start: string | null, end: string | null): string {
+function jobDuration(start: string | null, end: string | null): string {
   if (!start || !end) return "N/A";
-  const duration = dayjs(end).diff(dayjs(start), "second", true);
-  return `${duration.toFixed(2)}s`;
+  return formatDuration(start, end);
 }
 
 /** Relative time with the full locale timestamp as the hover title. */
@@ -42,7 +40,7 @@ export function JobOverview({ job }: { job: Job }) {
           <DataField label="Completed">
             <Timestamp value={job.completedAt} />
           </DataField>
-          <DataField label="Duration">{formatDuration(job.startedAt, job.completedAt)}</DataField>
+          <DataField label="Duration">{jobDuration(job.startedAt, job.completedAt)}</DataField>
         </DataFields>
       </CardContent>
     </Card>

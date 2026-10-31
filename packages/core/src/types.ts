@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import type { Logger } from "./logger/core";
+import type { Logger } from "./logger";
 
 export interface AuthUser {
   userId: number;

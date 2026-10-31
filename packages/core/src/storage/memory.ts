@@ -1,7 +1,7 @@
 import {
   bodyContentType,
   bodyToBytes,
-  groupByDelimiter,
+  listKeys,
   type ListOptions,
   type ListResult,
   type PutOptions,
@@ -41,7 +41,8 @@ export function memoryStorage(): StorageAdapter {
 
     async get(key: string) {
       const entry = objects.get(key);
-      return entry ? { object: toObject(key, entry), bytes: entry.bytes } : null;
+      // A copy, so a caller mutating the bytes cannot change the stored object.
+      return entry ? { object: toObject(key, entry), bytes: entry.bytes.slice() } : null;
     },
 
     async head(key: string) {
@@ -50,19 +51,16 @@ export function memoryStorage(): StorageAdapter {
     },
 
     async delete(keys: string[]) {
-      let deleted = 0;
-      for (const key of keys) if (objects.delete(key)) deleted += 1;
-      return deleted;
+      for (const key of keys) objects.delete(key);
     },
 
     async list(options: ListOptions = {}): Promise<ListResult> {
-      const prefix = options.prefix ?? "";
-      const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).sort();
-      if (!options.delimiter) {
-        return { objects: keys.map((key) => toObject(key, objects.get(key)!)), prefixes: [] };
-      }
-      const { direct, prefixes } = groupByDelimiter(keys, prefix, options.delimiter);
-      return { objects: direct.map((key) => toObject(key, objects.get(key)!)), prefixes };
+      const page = listKeys(objects.keys(), options);
+      return {
+        objects: page.keys.map((key) => toObject(key, objects.get(key)!)),
+        prefixes: page.prefixes,
+        cursor: page.cursor,
+      };
     },
 
     async copy(from: string, to: string) {

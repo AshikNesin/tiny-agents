@@ -2,44 +2,16 @@ import { describe, it, expect } from "vite-plus/test";
 import {
   mergePackageJson,
   mergeObject3Way,
-  parseDiff3Markers,
   detectIndent,
   PACKAGE_JSON_MERGE_KEYS,
-} from "../../../.groot/package-json-merge";
+} from "../../../.groot/lib/package-json-merge";
 
 /**
- * Deterministic package.json merge — the programmatic resolver used by
- * `.groot/resolve.ts` so package.json conflicts are never handed to the AI
- * agent. A malformed package.json breaks the whole toolchain, so this logic
- * must be airtight. These tests mirror the verification scenarios in
- * `.groot/feature-request.md` (request #8).
- *
- * Lives under tests/server/** so the server vitest config picks it up, even
- * though the code under test is sync tooling (.groot/**), not server code.
+ * Deterministic package.json merge — what sync's reconcile step uses for the
+ * root package.json instead of `git merge-file`, so project-owned keys never
+ * raise conflict markers. A malformed package.json breaks the whole
+ * toolchain, so this logic must be airtight.
  */
-
-/** Build a diff3 conflict file from three sides of a single object section. */
-function conflictFile(
-  section: string,
-  oursBody: string,
-  baseBody: string,
-  theirsBody: string,
-): string {
-  return [
-    "{",
-    `  "${section}": {`,
-    "<<<<<<< package.json (current_repo)",
-    oursBody,
-    "||||||| package.json (last_sync)",
-    baseBody,
-    "=======",
-    theirsBody,
-    ">>>>>>> package.json (groot_boilerplate)",
-    "  }",
-    "}",
-    "",
-  ].join("\n");
-}
 
 describe("mergeObject3Way", () => {
   it("keeps locally-changed keys (local wins)", () => {
@@ -80,78 +52,6 @@ describe("mergeObject3Way", () => {
       { z: "1", a: "2", m: "3" },
     );
     expect(Object.keys(merged)).toEqual(["z", "a", "m"]);
-  });
-});
-
-describe("parseDiff3Markers", () => {
-  it("reconstructs ours/base/theirs from a single conflict hunk", () => {
-    const parsed = parseDiff3Markers(
-      conflictFile("scripts", '    "dev": "tsx"', '    "dev": "old"', '    "dev": "vite"'),
-    )!;
-    expect(parsed).not.toBeNull();
-    expect(JSON.parse(parsed.ours).scripts.dev).toBe("tsx");
-    expect(JSON.parse(parsed.base).scripts.dev).toBe("old");
-    expect(JSON.parse(parsed.theirs).scripts.dev).toBe("vite");
-  });
-
-  it("reconstructs the base side faithfully", () => {
-    const parsed = parseDiff3Markers(
-      conflictFile("scripts", '    "dev": "tsx"', '    "dev": "old"', '    "dev": "vite"'),
-    )!;
-    expect(JSON.parse(parsed.base).scripts).toEqual({ dev: "old" });
-  });
-
-  it("handles multiple conflict hunks across different sections", () => {
-    const file = [
-      "{",
-      '  "scripts": {',
-      "<<<<<<< package.json (current_repo)",
-      '    "dev": "tsx watch",',
-      "||||||| package.json (last_sync)",
-      '    "dev": "old",',
-      "=======",
-      '    "dev": "tsx watch src",',
-      ">>>>>>> package.json (groot_boilerplate)",
-      '    "build": "vite build"',
-      "  },",
-      '  "dependencies": {',
-      "<<<<<<< package.json (current_repo)",
-      '    "express": "^5.0.0"',
-      "||||||| package.json (last_sync)",
-      '    "express": "^3.0.0"',
-      "=======",
-      '    "express": "^3.1.0"',
-      ">>>>>>> package.json (groot_boilerplate)",
-      "  }",
-      "}",
-      "",
-    ].join("\n");
-    const parsed = parseDiff3Markers(file)!;
-    expect(JSON.parse(parsed.ours).scripts.build).toBe("vite build"); // common line preserved
-    expect(JSON.parse(parsed.theirs).dependencies.express).toBe("^3.1.0");
-    expect(JSON.parse(parsed.base).scripts.dev).toBe("old");
-  });
-
-  it("reports base as null for 2-way merges (no base section)", () => {
-    const twoWay = [
-      "{",
-      '  "scripts": {',
-      "<<<<<<< package.json (current_repo)",
-      '    "dev": "tsx"',
-      "=======",
-      '    "dev": "vite"',
-      ">>>>>>> package.json (groot_boilerplate)",
-      "  }",
-      "}",
-      "",
-    ].join("\n");
-    const parsed = parseDiff3Markers(twoWay)!;
-    expect(parsed.base).toBeNull();
-    expect(JSON.parse(parsed.ours).scripts.dev).toBe("tsx");
-  });
-
-  it("returns null when there are no conflict markers", () => {
-    expect(parseDiff3Markers(JSON.stringify({ a: 1 }, null, 2))).toBeNull();
   });
 });
 
@@ -342,45 +242,6 @@ describe("mergePackageJson", () => {
       j({ scripts: { a: "2" } }),
     );
     expect(r.ok).toBe(false);
-  });
-
-  it("resolves a realistic multi-hunk diff3 conflict end-to-end", () => {
-    const file = [
-      "{",
-      '  "name": "finance-api",',
-      '  "scripts": {',
-      "<<<<<<< package.json (current_repo)",
-      '    "dev": "tsx watch index.ts",',
-      "||||||| package.json (last_sync)",
-      '    "dev": "tsx watch src",',
-      "=======",
-      '    "dev": "tsx watch src/index.ts",',
-      ">>>>>>> package.json (groot_boilerplate)",
-      '    "build": "vite build"',
-      "  },",
-      '  "dependencies": {',
-      "<<<<<<< package.json (current_repo)",
-      '    "express": "^5.0.0"',
-      "||||||| package.json (last_sync)",
-      '    "express": "^3.0.0"',
-      "=======",
-      '    "express": "^3.1.0"',
-      ">>>>>>> package.json (groot_boilerplate)",
-      "  }",
-      "}",
-      "",
-    ].join("\n");
-    const parsed = parseDiff3Markers(file)!;
-    const r = mergePackageJson(parsed.ours, parsed.base!, parsed.theirs);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    const out = JSON.parse(r.text);
-    expect(out.name).toBe("finance-api"); // project-owned, untouched
-    expect(out.scripts.dev).toBe("tsx watch index.ts"); // local changed -> local wins
-    expect(out.scripts.build).toBe("vite build"); // common line preserved
-    expect(out.dependencies.express).toBe("^5.0.0"); // local changed -> local wins
-    // Output must be valid JSON with no markers.
-    expect(r.text).not.toMatch(/<{7}|={7}|>{7}|\|{7}/);
   });
 });
 

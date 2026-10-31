@@ -1,8 +1,8 @@
 import type { Logger } from "@groot/core/logger";
-import type { JobState } from "./constants";
 
 export type { Job, NewJob, JobSchedule, JobLog } from "./schema";
-export type { JobState } from "./constants";
+export type { JobAction, JobState } from "../lifecycle";
+export type { JobStats, BulkRerunResult } from "./wire-types";
 
 /** What a handler receives. */
 export interface JobContext<T = unknown> {
@@ -50,19 +50,6 @@ export interface GetJobsOptions {
 export interface JobQueryResponse {
   jobs: import("./schema").Job[];
   total: number;
-}
-
-export type JobStats = Record<JobState, number>;
-
-export interface RerunJobOptions {
-  queueName: string;
-  jobId: string;
-}
-
-export interface BulkRerunResult extends RerunJobOptions {
-  success: boolean;
-  newJobId?: string;
-  error?: string;
 }
 
 export interface TickOptions {

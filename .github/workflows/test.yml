@@ -48,6 +48,8 @@ jobs:
         run: pnpm check:coverage
       - name: Lint & format check
         run: pnpm check
+      - name: Design tokens
+        run: pnpm check:tokens
       - name: Migrations are up to date with the schema
         run: |
           pnpm db:generate --name ci-check

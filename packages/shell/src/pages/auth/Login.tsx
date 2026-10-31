@@ -1,10 +1,9 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@groot/ui/button";
-import { displayClass, h1Class } from "@groot/ui";
+import { displayClass, h1Class } from "@groot/ui/typography";
 import { Input } from "@groot/ui/input";
 import { Form, FormField } from "@groot/ui/form";
-import { useAuthStore } from "@groot/shell/store/auth";
-import { ApiError } from "@groot/shell/lib/api";
+import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -14,37 +13,26 @@ const isDev = import.meta.env.DEV;
 
 const DEMO_CREDENTIALS = { email: "demo@example.com", password: "demo@example.com" };
 
-// Mirrors the server's loginSchema (packages/core/src/auth/auth.schema.ts).
-// Duplicated locally so the client never imports the server package (which
-// pulls Prisma/AWS/bcrypt) into the client bundle.
+// Mirrors the server's loginSchema (packages/core/src/auth/auth.schema.ts),
+// duplicated so the client bundle never imports the server package.
 const loginSchema = z.object({
   email: z.email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
-/** A 401 from the login endpoint is always "wrong credentials" for the
- * person typing; network-level wording ("Request failed with status code
- * 401") is for logs, not toasts. Anything else keeps its message. */
-export function loginErrorDescription(error: unknown, fallback: string): string {
-  // The fetch client throws ApiError (with `status`) for HTTP errors and a
-  // TypeError when the request never reached the server.
-  if (error instanceof ApiError) {
-    return error.status === 401 ? "Invalid email or password." : error.message || fallback;
-  }
-  if (error instanceof TypeError) {
-    return "Could not reach the server. Check your connection and try again.";
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
+export { loginErrorDescription };
 
 const FEATURES = [
-  { icon: Zap, title: "Built for speed", desc: "Express + React with HMR out of the box." },
+  {
+    icon: Zap,
+    title: "Built for speed",
+    desc: "Hono on Node or Workers, React with HMR out of the box.",
+  },
   {
     icon: ShieldCheck,
     title: "Secure by default",
-    desc: "JWT + Passkey auth, S3 storage, audit logs.",
+    desc: "Cookie sessions, passkeys, and rate-limited sign-in.",
   },
   { icon: LayoutDashboard, title: "Production UI", desc: "A polished sidebar shell you can ship." },
 ] satisfies LoginFeature[];
@@ -70,8 +58,7 @@ export function Login() {
   const location = useLocation();
   const destination = returnPath(location.state);
   const config = useShellConfig();
-  const BrandMark = config.brand?.icon ?? LayoutDashboard;
-  const brandLabel = config.brand?.label ?? "Groot";
+  const { icon: BrandMark, label: brandLabel } = config.brand;
   const tagline = config.login?.tagline ?? "The boilerplate that ships like a product.";
   const description =
     config.login?.description ??
@@ -83,7 +70,6 @@ export function Login() {
       await login(values.email, values.password);
       navigate(destination, { replace: true });
     } catch (error) {
-      console.error("Login failed:", error);
       toast.error("Login Failed", {
         description: loginErrorDescription(error, "Invalid credentials"),
       });
@@ -95,7 +81,6 @@ export function Login() {
       await loginWithPasskey();
       navigate(destination, { replace: true });
     } catch (error) {
-      console.error("Passkey sign-in failed:", error);
       toast.error("Passkey Sign-In Failed", {
         description: loginErrorDescription(error, "Passkey authentication failed"),
       });

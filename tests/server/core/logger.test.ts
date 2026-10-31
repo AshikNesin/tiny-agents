@@ -8,11 +8,16 @@ import {
   logPerformance,
   logger,
   runWithRequestContext,
+  scrubValue,
+  setScrubber,
   type LogRecord,
 } from "@groot/core/logger";
 
 const original = { ...getLoggerSettings() };
-afterEach(() => configureLogger(original));
+afterEach(() => {
+  configureLogger(original);
+  setScrubber(undefined);
+});
 
 function capture() {
   const records: LogRecord[] = [];
@@ -40,6 +45,26 @@ describe("logger", () => {
     const records = capture();
     createLogger({ service: "x" }).child({ reqId: "r1" }).info("hi");
     expect(records[0]).toMatchObject({ service: "x", reqId: "r1", msg: "hi" });
+  });
+
+  it("a record sink receives every record, inherited by children, even below the console level", () => {
+    const sunk: LogRecord[] = [];
+    const lines: string[] = [];
+    configureLogger({ level: "info", write: (_level, line) => lines.push(line) });
+    const child = createLogger({ component: "jobs" }, { sink: (record) => sunk.push(record) });
+    child.info("kept by sink");
+    child.child({ jobId: "j1" }).debug({ step: 2 }, "sunk, not printed");
+    expect(sunk.map((r) => r.msg)).toEqual(["kept by sink", "sunk, not printed"]);
+    expect(sunk[1]).toMatchObject({ component: "jobs", jobId: "j1", step: 2 });
+    expect(lines).toHaveLength(1); // the debug record never reached the console
+  });
+
+  it("scrubs messages, fields and secret-named values", () => {
+    setScrubber((text) => text.replaceAll("hunter2", "***"));
+    const records = capture();
+    logger.info({ password: "hunter2", nested: { token: "safe" } }, "login hunter2 attempt");
+    expect(records[0]).toMatchObject({ password: "[REDACTED]", msg: "login *** attempt" });
+    expect(scrubValue({ ok: "hunter2", arr: ["hunter2"] })).toEqual({ ok: "***", arr: ["***"] });
   });
 
   it("logPerformance escalates slow operations", () => {

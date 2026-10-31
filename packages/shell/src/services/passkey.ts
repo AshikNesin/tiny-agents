@@ -1,29 +1,15 @@
 import { apiClient } from "@groot/shell/lib/api";
-import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
+import { startRegistration } from "@simplewebauthn/browser";
 import type {
   PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
-  AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
+import type { PasskeySummary } from "@groot/core/passkey/passkey.schema";
 
-interface Passkey {
-  id: number;
-  userId: number;
-  deviceType: string | null;
-  backedUp: boolean;
-  transports: string[];
-  credentialName: string | null;
-  lastUsedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface User {
-  id: number;
-  email: string;
-  name: string | null;
-}
+/** A passkey as the server presents it — `PasskeySummary` in
+ *  `@groot/core/passkey/passkey.schema` is the source of truth (type-only
+ *  import, erased at build). */
+type Passkey = PasskeySummary;
 
 class PasskeyService {
   /**
@@ -70,52 +56,6 @@ class PasskeyService {
   }
 
   /**
-   * Authenticate using a passkey
-   */
-  async loginWithPasskey(email?: string): Promise<{ token: string; user: User }> {
-    try {
-      // 1. Get authentication options from server
-      const options = await apiClient.post<PublicKeyCredentialRequestOptionsJSON>(
-        "/passkey/login/options",
-        {
-          email,
-        },
-      );
-
-      if (!options) {
-        throw new Error("Failed to get authentication options");
-      }
-
-      // 2. Start WebAuthn authentication
-      const authenticationResponse: AuthenticationResponseJSON = await startAuthentication({
-        optionsJSON: options,
-      });
-
-      // 3. Verify authentication with server
-      const result = await apiClient.post<{ token: string; user: User }>("/passkey/login/verify", {
-        response: authenticationResponse,
-        email,
-      });
-
-      if (!result) {
-        throw new Error("Failed to verify authentication");
-      }
-
-      return result;
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === "NotAllowedError") {
-        throw new Error("Passkey authentication was cancelled or not allowed. Please try again.");
-      }
-      if (error instanceof Error && error.name === "NotSupportedError") {
-        throw new Error(
-          "Passkeys are not supported in this browser. Please use a modern browser that supports WebAuthn.",
-        );
-      }
-      throw error;
-    }
-  }
-
-  /**
    * List all passkeys for the authenticated user
    */
   async listPasskeys(): Promise<Passkey[]> {
@@ -143,32 +83,6 @@ class PasskeyService {
     }
 
     return passkey;
-  }
-
-  /**
-   * Check if passkeys are supported in the current browser
-   */
-  isPasskeySupported(): boolean {
-    return (
-      typeof window !== "undefined" &&
-      window.PublicKeyCredential !== undefined &&
-      typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function"
-    );
-  }
-
-  /**
-   * Check if platform authenticator (e.g., Face ID, Touch ID, Windows Hello) is available
-   */
-  async isPlatformAuthenticatorAvailable(): Promise<boolean> {
-    if (!this.isPasskeySupported()) {
-      return false;
-    }
-
-    try {
-      return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    } catch {
-      return false;
-    }
   }
 }
 

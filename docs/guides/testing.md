@@ -16,15 +16,14 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
 
 ## Server test setup
 
-`tests/server/setup.ts` runs once per test file and calls `bootstrap()` with:
+`tests/server/setup.ts` runs once per test file and boots the app through the
+same `startWebApp()` as the entries, with:
 
-- `NODE_ENV=test`, `DATABASE_URL=":memory:"`
-- `createSqliteDb(":memory:", { migrationsFolder: "apps/web/drizzle" })`: a
-  fresh database per file with every migration applied
+- `NODE_ENV=test`, `DATABASE_URL=":memory:"`, `LOG_LEVEL=silent`
+- `openDatabase(":memory:")`: a fresh database per file with every migration applied
 - `memoryStorage()` for uploads
-- `jobs.enabled = false`, so nothing runs in the background; tests call
-  `runTick()` when they want jobs processed
-- `logging.level = "silent"`
+- `jobs.enabled = false` (a `NODE_ENV=test` default), so nothing runs in the
+  background; tests call `runTick()` when they want jobs processed
 
 Files are isolated from each other for free. Within a file, clear what you
 need in `beforeEach` (e.g. `await db.delete(todos)`, `clearJobHandlers()`).

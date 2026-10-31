@@ -5,8 +5,8 @@ import * as matchers from "@testing-library/jest-dom/matchers";
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
 
-// jsdom lacks the Pointer Capture + scroll-into-view APIs Radix primitives
-// (Select, Dropdown, Tooltip, …) rely on. Minimal stubs — enough for the
+// jsdom lacks the Pointer Capture, scroll-into-view and ResizeObserver APIs
+// Radix primitives (Select, Dropdown, Tooltip, …) and cmdk rely on. Minimal stubs — enough for the
 // interaction paths exercised by component tests; not a faithful polyfill.
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {
@@ -20,6 +20,13 @@ if (typeof window !== "undefined") {
   }
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => {};
+  }
+  if (!window.ResizeObserver) {
+    window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
   }
 }
 

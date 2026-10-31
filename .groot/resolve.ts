@@ -12,11 +12,10 @@
  * to the model as part of its system prompt.
  *
  * The source of truth is the working tree plus local git state: files that
- * already contain markers are resolved directly with no boilerplate checkout,
- * and the merge base comes from the local baseline snapshot
- * (`refs/groot/baseline`) whenever it matches the manifest. A boilerplate
- * checkout is only acquired when markers must be regenerated (sync ran with
- * `--skip-conflicts`, e.g. CI) and a side is missing locally.
+ * already contain markers are resolved directly with no boilerplate checkout.
+ * A checkout is only acquired when markers must be regenerated (sync ran with
+ * `--skip-conflicts`, e.g. CI); the merge base then comes from the same lookup
+ * sync uses (`lib/sync-state.ts`).
  *
  * Prerequisite: the pi CLI must be installed and authenticated
  * (`npm install -g --ignore-scripts @earendil-works/pi-coding-agent`, then an
@@ -32,44 +31,28 @@
  *   pnpm groot:resolve --model <m>      - Model pattern or `provider/id`
  *                                         (default: pi's configured model)
  */
-import { readFile, writeFile, rm } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
-import { z } from "zod";
 import { loadConfig } from "./lib/config";
 import {
   exec,
   gitMergeFile,
   twoWayConflictMarkers,
   resolveDefaultBranch,
-  shaMatches,
   showBlob,
   CONFLICT_MARKER_RE,
 } from "./lib/git";
 import { acquireBoilerplate, releaseBoilerplate, type AcquiredRepo } from "./lib/acquire";
-import { readBaselineInfo, BASELINE_REF } from "./lib/baseline";
-import { PACKAGE_JSON_FILENAME, parseDiff3Markers, mergePackageJson } from "./package-json-merge";
-
-// ============================================================
-// SCHEMAS
-// ============================================================
-
-const ManifestSchema = z.object({
-  fromVersion: z.string().nullable(),
-  toVersion: z.string().nullable(),
-  fromCommit: z.string(),
-  toCommit: z.string(),
-  generatedAt: z.string(),
-  conflicts: z.array(
-    z.object({
-      file: z.string(),
-      conflicts: z.number(),
-      commits: z.array(z.string()).default([]),
-    }),
-  ),
-});
-
-type Manifest = z.infer<typeof ManifestSchema>;
+import {
+  openMergeBase,
+  readManifest,
+  writeManifest,
+  MANIFEST_RELATIVE_PATH,
+  type ConflictManifest,
+  type MergeBase,
+} from "./lib/sync-state";
 
 // ============================================================
 // PI CLI - prerequisite check and model selection
@@ -111,44 +94,31 @@ function piModelArgs(opts: { model?: string }): string[] {
 }
 
 // ============================================================
-// SIDE SOURCING - base from the local baseline ref when possible,
-// theirs from a boilerplate checkout only when actually needed.
+// SIDE SOURCING - the boilerplate checkout and merge base are only
+// acquired when a side is actually needed.
 // ============================================================
 
-/**
- * Read the merge base for a file. Prefers the local baseline snapshot (no
- * network, survives upstream history rewrites); falls back to the boilerplate
- * checkout at the manifest's base commit.
- */
-async function readBase(
-  projectRoot: string,
-  manifest: Manifest,
-  file: string,
-  getRepo: () => Promise<AcquiredRepo>,
-): Promise<string | null> {
-  const info = await readBaselineInfo(projectRoot);
-  if (info && shaMatches(info.boilerplateCommit, manifest.fromCommit)) {
-    const blob = await showBlob(projectRoot, BASELINE_REF, file);
-    if (blob !== null) return blob.toString("utf-8");
-    return null; // genuinely absent at base
-  }
-  try {
-    const repo = await getRepo();
-    const blob = await showBlob(repo.dir, manifest.fromCommit, file);
-    return blob === null ? null : blob.toString("utf-8");
-  } catch {
-    return null;
-  }
+/** The boilerplate side of a conflict, acquired on first use. */
+export interface BoilerplateSides {
+  /** Boilerplate checkout directory. */
+  dir(): Promise<string>;
+  /** Merge base at the manifest's `fromCommit`, or null when it cannot be found. */
+  base(): Promise<MergeBase | null>;
+}
+
+async function readBase(sides: BoilerplateSides, file: string): Promise<string | null> {
+  const base = await sides.base();
+  const blob = base === null ? null : await base.read(file);
+  return blob === null ? null : blob.toString("utf-8");
 }
 
 /** Read the upstream side at the manifest's target commit, or null if deleted. */
 async function readTheirs(
-  manifest: Manifest,
+  manifest: ConflictManifest,
   file: string,
-  getRepo: () => Promise<AcquiredRepo>,
+  sides: BoilerplateSides,
 ): Promise<string | null> {
-  const repo = await getRepo();
-  const blob = await showBlob(repo.dir, manifest.toCommit, file);
+  const blob = await showBlob(await sides.dir(), manifest.toCommit, file);
   return blob === null ? null : blob.toString("utf-8");
 }
 
@@ -157,11 +127,11 @@ async function readTheirs(
  * the file already has markers (sync wrote them), use as-is. Otherwise rebuild
  * them from the base/target commits recorded in the manifest.
  */
-async function ensureMarkers(
+export async function ensureMarkers(
   file: string,
   projectRoot: string,
-  manifest: Manifest,
-  getRepo: () => Promise<AcquiredRepo>,
+  manifest: ConflictManifest,
+  sides: BoilerplateSides,
 ): Promise<"ready" | "missing-local" | "clean"> {
   const localPath = join(projectRoot, file);
   let ours: string;
@@ -173,11 +143,11 @@ async function ensureMarkers(
 
   if (CONFLICT_MARKER_RE.test(ours)) return "ready";
 
-  const theirs = await readTheirs(manifest, file, getRepo);
+  const theirs = await readTheirs(manifest, file, sides);
   if (theirs === null) return "clean"; // deleted upstream — nothing to merge
   if (ours === theirs) return "clean";
 
-  const base = await readBase(projectRoot, manifest, file, getRepo);
+  const base = await readBase(sides, file);
   const markers =
     base === null
       ? twoWayConflictMarkers(file, ours, theirs)
@@ -342,77 +312,6 @@ function runCheck(projectRoot: string): Promise<number> {
 }
 
 // ============================================================
-// DETERMINISTIC PACKAGE.JSON RESOLUTION
-// ============================================================
-
-/**
- * Resolve a `package.json` conflict deterministically, without the AI agent.
- *
- * Sources the three sides (ours/base/theirs) from the diff3 markers already in
- * the file (no boilerplate checkout needed in the common case), falling back to
- * the baseline ref / manifest commits when markers are absent or 2-way. Only
- * `scripts` / `dependencies` / `devDependencies` are 3-way-merged; all other
- * top-level keys are copied verbatim from the local file.
- *
- * Returns:
- *   `"resolved"`      — file written, conflict gone
- *   `"fallback"`      — could not merge cleanly; caller should use the AI flow
- *   `"missing-local"` — local file does not exist
- *   `"clean"`         — ours === theirs (no change needed)
- */
-async function resolvePackageJson(
-  file: string,
-  projectRoot: string,
-  manifest: Manifest,
-  getRepo: () => Promise<AcquiredRepo>,
-): Promise<"resolved" | "fallback" | "missing-local" | "clean"> {
-  const localPath = join(projectRoot, file);
-  let content: string;
-  try {
-    content = await readFile(localPath, "utf-8");
-  } catch {
-    return "missing-local";
-  }
-
-  let oursText: string;
-  let baseText: string | null = null;
-  let theirsText: string | null = null;
-
-  const parsed = parseDiff3Markers(content);
-  if (parsed) {
-    // Common case: markers are already in the file (written by sync).
-    oursText = parsed.ours;
-    theirsText = parsed.theirs;
-    baseText = parsed.base; // null when 2-way (no base sections)
-  } else {
-    // No markers — e.g. sync ran with --skip-conflicts. Treat the local file
-    // as ours and source base/theirs from local git state / the checkout.
-    oursText = content;
-  }
-
-  if (baseText === null) {
-    baseText = await readBase(projectRoot, manifest, file, getRepo);
-    if (baseText === null) return "fallback";
-  }
-  if (theirsText === null) {
-    try {
-      theirsText = await readTheirs(manifest, file, getRepo);
-    } catch {
-      return "fallback";
-    }
-    if (theirsText === null) return "clean"; // deleted upstream — nothing to merge
-  }
-
-  if (oursText === theirsText) return "clean";
-
-  const merged = mergePackageJson(oursText, baseText, theirsText);
-  if (!merged.ok) return "fallback";
-
-  await writeFile(localPath, merged.text);
-  return "resolved";
-}
-
-// ============================================================
 // MAIN
 // ============================================================
 
@@ -443,12 +342,9 @@ async function main() {
   // 1. Load config (validates this is a groot-synced project) + manifest
   const config = await loadConfig(projectRoot);
 
-  const manifestPath = join(projectRoot, ".groot/needs-review/manifest.json");
-  let manifest: Manifest;
-  try {
-    manifest = ManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf-8")));
-  } catch {
-    console.log("No conflicts to resolve — `.groot/needs-review/manifest.json` not found.\n");
+  const manifest = await readManifest(projectRoot);
+  if (manifest === null) {
+    console.log(`No conflicts to resolve — \`${MANIFEST_RELATIVE_PATH}\` not found.\n`);
     console.log("Run `pnpm groot:sync` first if you expect pending conflicts.\n");
     return;
   }
@@ -480,29 +376,29 @@ async function main() {
     return;
   }
 
-  // 2. Lazy resources: the pi CLI and the boilerplate checkout are only
-  //    required when actually needed. package.json resolves deterministically
-  //    with neither.
+  // 2. The pi CLI is required up front; the boilerplate checkout is only
+  //    acquired when markers must be regenerated.
+  await checkPiCli();
+
   let repo: AcquiredRepo | undefined;
-  const getRepo = async (): Promise<AcquiredRepo> => {
-    if (!repo) {
-      repo = await acquireBoilerplate({
+  let base: Promise<MergeBase | null> | undefined;
+  const sides: BoilerplateSides = {
+    dir: async () => {
+      repo ??= await acquireBoilerplate({
         repoUrl: config.boilerplate.repo,
         name: config.boilerplate.name,
         defaultBranch: await resolveDefaultBranch(config.boilerplate.repo),
         purpose: "resolve",
         ensureCommitReachable: manifest.toCommit,
       });
-    }
-    return repo;
-  };
-
-  let piChecked = false;
-  const ensurePiCli = async (): Promise<void> => {
-    if (!piChecked) {
-      await checkPiCli();
-      piChecked = true;
-    }
+      return repo.dir;
+    },
+    // No base anywhere degrades to two-way markers rather than failing.
+    base: () =>
+      (base ??= sides
+        .dir()
+        .then((dir) => openMergeBase(projectRoot, dir, manifest.fromCommit))
+        .catch(() => null)),
   };
 
   const resolved: string[] = [];
@@ -513,33 +409,7 @@ async function main() {
     for (const c of conflicts) {
       console.log(`\n── Resolving ${c.file} ──\n`);
 
-      // package.json is merged deterministically (never via the AI agent) so the
-      // file can never be left in a malformed state by an LLM edit. Only falls
-      // back to the AI flow when the programmatic merge can't handle it.
-      if (c.file === PACKAGE_JSON_FILENAME) {
-        const outcome = await resolvePackageJson(c.file, projectRoot, manifest, getRepo);
-        if (outcome === "resolved") {
-          console.log(`  ✓ Resolved ${c.file} via deterministic package.json merge`);
-          resolved.push(c.file);
-          continue;
-        }
-        if (outcome === "clean") {
-          console.log(`  ✓ ${c.file} has no conflict markers — already resolved.`);
-          resolved.push(c.file);
-          continue;
-        }
-        if (outcome === "missing-local") {
-          console.log(`  ⚠ ${c.file} does not exist locally — skipping.`);
-          skipped.push(c.file);
-          continue;
-        }
-        console.log(`  → Deterministic merge unavailable for ${c.file}; falling back to AI.`);
-      }
-
-      // AI resolution path
-      await ensurePiCli();
-
-      const state = await ensureMarkers(c.file, projectRoot, manifest, getRepo);
+      const state = await ensureMarkers(c.file, projectRoot, manifest, sides);
 
       if (state === "missing-local") {
         console.log(`  ⚠ ${c.file} does not exist locally — skipping.`);
@@ -574,7 +444,10 @@ async function main() {
   }
 
   // 3. Update the manifest: drop resolved entries, keep failures.
-  await pruneManifest(manifestPath, manifest, resolved);
+  await writeManifest(projectRoot, {
+    ...manifest,
+    conflicts: manifest.conflicts.filter((c) => !resolved.includes(c.file)),
+  });
 
   // 4. Summary + verification
   console.log(`\n## Summary\n`);
@@ -605,23 +478,9 @@ async function fileHasMarkers(projectRoot: string, file: string): Promise<boolea
   }
 }
 
-async function pruneManifest(
-  manifestPath: string,
-  manifest: Manifest,
-  resolved: string[],
-): Promise<void> {
-  const remaining = manifest.conflicts.filter((c) => !resolved.includes(c.file));
-  if (remaining.length === 0) {
-    await rm(manifestPath, { force: true }).catch(() => {});
-    return;
-  }
-  await writeFile(
-    manifestPath,
-    JSON.stringify({ ...manifest, conflicts: remaining }, null, 2) + "\n",
-  ).catch(() => {});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error("\nError:", err.message);
+    process.exit(1);
+  });
 }
-
-main().catch((err) => {
-  console.error("\nError:", err.message);
-  process.exit(1);
-});

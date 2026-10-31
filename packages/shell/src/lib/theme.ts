@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
+import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 
 const THEME_STORAGE_KEY = "groot.theme";
 
 export type Theme = "light" | "dark" | "system";
 export type ResolvedTheme = Exclude<Theme, "system">;
+
+/** The theme choices every picker offers (account menu, ⌘K, settings). */
+export const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string; icon: LucideIcon }> = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+];
 
 let defaultTheme: Theme = "dark";
 let systemThemeQuery: MediaQueryList | undefined;

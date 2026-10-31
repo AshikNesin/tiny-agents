@@ -33,9 +33,7 @@ import { useUiStore } from "./store/ui";
 /** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
-  // Desktop navigation lives in the sidebar, which phones open as a drawer.
-  pageChrome: "sidebar",
-  // Phones open the same sidebar as a drawer from every page's menu button.
+  // Phones open the app's sidebar as a drawer from every page's menu button.
   openNav: () => useUiStore.getState().setMobileOpen(true),
   nav: [...APP_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }],
   login: {

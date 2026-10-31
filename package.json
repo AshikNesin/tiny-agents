@@ -38,7 +38,7 @@
     "check:changesets": "node scripts/check-changesets.mjs",
     "changeset:version": "changeset version",
     "changeset:status": "changeset status",
-    "doctor": "npx react-doctor@latest",
+    "doctor": "pnpm dlx react-doctor@latest",
     "build:client": "vp build",
     "db:generate": "tsx scripts/db-generate.ts",
     "db:studio": "drizzle-kit studio",

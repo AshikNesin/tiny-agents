@@ -1,13 +1,6 @@
 import { Button } from "@groot/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@groot/ui/card";
-import { Moon, Monitor, Sun, type LucideIcon } from "lucide-react";
-import { type Theme, useTheme } from "@groot/shell/lib/theme";
-
-const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: LucideIcon }> = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-];
+import { THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
 
 export function ThemeSettings() {
   const { theme, setTheme } = useTheme();

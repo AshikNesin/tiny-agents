@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
-import type { JobState } from "./constants";
+import type { JobState } from "../lifecycle";
 
 /**
  * Job tables. The queue is the database: `jobs` rows move through

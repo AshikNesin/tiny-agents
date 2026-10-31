@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+/** Which authenticator holds a passkey; the client picks the icon from this. */
+export type PasskeyKind = "security-key" | "synced" | "device";
+
+/**
+ * A passkey as the server presents it over JSON (`GET /passkey/list`,
+ * register/verify, `PATCH /passkey/:id`): no key material, no credential id,
+ * and dates as ISO strings. This is the wire type the client imports
+ * (type-only); `canDelete` is false for a user's last passkey, which the
+ * server refuses to delete.
+ */
+export interface PasskeySummary {
+  id: number;
+  credentialName: string | null;
+  kind: PasskeyKind;
+  /** What to call the authenticator, e.g. "Security key (USB)". */
+  label: string;
+  backedUp: boolean;
+  canDelete: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
 /**
  * Schema for verifying passkey registration
  */
@@ -13,7 +35,6 @@ export const verifyRegistrationSchema = z.object({
  */
 export const verifyAuthenticationSchema = z.object({
   response: z.any(), // AuthenticationResponseJSON from @simplewebauthn/types
-  email: z.email().trim().toLowerCase().optional(),
 });
 
 /**
@@ -32,11 +53,3 @@ export const updatePasskeyNameSchema = z.object({
     .min(1, "Passkey name must not be empty")
     .max(100, "Passkey name must be at most 100 characters"),
 });
-
-/**
- * Type definitions
- */
-export type VerifyRegistrationDTO = z.infer<typeof verifyRegistrationSchema>;
-export type VerifyAuthenticationDTO = z.infer<typeof verifyAuthenticationSchema>;
-export type GenerateAuthenticationOptionsDTO = z.infer<typeof generateAuthenticationOptionsSchema>;
-export type UpdatePasskeyNameDTO = z.infer<typeof updatePasskeyNameSchema>;

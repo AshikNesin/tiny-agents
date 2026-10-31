@@ -27,6 +27,12 @@ const DESTRUCTIVE_TEXT = "text-[color-mix(in_oklch,var(--destructive)_65%,var(--
  * every other badge in the app.
  */
 
+/**
+ * Every job state from `@groot/jobs/lifecycle` (created, active, completed,
+ * failed, cancelled) is a variant below, but the union is spelled out here
+ * rather than imported: `@groot/jobs` depends on `@groot/ui`, so importing
+ * `JobState` would invert the dependency direction.
+ */
 export type StatusVariant =
   | "active"
   | "created"

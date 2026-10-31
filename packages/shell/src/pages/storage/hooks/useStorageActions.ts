@@ -9,7 +9,7 @@ import {
   useDeleteFolder,
   useRenameFile,
   useStorageFiles,
-  useUploadFile,
+  useUploadFiles,
 } from "./useStorage";
 
 /** Download a file via a programmatic blob URL. */
@@ -61,7 +61,7 @@ export function useStorageActions() {
   const confirm = useConfirm();
 
   const { data: files = [], isLoading, refetch: refetchFiles } = useStorageFiles(currentPath);
-  const uploadFile = useUploadFile();
+  const uploadFiles = useUploadFiles();
   const deleteFiles = useDeleteFiles();
   const deleteFolder = useDeleteFolder();
   const createFolder = useCreateFolder();
@@ -104,15 +104,19 @@ export function useStorageActions() {
     const filesList = event.target.files;
     if (!filesList || !filesList.length) return;
     const files = Array.from(filesList);
-    // Upload each file with the current folder prefix so multi-file uploads
-    // land in the same folder as single-file uploads. (The bulk-upload endpoint
-    // ignores folder targeting, so per-file uploads are used for correctness.)
-    Promise.allSettled(
-      files.map((file) => uploadFile.mutateAsync({ file, filePath: `${currentPath}${file.name}` })),
-    )
-      .then((results) => {
-        const successCount = results.filter((r) => r.status === "fulfilled").length;
-        const failureCount = results.length - successCount;
+    uploadFiles
+      .mutateAsync({ files, folder: currentPath })
+      .then(
+        (result) => ({
+          successCount: result.uploadedFiles.length,
+          failureCount: result.failedFiles.length,
+        }),
+        (error: unknown) => {
+          console.error(error);
+          return { successCount: 0, failureCount: files.length };
+        },
+      )
+      .then(({ successCount, failureCount }) => {
         if (files.length === 1) {
           if (failureCount) {
             toast.error("Upload failed", { description: "Unable to upload file" });

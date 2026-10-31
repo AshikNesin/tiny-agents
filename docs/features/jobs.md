@@ -21,6 +21,30 @@ app-owned (`apps/web/src/server/api/<feature>/<feature>.jobs.ts`).
 
 States: `created` → `active` → `completed` | `failed` | `cancelled`.
 
+## Lifecycle (`@groot/jobs/lifecycle`)
+
+One runtime-neutral module holds the state machine; the queue and the
+dashboard both import it, so the buttons a page shows and the requests the
+server accepts cannot drift apart.
+
+| Action   | Allowed from          | Does                                   |
+| -------- | --------------------- | -------------------------------------- |
+| `retry`  | `failed`, `cancelled` | back to `created`, error cleared       |
+| `rerun`  | `completed`, `failed` | queue a fresh copy; the original stays |
+| `resume` | `cancelled`           | back to `created`                      |
+| `cancel` | `created`, `active`   | to `cancelled`                         |
+| `delete` | any state             | remove the row                         |
+
+`JOB_STATES`, `isValidJobState`, `isTerminalJobState`, `JOB_ACTIONS`,
+`canApplyJobAction(action, state)` and `allowedJobActions(state)` are exported
+from `@groot/jobs/lifecycle` (and re-exported by `@groot/jobs/server`).
+
+Each state change is one compare-and-set `UPDATE … WHERE id = ? AND state IN
+(<allowed>) RETURNING`. A cancel that arrives after the tick completed the job
+changes nothing and answers `400`; an unknown job answers `404`
+(`JOB_NOT_FOUND`). The tick guards its own writes the same way (`WHERE state =
+'active'`), so a job cancelled mid-run stays cancelled.
+
 ## Handlers
 
 ```ts
@@ -38,10 +62,10 @@ export function registerDigestJobs(): void {
 ```
 
 `JobContext<T>` is `{ id, name, data, attempt, logger }` (`attempt` is 1 for the
-first run). Register handlers in `registerJobHandlers()`
-(`apps/web/src/server/app.ts`); both entries call it before the first tick.
-Names must not be a reserved path segment (`schedule`, `stats`, `available`,
-`state`, `status`, `bulk-rerun`). A job whose name has no registered handler is
+Register handlers in `startWebApp()`
+(`apps/web/src/server/app.ts`), the one boot sequence both entries run.
+Any non-empty name works (routes address a job by its id, never its name). A
+job whose name has no registered handler is
 never claimed and stays `created`.
 
 ## Queueing and managing
@@ -64,13 +88,13 @@ await addJob(
 await scheduleJob("todo-cleanup", { daysToKeep: 30 }, "0 3 * * *", { timezone: "Asia/Kolkata" });
 ```
 
-| Function                                                                                                                                                | Does                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `addJob(name, data, options?)` → id                                                                                                                     | Insert a `created` row; triggers an inline tick when due                                                    |
-| `scheduleJob(name, data, cron, { timezone? })`                                                                                                          | Create or replace the one schedule for `name` (cron validated by croner)                                    |
-| `editScheduledJob(name, cron, data, options?)`, `cancelScheduledJob(name)`                                                                              | Update / delete a schedule                                                                                  |
-| `retryJob`, `cancelJob`, `resumeJob`, `rerunJob`, `deleteJob` (`{ queueName, jobId }`)                                                                  | failed/cancelled → created · created/active → cancelled · cancelled → created · queue a fresh copy · delete |
-| `getJobs`, `getJobById`, `getJobsByState`, `getFailedJobs`, `getQueueStats`, `getAvailableQueues`, `getScheduledJobs`, `getJobLogs`, `purgeJobsByState` | Queries (`queries.ts`)                                                                                      |
+| Function                                                                                                                 | Does                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `addJob(name, data, options?)` → id                                                                                      | Insert a `created` row; triggers an inline tick when due                                              |
+| `scheduleJob(name, data, cron, { timezone? })`                                                                           | Create or replace the one schedule for `name` (cron validated by croner); replacing keeps `lastRunAt` |
+| `cancelScheduledJob(name)`                                                                                               | Delete a schedule                                                                                     |
+| `retryJob(id)`, `cancelJob(id)`, `resumeJob(id)`, `rerunJob(id)` → new id, `deleteJob(id)`, `rerunJobs(ids)`             | The [lifecycle](#lifecycle-grootjobslifecycle) actions                                                |
+| `getJobs`, `getJobById(id)`, `getQueueStats`, `getAvailableQueues`, `getScheduledJobs`, `getJobLogs`, `purgeJobsByState` | Queries (`queries.ts`)                                                                                |
 
 ## The tick (`packages/jobs/src/server/tick.ts`)
 
@@ -129,33 +153,48 @@ tick does this before marking a job done).
 
 ## HTTP API (`/api/v1/jobs`, JWT)
 
-| Method | Path                                               | Body / query                                       | Returns                                        |
-| ------ | -------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------- |
-| POST   | `/`                                                | `{ jobName, data?, options? }`                     | `201` `{ jobId, jobName, data }`               |
-| POST   | `/schedule`                                        | `{ jobName, cron, data?, options?: { timezone } }` | `201` the schedule                             |
-| GET    | `/schedule`                                        |                                                    | schedules                                      |
-| PUT    | `/schedule/:jobName`                               | `{ cron, data?, options? }`                        | the schedule                                   |
-| DELETE | `/schedule/:jobName`                               |                                                    | `200` `{ success: true }`                      |
-| GET    | `/stats`                                           |                                                    | counts per state                               |
-| GET    | `/available`                                       |                                                    | `{ jobs: string[] }` (names seen + registered) |
-| GET    | `/status/failed`                                   | `?limit`                                           | failed jobs                                    |
-| GET    | `/state/:state`                                    | `?limit&offset`                                    | `{ jobs, total }`                              |
-| DELETE | `/state/:state`                                    |                                                    | `{ count }` purged                             |
-| GET    | `/`                                                | `?state&name&startDate&endDate&limit&offset`       | `{ jobs, total }`                              |
-| GET    | `/:queueName/:jobId`                               |                                                    | the job                                        |
-| GET    | `/:queueName/:jobId/logs`                          | `?afterId`                                         | log rows                                       |
-| DELETE | `/:queueName/:jobId`                               |                                                    | `200` `{ success: true }`                      |
-| POST   | `/:queueName/:jobId/retry` · `/cancel` · `/resume` |                                                    | `200` `{ success: true }`                      |
-| POST   | `/:queueName/:jobId/rerun`                         |                                                    | `{ newJobId, queueName }`                      |
-| POST   | `/bulk-rerun`                                      | `{ jobs: [{ queueName, jobId }] }`                 | per-job results                                |
+| Method | Path                                    | Body / query                                       | Returns                                        |
+| ------ | --------------------------------------- | -------------------------------------------------- | ---------------------------------------------- |
+| POST   | `/`                                     | `{ jobName, data?, options? }`                     | `201` `{ jobId, jobName, data }`               |
+| POST   | `/schedule`                             | `{ jobName, cron, data?, options?: { timezone } }` | `201` the schedule (creates or replaces)       |
+| GET    | `/schedule`                             |                                                    | schedules                                      |
+| DELETE | `/schedule/:jobName`                    |                                                    | `200` `{ success: true }`                      |
+| GET    | `/stats`                                |                                                    | counts per state                               |
+| GET    | `/available`                            |                                                    | `{ jobs: string[] }` (names seen + registered) |
+| DELETE | `/state/:state`                         |                                                    | `{ count }` purged                             |
+| GET    | `/`                                     | `?state&name&startDate&endDate&limit&offset`       | `{ jobs, total }`                              |
+| GET    | `/:jobId`                               |                                                    | the job                                        |
+| GET    | `/:jobId/logs`                          | `?afterId`                                         | log rows                                       |
+| DELETE | `/:jobId`                               |                                                    | `200` `{ success: true }`                      |
+| POST   | `/:jobId/retry` · `/cancel` · `/resume` |                                                    | `200` `{ success: true }`                      |
+| POST   | `/:jobId/rerun`                         |                                                    | `{ newJobId }`                                 |
+| POST   | `/bulk-rerun`                           | `{ jobIds: string[] }`                             | `[{ jobId, success, newJobId?, error? }]`      |
 
-`queueName` is the job name. curl examples in [API requests](../examples/api-requests.md#jobs-jwt).
+`:jobId` is the job's uuid. curl examples in [API requests](../examples/api-requests.md#jobs-jwt).
 
 ## Dashboard
 
 The `/jobs` page comes from `@groot/jobs/client`: `Jobs` and `JobDetail` pages,
-`useJobs` / `useJobDetail` hooks, `jobsApi`, and the table, stats, filter, log
-and dialog components. It talks to the API above through `apiClient`.
+`useJobs` / `useJobDetail` / `useJobActions` hooks, `jobsApi`, and the table,
+stats, filter, log and dialog components. It talks to the API above through
+`apiClient`.
+
+- The table's row menu and the detail page's buttons both render
+  `allowedJobActions(job.state)` and run them through `useJobActions()`, which
+  owns the toasts, the delete confirmation and the query invalidation.
+- `useJobs()` holds only the list: the URL filters and the page of jobs.
+  `JobsTable` owns the row selection (a `Set` of job ids, cleared when the
+  filters change) and renders one accessible table: each row is a `row` named
+  `Job <name> (<short id>)` with a "Select job …" checkbox, an "Actions for
+  job …" menu and a "View details for job …" link to `/jobs/:jobId`. `JobsStats`, `ScheduledJobsPanel` and the job-type pickers load
+  their own data through the hooks in `@groot/jobs/client/queries`.
+- `AddJobDialog` and `ScheduleJobDialog` own their drafts, submit, toast and
+  refresh the queries they affect. Both edit the payload in `JobDataEditor`
+  (CodeMirror). `ScheduleJobDialog` creates a schedule, or edits one when
+  given `schedule` (the name is fixed, the timezone is kept, and it saves
+  through `POST /schedule`).
+- The detail page fetches the job and its logs on load and polls both every
+  2 s while the job is `created` or `active`; polling stops once it finishes.
 
 ## Reference jobs
 

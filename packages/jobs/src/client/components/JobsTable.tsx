@@ -13,37 +13,24 @@ import { listRowGridClass } from "@groot/ui/list-row";
 import { StatusBadge } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { Section } from "@groot/shell/components/layout/Section";
-import { formatDuration, formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
+import { formatLocaleDateTime, formatRelativeTime } from "@groot/shell/lib/utils";
 import { formatJobId } from "@groot/jobs/client/utils";
-import type { Job } from "@groot/jobs/client/types";
-import type { JobsQueryPatch } from "@groot/jobs/client/constants";
-import { STATE_TABS } from "@groot/jobs/client/constants";
+import type { Job, JobAction } from "@groot/jobs/client/types";
+import {
+  JOB_ACTION_UI,
+  JOBS_PAGE_SIZE,
+  stateLabel,
+  type JobsQueryPatch,
+} from "@groot/jobs/client/constants";
+import { useJobActions } from "@groot/jobs/client/useJobActions";
+import { allowedJobActions } from "../../lifecycle";
 import { JobsTableSkeleton } from "./skeletons";
-
-/** Human-readable, capitalized label for a job state (e.g. "Active", "Failed"). */
-function stateLabel(state: string): string {
-  return STATE_TABS.find((t) => t.value === state)?.label ?? state;
-}
-import { ChevronRight, FileText, MoreVertical, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { ChevronRight, FileText, MoreVertical, Play, RefreshCw, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
-function formatJobDuration(start: string | null, end: string | null): string {
-  if (!start || !end) return "N/A";
-  return formatDuration(start, end);
-}
-
-type QueryParams = {
-  state: string;
-  page: number;
-};
-
-type JobActions = {
-  onRetry: (queueName: string, jobId: string) => void;
-  onRerun: (queueName: string, jobId: string) => void;
-  onResume: (queueName: string, jobId: string) => void;
-  onCancel: (queueName: string, jobId: string) => void;
-  onDelete: (queueName: string, jobId: string) => void;
-};
+/** One grid for the header and every row: job · status · menu on mobile, 12 columns from md. */
+const ROW_GRID = "grid-cols-[minmax(0,1fr)_auto_auto] md:grid-cols-12";
 
 type Props = {
   jobs: Job[];
@@ -51,16 +38,16 @@ type Props = {
   total: number;
   error?: string | null;
   onErrorRetry?: () => void;
-  queryParams: QueryParams;
+  queryParams: { state: string; page: number };
   setQueryParams: (patch: JobsQueryPatch) => void;
-  selectedJobs: Set<string>;
-  toggleJobSelection: (queueName: string, jobId: string) => void;
-  toggleSelectAll: () => void;
-  handleBulkRerun: () => void;
-  handlePurge: (state: string) => void;
-} & JobActions;
+};
 
-/** Jobs list: bulk-action bar + desktop grid table + mobile cards + pagination. */
+/**
+ * The jobs list: one accessible table (rows named "Job <name> (<short id>)"),
+ * row selection by job id with a bulk re-run, purge-by-state, and pagination.
+ * Selection only counts rows on the current page; mount it with a key per
+ * filter set to clear it when the filters change.
+ */
 export function JobsTable({
   jobs,
   loading,
@@ -69,32 +56,36 @@ export function JobsTable({
   onErrorRetry,
   queryParams,
   setQueryParams,
-  selectedJobs,
-  toggleJobSelection,
-  toggleSelectAll,
-  handleBulkRerun,
-  handlePurge,
-  onRetry,
-  onRerun,
-  onResume,
-  onCancel,
-  onDelete,
 }: Props) {
-  const pageSize = 50;
+  const { run, rerunMany, purge } = useJobActions();
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const selectedIds = jobs.filter((job) => selected.has(job.id)).map((job) => job.id);
+  const allSelected = jobs.length > 0 && selectedIds.length === jobs.length;
+
+  const toggle = (jobId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(jobId)) next.add(jobId);
+      return next;
+    });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(jobs.map((job) => job.id)));
+  const rerunSelected = async () => {
+    if (await rerunMany(selectedIds)) setSelected(new Set());
+  };
 
   const sectionActions = (
     <>
-      {selectedJobs.size > 0 && (
-        <Button variant="outline" size="sm" onClick={handleBulkRerun}>
+      {selectedIds.length > 0 && (
+        <Button variant="outline" size="sm" onClick={() => void rerunSelected()}>
           <Play className="size-3.5" />
-          Rerun {selectedJobs.size}
+          Rerun {selectedIds.length}
         </Button>
       )}
       {queryParams.state !== "all" && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => handlePurge(queryParams.state)}
+          onClick={() => void purge(queryParams.state)}
           className="text-destructive hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
@@ -138,181 +129,60 @@ export function JobsTable({
               }
             />
           ) : (
-            <>
-              {/* Desktop: CSS Grid Table */}
-              <div className="hidden md:block">
-                <div className="grid grid-cols-12 gap-4 border-b border-border/60 px-4 py-2.5">
-                  <div className={cn(tableColumnHeaderClass, "col-span-5 flex items-center gap-3")}>
+            <div role="table" aria-label="Jobs">
+              <div role="rowgroup" className="border-b border-border/60">
+                <div role="row" className={cn("grid items-center gap-4 px-4 py-2.5", ROW_GRID)}>
+                  <div
+                    role="columnheader"
+                    className={cn(tableColumnHeaderClass, "flex items-center gap-3 md:col-span-5")}
+                  >
                     <Checkbox
-                      checked={jobs.length > 0 && selectedJobs.size === jobs.length}
-                      onCheckedChange={toggleSelectAll}
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
                       aria-label="Select all"
                       className="size-3.5"
                     />
                     <span>Job</span>
                   </div>
-                  <div className={cn(tableColumnHeaderClass, "col-span-2")}>Status</div>
-                  <div className={cn(tableColumnHeaderClass, "col-span-2")}>Created</div>
-                  <div className={cn(tableColumnHeaderClass, "col-span-2")}>Started</div>
-                  <div className="col-span-1" />
-                </div>
-                <div className="divide-y divide-border/40">
-                  {jobs.map((job) => (
-                    <div key={job.id} className={cn("group relative", listRowGridClass)}>
-                      {/* Full-row navigation link — sits above all content except
-                          interactive controls (checkbox, actions) which are lifted
-                          with `relative z-10`. */}
-                      <Link
-                        to={`/jobs/${job.name}/${job.id}`}
-                        className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                        aria-label={`View details for job ${job.name} (${formatJobId(job.id)})`}
-                      />
-                      <div className="col-span-5 flex items-center gap-3 min-w-0">
-                        <Checkbox
-                          checked={selectedJobs.has(
-                            JSON.stringify({ queueName: job.name, jobId: job.id }),
-                          )}
-                          onCheckedChange={() => toggleJobSelection(job.name, job.id)}
-                          aria-label={`Select job ${job.name} (${formatJobId(job.id)})`}
-                          className="relative z-10 size-3.5"
-                        />
-                        <FileText className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-foreground">{job.name}</div>
-                          <div className="truncate font-mono text-xs text-muted-foreground">
-                            {formatJobId(job.id)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-span-2">
-                        <StatusBadge status={job.state} />
-                      </div>
-                      <div
-                        className="col-span-2 text-muted-foreground"
-                        title={job.createdAt ? formatLocaleDateTime(job.createdAt) : "N/A"}
-                      >
-                        {job.createdAt ? formatRelativeTime(job.createdAt) : "N/A"}
-                      </div>
-                      <div
-                        className="col-span-2 text-muted-foreground"
-                        title={job.startedAt ? formatLocaleDateTime(job.startedAt) : "N/A"}
-                      >
-                        {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
-                      </div>
-                      <div className="col-span-1 flex items-center justify-end gap-2">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Actions for job ${job.name} (${formatJobId(job.id)})`}
-                              className="relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-                            >
-                              <MoreVertical className="size-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {(job.state === "failed" || job.state === "cancelled") && (
-                              <DropdownMenuItem onClick={() => onRetry(job.name, job.id)}>
-                                <RefreshCw className="size-3.5" />
-                                Retry
-                              </DropdownMenuItem>
-                            )}
-                            {(job.state === "completed" || job.state === "failed") && (
-                              <DropdownMenuItem onClick={() => onRerun(job.name, job.id)}>
-                                <Play className="size-3.5" />
-                                Re-run
-                              </DropdownMenuItem>
-                            )}
-                            {job.state === "cancelled" && (
-                              <DropdownMenuItem onClick={() => onResume(job.name, job.id)}>
-                                <Play className="size-3.5" />
-                                Resume
-                              </DropdownMenuItem>
-                            )}
-                            {(job.state === "active" || job.state === "created") && (
-                              <DropdownMenuItem onClick={() => onCancel(job.name, job.id)}>
-                                <X className="size-3.5" />
-                                Cancel
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              onClick={() => onDelete(job.name, job.id)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="size-3.5" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <ChevronRight className="size-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  ))}
+                  <div role="columnheader" className={cn(tableColumnHeaderClass, "md:col-span-2")}>
+                    Status
+                  </div>
+                  <div
+                    role="columnheader"
+                    className={cn(tableColumnHeaderClass, "hidden md:col-span-2 md:block")}
+                  >
+                    Created
+                  </div>
+                  <div
+                    role="columnheader"
+                    className={cn(tableColumnHeaderClass, "hidden md:col-span-2 md:block")}
+                  >
+                    Started
+                  </div>
+                  <div role="columnheader" className="md:col-span-1">
+                    <span className="sr-only">Actions</span>
+                  </div>
                 </div>
               </div>
-
-              {/* Mobile: Card View */}
-              <div className="md:hidden divide-y divide-border/40">
+              <div role="rowgroup" className="divide-y divide-border/40">
                 {jobs.map((job) => (
-                  <Link
+                  <JobRow
                     key={job.id}
-                    to={`/jobs/${job.name}/${job.id}`}
-                    className="block space-y-2 px-4 py-3 active:bg-muted/50"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{job.name}</div>
-                          <div className="font-mono text-[11px] text-muted-foreground mt-0.5 truncate">
-                            {formatJobId(job.id)}
-                          </div>
-                        </div>
-                      </div>
-                      <StatusBadge status={job.state} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Created</span>
-                        <div className="font-medium mt-0.5">
-                          {job.createdAt ? formatRelativeTime(job.createdAt) : "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Started</span>
-                        <div className="font-medium mt-0.5">
-                          {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Retries</span>
-                        <div className="font-medium mt-0.5">
-                          {job.retryCount}/{job.retryLimit}
-                        </div>
-                      </div>
-                      {job.startedAt && (
-                        <div>
-                          <span className="text-muted-foreground">Duration</span>
-                          <div className="font-medium mt-0.5">
-                            {formatJobDuration(job.startedAt, job.completedAt)}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </Link>
+                    job={job}
+                    selected={selected.has(job.id)}
+                    onToggle={() => toggle(job.id)}
+                    onAction={(action) => void run(action, job)}
+                  />
                 ))}
               </div>
-            </>
+            </div>
           )}
         </Card>
 
-        {/* Pagination */}
-        {total > pageSize && (
+        {total > JOBS_PAGE_SIZE && (
           <div className="flex justify-between items-center">
             <div className="text-xs text-muted-foreground">
-              Page {queryParams.page + 1} of {Math.ceil(total / pageSize)}
+              Page {queryParams.page + 1} of {Math.ceil(total / JOBS_PAGE_SIZE)}
             </div>
             <div className="flex gap-2">
               <Button
@@ -327,7 +197,7 @@ export function JobsTable({
                 variant="outline"
                 size="sm"
                 onClick={() => setQueryParams({ page: queryParams.page + 1 })}
-                disabled={(queryParams.page + 1) * pageSize >= total}
+                disabled={(queryParams.page + 1) * JOBS_PAGE_SIZE >= total}
               >
                 Next
               </Button>
@@ -336,5 +206,97 @@ export function JobsTable({
         )}
       </div>
     </Section>
+  );
+}
+
+function JobRow({
+  job,
+  selected,
+  onToggle,
+  onAction,
+}: {
+  job: Job;
+  selected: boolean;
+  onToggle: () => void;
+  onAction: (action: JobAction) => void;
+}) {
+  const label = `${job.name} (${formatJobId(job.id)})`;
+  const created = formatRelativeTime(job.createdAt);
+  return (
+    <div
+      role="row"
+      aria-label={`Job ${label}`}
+      className={cn("group relative", listRowGridClass, ROW_GRID)}
+    >
+      <div role="cell" className="flex min-w-0 items-center gap-3 md:col-span-5">
+        {/* Full-row navigation link; the checkbox and the menu sit above it (z-10). */}
+        <Link
+          to={`/jobs/${job.id}`}
+          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          aria-label={`View details for job ${label}`}
+        />
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggle}
+          aria-label={`Select job ${label}`}
+          className="relative z-10 size-3.5"
+        />
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <div className="truncate font-medium text-foreground">{job.name}</div>
+          <div className="truncate font-mono text-xs text-muted-foreground">
+            {formatJobId(job.id)}
+            <span className="font-sans md:hidden"> · {created}</span>
+          </div>
+        </div>
+      </div>
+      <div role="cell" className="md:col-span-2">
+        <StatusBadge status={job.state} />
+      </div>
+      <div
+        role="cell"
+        className="hidden text-muted-foreground md:col-span-2 md:block"
+        title={formatLocaleDateTime(job.createdAt)}
+      >
+        {created}
+      </div>
+      <div
+        role="cell"
+        className="hidden text-muted-foreground md:col-span-2 md:block"
+        title={job.startedAt ? formatLocaleDateTime(job.startedAt) : "N/A"}
+      >
+        {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
+      </div>
+      <div role="cell" className="flex items-center justify-end gap-2 md:col-span-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Actions for job ${label}`}
+              className="relative z-10 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:data-[state=open]:opacity-100"
+            >
+              <MoreVertical className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {allowedJobActions(job.state).map((action) => {
+              const { label: actionLabel, icon: Icon, destructive } = JOB_ACTION_UI[action];
+              return (
+                <DropdownMenuItem
+                  key={action}
+                  onClick={() => onAction(action)}
+                  className={destructive ? "text-destructive focus:text-destructive" : undefined}
+                >
+                  <Icon className="size-3.5" />
+                  {actionLabel}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ChevronRight className="hidden size-4 text-muted-foreground md:block" />
+      </div>
+    </div>
   );
 }
