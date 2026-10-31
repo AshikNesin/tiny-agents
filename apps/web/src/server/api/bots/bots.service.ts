@@ -22,7 +22,6 @@ import {
   db,
   botChats,
   botConnections,
-  botMessages,
   bots,
   botSkills,
   connections,
@@ -42,6 +41,7 @@ import {
 } from "./bots.conversation";
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 import { findPastChat, recordPastChat, type EndingChat } from "./chats.history";
+import { createDeliveries } from "./bots.delivery";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -61,6 +61,7 @@ export type BotAgentRuntime = Pick<
   | "pendingQuestions"
   | "answerQuestions"
   | "dismissQuestions"
+  | "isBusy"
 >;
 
 function runtime(): BotAgentRuntime {
@@ -392,31 +393,18 @@ async function deliverMentions(
     .where(and(inArray(bots.id, input.mentions ?? []), ne(bots.id, host.id)));
   if (targets.length === 0) return;
   const ownerContext = `[From the owner, in ${host.name}'s chat]`;
+  const deliveries = createDeliveries(rt);
   for (const target of targets) {
-    const requestId = `mention-${input.requestId}-${target.id}`;
     try {
-      const existing = await db.query.botMessages.findFirst({
-        where: eq(botMessages.requestId, requestId),
-        columns: { id: true },
-      });
-      if (existing) continue;
-      await submitToBot(
-        target.id,
-        {
-          requestId,
-          text: mentionText(ownerContext, sanitizePeerText(input.text)),
-          peer: { kind: "mention", hostName: host.name },
-        },
-        rt,
-      );
-      await db.insert(botMessages).values({
-        fromBotId: null,
-        toBotId: target.id,
-        replyToBotId: host.id,
+      await deliveries.deliver({
+        requestId: `mention-${input.requestId}-${target.id}`,
         kind: "mention",
-        requestId,
+        toBotId: target.id,
+        fromBotId: null,
+        replyToBotId: host.id,
         text: input.text,
-        deliveredAt: new Date(),
+        prompt: mentionText(ownerContext, sanitizePeerText(input.text)),
+        peer: { kind: "mention", hostName: host.name },
       });
     } catch (error) {
       logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");

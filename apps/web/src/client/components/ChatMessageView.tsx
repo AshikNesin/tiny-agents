@@ -5,8 +5,8 @@ import { Streamdown } from "streamdown";
 import { markdownComponents } from "../lib/markdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
-import { botsApi } from "../lib/bots-api";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
+import { type OwnerActions, useOwnerActions, useOwnerDecision } from "../lib/owner-actions";
 import { BotAvatar } from "./BotAvatar";
 import { BotHandoff } from "./BotHandoff";
 import {
@@ -33,7 +33,6 @@ import { AskedQuestions, QuestionCard } from "./QuestionCard";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
-import { errorMessage } from "../lib/errors";
 
 /** "14:05" today, "Mon 14:05" this week, "12 Oct, 14:05" before; the full date in the tooltip. */
 function messageTime(at: number, now = Date.now()): { short: string; full: string } {
@@ -234,26 +233,17 @@ function statusIcon(call: ChatToolCall) {
 function ApprovalCard({
   call,
   ask,
-  botId,
+  actions,
   botName,
 }: {
-  call: ChatToolCall;
+  call: ChatToolCall & { taskId: number };
   ask: string;
-  botId: string;
+  actions: OwnerActions;
   botName: string;
 }) {
-  const [busy, setBusy] = useState(false);
-  const decide = async (decision: "approved" | "denied", alwaysAllow?: string) => {
-    if (busy || call.taskId === undefined) return;
-    setBusy(true);
-    try {
-      await botsApi.decideApproval(botId, call.taskId, decision, alwaysAllow);
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to answer"));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, run } = useOwnerDecision("Failed to answer");
+  const decide = (decision: "approved" | "denied", alwaysAllow?: string) =>
+    run(() => actions.decideApproval(call.taskId, decision, { alwaysAllow }));
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
@@ -299,26 +289,17 @@ const VAULT_VERB: Record<string, string> = {
 /** A vault use's approval (issue #56): the item and where it goes, never the value. */
 function VaultApprovalCard({
   call,
-  botId,
+  actions,
   botName,
 }: {
-  call: ChatToolCall & { vault: NonNullable<ChatToolCall["vault"]> };
-  botId: string;
+  call: ChatToolCall & { taskId: number; vault: NonNullable<ChatToolCall["vault"]> };
+  actions: OwnerActions;
   botName: string;
 }) {
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useOwnerDecision("Failed to answer");
   const { vault } = call;
-  const decide = async (decision: "approved" | "denied", grant?: boolean) => {
-    if (busy || call.taskId === undefined) return;
-    setBusy(true);
-    try {
-      await botsApi.decideApproval(botId, call.taskId, decision, undefined, grant);
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to answer"));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const decide = (decision: "approved" | "denied", grant?: boolean) =>
+    run(() => actions.decideApproval(call.taskId, decision, { grant }));
   const what = vault.card ? `${vault.card.brand} ••${vault.card.last4}` : vault.label;
   const verb = VAULT_VERB[vault.tool] ?? "use";
   const where = vault.tool === "http_request" ? `to ${vault.target}` : `on ${vault.target}`;
@@ -443,18 +424,17 @@ function ToolRow({
   call,
   label,
   ask,
-  botId,
   botName,
-  readOnly = false,
 }: {
   call: ChatToolCall;
   label: string;
   ask: string;
-  botId: string;
   botName: string;
-  /** A past chat (issue #101): what still waits there can no longer be answered. */
-  readOnly?: boolean;
 }) {
+  // No owner actions: a Past chat (issue #101), where what still waits can
+  // no longer be answered.
+  const actions = useOwnerActions();
+  const readOnly = !actions;
   const summary = summarizeArgs(call);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const waiting = call.status.startsWith("awaiting_");
@@ -495,13 +475,13 @@ function ToolRow({
     ) : null;
 
   // data-waiting: what a notification's ?focus= link scrolls to (focus-param.ts).
-  if (!readOnly && call.status === "awaiting_approval" && call.taskId !== undefined) {
+  if (actions && call.status === "awaiting_approval" && call.taskId !== undefined) {
     if (call.vault) {
       return (
         <div data-waiting={`approval:${call.taskId}`}>
           <VaultApprovalCard
-            call={{ ...call, vault: call.vault }}
-            botId={botId}
+            call={{ ...call, taskId: call.taskId, vault: call.vault }}
+            actions={actions}
             botName={botName}
           />
         </div>
@@ -509,13 +489,18 @@ function ToolRow({
     }
     return (
       <div data-waiting={`approval:${call.taskId}`}>
-        <ApprovalCard call={call} ask={ask} botId={botId} botName={botName} />
+        <ApprovalCard
+          call={{ ...call, taskId: call.taskId }}
+          ask={ask}
+          actions={actions}
+          botName={botName}
+        />
       </div>
     );
   }
 
   if (
-    !readOnly &&
+    actions &&
     call.status === "awaiting_credentials" &&
     call.taskId !== undefined &&
     call.credentials
@@ -527,12 +512,12 @@ function ToolRow({
 
   // ask_owner: the questionnaire while it waits, then the questions and answers.
   if (call.questions) {
-    if (!readOnly && call.status === "awaiting_answer" && call.taskId !== undefined) {
+    if (actions && call.status === "awaiting_answer" && call.taskId !== undefined) {
       return (
         <div data-waiting={`question:${call.taskId}`}>
           <QuestionCard
             call={{ ...call, taskId: call.taskId, questions: call.questions }}
-            botId={botId}
+            actions={actions}
             botName={botName}
           />
         </div>
@@ -628,27 +613,23 @@ export function toolAskLabel(askLabels: ToolLabels, labels: ToolLabels, name: st
 export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
-  botId?: string;
   toolLabels?: ToolLabels;
   /** Tool name → imperative label for approval cards ("open a page"). */
   toolAskLabels?: ToolLabels;
-  /** A past chat (issue #101): approval and question cards render without actions. */
-  readOnly?: boolean;
 }
 
 /**
  * One transcript row. User messages are right-aligned dark pills; assistant
  * replies are left-aligned light cards with markdown (PRD §6.2). Tool calls are Trace steps above the
- * reply; a call waiting for approval renders its Confirmation card.
+ * reply; a call waiting for approval renders its Confirmation card, acting
+ * through the `OwnerActions` in scope (none in a Past chat: no actions).
  * Compaction entries become a divider marker.
  */
 export function ChatMessageView({
   message,
   botName,
-  botId,
   toolLabels = {},
   toolAskLabels = {},
-  readOnly = false,
 }: ChatMessageViewProps) {
   if (message.role === "marker") {
     return (
@@ -701,7 +682,7 @@ export function ChatMessageView({
     );
   }
 
-  return assistantView(message, { botName, botId, toolLabels, toolAskLabels, readOnly });
+  return assistantView(message, { botName, toolLabels, toolAskLabels });
 }
 
 /** One peer-traffic user message as a Grok-style attributed card. */
@@ -821,13 +802,11 @@ function assistantView(
   message: ChatMessage,
   ctx: {
     botName: string;
-    botId?: string;
     toolLabels: ToolLabels;
     toolAskLabels: ToolLabels;
-    readOnly: boolean;
   },
 ) {
-  const { botName, botId, toolLabels, toolAskLabels, readOnly } = ctx;
+  const { botName, toolLabels, toolAskLabels } = ctx;
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -844,9 +823,7 @@ function assistantView(
                 call={call}
                 label={toolLabel(toolLabels, call.name)}
                 ask={toolAskLabel(toolAskLabels, toolLabels, call.name)}
-                botId={botId ?? ""}
                 botName={botName}
-                readOnly={readOnly}
               />
             ))}
           </div>

@@ -11,8 +11,8 @@ import { db, botSkills, bots, routines, skills } from "../../../../apps/web/src/
 import {
   conversationOwner,
   isRoutineConversation,
+  isUnattended,
 } from "../../../../apps/web/src/server/api/bots/bots.owner";
-import { isUnattended } from "../../../../apps/web/src/server/api/bots/bots.unattended";
 import { browserTargetForConversation } from "../../../../apps/web/src/server/api/bots/browser.targets";
 import { skillStore } from "../../../../apps/web/src/server/api/skills/skills.store";
 

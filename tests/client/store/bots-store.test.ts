@@ -98,6 +98,48 @@ describe("bots store — optimistic send", () => {
     emit(botId, { type: "pending-remove", id: "x" });
     expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
   });
+
+  it("a repeated text does not clear a newer Echo: confirmation is by request id", () => {
+    const botId = "bot-repeat";
+    useBotsStore.getState().connectChat(botId);
+    const earlier = {
+      id: "e1",
+      role: "user",
+      text: "ok",
+      requestId: "req-old",
+      status: "done",
+      createdAt: 1_000,
+    };
+    emit(botId, { type: "snapshot", state: { messages: [earlier], busy: false } });
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "req-new", text: "ok", createdAt: 60_000 },
+    });
+
+    // A reconnect snapshot still holding only the earlier "ok" keeps the new Echo.
+    emit(botId, { type: "snapshot", state: { messages: [earlier], busy: false } });
+    expect(useBotsStore.getState().chats[botId]!.pending.map((p) => p.id)).toEqual(["req-new"]);
+
+    // Its own confirmation clears it.
+    emit(botId, {
+      type: "upsert",
+      message: { ...earlier, id: "e2", requestId: "req-new", createdAt: 60_100 },
+    });
+    expect(useBotsStore.getState().chats[botId]!.pending).toHaveLength(0);
+  });
+
+  it("an earlier legacy message (no request id) with the same text does not clear a newer Echo", () => {
+    const botId = "bot-legacy";
+    useBotsStore.getState().connectChat(botId);
+    const legacy = { id: "e1", role: "user", text: "ok", status: "done", createdAt: 1_000 };
+    emit(botId, { type: "snapshot", state: { messages: [legacy], busy: false } });
+    emit(botId, {
+      type: "pending-add",
+      message: { id: "req-new", text: "ok", createdAt: 60_000 },
+    });
+    emit(botId, { type: "snapshot", state: { messages: [legacy], busy: false } });
+    expect(useBotsStore.getState().chats[botId]!.pending.map((p) => p.id)).toEqual(["req-new"]);
+  });
 });
 
 describe("bots store — routine run cards (issue #63)", () => {
@@ -154,7 +196,7 @@ describe("bots store — stream health", () => {
     emit(botId, { type: "snapshot", state: { messages: [], busy: false } });
     expect(useBotsStore.getState().chats[botId]!.connected).toBe(true);
 
-    // The connectChat callback handles {type:error} by clearing connected.
+    // The reducer handles {type:error} by clearing connected.
     const path = `/api/v1/bots/${botId}/stream`;
     listeners.get(path)?.({ type: "error", message: "SSE 502" });
     expect(useBotsStore.getState().chats[botId]!.connected).toBe(false);

@@ -1,20 +1,19 @@
 /**
  * Routine CRUD + lifecycle over Drizzle. Thin: schedule math lives in
- * routines.schedule.ts, dispatch in routines.jobs.ts. Every mutation that can
+ * routines.schedule.ts, dispatch in routines.jobs.ts, the chain in routines.chain.ts. Every mutation that can
  * move nextRunAt reconciles the pending queue job (cancel the old, enqueue
  * the new), so the queue and the row never disagree.
  *
- * Blocked runs (issue #87) count in `blockedStreak`; the third in a row
- * pauses the routine through the same disarm path as a manual pause and
- * records why in `pausedReason`. Arming it again (resume) starts over.
+ * Arming a routine again (resume) starts its blocked-run count over
+ * (issue #87; the count itself is routines.runs.ts's).
  */
-import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import { cancelJob } from "@groot/jobs/server/queue";
 import { bots, db, routineRuns, routines } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { dispatchOccurrence, enqueueOccurrence } from "./routines.jobs";
+import { cancelPendingJob, disarmRoutine, enqueueOccurrence } from "./routines.chain";
+import { dispatchOccurrence } from "./routines.jobs";
 import {
   MAX_ROUTINES,
   describeSchedule,
@@ -76,15 +75,6 @@ async function findRoutine(id: string): Promise<RoutineRow> {
   return row;
 }
 
-async function cancelPendingJob(pendingJobId: string | null): Promise<void> {
-  if (!pendingJobId) return;
-  try {
-    await cancelJob(pendingJobId);
-  } catch {
-    // The job may already have fired or been purged; cancellation is advisory.
-  }
-}
-
 /**
  * Stop a routine's conversation the app no longer uses (the routine moved to
  * another bot, or is gone). Its history stays in agent.db, like a chat's after
@@ -117,15 +107,6 @@ async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<v
   await db
     .update(routines)
     .set({ enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null })
-    .where(eq(routines.id, id));
-}
-
-/** Disable the chain: cancel the queued job, clear the materialized slot. */
-async function disarmRoutine(id: string, pendingJobId: string | null): Promise<void> {
-  await cancelPendingJob(pendingJobId);
-  await db
-    .update(routines)
-    .set({ enabled: false, nextRunAt: null, pendingJobId: null })
     .where(eq(routines.id, id));
 }
 
@@ -267,59 +248,19 @@ export async function resume(id: string): Promise<ReturnType<typeof toApi>> {
   return get(id);
 }
 
-/** Blocked runs in a row that pause a routine (issue #87). */
-export const BLOCKED_RUNS_BEFORE_PAUSE = 3;
-const PAUSED_REASON_CHARS = 500;
-
 /**
- * A run of the routine ended blocked: count it, and pause the routine once
- * BLOCKED_RUNS_BEFORE_PAUSE runs in a row have. Returns the paused reason
- * when this run paused it (the caller notifies once), else null; a routine
- * that is already paused (a manual run) only counts.
+ * Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5).
+ * Its slot is the click's instant to the millisecond, so two clicks are two
+ * runs.
  */
-export async function recordBlockedRun(id: string, reason: string): Promise<string | null> {
-  const [row] = await db
-    .update(routines)
-    .set({ blockedStreak: sql`${routines.blockedStreak} + 1` })
-    .where(eq(routines.id, id))
-    .returning({
-      enabled: routines.enabled,
-      pendingJobId: routines.pendingJobId,
-      blockedStreak: routines.blockedStreak,
-    });
-  if (!row) throw Boom.notFound("Routine not found");
-  if (!row.enabled || row.blockedStreak < BLOCKED_RUNS_BEFORE_PAUSE) return null;
-  const pausedReason = `Paused after ${row.blockedStreak} blocked runs: ${reason}`.slice(
-    0,
-    PAUSED_REASON_CHARS,
-  );
-  await disarmRoutine(id, row.pendingJobId);
-  await db.update(routines).set({ pausedReason }).where(eq(routines.id, id));
-  return pausedReason;
-}
-
-/** A run of the routine finished some other way: the blocked streak is broken. */
-export async function clearBlockedStreak(id: string): Promise<void> {
-  await db
-    .update(routines)
-    .set({ blockedStreak: 0 })
-    .where(and(eq(routines.id, id), gt(routines.blockedStreak, 0)));
-}
-
-/** Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5). */
 export async function runNow(id: string): Promise<{ runId: string }> {
   const row = await findRoutine(id);
   const now = new Date();
-  const scheduledFor = new Date(now.getTime() - now.getMilliseconds());
-  await dispatchOccurrence(
-    { routineId: row.id, scheduledFor: scheduledFor.toISOString(), trigger: "manual" },
+  const runId = await dispatchOccurrence(
+    { routineId: row.id, scheduledFor: now.toISOString(), trigger: "manual" },
     now,
   );
-  const run = await db.query.routineRuns.findFirst({
-    where: and(eq(routineRuns.routineId, row.id), eq(routineRuns.scheduledFor, scheduledFor)),
-    columns: { id: true },
-  });
-  return { runId: run?.id ?? "" };
+  return { runId: runId ?? "" };
 }
 
 export async function listRuns(id: string, limit: number) {

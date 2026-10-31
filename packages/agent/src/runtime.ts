@@ -50,7 +50,7 @@ import {
   QuestionsDoc,
   storedQuestions,
 } from "./toolkits/questions";
-import { REPORT_ROUTINE_BLOCKED } from "./toolkits/routines";
+import { finishedReplyOf } from "./replies";
 import {
   attachmentsOf,
   chatState,
@@ -71,7 +71,6 @@ import type {
   ChatPage,
   ChatState,
   ChatSubscription,
-  ChatToolCall,
   ConversationRef,
   FinishedReply,
   LastMessage,
@@ -731,30 +730,28 @@ export class AgentRuntime {
         content,
         requestId: input.requestId,
         ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
-        ...(input.attachments?.length || input.peer
-          ? {
-              entry: {
-                kind: CHAT_USER_ENTRY,
-                data: {
-                  requestId: input.requestId,
-                  ...(input.peer ? { peer: input.peer } : {}),
-                  ...(input.attachments?.length
-                    ? {
-                        attachments: input.attachments.map((a) => ({
-                          uploadId: a.uploadId,
-                          kind: a.kind,
-                          name: a.name,
-                          mimeType: a.mimeType,
-                          size: a.size,
-                          ...(a.width !== undefined ? { width: a.width } : {}),
-                          ...(a.height !== undefined ? { height: a.height } : {}),
-                        })),
-                      }
-                    : {}),
-                } as unknown as JsonValue,
-              },
-            }
-          : {}),
+        // Every user message records its request id on the entry, so a
+        // client can confirm its Echo by id instead of by text.
+        entry: {
+          kind: CHAT_USER_ENTRY,
+          data: {
+            requestId: input.requestId,
+            ...(input.peer ? { peer: input.peer } : {}),
+            ...(input.attachments?.length
+              ? {
+                  attachments: input.attachments.map((a) => ({
+                    uploadId: a.uploadId,
+                    kind: a.kind,
+                    name: a.name,
+                    mimeType: a.mimeType,
+                    size: a.size,
+                    ...(a.width !== undefined ? { width: a.width } : {}),
+                    ...(a.height !== undefined ? { height: a.height } : {}),
+                  })),
+                }
+              : {}),
+          } as unknown as JsonValue,
+        },
       },
       ctx,
     );
@@ -803,7 +800,7 @@ export class AgentRuntime {
     for (const entry of page.items) {
       const message = entry.model?.[0];
       if (!message) continue;
-      if (entry.kind === "pi.user" && message.role === "user") {
+      if ((entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) && message.role === "user") {
         const text =
           typeof message.content === "string"
             ? message.content
@@ -836,26 +833,7 @@ export class AgentRuntime {
   async finishedReplies(ref: ConversationRef): Promise<FinishedReply[]> {
     const state = await this.readChat(ref);
     if (state.busy) return [];
-    const replies: FinishedReply[] = [];
-    for (const message of state.messages) {
-      if (message.role !== "assistant" || message.status === "streaming") continue;
-      const error = message.status === "error" ? message.error : undefined;
-      const refused = message.toolCalls
-        ?.filter((call) => call.approval === "refused")
-        .map((call) => call.name);
-      const blocked = blockedReason(message.toolCalls);
-      if (!message.text && error === undefined && !refused?.length && blocked === undefined) {
-        continue;
-      }
-      replies.push({
-        text: message.text,
-        createdAt: message.createdAt,
-        ...(error !== undefined ? { error } : {}),
-        ...(refused?.length ? { refused } : {}),
-        ...(blocked !== undefined ? { blocked } : {}),
-      });
-    }
-    return replies;
+    return state.messages.flatMap((message) => finishedReplyOf(message) ?? []);
   }
 
   /**
@@ -1091,15 +1069,6 @@ export class AgentRuntime {
     if (!conversation) throw new ConversationNotFoundError(ref);
     return conversation;
   }
-}
-
-/** The reason a message's finished `report_routine_blocked` call gave, if it made one (issue #87). */
-function blockedReason(calls: ChatToolCall[] | undefined): string | undefined {
-  const call = calls?.findLast(
-    (candidate) => candidate.name === REPORT_ROUTINE_BLOCKED && candidate.status === "done",
-  );
-  const reason = call?.args.reason;
-  return typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 }
 
 function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {

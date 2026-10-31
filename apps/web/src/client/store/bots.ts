@@ -60,27 +60,55 @@ function attachmentIds(message: { attachments?: { uploadId: string }[] }): strin
 }
 
 /**
- * Whether a confirmed user message is the optimistic echo of `pending`. By
- * request id when the server recorded one: it annotates attachment sends'
- * text (file notes, see_image hints), so their text never matches the
- * echo's. Plain sends keep their text verbatim and match on it.
+ * How far a legacy confirmation's server clock may run behind the Echo's
+ * browser clock and still count as that Echo's.
  */
-function echoMatches(
-  pending: { id: string; text: string; attachments?: { uploadId: string }[] },
-  message: { text: string; requestId?: string; attachments?: { uploadId: string }[] },
+const LEGACY_ECHO_SKEW_MS = 5_000;
+
+/**
+ * Whether a confirmed user message is the Echo `pending`: by request id,
+ * which every owner send records. A message without one (written before
+ * request ids were recorded on every send) falls back to its text and
+ * attachments, and only when it is not older than the Echo: an earlier
+ * message with the same text ("ok") is never mistaken for a new Echo.
+ */
+export function echoMatches(
+  pending: { id: string; text: string; createdAt: number; attachments?: { uploadId: string }[] },
+  message: {
+    text: string;
+    requestId?: string;
+    createdAt: number;
+    attachments?: { uploadId: string }[];
+  },
 ): boolean {
   if (message.requestId) return message.requestId === pending.id;
   return (
+    message.createdAt >= pending.createdAt - LEGACY_ECHO_SKEW_MS &&
     pending.text.trim() === message.text.trim() &&
     attachmentIds(pending).join(",") === attachmentIds(message).join(",")
   );
 }
 
-function applyEvent(state: ChatState, event: ChatEvent): ChatState {
+/** A chat with nothing known yet: before its first snapshot. */
+function emptyChat(unreadFrom: number | null = null): ChatState {
+  return {
+    messages: [],
+    routineRuns: [],
+    busy: false,
+    queued: [],
+    pending: [],
+    connected: false,
+    loaded: false,
+    unreadFrom,
+  };
+}
+
+/** The per-chat reducer: every stream, Echo and connection event lands here. */
+export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
   switch (event.type) {
     case "snapshot":
-      // A fresh snapshot is authoritative: drop every pending echo whose
-      // text now appears as a real user message (confirmed), keep the rest
+      // A fresh snapshot is authoritative: drop every Echo now confirmed by
+      // a real user message (`echoMatches`), keep the rest
       // (still in flight). Echoes whose request id is queued server-side
       // are covered by the queued items instead. `unreadFrom` is session
       // state, not stream state, so it survives the replacement.
@@ -141,6 +169,9 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       };
     case "connected":
       return { ...state, connected: event.connected };
+    case "error":
+      // The stream gave up on this connection; it reconnects with a fresh snapshot.
+      return { ...state, connected: false };
     case "delta":
       return {
         ...state,
@@ -244,45 +275,12 @@ export const useBotsStore = create<BotsState>((set, get) => ({
     set((s) => ({
       chats: {
         ...s.chats,
-        [botId]: s.chats[botId] ?? {
-          messages: [],
-          routineRuns: [],
-          busy: false,
-          queued: [],
-          pending: [],
-          connected: false,
-          loaded: false,
-          unreadFrom: Number.isNaN(unreadFrom) ? null : unreadFrom,
-        },
+        [botId]: s.chats[botId] ?? emptyChat(Number.isNaN(unreadFrom) ? null : unreadFrom),
       },
     }));
     const connection = subscribeSse(
       `/api/v1/bots/${botId}/stream`,
-      (event) => {
-        const typed = event as ChatEvent;
-        if (typed.type === "error") {
-          set((s) => ({
-            chats: {
-              ...s.chats,
-              [botId]: {
-                ...(s.chats[botId] ?? {
-                  messages: [],
-                  routineRuns: [],
-                  busy: false,
-                  queued: [],
-                  pending: [],
-                  connected: false,
-                  loaded: false,
-                  unreadFrom: null,
-                }),
-                connected: false,
-              },
-            },
-          }));
-          return;
-        }
-        get().applyChatEvent(botId, typed);
-      },
+      (event) => get().applyChatEvent(botId, event as ChatEvent),
       {
         onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
         onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
@@ -337,24 +335,9 @@ export const useBotsStore = create<BotsState>((set, get) => ({
   },
 
   applyChatEvent: (botId, event) => {
-    if (event.type === "ping" || event.type === "error") return;
+    if (event.type === "ping") return;
     set((s) => ({
-      chats: {
-        ...s.chats,
-        [botId]: applyEvent(
-          s.chats[botId] ?? {
-            messages: [],
-            routineRuns: [],
-            busy: false,
-            queued: [],
-            pending: [],
-            connected: false,
-            loaded: false,
-            unreadFrom: null,
-          },
-          event,
-        ),
-      },
+      chats: { ...s.chats, [botId]: applyEvent(s.chats[botId] ?? emptyChat(), event) },
     }));
   },
 

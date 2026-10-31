@@ -10,8 +10,7 @@ import { bots, db } from "../../db";
 import { notifyVaultAlert } from "../notifications/notifications.wiring";
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { conversationOwner } from "../bots/bots.owner";
-import { isUnattended, type ChatReader } from "../bots/bots.unattended";
+import { conversationOwner, isUnattended, type ChatReader } from "../bots/bots.owner";
 import {
   audit,
   findItem,

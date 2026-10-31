@@ -68,7 +68,7 @@ export interface ChatMessage {
   text: string;
   /** Attachments the user sent with this message (issue #17). */
   attachments?: AttachmentRef[];
-  /** The send's request id, when the server recorded one (attachment and peer sends). */
+  /** The send's request id (every owner send records one; older entries may lack it). */
   requestId?: string;
   /** Trusted cross-bot attribution (delivery pipeline only; renders as a card). */
   peer?: import("@tiny-agents/agent").ChatMessage["peer"];
@@ -82,8 +82,12 @@ export interface ChatMessage {
   marker?: "compaction";
 }
 
+/** An Echo: the optimistic copy of an owner send, shown until the server confirms it. */
 export interface PendingMessage {
-  /** Client-generated id (crypto.randomUUID), stable across retries. */
+  /**
+   * The send's request id, minted once by the owner-send module
+   * (store/owner-send.ts) and reused by every retry of the same message.
+   */
   id: string;
   text: string;
   createdAt: number;

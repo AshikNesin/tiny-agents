@@ -30,7 +30,8 @@ import {
 } from "./api/bots/bots.runtime";
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
-import { createBotRelay } from "./api/bots/bots.relay";
+import { createDeliveries } from "./api/bots/bots.delivery";
+import { onConversationSettled } from "./api/bots/bots.settled";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { startMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
@@ -153,39 +154,11 @@ async function openRuntime(): Promise<AgentRuntime> {
 async function main(): Promise<void> {
   const runtime = await openRuntime();
 
-  // Fold finished replies into the bot list's denormalised fields.
-  const { recordReply } = await import("./api/bots/bots.service");
-  runtime.onActivity(async (change) => {
-    if (change.busy) return;
-    try {
-      const last = await runtime.lastMessage(change.conversation);
-      if (last?.role === "assistant") {
-        await recordReply(String(change.conversation), last);
-      }
-    } catch {
-      // A deleted bot's conversation is gone from app.db — nothing to update.
-    }
-  });
-
   // Remote MCP connections: install cached tools now, connect in the
   // background (never blocks /health or boot).
   await getConnectionManager()
     .start(runtime)
     .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections"));
-
-  // Bot-to-bot relay (issue #12): a bot that finished replying may owe an
-  // answer to another bot's chat. The boot sweep picks up deliveries
-  // interrupted by a restart.
-  const relay = createBotRelay(runtime);
-  runtime.onActivity(async (change) => {
-    if (change.busy) return;
-    try {
-      await relay.relayForConversation(change.conversation);
-    } catch {
-      // Relays are best-effort; the next idle retries unanswered rows.
-    }
-  });
-  void relay.sweep().catch(() => undefined);
 
   // Push notifications (issue #57): approvals, questions, failed or long runs
   // and routine results reach the owner's phone. A no-op without Pushover
@@ -198,10 +171,26 @@ async function main(): Promise<void> {
     logger.warn({ error }, "Upload extraction sweep failed"),
   );
 
-  // Routines completion (issue #18 phase A): fired runs resolve when their
-  // bot's conversation goes idle; the boot sweep marks runs interrupted by a
-  // restart as failed.
-  startRoutinesWatcher(runtime);
+  // A conversation that settles (its reply finished) answers its Deliveries
+  // (issue #12), resolves its awaiting routine runs (issue #63) and updates
+  // the bot list, in that order (bots.settled.ts). The boot sweeps pick up
+  // what a restart interrupted.
+  const { recordReply } = await import("./api/bots/bots.service");
+  const deliveries = createDeliveries(runtime);
+  const routineRuns = startRoutinesWatcher(runtime);
+  void deliveries.sweep().catch(() => undefined);
+  onConversationSettled(runtime, [
+    { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
+    { name: "routine runs", run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat) },
+    {
+      name: "bot list",
+      run: async (c) => {
+        const last = await runtime.lastMessage(c.conversationId);
+        // A routine's or a Past chat's conversation matches no bot row: nothing to update.
+        if (last?.role === "assistant") await recordReply(String(c.conversationId), last);
+      },
+    },
+  ]);
 
   // Memory capture (issue #22 phase B): idle chats arm a debounce; the quiet
   // window or 6 turns later one side-call extracts durable facts off the

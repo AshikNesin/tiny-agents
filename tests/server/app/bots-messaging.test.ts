@@ -1,7 +1,8 @@
 /**
- * Bot-to-bot delivery (issue #12): mention routing in the bots service and
- * the relay that carries answers back into the asking conversation. Uses the
- * route-test runtime fake (no pi-durable) plus the real SQLite ledger.
+ * Deliveries (issue #12): mention routing in the bots service, bot-to-bot
+ * sends, and answers relayed back into the asking conversation. Routing uses
+ * the route-test runtime fake; answering runs on the real faux-backed
+ * runtime, so reply timing and turn boundaries are the real ones.
  */
 import { asc, eq } from "drizzle-orm";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -9,9 +10,10 @@ import { generateToken } from "@groot/core/utils/jwt.utils";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { db, botMessages, bots, routines } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
-import { createBotRelay } from "../../../apps/web/src/server/api/bots/bots.relay";
+import { createDeliveries } from "../../../apps/web/src/server/api/bots/bots.delivery";
 import { createBotMessagingStore } from "../../../apps/web/src/server/api/bots/bots.messaging";
 import type { AgentRuntime } from "@tiny-agents/agent";
+import { openTestRuntime, TEST_MODEL } from "../../../packages/agent/src/testing";
 
 const token = await generateToken({ userId: 1, email: "relay-test@example.com" });
 
@@ -23,7 +25,7 @@ function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
     abort: vi.fn(),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
-    finishedReplies: vi.fn().mockResolvedValue([]),
+    readChat: vi.fn().mockResolvedValue({ messages: [], busy: false, queued: [] }),
     onActivity: vi.fn().mockReturnValue(() => undefined),
     listModels: vi
       .fn()
@@ -282,180 +284,183 @@ describe("messaging store (issues #13, #15, #16)", () => {
   });
 });
 
-describe("relay", () => {
-  let runtime: ReturnType<typeof fakeRuntime>;
+async function waitUntil(check: () => boolean | Promise<boolean>, what: string) {
+  const deadline = Date.now() + 8_000;
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+describe("answering Deliveries (real runtime)", () => {
+  let rt: AgentRuntime;
 
   beforeEach(async () => {
-    runtime = fakeRuntime();
+    rt = await openTestRuntime({ storePath: ":memory:" });
     await clearTables();
   });
 
   afterEach(async () => {
     await clearTables();
+    await rt.close();
   });
 
-  it("relays a finished reply back into the reply-to conversation and marks it answered", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const answered = Date.now();
-    await db.insert(botMessages).values({
-      fromBotId: null,
-      toBotId: guest.id,
-      replyToBotId: host.id,
-      kind: "mention",
-      requestId: "r1",
-      text: "hello",
-      deliveredAt: new Date(answered - 5_000),
+  async function seedLiveBot(name: string) {
+    const conversation = await rt.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+    const [bot] = await db
+      .insert(bots)
+      .values({ name, modelId: TEST_MODEL, conversationId: String(conversation) })
+      .returning();
+    return { ...bot!, ref: Number(conversation) };
+  }
+
+  const mention = (
+    host: { id: string; name: string },
+    to: string,
+    requestId: string,
+    text: string,
+  ) => ({
+    requestId,
+    kind: "mention" as const,
+    toBotId: to,
+    fromBotId: null,
+    replyToBotId: host.id,
+    text,
+    prompt: text,
+    peer: { kind: "mention" as const, hostName: host.name },
+  });
+
+  const userTexts = async (ref: number) =>
+    (await rt.readChat(ref)).messages.filter((m) => m.role === "user").map((m) => m.text);
+
+  it("relays the Finished reply into the host's chat and marks the Delivery answered", async () => {
+    const host = await seedLiveBot("Host");
+    const guest = await seedLiveBot("Guest");
+    const deliveries = createDeliveries(rt);
+    // As at boot: each idle answers the conversation's Deliveries.
+    rt.onActivity((change) => {
+      if (!change.busy) void deliveries.answer(Number(change.conversation));
     });
-    runtime.finishedReplies.mockResolvedValue([{ text: "Here is my answer", createdAt: answered }]);
-    const relay = createBotRelay(runtime);
-    const relayed = await relay.relayForBot(guest.id);
-    expect(relayed).toBe(1);
-    expect(runtime.submit).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({
-        requestId: expect.stringContaining("botmsg-reply-"),
-        text: expect.stringContaining("**Reply from Guest:**"),
-      }),
-    );
-    const row = await ledgerRow("r1");
-    expect(row?.answeredAt).not.toBeNull();
-    expect(row?.kind).toBe("relay");
-    // Relaying again is a no-op (kind=relay never relays again).
-    expect(await relay.relayForBot(guest.id)).toBe(0);
+    expect(await deliveries.deliver(mention(host, guest.id, "m1", "hello"))).toMatchObject({
+      status: "delivered",
+    });
+    await waitUntil(async () => (await ledgerRow("m1"))?.answeredAt != null, "the answer");
+    expect(await userTexts(host.ref)).toContain("**Reply from Guest:** Echo: hello");
+    const row = await ledgerRow("m1");
+    expect(row).toMatchObject({ kind: "relay", conversationId: String(guest.ref) });
+    // Answering again is a no-op: one answer per Delivery.
+    await waitUntil(() => !rt.isBusy(guest.ref), "the guest to settle");
+    expect(await deliveries.answer(guest.ref)).toBe(0);
   });
 
-  it("leaves deliveries pending while the target has no assistant reply yet", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
+  it("is idempotent: a replayed Delivery is neither resubmitted nor re-recorded", async () => {
+    const host = await seedLiveBot("Host");
+    const guest = await seedLiveBot("Guest");
+    const deliveries = createDeliveries(rt);
+    await deliveries.deliver(mention(host, guest.id, "m-replay", "hi"));
+    expect(await deliveries.deliver(mention(host, guest.id, "m-replay", "hi"))).toEqual({
+      status: "replayed",
+    });
+    expect(await db.select().from(botMessages)).toHaveLength(1);
+  });
+
+  it("gives each of two queued Deliveries its own reply, in order", async () => {
+    const host = await seedLiveBot("Host");
+    const guest = await seedLiveBot("Guest");
+    const deliveries = createDeliveries(rt);
+    await deliveries.deliver(mention(host, guest.id, "q1", "question one"));
+    await deliveries.deliver(mention(host, guest.id, "q2", "question two"));
+    await waitUntil(async () => !rt.isBusy(guest.ref), "the guest to finish both");
+    await deliveries.answer(guest.ref);
+    await waitUntil(async () => (await ledgerRow("q2"))?.answeredAt != null, "both answers");
+    // The second relay may wait behind the host's reply to the first.
+    const relayedTexts = async () =>
+      (await userTexts(host.ref)).filter((text) => text.startsWith("**Reply"));
+    await waitUntil(async () => (await relayedTexts()).length === 2, "both relays to land");
+    expect(await relayedTexts()).toEqual([
+      "**Reply from Guest:** Echo: question one",
+      "**Reply from Guest:** Echo: question two",
+    ]);
+  });
+
+  it("still answers after the target starts a new chat (the Delivery's conversation is pinned)", async () => {
+    const host = await seedLiveBot("Host");
+    const guest = await seedLiveBot("Guest");
+    const deliveries = createDeliveries(rt);
+    await deliveries.deliver(mention(host, guest.id, "pinned", "before the reset"));
+    // "New chat": the bot moves onto a fresh conversation before the relay ran.
+    const fresh = await rt.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+    await db
+      .update(bots)
+      .set({ conversationId: String(fresh) })
+      .where(eq(bots.id, guest.id));
+    await waitUntil(() => !rt.isBusy(guest.ref), "the old chat to finish");
+    await deliveries.answer(guest.ref);
+    await waitUntil(async () => (await ledgerRow("pinned"))?.answeredAt != null, "the answer");
+    expect(await userTexts(host.ref)).toContain("**Reply from Guest:** Echo: before the reset");
+  });
+
+  it("leaves a Delivery unanswered while its request is not in the transcript", async () => {
+    const host = await seedLiveBot("Host");
+    const guest = await seedLiveBot("Guest");
     await db.insert(botMessages).values({
       fromBotId: null,
       toBotId: guest.id,
       replyToBotId: host.id,
       kind: "mention",
-      requestId: "r2",
+      requestId: "not-placed",
       text: "hello",
       deliveredAt: new Date(),
     });
-    runtime.finishedReplies.mockResolvedValue([]);
-    const relay = createBotRelay(runtime);
-    expect(await relay.relayForBot(guest.id)).toBe(0);
-    const row = await ledgerRow("r2");
-    expect(row?.answeredAt).toBeNull();
+    expect(await createDeliveries(rt).sweep()).toBe(0);
+    expect((await ledgerRow("not-placed"))?.answeredAt).toBeNull();
+    expect(await userTexts(host.ref)).toEqual([]);
   });
+});
 
-  it("relayForConversation relays only the bot behind the idle conversation", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const other = await seedBot("Other", "3");
-    const answered = Date.now();
-    for (const [target, requestId] of [
-      [guest, "r-guest"],
-      [other, "r-other"],
-    ] as const) {
-      await db.insert(botMessages).values({
-        fromBotId: null,
-        toBotId: target.id,
-        replyToBotId: host.id,
-        kind: "mention",
-        requestId,
-        text: "hello",
-        deliveredAt: new Date(answered - 5_000),
-      });
-    }
-    runtime.finishedReplies.mockResolvedValue([{ text: "Guest's answer", createdAt: answered }]);
-    const relay = createBotRelay(runtime);
-    // Conversation 2 is Guest's: only Guest's delivery is read and relayed.
-    expect(await relay.relayForConversation(2)).toBe(1);
-    expect(runtime.finishedReplies).toHaveBeenCalledTimes(1);
-    expect(runtime.finishedReplies).toHaveBeenCalledWith(2);
-    const rows = await db.select().from(botMessages).orderBy(asc(botMessages.requestId));
-    expect(rows.map((row) => [row.requestId, row.answeredAt !== null])).toEqual([
-      ["r-guest", true],
-      ["r-other", false],
-    ]);
-    // A conversation with nothing pending reads no transcript at all.
-    expect(await relay.relayForConversation(1)).toBe(0);
-    expect(runtime.finishedReplies).toHaveBeenCalledTimes(1);
-  });
+describe("answering Deliveries (failed replies)", () => {
+  beforeEach(clearTables);
+  afterEach(clearTables);
 
-  it("never relays a stale reply that predates the delivery (boot sweep)", async () => {
+  it("relays a note, not the provider's message, when the reply failed", async () => {
     const host = await seedBot("Host", "1");
     const guest = await seedBot("Guest", "2");
     await db.insert(botMessages).values({
       fromBotId: null,
       toBotId: guest.id,
-      replyToBotId: host.id,
-      kind: "mention",
-      requestId: "r3",
-      text: "hello",
-      deliveredAt: new Date(),
-    });
-    // The guest's last reply predates the delivery: a restart sweep must
-    // not present it as the answer.
-    runtime.finishedReplies.mockResolvedValue([
-      { text: "Old reply before the mention", createdAt: Date.now() - 60_000 },
-    ]);
-    const relay = createBotRelay(runtime);
-    expect(await relay.relayForBot(guest.id)).toBe(0);
-    const row = await ledgerRow("r3");
-    expect(row?.answeredAt).toBeNull();
-  });
-
-  it("does not relay a model error as an answer", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const delivered = Date.now() - 5_000;
-    await db.insert(botMessages).values({
-      fromBotId: null,
-      toBotId: guest.id,
+      conversationId: "2",
       replyToBotId: host.id,
       kind: "mention",
       requestId: "r-error",
       text: "hello",
-      deliveredAt: new Date(delivered),
+      deliveredAt: new Date(),
     });
-    runtime.finishedReplies.mockResolvedValue([
-      { text: "", createdAt: delivered + 1_000, error: "Provider unavailable" },
-    ]);
-    const relay = createBotRelay(runtime);
-    expect(await relay.relayForBot(guest.id)).toBe(0);
-    expect(runtime.submit).not.toHaveBeenCalled();
-  });
-
-  it("gives each of two queued deliveries its own reply, in order", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const deliveredAt = new Date();
-    for (const [requestId, text] of [
-      ["first", "question one"],
-      ["second", "question two"],
-    ] as const) {
-      await db.insert(botMessages).values({
-        fromBotId: null,
-        toBotId: guest.id,
-        replyToBotId: host.id,
-        kind: "mention",
-        requestId,
-        text,
-        deliveredAt,
-      });
-    }
-    runtime.finishedReplies.mockResolvedValue([
-      { text: "Answer to question one", createdAt: deliveredAt.getTime() + 1_000 },
-      { text: "Answer to question two", createdAt: deliveredAt.getTime() + 2_000 },
-    ]);
-    const relay = createBotRelay(runtime);
-    expect(await relay.relayForBot(guest.id)).toBe(2);
-    const texts = runtime.submit.mock.calls.map((call: unknown[]) => call[1] as { text: string });
-    expect(texts.map((t) => t.text)).toEqual([
-      "**Reply from Guest:** Answer to question one",
-      "**Reply from Guest:** Answer to question two",
-    ]);
-    for (const requestId of ["first", "second"]) {
-      const row = await ledgerRow(requestId);
-      expect(row?.answeredAt).not.toBeNull();
-      expect(row?.answerReplyAt).not.toBeNull();
-    }
+    const runtime = fakeRuntime({
+      readChat: vi.fn().mockResolvedValue({
+        busy: false,
+        queued: [],
+        messages: [
+          {
+            id: "e1",
+            role: "user",
+            text: "hello",
+            requestId: "r-error",
+            status: "done",
+            createdAt: 1,
+          },
+          {
+            id: "e2",
+            role: "assistant",
+            text: "",
+            status: "error",
+            error: "Provider unavailable: key sk-123",
+            createdAt: 2,
+          },
+        ],
+      }),
+    });
+    expect(await createDeliveries(runtime).answer(2)).toBe(1);
+    const relayed = vi.mocked(runtime.submit).mock.calls[0]![1] as { text: string };
+    expect(relayed.text).toBe("**Reply from Guest:** (couldn't answer: the model failed)");
   });
 });

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Menu, MessageSquareReply, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -15,25 +15,15 @@ import { useBotsStore } from "../store/bots";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
-import { RoutineRuns } from "./RoutineRuns";
-import { formatDayDivider } from "../lib/day-divider";
-import { chatTimeline } from "../lib/chat-timeline";
+import { Transcript, type TranscriptPages } from "./Transcript";
 import { oldestEntryId, prependOlder } from "../lib/chat-history";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage } from "../lib/chat-types";
-import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "./ui/message-scroller";
-import { errorMessage } from "../lib/errors";
+import type { ChatMessage, RoutineRunCard } from "../lib/chat-types";
 
-const NO_TOOL_LABELS: { done: ToolLabels; ask: ToolLabels } = { done: {}, ask: {} };
+const NO_RUNS: RoutineRunCard[] = [];
+import { MessageScrollerProvider } from "./ui/message-scroller";
+import { errorMessage } from "../lib/errors";
 
 interface PastChatPaneProps {
   bot: Bot;
@@ -63,11 +53,12 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
   const resetChat = useBotsStore((s) => s.resetChat);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const [view, setView] = useState<PastChatView | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  const [loaded, setLoaded] = useState<{ messages: ChatMessage[]; hasMore: boolean }>({
+    messages: [],
+    hasMore: false,
+  });
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [toolLabels, setToolLabels] = useState(NO_TOOL_LABELS);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,8 +68,7 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
       .then((next) => {
         if (cancelled) return;
         setView(next);
-        setMessages(next.state.messages);
-        setHasMore(Boolean(next.state.hasMore));
+        setLoaded({ messages: next.state.messages, hasMore: Boolean(next.state.hasMore) });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -90,78 +80,31 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
     };
   }, [bot.id, chatId, navigate]);
 
-  useEffect(() => {
-    void botsApi
-      .capabilities()
-      .then((capabilities) => {
-        const tools = capabilities.flatMap((capability) => capability.tools);
-        setToolLabels({
-          done: Object.fromEntries(tools.map((tool) => [tool.name, tool.label])),
-          ask: Object.fromEntries(
-            tools.flatMap((tool) => (tool.askLabel ? [[tool.name, tool.askLabel]] : [])),
-          ),
-        });
-      })
-      .catch(() => undefined);
-  }, []);
-
-  // Older messages load as the top of the transcript scrolls into view,
-  // keeping what was on screen where it was (as in the live chat).
-  const olderSentinel = useRef<HTMLDivElement>(null);
-  const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
-  const loadingRef = useRef(false);
-  useEffect(() => {
-    const viewport = olderSentinel.current?.closest<HTMLElement>(
-      '[data-slot="message-scroller-viewport"]',
-    );
-    if (!viewport || !hasMore) return;
-    let armed = false;
-    const arm = () => {
-      armed = true;
-      check();
-    };
-    const check = () => {
-      const before = oldestEntryId(messages);
-      if (!armed || viewport.scrollTop > 400 || loadingRef.current || !before) return;
-      loadingRef.current = true;
+  // The transcript's pages: the first came with the view, older ones load on
+  // scroll. A page that no longer fits (another chat opened meanwhile) is dropped.
+  const pages: TranscriptPages = {
+    ...loaded,
+    loadingOlder,
+    loadOlder: async () => {
+      const before = oldestEntryId(loaded.messages);
+      if (!before) return;
       setLoadingOlder(true);
-      keepFromBottom.current = {
-        el: viewport,
-        distance: viewport.scrollHeight - viewport.scrollTop,
-      };
-      void botsApi
-        .pastChatHistory(bot.id, chatId, before)
-        .then((page) => {
-          const next = prependOlder(messages, page);
-          setMessages(next.messages);
-          setHasMore(next.hasMore);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          loadingRef.current = false;
-          setLoadingOlder(false);
-        });
-    };
-    viewport.addEventListener("wheel", arm, { passive: true });
-    viewport.addEventListener("touchmove", arm, { passive: true });
-    viewport.addEventListener("keydown", arm);
-    viewport.addEventListener("scroll", check, { passive: true });
-    return () => {
-      viewport.removeEventListener("wheel", arm);
-      viewport.removeEventListener("touchmove", arm);
-      viewport.removeEventListener("keydown", arm);
-      viewport.removeEventListener("scroll", check);
-    };
-  }, [bot.id, chatId, hasMore, messages]);
-  useLayoutEffect(() => {
-    const kept = keepFromBottom.current;
-    if (!kept || loadingOlder) return;
-    keepFromBottom.current = null;
-    kept.el.scrollTop = kept.el.scrollHeight - kept.distance;
-  }, [messages, loadingOlder]);
+      try {
+        const page = await botsApi.pastChatHistory(bot.id, chatId, before);
+        setLoaded((current) =>
+          oldestEntryId(current.messages) === before
+            ? prependOlder(current.messages, page)
+            : current,
+        );
+      } catch {
+        // Stay loadable: the next scroll to the top tries again.
+      } finally {
+        setLoadingOlder(false);
+      }
+    },
+  };
 
-  const runs = view?.runs;
-  const timeline = useMemo(() => chatTimeline(messages, runs ?? []), [messages, runs]);
+  const runs = view?.runs ?? NO_RUNS;
   const chat = view?.chat;
   const title = chat ? pastChatTitle(chat) : "";
 
@@ -273,63 +216,13 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
             <Spinner className="size-5" />
           </div>
         )}
-        <MessageScroller className="h-full">
-          <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
-            <MessageScrollerContent className="space-y-4" data-testid="past-chat-transcript">
-              {hasMore && (
-                <div
-                  ref={olderSentinel}
-                  className="text-muted-foreground py-2 text-center text-xs"
-                  aria-live="polite"
-                >
-                  {loadingOlder ? "Loading earlier messages…" : "Earlier messages"}
-                </div>
-              )}
-              {timeline.map((item, t) => {
-                const prev = timeline[t - 1];
-                const showDay =
-                  !prev || new Date(prev.at).toDateString() !== new Date(item.at).toDateString();
-                const dayDivider = showDay && (
-                  <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                    {formatDayDivider(item.at)}
-                  </div>
-                );
-                if (item.kind === "routine-runs") {
-                  const key = `runs-${item.runs[0].id}`;
-                  return (
-                    <Fragment key={key}>
-                      {dayDivider}
-                      <MessageScrollerItem messageId={key}>
-                        <RoutineRuns runs={item.runs} />
-                      </MessageScrollerItem>
-                    </Fragment>
-                  );
-                }
-                const { message } = item;
-                return (
-                  <Fragment key={message.id}>
-                    {dayDivider}
-                    <MessageScrollerItem messageId={message.id}>
-                      <ChatMessageView
-                        message={message}
-                        botName={bot.name}
-                        botId={bot.id}
-                        toolLabels={toolLabels.done}
-                        toolAskLabels={toolLabels.ask}
-                        readOnly
-                      />
-                    </MessageScrollerItem>
-                  </Fragment>
-                );
-              })}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton
-            direction="end"
-            className="absolute right-4 bottom-4"
-            aria-label="Jump to the latest message"
-          />
-        </MessageScroller>
+        {/* No owner actions: what still waits in a past chat can no longer be answered. */}
+        <Transcript
+          botName={bot.name}
+          pages={pages}
+          routineRuns={runs}
+          contentTestId="past-chat-transcript"
+        />
       </div>
 
       {/* The composer's place: this chat has ended, and how to pick it up again. */}

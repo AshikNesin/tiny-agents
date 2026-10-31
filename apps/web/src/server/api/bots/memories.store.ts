@@ -22,8 +22,7 @@ import {
 } from "./memories.domain";
 import { applyExtraction } from "./memories.capture";
 import { getAgentRuntime } from "./bots.runtime";
-import { conversationOwner } from "./bots.owner";
-import { isUnattended, type ChatReader } from "./bots.unattended";
+import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
 import type { MemoryLine, MemoryStore } from "@tiny-agents/agent";
 
 function order(category: string): number {

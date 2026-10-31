@@ -17,9 +17,9 @@ import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bot
 import {
   ROUTINE_FIRE_JOB,
   rearmRoutines,
-  registerRoutineJobs,
-  runRequestId,
-} from "../../../../apps/web/src/server/api/routines/routines.jobs";
+} from "../../../../apps/web/src/server/api/routines/routines.chain";
+import { registerRoutineJobs } from "../../../../apps/web/src/server/api/routines/routines.jobs";
+import { runRequestId } from "../../../../apps/web/src/server/api/routines/routines.runs";
 import { startRoutinesWatcher } from "../../../../apps/web/src/server/api/routines/routines.watcher";
 import type { AgentRuntime } from "@tiny-agents/agent";
 
@@ -33,7 +33,7 @@ function fakeRuntime() {
     configure: vi.fn().mockResolvedValue(undefined),
     submit: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn(),
-    finishedReplies: vi.fn(async () => []),
+    readChat: vi.fn(async () => ({ messages: [], busy: false, queued: [] })),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
     onActivity: vi.fn().mockReturnValue(() => undefined),

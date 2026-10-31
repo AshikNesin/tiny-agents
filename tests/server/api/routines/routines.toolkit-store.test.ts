@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { addJob } from "@groot/jobs/server/queue";
 import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
-import { ROUTINE_FIRE_JOB } from "../../../../apps/web/src/server/api/routines/routines.jobs";
+import { ROUTINE_FIRE_JOB } from "../../../../apps/web/src/server/api/routines/routines.chain";
 import {
   createRoutineStore,
   RECURSION_MSG,

@@ -11,11 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ChatMessageView } from "@/components/ChatMessageView";
 import { readAnswers } from "@/components/QuestionCard";
 import type { ChatMessage, ChatToolCall, OwnerQuestion } from "@/lib/chat-types";
+import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 
+// A recording fake: the card acts only through the owner actions in scope.
 const answerQuestions = vi.fn();
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: { answerQuestions: (...args: unknown[]) => answerQuestions(...args) },
-}));
+const actions: OwnerActions = {
+  decideApproval: vi.fn(),
+  answerQuestions: (...args) => answerQuestions(...args),
+};
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -50,7 +53,11 @@ function view(call: Partial<ChatToolCall>) {
       },
     ],
   };
-  return render(<ChatMessageView message={message} botName="Chief" botId="b1" />);
+  return render(
+    <OwnerActionsProvider actions={actions}>
+      <ChatMessageView message={message} botName="Chief" />
+    </OwnerActionsProvider>,
+  );
 }
 
 describe("QuestionCard", () => {
@@ -81,7 +88,7 @@ describe("QuestionCard", () => {
     await user.click(screen.getByRole("button", { name: "Send answers" }));
 
     await waitFor(() =>
-      expect(answerQuestions).toHaveBeenCalledWith("b1", 42, [
+      expect(answerQuestions).toHaveBeenCalledWith(42, [
         { selected: ["Postgres"] },
         { selected: ["Auth", "Billing"], text: "CSV" },
         { selected: [], text: "Friday" },
@@ -101,7 +108,7 @@ describe("QuestionCard", () => {
     // Skipping the last question sends the answers.
     await user.click(await screen.findByRole("button", { name: "Skip" }));
     await waitFor(() =>
-      expect(answerQuestions).toHaveBeenCalledWith("b1", 42, [
+      expect(answerQuestions).toHaveBeenCalledWith(42, [
         { selected: [] },
         { selected: ["Auth"] },
         { selected: [] },
@@ -112,7 +119,7 @@ describe("QuestionCard", () => {
   it("dismisses the questions", async () => {
     view({});
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(answerQuestions).toHaveBeenCalledWith("b1", 42, null);
+    expect(answerQuestions).toHaveBeenCalledWith(42, null);
   });
 
   it("an answer in the owner's own words replaces a picked option", () => {

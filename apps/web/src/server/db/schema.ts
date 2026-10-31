@@ -135,6 +135,12 @@ export const botMessages = sqliteTable(
     toBotId: text("to_bot_id")
       .notNull()
       .references(() => bots.id, { onDelete: "cascade" }),
+    /**
+     * The target's conversation this message was submitted to: its answer is
+     * read there even after the target starts a new chat. Null on rows from
+     * before it was recorded (read from the target's current chat).
+     */
+    conversationId: text("conversation_id"),
     /** Conversation that receives this message's answer (the host of a mention, or the sender). Null = only the owner. */
     replyToBotId: text("reply_to_bot_id").references(() => bots.id, { onDelete: "cascade" }),
     /** "send" (message_bot tool) | "mention" (owner @tag) | "relay" (relayed reply). */
@@ -148,11 +154,7 @@ export const botMessages = sqliteTable(
     deliveredAt: ms("delivered_at"),
     /** When the target's reply was relayed into replyToBotId's conversation (delivered → answered). */
     answeredAt: ms("answered_at"),
-    /**
-     * Created-at of the assistant reply that answered this delivery. Correlates
-     * deliveries to replies so one reply never answers two rows (queued
-     * deliveries) and a reply older than the delivery never answers (stale boot sweep).
-     */
+    /** Created-at of the Finished reply that answered this delivery (matched by requestId). */
     answerReplyAt: ms("answer_reply_at"),
     createdAt: createdAt(),
   },

@@ -17,6 +17,7 @@ export {
   QuestionNotPendingError,
   type AgentRuntimeOptions,
 } from "./runtime";
+export { finishedReplyOf, finishedReplyTo, type TurnOutcome } from "./replies";
 export { StoreLockedError, acquireStoreLock, type StoreLock } from "./lock";
 export {
   createToolSearchCapability,

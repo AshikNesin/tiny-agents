@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { bots, db, jobs, routineRuns, routines } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
-import { ROUTINE_FIRE_JOB } from "../../../apps/web/src/server/api/routines/routines.jobs";
+import { ROUTINE_FIRE_JOB } from "../../../apps/web/src/server/api/routines/routines.chain";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { api, createTestApp, type TestApp } from "../helpers";
 

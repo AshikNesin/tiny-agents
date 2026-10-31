@@ -10,7 +10,7 @@ import {
 import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
-import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
+import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import {
   activeMentionToken,
   mentionableBots,
@@ -19,6 +19,7 @@ import {
   type PickedMention,
 } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
+import type { OwnerSendOutcome, OwnerSubmission } from "../store/owner-send";
 import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
 import {
   MentionAutocomplete,
@@ -27,7 +28,6 @@ import {
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
 import { errorMessage } from "../lib/errors";
-import { useOnline } from "../lib/online";
 
 /** Most attachments one message can carry. */
 const MAX_ATTACHMENTS = 10;
@@ -77,13 +77,6 @@ function ambiguousMentionHint(names: string[]): string {
   return `More than one bot is named ${quoted}. Type @ and pick the one you mean from the list.`;
 }
 
-export interface ComposerSubmission {
-  body: string;
-  attachments: AttachmentRef[];
-  mentions: string[];
-  whenBusy: "steer" | "followUp";
-}
-
 export interface ChatComposerHandle {
   /** Stage files from outside the composer (drag and drop on the pane). */
   stageFiles: (files: FileList | File[]) => void;
@@ -94,8 +87,11 @@ interface ChatComposerProps {
   model: ModelInfo | undefined;
   gatewayConfigured: boolean;
   busy: boolean;
-  /** Rejects when the send failed; the composer then restores the draft. */
-  onSend: (submission: ComposerSubmission) => Promise<void>;
+  /**
+   * Send one owner message (store/owner-send.ts). "restored": it was refused
+   * and its Echo withdrawn, so the composer puts the draft back.
+   */
+  onSend: (submission: OwnerSubmission) => Promise<OwnerSendOutcome>;
   onStop: () => Promise<void>;
   onEditBot: () => void;
 }
@@ -110,8 +106,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   ref,
 ) {
   const [text, setText] = useState(() => readDraft(bot.id));
-  const online = useOnline();
-  const [retryWhenOnline, setRetryWhenOnline] = useState<"steer" | "followUp" | null>(null);
   // Mentions picked from the autocomplete, kept in step with the text: they
   // send to the bot picked, not whichever bot the name matches (issue #80).
   const [picked, setPicked] = useState<PickedMention[]>([]);
@@ -261,19 +255,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setStaged([]);
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    try {
-      await onSend({
-        body,
-        attachments,
-        mentions: mentions.ids,
-        whenBusy,
-      });
-    } catch {
-      // Offline: send it by itself once the browser is back (sends are
-      // idempotent server-side, and the text stays visible meanwhile).
-      if (!navigator.onLine) setRetryWhenOnline(whenBusy);
-      // The pane already toasted; hand the message back for another try,
-      // ahead of anything typed or attached while the send was in flight.
+    // An offline send stays an Echo and goes again by itself once the
+    // browser is back (store/owner-send.ts); only a refusal comes back here.
+    const outcome = await onSend({
+      body,
+      attachments,
+      mentions: mentions.ids,
+      whenBusy,
+    }).catch((): OwnerSendOutcome => "restored");
+    if (outcome === "restored") {
+      // The send was refused (and toasted); hand the message back for another
+      // try, ahead of anything typed or attached while the send was in flight.
       setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
       // Picks made meanwhile imply text, so they move down behind the body.
       setPicked((current) => [
@@ -293,12 +285,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
-
-  useEffect(() => {
-    if (!online || !retryWhenOnline) return;
-    setRetryWhenOnline(null);
-    void send(retryWhenOnline);
-  }, [online, retryWhenOnline]);
 
   const stop = async () => {
     if (!busy || stopping) return;

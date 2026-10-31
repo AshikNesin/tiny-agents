@@ -1,14 +1,13 @@
 /**
- * BotMessagingStore adapter: the agent's `bots` toolkit delivers messages
- * between bots through the app.db ledger. The store owns the submit into the
- * target's durable conversation, so the exactly-once boundary (requestId) and
- * the delivery receipt (deliveredAt) commit together.
+ * BotMessagingStore adapter: the agent's `bots` toolkit sends messages
+ * between bots as Deliveries (bots.delivery.ts). This adapter adds the
+ * sender's guards: the per-turn budget and the loop guard.
  */
 import { and, asc, eq, gte, ne } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
-import { submitToBot } from "./bots.conversation";
+import { createDeliveries } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
 
 /** Why a delivery was refused (the bots toolkit's reasons). */
@@ -58,66 +57,55 @@ export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
   }
 
   const turnBudget = createTurnBudget(rt);
+  const deliveries = createDeliveries(rt);
   return {
     async deliver(input) {
       const sender = await senderOf(input.conversationId);
       if (!sender) return { delivered: false, reason: "unknown_bot" as DeliverReason };
       const target = await db.query.bots.findFirst({
         where: eq(bots.name, input.toName),
-        columns: { id: true, name: true, conversationId: true },
+        columns: { id: true, name: true },
       });
       if (!target) return { delivered: false, reason: "unknown_bot" };
       if (target.id === sender.id) return { delivered: false, reason: "self" };
-      // Per-turn budget (issue #16): the idempotency check below must run
-      // first so a replayed tool task returns early without being charged.
-      const existing = await db.query.botMessages.findFirst({
-        where: eq(botMessages.requestId, input.requestId),
-        columns: { id: true },
-      });
-      if (existing) return { delivered: true };
-      const sent = turnBudget.count(input.conversationId);
-      if (sent >= TURN_LIMIT) return { delivered: false, reason: "budget" as DeliverReason };
-
-      const since = new Date(Date.now() - LOOP_WINDOW_MS);
-      const recent = await db.$count(
-        botMessages,
-        and(
-          eq(botMessages.fromBotId, sender.id),
-          eq(botMessages.toBotId, target.id),
-          eq(botMessages.kind, "send"),
-          gte(botMessages.createdAt, since),
-        ),
-      );
-      if (recent >= LOOP_LIMIT) return { delivered: false, reason: "loop" };
 
       // Exactly-once across pi-durable replays: a rerun of the tool task
-      // recomputes the same requestId and sourceKey, so the row lands once
-      // and the submit below is deduped by pi-durable itself (the early
-      // return above is the replay path).
-      const queued = rt.isBusy(Number(target.conversationId));
-      await submitToBot(
-        target.id,
+      // recomputes the same requestId, so a replay returns early, uncharged
+      // and unguarded; the guards below run for first-time deliveries only.
+      const outcome = await deliveries.deliver<DeliverReason>(
         {
           requestId: input.requestId,
-          text: botToBotText(sender.name, sanitizePeerText(input.text)),
+          kind: "send",
+          toBotId: target.id,
+          fromBotId: sender.id,
+          // A routine run's message gets no relayed answer: it would land in
+          // the bot's chat, which routine runs never write to (issue #63).
+          replyToBotId: sender.fromRoutine ? null : sender.id,
+          text: input.text,
+          prompt: botToBotText(sender.name, sanitizePeerText(input.text)),
           peer: { kind: "message", name: sender.name },
+          sourceKey: input.sourceKey,
         },
-        rt,
+        async () => {
+          // Per-turn budget (issue #16), then the loop guard.
+          if (turnBudget.count(input.conversationId) >= TURN_LIMIT) return "budget";
+          const since = new Date(Date.now() - LOOP_WINDOW_MS);
+          const recent = await db.$count(
+            botMessages,
+            and(
+              eq(botMessages.fromBotId, sender.id),
+              eq(botMessages.toBotId, target.id),
+              eq(botMessages.kind, "send"),
+              gte(botMessages.createdAt, since),
+            ),
+          );
+          return recent >= LOOP_LIMIT ? "loop" : undefined;
+        },
       );
-      await db.insert(botMessages).values({
-        fromBotId: sender.id,
-        toBotId: target.id,
-        // A routine run's message gets no relayed answer: it would land in
-        // the bot's chat, which routine runs never write to (issue #63).
-        replyToBotId: sender.fromRoutine ? null : sender.id,
-        kind: "send",
-        requestId: input.requestId,
-        sourceKey: input.sourceKey,
-        text: input.text,
-        deliveredAt: new Date(),
-      });
+      if (outcome.status === "refused") return { delivered: false, reason: outcome.reason };
+      if (outcome.status === "replayed") return { delivered: true };
       turnBudget.charge(input.conversationId);
-      return { delivered: true, ...(queued ? { queued: true } : {}) };
+      return { delivered: true, ...(outcome.queued ? { queued: true } : {}) };
     },
 
     async roster(conversationId) {

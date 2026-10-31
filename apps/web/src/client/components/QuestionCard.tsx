@@ -1,11 +1,10 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, type FormEvent } from "react";
 import { MessageCircleQuestion } from "lucide-react";
 import { Questionnaire } from "@shadcn/react/questionnaire";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
-import { toast } from "sonner";
-import { botsApi } from "../lib/bots-api";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../lib/chat-types";
+import { type OwnerActions, useOwnerDecision } from "../lib/owner-actions";
 import {
   Trace,
   TraceCollapsible,
@@ -16,7 +15,6 @@ import {
   TraceLine,
   TraceTitle,
 } from "./ui/trace";
-import { errorMessage } from "../lib/errors";
 
 /** Mirrors the agent package's MAX_ANSWER_TEXT (the server rejects longer answers). */
 const MAX_ANSWER_TEXT = 2_000;
@@ -54,15 +52,16 @@ export function readAnswers(form: FormData, questions: readonly OwnerQuestion[])
  */
 export function QuestionCard({
   call,
-  botId,
+  actions,
   botName,
 }: {
   call: ChatToolCall & { taskId: number; questions: OwnerQuestion[] };
-  botId: string;
+  actions: OwnerActions;
   botName: string;
 }) {
   const { questions } = call;
-  const [busy, setBusy] = useState(false);
+  // Stay disabled after answering: the stream replaces this card with the answered row.
+  const { busy, run } = useOwnerDecision("Failed to send your answers", { settle: false });
   // Shortcut keys follow the declared option order.
   const items = useMemo(
     () =>
@@ -73,17 +72,8 @@ export function QuestionCard({
     [questions],
   );
 
-  const respond = async (answers: OwnerAnswer[] | null) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await botsApi.answerQuestions(botId, call.taskId, answers);
-      // Stay disabled: the stream replaces this card with the answered row.
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to send your answers"));
-      setBusy(false);
-    }
-  };
+  const respond = (answers: OwnerAnswer[] | null) =>
+    run(() => actions.answerQuestions(call.taskId, answers));
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

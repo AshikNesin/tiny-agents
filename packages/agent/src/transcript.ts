@@ -313,7 +313,7 @@ function toolResultsByAssistant(entries: readonly EntryRecord[]): Map<number, To
         diagnostics: diagnostics.map((d) => d.message ?? "").filter(Boolean),
       });
       out.set(assistant, list);
-    } else if (entry.kind === "pi.user") assistant = undefined;
+    } else if (entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) assistant = undefined;
   }
   return out;
 }

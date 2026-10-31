@@ -10,22 +10,24 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
+import { dispatchOccurrence } from "../../../../apps/web/src/server/api/routines/routines.jobs";
+import { runNow } from "../../../../apps/web/src/server/api/routines/routines.service";
 import {
   ROUTINE_FIRE_JOB,
-  dispatchOccurrence,
-  runRequestId,
   type RoutineFirePayload,
-} from "../../../../apps/web/src/server/api/routines/routines.jobs";
+} from "../../../../apps/web/src/server/api/routines/routines.chain";
 import {
-  createRoutinesCompletionWatcher,
+  createRoutineRunResolver as createRoutinesCompletionWatcher,
   refusalReason,
-} from "../../../../apps/web/src/server/api/routines/routines.watcher";
+  runRequestId,
+} from "../../../../apps/web/src/server/api/routines/routines.runs";
 import {
   chatCards,
   onRoutineCard,
   type RoutineRunCard,
 } from "../../../../apps/web/src/server/api/routines/routines.cards";
-import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
+import type { AgentRuntime, ChatMessage, ChatState, FinishedReply } from "@tiny-agents/agent";
+import { REPORT_ROUTINE_BLOCKED } from "../../../../packages/agent/src/index";
 
 /** Routine-fire jobs queued so far, oldest first. */
 async function sentJobs() {
@@ -65,16 +67,77 @@ const CHAT = 7;
 /** The conversation the fake runtime creates for a routine on its first fire. */
 const ROUTINE_CONVERSATION = 42;
 
-/** Finished replies the runtime reports for the routine's conversation. */
-let chatReplies: FinishedReply[] = [];
+/** Request ids submitted per conversation, in order (what the fake transcript shows). */
+let submitted = new Map<number, string[]>();
+/** How each submission's turn finished, by request id (absent: still running). */
+let answers: Record<string, { conversation: number; reply: Omit<FinishedReply, "createdAt"> }> = {};
+
+function recordSubmit(ref: number, input: { requestId: string }) {
+  const list = submitted.get(ref) ?? [];
+  if (!list.includes(input.requestId)) list.push(input.requestId);
+  submitted.set(ref, list);
+}
+
+/** The fake transcript: each submission as a user message, then its turn's reply if it finished. */
+function transcript(ref: number): ChatState {
+  const ids = [
+    ...(submitted.get(ref) ?? []),
+    ...Object.entries(answers)
+      .filter(([id, a]) => a.conversation === ref && !(submitted.get(ref) ?? []).includes(id))
+      .map(([id]) => id),
+  ];
+  const messages: ChatMessage[] = [];
+  let at = 1;
+  for (const requestId of ids) {
+    messages.push({
+      id: `u${at}`,
+      role: "user",
+      text: "",
+      requestId,
+      status: "done",
+      createdAt: at++,
+    });
+    const answer = answers[requestId];
+    if (!answer || answer.conversation !== ref) continue;
+    const { text, error, refused, blocked } = answer.reply;
+    messages.push({
+      id: `a${at}`,
+      role: "assistant",
+      text,
+      status: error !== undefined ? "error" : "done",
+      ...(error !== undefined ? { error } : {}),
+      toolCalls: [
+        ...(refused ?? []).map((name) => ({
+          id: "",
+          name,
+          args: {},
+          status: "error" as const,
+          approval: "refused" as const,
+        })),
+        ...(blocked !== undefined
+          ? [
+              {
+                id: "",
+                name: REPORT_ROUTINE_BLOCKED,
+                args: { reason: blocked },
+                status: "done" as const,
+              },
+            ]
+          : []),
+      ],
+      createdAt: at++,
+    });
+  }
+  return { messages, busy: false, queued: [] };
+}
 
 function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     createConversation: vi.fn().mockResolvedValue(ROUTINE_CONVERSATION),
     configure: vi.fn().mockResolvedValue(undefined),
-    submit: vi.fn().mockResolvedValue(undefined),
+    submit: vi.fn(async (ref: number, input: { requestId: string }) => recordSubmit(ref, input)),
     abort: vi.fn(),
-    finishedReplies: vi.fn(async () => chatReplies),
+    readChat: vi.fn(async (ref: number) => transcript(ref)),
     isBusy: vi.fn().mockReturnValue(false),
     busyConversations: vi.fn().mockReturnValue([]),
     onActivity: vi.fn().mockReturnValue(() => undefined),
@@ -131,7 +194,8 @@ describe("routine-fire dispatch", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    chatReplies = [];
+    answers = {};
+    submitted = new Map();
     runtime = fakeRuntime();
     setAgentRuntimeForTests(runtime);
     await clearTables();
@@ -331,6 +395,15 @@ describe("routine-fire dispatch", () => {
     expect(await sentJobs()).toHaveLength(0);
   });
 
+  it("two Run now clicks in the same second are two runs", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    const first = await runNow(routine.id);
+    const second = await runNow(routine.id);
+    expect(first.runId).not.toBe("");
+    expect(second.runId).not.toBe(first.runId);
+    expect(vi.mocked(runtime.submit)).toHaveBeenCalledTimes(2);
+  });
+
   it("a submit failure fails the run once and pauses the routine, leaving the chat alone", async () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await db.update(routines).set({ pendingJobId: "job-99" }).where(eq(routines.id, routine.id));
@@ -363,8 +436,9 @@ describe("routine-fire dispatch", () => {
       configure: vi.fn().mockRejectedValue(new Error('Unknown model "m1"')),
     });
     setAgentRuntimeForTests(failing);
-    await expect(dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME)).resolves.toBeUndefined();
+    const runId = await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id, SLOT);
+    expect(runId).toBe(run?.id);
     expect(run?.status).toBe("failed");
     expect(run?.error).toContain("Unknown model");
     expect((await routineRow(routine.id))?.enabled).toBe(false);
@@ -374,13 +448,15 @@ describe("routine-fire dispatch", () => {
 describe("completion watcher", () => {
   let runtime: ReturnType<typeof fakeRuntime>;
 
-  function chatWith(replies: FinishedReply[]) {
-    chatReplies = replies;
+  /** The run's turn finished with this reply. */
+  function answer(run: { requestId: string }, reply: Omit<FinishedReply, "createdAt">) {
+    answers[run.requestId] = { conversation: ROUTINE_CONVERSATION, reply };
   }
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    chatReplies = [];
+    answers = {};
+    submitted = new Map();
     runtime = fakeRuntime();
     setAgentRuntimeForTests(runtime);
     await clearTables();
@@ -392,12 +468,7 @@ describe("completion watcher", () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    const submittedAt = run!.submittedAt!;
-
-    chatWith([
-      { text: "Older reply", createdAt: submittedAt.getTime() - 1000 },
-      { text: "x".repeat(2500), createdAt: submittedAt.getTime() + 1000 },
-    ]);
+    answer(run!, { text: "x".repeat(2500) });
     const watcher = createRoutinesCompletionWatcher(runtime);
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(1);
@@ -412,14 +483,8 @@ describe("completion watcher", () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    const submittedAt = run!.submittedAt!.getTime();
-    const replies: Record<number, FinishedReply[]> = {
-      [CHAT]: [{ text: "Owner's answer", createdAt: submittedAt + 500 }],
-      [ROUTINE_CONVERSATION]: [{ text: "Routine's answer", createdAt: submittedAt + 1000 }],
-    };
-    const split = fakeRuntime({
-      finishedReplies: vi.fn(async (ref: number) => replies[ref] ?? []),
-    });
+    answer(run!, { text: "Routine's answer" });
+    const split = fakeRuntime();
     const watcher = createRoutinesCompletionWatcher(split);
 
     expect(await watcher.resolveConversation(CHAT)).toBe(0);
@@ -435,12 +500,8 @@ describe("completion watcher", () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    const submittedAt = run!.submittedAt!.getTime();
-
-    chatWith([
-      { text: "", createdAt: submittedAt + 500, refused: ["send_email"] },
-      { text: "Drafted the email but could not send it.", createdAt: submittedAt + 1000 },
-    ]);
+    // The turn's refusals are collected across its messages by the runtime.
+    answer(run!, { text: "Drafted the email but could not send it.", refused: ["send_email"] });
     const watcher = createRoutinesCompletionWatcher(runtime);
     expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
 
@@ -456,7 +517,7 @@ describe("completion watcher", () => {
     const slot = new Date(SLOT.getTime() + hour * 60 * 60_000);
     await dispatchOccurrence(payloadOf(routineId, slot), new Date(slot.getTime() + 5_000));
     const run = (await runOf(routineId, slot))!;
-    chatWith([{ ...reply, createdAt: run.submittedAt!.getTime() + 1000 }]);
+    answer(run, reply);
     await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
     return (await runById(run.id))!;
   }
@@ -517,7 +578,7 @@ describe("completion watcher", () => {
 
     const seen: { botId: string; card: RoutineRunCard }[] = [];
     const stop = onRoutineCard((botId, card) => seen.push({ botId, card }));
-    chatWith([{ text: "**All** good", createdAt: run!.submittedAt!.getTime() + 1000 }]);
+    answer(run!, { text: "**All** good" });
     await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
     await vi.waitFor(() => expect(seen).toHaveLength(1));
     stop();
@@ -541,11 +602,7 @@ describe("completion watcher", () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    const submittedAt = run!.submittedAt!;
-
-    chatWith([
-      { text: "", createdAt: submittedAt.getTime() + 1000, error: "Model error: gateway down" },
-    ]);
+    answer(run!, { text: "", error: "Model error: gateway down" });
     const watcher = createRoutinesCompletionWatcher(runtime);
     await watcher.resolveConversation(ROUTINE_CONVERSATION);
 
@@ -580,10 +637,8 @@ describe("completion watcher", () => {
         submittedAt: new Date("2026-10-22T03:30:01Z"),
       })
       .returning();
-    chatWith([
-      { text: "First reply", createdAt: first!.submittedAt!.getTime() + 1000 },
-      { text: "Second reply", createdAt: second!.submittedAt!.getTime() + 1000 },
-    ]);
+    answer(first!, { text: "First reply" });
+    answer(second!, { text: "Second reply" });
     const watcher = createRoutinesCompletionWatcher(runtime);
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
     expect(resolved).toBe(2);
@@ -593,17 +648,27 @@ describe("completion watcher", () => {
     expect(afterSecond?.output).toBe("Second reply");
   });
 
-  it("a stale reply (pre-submit) never answers; the run keeps awaiting", async () => {
+  it("a run whose turn has not finished keeps awaiting", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
 
-    chatWith([{ text: "Before the run", createdAt: run!.submittedAt!.getTime() - 5000 }]);
     const watcher = createRoutinesCompletionWatcher(runtime);
-    const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION);
-    expect(resolved).toBe(0);
-    const after = await runById(run!.id);
-    expect(after?.status).toBe("awaiting");
+    expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(0);
+    expect((await runById(run!.id))?.status).toBe("awaiting");
+  });
+
+  it("boot sweep resolves a run whose reply finished just before the restart", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await runOf(routine.id);
+    answer(run!, { text: "Done before the restart" });
+
+    expect(await createRoutinesCompletionWatcher(runtime).bootSweep()).toBe(1);
+    expect(await runById(run!.id)).toMatchObject({
+      status: "succeeded",
+      output: "Done before the restart",
+    });
   });
 
   it("boot sweep marks awaiting runs on idle conversations interrupted", async () => {

@@ -9,6 +9,7 @@ import {
   chatState,
   deriveChat,
   diffChat,
+  finishedReplyTo,
   pageBefore,
   queuedOf,
   windowChat,
@@ -713,6 +714,32 @@ describe("AgentRuntime", () => {
     }
   });
 
+  it("answers each queued submission with its own turn's reply, by request id", async () => {
+    const runtime = await openTestRuntime({ storePath: ":memory:" });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      await runtime.submit(ref, { requestId: "turn-1", text: "one" });
+      await runtime.submit(ref, { requestId: "turn-2", text: "two" });
+      await waitUntil(
+        async () => finishedReplyTo(await runtime.readChat(ref), "turn-2").status === "answered",
+        "both turns to finish",
+      );
+      expect(finishedReplyTo(await runtime.readChat(ref), "turn-1")).toEqual({
+        status: "answered",
+        reply: { text: "Echo: one", createdAt: expect.any(Number) },
+      });
+      expect(finishedReplyTo(await runtime.readChat(ref), "turn-2")).toEqual({
+        status: "answered",
+        reply: { text: "Echo: two", createdAt: expect.any(Number) },
+      });
+      expect(finishedReplyTo(await runtime.readChat(ref), "never-sent")).toEqual({
+        status: "unknown",
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("carries the request id of an attachment send on its user message", async () => {
     const runtime = await openTestRuntime({ storePath: ":memory:" });
     try {
@@ -732,7 +759,8 @@ describe("AgentRuntime", () => {
       );
       const users = chat.state().messages.filter((m) => m.role === "user");
       expect(users[0]).toMatchObject({ requestId: "with-file" });
-      expect(users[1]?.requestId).toBeUndefined();
+      // Plain sends record their request id too, so an Echo confirms by id.
+      expect(users[1]).toMatchObject({ requestId: "plain" });
       await chat.stop();
     } finally {
       await runtime.close();

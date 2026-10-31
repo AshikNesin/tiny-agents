@@ -1,12 +1,4 @@
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type DragEvent,
-} from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -21,33 +13,23 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
+import { ownerSend, type OwnerSubmission } from "../store/owner-send";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import {
-  ACTIVE_TOOL_STATUSES,
-  ChatMessageView,
-  TypingIndicator,
-  USER_PILL,
-  type ToolLabels,
-} from "./ChatMessageView";
-import { ChatComposer, type ChatComposerHandle, type ComposerSubmission } from "./ChatComposer";
+import { ACTIVE_TOOL_STATUSES, TypingIndicator, USER_PILL } from "./ChatMessageView";
+import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { MessageAttachments } from "./Attachments";
-import { RoutineRuns } from "./RoutineRuns";
+import { Transcript, type TranscriptPages } from "./Transcript";
 import { browserInUse, useBrowserPanel } from "../lib/browser-panel";
-import { formatDayDivider } from "../lib/day-divider";
-import { chatTimeline } from "../lib/chat-timeline";
+import { useHttpOwnerActions } from "../lib/owner-actions";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
 import type { ChatMessage, PendingMessage, QueuedMessage, RoutineRunCard } from "../lib/chat-types";
 import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerProvider,
-  MessageScrollerViewport,
   useMessageScroller,
 } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
@@ -59,7 +41,6 @@ const NO_MESSAGES: ChatMessage[] = [];
 const NO_PENDING: PendingMessage[] = [];
 const NO_QUEUED: QueuedMessage[] = [];
 const NO_RUNS: RoutineRunCard[] = [];
-const NO_TOOL_LABELS: { done: ToolLabels; ask: ToolLabels } = { done: {}, ask: {} };
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -123,13 +104,10 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
   const resetChat = useBotsStore((s) => s.resetChat);
-  const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
   const markRead = useBotsStore((s) => s.markRead);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const [toolLabels, setToolLabels] = useState<{ done: ToolLabels; ask: ToolLabels }>(
-    NO_TOOL_LABELS,
-  );
+  const ownerActions = useHttpOwnerActions(bot.id);
   const [confirmReset, setConfirmReset] = useState(false);
   // `?history=1` (the sidebar row's "Chat history") opens the history menu.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -156,23 +134,6 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     return () => disconnectChat(bot.id);
   }, [bot.id, bot.conversationId, connectChat, disconnectChat]);
 
-  // Tool labels for the transcript rows (past tense) and the approval cards
-  // (imperative) come from the capability catalog.
-  useEffect(() => {
-    void botsApi
-      .capabilities()
-      .then((capabilities) => {
-        const tools = capabilities.flatMap((capability) => capability.tools);
-        setToolLabels({
-          done: Object.fromEntries(tools.map((tool) => [tool.name, tool.label])),
-          ask: Object.fromEntries(
-            tools.flatMap((tool) => (tool.askLabel ? [[tool.name, tool.askLabel]] : [])),
-          ),
-        });
-      })
-      .catch(() => undefined);
-  }, []);
-
   // Mark read when opening a bot with unread replies.
   const unread = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.unread);
   useEffect(() => {
@@ -180,56 +141,17 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   }, [markRead, unread, bot.id]);
 
   const messages = chat?.messages ?? NO_MESSAGES;
-
-  // Older messages load when the top of the transcript scrolls into view
-  // (issue #92), keeping what was on screen where it was.
+  // The transcript's pages come from the chat store (issue #92).
   const loadOlder = useBotsStore((s) => s.loadOlder);
-  const olderSentinel = useRef<HTMLDivElement>(null);
-  const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
-  const hasMore = Boolean(chat?.hasMore);
-  useEffect(() => {
-    const viewport = olderSentinel.current?.closest<HTMLElement>(
-      '[data-slot="message-scroller-viewport"]',
-    );
-    if (!viewport || !hasMore) return;
-    // Only the owner's own scrolling loads history: the scroller's jump to
-    // the latest message on open must not fetch a page nobody asked for.
-    let armed = false;
-    const arm = () => {
-      armed = true;
-      check();
-    };
-    const check = () => {
-      if (!armed || viewport.scrollTop > 400) return;
-      if (useBotsStore.getState().chats[bot.id]?.loadingOlder) return;
-      keepFromBottom.current = {
-        el: viewport,
-        distance: viewport.scrollHeight - viewport.scrollTop,
-      };
-      void loadOlder(bot.id);
-    };
-    viewport.addEventListener("wheel", arm, { passive: true });
-    viewport.addEventListener("touchmove", arm, { passive: true });
-    viewport.addEventListener("keydown", arm);
-    viewport.addEventListener("scroll", check, { passive: true });
-    return () => {
-      viewport.removeEventListener("wheel", arm);
-      viewport.removeEventListener("touchmove", arm);
-      viewport.removeEventListener("keydown", arm);
-      viewport.removeEventListener("scroll", check);
-    };
-  }, [bot.id, hasMore, loadOlder, messages.length]);
-  useLayoutEffect(() => {
-    const kept = keepFromBottom.current;
-    if (!kept || chat?.loadingOlder) return;
-    keepFromBottom.current = null;
-    kept.el.scrollTop = kept.el.scrollHeight - kept.distance;
-  }, [messages, chat?.loadingOlder]);
+  const pages: TranscriptPages = {
+    messages,
+    hasMore: Boolean(chat?.hasMore),
+    loadingOlder: Boolean(chat?.loadingOlder),
+    loadOlder: () => loadOlder(bot.id),
+  };
   const pending = chat?.pending ?? NO_PENDING;
   const queued = chat?.queued ?? NO_QUEUED;
   const routineRuns = chat?.routineRuns ?? NO_RUNS;
-  // Routine results (issue #63): quiet lines between messages, by finish time.
-  const timeline = useMemo(() => chatTimeline(messages, routineRuns), [messages, routineRuns]);
   const busy = chat?.busy ?? false;
   const loaded = chat?.loaded ?? false;
   // Brief stream hiccups reconnect on their own; only a drop that lasts
@@ -303,49 +225,14 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const model = models.find((m) => m.id === bot.modelId);
   const composerEnabled = gatewayConfigured && model !== undefined;
 
-  /** Rejects when the server refused, so the composer restores the draft. */
-  const send = async ({ body, attachments, mentions, whenBusy }: ComposerSubmission) => {
+  const send = (submission: OwnerSubmission) => {
     // Keep the just-sent message visible: the reader may be scrolled up in
     // the history, and sending is an explicit jump-to-now (issue #2a).
     scroller.scrollToEnd({ behavior: "auto" });
-    // Optimistic echo: show the message immediately; the SSE queued event
-    // replaces it once the server confirms the message is held (steer or
-    // follow-up), and the snapshot/upsert once it is placed. If the POST
-    // fails the echo is withdrawn and the text returns to the composer.
-    const echo = {
-      id: crypto.randomUUID(),
-      // Exactly the submitted body: the store dedupes a plain echo against
-      // the confirmed row by text (attachment sends by request id), so any
-      // transformation here leaves both visible (cubic: doubled mention echo).
-      text: body,
-      createdAt: Date.now(),
-      ...(attachments.length > 0 ? { attachments } : {}),
-    };
-    applyChatEvent(bot.id, { type: "pending-add", message: echo });
-    try {
-      await botsApi.send(
-        bot.id,
-        echo.id,
-        body,
-        mentions,
-        attachments.map((a) => a.uploadId),
-        whenBusy,
-      );
-    } catch (error) {
-      applyChatEvent(bot.id, { type: "pending-remove", id: echo.id });
-      toast.error(errorMessage(error, "Failed to send"));
-      throw error;
-    }
+    return ownerSend.submit(bot.id, submission);
   };
 
-  const stop = async () => {
-    try {
-      await botsApi.abort(bot.id);
-    } catch (error) {
-      toast.error("Failed to stop the reply");
-      throw error;
-    }
-  };
+  const stop = () => ownerSend.stop(bot.id);
 
   // Drop files anywhere on the conversation to attach them. dragenter and
   // dragleave fire for every child crossed, so a depth counter tells when
@@ -379,20 +266,6 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
         },
       }
     : {};
-
-  /** Withdraw a queued/steering message: the x on its bubble. */
-  const cancelQueued = async (item: QueuedMessage) => {
-    try {
-      await botsApi.withdraw(bot.id, item.requestId);
-      // The queued SSE event clears the bubble.
-    } catch (error) {
-      // A refusal means the message was placed or answered meanwhile; the
-      // server's message says which.
-      toast.error(
-        error instanceof Error && error.message ? error.message : "Failed to cancel the message",
-      );
-    }
-  };
 
   const doReset = async () => {
     setConfirmReset(false);
@@ -546,81 +419,31 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
               <Spinner className="size-5" />
             </div>
           )}
-          <MessageScroller className="h-full">
-            <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
-              <MessageScrollerContent className="space-y-4">
-                {hasMore && (
-                  <div
-                    ref={olderSentinel}
-                    className="text-muted-foreground py-2 text-center text-xs"
-                    aria-live="polite"
-                    data-testid="older-messages"
-                  >
-                    {chat?.loadingOlder ? "Loading earlier messages…" : "Earlier messages"}
+          <Transcript
+            botName={bot.name}
+            pages={pages}
+            routineRuns={routineRuns}
+            actions={ownerActions}
+            echoes={pending}
+            unreadDividerId={dividerId}
+            scrollAnchor={(i) => anchoring && isRead(i)}
+            empty={
+              loaded && (
+                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
+                  <BotAvatar name={bot.name} className="size-20" />
+                  <div className="max-w-sm">
+                    <p className="text-foreground text-lg font-semibold">{bot.name}</p>
+                    {bot.description ? (
+                      <p className="mt-1 text-sm">{bot.description}</p>
+                    ) : (
+                      <p className="mt-1 text-sm">Say hi to start the conversation.</p>
+                    )}
                   </div>
-                )}
-                {loaded && timeline.length === 0 && pending.length === 0 && (
-                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
-                    <BotAvatar name={bot.name} className="size-20" />
-                    <div className="max-w-sm">
-                      <p className="text-foreground text-lg font-semibold">{bot.name}</p>
-                      {bot.description ? (
-                        <p className="mt-1 text-sm">{bot.description}</p>
-                      ) : (
-                        <p className="mt-1 text-sm">Say hi to start the conversation.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {timeline.map((item, t) => {
-                  const prev = timeline[t - 1];
-                  const showDay =
-                    !prev || new Date(prev.at).toDateString() !== new Date(item.at).toDateString();
-                  const dayDivider = showDay && (
-                    <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                      {formatDayDivider(item.at)}
-                    </div>
-                  );
-                  if (item.kind === "routine-runs") {
-                    const key = `runs-${item.runs[0].id}`;
-                    return (
-                      <Fragment key={key}>
-                        {dayDivider}
-                        <MessageScrollerItem messageId={key}>
-                          <RoutineRuns runs={item.runs} />
-                        </MessageScrollerItem>
-                      </Fragment>
-                    );
-                  }
-                  const { message, index: i } = item;
-                  return (
-                    <Fragment key={message.id}>
-                      {dayDivider}
-                      {dividerId === message.id && (
-                        <div
-                          data-testid="unread-divider"
-                          className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"
-                        >
-                          <span className="bg-border h-px flex-1" aria-hidden="true" />
-                          New messages
-                          <span className="bg-border h-px flex-1" aria-hidden="true" />
-                        </div>
-                      )}
-                      <MessageScrollerItem
-                        messageId={message.id}
-                        scrollAnchor={anchoring && isRead(i)}
-                      >
-                        <ChatMessageView
-                          message={message}
-                          botName={bot.name}
-                          botId={bot.id}
-                          toolLabels={toolLabels.done}
-                          toolAskLabels={toolLabels.ask}
-                        />
-                      </MessageScrollerItem>
-                    </Fragment>
-                  );
-                })}
+                </div>
+              )
+            }
+            tail={
+              <>
                 {showTyping && (
                   <MessageScrollerItem messageId="typing">
                     <Message>
@@ -629,57 +452,22 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                   </MessageScrollerItem>
                 )}
                 {/* Messages the server holds behind (or steering into) the
-                  running reply (issue #9). They render in queue order between
-                  the transcript and the in-flight echoes; placement turns
-                  them into real user bubbles. */}
+                    running reply (issue #9), in queue order before the
+                    in-flight Echoes; placement turns them into real bubbles. */}
                 {queued.map((item) => (
                   <MessageScrollerItem
                     key={`queued-${item.requestId}`}
                     messageId={`queued-${item.requestId}`}
                   >
-                    <QueuedMessageView item={item} onCancel={() => void cancelQueued(item)} />
+                    <QueuedMessageView
+                      item={item}
+                      onCancel={() => void ownerSend.cancelQueued(bot.id, item.requestId)}
+                    />
                   </MessageScrollerItem>
                 ))}
-                {pending.length > 0 &&
-                  (() => {
-                    const last = timeline[timeline.length - 1];
-                    const showDay =
-                      !last ||
-                      new Date(last.at).toDateString() !==
-                        new Date(pending[0].createdAt).toDateString();
-                    return (
-                      <Fragment>
-                        {showDay && (
-                          <div className="text-muted-foreground flex justify-center py-2 text-xs">
-                            {formatDayDivider(pending[0].createdAt)}
-                          </div>
-                        )}
-                        {pending.map((p) => (
-                          <MessageScrollerItem key={p.id} messageId={p.id}>
-                            <ChatMessageView
-                              message={{
-                                id: p.id,
-                                role: "user",
-                                text: p.text,
-                                ...(p.attachments?.length ? { attachments: p.attachments } : {}),
-                                status: "streaming",
-                                createdAt: p.createdAt,
-                              }}
-                              botName={bot.name}
-                            />
-                          </MessageScrollerItem>
-                        ))}
-                      </Fragment>
-                    );
-                  })()}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton
-              direction="end"
-              className="absolute right-4 bottom-4"
-              aria-label="Jump to the latest message"
-            />
-          </MessageScroller>
+              </>
+            }
+          />
         </div>
 
         <ChatComposer
