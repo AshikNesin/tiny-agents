@@ -14,7 +14,7 @@ permissions:
 jobs:
   release:
     name: Release
-    runs-on: [self-hosted, linux, x64]
+    runs-on: instabox-medium
     timeout-minutes: 10
 
     steps:
