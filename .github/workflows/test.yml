@@ -88,7 +88,7 @@ jobs:
           cd ../pruned-boot
           pnpm install --frozen-lockfile --prod --ignore-scripts
           pnpm rebuild
-          DATABASE_URL=file:./tmp/boot.db PORT=3999 \
+          DATABASE_URL=file:./tmp/boot.db AGENT_DB_PATH=./tmp/agent.db PORT=3999 \
             node dist/server/bundle.js > boot.log 2>&1 < /dev/null &
           server_pid=$!
           for i in $(seq 1 60); do
