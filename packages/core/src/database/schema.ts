@@ -46,12 +46,16 @@ export const passkeys = sqliteTable(
 );
 
 /** Generic key-value storage (settings, passkey challenges, caches). */
-export const kv = sqliteTable("kv", {
-  key: text("key").primaryKey(),
-  /** JSON-encoded value. */
-  value: text("value").notNull(),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
-});
+export const kv = sqliteTable(
+  "kv",
+  {
+    key: text("key").primaryKey(),
+    /** JSON-encoded value. */
+    value: text("value").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("kv_expires_at_idx").on(table.expiresAt)],
+);
 
 export type User = typeof users.$inferSelect;
 export type Passkey = typeof passkeys.$inferSelect;

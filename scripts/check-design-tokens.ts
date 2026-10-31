@@ -235,7 +235,7 @@ for (const rule of RULES) {
 }
 
 if (failed) {
-  console.error("\nSee docs/features/client.md for the UI system rules these checks enforce.\n");
+  console.error("\nSee docs/features/dls.md for the UI system rules these checks enforce.\n");
   process.exit(1);
 }
 

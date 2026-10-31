@@ -10,7 +10,7 @@ metadata:
 This skill references the TypeScript sync tools at `.groot/sync.ts`,
 `.groot/resolve.ts`, and `.groot/upstream.ts`.
 
-Full documentation: [docs/sync-guide.md](../../../docs/sync-guide.md)
+Full documentation: [docs/guides/sync.md](../../../docs/guides/sync.md)
 
 ## Quick Start
 

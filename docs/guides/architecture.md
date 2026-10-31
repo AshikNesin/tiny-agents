@@ -13,10 +13,11 @@ packages/core/src/                 # Boilerplate (synced)
 ├── env.ts · config.ts             # Zod env schema · typed AppConfig + defineConfig()
 ├── context.ts                     # AsyncLocalStorage request context, waitUntil()
 ├── types.ts                       # AppEnv (Hono generics), AuthUser
-├── database/                      # db handle (index.ts), core tables (schema.ts), Node driver (node.ts)
-├── auth/ passkey/ settings/       # Reusable feature modules (routes + service + schema)
+├── database/                      # db handle (index.ts), core tables (schema.ts), Node driver (node.ts), D1 migrator (d1.ts)
+├── auth/ passkey/ settings/       # Reusable feature modules (routes + service + schema); import the module, there is no barrel
 ├── storage/                       # StorageAdapter contract, local/R2/memory adapters, routes
-├── kv/ logger/ errors/            # kv table store · JSON logger + breadcrumbs · Boom + reporting seam
+├── kv/ logger/ errors/            # kv table store · structured logger + breadcrumbs · HttpError, Boom, toHttpError, reporting seam
+├── notification/                  # startup notification the Node entry sends in production
 ├── middlewares/                   # request logger, JWT, admin key, rate limit, error handler
 └── utils/                         # ok()/noContent(), parseBody()/parseQuery()/parseId(), jwt, password
 
@@ -27,6 +28,7 @@ apps/web/src/server/               # App-owned (not synced)
 ├── config.ts                      # defineConfig() overrides
 ├── entry.node.ts · entry.worker.ts
 ├── db/schema.ts                   # app tables; drizzle-kit entry (re-exports core + jobs tables)
+├── db/node.ts                     # openDatabase(url): SQLite with migrations applied (Node entry, scripts, tests)
 └── api/<feature>/                 # feature.routes.ts, .service.ts, .schema.ts, .jobs.ts
 ```
 
@@ -36,59 +38,26 @@ apps/web/src/server/               # App-owned (not synced)
 HTTP request
   → requestLoggerMiddleware   request id (x-request-id), child logger, AsyncLocalStorage context, one log line
   → cors                      config.cors.origins (empty = reflect the requesting origin)
-  → bodyLimit                 1 MB JSON on /api/* (storage sets its own 100 MB limit)
-  → router                    new Hono<AppEnv>() mounted in apps/web/src/server/app.ts
+  → bodyLimit                 1 MB on /api/* except /api/v1/storage/* (storage sets its own 100 MB limit)
+  → router                    new Hono<AppEnv>() mounted by createWebApp() in apps/web/src/server/app.ts
   → handler                   await parseBody(c, schema) → service → ok(c, data, status?)
   → service                   Drizzle query builder → SQLite
-  → errorHandler              anything thrown → { success: false, error: { code, message, details } }
+  → errorHandler              toHttpError(thrown) → { success: false, error: { code, message, details } }
 ```
 
 `/api/v1/auth` and `/api/v1/passkey` are mounted directly (their login routes
 are public and rate-limited); every other router is mounted on a sub-app that
-runs `jwtAuthMiddleware` first.
+runs `jwtAuthMiddleware` first. An unknown route gets the same envelope with a
+404 `NOT_FOUND`.
 
 ## Writing a feature module
 
-Routes are plain Hono routers; handlers parse, call a service, and return the
-envelope:
-
-```ts
-import { Hono } from "hono";
-import type { AppEnv } from "@groot/core/types";
-import { ok, noContent } from "@groot/core/utils/api-response.utils";
-import { parseBody, parseId } from "@groot/core/utils/controller.utils";
-import * as service from "./post.service";
-import { createPostSchema } from "./post.schema";
-
-const router = new Hono<AppEnv>();
-
-router.get("/", async (c) => ok(c, await service.findAll()));
-router.post("/", async (c) =>
-  ok(c, await service.create(await parseBody(c, createPostSchema)), 201),
-);
-router.get("/:id", async (c) => ok(c, await service.findById(parseId(c.req.param("id")))));
-router.delete("/:id", async (c) => {
-  await service.remove(parseId(c.req.param("id")));
-  return noContent(c);
-});
-
-export default router;
-```
-
-Services call Drizzle directly; there is no model layer:
-
-```ts
-import { eq } from "drizzle-orm";
-import { db } from "@groot/core/database";
-import { Boom } from "@groot/core/errors";
-import { posts } from "../../db/schema";
-
-export async function findById(id: number) {
-  const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
-  if (!post) throw Boom.notFound("Post not found");
-  return post;
-}
-```
+A feature is one folder, `apps/web/src/server/api/<feature>/`: a Zod schema,
+a service that calls Drizzle directly (there is no model layer), a plain Hono
+router whose handlers parse, call the service and return the envelope, and
+optionally job handlers. [Development workflow](./development.md#adding-a-feature-end-to-end)
+builds one end to end; [Todos](../features/todos.md) is the reference module.
+Handlers use these helpers:
 
 | Helper (`@groot/core/utils/…`)                    | Does                                                                   |
 | ------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -102,11 +71,17 @@ export async function findById(id: number) {
 | `noContent(c)`                                    | 204                                                                    |
 | `fail(c, error, status)`                          | `{ success: false, error }` (used by the error handler)                |
 
-Errors: throw `Boom.*` for expected failures (`notFound`, `badRequest`,
-`unauthorized`, `conflict`, …). SQLite constraint failures are mapped for you
-(`UNIQUE` → 409, `FOREIGN KEY` / `NOT NULL` / `CHECK` → 400). Anything else
-logs with breadcrumbs, goes to `reportError()`, and returns a 500 whose message
-is only shown in development.
+Errors come from `@groot/core/errors`. Throw a `Boom.*` factory for expected
+failures (`badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, …).
+Each takes `(message?, data?, code?)`: `data` becomes `error.details` and
+`code` is any string (`Boom.notFound("Job not found", null, "JOB_NOT_FOUND")`);
+`Boom.boomify(err, { statusCode })` covers any other status. The error handler
+normalises whatever was thrown with `toHttpError()`: an `HttpError` passes
+through, SQLite constraint failures are mapped (`UNIQUE` → 409, `FOREIGN KEY` /
+`NOT NULL` / `CHECK` → 400), and Hono's `HTTPException` keeps its status. A
+4xx logs a warning. A 5xx or anything unrecognised logs an error with the
+request's breadcrumbs and goes to `reportError()`; an unrecognised error
+returns a 500 whose message is only shown in development.
 
 ## Database
 
@@ -121,20 +96,22 @@ all and is the drizzle-kit entry. See [Database migrations](./database-migration
 ## Bootstrap and the two runtimes
 
 `bootstrap({ env, config, db, storage, reportError })` wires, in order, env →
-config → logger → db → storage → error reporter. Both entries, the scripts and
-the test setup call it through `startWebApp(runtime)` in
-`apps/web/src/server/app.ts`, which also registers the job handlers and builds
-the app; an entry only builds its adapters:
+config → logger → db → storage → error reporter (see
+[boot order](../reference/config.md#boot-order)). Nothing calls it directly:
+both entries, `scripts/seed.ts` and the test setup go through
+`startWebApp(runtime)` in `apps/web/src/server/app.ts`, which adds the app
+config, registers the job handlers and builds the app. A runtime supplies only
+its env source and adapters:
 
-|          | `entry.node.ts`                                                                               | `entry.worker.ts`                              |
-| -------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| env      | `process.env` (+ `.env` via `process.loadEnvFile` when present)                               | Worker vars + secrets bindings                 |
-| db       | `openDatabase(DATABASE_URL)` (`db/node.ts`), migrates on boot                                 | `drizzle(env.DB)` (D1)                         |
-| storage  | `localStorage(uploadsRoot(env))` → `/data/uploads` in production, `./local/uploads` otherwise | `r2Storage(env.STORAGE)`                       |
-| errors   | `@sentry/node` when `SENTRY_DSN` is set                                                       | `@sentry/cloudflare` `withSentry`              |
-| client   | Vite middleware (dev) / `dist/client` + SPA fallback (prod)                                   | Static Assets; `run_worker_first` for `/api/*` |
-| jobs     | `startWorkers()` poller                                                                       | `scheduled` handler → `runTick()`              |
-| shutdown | `SIGTERM` → `/health` 503 → stop workers → close                                              | n/a                                            |
+|          | `entry.node.ts`                                                                                                                                       | `entry.worker.ts`                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| env      | `process.env` (+ `.env` via `process.loadEnvFile` when present)                                                                                       | Worker vars + secrets bindings                                           |
+| db       | `openDatabase(DATABASE_URL)` (`db/node.ts`), migrates on boot                                                                                         | `drizzle(env.DB)` (D1); `migrateD1()` on the first request of an isolate |
+| storage  | `localStorage(uploadsRoot(env))`: `UPLOADS_DIR`, else `uploads/` next to the SQLite file in production (`/data/uploads`), `./local/uploads` otherwise | `r2Storage(env.STORAGE)` when the bucket is bound                        |
+| errors   | `@sentry/node` when `config.sentry.dsn` is set                                                                                                        | `@sentry/cloudflare` `withSentry`, same config                           |
+| client   | Vite middleware (dev) / `dist/client` + SPA fallback (prod)                                                                                           | Static Assets; `run_worker_first` for `/api/*`, `/health`, `/ready`      |
+| jobs     | `startWorkers()` poller when `config.jobs.enabled`                                                                                                    | `scheduled` handler → `runTick()`                                        |
+| shutdown | `SIGTERM` / `SIGINT` → `/health` 503 → stop workers → close                                                                                           | n/a                                                                      |
 
 Core stays runtime-neutral: Web APIs only (`crypto.subtle`, `fetch`,
 `TextEncoder`), with `node:` imports confined to `database/node.ts`,
@@ -153,16 +130,23 @@ interface in `packages/core/src/storage/adapter.ts`. See [File storage](../featu
 
 The `jobs` table is the queue. `addJob()` inserts a row; `runTick()` claims and
 runs due rows; the Node poller or the Workers cron trigger calls it. Handlers
-register through `registerJobHandlers()` in `apps/web/src/server/app.ts`.
-Details in [Background jobs](../features/jobs.md).
+are registered by `startWebApp()`: add a feature's registration to
+`registerJobHandlers()` in `apps/web/src/server/app.ts`. Details in [Background jobs](../features/jobs.md).
 
 ## Logging and request context
 
 `logger` from `@groot/core/logger` is a small structured logger:
 `logger.info({ userId }, "Signed in")`, `logger.child({ component })`, levels
 `trace` … `fatal`. Output is a readable line outside production and JSON lines
-in production (`configureLogger` is called by `bootstrap`). The request
-context (id, start time, breadcrumbs, `waitUntil`) lives in AsyncLocalStorage:
+in production (`configureLogger` is called by `bootstrap`). Before a record is
+written, fields named like secrets (`password`, `secret`, `authorization`, …)
+become `[REDACTED]` and every string goes through the app's scrubber, if one
+is set with `setScrubber()`. A child can carry a record sink
+(`logger.child(bindings, { sink })`, inherited by its children) that receives
+every record whatever the console level; the jobs package persists job logs
+this way.
+
+The request context (id, start time, breadcrumbs, `waitUntil`) lives in AsyncLocalStorage:
 `addBreadcrumb("auth", "token verified")` records a step that is attached to
 the next error log; `waitUntil(promise)` keeps a Workers request alive for
 background work and simply detaches on Node. `reportError(error, context)` is
@@ -171,7 +155,7 @@ the seam the entries point at Sentry.
 ## Key-value store
 
 `kv` from `@groot/core/kv` is a JSON key-value API over the `kv` table with
-optional TTL; app settings and passkey challenges use it. See [KV](../kv.md).
+optional TTL; app settings and passkey challenges use it. See [KV](../features/kv.md).
 
 ## Authentication
 
@@ -192,16 +176,6 @@ React Router 7 (`apps/web/src/client/App.tsx`), the session store
 stays in the HttpOnly cookie), React Query over a `fetch` client
 (`@groot/shell/lib/api`: `/api/v1` prefix, sends the cookie, unwraps `data`,
 throws `ApiError`), `@groot/ui` primitives. See [Client](../features/client.md).
-
-## Adding a feature
-
-1. Table in `apps/web/src/server/db/schema.ts` → `pnpm db:generate` → commit `apps/web/drizzle/`.
-2. `apps/web/src/server/api/<feature>/` with `.schema.ts`, `.service.ts`, `.routes.ts` (+ `.jobs.ts`).
-3. Mount the router in `createWebApp()`; register jobs in `startWebApp()`.
-4. New env var? Add it to `envSchema` (`packages/core/src/env.ts`) and `.env.example`; expose it through `defaultConfig()` if code needs it.
-5. Tests in `tests/server/app/` using `createTestApp()` + `api()`.
-
-Full walkthrough in [Development workflow](./development.md).
 
 ## Design principles
 

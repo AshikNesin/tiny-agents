@@ -36,7 +36,7 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /** SQLite file for the Node runtime. Ignored on Workers, which bind D1. Default: `defaultDatabaseUrl()`. */
   DATABASE_URL: z.string().optional(),
-  /** Node only: where uploads live. Default: `uploads/` next to the SQLite file (`/data/uploads` in production). */
+  /** Node only: where uploads live. Default: `./local/uploads` in development, `uploads/` next to the SQLite file in production (`/data/uploads`). */
   UPLOADS_DIR: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(3000),
   JWT_SECRET_KEY: z.string().min(32, "must be at least 32 characters").optional(),

@@ -19,18 +19,13 @@ test-results/
 /.screenshots/
 
 
-# Development uploads root (UPLOADS_DIR default: ./local/uploads)
+# Development uploads root (UPLOADS_DIR default outside production: ./local/uploads)
 /local/
-# SQLite database files (dev/test data). Keep the dir tracked but ignore contents.
-/data/*.db
-/data/*.db-journal
-/data/*.db.lock
-/data/*.db.lock-journal
-/data/*.db-shm
-/data/*.db-wal
-# Production volume layout (`file:/data/prod.db`): uploads and backups sit beside it
-/data/uploads/
-/data/backups/
+# Local data (dev/e2e SQLite files and their lock/wal sidecars, agent store,
+# browser profiles, production volume uploads and backups). Keep the dir
+# tracked but ignore everything inside it.
+/data/*
+!data/.gitkeep
 
 # Scratch output from scripts (e.g. pnpm check:worker bundles in tmp/worker-build)
 /tmp/

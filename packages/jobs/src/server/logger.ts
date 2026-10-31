@@ -5,6 +5,7 @@ import {
   type Logger,
   type LogRecord,
 } from "@groot/core/logger";
+import { inArray } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { jobLogs } from "./schema";
 
@@ -57,6 +58,17 @@ export function createJobLogger(options: CreateJobLoggerOptions): Logger {
     { jobId, jobName, ...additionalContext },
     { sink: persistSink(jobId, jobName) },
   );
+}
+
+// D1 binds at most 100 parameters per statement.
+const DELETE_CHUNK_SIZE = 90;
+
+/** Delete the `job_logs` rows of the given jobs (indexed on `job_id`). */
+export async function deleteJobLogs(jobIds: readonly string[]): Promise<void> {
+  for (let start = 0; start < jobIds.length; start += DELETE_CHUNK_SIZE) {
+    const chunk = jobIds.slice(start, start + DELETE_CHUNK_SIZE);
+    await db.delete(jobLogs).where(inArray(jobLogs.jobId, chunk));
+  }
 }
 
 /** Wait for every in-flight `job_logs` write. */

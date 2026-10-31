@@ -1,6 +1,7 @@
 # ADR 0001: Own the DLS on the shadcn stack, with Kumo as reference
 
-- Status: **reinstated by [0003](0003-revert-kumo-adoption.md)**
+- Status: **accepted** (superseded by [0002](0002-adopt-kumo-directly.md),
+  reinstated by [0003](0003-revert-kumo-adoption.md))
 - Date: 2026-09-21
 
 ## Context

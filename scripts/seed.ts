@@ -4,6 +4,7 @@
  * starts empty (tasks replace groot's demo todos). A pre-Drizzle database is
  * copied into the new layout first, as the server would on boot.
  */
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { eq } from "drizzle-orm";
 import { bootstrap } from "@groot/core/bootstrap";
@@ -50,6 +51,7 @@ export async function seed(): Promise<void> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (existsSync(".env")) process.loadEnvFile(".env");
   seed().catch((error) => {
     console.error(error);
     process.exit(1);

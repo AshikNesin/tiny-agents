@@ -44,13 +44,13 @@ function DialogContent({
   children,
   showCloseButton = true,
   /**
-   * Whether clicking outside the dialog (overlay / pointer-down) dismisses it.
-   * Defaults to `false` — outside clicks are ignored so users don't
-   * accidentally discard form input. The dialog still closes via the X
-   * button, the Escape key, or an explicit `DialogClose`. Set `true` to
-   * restore dismiss-on-outside-click.
+   * Whether clicking outside the dialog (overlay / pointer-down) dismisses
+   * it. Defaults to `true`, matching platform modal conventions. Set to
+   * `false` for dialogs whose input is expensive to re-enter and would be
+   * lost to a stray click; the dialog still closes via the X button, the
+   * Escape key, or an explicit `DialogClose`.
    */
-  dismissOnOutsideClick = false,
+  dismissOnOutsideClick = true,
   onPointerDownOutside,
   onInteractOutside,
   ...props

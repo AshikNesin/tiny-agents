@@ -4,12 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import * as Sentry from "@sentry/node";
 import { bootstrap } from "@groot/core/bootstrap";
 import { env } from "@groot/core/env";
 import { config } from "@groot/core/config";
 import { logger, scrubValue } from "@groot/core/logger";
 import { markShuttingDown } from "@groot/core/app";
+import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startWorkers, stopWorkers } from "@groot/jobs/server/worker";
@@ -69,6 +69,12 @@ function findMigrationsFolder(): string {
   return found;
 }
 
+// Sentry is loaded below only when a DSN is configured: importing @sentry/node
+// costs tens of MB of RSS even with nothing to send, and most self-hosted
+// instances run without error reporting. Until it initialises, this slot is a
+// no-op — the same outcome as calling Sentry before init().
+let captureException: ErrorReporter | undefined;
+
 bootstrap({
   env: process.env,
   config: appConfig,
@@ -82,14 +88,15 @@ bootstrap({
       }),
     ),
   storage: (validated) => localStorage(uploadsRoot(validated)),
-  reportError: (error, context) => Sentry.captureException(error, { extra: context }),
+  reportError: (error, context) => captureException?.(error, context),
 });
 
 if (config.sentry.dsn) {
+  const Sentry = await import("@sentry/node");
   Sentry.init({
     dsn: config.sentry.dsn,
     // scripts/build.mjs bakes the same release name it uploads source maps under.
-    release: process.env.SENTRY_RELEASE,
+    release: config.sentry.release,
     environment: env.NODE_ENV,
     integrations: [Sentry.zodErrorsIntegration()],
     // Values the app registered as secret never leave in an event; request
@@ -100,6 +107,7 @@ if (config.sentry.dsn) {
     },
     beforeBreadcrumb: (breadcrumb) => scrubValue(breadcrumb),
   });
+  captureException = (error, extra) => Sentry.captureException(error, { extra });
 }
 
 registerJobHandlers();

@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, gt, gte, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, lte } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { Boom } from "@groot/core/errors";
 import { JOB_STATES, VALID_JOB_STATES, isValidJobState, type JobState } from "../lifecycle";
 import { jobs, jobLogs, jobSchedules, type Job, type JobLog, type JobSchedule } from "./schema";
+import { deleteJobLogs } from "./logger";
 import { getRegisteredHandlers } from "./worker";
 import type { GetJobsOptions, JobQueryResponse, JobStats } from "./types";
 
@@ -63,9 +64,7 @@ export async function getJobs(options: GetJobsOptions = {}): Promise<JobQueryRes
 export async function purgeJobsByState(options: { state: string }): Promise<number> {
   const state = assertState(options.state);
   const deleted = await db.delete(jobs).where(eq(jobs.state, state)).returning({ id: jobs.id });
-  if (deleted.length > 0) {
-    await db.delete(jobLogs).where(sql`${jobLogs.jobId} NOT IN (SELECT ${jobs.id} FROM ${jobs})`);
-  }
+  await deleteJobLogs(deleted.map((job) => job.id));
   return deleted.length;
 }
 

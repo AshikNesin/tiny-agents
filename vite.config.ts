@@ -66,6 +66,7 @@ export default defineConfig({
             authToken,
             org: process.env.SENTRY_ORG,
             project: process.env.SENTRY_PROJECT || pkgName,
+            release: { name: release },
             sourcemaps: {
               filesToDeleteAfterUpload: ["dist/client/assets/*.map"],
             },

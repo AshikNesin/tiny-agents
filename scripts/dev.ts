@@ -5,7 +5,12 @@
  * the same port.
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { parseEnv } from "@groot/core/env";
+
+// Load .env before resolving DATABASE_URL: the seed step and the server inherit
+// this process.env, and loadEnvFile never overrides a variable already set.
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 let devServer: ChildProcess | null = null;
 let isShuttingDown = false;

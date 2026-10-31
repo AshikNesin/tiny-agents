@@ -6,8 +6,10 @@ production, on Node or on Cloudflare Workers.
 ## Prerequisites
 
 - **Node.js 24** (`engines` in `package.json`) and **pnpm**.
-- **portless** (optional, `npm install -g portless`) for `https://groot.localhost`
-  in development. See [Portless & HTTPS](./guides/portless-https.md).
+- **portless**, installed globally (`npm install -g portless`): `pnpm dev` runs
+  through it to serve `https://groot.localhost`. `PORTLESS=0` bypasses the
+  proxy, but the `portless` command must still exist. See
+  [Portless & HTTPS](./guides/portless-https.md).
 - Nothing for the database: SQLite ships inside `better-sqlite3`.
 - For Cloudflare: a Cloudflare account; `wrangler` is a dev dependency.
 
@@ -19,8 +21,9 @@ pnpm dev
 ```
 
 Every environment variable has a development default, so no `.env` is needed.
-To override, copy `.env.example` to `.env` (git-ignored); `entry.node.ts` loads
-it with `process.loadEnvFile` when present. Sign in with
+To override, copy `.env.example` to `.env` (git-ignored); `pnpm dev`,
+`pnpm db:seed`, `pnpm db:migrate` and `entry.node.ts` load it with
+`process.loadEnvFile` when present. Sign in with
 `demo@example.com` / `demo@example.com`.
 
 ## Environment variables
@@ -39,22 +42,21 @@ as unset. In production (`NODE_ENV=production`) the variables marked
 | `JWT_SECRET_KEY`                                                                        | dev-only fallback                               | **required**, ≥ 32 characters  | HS256 signing key                                                                                  |
 | `ADMIN_AUTH_KEY`                                                                        | dev-only fallback                               | **required**                   | Value of the `X-Admin-Auth-Key` header                                                             |
 | `RP_NAME`                                                                               | `Groot`                                         | optional                       | Passkey display name                                                                               |
-| `RP_ID`                                                                                 | `localhost`                                     | **required**, your domain      | Passkey relying party id                                                                           |
+| `RP_ID`                                                                                 | `localhost`                                     | **required**, your domain      | Passkey relying party id; under portless see [Portless & HTTPS](./guides/portless-https.md)        |
 | `ORIGIN`                                                                                | `http://localhost:3000`                         | **required**, `https://…`      | Passkey origin; must be a URL                                                                      |
 | `CORS_ALLOWED_ORIGINS`                                                                  | empty (reflects the requesting origin)          | comma-separated list           | Only needed for cross-origin callers                                                               |
 | `LOG_LEVEL`                                                                             | `debug` (dev) / `info` (prod) / `silent` (test) | optional                       | `trace` `debug` `info` `warn` `error` `fatal` `silent`                                             |
-| `SENTRY_DSN`, `SENTRY_RELEASE`                                                          | unset                                           | optional                       | Error reporting through `config.sentry`; see [Sentry source maps](./sentry-source-maps.md)         |
+| `SENTRY_DSN`, `SENTRY_RELEASE`                                                          | unset                                           | optional                       | Error reporting through `config.sentry`; see [Sentry source maps](./guides/sentry-source-maps.md)  |
 | `SENTRY_ORG`, `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT`, `SOURCE_COMMIT`                    | unset                                           | build-time only                | Source map upload and the release name; not part of `envSchema`                                    |
 | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`, `DEFAULT_MODEL` | unset                                           | optional                       | Read by app code that builds an `@groot/ai` client; see [AI inference](./features/ai-inference.md) |
 | `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`                                               | unset                                           | optional                       | Push notification when the Node server starts in production                                        |
 
-Non-secret settings (ports, rate limits, job tuning) are derived from these in
-`packages/core/src/config.ts` and overridden in `apps/web/src/server/config.ts`
-— see [Config](./config.md). Adding a variable means adding it to `envSchema`
-and to `.env.example` (plus `AppConfig` and `defaultConfig()` when it tunes
-behaviour). LLM provider keys such as `OPENAI_API_KEY` are not in the schema:
-the provider SDKs behind `@groot/ai` read them from `process.env` when no
-`apiKey` is passed.
+Non-secret settings (rate limits, job tuning, ...) are derived from these in
+`packages/core/src/config.ts` and overridden in `apps/web/src/server/config.ts`;
+[Config](./reference/config.md#env-vs-config) covers that split and what adding
+a variable involves. LLM provider keys such as `OPENAI_API_KEY` are not in the
+schema: the provider SDKs behind `@groot/ai` read them from `process.env` when
+no `apiKey` is passed.
 
 Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 
@@ -104,13 +106,13 @@ the Worker on its first request. See [Database migrations](./guides/database-mig
 
 No broker: the `jobs` table is the queue. The Node entry starts a poller
 (`startWorkers()`); on Workers the cron trigger runs one tick per minute.
-Tuning lives in `config.jobs` ([Config](./config.md)); the API and handler model
+Tuning lives in `config.jobs` ([Config](./reference/config.md)); the API and handler model
 in [Background jobs](./features/jobs.md).
 
 ## Verify the stack
 
 ```bash
-BASE=http://localhost:3000
+BASE=https://groot.localhost   # http://localhost:3000 under PORTLESS=0
 curl $BASE/health
 TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
   -H "Content-Type: application/json" \

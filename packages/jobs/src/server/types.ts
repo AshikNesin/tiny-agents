@@ -34,7 +34,7 @@ export interface SendJobOptions {
 }
 
 export interface ScheduleJobOptions {
-  /** IANA timezone for the cron expression. Defaults to UTC. */
+  /** IANA timezone for the cron expression. Defaults to the process time zone (UTC on Workers, `TZ` on Node). */
   timezone?: string;
 }
 

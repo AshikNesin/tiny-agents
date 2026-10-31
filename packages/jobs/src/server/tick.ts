@@ -1,12 +1,12 @@
-import { and, asc, desc, eq, inArray, lt, lte, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, lte, sql } from "drizzle-orm";
 import { Cron } from "croner";
-import { db } from "@groot/core/database";
+import { db, kv } from "@groot/core/database";
 import { config } from "@groot/core/config";
 import { logger, logPerformance } from "@groot/core/logger";
 import { reportError } from "@groot/core/errors";
 import { purgeExpiredKv } from "@groot/core/kv";
-import { jobs, jobLogs, jobSchedules, type Job } from "./schema";
-import { createJobLogger, flushJobLogs } from "./logger";
+import { jobs, jobSchedules, type Job, type NewJob } from "./schema";
+import { createJobLogger, deleteJobLogs, flushJobLogs } from "./logger";
 import { getJobHandler, getRegisteredHandlers } from "./worker";
 import type { TickOptions, TickResult } from "./types";
 
@@ -17,11 +17,14 @@ import type { TickOptions, TickResult } from "./types";
  */
 
 const HOUSEKEEPING_INTERVAL_MS = 10 * 60 * 1000;
+/** How long to wait before asking again after another process held the slot. */
+const HOUSEKEEPING_RECHECK_MS = 60 * 1000;
+const HOUSEKEEPING_KEY = "jobs:housekeeping:lastRunAt";
 const MAX_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
 
 let inFlight: Promise<TickResult> | null = null;
 let rerunRequested = false;
-let lastHousekeeping = 0;
+let nextHousekeepingCheck = 0;
 
 export function runTick(options: TickOptions = {}): Promise<TickResult> {
   if (inFlight) {
@@ -69,15 +72,38 @@ async function tick(options: TickOptions): Promise<TickResult> {
     result[outcome] += 1;
   }
 
-  if (
-    (options.housekeeping ?? true) &&
-    now.getTime() - lastHousekeeping > HOUSEKEEPING_INTERVAL_MS
-  ) {
-    lastHousekeeping = now.getTime();
+  if ((options.housekeeping ?? true) && (await claimHousekeeping(now))) {
     await housekeeping(now);
   }
 
   return result;
+}
+
+/**
+ * True when this tick owns the housekeeping slot. The last run time lives in a
+ * kv row, claimed with one compare-and-set upsert, because a Workers isolate
+ * starts with empty module state and an in-memory timer alone would let every
+ * fresh isolate sweep again. The in-memory check spares the Node poller a
+ * query on every tick.
+ */
+async function claimHousekeeping(now: Date): Promise<boolean> {
+  const nowMs = now.getTime();
+  if (nowMs < nextHousekeepingCheck) return false;
+
+  const value = JSON.stringify(nowMs);
+  const claimed = await db
+    .insert(kv)
+    .values({ key: HOUSEKEEPING_KEY, value })
+    .onConflictDoUpdate({
+      target: kv.key,
+      set: { value },
+      setWhere: sql`CAST(${kv.value} AS INTEGER) <= ${nowMs - HOUSEKEEPING_INTERVAL_MS}`,
+    })
+    .returning({ key: kv.key });
+
+  const owned = claimed.length > 0;
+  nextHousekeepingCheck = nowMs + (owned ? HOUSEKEEPING_INTERVAL_MS : HOUSEKEEPING_RECHECK_MS);
+  return owned;
 }
 
 /** Next fire time of a cron expression after `from`, or null when it never fires. */
@@ -185,18 +211,34 @@ function serializable(value: unknown): unknown {
   }
 }
 
+/**
+ * Record the outcome while the job is still `active` (a cancel or delete that
+ * landed mid-run wins). A job deleted mid-run has no row left to own the logs
+ * its handler wrote after the delete, so they go too.
+ */
+async function finishJob(job: Job, set: Partial<NewJob>): Promise<void> {
+  const updated = await db
+    .update(jobs)
+    .set(set)
+    .where(and(eq(jobs.id, job.id), eq(jobs.state, "active")))
+    .returning({ id: jobs.id });
+  if (updated.length > 0) return;
+  const [exists] = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, job.id)).limit(1);
+  if (!exists) await deleteJobLogs([job.id]);
+}
+
 async function runJob(job: Job): Promise<"completed" | "retried" | "failed"> {
   const jobLogger = createJobLogger({ jobId: job.id, jobName: job.name });
   const handler = getJobHandler(job.name);
   const startTime = Date.now();
   const attempt = job.retryCount + 1;
-  const stillActive = and(eq(jobs.id, job.id), eq(jobs.state, "active"));
 
   if (!handler) {
-    await db
-      .update(jobs)
-      .set({ state: "failed", completedAt: new Date(), error: "No handler registered" })
-      .where(stillActive);
+    await finishJob(job, {
+      state: "failed",
+      completedAt: new Date(),
+      error: "No handler registered",
+    });
     return "failed";
   }
 
@@ -213,15 +255,12 @@ async function runJob(job: Job): Promise<"completed" | "retried" | "failed"> {
     jobLogger.info({ duration: `${duration}ms` }, `Job ${job.name} completed`);
     logPerformance({ operation: `job_${job.name}`, duration, data: { jobId: job.id } });
     await flushJobLogs();
-    await db
-      .update(jobs)
-      .set({
-        state: "completed",
-        completedAt: new Date(),
-        output: serializable(output),
-        error: null,
-      })
-      .where(stillActive);
+    await finishJob(job, {
+      state: "completed",
+      completedAt: new Date(),
+      output: serializable(output),
+      error: null,
+    });
     return "completed";
   } catch (error) {
     const duration = Date.now() - startTime;
@@ -237,33 +276,31 @@ async function runJob(job: Job): Promise<"completed" | "retried" | "failed"> {
 
     if (job.retryCount < job.retryLimit) {
       const delayMs = Math.min(job.retryDelay * 1000 * 2 ** job.retryCount, MAX_RETRY_DELAY_MS);
-      await db
-        .update(jobs)
-        .set({
-          state: "created",
-          startedAt: null,
-          runAt: new Date(Date.now() + delayMs),
-          retryCount: job.retryCount + 1,
-          error: message,
-        })
-        .where(stillActive);
+      await finishJob(job, {
+        state: "created",
+        startedAt: null,
+        runAt: new Date(Date.now() + delayMs),
+        retryCount: job.retryCount + 1,
+        error: message,
+      });
       return "retried";
     }
 
-    await db
-      .update(jobs)
-      .set({ state: "failed", completedAt: new Date(), error: message })
-      .where(stillActive);
+    await finishJob(job, { state: "failed", completedAt: new Date(), error: message });
     return "failed";
   }
 }
 
-/** Delete old finished jobs, their logs, and expired kv entries. */
+/**
+ * Delete old finished jobs with their logs, and expired kv entries. Every
+ * statement uses an index, so the cost follows what is deleted, not table size.
+ */
 export async function housekeeping(now: Date = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - config.jobs.keepCompletedDays * 24 * 60 * 60 * 1000);
-  await db
+  const deleted = await db
     .delete(jobs)
-    .where(and(inArray(jobs.state, ["completed", "cancelled"]), lt(jobs.completedAt, cutoff)));
-  await db.delete(jobLogs).where(notInArray(jobLogs.jobId, db.select({ id: jobs.id }).from(jobs)));
+    .where(and(inArray(jobs.state, ["completed", "cancelled"]), lt(jobs.completedAt, cutoff)))
+    .returning({ id: jobs.id });
+  await deleteJobLogs(deleted.map((job) => job.id));
   await purgeExpiredKv();
 }

@@ -6,6 +6,7 @@ import { Boom } from "@groot/core/errors";
 import { logger, waitUntil } from "@groot/core/logger";
 import { JOB_ACTIONS, canApplyJobAction, type JobAction, type JobState } from "../lifecycle";
 import { defaultJobOptions } from "./config";
+import { deleteJobLogs } from "./logger";
 import { jobs, jobSchedules, type Job, type JobSchedule, type NewJob } from "./schema";
 import { getJobHandler } from "./worker";
 import { runTick } from "./tick";
@@ -145,6 +146,8 @@ async function applyAction(action: JobAction, jobId: string, set: Partial<NewJob
 export async function deleteJob(jobId: string): Promise<void> {
   const deleted = await db.delete(jobs).where(eq(jobs.id, jobId)).returning({ id: jobs.id });
   if (deleted.length === 0) throw jobNotFound(jobId);
+  // An active job's handler may still log; the tick drops those rows when it finishes.
+  await deleteJobLogs([jobId]);
 }
 
 /** Put a failed or cancelled job back on the queue. */

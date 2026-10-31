@@ -13,7 +13,7 @@
  * no importers inside this repo. That is not dead code: they exist so child
  * apps can consume them from `@groot/ui` instead of vendoring. Removal
  * decisions for this package must weigh child-project demand (see
- * docs/sync-guide.md), not just the in-repo import graph.
+ * docs/guides/sync.md), not just the in-repo import graph.
  */
 
 export * from "./badge";

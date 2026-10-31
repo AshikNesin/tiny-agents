@@ -7,15 +7,15 @@ entry is `apps/web/src/server/entry.worker.ts`.
 
 ## What maps to what
 
-| Concern  | Node                         | Workers                                                                                            |
-| -------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| Database | `better-sqlite3` file        | D1 binding `DB` (`drizzle(env.DB)`)                                                                |
-| Uploads  | `./local/uploads`            | R2 binding `STORAGE` (`r2Storage(env.STORAGE)`)                                                    |
-| Client   | `dist/client` served by Hono | Static Assets from `dist/client`, SPA fallback; `/api/*`, `/health`, `/ready` hit the Worker first |
-| Jobs     | poller every 5 s             | cron `* * * * *` → `scheduled` → `runTick()`; `addJob()` also runs a tick through `ctx.waitUntil`  |
-| Env      | `.env` / platform vars       | `vars` in `wrangler.jsonc` + `wrangler secret put`                                                 |
-| Errors   | `@sentry/node`               | `@sentry/cloudflare` (`withSentry`)                                                                |
-| Logs     | stdout                       | Workers Logs (`observability.enabled`)                                                             |
+| Concern  | Node                                 | Workers                                                                                                            |
+| -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Database | `better-sqlite3` file                | D1 binding `DB` (`drizzle(env.DB)`)                                                                                |
+| Uploads  | `./local/uploads`                    | R2 binding `STORAGE` (`r2Storage(env.STORAGE)`)                                                                    |
+| Client   | `dist/client` served by Hono         | Static Assets from `dist/client`, SPA fallback; `/api/*`, `/health`, `/ready`, `/__scheduled` hit the Worker first |
+| Jobs     | poller every 5 s                     | cron `* * * * *` → `scheduled` → `runTick()`; `addJob()` also runs a tick through `ctx.waitUntil`                  |
+| Env      | `.env` / platform vars               | `vars` in `wrangler.jsonc` + `wrangler secret put`                                                                 |
+| Errors   | `@sentry/node`, from `config.sentry` | `@sentry/cloudflare` (`withSentry`), from `config.sentry`                                                          |
+| Logs     | stdout                               | Workers Logs (`observability.enabled`)                                                                             |
 
 ## Step by step
 
@@ -57,18 +57,16 @@ pnpm dev:worker                                       # builds the client, runs 
 pnpm check:worker                                     # dry-run bundle into tmp/worker-build (CI runs this)
 ```
 
-`wrangler dev` uses `vars` from `wrangler.jsonc`, which set `NODE_ENV=production`.
-For local work create a git-ignored `.dev.vars`:
+`wrangler dev` uses `vars` from `wrangler.jsonc`, which set `NODE_ENV=production`,
+so the production checks apply locally too. Copy `.dev.vars.example` to the
+git-ignored `.dev.vars`: it supplies local secrets and points `RP_ID` and
+`ORIGIN` at `localhost:8787`. Adding `NODE_ENV=development` to `.dev.vars`
+instead lets the env fall back to the dev-only secrets.
 
-```
-NODE_ENV=development
-RP_ID=localhost
-ORIGIN=http://localhost:8787
-```
-
-In development the env falls back to the dev-only secrets, so nothing else is
-needed. The client is served from `dist/client` without HMR; rerun
-`pnpm build:client` (or `pnpm dev:worker`) after client changes.
+The client is served from `dist/client` without HMR; rerun
+`pnpm build:client` (or `pnpm dev:worker`) after client changes. To fire the
+cron handler locally, run `pnpm exec wrangler dev --test-scheduled` and request
+`/__scheduled`.
 
 ## Free-plan limits that shaped the design
 
@@ -84,13 +82,15 @@ needed. The client is served from `dist/client` without HMR; rerun
 ## Notes
 
 - **Migrations run on the first request** of an isolate (`migrateD1()` in
-  `@groot/core/database/d1`, fed by the generated `apps/web/drizzle/index.ts`).
-  Two isolates racing is safe: D1 applies each file in one batch and the second
-  isolate sees it recorded. The Node entry migrates on boot the same way.
-- **Rate limiting** is per isolate in memory. For exact limits add the
-  `ratelimits` bindings commented in `wrangler.jsonc` (`AUTH_RATE_LIMITER`,
-  `STORAGE_RATE_LIMITER`, `UPLOAD_RATE_LIMITER`); the middleware uses them when
-  present.
+  `@groot/core/database/d1`, fed by `apps/web/drizzle/index.ts`, which
+  `pnpm db:generate` regenerates). Two isolates racing is safe: D1 applies each
+  file in one batch and the second isolate sees it recorded. The Node entry
+  applies the same files on boot through `openDatabase()` in
+  `apps/web/src/server/db/node.ts`.
+- **Rate limiting** is per isolate in memory. For exact limits add
+  `ratelimits` bindings named `AUTH_RATE_LIMITER`, `STORAGE_RATE_LIMITER` and
+  `UPLOAD_RATE_LIMITER` (`wrangler.jsonc` has a commented example for the
+  first); the middleware uses each one when present.
 - **Jobs run inside the request or the cron invocation** and share its CPU
   budget. Long work should be split into several jobs.
 - **Workspace packages** resolve through the `exports` map in each

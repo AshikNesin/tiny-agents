@@ -5,19 +5,24 @@ client and React Query.
 
 ## Routing & layout
 
-Routes are defined in `apps/web/src/client/App.tsx`:
+Routes are defined in `apps/web/src/client/App.tsx` (React Router 7):
 
-| Route                  | Component            | Auth      |
-| ---------------------- | -------------------- | --------- |
-| `/login`               | `Login`              | Public    |
-| `/` → `/todos` (index) | `Todos`              | Protected |
-| `/storage`             | `Storage`            | Protected |
-| `/jobs`, `/jobs/:id`   | `Jobs` / `JobDetail` | Protected |
-| `/settings`            | `Settings`           | Protected |
+| Route                   | Component            | From                                   | Auth      |
+| ----------------------- | -------------------- | -------------------------------------- | --------- |
+| `/login`                | `Login`              | `@groot/shell/pages/auth/Login`        | Public    |
+| `/` → `/todos` (index)  | `Todos`              | `apps/web/src/client/pages/todo/Todos` | Protected |
+| `/storage`              | `Storage`            | `@groot/shell/pages/storage/Storage`   | Protected |
+| `/jobs`, `/jobs/:jobId` | `Jobs` / `JobDetail` | `@groot/jobs/client`                   | Protected |
+| `/settings`             | `Settings`           | `@groot/shell/pages/settings/Settings` | Protected |
 
-`ProtectedRoute` checks `useAuthStore` and redirects unauthenticated users to
-`/login`. `Layout` renders the sidebar, the account menu, the ⌘K palette and an
-`<Outlet>` for nested routes.
+Any other path redirects to `/`. The router sits inside nuqs's `NuqsAdapter`
+(URL state) and `GrootUIProvider` (`@groot/ui/provider`), which mounts the
+toaster and the `ConfirmProvider` that `useConfirm()` needs.
+
+`App` calls `checkAuth()` on mount. `ProtectedRoute` shows a spinner until it
+settles, then redirects unauthenticated users to `/login`. `Layout` renders
+the sidebar, the account menu, the ⌘K palette and an `<Outlet>` for nested
+routes.
 
 ## Navigation (`ShellConfig`)
 
@@ -38,8 +43,8 @@ mobile bar with your own, and `padded`, `mainClassName`, `className`.
 
 `App.tsx` keeps a `PAGES` list of `NavDestination & { element }`: it is both
 `ShellConfig.nav` and the routes, so a page with a place in the navigation is
-declared once. Routes without a nav entry (`jobs/:queueName/:jobId`) are
-written out as usual.
+declared once. Routes without a nav entry (`jobs/:jobId`) are written out as
+usual.
 
 ## Transport and session
 
@@ -47,89 +52,65 @@ written out as usual.
 `/api/v1`, sends the cookie (`credentials: "include"`), JSON-encodes bodies
 (`FormData` goes as multipart), unwraps the `{ success, data }` envelope and
 throws an `ApiError` (`status`, `code`, `message`, `details`, `url`) for any
-non-2xx response. It knows nothing about sessions: `apiClient.onUnauthorized(handler)`
-reports each 401 with its `path` and `sentAt` time.
+non-2xx response. `get`, `post`, `put` and `patch` also throw (code `NO_DATA`)
+when a 2xx envelope has no `data`, so only `delete` suits an endpoint that
+answers `204`. `postForm` uploads and `getBlob` downloads. It knows nothing
+about sessions: `apiClient.onUnauthorized(handler)` reports each 401 with its
+`path` and `sentAt` time.
 
 The session is `useAuthStore` (`@groot/shell/store/auth`, Zustand). The server
 keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 
-| Member                                          | Does                                                                               |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled |
-| `login(email, password)` / `loginWithPasskey()` | Sign in (`/auth/login`, or the WebAuthn ceremony); reject with the original error  |
-| `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                    |
-| `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                  |
-| `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call           |
-| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password.")                   |
+| Member                                          | Does                                                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled           |
+| `login(email, password)` / `loginWithPasskey()` | Sign in (`POST /auth/login`, or the WebAuthn ceremony); resolve with the user, or reject     |
+| `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                              |
+| `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                            |
+| `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                     |
+| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password."; network and WebAuthn cases) |
 
 The store installs the 401 hook: a 401 for a request sent during the current
 session clears it, so `ProtectedRoute` redirects to `/login`. A 401 for a
 request sent before the last sign-in or sign-out is ignored.
 
+Response types come from the server, imported type-only (for example
+`SessionUser` from `@groot/core/auth/auth.schema`), never hand-copied; see the
+wire-type rule in [`AGENTS.md`](../../AGENTS.md).
+
 ## Data fetching
 
-- React Query is mounted globally.
+- The `QueryClient` is created in `apps/web/src/client/main.tsx`: queries stay
+  fresh for 5 minutes, refetch on window focus and reconnect, and retry once.
+  Mutations never retry, because a repeated POST can create a duplicate.
 - Feature hooks (e.g. `useTodos`) wrap list + CRUD mutations and invalidate
   caches after each mutation.
-- Errors surface via `useToast` (Sonner) for immediate UI feedback.
+- `useToastMutation(fn, { success, error, onSuccess })`
+  (`@groot/shell/hooks/useToastMutation`) is `useMutation` with Sonner toasts.
+  Its `onSuccess` is awaited, so returning an invalidation keeps `isPending`
+  true until the refetch lands.
 
 ## UI system
 
-- **Tailwind CSS** + `tailwindcss-animate`, configured in `packages/shell`.
-- **shadcn-style primitives** (`Button`, `Card`, `Dialog`, `Input`, …) live in
-  the [`@groot/ui`](../../packages/ui) package.
-- **Design rules** (type scale, motion, idioms) live in [`dls.md`](./dls.md) —
-  the DLS, Kumo-referenced, enforced by `pnpm check:tokens`.
-- Pages compose these with React Query hooks to render server data.
+Primitives live in [`@groot/ui`](../../packages/ui) (shadcn-style, on Radix
+and cva); page chrome (`PageLayout`, `PageContainer`, `Section`) lives in
+`@groot/shell/components/layout/`. Tailwind v4 is configured CSS-first in
+`packages/shell/src/index.css`, which also defines the tokens. Which primitive
+to use for what, the type scale, tokens and motion rules are in the
+[DLS](./dls.md), enforced by `pnpm check:tokens`.
 
-### Rules
-
-The primitives below are the _only_ way to render these things. Hand-rolling a
-replacement is what makes the UI drift, so `pnpm check:tokens` fails the build
-on the common cases (see [enforcement](#enforcement)).
-
-| Need                       | Use                                                                                                                                                                      | Don't                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A bordered surface         | `Card` (+ `CardHeader`/`CardContent`/`CardFooter`)                                                                                                                       | `rounded-xl border bg-card` on a `div`                                                                                                               |
-| Page title / chrome        | `PageLayout`                                                                                                                                                             | a hand-written `<h1>` or `max-w-* mx-auto`                                                                                                           |
-| In-page section heading    | `Section` (`title`, `meta`, `description`, `actions`)                                                                                                                    | a `text-sm font-medium` span + a count span                                                                                                          |
-| Empty list / nothing found | `EmptyState`                                                                                                                                                             | an ad-hoc icon + heading + copy stack                                                                                                                |
-| Failed load                | `ErrorState` (+ a retry `action`)                                                                                                                                        | ditto, tinted red                                                                                                                                    |
-| Loading a whole surface    | `SkeletonTable` / `SkeletonList` / `SkeletonCard` from `@groot/ui` (compose with `Skeleton` for one-off bits); `LoadingState` only for unknown shapes or app-level gates | a per-page custom skeleton component, a bare "Loading…" string, an inline spinner div, or a big centered spinner inside a list whose layout is known |
-| Tabular data               | `Table`; `tableColumnHeaderClass` for grid-based tables                                                                                                                  | a raw `<table>`/`<thead>`                                                                                                                            |
-| Status / state pill        | `StatusBadge` (token-driven); `Badge` for neutral tags                                                                                                                   | a local status→color map                                                                                                                             |
-| Destructive confirmation   | `useConfirm({ destructive: true })`                                                                                                                                      | a bespoke `Dialog` (dismissible by overlay)                                                                                                          |
-| Scrolling dialog content   | `DialogBody` between `DialogHeader` and `DialogFooter` (header and footer stay pinned)                                                                                   | a hand-rolled `overflow-y-auto` wrapper                                                                                                              |
-| Icon sizing                | `size-4` / `size-3.5`                                                                                                                                                    | `h-4 w-4`                                                                                                                                            |
-| Icon spacing in a button   | nothing — `Button` already sets `gap`                                                                                                                                    | `mr-2` on the icon                                                                                                                                   |
-| Any text treatment         | `Text` / `metaLabelClass` / `monoClass` from `@groot/ui`                                                                                                                 | ad-hoc `text-*` sizes, `tracking-*`, `font-bold`, inline `font-mono` at full size                                                                    |
-| Hover state                | instant color change                                                                                                                                                     | `transition-colors` / `transition-all` on hover                                                                                                      |
-| Key-value data (read-only) | `DataField` + `DataFields` from `@groot/ui`                                                                                                                              | hand-rolled `<dl>`/`<dt>`/`<dd>` with ad-hoc label classes                                                                                           |
-| A standalone metric/stat   | `StatTile` from `@groot/ui`                                                                                                                                              | icon + label + `text-xl font-semibold tabular-nums` stacks written per page                                                                          |
-| Interactive list rows      | `listRowClass` / `listRowGridClass` from `@groot/ui` (class constants)                                                                                                   | per-page `hover:bg-muted/40 px-4 py-3 …` strings                                                                                                     |
-
-Colors come only from semantic token classes (`bg-primary`, `text-foreground`,
-`text-destructive`, `text-muted-foreground`, `border-border`, …). Raw palette
-classes (`gray-*`, `red-*`, …) are allowed _only_ in
-`packages/shell/src/index.css`, which defines the tokens.
-
-### Enforcement
-
-`scripts/check-design-tokens.ts` greps every client dir (`packages/*/src` and
-`apps/*/src/client`, so a new package or app is covered without an edit) for
-both token and structural drift. It runs:
-
-- on every commit via the `vp staged` pre-commit hook (`vite.config.ts`), and
-- in CI as a step of `.github/workflows/test.yml`, which catches
-  `--no-verify` commits.
+`main.tsx` calls `initTheme()` (`@groot/shell/lib/theme`) before the first
+render, so the stored theme applies without a flash. The default is dark;
+call `setDefaultTheme()` before `initTheme()` to change it.
 
 ## Layering (import rules)
 
-| Layer              | Import path            | Purpose           | Synced? |
-| ------------------ | ---------------------- | ----------------- | ------- |
-| `@groot/ui`        | `@groot/ui/button`     | Design primitives | Yes     |
-| `@groot/shell`     | `@groot/shell/lib/api` | Client infra      | Yes     |
-| `apps/web/…/pages` | `./pages/todo/Todos`   | Business features | No      |
+| Layer                | Import path            | Purpose           | Synced? |
+| -------------------- | ---------------------- | ----------------- | ------- |
+| `@groot/ui`          | `@groot/ui/button`     | Design primitives | Yes     |
+| `@groot/shell`       | `@groot/shell/lib/api` | Client infra      | Yes     |
+| `@groot/jobs/client` | `@groot/jobs/client`   | Jobs dashboard    | Yes     |
+| `apps/web/…/pages`   | `./pages/todo/Todos`   | Business features | No      |
 
 `ui/` can't import `shell`/`pages`; `shell/` can't import `pages/`.
 
@@ -137,7 +118,9 @@ both token and structural drift. It runs:
 
 1. Add the page to `PAGES` in `App.tsx` (route, sidebar or account-menu row
    and ⌘K entry in one line), or a plain `<Route>` if it has no nav entry.
-2. Create a React Query hook in the feature's `hooks/` that calls `/api/v1/*`.
-3. Compose the UI in `pages/`, using the shared layout + toasts.
+2. Create a React Query hook in the feature's `hooks/` that calls `apiClient`
+   (paths are relative to `/api/v1`).
+3. Compose the UI in `pages/` with `PageLayout` and the `@groot/ui`
+   primitives.
 4. For global state, prefer Zustand slices or React Query caches over ad-hoc
    contexts.

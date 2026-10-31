@@ -83,7 +83,9 @@ export function ScheduledJobsPanel() {
               <div key={job.name} className={cn(listRowGridClass, "group")}>
                 <div className="col-span-3 font-medium text-foreground">{job.name}</div>
                 <div className="col-span-3 font-mono text-xs text-muted-foreground">{job.cron}</div>
-                <div className="col-span-2 text-muted-foreground">{job.timezone || "UTC"}</div>
+                <div className="col-span-2 text-muted-foreground">
+                  {job.timezone || "Server time"}
+                </div>
                 <div className="col-span-3">
                   <pre className="font-mono text-[11px] bg-muted px-1.5 py-1 rounded-md truncate max-w-xs">
                     {JSON.stringify(job.data)}

@@ -5,7 +5,7 @@
 set -e
 
 # Run Gitleaks for secret detection on staged files
-gitleaks protect --verbose --redact --config .gitleaks.toml
+gitleaks protect --staged --verbose --redact --config .gitleaks.toml
 
 # Run Vite+ staged checks (lint + format)
 vp staged

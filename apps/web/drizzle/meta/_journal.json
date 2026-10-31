@@ -8,6 +8,13 @@
       "when": 1793369954273,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793425919879,
+      "tag": "0001_even_power_man",
+      "breakpoints": true
     }
   ]
 }

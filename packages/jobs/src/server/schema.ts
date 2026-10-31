@@ -34,6 +34,7 @@ export const jobs = sqliteTable(
   },
   (table) => [
     index("jobs_state_run_at_idx").on(table.state, table.runAt),
+    index("jobs_state_completed_at_idx").on(table.state, table.completedAt),
     index("jobs_name_idx").on(table.name),
     index("jobs_created_at_idx").on(table.createdAt),
   ],

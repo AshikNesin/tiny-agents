@@ -19,7 +19,10 @@ The groot sync system has four workflows:
 
 ## How Versioning Works
 
-Groot uses [changesets](https://github.com/changesets/changesets) for versioning:
+Groot uses [changesets](https://github.com/changesets/changesets) for versioning.
+The released packages are the root `groot` package and the kit packages
+`@groot/core`, `@groot/jobs`, `@groot/shell`, `@groot/ui` and `@groot/ai`
+(all private: they are versioned, never published to npm).
 
 1. **When making changes to groot**, add a changeset file:
 
@@ -27,14 +30,23 @@ Groot uses [changesets](https://github.com/changesets/changesets) for versioning
    pnpm changeset
    ```
 
-   This asks for the change type (patch/minor/major) and a description.
+   This asks which packages changed, the change type (patch/minor/major) and a
+   description.
 
-2. **On merge to `main`**, a GitHub Action creates a "Version Packages" PR that:
-   - Bumps the version in `package.json`
-   - Updates `CHANGELOG.md` with all pending changeset entries
+2. **On push to `main`**, `.github/workflows/release.yml` opens or updates a
+   "chore: version packages" PR that:
+   - Bumps the version in each named package's `package.json` (dependents such
+     as `@groot/web` get a patch bump)
+   - Updates each package's `CHANGELOG.md` with its pending entries
    - Removes consumed changeset files
 
-3. **When the version PR merges**, a git tag (e.g., `v1.3.0`) and GitHub Release are created.
+3. **When the version PR merges**, the workflow tags the root version (e.g.
+   `v3.1.0`) and creates a GitHub Release from the root `CHANGELOG.md`.
+
+The tag follows the root `groot` version only, and sync reads versions from
+those tags and changelog entries from the root `CHANGELOG.md`. Name `"groot"`
+in the changeset when a change should appear as a new boilerplate version to
+child projects; a release that bumps only kit packages creates no new tag.
 
 ### Changeset Types
 
@@ -44,19 +56,35 @@ Groot uses [changesets](https://github.com/changesets/changesets) for versioning
 | `minor` | New features, non-breaking additions | `feat(ui): add DatePicker component`      |
 | `major` | Breaking changes requiring migration | `feat!: change the logger sink API`       |
 
+### Which packages a changeset must name
+
+`pnpm check:changesets` (run in CI against the base branch) fails a branch that
+changes a managed surface without naming its package:
+
+| Changed path                                                             | Package to name                   |
+| ------------------------------------------------------------------------ | --------------------------------- |
+| `packages/<pkg>/src/**`                                                  | that package (`@groot/core`, ...) |
+| `packages/<pkg>/package.json` (any key but `name`, `version`, `private`) | that package                      |
+| `apps/web/drizzle/**`, `.groot/**`                                       | `groot`                           |
+
+Docs-only or internal changes to those paths can instead carry a reviewed
+reason file under `.changeset/no-release/` (any non-empty `.md`; it covers the
+whole branch). The release bot's own commits are exempt.
+
 ### Writing a Changeset (for AI Agents)
 
-Create a markdown file in `.changeset/` with a random name:
+Create a markdown file in `.changeset/` with a descriptive name, naming every
+package the branch changed:
 
 ```markdown
 ---
-"groot": patch
+"@groot/core": patch
 ---
 
-fix(core): handle null values in Boom error handler
+fix(core): `Boom.badRequest()` accepts a null message
 
-The `Boom.badRequest()` factory now gracefully handles null error messages
-instead of throwing a TypeError.
+The factory now falls back to the default message instead of throwing a
+TypeError.
 ```
 
 ---
@@ -80,26 +108,36 @@ pnpm groot:resolve
 
 1. Acquires the groot boilerplate checkout (see [Boilerplate checkout reuse](#boilerplate-checkout-reuse) below)
 2. Reconciles the full set of synced files across three trees: ours (working
-   tree), base (the `refs/groot/baseline` snapshot from the last sync, rebuilt
-   from the checkout when missing), and theirs (boilerplate HEAD). This makes
-   sync idempotent and self-healing — lost state simply reconverges on the
-   next run
+   tree), base (the `refs/groot/baseline` snapshot from the last sync, or the
+   checkout at `last_sync.commit` when the snapshot is missing), and theirs
+   (boilerplate HEAD). This makes sync idempotent and self-healing — lost
+   state simply reconverges on the next run
 3. Categorizes each file into one bucket:
    - **Auto-apply**: New upstream, or unmodified locally since last sync → copied
    - **Auto-merged**: Modified locally but a three-way merge (base = last sync, ours = local, theirs = groot) is clean → merged result written automatically
    - **Conflict**: Modified locally with overlapping changes → conflict markers written and recorded in `.groot/needs-review/manifest.json`
-   - **Deleted**: Removed upstream and unmodified locally → deleted locally; locally-modified files are kept and flagged for review instead
+   - **Binary conflict**: A binary file changed on both sides → listed for manual reconciliation
+   - **Deleted**: Removed upstream and unmodified locally → deleted locally; locally-modified files are kept and listed under **Deletion review** instead
+   - **Kept local deletion**: Deleted in this repo (committed) but still upstream → left deleted
    - **Drift**: Changed in groot but matches no sync pattern (new boilerplate surface) → listed only
    - **Skipped**: Immutable (security) or app-specific paths → reported as counts only
-4. Extracts changelog between the last synced version and the latest version
+4. Extracts the changelog between the last synced version and the latest `v*`
+   tag from groot's root `CHANGELOG.md`, falling back to commit messages
 5. Applies changes (refusing to overwrite files with uncommitted git changes
    unless `--force`), then advances the baseline ref and
    `boilerplate-sync.json` last, so a crash mid-apply never loses state
-6. Generates a machine-readable `sync-report.json` for CI consumption
+6. Writes a machine-readable `.groot/sync-report.json` (git-ignored, also
+   written by `groot:check`) for CI consumption
 
-Only **Conflict** files need attention. Clean three-way merges are applied
-automatically, so non-overlapping upstream changes no longer pile up in a manual
-review list.
+Only **Conflict** and **Binary conflict** files need attention. Clean
+three-way merges are applied automatically, so non-overlapping upstream changes
+no longer pile up in a manual review list.
+
+The root `package.json` is merged deterministically rather than line by line:
+`scripts`, `dependencies` and `devDependencies` are merged per key (a key you
+changed locally keeps your value), and every other top-level key stays local.
+It only reaches the conflict manifest when that merge cannot run (invalid
+JSON, or one of those sections is not an object).
 
 > `pnpm groot:sync --skip-conflicts` applies only the clean changes and records
 > conflicts in the manifest without writing markers into the working tree. CI
@@ -121,9 +159,11 @@ pnpm groot:resolve --no-verify         # skip the post-resolution `pnpm check`
 pnpm groot:resolve --model zai/glm-4.7 # pin a model (pattern or provider/id)
 ```
 
-`resolve.ts` reads `.groot/needs-review/manifest.json`, ensures each file has
-conflict markers (regenerating them from the local baseline snapshot and the
-recorded target commit when sync ran with `--skip-conflicts`), then runs pi per
+`resolve.ts` reads `.groot/needs-review/manifest.json` and checks for the pi
+CLI once up front. Files that already contain conflict markers are resolved
+directly. When sync ran with `--skip-conflicts`, it regenerates the markers
+from the boilerplate checkout at the recorded target commit and the same base
+sync uses (two-way markers when no base is available). It then runs pi per
 file. The model merges both sides while preserving local customizations and
 following `AGENTS.md` conventions; the tool validates the response (non-empty,
 no conflict markers, retried once with feedback) before anything is written, so
@@ -139,24 +179,49 @@ export ZAI_API_KEY=...   # any pi-supported provider key, or `pi` + /login
 
 To pin a provider/model instead of using pi's configured default, set
 `GROOT_RESOLVE_PROVIDER` and `GROOT_RESOLVE_MODEL` (plain environment
-variables read by `.groot/resolve.ts`).
+variables read by `.groot/resolve.ts`; `--model` wins over
+`GROOT_RESOLVE_MODEL`).
 
 ### Boilerplate checkout reuse
 
-To avoid re-cloning the boilerplate on every run, `groot:sync` and the `groot:upstream` diff step reuse a local checkout when it's safe to do so:
+To avoid re-cloning the boilerplate on every run, `groot:sync`, `groot:resolve`
+(when it has to regenerate markers) and the `groot:upstream` diff step reuse a
+local checkout when it's safe to do so:
 
 1. Look for a clone at `~/Code/<boilerplate.name>` (i.e. `~/Code/groot`).
 2. Verify its `origin` matches the configured `boilerplate.repo` (HTTPS and SSH URLs are treated as equivalent).
 3. Confirm the working tree is **clean** (`git status --porcelain` empty).
-4. Check out the default branch and fast-forward it with `git pull --ff-only`.
+4. Check out the boilerplate's default branch and fast-forward it with
+   `git pull --ff-only`. Both steps are best-effort: if either fails, the
+   checkout is used in its current state.
 
-If any of those checks fail (no local clone, dirty tree, mismatched origin, not a git repo, or the pull is not fast-forwardable), the tool falls back to a fresh shallow clone into a temp directory, which is cleaned up afterwards. A reused local checkout is **never** modified destructively or deleted.
+If the clone is missing, is not a git repo, has a different origin or has
+uncommitted changes, the tool falls back to a fresh shallow clone into a temp
+directory, which is cleaned up afterwards. A reused local checkout is **never**
+modified destructively or deleted.
 
 > Tip: keep `~/Code/groot` on `main` with no uncommitted changes and sync runs will skip the clone entirely.
 
 ### What Gets Synced
 
-See the [groot-sync skill](./../.agents/skills/groot-sync/SKILL.md) for the complete list of sync patterns.
+`.groot/lib/patterns.ts` is the single source of truth, and both sync and
+upstream classify with it. In summary:
+
+- **Synced**: `packages/**`, `apps/*/package.json`, `apps/*/tsconfig.json`,
+  root config (`*.config.*`, `tsconfig*.json`, `components.json`,
+  `railpack.json`, `.gitleaks.toml`), `.github/workflows/**`, `.vite-hooks/**`,
+  `scripts/**`, `.groot/**` (the tool's code), `.agents/skills/**`, `docs/**`,
+  `.env.example`, and the tests that exercise synced source (declared in
+  `TEST_AREA_OWNERSHIP`, plus `tests/server/setup.ts`).
+- **Always three-way merged**: `package.json`, `.gitignore`,
+  `pnpm-workspace.yaml`.
+- **App-owned, never synced**: `apps/web/src/**`, `apps/web/drizzle/**`,
+  `apps/web/index.html`, `tests/server/app/**`, `tests/e2e/**`, `README.md`,
+  `pnpm-lock.yaml`, and anything in `additional_exclusions`.
+- **Immutable, cannot be overridden**: `.env` files, `wrangler.jsonc`,
+  `apps/web/drizzle/**`, keys and `secrets/**`, and the sync state
+  (`.groot/boilerplate-sync.json`, `.groot/sync-report.json`,
+  `.groot/needs-review/**`).
 
 ### Configuration
 
@@ -169,7 +234,7 @@ The sync state is tracked in `.groot/boilerplate-sync.json`:
     "repo": "https://github.com/AshikNesin/groot"
   },
   "last_sync": {
-    "version": "1.3.0",
+    "version": "3.0.0",
     "commit": "abc1234",
     "date": "2026-06-15T00:00:00Z"
   },
@@ -191,15 +256,15 @@ If your project has customized a synced component and you don't want it overwrit
 
 The `.github/workflows/groot-sync.yml` workflow:
 
-- Runs twice daily (12PM and 12AM IST)
-- Runs `pnpm groot:sync --skip-conflicts` so the PR contains only clean changes
-- Creates a PR with a rich description including:
-  - Version diff (e.g., v1.3.0 → v1.5.0)
+- Runs twice daily (12PM and 12AM IST) and on demand via `workflow_dispatch`
+- Runs `pnpm groot:check`, then `pnpm groot:sync --skip-conflicts` when there
+  is anything to apply, so the PR contains only clean changes
+- Opens or updates a PR from `chore/groot-sync` whose description includes:
+  - Version diff (e.g., v2.6.2 → v3.0.0)
   - Changelog entries
   - Breaking change warnings
-  - Lists of auto-applied, auto-merged, conflict, and drift files
+  - Lists of auto-applied, auto-merged, deleted, deletion-review, conflict and drift files
 - Conflicts are listed for local resolution via `pnpm groot:resolve`
-- Can be triggered manually via `workflow_dispatch`
 
 ---
 
@@ -222,11 +287,10 @@ pnpm groot:upstream --all
 
 ### Prerequisites
 
-- [GitHub CLI (`gh`)](https://cli.github.com/) must be installed and authenticated:
-  ```bash
-  brew install gh
-  gh auth login
-  ```
+- [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated
+  (`brew install gh`, then `gh auth login`); `--dry-run` skips this check.
+- Push access to the groot repo: the branch is pushed to it directly, not to a
+  fork.
 
 ### How It Works
 
@@ -244,20 +308,11 @@ your change is the incoming one.
    again. Files groot has deleted since are listed and skipped
 4. In interactive mode, lets you select which files to upstream
 5. Clones groot fresh, re-merges the selected files onto that clone, and
-   creates a branch (`upstream/<app-name>/<date>`)
-6. Opens a PR on the groot repo via `gh pr create`
+   commits them on a branch `upstream/<package.json name>/<date>`
+6. Pushes the branch and opens a PR on the groot repo via `gh pr create`
 
-### What Can Be Upstreamed
-
-Only files matching the sync patterns can be upstreamed:
-
-- `packages/core/src/**` — infrastructure fixes
-- `packages/ai/src/**` — inference fixes
-- `packages/ui/src/**` — UI component fixes
-- `packages/shell/src/**` — client infrastructure fixes (layouts, api client, stores, hooks)
-- Config files, scripts, docs
-
-App-specific code (`apps/web/src/server/api/**`, `apps/web/src/client/pages/**`, etc.) is never eligible.
+Only files classified as synced (see [What Gets Synced](#what-gets-synced))
+can be upstreamed; app-owned code is never eligible.
 
 ---
 
@@ -265,7 +320,15 @@ App-specific code (`apps/web/src/server/api/**`, `apps/web/src/client/pages/**`,
 
 ### "Invalid commit SHA" error during sync
 
-The `last_sync.commit` in your config may reference a commit that's no longer in the shallow clone. Fix by increasing the clone depth or updating the commit to a more recent known-good SHA.
+`last_sync.commit` in `.groot/boilerplate-sync.json` is not a 7–40 character
+hex SHA. Set it to the groot commit you last synced from.
+
+### "Last sync commit … is not reachable" error
+
+Neither the `refs/groot/baseline` snapshot nor the boilerplate checkout has
+`last_sync.commit`. A temp clone is deepened automatically, but a reused
+`~/Code/groot` checkout is never modified: run `git fetch --unshallow` (or a
+full fetch) there, or correct `last_sync.commit`.
 
 ### Files reported as conflicts
 
@@ -274,22 +337,18 @@ lines, so the three-way merge could not resolve it automatically. Options:
 
 1. **AI-resolve (recommended)**: `pnpm groot:resolve` — the pi coding agent
    merges both sides and removes the conflict markers.
-2. **Resolve manually**: Open the file, reconcile the `<<<<<<<` / `=======` /
-   `>>>>>>>` markers by hand.
+2. **Resolve manually**: Open the file, reconcile the `<<<<<<<` / `|||||||` /
+   `=======` / `>>>>>>>` markers by hand.
 3. **Accept boilerplate version**: Discard local changes for the file, then
    delete the relevant entry from `.groot/needs-review/manifest.json`.
 4. **Keep local version**: Add the file to `additional_exclusions` so future
    syncs leave it untouched.
 
-### `pi` CLI not found during resolve
+### `pi` or `gh` CLI not found
 
-`groot:resolve` shells out to the pi coding agent CLI (https://pi.dev). Install
-and authenticate it:
-
-```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-export ZAI_API_KEY=...   # any pi-supported provider key, or `pi` + /login
-```
+`groot:resolve` needs the pi CLI (see the resolve
+[prerequisites](#resolving-conflicts-pnpm-grootresolve)) and `groot:upstream`
+needs an authenticated `gh` (see [Prerequisites](#prerequisites)).
 
 ### Upgrading a pre-2.0 project
 
@@ -302,16 +361,8 @@ git -C ~/Code/groot show v2.4.1:.groot/migrate-layout.ts > /tmp/migrate-layout.t
 pnpm exec tsx /tmp/migrate-layout.ts --check   # dry run; drop --check to apply
 ```
 
-### Changeset version not detected
+### Sync shows commit SHAs instead of versions
 
-Make sure groot has git tags in `v*` format (e.g., `v1.3.0`). The sync tool resolves versions from tags. If no tags exist, it falls back to commit SHAs.
-
-### `gh` CLI not found during upstream
-
-```bash
-# macOS
-brew install gh
-
-# Then authenticate
-gh auth login
-```
+The sync tool resolves versions from groot's `v*` tags (e.g. `v3.0.0`). If no
+tags are reachable, it reports commit SHAs and builds the changelog from commit
+messages.

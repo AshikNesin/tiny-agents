@@ -5,19 +5,19 @@ returns. Responses use the envelope `{ success: true, data }`; errors are
 `{ success: false, error: { code, message, details } }`.
 
 ```bash
-BASE=http://localhost:3000        # https://groot.localhost under portless
+BASE=https://groot.localhost      # http://localhost:3000 under PORTLESS=0
 ADMIN_KEY=dev-only-admin-key      # ADMIN_AUTH_KEY (the dev default)
 ```
 
-> Everything under `/api/v1` except login needs a JWT. The login response sets
-> an httpOnly `token` cookie for browsers and returns the token for scripts:
-> pass it as `Authorization: Bearer $TOKEN`. User management uses the admin key
-> instead (`X-Admin-Auth-Key`).
+> Everything under `/api/v1` except password and passkey login needs a JWT. The
+> login response sets an httpOnly `token` cookie for browsers and returns the
+> token for scripts: pass it as `Authorization: Bearer $TOKEN`. User management
+> uses the admin key instead (`X-Admin-Auth-Key`).
 
 ## Get a token
 
 ```bash
-# 200 → { token, user }
+# 200 → { token, user: { id, email, name } }
 TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@example.com","password":"demo@example.com"}' | jq -r .data.token)
@@ -96,18 +96,18 @@ curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/stats
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/available
 curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs?state=completed&name=todo-summary&limit=20"
 
-# One job by id → 200; unknown → 404
+# One job by id → 200; unknown → 404 JOB_NOT_FOUND
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/$JOB_ID
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/$JOB_ID/logs
 
-# Actions → 200 { success: true }; wrong state → 400
+# Actions → 200 { success: true }; unknown → 404; not allowed from the job's state → 400
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/retry
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/cancel
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/resume
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/$JOB_ID/rerun   # 200 { newJobId }
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/$JOB_ID       # 200 { success: true }
 
-# Bulk rerun → 200 per-job results
+# Bulk rerun → 200 [{ jobId, success, newJobId?, error? }]
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/bulk-rerun \
   -H "Content-Type: application/json" \
   -d '{"jobIds":["'$JOB_ID'"]}'
@@ -116,8 +116,10 @@ curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/bulk-rerun \
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/state/cancelled
 ```
 
-Unknown job names are accepted (the job waits until a handler is registered);
-reserved names (`schedule`, `stats`, …) and bad cron expressions → `400`.
+Unknown job names are accepted: the job stays `created` until a handler with
+that name is registered. A bad cron expression → `400`. Which action is
+allowed from which state is listed in
+[Background jobs](../features/jobs.md#lifecycle-grootjobslifecycle).
 
 ## Storage (JWT)
 
@@ -148,8 +150,11 @@ curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/files \
   -H "Content-Type: application/json" -d '{"filePaths":["docs/document.pdf"]}'
 
 # Delete a folder recursively → 200 { deletedCount }
-curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/folders/archive/2026/
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/storage/folders/archive/2026
 ```
+
+File and folder paths with a leading, trailing or doubled `/`, or a `.` or
+`..` segment, are rejected with `400`; folder paths are normalised to `a/b/`.
 
 ## App settings (JWT)
 
@@ -184,6 +189,3 @@ Passkey flows need the browser (`navigator.credentials`), so drive them from
    shows `state: "completed"` with the counts in `output`.
 3. Schedule `todo-cleanup` nightly.
 4. Open `/todos` and `/jobs` in the client to verify.
-
-> Tip: drop these into an `.http` file (VS Code REST client, JetBrains) for
-> faster iteration.

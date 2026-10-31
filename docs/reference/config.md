@@ -3,7 +3,8 @@
 Application settings are a typed object in code, not a file. `defaultConfig(env)`
 in `packages/core/src/config.ts` derives sensible values from the validated
 environment; the app overrides what it wants in `apps/web/src/server/config.ts`
-with `defineConfig()`; `bootstrap()` merges the two before the first request.
+with `defineConfig()`; `startWebApp()` passes those overrides to `bootstrap()`,
+which merges the two before the first request.
 
 ```ts
 import { config } from "@groot/core/config";
@@ -48,7 +49,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `jobs.retryDelaySeconds`    | `60` — base delay, doubles per attempt (max 24 h)   |                                          |
 | `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this is retried  |                                          |
 | `jobs.keepCompletedDays`    | `7` — completed/cancelled jobs + logs deleted after |                                          |
-| `jobs.runInline`            | `true` — `addJob()` runs a tick immediately         |                                          |
+| `jobs.runInline`            | `true` — `addJob()` and retry run a tick right away |                                          |
 | `logging.level`             | `debug` dev / `info` prod / `silent` test           | `LOG_LEVEL`                              |
 | `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                |
 | `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                  |
@@ -66,7 +67,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
   (`JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `DATABASE_URL`, `SENTRY_DSN`, ...). It is
   validated once by `parseEnv()` at boot, and every key in `envSchema` is read
   through the validated `env` or surfaced through `defaultConfig()`, never from
-  `process.env`. See [Setup guide](./setup-guide.md#environment-variables).
+  `process.env`. See [Setup guide](../setup-guide.md#environment-variables).
 - **`config`** holds tunables with defaults: what the app does with those
   facts. `defaultConfig(env)` sets them, `defineConfig()` overrides them, and
   feature code reads `config.*`.
@@ -74,9 +75,6 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
   field in `AppConfig` and `defaultConfig()` when it tunes behaviour. A new
   tunable with no deployment input goes into `AppConfig` + `defaultConfig()`
   only.
-- Build-time variables (`SOURCE_COMMIT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`,
-  `SENTRY_PROJECT`) are read by `scripts/build.mjs` and `vite.config.ts` and
-  are not in the schema.
 
 Both are live bindings replaced by `bootstrap()`, so read them inside functions,
 not at module top level (module-level reads see the development defaults).
@@ -84,14 +82,18 @@ not at module top level (module-level reads see the development defaults).
 ## Boot order
 
 ```
-bootstrap({ env, config, db, storage, reportError })
-  loadEnv(source)          parse + validate, dev defaults outside production
-  setConfig(overrides)     defaultConfig(env) ⊕ defineConfig(...)
-  configureLogger()        level from config.logging.level, pretty outside production
-  setDb(...)               the Drizzle handle (better-sqlite3 or D1)
-  setStorageAdapter(...)   StorageAdapter (local, R2 or memory), if given
-  setErrorReporter(...)    Sentry or anything else, if given
+startWebApp({ env, db, storage, reportError })   apps/web/src/server/app.ts
+  bootstrap({ ...runtime, config: appConfig })
+    loadEnv(source)          parse + validate, dev defaults outside production
+    setConfig(overrides)     defaultConfig(env) ⊕ defineConfig(...)
+    configureLogger()        level from config.logging.level, pretty outside production
+    setDb(...)               the Drizzle handle (better-sqlite3 or D1)
+    setStorageAdapter(...)   StorageAdapter (local, R2 or memory), if given
+    setErrorReporter(...)    Sentry or anything else, if given
+  registerJobHandlers()
+  createWebApp()           the Hono app
 ```
 
-Called once per process on Node (`entry.node.ts`), once per isolate on Workers
-(`entry.worker.ts`), and once per test file (`tests/server/setup.ts`).
+Called once per process on Node (`entry.node.ts`, `scripts/seed.ts`), once per
+isolate on Workers (`entry.worker.ts`), and once per test file
+(`tests/server/setup.ts`).

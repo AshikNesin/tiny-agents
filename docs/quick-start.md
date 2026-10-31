@@ -28,12 +28,14 @@ the same port). Nothing to configure: every environment variable has a
 development default. Copy `.env.example` to `.env` only when you want to
 override something.
 
-The app is served at **`https://groot.localhost`** via portless (first run
-asks to trust a local certificate, see [Portless & HTTPS](./guides/portless-https.md)).
-Skip portless with `PORTLESS=0 pnpm dev` → `http://localhost:3000`.
+The app is served at **`https://groot.localhost`** via portless, which must be
+installed globally (`https://groot.localhost:8888` when no portless proxy is
+already running; first run asks to trust a local certificate, see
+[Portless & HTTPS](./guides/portless-https.md)). Bypass its proxy with
+`PORTLESS=0 pnpm dev` → `http://localhost:3000`.
 
 Optional: `pnpm groot:setup` renames the app (package name, `app.name`,
-Worker name, `RP_NAME`) and installs portless.
+Worker name, `RP_NAME`) and offers to install portless.
 
 ## 2. Sign in
 
@@ -42,13 +44,14 @@ Email `demo@example.com`, password `demo@example.com` (from `scripts/seed.ts`).
 To create another user, call the admin endpoint with the development admin key:
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/users \
+# http://localhost:3000 under PORTLESS=0
+curl -X POST https://groot.localhost/api/v1/auth/users \
   -H "Content-Type: application/json" \
   -H "X-Admin-Auth-Key: dev-only-admin-key" \
   -d '{"email":"you@example.com","password":"a-long-password"}'
 ```
 
-More recipes in [API requests](./examples/api-requests.md).
+More recipes in [API requests](./reference/api-requests.md).
 
 ## 3. Add a feature
 
@@ -103,29 +106,20 @@ const created = await apiClient.post<Post>("/posts", { title: "Hello" });
 ```
 
 `apiClient` is a thin `fetch` client: it prefixes `/api/v1`, sends the session
-cookie, unwraps `data` and throws an `ApiError` on failure; a 401 signs the user
-out. See [Client](./features/client.md).
+cookie, unwraps `data` and throws an `ApiError` on failure. A 401 is reported to
+the session store, which signs the user out. See [Client](./features/client.md).
 
-## Common commands
+## Commands
 
-| Task                     | Command                                |
-| ------------------------ | -------------------------------------- |
-| Dev server               | `pnpm dev`                             |
-| Dev server on workerd    | `pnpm dev:worker`                      |
-| Generate a migration     | `pnpm db:generate`                     |
-| Apply migrations locally | `pnpm db:migrate` (or just `pnpm dev`) |
-| Browse the database      | `pnpm db:studio`                       |
-| Lint + format            | `pnpm check`                           |
-| Server / client tests    | `pnpm test` / `pnpm test:client`       |
-| E2E tests                | `pnpm test:e2e`                        |
-| Build / run prod bundle  | `pnpm build` / `pnpm start`            |
+Every `pnpm` script is listed in
+[Development workflow](./guides/development.md#commands).
 
 ## Production checklist
 
 - [ ] `NODE_ENV=production`
-- [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — the server refuses the dev defaults
-- [ ] `RP_ID` and `ORIGIN` match your public domain (passkeys)
-- [ ] Node: `DATABASE_URL=file:/path/on/a/persistent/volume.db`, one replica — or deploy to [Cloudflare Workers](./guides/deploy-cloudflare.md)
+- [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — in production the server will not start without them
+- [ ] `RP_ID` and `ORIGIN` set to your public domain (also required in production; passkeys use them)
+- [ ] Node: a persistent volume at `/data` (the production default is `file:/data/prod.db`) or `DATABASE_URL` pointing at one, and one replica — or deploy to [Cloudflare Workers](./guides/deploy-cloudflare.md)
 - [ ] `CORS_ALLOWED_ORIGINS` set if the API is called from another origin
 - [ ] `SENTRY_DSN` (optional)
 - [ ] `pnpm build` and `pnpm test` pass

@@ -35,6 +35,6 @@ export interface AddJobOptions {
 
 /** Options accepted by `POST /api/v1/jobs/schedule`. */
 export interface ScheduleJobOptions {
-  /** IANA timezone for the cron expression. Defaults to UTC. */
+  /** IANA timezone for the cron expression. Defaults to the process time zone (UTC on Workers, `TZ` on Node). */
   timezone?: string;
 }

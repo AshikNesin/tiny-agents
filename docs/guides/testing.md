@@ -43,9 +43,9 @@ need in `beforeEach` (e.g. `await db.delete(todos)`, `clearJobHandlers()`).
 tests/
 ├── server/
 │   ├── setup.ts · helpers.ts
-│   ├── core/      # @groot/core units: env, config, jwt, password, kv, logger
-│   ├── jobs/      # @groot/jobs/server: queue + tick, schedules, routes, validation, constants
-│   ├── api/       # HTTP tests for the core routers: auth, settings, storage, todos
+│   ├── core/      # @groot/core units: env, config, logger, kv, storage adapters, D1 migrator, …
+│   ├── jobs/      # @groot/jobs/server: queue + tick, schedules, housekeeping, routes, job logger
+│   ├── api/       # HTTP tests through the routers: auth, passkey, settings, storage, todos
 │   ├── app/       # app-owned: createApp, todo jobs (project-local, not synced)
 │   ├── checks/    # repo guards: changesets gate, kit exports, typecheck coverage
 │   ├── groot/     # sync tooling
@@ -56,9 +56,9 @@ tests/
 └── kit-consumers/ # compiled fixture for pnpm typecheck:kit (never executed)
 ```
 
-`tests/server/{core,jobs,api,groot,ai}` and `tests/client` sync with the source
-they exercise (`TEST_AREA_OWNERSHIP` in `.groot/lib/patterns.ts`);
-`tests/server/app` and `tests/e2e` stay project-local.
+`tests/server/setup.ts`, `tests/server/{core,jobs,api,groot,ai}` and `tests/client`
+sync with the source they exercise (`TEST_AREA_OWNERSHIP` in
+`.groot/lib/patterns.ts`); `tests/server/app` and `tests/e2e` stay project-local.
 
 ## Patterns
 
@@ -153,18 +153,27 @@ it("renders", () => {
 
 ## End to end
 
-`pnpm test:e2e` lets Playwright start the server
-(`tsx scripts/seed.ts && tsx watch apps/web/src/server/entry.node.ts` on
-`http://localhost:3000`, so the demo user exists) and runs `tests/e2e/*.spec.ts`
-in Chromium: headed locally, headless in CI. `DATABASE_URL` is inherited from
-your environment (default `file:./data/dev.db` outside production).
+`pnpm test:e2e` runs `tests/e2e/*.spec.ts` in Chromium, headed locally and
+headless when `CI` is set (`playwright test -c playwright.headless.config.ts`
+forces headless with a list reporter). Playwright starts the server itself on
+`http://localhost:3000` against a throwaway database: it deletes
+`data/e2e.db*`, seeds it with `scripts/seed.ts` and runs
+`tsx watch apps/web/src/server/entry.node.ts` with
+`DATABASE_URL=file:./data/e2e.db`; `tests/e2e/global-setup.ts` runs the same
+`seed()`, so the demo user exists. Your `data/dev.db` is never touched.
+
+Outside CI an already running server on port 3000 is reused (for example
+`PORTLESS=0 pnpm dev`); the specs then run against that server's database.
+CI does not run Playwright.
 
 ## Continuous integration
 
 `.github/workflows/test.yml` runs, in order: typechecks (server, client,
-coverage guard, kit fixture), the kit export guard, the changeset gate, the
-checks-coverage guard, lint + format, a migration freshness check
-(`pnpm db:generate` must produce no diff), server and client tests,
-`pnpm build`, the runtime dependency closure check, a wrangler dry run, and a
-pruned production boot (`pnpm install --prod`, `node dist/server/bundle.js`,
-`/health` answers, `SIGTERM` exits cleanly).
+typecheck coverage, kit fixture), the kit export guard, the changeset gate, the
+checks-coverage guard, lint + format (`pnpm check`), the design-token check
+(`pnpm check:tokens`), a migration freshness check (`pnpm db:generate` must
+leave `apps/web/drizzle` unchanged), server and client tests, `pnpm build`,
+the runtime dependency closure check, a wrangler dry run, and a pruned
+production boot (tracked files plus `dist` copied to a fresh directory,
+`pnpm install --prod`, `node dist/server/bundle.js`, `/health` answers,
+`SIGTERM` exits within 15 s).

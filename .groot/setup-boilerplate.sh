@@ -2,7 +2,7 @@
 # Boilerplate Setup Script
 #
 # Run after cloning groot to customize it for your project:
-#   1. Verify / install the optional portless CLI (local https dev domain)
+#   1. Verify / install the portless CLI (`pnpm dev` runs through it)
 #   2. Ask for an app name and propagate it to package.json,
 #      apps/web/src/server/config.ts, wrangler.jsonc and .env.example
 #   3. Install dependencies (also installs the Vite+ git hooks)
@@ -42,18 +42,18 @@ check_git_repo() {
 }
 
 setup_portless() {
-    print_info "Checking portless (optional: serves https://<app>.localhost in dev)..."
+    print_info "Checking portless (required by pnpm dev; serves https://<app>.localhost)..."
     if command -v portless &> /dev/null; then
         print_success "portless is installed"
         return
     fi
-    read -rp "Install portless globally via npm? (y/N): " -r
+    read -rp "Install portless globally via npm? (Y/n): " -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         npm install -g portless || { print_warning "Failed — run 'npm install -g portless' manually."; return; }
         command -v portless &> /dev/null && print_success "portless installed" || print_warning "Installation may have failed"
     else
-        print_warning "Skipped. Install later with: npm install -g portless"
+        print_warning "Skipped. pnpm dev needs it: npm install -g portless"
     fi
 }
 
