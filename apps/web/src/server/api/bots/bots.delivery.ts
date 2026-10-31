@@ -15,7 +15,7 @@
  *   reply.
  * - Relay rows (kind="relay") never relay again: one answer per Delivery.
  */
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
   finishedReplyTo,
@@ -25,7 +25,7 @@ import {
   type FinishedReply,
 } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
-import { submitToBot, type BotConversationRuntime } from "./bots.conversation";
+import { submitToBot, type Bot, type BotConversationRuntime } from "./bots.conversation";
 import type { ChatRead } from "./bots.settled";
 
 /** What the Delivery module needs from the runtime. */
@@ -228,4 +228,45 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
   }
 
   return { deliver, answer, sweep };
+}
+
+/** The text a tagged bot receives: enough context to answer in-place. */
+function mentionText(ownerContext: string, text: string): string {
+  return `${ownerContext} ${text}`;
+}
+
+/**
+ * Deliver a copy of an owner's message to every @mentioned bot (issue #12):
+ * one Delivery (kind="mention") per target, answered back into the host
+ * bot's chat. Failures never fail the owner's send: the host conversation
+ * already got the message.
+ */
+export async function deliverMentions(
+  host: Pick<Bot, "id" | "name">,
+  input: { requestId: string; text: string; mentions?: string[] },
+  rt: DeliveryRuntime,
+): Promise<void> {
+  const targets = await db
+    .select({ id: bots.id })
+    .from(bots)
+    .where(and(inArray(bots.id, input.mentions ?? []), ne(bots.id, host.id)));
+  if (targets.length === 0) return;
+  const ownerContext = `[From the owner, in ${host.name}'s chat]`;
+  const deliveries = createDeliveries(rt);
+  for (const target of targets) {
+    try {
+      await deliveries.deliver({
+        requestId: `mention-${input.requestId}-${target.id}`,
+        kind: "mention",
+        toBotId: target.id,
+        fromBotId: null,
+        replyToBotId: host.id,
+        text: input.text,
+        prompt: mentionText(ownerContext, sanitizePeerText(input.text)),
+        peer: { kind: "mention", hostName: host.name },
+      });
+    } catch (error) {
+      logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
+    }
+  }
 }

@@ -1,19 +1,14 @@
 /**
- * The ssh2 binding behind the sandbox toolkit. Everything here is a narrow
- * port so the toolkit never touches ssh2 types directly:
- *
- * - `SandboxSession.exec/readFile/writeFile` — what the tools need, nothing more.
- * - `SandboxTransport` — `connect(options)`, substitutable in tests.
- * - `HostKeyStore` — TOFU pinning (one key hash per host), substitutable.
- *
- * Auth is intentionally absent: Tailscale SSH terminates at the node and the
- * tailnet's `accept` rules are the identity check, so ssh2 connects with no
- * credentials and expects `none` auth to succeed.
+ * The ssh2 binding behind the sandbox toolkit: an adapter over the shared
+ * SSH connection module (`../ssh/connection`) that turns a dialed client
+ * into the narrow `SandboxSession` the tools need (exec, readFile,
+ * writeFile), so the toolkit never touches ssh2 types directly.
  */
-import { createHash, randomBytes } from "node:crypto";
-import ssh2, { type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
-const { Client } = ssh2;
-type ClientClass = typeof Client;
+import { randomBytes } from "node:crypto";
+import type ssh2 from "ssh2";
+import type { ClientChannel, SFTPWrapper } from "ssh2";
+import { dialSsh, PreDispatchError, type SshClientClass } from "../ssh/connection";
+import type { ExecResult, SandboxSession, SandboxTransport } from "./sandbox";
 
 export type {
   ConnectOptions,
@@ -22,98 +17,14 @@ export type {
   SandboxSession,
   SandboxTransport,
 } from "./sandbox";
+export { createMemoryHostKeyStore, PreDispatchError, type HostKeyStore } from "../ssh/connection";
 
 /**
- * A connection-level failure raised before a command or transfer was
- * dispatched on the wire: safe to retry on a fresh connection because
- * nothing has started. Anything after dispatch is a different failure and
- * must surface, honoring the tools' `unsafe` replay contract.
+ * The production transport: one dialed client per session (`none` auth,
+ * keepalive, TOFU host-key check against the endpoint's store).
  */
-export class PreDispatchError extends Error {}
-import type { ConnectOptions, ExecResult, SandboxSession, SandboxTransport } from "./sandbox";
-
-/** TOFU host-key store: remember one key hash per host, reject changes. */
-export interface HostKeyStore {
-  get(host: string): Promise<string | undefined>;
-  set(host: string, hash: string): Promise<void>;
-}
-
-export function createMemoryHostKeyStore(): HostKeyStore {
-  const map = new Map<string, string>();
-  return {
-    get: async (host) => map.get(host),
-    set: async (host, hash) => void map.set(host, hash),
-  };
-}
-
-/**
- * The production transport: one ssh2 Client, `none` auth, 15s keepalive,
- * TOFU host-key check against the injected store.
- */
-export function createSsh2Transport(ClientClass: ClientClass = Client): SandboxTransport {
-  return (options) =>
-    new Promise((resolve, reject) => {
-      const client = new ClientClass();
-      let settled = false;
-      const fail = (error: Error) => {
-        if (settled) return;
-        settled = true;
-        client.end();
-        reject(error);
-      };
-
-      client
-        .on("ready", () => {
-          if (!settled) {
-            settled = true;
-            resolve(createSession(client));
-          }
-        })
-        .once("error", fail)
-        .once("close", () => fail(new Error("connection closed before ready")))
-        .connect({
-          host: options.host,
-          port: options.port,
-          username: options.user,
-          keepaliveInterval: 15_000,
-          readyTimeout: options.connectTimeoutMs ?? 10_000,
-          // TOFU host-key check runs inside ssh2's verifier: returning false
-          // aborts the handshake before any channel opens. No store = accept
-          // (WireGuard already authenticates the tailnet endpoint).
-          hostVerifier: options.hostKeys
-            ? (key: Buffer, verify: (result: boolean) => void) => {
-                void checkHostKey(options, key).then(
-                  (ok) => verify(ok),
-                  // a store failure must not break connectivity: pinning is
-                  // defense-in-depth over WireGuard's own endpoint auth
-                  (error: Error) => {
-                    client.end();
-                    fail(error);
-                    verify(false);
-                  },
-                );
-              }
-            : undefined,
-          // no privateKey, no password: the tailnet is the authentication
-        } satisfies ConnectConfig);
-    });
-}
-
-async function checkHostKey(options: ConnectOptions, raw: Buffer): Promise<boolean> {
-  const store = options.hostKeys!;
-  const hash = `sha256:${createHash("sha256").update(raw).digest("base64")}`;
-  const known = await store.get(options.host);
-  if (known === undefined) {
-    await store.set(options.host, hash);
-    return true;
-  }
-  if (known !== hash) {
-    throw new Error(
-      `Sandbox host key changed for ${options.host} (pinned ${known}, now ${hash}). ` +
-        "Either the VM was reinstalled — clear the pinned key — or the endpoint is being intercepted.",
-    );
-  }
-  return true;
+export function createSsh2Transport(ClientClass?: SshClientClass): SandboxTransport {
+  return async (options) => createSession(await dialSsh(options, ClientClass));
 }
 
 function createSession(client: ssh2.Client): SandboxSession {
@@ -165,38 +76,36 @@ async function readAll(
   path: string,
   maxBytes: number,
 ): Promise<{ text: string; truncated: boolean }> {
-  {
-    const readSize = Math.min(maxBytes + 1, 65_536);
-    const buffer = Buffer.alloc(readSize);
-    const chunks: Buffer[] = [];
-    let offset = 0;
-    const handle = await new Promise<Buffer>((resolve, reject) =>
-      s.open(path, "r", (e, h) => (e ? reject(sftpError(e, path)) : resolve(h))),
-    );
-    try {
-      for (;;) {
-        const bytesRead = await new Promise<number>((resolve, reject) =>
-          s.read(handle, buffer, 0, readSize, offset, (e, b) =>
-            e ? reject(sftpError(e, path)) : resolve(b),
-          ),
-        );
-        if (bytesRead === 0) break;
-        chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
-        offset += bytesRead;
-        if (offset > maxBytes) break;
-      }
-      const all = Buffer.concat(chunks);
-      const truncated = all.length > maxBytes;
-      const slice = truncated ? all.subarray(0, maxBytes) : all;
-      return {
-        text: looksUtf8(trimPartialRune(slice))
-          ? slice.toString("utf8")
-          : `[binary file, ${all.length} bytes] — inspect with run_command (file, hexdump -C | head)`,
-        truncated,
-      };
-    } finally {
-      s.close(handle, () => {});
+  const readSize = Math.min(maxBytes + 1, 65_536);
+  const buffer = Buffer.alloc(readSize);
+  const chunks: Buffer[] = [];
+  let offset = 0;
+  const handle = await new Promise<Buffer>((resolve, reject) =>
+    s.open(path, "r", (e, h) => (e ? reject(sftpError(e, path)) : resolve(h))),
+  );
+  try {
+    for (;;) {
+      const bytesRead = await new Promise<number>((resolve, reject) =>
+        s.read(handle, buffer, 0, readSize, offset, (e, b) =>
+          e ? reject(sftpError(e, path)) : resolve(b),
+        ),
+      );
+      if (bytesRead === 0) break;
+      chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+      offset += bytesRead;
+      if (offset > maxBytes) break;
     }
+    const all = Buffer.concat(chunks);
+    const truncated = all.length > maxBytes;
+    const slice = truncated ? all.subarray(0, maxBytes) : all;
+    return {
+      text: looksUtf8(trimPartialRune(slice))
+        ? slice.toString("utf8")
+        : `[binary file, ${all.length} bytes] — inspect with run_command (file, hexdump -C | head)`,
+      truncated,
+    };
+  } finally {
+    s.close(handle, () => {});
   }
 }
 
@@ -205,30 +114,24 @@ async function writeAtomic(
   path: string,
   content: string | Uint8Array,
 ): Promise<void> {
-  {
-    // temp name then rename: a crash mid-write never leaves a half file.
-    // Random suffix: pid+ms collide for concurrent writes.
-    const tmp = `${path}.ta-tmp-${process.pid}-${cryptoRandomSuffix()}`;
-    try {
-      await new Promise<void>((resolve, reject) =>
-        s.writeFile(
-          tmp,
-          typeof content === "string" ? Buffer.from(content, "utf8") : Buffer.from(content),
-          (e) => (e ? reject(sftpError(e, tmp)) : resolve()),
-        ),
-      );
-      await new Promise<void>((resolve, reject) =>
-        s.rename(tmp, path, (e) => (e ? reject(sftpError(e, path)) : resolve())),
-      );
-    } catch (error) {
-      s.unlink(tmp, () => {});
-      throw error;
-    }
+  // temp name then rename: a crash mid-write never leaves a half file.
+  // Random suffix: pid+ms collide for concurrent writes.
+  const tmp = `${path}.ta-tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
+  try {
+    await new Promise<void>((resolve, reject) =>
+      s.writeFile(
+        tmp,
+        typeof content === "string" ? Buffer.from(content, "utf8") : Buffer.from(content),
+        (e) => (e ? reject(sftpError(e, tmp)) : resolve()),
+      ),
+    );
+    await new Promise<void>((resolve, reject) =>
+      s.rename(tmp, path, (e) => (e ? reject(sftpError(e, path)) : resolve())),
+    );
+  } catch (error) {
+    s.unlink(tmp, () => {});
+    throw error;
   }
-}
-
-function cryptoRandomSuffix(): string {
-  return randomBytes(6).toString("hex");
 }
 
 /** Drop a trailing partial UTF-8 rune so a capped slice still validates as text. */
@@ -293,5 +196,5 @@ function collect(channel: ClientChannel, timeoutMs: number): Promise<ExecResult>
 function looksUtf8(buffer: Buffer): boolean {
   // Buffer.toString("utf8") replaces invalid sequences with U+FFFD; a clean
   // round-trip means the bytes are valid UTF-8.
-  return !buffer.toString("utf8").includes("\uFFFD");
+  return !buffer.toString("utf8").includes("�");
 }

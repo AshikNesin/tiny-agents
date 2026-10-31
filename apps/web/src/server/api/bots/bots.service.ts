@@ -1,9 +1,12 @@
 /**
- * Bot CRUD + chat actions over Drizzle. Everything that touches a bot's
- * durable conversation (create, reconcile, submit) goes through
- * `bots.conversation.ts`; this module adds the row bookkeeping around it.
+ * Bot records and the owner's chat actions over Drizzle. Everything that
+ * touches a bot's durable conversation (create, reconcile, submit) goes
+ * through `bots.conversation.ts`; moving between chats through
+ * `chats.history.ts`; @mentions through `bots.delivery.ts`; the sidebar's
+ * list through `bots.list.ts`. This module adds the row bookkeeping around
+ * them. Every action takes the runtime it acts on (`rt`), the test seam.
  */
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
@@ -11,11 +14,6 @@ import {
   ApprovalNotPendingError,
   InvalidAnswersError,
   QuestionNotPendingError,
-  closeBrowserSession,
-  closeBrowserTab,
-  sanitizePeerText,
-  stripPeerEnvelope,
-  type AttachmentRef,
   type OwnerAnswer,
 } from "@tiny-agents/agent";
 import {
@@ -30,6 +28,7 @@ import {
 } from "../../db";
 import { getAgentRuntime } from "./bots.runtime";
 import { browserTargetForBot } from "./browser.targets";
+import { getBrowserSessions } from "./browser.sessions";
 import {
   findBotRow,
   startBotConversation,
@@ -37,11 +36,11 @@ import {
   reconcileBotConversation,
   toBot,
   type Bot,
-  type BotRow,
 } from "./bots.conversation";
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
-import { findPastChat, recordPastChat, type EndingChat } from "./chats.history";
-import { createDeliveries } from "./bots.delivery";
+import { findPastChat, leaveChat, retireConversation } from "./chats.history";
+import { deliverMentions } from "./bots.delivery";
+import { listBots as listBotEntries, previewText } from "./bots.list";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -64,69 +63,15 @@ export type BotAgentRuntime = Pick<
   | "isBusy"
 >;
 
+export type { BotListEntry } from "./bots.list";
+/** Kept for the boot wiring until it moves onto `botListStep` (bots.list.ts). */
+
 function runtime(): BotAgentRuntime {
   return getAgentRuntime();
 }
 
-/** Shape returned by the bots list: denormalised preview fields + unread. */
-export interface BotListEntry {
-  id: string;
-  conversationId: string;
-  name: string;
-  description: string;
-  modelId: string;
-  lastMessagePreview: string | null;
-  lastActivityAt: Date;
-  /** Pre-open read marker; the client opens at the first message after it. */
-  lastReadAt: Date | null;
-  unread: boolean;
-  replying: boolean;
-  /** Tool calls waiting for the owner's approval. */
-  approvals: number;
-  /** Questions (ask_owner calls) waiting for the owner's answers. */
-  questions: number;
-  pinnedAt: Date | null;
-}
-
-function toListEntry(
-  bot: BotRow,
-  replying: boolean,
-  waiting: { approvals: number; questions: number },
-): BotListEntry {
-  return {
-    id: bot.id,
-    conversationId: bot.conversationId,
-    name: bot.name,
-    description: bot.description,
-    modelId: bot.modelId,
-    lastMessagePreview: bot.lastMessagePreview,
-    lastActivityAt: bot.lastActivityAt,
-    lastReadAt: bot.lastReadAt,
-    unread: isUnread(bot),
-    replying,
-    ...waiting,
-    pinnedAt: bot.pinnedAt,
-  };
-}
-
-/** Unread = an assistant reply newer than the user's last read marker. */
-function isUnread(
-  bot: Pick<BotRow, "lastReadAt" | "lastActivityAt" | "lastMessagePreview">,
-): boolean {
-  if (!bot.lastMessagePreview) return false;
-  return bot.lastReadAt === null || bot.lastActivityAt > bot.lastReadAt;
-}
-
 export async function listBots(rt: BotAgentRuntime = runtime()) {
-  const rows = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
-  const busy = new Set(rt.busyConversations());
-  return rows.map((bot) => {
-    const ref = Number(bot.conversationId);
-    return toListEntry(bot, busy.has(ref), {
-      approvals: rt.pendingApprovals(ref),
-      questions: rt.pendingQuestions(ref),
-    });
-  });
+  return listBotEntries(rt);
 }
 
 export async function getBot(id: string): Promise<Bot> {
@@ -274,20 +219,6 @@ async function updateRow(id: string, data: Partial<typeof bots.$inferInsert>): P
 }
 
 /**
- * Stop whatever a conversation the app no longer shows is still doing. A run
- * left going there would keep calling the model and its tools (e.g. creating
- * tasks) with nobody watching, and resume after every restart. Best effort:
- * the row change has already happened, so a failure here is only logged.
- */
-async function retireConversation(rt: BotAgentRuntime, conversationId: string): Promise<void> {
-  try {
-    await rt.abort(Number(conversationId));
-  } catch (error) {
-    logger.warn({ error, conversationId }, "Failed to stop a retired bot conversation");
-  }
-}
-
-/**
  * A deleted bot's browser goes with it (issue #88): its tab in the shared
  * browser closes, and a browser of its own closes with its profile (cookies,
  * logins) wiped. Best effort: a browser hiccup never fails the delete.
@@ -295,8 +226,9 @@ async function retireConversation(rt: BotAgentRuntime, conversationId: string): 
 async function releaseBrowser(bot: { id: string; browserProfile: string }): Promise<void> {
   const target = browserTargetForBot(bot);
   try {
-    if (bot.browserProfile === "own") await closeBrowserSession(target, { wipeProfile: true });
-    else await closeBrowserTab(target);
+    const sessions = getBrowserSessions();
+    if (bot.browserProfile === "own") await sessions.close(target, { wipeProfile: true });
+    else await sessions.closeTab(target);
   } catch (error) {
     logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's browser");
   }
@@ -342,7 +274,7 @@ export async function sendMessage(
   );
   await updateRow(id, {
     lastActivityAt: new Date(),
-    lastMessagePreview: previewOf(input.text, attachments).slice(0, 120),
+    lastMessagePreview: previewText(input.text, attachments),
   });
   if (input.mentions && input.mentions.length > 0) {
     await deliverMentions(bot, input, rt);
@@ -358,74 +290,24 @@ export async function sendMessage(
   }
 }
 
-/** Bot-list preview: text, else a hint of what was attached (issue #17). */
-function previewOf(text: string, attachments: AttachmentRef[] | undefined): string {
-  // Cross-bot deliveries carry system attribution prefixes (relay, message_bot,
-  // mention). The list preview shows the payload, like the transcript does.
-  const trimmed = stripPeerEnvelope(text).replace(/\s+/g, " ").trim();
-  if (trimmed) return trimmed;
-  if (!attachments?.length) return "";
-  const first = attachments[0];
-  return first.kind === "image"
-    ? `[Image] ${attachments.filter((a) => a.kind === "image").length > 1 ? `+${attachments.length - 1} more` : first.name}`
-    : `[File] ${first.name}`;
-}
-
-/** The text a tagged bot receives: enough context to answer in-place. */
-function mentionText(ownerContext: string, text: string): string {
-  return `${ownerContext} ${text}`;
-}
-
-/**
- * Deliver a copy of the message to every @mentioned bot (issue #12). Each
- * delivery is a ledger row (kind="mention") whose answer relays back into
- * the host bot's conversation. Failures never fail the owner's send: the
- * host conversation already got the message.
- */
-async function deliverMentions(
-  host: Bot,
-  input: { requestId: string; text: string; mentions?: string[] },
-  rt: BotAgentRuntime,
-): Promise<void> {
-  const targets = await db
-    .select({ id: bots.id })
-    .from(bots)
-    .where(and(inArray(bots.id, input.mentions ?? []), ne(bots.id, host.id)));
-  if (targets.length === 0) return;
-  const ownerContext = `[From the owner, in ${host.name}'s chat]`;
-  const deliveries = createDeliveries(rt);
-  for (const target of targets) {
-    try {
-      await deliveries.deliver({
-        requestId: `mention-${input.requestId}-${target.id}`,
-        kind: "mention",
-        toBotId: target.id,
-        fromBotId: null,
-        replyToBotId: host.id,
-        text: input.text,
-        prompt: mentionText(ownerContext, sanitizePeerText(input.text)),
-        peer: { kind: "mention", hostName: host.name },
-      });
-    } catch (error) {
-      logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");
-    }
-  }
-}
-
 /**
  * Transcript messages older than `before` (issue #92): the chat stream sends
  * only the newest ones, and the client loads the rest as the owner scrolls up.
  */
-export async function chatHistory(id: string, query: ChatHistoryDTO) {
+export async function chatHistory(
+  id: string,
+  query: ChatHistoryDTO,
+  rt: BotAgentRuntime = runtime(),
+) {
   const bot = await getBot(id);
-  const page = await runtime().readChatPage(Number(bot.conversationId), query);
+  const page = await rt.readChatPage(Number(bot.conversationId), query);
   if (!page) throw Boom.badRequest("Unknown message cursor");
   return page;
 }
 
-export async function abortReply(id: string) {
+export async function abortReply(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await getBot(id);
-  await runtime().abort(Number(bot.conversationId));
+  await rt.abort(Number(bot.conversationId));
 }
 
 /**
@@ -433,47 +315,42 @@ export async function abortReply(id: string) {
  * a queued bubble. Inputs already placed into the running reply, or answered,
  * are refused with 409 — they are part of the conversation.
  */
-export async function withdrawMessage(id: string, input: { requestId: string }) {
+export async function withdrawMessage(
+  id: string,
+  input: { requestId: string },
+  rt: BotAgentRuntime = runtime(),
+) {
   const bot = await getBot(id);
-  const outcome = await runtime().withdraw(Number(bot.conversationId), input.requestId);
+  const outcome = await rt.withdraw(Number(bot.conversationId), input.requestId);
   if (outcome === "not_found") throw Boom.notFound("Message not found");
   if (outcome !== "withdrawn") throw Boom.conflict("Message is no longer queued");
   return { withdrawn: true };
 }
 
-/** The chat a bot row is on, as a past chat would record it. */
-function endingChat(row: BotRow): EndingChat {
-  return {
-    botId: row.id,
-    botName: row.name,
-    botModelId: row.modelId,
-    conversationId: row.conversationId,
-    startedAt: row.chatStartedAt,
-    lastMessagePreview: row.lastMessagePreview,
-  };
-}
-
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
   const old = await findBotRow(id);
-  // Fresh conversation; the old one stays in agent.db as a past chat
+  // Fresh conversation; the old one stays in agent.db as a Past chat
   // (issue #101), and any reply still running there is stopped.
   const conversationId = await startBotConversation(id, rt);
-  await updateRow(id, {
-    conversationId,
-    // A fresh thread: routine results from before it stay out of it.
-    chatStartedAt: new Date(),
-    lastReadAt: new Date(),
-    lastMessagePreview: null,
-    lastActivityAt: new Date(),
-  });
-  await retireConversation(rt, old.conversationId);
-  await recordPastChat(endingChat(old), rt);
+  await leaveChat(
+    old,
+    () =>
+      updateRow(id, {
+        conversationId,
+        // A fresh thread: routine results from before it stay out of it.
+        chatStartedAt: new Date(),
+        lastReadAt: new Date(),
+        lastMessagePreview: null,
+        lastActivityAt: new Date(),
+      }),
+    rt,
+  );
   return getBot(id);
 }
 
 /**
- * Continue a past chat (issue #101): the bot moves back onto its
- * conversation, and the chat it was on becomes a past chat in turn. The
+ * Continue a Past chat (issue #101): the bot moves back onto its
+ * conversation, and the chat it was on becomes a Past chat in turn. The
  * conversation is reconciled first, so it runs on the bot's current persona,
  * model and tools. Its routine cards start from when it first began.
  */
@@ -484,30 +361,34 @@ export async function continuePastChat(
 ) {
   const old = await findBotRow(id);
   const past = await findPastChat(id, chatId);
-  db.transaction((tx) => {
-    // Both rows must still be there (Prisma's delete/update threw P2025 otherwise).
-    const removed = tx
-      .delete(botChats)
-      .where(eq(botChats.id, past.id))
-      .returning({ id: botChats.id })
-      .all();
-    if (removed.length === 0) throw Boom.notFound("Record not found");
-    const moved = tx
-      .update(bots)
-      .set({
-        conversationId: past.conversationId,
-        chatStartedAt: past.startedAt,
-        lastReadAt: new Date(),
-        lastMessagePreview: past.lastMessagePreview,
-        lastActivityAt: new Date(),
-      })
-      .where(eq(bots.id, id))
-      .returning({ id: bots.id })
-      .all();
-    if (moved.length === 0) throw Boom.notFound("Record not found");
-  });
-  await retireConversation(rt, old.conversationId);
-  await recordPastChat(endingChat(old), rt);
+  await leaveChat(
+    old,
+    () => {
+      db.transaction((tx) => {
+        // Both rows must still be there (Prisma's delete/update threw P2025 otherwise).
+        const removed = tx
+          .delete(botChats)
+          .where(eq(botChats.id, past.id))
+          .returning({ id: botChats.id })
+          .all();
+        if (removed.length === 0) throw Boom.notFound("Record not found");
+        const moved = tx
+          .update(bots)
+          .set({
+            conversationId: past.conversationId,
+            chatStartedAt: past.startedAt,
+            lastReadAt: new Date(),
+            lastMessagePreview: past.lastMessagePreview,
+            lastActivityAt: new Date(),
+          })
+          .where(eq(bots.id, id))
+          .returning({ id: bots.id })
+          .all();
+        if (moved.length === 0) throw Boom.notFound("Record not found");
+      });
+    },
+    rt,
+  );
   return reconcileBotConversation(id, rt);
 }
 
@@ -573,29 +454,5 @@ export async function answerQuestions(
     if (error instanceof QuestionNotPendingError) throw Boom.conflict(error.message);
     if (error instanceof InvalidAnswersError) throw Boom.badRequest(error.message);
     throw error;
-  }
-}
-
-/**
- * Fold a completed reply into the bot row's denormalised list fields. Called
- * from the activity feed when a bot stops replying.
- */
-export async function recordReply(
-  conversationId: string,
-  last: { role: "user" | "assistant"; text: string; createdAt: number } | undefined,
-) {
-  if (!last) return;
-  // Cross-bot deliveries land as user turns carrying an attribution prefix
-  // (relay, message_bot, mention). The list preview shows the payload, like
-  // the transcript card does.
-  const payload = last.role === "user" ? stripPeerEnvelope(last.text) : last.text;
-  const preview = payload.replace(/\s+/g, " ").trim().slice(0, 120);
-  try {
-    await db
-      .update(bots)
-      .set({ lastMessagePreview: preview || null, lastActivityAt: new Date(last.createdAt) })
-      .where(eq(bots.conversationId, conversationId));
-  } catch {
-    // Best effort, as before: the list fields catch up on the next reply.
   }
 }

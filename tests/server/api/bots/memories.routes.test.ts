@@ -1,50 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
-import { generateToken } from "@groot/core/utils/jwt.utils";
-import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
 import { bots, db, memories } from "../../../../apps/web/src/server/db";
 import { api, createTestApp, type TestApp } from "../../helpers";
+import {
+  authToken,
+  closeAppRuntime,
+  openAppRuntime,
+  resetAppTables,
+  TEST_MODEL,
+} from "../../fixtures";
 
-const token = await generateToken({ userId: 1, email: "memories-test@example.com" });
-
-const agentRuntime = {
-  createConversation: vi.fn().mockResolvedValue(200),
-  configure: vi.fn().mockResolvedValue(undefined),
-  submit: vi.fn().mockResolvedValue(undefined),
-  abort: vi.fn().mockResolvedValue(undefined),
-  watchChat: vi
-    .fn()
-    .mockResolvedValue({ initial: { messages: [], busy: false }, stop: async () => undefined }),
-  isBusy: vi.fn().mockReturnValue(false),
-  busyConversations: vi.fn().mockReturnValue([]),
-  onActivity: vi.fn().mockReturnValue(() => undefined),
-  listModels: vi.fn().mockReturnValue([
-    {
-      id: "known-model",
-      name: "Known",
-      family: "other",
-      reasoning: false,
-      contextWindow: 8192,
-      vision: false,
-    },
-  ]),
-  hasModel: vi.fn().mockReturnValue(true),
-  listCapabilities: vi
-    .fn()
-    .mockReturnValue([
-      { id: "tasks", kind: "toolkit", name: "Tasks", description: "Tasks", tools: [] },
-    ]),
-  pendingApprovals: vi.fn().mockReturnValue(0),
-  decideApproval: vi.fn().mockResolvedValue(undefined),
-  close: vi.fn().mockResolvedValue(undefined),
-};
+const token = await authToken("memories-test@example.com");
 
 type MemoryList = { memories: Array<Record<string, unknown>> };
 
 async function seedBot(app: TestApp): Promise<string> {
   const response = await api<{ id: string }>(app, "/api/v1/bots", {
     method: "POST",
-    json: { name: "Memory bot", modelId: "known-model" },
+    json: { name: "Memory bot", modelId: TEST_MODEL },
     token,
   });
   expect(response.status).toBe(201);
@@ -71,12 +44,12 @@ describe("Memories API routes", () => {
   let app: TestApp;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    setAgentRuntimeForTests(agentRuntime as never);
-    await db.delete(memories);
-    await db.delete(bots);
+    await openAppRuntime();
+    await resetAppTables();
     app = createTestApp();
   });
+
+  afterEach(closeAppRuntime);
 
   it("creates a manual memory and lists it", async () => {
     const botId = await seedBot(app);

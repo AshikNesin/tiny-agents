@@ -8,9 +8,9 @@
 import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
 import type { Locator, Page } from "playwright-core";
-import { assertRefShape, isBlockedPrivateUrl } from "./browser";
 import { fillSecretFields, pageOrigin } from "./browser-fill";
-import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser";
+import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
+import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
 
 export interface ChromiumTransportOptions {
   /** Overrides the browser binary; default: the VM's headless shell if
@@ -90,6 +90,7 @@ export function pageSession(
   },
   claimed: Set<Page> = new Set(),
 ): BrowserSession {
+  const exempt = parseExemptHosts(open.allowedPrivateHosts);
   // The tab the agent drives. With a streamed desktop the owner can open
   // and close tabs, so this follows them (see `follow`).
   let page = initialPage;
@@ -152,7 +153,7 @@ export function pageSession(
       const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
       const hops: string[] = [];
       for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
-      const bad = hops.find((hop) => isBlockedPrivateUrl(hop, open.allowedPrivateHosts));
+      const bad = hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
       if (bad) {
         await page.goto("about:blank").catch(() => {});
         throw new Error(

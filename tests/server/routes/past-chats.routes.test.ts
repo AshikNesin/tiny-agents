@@ -1,72 +1,31 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { api, createTestApp } from "../helpers";
-import { db, botChats, bots } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
+import { db, botChats } from "../../../apps/web/src/server/db";
 import { setChatTitler } from "../../../apps/web/src/server/api/bots/chats.title";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
+import type { AgentRuntime } from "../../../packages/agent/src/index";
+import {
+  authToken,
+  closeAppRuntime,
+  openAppRuntime,
+  resetAppTables,
+  spyOnRuntime,
+  TEST_MODEL,
+  until,
+  type SpiedRuntime,
+} from "../fixtures";
 
 /**
  * Past chats (issue #101): "New chat" records the chat it leaves, which the
- * owner can list, read (paged like the live chat), continue or delete.
+ * owner can list, read (paged like the live chat), continue or delete. Runs
+ * on the real runtime: the owner's messages go through the API and the faux
+ * model answers each with "Echo: <text>".
  */
 
-const token = await generateToken({ userId: 1, email: "past-chats-test@example.com" });
+const token = await authToken("past-chats-test@example.com");
 
-type Msg = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  status: "done";
-  createdAt: number;
-};
-
-/** Transcripts by conversation id; anything unlisted is empty. */
-const transcripts = new Map<number, Msg[]>();
-let nextConversation = 100;
-
-function say(conversation: number, ...turns: string[]): void {
-  transcripts.set(
-    conversation,
-    turns.map((text, i) => ({
-      id: `e${i + 1}`,
-      role: i % 2 === 0 ? "user" : "assistant",
-      text,
-      status: "done",
-      createdAt: Date.now() - 60_000 + i,
-    })),
-  );
-}
-
-const agentRuntime = {
-  createConversation: vi.fn(async () => nextConversation++),
-  configure: vi.fn().mockResolvedValue(undefined),
-  submit: vi.fn().mockResolvedValue(undefined),
-  abort: vi.fn().mockResolvedValue(undefined),
-  readChat: vi.fn(async (ref: number) => ({
-    messages: transcripts.get(ref) ?? [],
-    busy: false,
-    queued: [],
-  })),
-  isBusy: vi.fn().mockReturnValue(false),
-  busyConversations: vi.fn().mockReturnValue([]),
-  listModels: vi.fn().mockReturnValue([
-    {
-      id: "known-model",
-      name: "Known Model",
-      family: "other",
-      reasoning: false,
-      contextWindow: 8_192,
-      vision: false,
-    },
-  ]),
-  hasModel: vi.fn((modelId: string) => modelId === "known-model"),
-  listCapabilities: vi.fn().mockReturnValue([]),
-  pendingApprovals: vi.fn().mockReturnValue(0),
-  pendingQuestions: vi.fn().mockReturnValue(0),
-  close: vi.fn().mockResolvedValue(undefined),
-};
+type Msg = { id: string; role: string; text: string };
 
 const app = createTestApp();
 
@@ -78,13 +37,41 @@ function call(path: string, init: { method?: string; json?: unknown } = {}) {
   return api<Data>(app, path, { ...init, token });
 }
 
+let rt: AgentRuntime;
+let runtime: SpiedRuntime;
+
 async function createBot(name = "Travel"): Promise<{ id: string; conversationId: string }> {
   const response = await call("/api/v1/bots", {
     method: "POST",
-    json: { name, systemPrompt: "Plan trips.", modelId: "known-model" },
+    json: { name, systemPrompt: "Plan trips.", modelId: TEST_MODEL },
   });
   expect(response.status).toBe(201);
   return response.body.data as { id: string; conversationId: string };
+}
+
+/** The bot's current conversation, as the row names it. */
+async function chatOf(botId: string): Promise<number> {
+  const response = await call(`/api/v1/bots/${botId}`);
+  return Number(response.body.data.conversationId);
+}
+
+/** Send each owner message and wait for its reply, so the transcript holds owner, bot, owner, bot… */
+async function converse(botId: string, ...texts: string[]): Promise<void> {
+  const conversation = await chatOf(botId);
+  for (const [i, text] of texts.entries()) {
+    const sent = await call(`/api/v1/bots/${botId}/messages`, {
+      method: "POST",
+      json: { requestId: `say-${conversation}-turn-${i}`, text },
+    });
+    expect(sent.status).toBe(200);
+    await until(
+      async () => {
+        const state = await rt.readChat(conversation);
+        return !state.busy && state.messages.length === 2 * (i + 1);
+      },
+      `reply ${i + 1} in conversation ${conversation}`,
+    );
+  }
 }
 
 async function newChat(botId: string): Promise<{ conversationId: string }> {
@@ -101,26 +88,21 @@ async function listChats(botId: string) {
 
 describe("Past chats", () => {
   beforeEach(async () => {
-    vi.clearAllMocks();
-    transcripts.clear();
-    nextConversation = 100;
-    setAgentRuntimeForTests(agentRuntime as never);
+    rt = await openAppRuntime();
+    runtime = spyOnRuntime(rt);
     setChatTitler(undefined);
-    await db.delete(bots);
+    await resetAppTables();
   });
 
   afterEach(async () => {
     setChatTitler(undefined);
-    await db.delete(bots);
+    await resetAppTables();
+    await closeAppRuntime();
   });
 
   it("records the chat New chat leaves, titled by its first owner message", async () => {
     const bot = await createBot();
-    say(
-      Number(bot.conversationId),
-      "  Find   flights to Goa\nin December",
-      "Here are three options.",
-    );
+    await converse(bot.id, "  Find   flights to Goa\nin December");
 
     await newChat(bot.id);
 
@@ -145,11 +127,10 @@ describe("Past chats", () => {
 
   it("lists the most recently ended chat first", async () => {
     const bot = await createBot();
-    say(100, "First topic", "ok");
+    await converse(bot.id, "First topic");
     await newChat(bot.id);
-    say(101, "Second topic", "ok");
+    await converse(bot.id, "Second topic");
     await newChat(bot.id);
-
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual([
       "Second topic",
       "First topic",
@@ -157,24 +138,25 @@ describe("Past chats", () => {
   });
 
   it("404s for an unknown bot and for another bot's chat", async () => {
-    expect((await call("/api/v1/bots/nope/chats")).status).toBe(404);
-
     const travel = await createBot("Travel");
-    const finance = await createBot("Finance");
-    say(Number(travel.conversationId), "Trip", "ok");
+    const other = await createBot("Other");
+    await converse(travel.id, "Trip");
     await newChat(travel.id);
     const [chat] = await listChats(travel.id);
 
-    expect((await call(`/api/v1/bots/${finance.id}/chats/${chat.id}`)).status).toBe(404);
+    expect((await call("/api/v1/bots/no-such-bot/chats")).status).toBe(404);
+    expect((await call(`/api/v1/bots/${other.id}/chats/${chat.id}`)).status).toBe(404);
     expect(
-      (await call(`/api/v1/bots/${finance.id}/chats/${chat.id}`, { method: "DELETE" })).status,
+      (await call(`/api/v1/bots/${other.id}/chats/${chat.id}`, { method: "DELETE" })).status,
     ).toBe(404);
   });
 
   it("reads the newest window and pages older messages", async () => {
     const bot = await createBot();
-    const turns = Array.from({ length: CHAT_WINDOW + 5 }, (_, i) => `turn ${i + 1}`);
-    say(Number(bot.conversationId), ...turns);
+    // Enough owner messages that owner + reply pairs overflow the window.
+    const owner = Array.from({ length: Math.ceil(CHAT_WINDOW / 2) + 3 }, (_, i) => `turn ${i + 1}`);
+    await converse(bot.id, ...owner);
+    const all = owner.flatMap((text) => [text, `Echo: ${text}`]);
     await newChat(bot.id);
     const [chat] = await listChats(bot.id);
 
@@ -187,6 +169,7 @@ describe("Past chats", () => {
     };
     expect(view.chat.id).toBe(chat.id);
     expect(view.state.messages).toHaveLength(CHAT_WINDOW);
+    expect(view.state.messages.map((m) => m.text)).toEqual(all.slice(all.length - CHAT_WINDOW));
     expect(view.state.hasMore).toBe(true);
     expect(view.runs).toEqual([]);
 
@@ -194,59 +177,76 @@ describe("Past chats", () => {
     const page = await call(`/api/v1/bots/${bot.id}/chats/${chat.id}/messages?${query}`);
     expect(page.status).toBe(200);
     expect(page.body.data).toMatchObject({ hasMore: false });
-    expect((page.body.data.messages as Msg[]).map((m) => m.text)).toEqual(turns.slice(0, 5));
+    expect((page.body.data.messages as Msg[]).map((m) => m.text)).toEqual(
+      all.slice(0, all.length - CHAT_WINDOW),
+    );
   });
 
   it("continues a past chat: the bot moves back, and the chat it left becomes a past chat", async () => {
     const bot = await createBot();
-    say(100, "Old trip", "ok");
-    await newChat(bot.id);
-    say(101, "Current topic", "ok");
-    const [old] = await listChats(bot.id);
-    const startedAt = (await db.query.botChats.findFirst({
-      where: eq(botChats.id, String(old.id)),
-    }))!.startedAt;
+    const first = Number(bot.conversationId);
+    await converse(bot.id, "Old trip");
+    const second = Number((await newChat(bot.id)).conversationId);
+    await converse(bot.id, "Current topic");
+    const [past] = await listChats(bot.id);
 
-    const response = await call(`/api/v1/bots/${bot.id}/chats/${old.id}/continue`, {
+    const continued = await call(`/api/v1/bots/${bot.id}/chats/${past.id}/continue`, {
       method: "POST",
     });
-    expect(response.status).toBe(200);
-
-    expect(response.body.data).toMatchObject({ conversationId: "100" });
-    const row = (await db.query.bots.findFirst({ where: eq(bots.id, bot.id) }))!;
-    expect(row.chatStartedAt).toEqual(startedAt);
-    // The chat it left is stopped and listed; the continued one is not.
-    expect(agentRuntime.abort).toHaveBeenCalledWith(101);
+    expect(continued.status).toBe(200);
+    expect(continued.body.data).toMatchObject({ conversationId: String(first) });
+    expect(await chatOf(bot.id)).toBe(first);
+    // The chat it left is stopped and recorded; the one it returned to is reconciled.
+    expect(runtime.abort).toHaveBeenCalledWith(second);
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual(["Current topic"]);
-    // Reconciled: it runs on the bot's current config from its next turn.
-    expect(agentRuntime.configure).toHaveBeenCalledWith(100, expect.anything());
+    expect(runtime.configure).toHaveBeenCalledWith(first, expect.anything());
   });
 
   it("deletes a past chat, and a deleted bot takes its past chats with it", async () => {
     const bot = await createBot();
-    say(100, "One", "ok");
+    await converse(bot.id, "One");
     await newChat(bot.id);
-    say(101, "Two", "ok");
+    await converse(bot.id, "Two");
     await newChat(bot.id);
-    const [two] = await listChats(bot.id);
+    const [two, one] = await listChats(bot.id);
 
-    expect(
-      (await call(`/api/v1/bots/${bot.id}/chats/${two.id}`, { method: "DELETE" })).status,
-    ).toBe(200);
+    const deleted = await call(`/api/v1/bots/${bot.id}/chats/${two.id}`, { method: "DELETE" });
+    expect(deleted.status).toBe(200);
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual(["One"]);
+    expect(one).toBeDefined();
 
     expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);
-    expect(await db.$count(botChats, eq(botChats.botId, bot.id))).toBe(0);
+    expect(await db.$count(botChats)).toBe(0);
   });
 
   it("still starts a new chat when the old transcript cannot be read", async () => {
     const bot = await createBot();
-    agentRuntime.readChat.mockRejectedValueOnce(new Error("agent.db busy"));
+    runtime.readChat.mockRejectedValueOnce(new Error("agent.db busy"));
 
     const fresh = await newChat(bot.id);
 
-    expect(fresh.conversationId).toBe("101");
+    expect(fresh.conversationId).not.toBe(bot.conversationId);
+    expect(await chatOf(bot.id)).toBe(Number(fresh.conversationId));
     expect(await listChats(bot.id)).toEqual([]);
+  });
+
+  it("ends the bot's open chat stream when it moves to a new chat", async () => {
+    const bot = await createBot();
+    const response = await app.request(`/api/v1/bots/${bot.id}/stream`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    // The snapshot arrives first; then "New chat" ends the stream.
+    while (!text.includes('"type":"snapshot"')) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error("stream ended before its snapshot");
+      text += decoder.decode(value, { stream: true });
+    }
+    await newChat(bot.id);
+    const ended = await until(async () => (await reader.read()).done, "the stream to end");
+    expect(ended).toBe(true);
   });
 
   it("replaces the provisional title with the title model's", async () => {
@@ -259,7 +259,7 @@ describe("Past chats", () => {
       hasModel: () => true,
     });
     const bot = await createBot();
-    say(Number(bot.conversationId), "Find flights to Goa", "Here are three.");
+    await converse(bot.id, "Find flights to Goa");
 
     await newChat(bot.id);
 
@@ -267,5 +267,7 @@ describe("Past chats", () => {
       expect((await listChats(bot.id))[0]).toMatchObject({ title: "Goa trip: December flights" });
     });
     expect(completeSimple).toHaveBeenCalledOnce();
+    // The call carries an abort signal, so an overrun is stopped, not left running.
+    expect(completeSimple.mock.calls[0]?.[2]).toMatchObject({ signal: expect.any(AbortSignal) });
   });
 });

@@ -126,6 +126,33 @@ describe("sandbox toolkit (unit, fake transport)", () => {
     expect(fake.calls).toEqual(["one", "two", "three"]);
   });
 
+  it("closes a pooled session that failed instead of leaving its client running", async () => {
+    const closed: number[] = [];
+    let dials = 0;
+    const transport: SandboxTransport = async () => {
+      const id = ++dials;
+      const session: SandboxSession = {
+        exec: async () => {
+          if (id === 1) throw new Error("Keepalive timeout");
+          return { output: "ok", exitCode: 0 };
+        },
+        readFile: async () => ({ text: "", truncated: false }),
+        writeFile: async () => {},
+        close: () => closed.push(id),
+      };
+      return session;
+    };
+    const sandbox = createSandboxToolkit({ host: "vm", transport });
+    const failed = await run(sandbox, "run_command", { command: "one" });
+    expect(failed.isError).toBe(true);
+    // The dead client is ended (its keepalive would otherwise run forever)…
+    expect(closed).toEqual([1]);
+    // …and the next call dials fresh.
+    const ok = await run(sandbox, "run_command", { command: "two" });
+    expect(ok.isError).toBeUndefined();
+    expect(dials).toBe(2);
+  });
+
   it("surfaces post-dispatch failures instead of re-running the command", async () => {
     const calls: string[] = [];
     const transport: SandboxTransport = async () => ({

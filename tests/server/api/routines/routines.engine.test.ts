@@ -9,7 +9,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
 import { dispatchOccurrence } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import { runNow } from "../../../../apps/web/src/server/api/routines/routines.service";
 import {
@@ -26,8 +25,13 @@ import {
   onRoutineCard,
   type RoutineRunCard,
 } from "../../../../apps/web/src/server/api/routines/routines.cards";
-import type { AgentRuntime, ChatMessage, ChatState, FinishedReply } from "@tiny-agents/agent";
-import { REPORT_ROUTINE_BLOCKED } from "../../../../packages/agent/src/index";
+import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
+import {
+  createFakeRuntime,
+  installFakeRuntime,
+  resetAppTables,
+  type FakeRuntime,
+} from "../../fixtures";
 
 /** Routine-fire jobs queued so far, oldest first. */
 async function sentJobs() {
@@ -55,99 +59,19 @@ async function runById(id: string) {
   return db.query.routineRuns.findFirst({ where: eq(routineRuns.id, id) });
 }
 
-async function clearTables() {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  await db.delete(jobs);
-}
+const clearTables = resetAppTables;
 
 /** The bot's chat, where the owner talks (seeded on the bot row). */
 const CHAT = 7;
 /** The conversation the fake runtime creates for a routine on its first fire. */
 const ROUTINE_CONVERSATION = 42;
 
-/** Request ids submitted per conversation, in order (what the fake transcript shows). */
-let submitted = new Map<number, string[]>();
-/** How each submission's turn finished, by request id (absent: still running). */
-let answers: Record<string, { conversation: number; reply: Omit<FinishedReply, "createdAt"> }> = {};
-
-function recordSubmit(ref: number, input: { requestId: string }) {
-  const list = submitted.get(ref) ?? [];
-  if (!list.includes(input.requestId)) list.push(input.requestId);
-  submitted.set(ref, list);
-}
-
-/** The fake transcript: each submission as a user message, then its turn's reply if it finished. */
-function transcript(ref: number): ChatState {
-  const ids = [
-    ...(submitted.get(ref) ?? []),
-    ...Object.entries(answers)
-      .filter(([id, a]) => a.conversation === ref && !(submitted.get(ref) ?? []).includes(id))
-      .map(([id]) => id),
-  ];
-  const messages: ChatMessage[] = [];
-  let at = 1;
-  for (const requestId of ids) {
-    messages.push({
-      id: `u${at}`,
-      role: "user",
-      text: "",
-      requestId,
-      status: "done",
-      createdAt: at++,
-    });
-    const answer = answers[requestId];
-    if (!answer || answer.conversation !== ref) continue;
-    const { text, error, refused, blocked } = answer.reply;
-    messages.push({
-      id: `a${at}`,
-      role: "assistant",
-      text,
-      status: error !== undefined ? "error" : "done",
-      ...(error !== undefined ? { error } : {}),
-      toolCalls: [
-        ...(refused ?? []).map((name) => ({
-          id: "",
-          name,
-          args: {},
-          status: "error" as const,
-          approval: "refused" as const,
-        })),
-        ...(blocked !== undefined
-          ? [
-              {
-                id: "",
-                name: REPORT_ROUTINE_BLOCKED,
-                args: { reason: blocked },
-                status: "done" as const,
-              },
-            ]
-          : []),
-      ],
-      createdAt: at++,
-    });
-  }
-  return { messages, busy: false, queued: [] };
-}
-
-function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    createConversation: vi.fn().mockResolvedValue(ROUTINE_CONVERSATION),
-    configure: vi.fn().mockResolvedValue(undefined),
-    submit: vi.fn(async (ref: number, input: { requestId: string }) => recordSubmit(ref, input)),
-    abort: vi.fn(),
-    readChat: vi.fn(async (ref: number) => transcript(ref)),
-    isBusy: vi.fn().mockReturnValue(false),
-    busyConversations: vi.fn().mockReturnValue([]),
-    onActivity: vi.fn().mockReturnValue(() => undefined),
-    listModels: vi.fn().mockReturnValue([]),
-    hasModel: vi.fn().mockReturnValue(true),
-    listCapabilities: vi.fn().mockReturnValue([]),
-    pendingApprovals: vi.fn().mockReturnValue(0),
-    decideApproval: vi.fn(),
-    ...overrides,
-  } as unknown as AgentRuntime;
+/** The shared fake, with the routine's conversation created on its first fire. */
+function fakeRuntime(overrides: Partial<FakeRuntime> = {}) {
+  const fake = createFakeRuntime(overrides);
+  if (!overrides.createConversation)
+    fake.createConversation.mockResolvedValue(ROUTINE_CONVERSATION);
+  return fake;
 }
 
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
@@ -194,10 +118,8 @@ describe("routine-fire dispatch", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    answers = {};
-    submitted = new Map();
     runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
+    installFakeRuntime(runtime);
     await clearTables();
   });
 
@@ -407,8 +329,10 @@ describe("routine-fire dispatch", () => {
   it("a submit failure fails the run once and pauses the routine, leaving the chat alone", async () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await db.update(routines).set({ pendingJobId: "job-99" }).where(eq(routines.id, routine.id));
-    const failing = fakeRuntime({ submit: vi.fn().mockRejectedValue(new Error("model gone")) });
-    setAgentRuntimeForTests(failing);
+    const failing = fakeRuntime({
+      submit: vi.fn<AgentRuntime["submit"]>().mockRejectedValue(new Error("model gone")),
+    });
+    installFakeRuntime(failing);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id, SLOT);
     expect(run?.status).toBe("failed");
@@ -433,9 +357,11 @@ describe("routine-fire dispatch", () => {
     // (ModelNotFoundError); it must take the same fail-once path as submit.
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     const failing = fakeRuntime({
-      configure: vi.fn().mockRejectedValue(new Error('Unknown model "m1"')),
+      configure: vi
+        .fn<AgentRuntime["configure"]>()
+        .mockRejectedValue(new Error('Unknown model "m1"')),
     });
-    setAgentRuntimeForTests(failing);
+    installFakeRuntime(failing);
     const runId = await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id, SLOT);
     expect(runId).toBe(run?.id);
@@ -450,15 +376,13 @@ describe("completion watcher", () => {
 
   /** The run's turn finished with this reply. */
   function answer(run: { requestId: string }, reply: Omit<FinishedReply, "createdAt">) {
-    answers[run.requestId] = { conversation: ROUTINE_CONVERSATION, reply };
+    runtime.script.answer(run.requestId, reply, ROUTINE_CONVERSATION);
   }
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    answers = {};
-    submitted = new Map();
     runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
+    installFakeRuntime(runtime);
     await clearTables();
   });
 
@@ -484,8 +408,8 @@ describe("completion watcher", () => {
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
     answer(run!, { text: "Routine's answer" });
-    const split = fakeRuntime();
-    const watcher = createRoutinesCompletionWatcher(split);
+    // The answer sits in the routine's conversation; the chat has none.
+    const watcher = createRoutinesCompletionWatcher(runtime);
 
     expect(await watcher.resolveConversation(CHAT)).toBe(0);
     expect((await runById(run!.id))?.status).toBe("awaiting");
@@ -688,7 +612,9 @@ describe("completion watcher", () => {
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
 
-    const busyRuntime = fakeRuntime({ isBusy: vi.fn().mockReturnValue(true) });
+    const busyRuntime = fakeRuntime({
+      isBusy: vi.fn<AgentRuntime["isBusy"]>().mockReturnValue(true),
+    });
     const watcher = createRoutinesCompletionWatcher(busyRuntime);
     const resolved = await watcher.bootSweep();
     expect(resolved).toBe(0);

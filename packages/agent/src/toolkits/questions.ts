@@ -18,12 +18,21 @@ import {
   defineDoc,
   defineExtension,
   defineTool,
+  type TaskId,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
-import { isUnattendedConversation } from "../approvals";
+import { innerDetails } from "../approvals";
 import type { Capability } from "../capabilities";
-import type { OwnerAnswer, OwnerQuestion } from "../types";
-import { waitForOwner, type WaitTracker } from "../waiting";
+import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
+import {
+  pendingToolTask,
+  refuseUnattended,
+  sealedAsNotPending,
+  unattendedOnce,
+  waitForOwner,
+  type HostTx,
+  type WaitTracker,
+} from "../waiting";
 
 export const ASK_OWNER = "ask_owner";
 
@@ -46,6 +55,14 @@ export const QuestionsDoc = defineDoc<{
   checkpointWhen: () => false,
 });
 
+/** The questions were already answered or dismissed, or their call ended. */
+export class QuestionNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for answers`);
+    this.name = "QuestionNotPendingError";
+  }
+}
+
 /** The answers do not fit the questions they answer. */
 export class InvalidAnswersError extends Error {
   constructor(message: string) {
@@ -59,6 +76,67 @@ export class InvalidAnswersError extends Error {
 const toJson = (value: OwnerQuestion[] | OwnerAnswer[]) => value as unknown as JsonValue[];
 export const storedQuestions = (doc: { questions: JsonValue[] }) =>
   doc.questions as unknown as OwnerQuestion[];
+
+// ── The card's details: one shape, produced and parsed here ─────────────
+
+/** An `ask_owner` call as the chat reads it off the call's details. */
+export interface QuestionView extends Pick<ChatToolCall, "questions" | "answers"> {
+  pending: boolean;
+}
+
+const pendingDetails = (questions: OwnerQuestion[]) => ({
+  question: "pending",
+  questions: toJson(questions),
+});
+
+/** The questions (and answers) of an `ask_owner` call's details; `pending` while it waits. */
+export function questionsOf(details: unknown): QuestionView {
+  const value = innerDetails(details);
+  if (!value || !Array.isArray(value.questions)) return { pending: false };
+  return {
+    pending: value.question === "pending",
+    questions: value.questions as OwnerQuestion[],
+    ...(Array.isArray(value.answers) ? { answers: value.answers as OwnerAnswer[] } : {}),
+  };
+}
+
+// ── Host side: the owner's answers ──────────────────────────────────────
+
+/**
+ * Record the owner's answers (or a dismissal with `null`) on a waiting
+ * `ask_owner` call, in the host's transaction. Throws
+ * `QuestionNotPendingError` for a call that is not waiting on questions
+ * (another tool's call, already answered, ended) and `InvalidAnswersError`
+ * when the answers do not fit.
+ */
+export async function recordAnswers(
+  tx: HostTx,
+  conversation: number,
+  taskId: number,
+  answers: readonly OwnerAnswer[] | null,
+): Promise<void> {
+  const id = taskId as TaskId;
+  const notPending = () => new QuestionNotPendingError(taskId);
+  await pendingToolTask(tx, id, conversation, notPending);
+  // Another tool's task has no questions (and the throw rolls back the
+  // document this read would create).
+  const doc = await tx.doc(QuestionsDoc, id);
+  if (doc.status !== "pending" || doc.questions.length === 0) throw notPending();
+  if (answers) {
+    doc.answers = checkAnswers(storedQuestions(doc), answers) as unknown as JsonValue[];
+    doc.status = "answered";
+  } else {
+    doc.status = "dismissed";
+  }
+}
+
+/** Map a sealed-document error (the call ended) to `QuestionNotPendingError`; rethrow the rest. */
+export function questionNotPending(error: unknown, taskId: number): never {
+  if (error instanceof QuestionNotPendingError || error instanceof InvalidAnswersError) {
+    throw error;
+  }
+  return sealedAsNotPending(error, () => new QuestionNotPendingError(taskId));
+}
 
 const optionSchema = Type.Object({
   label: Type.String({ minLength: 1, maxLength: 100, description: "Short answer, 1-5 words" }),
@@ -168,21 +246,15 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     replay: "safe",
     execute: async (args, api, context): Promise<ToolExecutionResult> => {
       // Decided once per call, so a replay never starts waiting after all.
-      if (
-        await api.memo(
-          "questions:unattended",
-          await isUnattendedConversation(api, context),
-          context,
-        )
-      ) {
-        return { output: [{ type: "text", text: UNATTENDED }], isError: true };
+      if (await unattendedOnce(api, context, "questions:unattended")) {
+        return refuseUnattended(UNATTENDED);
       }
       const asked = normalizeQuestions(args.questions);
       const doc = await waitForOwner(
         api,
         tracker,
         QuestionsDoc,
-        { question: "pending", questions: toJson(asked) },
+        pendingDetails(asked),
         context,
         (value) => {
           if (value.questions.length === 0) value.questions = toJson(asked);

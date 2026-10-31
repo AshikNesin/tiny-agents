@@ -12,7 +12,7 @@
  */
 import type { Frame, Page } from "playwright-core";
 import type { SecretValue } from "../vault";
-import { assertRefShape } from "./browser";
+import { assertRefShape } from "./browser-guard";
 
 export interface SecretFillField {
   /** Reported back when filled. */

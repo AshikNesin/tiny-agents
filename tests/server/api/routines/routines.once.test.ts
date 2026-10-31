@@ -6,8 +6,9 @@
  */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
+import { db, routines } from "../../../../apps/web/src/server/db";
 import * as service from "../../../../apps/web/src/server/api/routines/routines.service";
+import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 import {
   composeRoutineLabel,
   formatLateness,
@@ -16,13 +17,7 @@ import {
 const HOUR = 60 * 60_000;
 const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 
-async function seedBot() {
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: "Bot", modelId: "m1", conversationId: "7" })
-    .returning();
-  return bot!;
-}
+const seedBot = () => seedBotRow({ name: "Bot", conversationId: "7" });
 
 async function seedSpentOnce(botId: string) {
   const [routine] = await db
@@ -38,12 +33,7 @@ async function seedSpentOnce(botId: string) {
   return routine!;
 }
 
-async function clearTables() {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  await db.delete(jobs);
-}
+const clearTables = resetAppTables;
 
 describe("one-time routines", () => {
   beforeEach(clearTables);

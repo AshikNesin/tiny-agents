@@ -5,13 +5,13 @@
  * route needs a session.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { createNamespaceKv } from "@groot/core/kv";
 import { createDbLogStore } from "@groot/core/notification/notification.log";
 import { NOTIFICATION_SETTINGS_KEY } from "@groot/core/notification/notification.settings";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { NOTIFICATION_EVENTS } from "../../../apps/web/src/server/api/notifications/notifications.events";
 import { api, createTestApp } from "../helpers";
+import { authToken } from "../fixtures";
 
 const kv = createNamespaceKv("APP_SETTING");
 
@@ -25,7 +25,7 @@ interface SettingsBody {
 }
 
 beforeAll(async () => {
-  token = await generateToken({ userId: 1, email: "notifications-test@example.com" });
+  token = await authToken("notifications-test@example.com");
   await kv.delete(NOTIFICATION_SETTINGS_KEY);
   notificationService.defineEvents(NOTIFICATION_EVENTS);
 });

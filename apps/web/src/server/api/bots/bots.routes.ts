@@ -9,6 +9,7 @@ import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import * as pastChats from "./chats.history";
+import { onBotChatChanged } from "./chats.history";
 import { openSse } from "./bots.sse";
 import { watchBot } from "./bots.viewers";
 import { chatCards, onRoutineCard } from "../routines/routines.cards";
@@ -90,6 +91,14 @@ router.get("/bots/:id/stream", async (c) => {
   const bot = await botsService.getBot(id);
   return openSse(c, async (sse) => {
     sse.onClose(watchBot(bot.id));
+    // "New chat" or continuing a Past chat moves the bot onto another
+    // conversation: this stream watched the old one, so it ends and the
+    // client reconnects onto the new one.
+    sse.onClose(
+      onBotChatChanged((botId) => {
+        if (botId === bot.id) sse.end();
+      }),
+    );
     // Only the newest messages (issue #92): older ones load on scroll from
     // GET /bots/:id/messages, so an open or reconnect stays the same size
     // however long the conversation gets.

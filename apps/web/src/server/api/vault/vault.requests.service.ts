@@ -12,9 +12,7 @@
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
-  browserTabOrigin,
   CredentialRequestNotPendingError,
-  fillSecretInBrowser,
   SecretValue,
   secretRedactor,
   type AgentRuntime,
@@ -24,6 +22,7 @@ import {
 } from "@tiny-agents/agent";
 import { logger } from "@groot/core/logger";
 import { db, vaultItems } from "../../db";
+import { getBrowserSessions } from "../bots/browser.sessions";
 import { browserTargetForConversation } from "../bots/browser.targets";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { conversationOwner } from "../bots/bots.owner";
@@ -48,7 +47,9 @@ export async function requestView(taskId: number, runtime: RequestRuntime = getA
   const { conversation, request, expiresAt } = await pending(taskId, runtime);
   const owner = await conversationOwner(conversation);
   const bot = owner ? { id: owner.bot.id, name: owner.bot.name } : undefined;
-  const liveOrigin = await browserTabOrigin(await browserTargetForConversation(conversation));
+  const liveOrigin = await getBrowserSessions().tabOrigin(
+    await browserTargetForConversation(conversation),
+  );
   return {
     taskId,
     bot: bot ?? null,
@@ -202,7 +203,7 @@ async function fillRequest(
   const filled = checkValues(request, input.values);
   for (const { value } of filled) secretRedactor.register(value);
   const target = await browserTargetForConversation(conversation);
-  const live = await browserTabOrigin(target);
+  const live = await getBrowserSessions().tabOrigin(target);
   if (live !== request.origin) {
     await audit({
       handle: "(credential request)",
@@ -228,7 +229,7 @@ async function fillRequest(
   }));
   let result: { filled: string[] };
   try {
-    result = await fillSecretInBrowser(target, { origin: request.origin, fields });
+    result = await getBrowserSessions().fillSecret(target, { origin: request.origin, fields });
   } catch (error) {
     if (error instanceof Error && error.name === "OriginMismatchError") {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");

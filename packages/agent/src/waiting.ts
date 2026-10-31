@@ -12,7 +12,75 @@
  * Revisit once pi-durable ships an external wake/resume (`Harness.wake()`).
  */
 import type { Context, JsonValue } from "@earendil-works/chord";
-import type { JsonObject, TaskDocToken, ToolExecutionApi } from "@earendil-works/pi-durable";
+import type {
+  Harness,
+  JsonObject,
+  TaskDocToken,
+  TaskId,
+  ToolExecutionApi,
+  ToolExecutionResult,
+} from "@earendil-works/pi-durable";
+import { isUnattendedConversation } from "./policy";
+
+/**
+ * A call that would wait on the owner in a conversation nobody watches (a
+ * routine's, issue #63) is refused instead, every wait kind alike: the
+ * model gets `message`, and `approval: "refused"` lets a Routine run see
+ * that the Turn was blocked for want of the owner (`finishedReplyTo`).
+ */
+export function refuseUnattended(message: string): ToolExecutionResult {
+  return {
+    output: [{ type: "text", text: message }],
+    isError: true,
+    details: { approval: "refused" },
+  };
+}
+
+/** Whether nobody watches the conversation, decided once per call (a replay keeps the answer). */
+export async function unattendedOnce(
+  api: ToolExecutionApi,
+  context: Context,
+  memoKey = "gate:unattended",
+): Promise<boolean> {
+  return api.memo(memoKey, await isUnattendedConversation(api, context), context);
+}
+
+/** The transaction a host-side answer runs in (pi-durable's commit callback argument). */
+export type HostTx = Parameters<Parameters<Harness["commit"]>[0]>[0];
+
+/**
+ * The running tool task a host answer addresses: it must exist, be a tool
+ * call, still be running, and (when `conversation` is given) belong to that
+ * conversation. Throws `notPending()` otherwise. Returns the conversation.
+ */
+export async function pendingToolTask(
+  tx: Pick<HostTx, "task">,
+  id: TaskId,
+  conversation: number | undefined,
+  notPending: () => Error,
+): Promise<number> {
+  const task = await tx.task(id);
+  if (
+    !task ||
+    (conversation !== undefined && Number(task.conversationId) !== conversation) ||
+    task.kind !== "pi.tool" ||
+    task.state.status === "terminal" ||
+    task.state.status === "completing"
+  ) {
+    throw notPending();
+  }
+  return Number(task.conversationId);
+}
+
+/**
+ * A terminal task's documents are sealed: writing one throws, which means
+ * the call ended meanwhile. Every host answer maps that to its own
+ * not-pending error; anything else is rethrown.
+ */
+export function sealedAsNotPending(error: unknown, notPending: () => Error): never {
+  if (error instanceof Error && /terminal/i.test(error.message)) throw notPending();
+  throw error;
+}
 
 /** What a waiting call is about, for listeners that tell the owner (notifications). */
 export interface WaitInfo {

@@ -1,6 +1,5 @@
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
   configure as configureAgent,
@@ -11,56 +10,56 @@ import {
   MemoryStorage,
   watchEvents,
   type AgentChange,
-  type AgentEvent,
   type Conversation,
   type ConversationId,
   type Cursor,
   type EntryRecord,
   type HarnessSettings,
-  type MessageChange,
   type Registry,
   type Storage,
   type TaskGraphWatch,
-  type TaskId,
-  type ToolRegistration,
-  type ToolSlot,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { ApprovalDoc, gateExtension, PermissionsDoc, type ApprovalDecision } from "./approvals";
 import {
-  CredentialRequestDoc,
-  storedRequest,
+  ApprovalNotPendingError,
+  approvalNotPending,
+  gateExtension,
+  recordDecision,
+  type ApprovalDecision,
+} from "./approvals";
+import {
+  CredentialRequestNotPendingError,
+  credentialRequestNotPending,
+  readPendingRequest,
+  settleRequest,
   type CredentialRequest,
   type CredentialRequestOutcome,
 } from "./credentials";
-import { GrantsDoc } from "./vault";
-import {
-  capabilityInfo,
-  effectivePermission,
-  type Capability,
-  type CapabilityInfo,
-  type CapabilitySelection,
-} from "./capabilities";
+import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
 import {
-  checkAnswers,
+  applyPermissions,
+  compilePolicy,
+  PermissionsDoc,
+  resolveModelId,
+  type CompiledPolicy,
+} from "./policy";
+import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "./projection";
+import {
   createQuestionsCapability,
-  InvalidAnswersError,
-  QuestionsDoc,
-  storedQuestions,
+  QuestionNotPendingError,
+  questionNotPending,
+  recordAnswers,
 } from "./toolkits/questions";
 import { finishedReplyOf } from "./replies";
 import {
   attachmentsOf,
-  chatState,
-  diffChat,
   CHAT_USER_ENTRY,
-  type LiveTool,
+  modelErrorText,
   pageBefore,
   queuedOf,
-  type RawChat,
-  windowChat,
+  textOf,
 } from "./transcript";
 import type {
   ActivityChange,
@@ -80,6 +79,9 @@ import type {
   WaitEvent,
   WithdrawOutcome,
 } from "./types";
+
+// The three wait kinds own their not-pending errors; the app imports them from here.
+export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
 import { WaitTracker } from "./waiting";
 import { REVIEW_ENTRY_LOOKBACK, type GateReview, type Reviewer } from "./reviewer";
 
@@ -102,30 +104,6 @@ export class ConversationNotFoundError extends Error {
   constructor(ref: ConversationRef) {
     super(`Conversation ${ref} not found`);
     this.name = "ConversationNotFoundError";
-  }
-}
-
-/** The approval was already answered, or its tool call ended. */
-export class ApprovalNotPendingError extends Error {
-  constructor(taskId: number) {
-    super(`Tool call ${taskId} is not waiting for approval`);
-    this.name = "ApprovalNotPendingError";
-  }
-}
-
-/** The credential request was already answered, expired, or its call ended. */
-export class CredentialRequestNotPendingError extends Error {
-  constructor(taskId: number) {
-    super(`Tool call ${taskId} is not waiting for credentials`);
-    this.name = "CredentialRequestNotPendingError";
-  }
-}
-
-/** The questions were already answered or dismissed, or their call ended. */
-export class QuestionNotPendingError extends Error {
-  constructor(taskId: number) {
-    super(`Tool call ${taskId} is not waiting for answers`);
-    this.name = "QuestionNotPendingError";
   }
 }
 
@@ -327,7 +305,7 @@ export class AgentRuntime {
 
   listModels(): ModelInfo[] {
     // Catalog models plus any registered gateway custom providers (their ids
-    // are namespaced "custom-<provider>/<model>" so bots' saved modelIds
+    // are namespaced "custom:<provider>/<model>" so bots' saved modelIds
     // stay stable and never collide with catalog ids).
     const catalog = this.#models.getModels(this.provider).map((m) => toModelInfo(m));
     const custom = this.#models
@@ -345,35 +323,28 @@ export class AgentRuntime {
     return this.#resolveModel(modelId) !== undefined;
   }
 
-  /**
-   * Resolve a model id to (provider, model). Catalog ids are plain; gateway
-   * custom providers use "custom:<provider>/<model>" (the slash inside the
-   * provider segment is forbidden by registration, so the first "/" splits).
-   */
   #resolveModel(modelId: string): { provider: string; model: string } | undefined {
-    if (modelId.startsWith("custom:")) {
-      const rest = modelId.slice("custom:".length);
-      const slash = rest.indexOf("/");
-      if (slash <= 0) return undefined;
-      const providerId = rest.slice(0, slash);
-      const model = rest.slice(slash + 1);
-      return this.#models.getModel(providerId, model) ? { provider: providerId, model } : undefined;
-    }
-    return this.#models.getModel(this.provider, modelId)
-      ? { provider: this.provider, model: modelId }
-      : undefined;
+    return resolveModelId(
+      modelId,
+      this.provider,
+      (provider, model) => this.#models.getModel(provider, model) !== undefined,
+    );
   }
 
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
-    const change = this.#agentChange(config);
+    const { change, policy } = this.#compile(config);
     const conversation = await this.#harness.createConversation(
       { ownership: { kind: "ownerless" }, agent: change },
       ctx,
     );
     const ref = Number(conversation.id);
-    if (config.capabilities) await this.#writePermissions(ref, config.capabilities);
+    if (policy) {
+      await this.#harness.commit(async (tx) => {
+        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
+      }, ctx);
+    }
     return ref;
   }
 
@@ -382,95 +353,44 @@ export class AgentRuntime {
    * request; history is kept.
    */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
-    const change = this.#agentChange(config);
+    const { change, policy } = this.#compile(config);
     await this.#conversation(ref);
     await this.#harness.commit(async (tx) => {
       await configureAgent(tx, ref as ConversationId, change);
-      if (config.capabilities) {
-        this.#setPermissions(
-          await tx.doc(PermissionsDoc, ref as ConversationId),
-          config.capabilities,
-        );
+      if (policy) {
+        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
       }
     }, ctx);
   }
 
-  #agentChange(config: BotAgentConfig): AgentChange {
+  /**
+   * A bot's config as pi-durable stores it (the agent change) and as the
+   * gate reads it (the permissions), compiled by `policy.ts`. Without a
+   * capability selection the conversation keeps its tools.
+   */
+  #compile(config: BotAgentConfig): { change: AgentChange; policy?: CompiledPolicy } {
     const resolved = this.#resolveModel(config.modelId);
     if (!resolved) throw new ModelNotFoundError(config.modelId);
     const change: AgentChange = {
       model: { provider: resolved.provider, modelId: resolved.model },
       instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
     };
-    if (!config.capabilities) return change;
-    const selected = this.#selected(config.capabilities);
-    const installed = this.#registry.snapshot();
-    const off: ToolRegistration[] = [];
-    for (const capability of selected) {
-      for (const tool of capability.tools) {
-        const offHere = tool.unattendedOnly === true && !config.capabilities.unattended;
-        if (!offHere && effectivePermission(tool, config.capabilities.permissions) !== "off") {
-          continue;
-        }
-        const registration = installed
-          .extension(capability.id)
-          ?.tools?.find((candidate) => candidate.name === tool.name);
-        if (registration) off.push(registration);
-      }
-    }
+    if (!config.capabilities) return { change };
+    const policy = compilePolicy(
+      this.#capabilities,
+      config.capabilities,
+      this.#registry.snapshot(),
+    );
     return {
-      ...change,
-      // pi-durable stores names: a capability installed later (an MCP server
-      // reconnecting) is picked up by name without reconfiguring.
-      extensions: selected
-        .map((capability) => installed.extension(capability.id))
-        .filter((extension): extension is Extension => extension !== undefined),
-      tools: { remove: off },
+      change: {
+        ...change,
+        // pi-durable stores names: a capability installed later (an MCP server
+        // reconnecting) is picked up by name without reconfiguring.
+        extensions: policy.extensions,
+        tools: { remove: policy.remove },
+      },
+      policy,
     };
-  }
-
-  #selected(selection: CapabilitySelection): Capability[] {
-    return selection.enabled
-      .map((id) => this.#capabilities.get(id))
-      .filter((capability): capability is Capability => capability !== undefined);
-  }
-
-  #allowedTools(selection: CapabilitySelection): string[] {
-    return this.#selected(selection).flatMap((capability) =>
-      capability.tools
-        .filter((tool) => effectivePermission(tool, selection.permissions) === "allow")
-        .map((tool) => tool.name),
-    );
-  }
-
-  /** Tools that would ask and auto-review may approve (never `askOnly` ones). */
-  #reviewableTools(selection: CapabilitySelection): string[] {
-    if (!selection.autoReview) return [];
-    return this.#selected(selection).flatMap((capability) =>
-      capability.tools
-        .filter(
-          (tool) => !tool.askOnly && effectivePermission(tool, selection.permissions) === "ask",
-        )
-        .map((tool) => tool.name),
-    );
-  }
-
-  #setPermissions(
-    doc: { allow: string[]; review?: string[]; unattended?: boolean },
-    selection: CapabilitySelection,
-  ): void {
-    doc.allow = this.#allowedTools(selection);
-    const review = selection.unattended ? [] : this.#reviewableTools(selection);
-    if (review.length > 0) doc.review = review;
-    else delete doc.review;
-    if (selection.unattended) doc.unattended = true;
-    else delete doc.unattended;
-  }
-
-  async #writePermissions(ref: ConversationRef, selection: CapabilitySelection): Promise<void> {
-    await this.#harness.commit(async (tx) => {
-      this.#setPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), selection);
-    }, ctx);
   }
 
   // ── Capabilities ──────────────────────────────────────────────────────
@@ -532,45 +452,11 @@ export class AgentRuntime {
     decision: ApprovalDecision,
     options: { grant?: boolean } = {},
   ): Promise<void> {
-    const id = taskId as TaskId;
     try {
-      await this.#harness.commit(async (tx) => {
-        await this.#pendingTask(tx, ref, id, () => new ApprovalNotPendingError(taskId));
-        const doc = await tx.doc(ApprovalDoc, id);
-        if (doc.status !== "pending") throw new ApprovalNotPendingError(taskId);
-        doc.status = decision;
-        if (decision === "approved" && options.grant && doc.grant) {
-          const grants = await tx.doc(GrantsDoc, ref as ConversationId);
-          if (!grants.grants.includes(doc.grant)) grants.grants.push(doc.grant);
-        }
-      }, ctx);
+      await this.#harness.commit((tx) => recordDecision(tx, ref, taskId, decision, options), ctx);
     } catch (error) {
-      if (error instanceof ApprovalNotPendingError) throw error;
-      // A terminal task's documents are sealed: the call already ended.
-      if (error instanceof Error && /terminal/i.test(error.message)) {
-        throw new ApprovalNotPendingError(taskId);
-      }
-      throw error;
+      approvalNotPending(error, taskId);
     }
-  }
-
-  async #pendingTask(
-    tx: Parameters<Parameters<Harness["commit"]>[0]>[0],
-    ref: ConversationRef | undefined,
-    id: TaskId,
-    notPending: () => Error,
-  ): Promise<ConversationRef> {
-    const task = await tx.task(id);
-    if (
-      !task ||
-      (ref !== undefined && Number(task.conversationId) !== ref) ||
-      task.kind !== "pi.tool" ||
-      task.state.status === "terminal" ||
-      task.state.status === "completing"
-    ) {
-      throw notPending();
-    }
-    return Number(task.conversationId);
   }
 
   // ── Credential requests ───────────────────────────────────────────────
@@ -582,47 +468,19 @@ export class AgentRuntime {
   async credentialRequest(
     taskId: number,
   ): Promise<{ conversation: ConversationRef; request: CredentialRequest; expiresAt: number }> {
-    const id = taskId as TaskId;
-    const notPending = () => new CredentialRequestNotPendingError(taskId);
     try {
-      return await this.#harness.commit(async (tx) => {
-        const conversation = await this.#pendingTask(tx, undefined, id, notPending);
-        // Another tool's task has no request (and the throw rolls back the
-        // document this read would create).
-        const doc = await tx.doc(CredentialRequestDoc, id);
-        if (doc.status !== "pending" || !doc.request) throw notPending();
-        if (doc.expiresAt <= Date.now()) throw notPending();
-        return {
-          conversation,
-          // A plain copy: the draft is a proxy that structuredClone can't copy.
-          request: JSON.parse(JSON.stringify(storedRequest(doc))) as CredentialRequest,
-          expiresAt: doc.expiresAt,
-        };
-      }, ctx);
+      return await this.#harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
     } catch (error) {
-      if (error instanceof Error && /terminal/i.test(error.message)) throw notPending();
-      throw error;
+      credentialRequestNotPending(error, taskId);
     }
   }
 
   /** Settle a credential request with the owner's outcome (never values). */
   async settleCredentialRequest(taskId: number, outcome: CredentialRequestOutcome): Promise<void> {
-    const id = taskId as TaskId;
-    const notPending = () => new CredentialRequestNotPendingError(taskId);
     try {
-      await this.#harness.commit(async (tx) => {
-        await this.#pendingTask(tx, undefined, id, notPending);
-        const doc = await tx.doc(CredentialRequestDoc, id);
-        if (doc.status !== "pending" || !doc.request) throw notPending();
-        doc.status = outcome.status;
-        if (outcome.status === "filled") {
-          doc.filled = [...outcome.filled];
-          doc.savedHandle = outcome.savedHandle ?? null;
-        }
-      }, ctx);
+      await this.#harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
     } catch (error) {
-      if (error instanceof Error && /terminal/i.test(error.message)) throw notPending();
-      throw error;
+      credentialRequestNotPending(error, taskId);
     }
   }
 
@@ -642,41 +500,10 @@ export class AgentRuntime {
     taskId: number,
     answers: OwnerAnswer[] | null,
   ): Promise<void> {
-    const id = taskId as TaskId;
     try {
-      await this.#harness.commit(async (tx) => {
-        const task = await tx.task(id);
-        if (
-          !task ||
-          Number(task.conversationId) !== ref ||
-          task.kind !== "pi.tool" ||
-          task.state.status === "terminal" ||
-          task.state.status === "completing"
-        ) {
-          throw new QuestionNotPendingError(taskId);
-        }
-        // Another tool's task has no questions (and the throw rolls back the
-        // document this read would create).
-        const doc = await tx.doc(QuestionsDoc, id);
-        if (doc.status !== "pending" || doc.questions.length === 0) {
-          throw new QuestionNotPendingError(taskId);
-        }
-        if (answers) {
-          doc.answers = checkAnswers(storedQuestions(doc), answers) as unknown as JsonValue[];
-          doc.status = "answered";
-        } else {
-          doc.status = "dismissed";
-        }
-      }, ctx);
+      await this.#harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
     } catch (error) {
-      if (error instanceof QuestionNotPendingError || error instanceof InvalidAnswersError) {
-        throw error;
-      }
-      // A terminal task's documents are sealed: the call already ended.
-      if (error instanceof Error && /terminal/i.test(error.message)) {
-        throw new QuestionNotPendingError(taskId);
-      }
-      throw error;
+      questionNotPending(error, taskId);
     }
   }
 
@@ -801,22 +628,15 @@ export class AgentRuntime {
       const message = entry.model?.[0];
       if (!message) continue;
       if ((entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) && message.role === "user") {
-        const text =
-          typeof message.content === "string"
-            ? message.content
-            : message.content
-                .filter((b) => b.type === "text")
-                .map((b) => (b as { text: string }).text)
-                .join("");
-        return { role: "user", text, createdAt: message.timestamp ?? Date.now() };
+        return {
+          role: "user",
+          text: textOf(message.content),
+          createdAt: message.timestamp ?? Date.now(),
+        };
       }
       if (entry.kind === "pi.assistant" && message.role === "assistant") {
-        const text = message.content
-          .filter((b) => b.type === "text")
-          .map((b) => (b as { text: string }).text)
-          .join("");
         const shown =
-          message.stopReason === "error" ? `⚠ ${message.errorMessage || "Model error"}` : text;
+          message.stopReason === "error" ? `⚠ ${modelErrorText(message)}` : textOf(message.content);
         return { role: "assistant", text: shown, createdAt: message.timestamp ?? Date.now() };
       }
     }
@@ -837,14 +657,23 @@ export class AgentRuntime {
   }
 
   /**
-   * The conversation's chat state right now: the same snapshot `watchChat`
-   * delivers first, for one-shot readers (relay, routines, memory capture)
-   * that need the transcript but no stream.
+   * The conversation's chat state right now, for one-shot readers (Settled,
+   * Deliveries, Routine runs, memory capture, history) that need the
+   * transcript but no stream. An idle conversation is read from the store
+   * alone (no watch opened); a busy one through a watch, so its in-flight
+   * reply and tool round show as the stream would show them.
    */
   async readChat(ref: ConversationRef): Promise<ChatState> {
-    const subscription = await this.watchChat(ref, () => undefined);
-    await subscription.stop();
-    return subscription.initial;
+    const conversation = await this.#conversation(ref);
+    if (this.isBusy(ref)) {
+      const subscription = await this.watchChat(ref, () => undefined);
+      await subscription.stop();
+      return subscription.initial;
+    }
+    const projection = new ChatProjection(
+      await this.#snapshot(conversation, ref, { entries: [], busy: false, tools: [] }),
+    );
+    return projection.state;
   }
 
   /**
@@ -867,6 +696,7 @@ export class AgentRuntime {
    * `hasMore`/`cursor` (issue #92). The window's start then stays put, so
    * new messages arrive as upserts and nothing drops out of it; a
    * re-snapshot (a slow client fell behind) re-windows to the newest ones.
+   * The fold itself is `ChatProjection`'s; this method is its event source.
    */
   async watchChat(
     ref: ConversationRef,
@@ -875,47 +705,11 @@ export class AgentRuntime {
   ): Promise<ChatSubscription> {
     const conversation = await this.#conversation(ref);
     const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
-
-    const raw: MutableRaw = {
-      entries: new Map(),
-      live: stream.snapshot.generation?.message
-        ? structuredClone(stream.snapshot.generation.message)
-        : undefined,
-      busy: stream.snapshot.run !== undefined,
-      unanswered: new Map(),
-      tools: liveTools(stream.snapshot.tools),
-      queued: [],
-    };
-    for (const entry of await loadHistory(conversation)) raw.entries.set(Number(entry.id), entry);
-    for (const entry of stream.snapshot.entries) raw.entries.set(Number(entry.id), entry);
-    // Seed the queue from the inbox doc (read after the snapshot, so it is at
-    // least as new): a reload shows what a busy conversation is still holding.
-    await this.#refreshQueued(raw, ref);
-
-    const view = (): RawChat => ({
-      entries: [...raw.entries.values()],
-      live: raw.live,
-      busy: raw.busy,
-      unanswered: raw.unanswered,
-      tools: raw.tools,
-      queued: raw.queued,
-    });
-
-    // The window's first message id, fixed once older messages exist; with
-    // none, the window is the whole transcript and grows from its start.
-    let from: string | undefined;
-    /** `full` as this stream shows it; undefined when `from` is gone. */
-    const windowed = (full: ChatState, fresh: boolean): ChatState | undefined => {
-      if (options.window === undefined) return full;
-      const next = fresh
-        ? windowChat(full, options.window)
-        : windowChat(full, Number.POSITIVE_INFINITY, from);
-      if (next) from = next.hasMore ? next.cursor : undefined;
-      return next;
-    };
-
-    let state: ChatState = windowed(chatState(view()), true)!;
-    const initial = state;
+    const projection = new ChatProjection(
+      await this.#snapshot(conversation, ref, stream.snapshot),
+      options,
+    );
+    const initial = projection.state;
     let stopped = false;
 
     const subscription: ChatSubscription = {
@@ -929,49 +723,66 @@ export class AgentRuntime {
     };
     this.#chats.add(subscription);
 
-    await listener([{ type: "snapshot", state }]);
+    await listener([{ type: "snapshot", state: initial }]);
 
     stream.start(async (events) => {
       if (stopped) return;
-      let resnapshot = false;
-      let inboxChanged = false;
-      for (const event of events) {
-        if (event.type === "snapshot") {
-          resnapshot = true;
-          raw.entries.clear();
-          for (const entry of await loadHistory(conversation)) {
-            raw.entries.set(Number(entry.id), entry);
-          }
-          for (const entry of event.entries) raw.entries.set(Number(entry.id), entry);
-          raw.live = event.generation?.message
-            ? structuredClone(event.generation.message)
-            : undefined;
-          raw.busy = event.run !== undefined;
-          raw.tools = liveTools(event.tools);
-          continue;
+      const outcome = projection.fold(events);
+      if (outcome.resnapshot) {
+        const fresh = events.findLast((event) => event.type === "snapshot");
+        if (fresh && fresh.type === "snapshot") {
+          projection.reset(await this.#snapshot(conversation, ref, fresh));
         }
+      } else if (outcome.inboxChanged) {
         // The inbox doc moved (send while busy, placement, withdrawal); the
         // items' content lives in the doc, not the event.
-        if (event.type === "inbox_update") {
-          inboxChanged = true;
-          continue;
-        }
-        applyEvent(raw, event);
+        projection.setQueued(await this.#queued(ref));
       }
-      if (resnapshot || inboxChanged) await this.#refreshQueued(raw, ref);
-      const full = chatState(view());
-      // The window's first message vanished (never expected): start afresh.
-      const kept = resnapshot ? undefined : windowed(full, false);
-      if (!kept) resnapshot = true;
-      const next = kept ?? windowed(full, true)!;
-      const diff = resnapshot
-        ? [{ type: "snapshot", state: next } as ChatEvent]
-        : diffChat(state, next);
-      state = next;
+      const diff = projection.flush({ resnapshot: outcome.resnapshot });
       if (diff.length > 0) await listener(diff);
     });
 
     return subscription;
+  }
+
+  /**
+   * Everything a projection starts from: the full stored history (not just
+   * what the model still sees), the stream's view of the in-flight reply
+   * and tool round, the queue, and the unanswered reasons recorded on the
+   * conversation's submissions (so they survive a reconnect and show in a
+   * one-shot read, not only after a live `submission` event).
+   */
+  async #snapshot(
+    conversation: Conversation,
+    ref: ConversationRef,
+    live: {
+      entries: readonly EntryRecord[];
+      generation?: { message?: ProjectionSnapshot["live"] };
+      run?: unknown;
+      busy?: boolean;
+      tools: ProjectionSnapshot["tools"];
+    },
+  ): Promise<ProjectionSnapshot> {
+    const entries = new Map<number, EntryRecord>();
+    for (const entry of await loadHistory(conversation)) entries.set(Number(entry.id), entry);
+    for (const entry of live.entries) entries.set(Number(entry.id), entry);
+    const inspection = await this.#harness.inspect(ctx);
+    const records = inspection.submissions.filter(
+      (record) => Number(record.conversationId) === ref,
+    );
+    const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
+    const items = inbox?.items ?? [];
+    return {
+      entries: [...entries.values()],
+      live: live.generation?.message,
+      busy: live.busy ?? live.run !== undefined,
+      tools: live.tools,
+      queued:
+        items.length === 0
+          ? []
+          : queuedOf(items, new Map(records.map((record) => [String(record.id), record]))),
+      unanswered: unansweredOf(records),
+    };
   }
 
   // ── Activity (bot list "typing…") ─────────────────────────────────────
@@ -1043,25 +854,22 @@ export class AgentRuntime {
   }
 
   /**
-   * Read the conversation's queued owner messages from `pi.inbox`. The inbox
-   * doc holds the items; the submission records (via `inspect()`) supply the
+   * The conversation's queued owner messages from `pi.inbox`. The inbox doc
+   * holds the items; the submission records (via `inspect()`) supply the
    * request ids withdrawal addresses. Both reads are plain snapshots, newer
    * than any event that triggered the refresh.
    */
-  async #refreshQueued(raw: MutableRaw, ref: ConversationRef): Promise<void> {
+  async #queued(ref: ConversationRef): Promise<QueuedMessage[]> {
     const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
     const items = inbox?.items ?? [];
-    if (items.length === 0) {
-      raw.queued = [];
-      return;
-    }
+    if (items.length === 0) return [];
     const inspection = await this.#harness.inspect(ctx);
     const records = new Map(
       inspection.submissions
         .filter((record) => Number(record.conversationId) === ref)
         .map((record) => [String(record.id), record]),
     );
-    raw.queued = queuedOf(items, records);
+    return queuedOf(items, records);
   }
 
   async #conversation(ref: ConversationRef): Promise<Conversation> {
@@ -1093,123 +901,4 @@ async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
     cursor = page.next;
   } while (cursor !== undefined);
   return entries;
-}
-
-type MutableRaw = {
-  entries: Map<number, EntryRecord>;
-  live?: AssistantMessage;
-  busy: boolean;
-  unanswered: Map<number, string>;
-  tools: Map<string, LiveTool>;
-  queued: QueuedMessage[];
-};
-
-/** Model-issued calls of the current round (nested calls live in `nestedTools`). */
-function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
-  const tools = new Map<string, LiveTool>();
-  for (const slot of slots) {
-    tools.set(slot.callId, {
-      status: slot.status,
-      ...(slot.taskId !== undefined ? { taskId: Number(slot.taskId) } : {}),
-      ...(slot.output ? { output: slot.output } : {}),
-      ...(slot.details !== undefined ? { details: slot.details } : {}),
-    });
-  }
-  return tools;
-}
-
-function applyEvent(raw: MutableRaw, event: AgentEvent): void {
-  switch (event.type) {
-    case "tool_execution_start":
-      if (event.parentToolCallId === undefined) {
-        raw.tools.set(event.toolCallId, {
-          status: "running",
-          ...(event.taskId !== undefined ? { taskId: Number(event.taskId) } : {}),
-        });
-      }
-      break;
-    case "tool_execution_update": {
-      const slot = raw.tools.get(event.toolCallId);
-      if (!slot || event.parentToolCallId !== undefined) break;
-      const next: LiveTool = { ...slot };
-      if (event.details !== undefined) next.details = event.details ?? undefined;
-      if (event.output) {
-        next.output =
-          "set" in event.output
-            ? event.output.set
-            : (slot.output ?? "").slice(event.output.trimStart ?? 0) + (event.output.append ?? "");
-      }
-      raw.tools.set(event.toolCallId, next);
-      break;
-    }
-    case "tool_execution_end":
-      if (event.parentToolCallId !== undefined) break;
-      raw.tools.delete(event.toolCallId);
-      if (event.entry) raw.entries.set(Number(event.entry.id), event.entry);
-      break;
-    case "message_start":
-      if (event.message.role === "assistant") raw.live = structuredClone(event.message);
-      break;
-    case "message_update":
-      if (raw.live) for (const change of event.changes) raw.live = applyChange(raw.live, change);
-      break;
-    case "message_end":
-      raw.entries.set(Number(event.entry.id), event.entry);
-      if (event.entry.kind === "pi.assistant") raw.live = undefined;
-      break;
-    case "entry_appended":
-      raw.entries.set(Number(event.entry.id), event.entry);
-      break;
-    case "run_start":
-      raw.busy = true;
-      break;
-    case "run_end":
-      raw.busy = false;
-      raw.live = undefined;
-      raw.tools.clear();
-      break;
-    case "submission":
-      if (
-        event.record.type === "input" &&
-        event.record.status === "unanswered" &&
-        event.record.entry !== undefined
-      ) {
-        raw.unanswered.set(Number(event.record.entry), event.record.reason);
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-function applyChange(message: AssistantMessage, change: MessageChange): AssistantMessage {
-  if (change.type === "message") return structuredClone(change.message);
-  const content = [...message.content];
-  switch (change.type) {
-    case "text_start":
-    case "thinking_start":
-    case "toolcall_start":
-    case "block":
-      content[change.contentIndex] = structuredClone(change.block);
-      break;
-    case "text_delta": {
-      const block = content[change.contentIndex];
-      content[change.contentIndex] =
-        block?.type === "text"
-          ? { ...block, text: block.text + change.delta }
-          : { type: "text", text: change.delta };
-      break;
-    }
-    case "thinking_delta": {
-      const block = content[change.contentIndex];
-      content[change.contentIndex] =
-        block?.type === "thinking"
-          ? { ...block, thinking: block.thinking + change.delta }
-          : { type: "thinking", thinking: change.delta };
-      break;
-    }
-    default:
-      break;
-  }
-  return { ...message, content };
 }

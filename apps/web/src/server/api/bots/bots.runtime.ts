@@ -11,11 +11,8 @@ import {
   createAttachmentsToolkit,
   createBotsToolkit,
   createBrowserToolkit,
-  createChromiumTransport,
   createClassifier,
-  createRemoteCdpTransport,
   createMemoryCapability,
-  createMemoryHostKeyStore,
   createReviewer,
   createRoutinesToolkit,
   createSandboxToolkit,
@@ -30,7 +27,6 @@ import {
   WaitTracker,
   type BotMessagingStore,
   type Capability,
-  type HostKeyStore,
   type Reviewer,
 } from "@tiny-agents/agent";
 import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
@@ -41,7 +37,6 @@ import {
   TEST_MODEL,
 } from "@tiny-agents/agent/testing";
 import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
-import { createNamespaceKv } from "@groot/core/kv";
 import { logger, setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
@@ -51,15 +46,10 @@ import { createAttachmentStore, createVisionStore } from "../uploads/uploads.sto
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
-import { sandboxHost } from "./sandbox-host";
+import { getBrowserSessions } from "./browser.sessions";
+import { sandboxEndpoint, unquoteEnv as unquote } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
-
-const unquote = (value: string | undefined) =>
-  value
-    ?.trim()
-    .replace(/^(['"])([\s\S]*)\1$/, "$2")
-    .trim() || undefined;
 
 /**
  * Calls waiting on the owner's approval, shared by the runtime's approval
@@ -85,10 +75,8 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     createVaultToolkit({ broker: vault }),
     createTodayCapability({ timeZone: unquote(env.TZ) }),
     createSandboxToolkit({
-      host: sandboxHost(env),
-      port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
-      user: unquote(env.SANDBOX_USER),
-      hostKeys: kvHostKeyStore(),
+      // The one endpoint (host, port, user, pinned key) every SSH user shares.
+      ...sandboxEndpoint(env),
       // Vault secrets as env vars for one command, confined to their hosts;
       // with an allowlist, every command is confined to it (issue #56).
       vault,
@@ -99,70 +87,21 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     // the asking conversation.
     createAttachmentsToolkit(
       createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
-      {
-        sandbox: {
-          host: sandboxHost(env),
-          port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
-          user: unquote(env.SANDBOX_USER),
-          hostKeys: kvHostKeyStore(),
-        },
-      },
+      { sandbox: sandboxEndpoint(env) },
     ),
     // Browser (issue #24): one Chrome per profile (shared by default, or the
     // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
     // owner also gets a VNC-streamed desktop.
     createBrowserToolkit({
-      profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
+      // The same manager the routes, the VNC bridge and the credential
+      // request submit act through (browser.sessions.ts).
+      sessions: getBrowserSessions(env),
       resolveTarget: browserTargetForConversation,
-      idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
-      scale: Number(env.BROWSER_SCALE) === 1 ? 1 : 2,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
-      transport: browserTransport(env),
       vault,
       ownerWaits,
     }),
   ];
-}
-
-/**
- * Browser transport for the deploy model: chromium runs on the sandbox VM
- * (SANDBOX_HOST over Tailscale SSH), not in this container. With
- * BROWSER_EXECUTABLE_PATH set we drive that local binary instead (dev on
- * the exe.dev VM); with neither, Playwright's bundled Chromium.
- */
-function browserTransport(env: Env) {
-  const executable = unquote(env.BROWSER_EXECUTABLE_PATH);
-  if (executable) return createChromiumTransport({ executablePath: executable });
-  const host = sandboxHost(env);
-  if (host) {
-    return createRemoteCdpTransport({
-      host,
-      port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
-      user: unquote(env.SANDBOX_USER),
-    });
-  }
-  return createChromiumTransport();
-}
-
-/**
- * The sandbox's TOFU host-key pins, one per host, persisted through the app's
- * KV (the `kv` table) so a restart remembers what it trusted on first
- * connect. The memory fallback keeps tests key-free.
- */
-function kvHostKeyStore(): HostKeyStore {
-  try {
-    const kv = createNamespaceKv("SANDBOX");
-    return {
-      async get(host) {
-        return (await kv.get<string>(host)) ?? undefined;
-      },
-      async set(host, hash) {
-        await kv.set(host, hash);
-      },
-    };
-  } catch {
-    return createMemoryHostKeyStore();
-  }
 }
 
 /** Bot-to-bot messaging (issue #12). The store needs the live runtime for submits. */
@@ -182,10 +121,15 @@ export function visionCapability(
   );
 }
 
-/** One messaging store per process, rebuilt never (the runtime is a singleton too). */
-let messagingStore: BotMessagingStore | undefined;
+/** One messaging store per runtime: a reopened runtime (tests, a restart in-process) gets its own. */
+const messagingStores = new WeakMap<AgentRuntime, BotMessagingStore>();
 function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
-  return (messagingStore ??= createBotMessagingStore(rt));
+  let store = messagingStores.get(rt);
+  if (!store) {
+    store = createBotMessagingStore(rt);
+    messagingStores.set(rt, store);
+  }
+  return store;
 }
 
 let runtime: AgentRuntime | undefined;

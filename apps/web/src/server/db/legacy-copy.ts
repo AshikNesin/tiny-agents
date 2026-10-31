@@ -1,20 +1,23 @@
-import { cpSync, existsSync, readdirSync, renameSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { getTableColumns, getTableName, type Table } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { resolveSqlitePath } from "@groot/core/database/node";
 import { LOCAL_UPLOADS_ROOT } from "@groot/core/storage/node";
-import { createAppDb, type AppDatabase } from "./index";
+import { createAppDb, sqliteConnection, type AppDatabase } from "./index";
 import * as schema from "./schema";
 
 /**
  * One-off move from the Prisma database (tiny-agents before groot 3.0) to the
  * Drizzle one, run on the first boot that finds the old layout.
  *
- * The old file is renamed to `<file>.prisma-backup-<timestamp>` and kept; a
- * fresh database is created at the original path from the Drizzle migrations
- * and every app row is copied across. The Prisma models and the Drizzle tables
+ * The copy is built in a sibling file (`<file>.migrating-<timestamp>`) from
+ * the Drizzle migrations while the old database stays in place and is read
+ * only; it is swapped in, and the old file kept as
+ * `<file>.prisma-backup-<timestamp>`, only once every row has copied. A copy
+ * that fails leaves the old database exactly where it was, so the next boot
+ * finds the Prisma layout again and retries. The Prisma models and the Drizzle tables
  * share table names and field names (columns go camelCase → snake_case), so
  * rows map field by field; dates (ISO text in Prisma's SQLite) become
  * millisecond timestamps, booleans and JSON are normalised. Keyv entries move
@@ -88,64 +91,91 @@ export function copyLegacyDatabase(
 ): AppDatabase & { legacyCopyReport?: LegacyCopyReport } {
   logger.warn({ file }, "Found a pre-Drizzle (Prisma) database; copying it into the new layout");
 
-  // Fold the WAL into the main file so the rename carries every committed row.
+  // Fold the WAL into the main file so the copy and the backup carry every
+  // committed row.
   const old = new Database(file);
   old.pragma("wal_checkpoint(TRUNCATE)");
   old.close();
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backup = `${file}.prisma-backup-${stamp}`;
+  const staging = `${file}.migrating-${stamp}`;
+  // A copy a crash cut short leaves its staging file behind: never the real
+  // database, so it is swept, not resumed.
+  for (const name of readdirSync(path.dirname(file))) {
+    if (name.startsWith(`${path.basename(file)}.migrating-`)) {
+      rmSync(path.join(path.dirname(file), name), { force: true });
+    }
+  }
+
+  const report: LegacyCopyReport = { backup, rows: {}, kv: 0, uploadsCopied: false };
+  const target = createAppDb(`file:${staging}`, { migrationsFolder: options.migrationsFolder });
+  const source = new Database(file, { readonly: true, fileMustExist: true });
+  try {
+    copyRows(source, target, report);
+    // Checkpoint so the staging file is whole before it moves.
+    sqliteConnection(target).pragma("wal_checkpoint(TRUNCATE)");
+  } catch (error) {
+    source.close();
+    sqliteConnection(target).close();
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(staging + suffix, { force: true });
+    logger.error({ error, file }, "Copying the pre-Drizzle database failed; it is left as it was");
+    throw error;
+  }
+  source.close();
+  sqliteConnection(target).close();
+
+  // Every row is across: the old file becomes the backup, the copy takes its place.
   renameSync(file, backup);
   for (const suffix of ["-wal", "-shm"]) {
     if (existsSync(file + suffix)) renameSync(file + suffix, backup + suffix);
   }
-
-  const db = createAppDb(url, { migrationsFolder: options.migrationsFolder });
-  const source = new Database(backup, { readonly: true, fileMustExist: true });
-  const report: LegacyCopyReport = { backup, rows: {}, kv: 0, uploadsCopied: false };
-  try {
-    const sourceTables = new Set(
-      source
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-        .all()
-        .map((row) => (row as { name: string }).name),
-    );
-    db.transaction((tx) => {
-      for (const table of COPIED_TABLES) {
-        const name = getTableName(table);
-        if (!sourceTables.has(name)) continue;
-        const rows = source.prepare(`SELECT * FROM "${name}"`).all() as Record<string, unknown>[];
-        const converted = rows.map((row) => convertRow(table, row));
-        // Old job ids point at the retired queue; routines re-arm on boot.
-        if (table === schema.routines) for (const row of converted) row.pendingJobId = null;
-        for (let i = 0; i < converted.length; i += 200) {
-          tx.insert(table)
-            .values(converted.slice(i, i + 200) as never)
-            .run();
-        }
-        report.rows[name] = converted.length;
-      }
-      if (sourceTables.has("keyv")) {
-        const entries = source.prepare(`SELECT key, value FROM keyv`).all() as {
-          key: string;
-          value: string;
-        }[];
-        for (const entry of entries) {
-          const kvRow = convertKeyvEntry(entry);
-          if (!kvRow) continue;
-          tx.insert(schema.kv).values(kvRow).onConflictDoNothing().run();
-          report.kv += 1;
-        }
-      }
-    });
-  } finally {
-    source.close();
-  }
+  renameSync(staging, file);
+  for (const suffix of ["-wal", "-shm"]) rmSync(staging + suffix, { force: true });
 
   if (options.uploadsRoot) report.uploadsCopied = copyLegacyUploads(options.uploadsRoot);
 
   logger.warn({ ...report }, "Copied the pre-Drizzle database; the old file is kept as a backup");
+  const db = createAppDb(url, { migrationsFolder: options.migrationsFolder });
   return Object.assign(db, { legacyCopyReport: report });
+}
+
+/** Copy every app table and the Keyv entries from the old database into the new one. */
+function copyRows(source: Database.Database, target: AppDatabase, report: LegacyCopyReport): void {
+  const sourceTables = new Set(
+    source
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all()
+      .map((row) => (row as { name: string }).name),
+  );
+  target.transaction((tx) => {
+    for (const table of COPIED_TABLES) {
+      const name = getTableName(table);
+      if (!sourceTables.has(name)) continue;
+      const rows = source.prepare(`SELECT * FROM "${name}"`).all() as Record<string, unknown>[];
+      const converted = rows.map((row) => convertRow(table, row));
+      // Old job ids point at the retired queue; routines re-arm on boot.
+      if (table === schema.routines) for (const row of converted) row.pendingJobId = null;
+      for (let i = 0; i < converted.length; i += 200) {
+        tx.insert(table)
+          .values(converted.slice(i, i + 200) as never)
+          .run();
+      }
+      report.rows[name] = converted.length;
+    }
+    if (sourceTables.has("keyv")) {
+      const entries = source.prepare(`SELECT key, value FROM keyv`).all() as {
+        key: string;
+        value: string;
+      }[];
+      for (const entry of entries) {
+        const kvRow = convertKeyvEntry(entry);
+        if (!kvRow) continue;
+        tx.insert(schema.kv).values(kvRow).onConflictDoNothing().run();
+        report.kv += 1;
+      }
+    }
+  });
 }
 
 /** Map an old row onto a table's fields, converting each value to the field's mode. */

@@ -5,24 +5,51 @@
  * toolkit uses).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { api, createTestApp } from "../helpers";
 import { db, bots } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { vi } from "vite-plus/test";
 import {
-  createBrowserToolkit,
-  getLiveBrowserSession,
-  resetBrowserSessionsForTests,
+  createBrowserSessions,
+  type BrowserSessions,
+  type BrowserSessionsOptions,
   type BrowserSession,
+  type BrowserTarget,
+  type BrowserTransport,
   type BrowserVnc,
 } from "../../../packages/agent/src/toolkits/browser";
+import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
+
+/**
+ * The manager the routes act through. One per test; `install` swaps the
+ * transport its next open uses (the way a test used to swap the toolkit's),
+ * so browsers already live stay live across an install.
+ */
+let sessions: BrowserSessions | undefined;
+let currentTransport: BrowserTransport = async () => fakeSession().session;
+function freshManager(): BrowserSessions {
+  sessions = createBrowserSessions({
+    profilesDir: "/tmp/ta-route-profiles",
+    transport: (dir, open) => currentTransport(dir, open),
+  });
+  setBrowserSessionsForTests(sessions);
+  return sessions;
+}
+function install(options: Pick<BrowserSessionsOptions, "transport" | "profilesDir">) {
+  currentTransport = options.transport!;
+  return sessions ?? freshManager();
+}
+const getLiveBrowserSession = (target: BrowserTarget) => sessions?.get(target);
+/** Nothing live, nothing opening: the routes see no browser. */
+async function resetBrowserSessionsForTests() {
+  await sessions?.closeAll();
+}
 import {
   redeemVncTicket,
   resetVncTicketsForTests,
 } from "../../../apps/web/src/server/api/bots/browser.vnc";
 
-const token = await generateToken({ userId: 1, email: "browser-test@example.com" });
+const token = await authToken("browser-test@example.com");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
 type Data = any;
@@ -84,9 +111,7 @@ function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
   };
 }
 
-// The routes read sessions through the toolkit's exported helpers; the test
-// injects by calling the internal map through a probe conversation id.
-import { acquire } from "../../../packages/agent/src/toolkits/browser";
+import { authToken } from "../fixtures";
 
 const agentRuntime = {
   createConversation: vi
@@ -120,12 +145,9 @@ describe("browser routes", () => {
 
   // Installs the fake as the live session for this bot (headless or VNC).
   async function openFake(options: { vnc?: boolean; resizeError?: string } = {}) {
-    resetBrowserSessionsForTests();
+    await sessions?.closeAll();
     fake = fakeSession(options);
-    await acquire(
-      { transport: async () => fake.session, profilesDir: "/tmp/ta-route-profiles" },
-      target,
-    );
+    await install({ transport: async () => fake.session }).acquire(target);
   }
 
   beforeEach(async () => {
@@ -139,12 +161,14 @@ describe("browser routes", () => {
   });
 
   afterEach(async () => {
-    resetBrowserSessionsForTests();
+    await sessions?.closeAll();
+    sessions = undefined;
+    setBrowserSessionsForTests(undefined);
     await db.delete(bots);
   });
 
   it("reports inactive status when no session exists", async () => {
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
     const r = await get(`/api/v1/bots/${botId}/browser`);
     expect(r.status).toBe(200);
     expect(r.body.data).toEqual({
@@ -180,9 +204,9 @@ describe("browser routes", () => {
   });
 
   it("starts the browser on request and reports it live", async () => {
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
     const next = fakeSession({ vnc: true });
-    createBrowserToolkit({
+    install({
       transport: async () => next.session,
       profilesDir: "/tmp/ta-route-profiles",
     });
@@ -194,8 +218,8 @@ describe("browser routes", () => {
   });
 
   it("surfaces why a requested start failed", async () => {
-    resetBrowserSessionsForTests();
-    createBrowserToolkit({
+    await resetBrowserSessionsForTests();
+    install({
       transport: async () => {
         throw new Error("VM exec failed: no sudo");
       },
@@ -232,7 +256,7 @@ describe("browser routes", () => {
 
   it("refuses a VNC ticket without a VNC browser or a session", async () => {
     expect((await post(`/api/v1/bots/${botId}/browser/vnc-ticket`)).status).toBe(409);
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
     expect((await post(`/api/v1/bots/${botId}/browser/vnc-ticket`)).status).toBe(404);
   });
 
@@ -297,7 +321,7 @@ describe("browser routes", () => {
   });
 
   it("404s driver flip when no session exists", async () => {
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
     expect((await post(`/api/v1/bots/${botId}/browser/driver`, { driver: "human" })).status).toBe(
       404,
     );
@@ -311,7 +335,7 @@ describe("browser routes", () => {
   });
 
   it("gives bots on the shared profile one browser, each with its own tab", async () => {
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
     const tabs: string[] = [];
     const tab = (url: string): BrowserSession => ({ ...fakeSession().session, url: () => url });
     const browser: BrowserSession = {
@@ -323,7 +347,7 @@ describe("browser routes", () => {
       },
     };
     let launches = 0;
-    createBrowserToolkit({
+    install({
       transport: async () => {
         launches += 1;
         return browser;
@@ -358,7 +382,7 @@ describe("browser routes", () => {
     expect(patched.status).toBe(200);
     const own = { profile: `bot-${botId}`, tab: botId };
     const ownFake = fakeSession();
-    createBrowserToolkit({
+    install({
       transport: async () => ownFake.session,
       profilesDir: "/tmp/ta-route-profiles",
     });

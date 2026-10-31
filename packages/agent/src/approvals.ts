@@ -1,19 +1,23 @@
 /**
- * Tool approvals (issue #1 D3/D4).
+ * Tool approvals (issue #1 D3/D4): the owner-wait of a gated tool call, end
+ * to end. This module owns the approval's document, the card details the
+ * chat renders (produced and parsed here, nowhere else), the host side that
+ * records the owner's decision, and the gate that wraps every capability
+ * tool:
  *
- * Every capability tool is installed through `gateExtension`, which wraps it
- * in a replay-safe gate:
- *
- * - A conversation's `tiny.permissions` document lists the tools that run
- *   without asking (written by `AgentRuntime.configure`). A conversation
- *   without the document predates permissions and runs everything.
+ * - A conversation's `tiny.permissions` document (`policy.ts`) lists the
+ *   tools that run without asking. A conversation without the document
+ *   predates permissions and runs everything.
  * - A tool that must ask waits on its task-scoped `tiny.approval` document
  *   (`waitForOwner`, see `waiting.ts`), publishing `{ approval: "pending" }`
- *   details the chat renders the card from, until the host writes a decision
- *   (`AgentRuntime.decideApproval`).
+ *   details until the host records a decision (`recordDecision`, reached
+ *   through `AgentRuntime.decideApproval`). Only a call that is waiting can
+ *   be decided: the document is marked `asked` by the wait itself, so a
+ *   decision for a running call that never asked is refused.
  * - The side effect itself keeps the wrapped tool's replay policy: for a tool
  *   that is not replay-safe, a durable memo records that the effect started, so
- *   a crash during it reports "interrupted" instead of running it twice.
+ *   a crash during it reports "interrupted" instead of running it twice. A
+ *   tool whose call is replay-safe for some arguments says so (`replaySafe`).
  * - A tool can carry a gate plan (`withGatePlan`, used by vault sinks, issue
  *   #56): decided once per call before anything runs, it may refuse the call,
  *   ask even where the tool is allowed, add to the card, offer a standing
@@ -23,50 +27,50 @@
  *   permissions list under `review`; an approval skips the card. Vault calls
  *   always ask. The verdict is memoized, so a replay never re-asks.
  * - A conversation nobody watches (`unattended`, a routine's, issue #63)
- *   never asks: a call that would wait for the owner is refused instead,
- *   with `{ approval: "refused" }` details the host fails the run on.
+ *   never asks: a call that would wait for the owner is refused instead
+ *   (`refuseUnattended`), which a Routine run reads as blocked.
  * - Every result leaves the gate scrubbed of registered secret values.
  */
 import type { Context } from "@earendil-works/chord";
 import {
   defineDoc,
   type Extension,
+  type TaskId,
   type ToolExecutionApi,
   type ToolExecutionResult,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
+import { isUnattendedConversation, mayAutoReview, mustAsk, PermissionsDoc } from "./policy";
 import { secretRedactor } from "./redact";
 import { ownerMessages, type GateReview, type ReviewVerdict } from "./reviewer";
-import { waitForOwner, type WaitTracker } from "./waiting";
+import type { ChatVaultUse } from "./types";
+import { GrantsDoc } from "./vault";
+import {
+  pendingToolTask,
+  refuseUnattended,
+  sealedAsNotPending,
+  unattendedOnce,
+  waitForOwner,
+  type HostTx,
+  type WaitTracker,
+} from "./waiting";
 
-/**
- * Which tools of the conversation run without asking (`allow`), which of the
- * asking ones auto-review may approve (`review`, absent when it is off), and
- * whether nobody is there to ask (`unattended`, absent when someone is).
- */
-export const PermissionsDoc = defineDoc<{
-  allow: string[];
-  review?: string[];
-  unattended?: boolean;
-}>({
-  kind: "tiny.permissions",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "current",
-  initial: () => ({ allow: [] }),
-  checkpointWhen: () => false,
-});
+// Read by tools that decide their own unattended behaviour (routines, browser).
+export { isUnattendedConversation, PermissionsDoc };
 
 export type ApprovalDecision = "approved" | "denied";
 
 /**
- * One gated tool call's approval, owned by its tool task. `grant` is the
- * standing grant the card offers; `expiresAt` makes it settle as `expired`.
+ * One gated tool call's approval, owned by its tool task. `asked` is set by
+ * the wait that created it: a document a host answer would create itself
+ * (for a call that never asked) has it unset, and the answer is refused.
+ * `grant` is the standing grant the card offers; `expiresAt` makes it settle
+ * as `expired`.
  */
 export const ApprovalDoc = defineDoc<{
   status: "pending" | ApprovalDecision | "expired";
+  asked?: boolean;
   grant?: string;
   expiresAt?: number;
 }>({
@@ -77,7 +81,131 @@ export const ApprovalDoc = defineDoc<{
   checkpointWhen: () => false,
 });
 
+/** The approval was already answered, or its tool call ended or never asked. */
+export class ApprovalNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for approval`);
+    this.name = "ApprovalNotPendingError";
+  }
+}
+
+// ── The card's details: one shape, produced and parsed here ─────────────
+
+/** How a gated call stands with the owner, as its tool details say it. */
+export type ApprovalState = "pending" | "approved" | "denied" | "expired" | "auto" | "refused";
+
+/** What the chat reads off a gated call's details. */
+export interface ApprovalView {
+  state: ApprovalState;
+  /** Time the call waited for the owner (not part of its run time). */
+  waitedMs?: number;
+  /** Pending only: when the approval expires. */
+  expiresAt?: number;
+  /** Pending vault calls: the item and target the card shows. */
+  vault?: ChatVaultUse;
+  /** The wrapped tool's own details, once it ran. */
+  result?: unknown;
+  /** The call was cut off by a restart after approval. */
+  interrupted?: boolean;
+}
+
+const record = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const APPROVAL_STATES: ReadonlySet<string> = new Set([
+  "pending",
+  "approved",
+  "denied",
+  "expired",
+  "auto",
+  "refused",
+]);
+
+/** The approval view of a tool call's details; undefined for a call that never asked. */
+export function approvalOf(details: unknown): ApprovalView | undefined {
+  const own = record(details);
+  const state = own?.approval;
+  if (typeof state !== "string" || !APPROVAL_STATES.has(state)) return undefined;
+  const vault = record(own?.vault);
+  return {
+    state: state as ApprovalState,
+    ...(typeof own?.waitedMs === "number" ? { waitedMs: own.waitedMs } : {}),
+    ...(typeof own?.expiresAt === "number" ? { expiresAt: own.expiresAt } : {}),
+    ...(state === "pending" && vault && typeof vault.handle === "string"
+      ? { vault: vault as unknown as ChatVaultUse }
+      : {}),
+    ...(own && "result" in own ? { result: own.result } : {}),
+    ...(own?.interrupted === true ? { interrupted: true } : {}),
+  };
+}
+
+/**
+ * The wrapped tool's own details, for parsers of other wait kinds: a tool
+ * that asked first keeps its details under `result`; one that did not has
+ * them at the top.
+ */
+export function innerDetails(details: unknown): Record<string, unknown> | undefined {
+  const own = record(details);
+  if (!own) return undefined;
+  return own.approval !== undefined && "result" in own ? record(own.result) : own;
+}
+
 const text = (value: string) => [{ type: "text" as const, text: value }];
+
+/** A gated call's result once the owner declined, in either way. */
+function declinedResult(
+  tool: string,
+  decision: "denied" | "expired",
+  waitedMs: number,
+): ToolExecutionResult {
+  return {
+    output: text(
+      decision === "expired"
+        ? `Nobody answered the approval for this ${tool} call in time, so it did not run. Tell the owner what you needed; do not retry it unless asked.`
+        : `The owner denied this ${tool} call. Do not retry it unless asked.`,
+    ),
+    isError: true,
+    details: { approval: decision, waitedMs },
+  };
+}
+
+// ── Host side: the owner's decision ─────────────────────────────────────
+
+/**
+ * Record the owner's decision on a waiting call, in the host's transaction.
+ * With `grant`, an approval also records the standing grant the card
+ * offered. Throws `ApprovalNotPendingError` for a call that is not waiting:
+ * already decided, ended, never asked (the document was never marked
+ * `asked` by a wait) or still planning.
+ */
+export async function recordDecision(
+  tx: HostTx,
+  conversation: number,
+  taskId: number,
+  decision: ApprovalDecision,
+  options: { grant?: boolean } = {},
+): Promise<void> {
+  const id = taskId as TaskId;
+  const notPending = () => new ApprovalNotPendingError(taskId);
+  await pendingToolTask(tx, id, conversation, notPending);
+  const doc = await tx.doc(ApprovalDoc, id);
+  if (doc.asked !== true || doc.status !== "pending") throw notPending();
+  doc.status = decision;
+  if (decision === "approved" && options.grant && doc.grant) {
+    const grants = await tx.doc(GrantsDoc, conversation as never);
+    if (!grants.grants.includes(doc.grant)) grants.grants.push(doc.grant);
+  }
+}
+
+/** Map a sealed-document error (the call ended) to `ApprovalNotPendingError`. */
+export function approvalNotPending(error: unknown, taskId: number): never {
+  if (error instanceof ApprovalNotPendingError) throw error;
+  return sealedAsNotPending(error, () => new ApprovalNotPendingError(taskId));
+}
+
+// ── The gate ────────────────────────────────────────────────────────────
 
 /** A tool's own say in its gate, decided once per call (memoized for replays). */
 export interface GatePlan {
@@ -103,6 +231,12 @@ export interface GateHooks<TArgs = never> {
     context: Context,
     decision: "denied" | "expired",
   ): Promise<void>;
+  /**
+   * The call is replay-safe for these arguments even though the tool is not
+   * (it only waits on the owner, e.g. `browser_enter_code` without a vault
+   * handle): a restart re-attaches instead of reporting "interrupted".
+   */
+  replaySafe?(args: TArgs): boolean;
 }
 
 const gateHooks = new WeakMap<ToolRegistration, GateHooks<never>>();
@@ -165,13 +299,9 @@ export function gateTool(
         context,
       );
       if (ask && (await unattendedOnce(api, context))) {
-        return {
-          output: text(
-            `${tool.name} needs the owner's approval, and nobody is here to give it: this is a scheduled routine run. It did not run. Finish without it and say what it was for.`,
-          ),
-          isError: true,
-          details: { approval: "refused" },
-        };
+        return refuseUnattended(
+          `${tool.name} needs the owner's approval, and nobody is here to give it: this is a scheduled routine run. It did not run. Finish without it and say what it was for.`,
+        );
       }
       // Vault uses always reach the owner: their policy, not the classifier, decides.
       const verdict =
@@ -187,25 +317,12 @@ export function gateTool(
         waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
         if (decision !== "approved") {
           await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
-          return decision === "expired"
-            ? {
-                output: text(
-                  `Nobody answered the approval for this ${tool.name} call in time, so it did not run. Tell the owner what you needed; do not retry it unless asked.`,
-                ),
-                isError: true,
-                details: { approval: "expired", waitedMs },
-              }
-            : {
-                output: text(
-                  `The owner denied this ${tool.name} call. Do not retry it unless asked.`,
-                ),
-                isError: true,
-                details: { approval: "denied", waitedMs },
-              };
+          return declinedResult(tool.name, decision, waitedMs);
         }
         await api.memo("gate:approved", true, context);
       }
-      if (tool.replay !== "safe") {
+      const replaySafe = tool.replay === "safe" || hooks?.replaySafe?.(args as never) === true;
+      if (!replaySafe) {
         if (await api.memo<boolean>("gate:effect", context)) {
           return {
             output: text(
@@ -267,8 +384,7 @@ async function reviewOnce(
 ): Promise<ReviewVerdict | undefined> {
   const stored = await api.memo<JsonObject>("gate:review", context);
   if (stored) return stored as unknown as ReviewVerdict;
-  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
-  if (!permissions?.review?.includes(name)) return undefined;
+  if (!(await mayAutoReview(name, api, context))) return undefined;
   const messages = ownerMessages(await review.recentEntries(Number(api.conversationId)));
   if (!messages) return undefined;
   const { instructions } = await api.agent(context);
@@ -283,25 +399,6 @@ async function reviewOnce(
     Object.entries(verdict).filter(([, value]) => value !== undefined),
   ) as JsonObject;
   return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
-}
-
-/** Whether nobody watches the conversation, decided once per call (a replay keeps the answer). */
-async function unattendedOnce(api: ToolExecutionApi, context: Context): Promise<boolean> {
-  return api.memo("gate:unattended", await isUnattendedConversation(api, context), context);
-}
-
-/** The conversation's permissions say nobody is there to answer (a routine's, issue #63). */
-export async function isUnattendedConversation(
-  api: ToolExecutionApi,
-  context: Context,
-): Promise<boolean> {
-  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
-  return permissions?.unattended === true;
-}
-
-async function mustAsk(name: string, api: ToolExecutionApi, context: Context): Promise<boolean> {
-  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
-  return permissions !== undefined && !permissions.allow.includes(name);
 }
 
 /**
@@ -342,6 +439,8 @@ async function waitForDecision(
       }) as JsonObject,
     context,
     (value) => {
+      // The wait marks the document: only a call that asked can be decided.
+      value.asked = true;
       if (plan?.grant && value.grant === undefined) value.grant = plan.grant;
       if (plan?.expiresInMs && value.expiresAt === undefined) {
         value.expiresAt = Date.now() + plan.expiresInMs;

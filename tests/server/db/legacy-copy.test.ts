@@ -225,6 +225,36 @@ describe("legacy (Prisma) database copy", () => {
     ]);
   });
 
+  it("leaves the old database in place when the copy fails, and retries next boot", async () => {
+    const sqlite = new Database(file);
+    sqlite.prepare(`UPDATE bots SET createdAt = 'yesterday-ish' WHERE id = 'cbot1'`).run();
+    sqlite.close();
+
+    expect(() => openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS })).toThrow(
+      /Unreadable date/,
+    );
+    // Nothing moved: no backup, no staging file, the Prisma layout still there.
+    expect(readdirSync(dir).filter((name) => name !== "app.db")).toEqual([]);
+    expect(isLegacyLayout(file)).toBe(true);
+
+    // The owner repairs the row; the next boot finds the old layout and copies it.
+    const repair = new Database(file);
+    repair.prepare(`UPDATE bots SET createdAt = '2026-10-20T10:00:00.000+00:00'`).run();
+    repair.close();
+    const db = openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
+    expect(isLegacyLayout(file)).toBe(false);
+    expect(await db.$count(schema.bots)).toBe(1);
+    expect(readdirSync(dir).some((name) => name.includes(".migrating-"))).toBe(false);
+  });
+
+  it("sweeps a staging file a crashed copy left behind", async () => {
+    const stale = path.join(dir, "app.db.migrating-2026-01-01T00-00-00-000Z");
+    new Database(stale).close();
+    const db = openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
+    expect(existsSync(stale)).toBe(false);
+    expect(await db.$count(schema.bots)).toBe(1);
+  });
+
   it("does nothing once the database is in the Drizzle layout", async () => {
     openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
     const before = readdirSync(dir).length;

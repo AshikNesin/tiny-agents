@@ -28,11 +28,11 @@ import {
   cancelRequest,
 } from "../../../apps/web/src/server/api/vault/vault.requests.service";
 import {
-  closeBrowserSession,
-  createBrowserToolkit,
-  startBrowserSession,
+  createBrowserSessions,
   type BrowserSession,
+  type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
+import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 import type { SecretFill } from "../../../packages/agent/src/toolkits/browser-fill";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
@@ -475,15 +475,18 @@ describe("credential request submit", () => {
     settleCredentialRequest: vi.fn(async () => {}),
   });
 
+  let sessions: BrowserSessions;
   beforeEach(async () => {
     fills.length = 0;
     origin = "https://hi.nesin.io";
-    createBrowserToolkit({ transport: async () => session });
-    await startBrowserSession(target);
+    sessions = createBrowserSessions({ transport: async () => session });
+    setBrowserSessionsForTests(sessions);
+    await sessions.start(target);
   });
 
   afterEach(async () => {
-    await closeBrowserSession(target);
+    await sessions.closeAll();
+    setBrowserSessionsForTests(undefined);
   });
 
   it("fills the page, saves a login and tells the bot only the keys", async () => {

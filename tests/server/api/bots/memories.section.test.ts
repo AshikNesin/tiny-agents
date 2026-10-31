@@ -26,21 +26,12 @@ import {
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
 import { bots, db, memories } from "../../../../apps/web/src/server/db";
+import { until } from "../../fixtures";
 
 let agentDir: string | null = null;
 afterAll(async () => {
   if (agentDir) await rm(agentDir, { recursive: true, force: true });
 });
-
-async function until<T>(read: () => T | undefined | false): Promise<T> {
-  const deadline = Date.now() + 5_000;
-  for (;;) {
-    const value = read();
-    if (value) return value;
-    if (Date.now() >= deadline) throw new Error("Timed out waiting for memory tool");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 it(
   "remember asks before saving, injects the fact into a fresh chat, and forget removes it",

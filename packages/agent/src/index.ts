@@ -30,7 +30,30 @@ export {
   type ToolInfo,
   type ToolPermission,
 } from "./capabilities";
-export type { ApprovalDecision } from "./approvals";
+export {
+  approvalOf,
+  recordDecision,
+  type ApprovalDecision,
+  type ApprovalState,
+  type ApprovalView,
+  type GateHooks,
+  type GatePlan,
+} from "./approvals";
+export {
+  applyPermissions,
+  compilePolicy,
+  PermissionsDoc,
+  resolveModelId,
+  type CompiledPolicy,
+  type Permissions,
+} from "./policy";
+export {
+  ChatProjection,
+  unansweredOf,
+  type FoldOutcome,
+  type ProjectionSnapshot,
+} from "./projection";
+export { refuseUnattended } from "./waiting";
 export {
   classifierFromModels,
   createClassifier,
@@ -68,6 +91,9 @@ export {
 export { REDACTED, SecretRedactor, secretRedactor } from "./redact";
 export {
   CREDENTIAL_REQUEST_TTL_MS,
+  credentialResultDetails,
+  credentialsOf,
+  pendingCredentialDetails,
   SECRET_FIELD_TYPES,
   type CredentialField,
   type CredentialFieldType,
@@ -86,7 +112,7 @@ export {
   type SecretFill,
   type SecretFillField,
 } from "./toolkits/browser-fill";
-export { ASK_OWNER, InvalidAnswersError, MAX_ANSWER_TEXT } from "./toolkits/questions";
+export { ASK_OWNER, InvalidAnswersError, MAX_ANSWER_TEXT, questionsOf } from "./toolkits/questions";
 export {
   createTasksExtension,
   createTasksToolkit,
@@ -150,31 +176,35 @@ export {
   type AttachmentsToolkitOptions,
 } from "./toolkits/attachments";
 export {
-  browserOpenState,
-  browserProfilesDir,
-  browserTabOrigin,
-  fillSecretInBrowser,
-  normalizeCredentialRequest,
   closeAllBrowserSessions,
-  closeBrowserSession,
-  closeBrowserTab,
   conversationBrowserTarget,
+  createBrowserSessions,
   createBrowserToolkit,
-  setDriver,
-  startBrowserSession,
-  getLiveBrowserSession,
-  liveBrowserProfiles,
-  type BrowserToolkitOptions,
-  type BrowserSession,
-  type BrowserTransport,
+  isBlockedPrivateUrl,
+  normalizeCredentialRequest,
+  type BrowserClock,
   type BrowserDriver,
+  type BrowserOpenState,
   type BrowserPhase,
+  type BrowserSession,
+  type BrowserSessions,
+  type BrowserSessionsOptions,
   type BrowserTarget,
+  type BrowserToolkitOptions,
+  type BrowserTransport,
   type BrowserVnc,
   type LiveBrowserSession,
   type LiveBrowserTab,
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";
+export {
+  dialSsh,
+  hostKeyHash,
+  verifyHostKey,
+  DEFAULT_SSH_PORT,
+  DEFAULT_SSH_USER,
+  type SshEndpoint,
+} from "./ssh/connection";
 export {
   createRemoteCdpTransport,
   type RemoteCdpTransportOptions,

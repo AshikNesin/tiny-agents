@@ -5,7 +5,6 @@
  * error.details.process on a busy tab, ticket path shape.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import {
   resetTerminalTicketsForTests,
   redeemTerminalTicket,
@@ -20,8 +19,9 @@ import {
   type TerminalSessionRow,
 } from "../../../packages/agent/src/terminal/terminal";
 import { api, createTestApp, type TestApp } from "../helpers";
+import { authToken } from "../fixtures";
 
-const token = await generateToken({ userId: 1, email: "t@t.dev" });
+const token = await authToken("t@t.dev");
 
 interface Envelope {
   success: boolean;

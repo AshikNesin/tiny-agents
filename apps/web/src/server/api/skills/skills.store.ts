@@ -53,31 +53,41 @@ export const skillStore: SkillStore = {
     return skill ? files(skill.files).find((file) => file.path === path)?.content : undefined;
   },
 
+  /**
+   * A bot saves a skill of its own: a new one under a free name, or a new
+   * version of one already assigned to it. Names are unique in the library,
+   * and a skill the bot does not have (another bot's, a GitHub import) is
+   * never overwritten from a conversation: the owner assigns it instead.
+   */
   async save(conversationId, input) {
-    const { botId } = await assigned(conversationId);
-    const existing = await db.query.skills.findFirst({ where: eq(skills.name, input.name) });
-    const [skill] = existing
-      ? await db
-          .update(skills)
-          .set({ description: input.description, body: input.body })
-          .where(eq(skills.id, existing.id))
-          .returning({ id: skills.id })
-      : await db
-          .insert(skills)
-          .values({
-            name: input.name,
-            description: input.description,
-            body: input.body,
-            source: "bot",
-          })
-          .returning({ id: skills.id });
+    const { botId, skills: own } = await assigned(conversationId);
+    const mine = own.find((skill) => skill.name === input.name);
+    if (mine) {
+      await db
+        .update(skills)
+        .set({ description: input.description, body: input.body })
+        .where(eq(skills.id, mine.id));
+      return { created: false };
+    }
+    const taken = await db.query.skills.findFirst({
+      where: eq(skills.name, input.name),
+      columns: { id: true },
+    });
+    if (taken) {
+      throw new Error(
+        `A skill named "${input.name}" already exists and is not assigned to you. Pick another name, or ask the owner to assign it.`,
+      );
+    }
+    const [skill] = await db
+      .insert(skills)
+      .values({ name: input.name, description: input.description, body: input.body, source: "bot" })
+      .returning({ id: skills.id });
     if (botId) {
-      // Already assigned is fine: the upsert's update was a no-op.
       await db
         .insert(botSkills)
         .values({ botId, skillId: skill!.id })
         .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
     }
-    return { created: !existing };
+    return { created: true };
   },
 };

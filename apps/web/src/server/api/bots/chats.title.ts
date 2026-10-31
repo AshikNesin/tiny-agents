@@ -8,8 +8,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes, stripPeerEnvelope, type AgentRuntime } from "@tiny-agents/agent";
 import { db, botChats } from "../../db";
-import type { CaptureModels } from "./memories.capture";
-import { resolveCaptureModel, resolveCaptureModelId } from "./memories.runner";
+import { resolveSideCallModel, resolveSideCallModelId, type SideCallModels } from "./side-call";
 
 /** Lightweight and on Workers AI, so it needs no provider key of its own. */
 export const DEFAULT_CHAT_TITLE_MODEL = "workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct";
@@ -28,7 +27,7 @@ export interface TitleMessage {
 }
 
 export interface ChatTitler {
-  models: CaptureModels;
+  models: SideCallModels;
   hasModel: AgentRuntime["hasModel"];
   /** CHAT_TITLE_MODEL; the default lightweight model when unset. */
   modelId?: string;
@@ -36,7 +35,7 @@ export interface ChatTitler {
 
 let titler: ChatTitler | undefined;
 
-/** Boot wiring (index.ts). Unset (tests, faux mode) means no title calls. */
+/** Boot wiring (entry.node.ts). Unset (tests, faux mode) means no title calls. */
 export function setChatTitler(next: ChatTitler | undefined): void {
   titler = next;
 }
@@ -91,20 +90,22 @@ export function cleanTitle(raw: string): string | null {
   return title ? title.slice(0, CHAT_TITLE_MAX) : null;
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Chat title timed out")), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+/**
+ * Run a model call with a deadline. The signal reaches the call, so a call
+ * that overruns is aborted rather than left running after the timeout.
+ */
+async function withTimeout<T>(
+  call: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+  what: string,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`${what} timed out`)), ms);
+  try {
+    return await call(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -120,30 +121,36 @@ export async function titlePastChat(
   try {
     const excerpt = titleExcerpt(input.messages, input.botName);
     if (!excerpt) return;
-    const modelId = resolveCaptureModelId(
+    const modelId = resolveSideCallModelId(
       deps,
       input.botModelId,
       deps.modelId?.trim() || DEFAULT_CHAT_TITLE_MODEL,
     );
-    const model = modelId ? resolveCaptureModel(deps.models, modelId) : undefined;
+    const model = modelId ? resolveSideCallModel(deps.models, modelId) : undefined;
     if (!model) {
       logger.warn({ chatId, modelId }, "Chat title model unavailable; keeping the first message");
       return;
     }
     const reply = await withTimeout(
-      deps.models.completeSimple(model, {
-        systemPrompt:
-          "You name chat conversations. Reply with a title of at most 6 words that says what " +
-          "the conversation is about. Plain text only: no quotes, no trailing period, no preamble.",
-        messages: [
+      (signal) =>
+        deps.models.completeSimple(
+          model,
           {
-            role: "user",
-            content: [{ type: "text", text: `Conversation:\n${excerpt}\n\nTitle:` }],
-            timestamp: Date.now(),
+            systemPrompt:
+              "You name chat conversations. Reply with a title of at most 6 words that says what " +
+              "the conversation is about. Plain text only: no quotes, no trailing period, no preamble.",
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "text", text: `Conversation:\n${excerpt}\n\nTitle:` }],
+                timestamp: Date.now(),
+              },
+            ],
           },
-        ],
-      }),
+          { signal },
+        ),
       TITLE_TIMEOUT_MS,
+      "Chat title",
     );
     if (reply.stopReason === "error" || reply.stopReason === "aborted") {
       logger.warn(

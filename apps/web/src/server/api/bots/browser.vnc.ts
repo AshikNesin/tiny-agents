@@ -12,7 +12,8 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
-import { getLiveBrowserSession, type BrowserTarget } from "@tiny-agents/agent";
+import type { BrowserTarget } from "@tiny-agents/agent";
+import { getBrowserSessions } from "./browser.sessions";
 import { createTicketStore, isOriginAllowed, onUpgrade, rejectUpgrade } from "../ws/upgrade";
 
 const MAX_VIEWERS_PER_BOT = 4;
@@ -66,7 +67,7 @@ export function attachBrowserVnc(
     const ticket = redeemVncTicket(url.searchParams.get("ticket") ?? "", botId);
     if (!ticket) return rejectUpgrade(socket, "401 Unauthorized");
 
-    const live = getLiveBrowserSession(ticket.target);
+    const live = getBrowserSessions().get(ticket.target);
     const vnc = live?.session.vnc;
     if (!live || !vnc) return rejectUpgrade(socket, "404 Not Found");
     if ((viewers.get(botId) ?? 0) >= MAX_VIEWERS_PER_BOT) {
@@ -117,7 +118,7 @@ async function bridge(
       ws.ping();
       // An open viewer counts as activity: the idle sweeper must not close
       // a browser someone is watching.
-      const live = getLiveBrowserSession(target);
+      const live = getBrowserSessions().get(target);
       if (live) live.lastActivity = Date.now();
     }, PING_INTERVAL_MS);
     ws.on("pong", () => {

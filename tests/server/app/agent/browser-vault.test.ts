@@ -16,8 +16,10 @@ import {
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
 import {
+  closeAllBrowserSessions,
+  conversationBrowserTarget,
+  createBrowserSessions,
   createBrowserToolkit,
-  resetBrowserSessionsForTests,
   type BrowserSession,
 } from "../../../../packages/agent/src/toolkits/browser";
 import type { SecretFill } from "../../../../packages/agent/src/toolkits/browser-fill";
@@ -170,7 +172,7 @@ const result = (events: ChatEvent[]) =>
 const runtimes: AgentRuntime[] = [];
 afterEach(async () => {
   await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
-  resetBrowserSessionsForTests();
+  await closeAllBrowserSessions();
   secretRedactor.clear();
 });
 
@@ -181,11 +183,10 @@ async function open(
 ) {
   const tracker = new WaitTracker();
   const broker = loginBroker();
-  const browser = createBrowserToolkit({
-    transport: async () => page.session,
-    vault: broker,
-    ownerWaits: tracker,
-  });
+  // The page is already open in the bot's browser: planning a fill never
+  // launches one, so the test opens it the way an earlier navigate would.
+  const sessions = createBrowserSessions({ transport: async () => page.session });
+  const browser = createBrowserToolkit({ sessions, vault: broker, ownerWaits: tracker });
   const runtime = await openTestRuntime({
     storePath: ":memory:",
     capabilities: [browser],
@@ -202,6 +203,7 @@ async function open(
       ...(options.unattended ? { unattended: true } : {}),
     },
   });
+  await sessions.acquire(conversationBrowserTarget(Number(ref)));
   const events: ChatEvent[] = [];
   await runtime.watchChat(ref, (batch) => events.push(...batch));
   return { runtime, ref, events, broker };

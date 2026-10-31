@@ -17,8 +17,8 @@ import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
 import { appConfig } from "./config";
 import { agentDbPath, appEnv, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
-import { asCoreDatabase } from "./db";
-import { openAppDatabase } from "./db/legacy-copy";
+import { applyDatabaseDefaults, openNodeAppDatabase } from "./db/open";
+import { createLifecycle } from "./lifecycle";
 import { startNotifications, notifyVaultAlert } from "./api/notifications/notifications.wiring";
 import { extractionSweep } from "./api/uploads/uploads.extraction";
 import { systemStarted } from "./api/notifications/notifications.events";
@@ -32,6 +32,7 @@ import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { createDeliveries } from "./api/bots/bots.delivery";
 import { onConversationSettled } from "./api/bots/bots.settled";
+import { botListStep } from "./api/bots/bots.list";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
 import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { createMemoryCapture } from "./api/bots/memories.capture";
@@ -54,22 +55,8 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
 
-// tiny-agents kept its database at /data/app.db in production before groot
-// 3.0 (whose default is /data/prod.db). Keep that path when DATABASE_URL is unset.
-if (isProduction && !process.env.DATABASE_URL) process.env.DATABASE_URL = "file:/data/app.db";
-
-/** Migrations ship next to the bundle in production and live in apps/web/drizzle in the repo. */
-function findMigrationsFolder(): string {
-  const candidates = [
-    process.env.GROOT_MIGRATIONS_DIR,
-    path.resolve(here, "drizzle"),
-    path.resolve(process.cwd(), "apps/web/drizzle"),
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (!found)
-    throw new Error(`Drizzle migrations folder not found. Looked in: ${candidates.join(", ")}`);
-  return found;
-}
+// The production database path default (db/open.ts) applies before bootstrap validates.
+applyDatabaseDefaults();
 
 // Sentry is loaded below only when a DSN is configured: importing @sentry/node
 // costs tens of MB of RSS even with nothing to send, and most self-hosted
@@ -81,14 +68,8 @@ bootstrap({
   env: process.env,
   config: appConfig,
   // A database still in the pre-Drizzle (Prisma) layout is copied into a
-  // fresh one on first boot; see db/legacy-copy.ts.
-  db: (validated) =>
-    asCoreDatabase(
-      openAppDatabase(validated.DATABASE_URL, {
-        migrationsFolder: findMigrationsFolder(),
-        uploadsRoot: uploadsRoot(validated),
-      }),
-    ),
+  // fresh one on first boot; see db/legacy-copy.ts and db/open.ts.
+  db: (validated) => openNodeAppDatabase(validated, { besideBundle: here }),
   storage: (validated) => localStorage(uploadsRoot(validated)),
   reportError: (error, context) => captureException?.(error, context),
 });
@@ -152,125 +133,190 @@ async function openRuntime(): Promise<AgentRuntime> {
   }
 }
 
+/**
+ * Boot is a flat list of parts (lifecycle.ts): they start in this order and
+ * stop in reverse, each stop isolated and the whole under a deadline. To add
+ * a part, add an entry; place it after what it needs.
+ */
 async function main(): Promise<void> {
-  const runtime = await openRuntime();
+  const lifecycle = createLifecycle({
+    log: {
+      info: (message) => logger.info(message),
+      warn: (context, message) => logger.warn(context, message),
+    },
+  });
+  const add = lifecycle.add;
+
+  let runtime!: AgentRuntime;
+  add({
+    name: "agent runtime",
+    start: async () => {
+      runtime = await openRuntime();
+    },
+    stop: () => closeAgentRuntime(),
+  });
+
+  // Browsers drive agent work, so they close before the runtime and after
+  // everything that could still ask for a page.
+  add({ name: "browser sessions", stop: () => closeAllBrowserSessions() });
 
   // Remote MCP connections: install cached tools now, connect in the
   // background (never blocks /health or boot).
-  await getConnectionManager()
-    .start(runtime)
-    .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections"));
+  add({
+    name: "mcp connections",
+    start: () =>
+      getConnectionManager()
+        .start(runtime)
+        .catch((error: unknown) => logger.error({ error }, "Failed to start MCP connections")),
+    stop: () => getConnectionManager().close(),
+  });
 
   // Push notifications (issue #57): approvals, questions, failed or long runs
   // and routine results reach the owner's phone. A no-op without Pushover
-  // credentials; never blocks the agent.
-  const notifications = startNotifications(runtime);
-  notificationService.start();
-  // The vault raises owner alerts through a port; pushes are their destination.
-  setVaultAlertSink((kind, title, message) => notifyVaultAlert(kind, title, message));
+  // credentials; never blocks the agent. The vault raises owner alerts
+  // through a port; pushes are their destination.
+  let notifications!: ReturnType<typeof startNotifications>;
+  let unsetVaultAlerts = () => {};
+  add({
+    name: "notifications",
+    start: () => {
+      notifications = startNotifications(runtime);
+      notificationService.start();
+      unsetVaultAlerts = setVaultAlertSink((kind, title, message) =>
+        notifyVaultAlert(kind, title, message),
+      );
+    },
+    stop: () => {
+      unsetVaultAlerts();
+      notifications.stop();
+      notificationService.stop();
+    },
+  });
 
   // Upload extraction (issue #58): files a restart interrupted extract again.
-  void extractionSweep().catch((error: unknown) =>
-    logger.warn({ error }, "Upload extraction sweep failed"),
-  );
+  add({
+    name: "upload extraction sweep",
+    start: () =>
+      void extractionSweep().catch((error: unknown) =>
+        logger.warn({ error }, "Upload extraction sweep failed"),
+      ),
+  });
 
   // A conversation that settles (its reply finished) answers its Deliveries
-  // (issue #12), resolves its awaiting routine runs (issue #63) and updates
-  // the bot list, in that order (bots.settled.ts). The boot sweeps pick up
-  // what a restart interrupted.
-  const { recordReply } = await import("./api/bots/bots.service");
-  const deliveries = createDeliveries(runtime);
-  const routineRuns = startRoutinesWatcher(runtime);
-  void deliveries.sweep().catch(() => undefined);
+  // (issue #12), resolves its awaiting routine runs (issue #63), updates the
+  // bot list, pushes and arms memory capture, in that order (bots.settled.ts).
   // Memory capture (issue #22 phase B): settled Turns arm a debounce; the
   // quiet window or 6 turns later one side-call extracts durable facts off
   // the reply path. Faux mode never makes capture calls.
-  const memoryCapture = fauxMode()
-    ? undefined
-    : createMemoryCapture({
-        captureNow: (conversationId) =>
-          captureConversation(conversationId, {
-            sideCall: {
-              models: runtime.models,
-              hasModel: (id) => runtime.hasModel(id),
-              modelId: appEnv().MEMORY_CAPTURE_MODEL,
-            },
-            readTranscript: async (id) => (await runtime.readChat(id)).messages,
-          }),
-      });
-  onConversationSettled(runtime, [
-    { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
-    { name: "routine runs", run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat) },
-    {
-      name: "bot list",
-      run: async (c) => {
-        const last = await runtime.lastMessage(c.conversationId);
-        // A routine's or a Past chat's conversation matches no bot row: nothing to update.
-        if (last?.role === "assistant") await recordReply(String(c.conversationId), last);
-      },
+  const deliveries = createDeliveries(runtime);
+  let memoryCapture: ReturnType<typeof createMemoryCapture> | undefined;
+  let unsubscribeSettled = () => {};
+  add({
+    name: "settled conversations",
+    start: async () => {
+      const routineRuns = startRoutinesWatcher(runtime);
+      memoryCapture = fauxMode()
+        ? undefined
+        : createMemoryCapture({
+            captureNow: (conversationId) =>
+              captureConversation(conversationId, {
+                sideCall: {
+                  models: runtime.models,
+                  hasModel: (id) => runtime.hasModel(id),
+                  modelId: appEnv().MEMORY_CAPTURE_MODEL,
+                },
+                readTranscript: async (id) => (await runtime.readChat(id)).messages,
+              }),
+          });
+      unsubscribeSettled = onConversationSettled(runtime, [
+        { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
+        {
+          name: "routine runs",
+          run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat),
+        },
+        botListStep(),
+        notifications.onSettled,
+        ...(memoryCapture ? [memoryCapture.onSettled] : []),
+      ]);
     },
-    notifications.onSettled,
-    ...(memoryCapture ? [memoryCapture.onSettled] : []),
-  ]);
+    // Unsubscribe first, then disarm capture timers: nothing may call into
+    // the runtime once it closes.
+    stop: () => {
+      unsubscribeSettled();
+      memoryCapture?.stop();
+    },
+  });
+
+  // Deliveries a restart interrupted are answered once the settled listener
+  // is in place (above), whatever order the boot awaits in.
+  add({ name: "delivery sweep", start: () => void deliveries.sweep().catch(() => undefined) });
 
   // Past-chat titles (issue #101): one lightweight side-call per "New chat"
   // names the chat that ended. Faux mode keeps the first-message titles.
-  if (!fauxMode()) {
-    setChatTitler({
-      models: runtime.models,
-      hasModel: (id) => runtime.hasModel(id),
-      modelId: appEnv().CHAT_TITLE_MODEL,
-    });
-  }
-
-  const server = isProduction ? await createProductionServer() : await createDevServer();
-
-  // VNC viewers for bot browsers and terminal tabs connect over WebSocket on
-  // the same server; each handles only its own upgrade path.
-  const browserVnc = attachBrowserVnc(server);
-  const terminalWs = attachTerminalWs(server);
-
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, "0.0.0.0", resolve);
+  add({
+    name: "chat titles",
+    start: () => {
+      if (fauxMode()) return;
+      setChatTitler({
+        models: runtime.models,
+        hasModel: (id) => runtime.hasModel(id),
+        modelId: appEnv().CHAT_TITLE_MODEL,
+      });
+    },
   });
-  logger.info(`Server is running on http://localhost:${port}`);
 
-  if (config.jobs.enabled) {
-    await startWorkers();
-  } else {
-    logger.info("Job queue disabled (config.jobs.enabled = false)");
-  }
+  // HTTP last to start, first to stop: new connections are refused, then the
+  // long-lived ones (SSE streams, VNC and terminal sockets) are ended so
+  // close() can finish, while everything they used is still up.
+  let server!: http.Server;
+  let browserVnc!: ReturnType<typeof attachBrowserVnc>;
+  let terminalWs!: ReturnType<typeof attachTerminalWs>;
+  add({
+    name: "http server",
+    start: async () => {
+      server = isProduction ? await createProductionServer() : await createDevServer();
+      // VNC viewers for bot browsers and terminal tabs connect over WebSocket
+      // on the same server; each handles only its own upgrade path.
+      browserVnc = attachBrowserVnc(server);
+      terminalWs = attachTerminalWs(server);
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(port, "0.0.0.0", resolve);
+      });
+      logger.info(`Server is running on http://localhost:${port}`);
+    },
+    stop: async () => {
+      markShuttingDown();
+      // Give the load balancer a moment to stop routing traffic here.
+      if (isProduction) await new Promise((r) => setTimeout(r, 2000));
+      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+      server.closeIdleConnections();
+      endAllSse();
+      browserVnc.close();
+      terminalWs.close();
+      await closed;
+    },
+  });
+
+  add({
+    name: "job workers",
+    start: async () => {
+      if (config.jobs.enabled) await startWorkers();
+      else logger.info("Job queue disabled (config.jobs.enabled = false)");
+    },
+    stop: () => stopWorkers(),
+  });
 
   // A silent startup ping in production.
-  if (isProduction) notificationService.notify(systemStarted(env.NODE_ENV));
+  add({
+    name: "startup ping",
+    start: () => {
+      if (isProduction) notificationService.notify(systemStarted(env.NODE_ENV));
+    },
+  });
 
-  const shutdown = async (signal: string) => {
-    logger.info(`${signal} received. Shutting down gracefully...`);
-    markShuttingDown();
-    // Give the load balancer a moment to stop routing traffic here.
-    if (isProduction) await new Promise((r) => setTimeout(r, 2000));
-    // End chat/activity streams first: they hold their HTTP connections open
-    // forever, and their watches must stop before the Harness closes.
-    endAllSse();
-    // Viewers first, then the remote browsers they were watching.
-    browserVnc.close();
-    terminalWs.close();
-    await closeAllBrowserSessions();
-    // Disarm capture debounce timers before the runtime closes: a firing
-    // timer would call into a closed store.
-    memoryCapture?.stop();
-    notifications.stop();
-    notificationService.stop();
-    await getConnectionManager().close();
-    await stopWorkers();
-    await closeAgentRuntime();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    process.exit(0);
-  };
-  for (const signal of ["SIGTERM", "SIGINT"] as const) {
-    process.once(signal, () => void shutdown(signal));
-  }
+  await lifecycle.start();
+  lifecycle.handleSignals(["SIGTERM", "SIGINT"]);
 }
 
 /** Production: Hono serves the API and the built client (SPA fallback to index.html). */

@@ -254,8 +254,9 @@ export function registerGatewayCustomProviders(
   }
 }
 
-function familyOf(model: Model<Api>, providerId?: string): ModelInfo["family"] {
-  if (providerId?.startsWith("custom-")) return "other";
+/** `providerTag` is the "custom:<provider>" prefix a custom-provider model id carries. */
+function familyOf(model: Model<Api>, providerTag?: string): ModelInfo["family"] {
+  if (providerTag?.startsWith("custom:")) return "other";
   if (model.id.startsWith("workers-ai/")) return "workers-ai";
   if (model.api === "anthropic-messages") return "anthropic";
   if (model.api === "openai-responses" || model.api === "openai-completions") return "openai";

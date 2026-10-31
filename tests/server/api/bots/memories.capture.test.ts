@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
@@ -16,26 +16,25 @@ import {
   resolveCaptureModelId,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
+import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
 vi.mock("@groot/core/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
-const botIds: string[] = [];
 afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  await db.delete(bots).where(inArray(bots.id, botIds.splice(0)));
+  await resetAppTables();
 });
 
 async function seedBot(): Promise<{ botId: string; conversationId: number }> {
-  const conv = conversationId();
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: "Cap", modelId: "m", conversationId: String(conv) })
-    .returning();
-  botIds.push(bot!.id);
-  return { botId: bot!.id, conversationId: conv };
+  const bot = await seedBotRow({
+    name: "Cap",
+    modelId: "m",
+    conversationId: String(conversationId()),
+  });
+  return { botId: bot.id, conversationId: Number(bot.conversationId) };
 }
 
 function findBot(id: string) {

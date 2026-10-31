@@ -45,6 +45,14 @@ _Avoid_: consumer, client
 A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript and one record of when the reply started (`bots.settled.ts`). Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
 
+**Owner wait**:
+A tool call paused until the owner answers: an approval (`approvals.ts`), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
+_Avoid_: pending approval (for the family), interrupt, prompt
+
+**Browser session**:
+One live browser per profile, owned by the session manager (`toolkits/browser-sessions.ts`): open, peek (never launches), the driver flag (owner or bot), the idle sweep, close (which cancels an open still in flight). The toolkit, the vault sinks and the app's browser routes all hold the same manager instance; nothing reads a module global.
+_Avoid_: tab (a session has tabs), browser instance
+
 **Question**:
 A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply waits until the owner answers or dismisses it; writing in the chat instead dismisses it.
 _Avoid_: prompt, form, survey
@@ -52,6 +60,10 @@ _Avoid_: prompt, form, survey
 **Echo**:
 The optimistic copy of an owner's send shown until the server confirms it. Its request id is minted once and reused by every retry (an offline send keeps its Echo and goes again once the browser is back), and it is confirmed by that request id. Only an older entry without one is matched by text, and never one created before the Echo.
 _Avoid_: pending message, ghost bubble
+
+**Bot list**:
+What the sidebar shows for each bot: the row's last-message preview, last activity and read marker, plus what is live (replying, approvals and Questions waiting). `bots.list.ts` owns the entry shape, the one preview function and the settled step that folds a Finished reply into the row.
+_Avoid_: roster (that is the bots toolkit's name for the other bots), sidebar state
 
 **Past chat**:
 A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only until the owner continues it, which moves the bot back onto it; nothing is submitted or reconciled there before that.

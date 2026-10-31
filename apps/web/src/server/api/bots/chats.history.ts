@@ -4,6 +4,10 @@
  * the owner can read it (read-only: nothing is submitted or reconciled
  * there), continue it, or delete it. Chats retired before this existed have
  * no link back to their bot and are not listed.
+ *
+ * Moving a bot between chats ("New chat", continuing a Past chat) is one
+ * operation here, `leaveChat`: the row moves, the chat it left is stopped
+ * and recorded, and whoever follows the bot's chat (its open stream) is told.
  */
 import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -13,8 +17,10 @@ import { db, botChats } from "../../db";
 import { chatCards } from "../routines/routines.cards";
 import { firstMessageTitle, titlePastChat } from "./chats.title";
 import type { ChatHistoryDTO } from "./bots.schema";
+import type { BotRow } from "./bots.conversation";
 
 export type PastChatRuntime = Pick<AgentRuntime, "readChat">;
+export type LeaveChatRuntime = Pick<AgentRuntime, "readChat" | "abort">;
 
 /** A past chat as the API returns it. */
 export interface PastChat {
@@ -53,6 +59,76 @@ export interface EndingChat {
   conversationId: string;
   startedAt: Date;
   lastMessagePreview: string | null;
+}
+
+/** The bot row fields that describe the chat it is on. */
+export type ChatRow = Pick<
+  BotRow,
+  "id" | "name" | "modelId" | "conversationId" | "chatStartedAt" | "lastMessagePreview"
+>;
+
+/** The chat a bot row is on, as a Past chat would record it. */
+export function endingChat(row: ChatRow): EndingChat {
+  return {
+    botId: row.id,
+    botName: row.name,
+    botModelId: row.modelId,
+    conversationId: row.conversationId,
+    startedAt: row.chatStartedAt,
+    lastMessagePreview: row.lastMessagePreview,
+  };
+}
+
+/**
+ * Stop whatever a conversation the app no longer shows is still doing. A run
+ * left going there would keep calling the model and its tools (e.g. creating
+ * tasks) with nobody watching, and resume after every restart. Best effort:
+ * the row change has already happened, so a failure here is only logged.
+ */
+export async function retireConversation(
+  rt: Pick<AgentRuntime, "abort">,
+  conversationId: string,
+): Promise<void> {
+  try {
+    await rt.abort(Number(conversationId));
+  } catch (error) {
+    logger.warn({ error, conversationId }, "Failed to stop a retired bot conversation");
+  }
+}
+
+type ChatChangeListener = (botId: string) => void;
+const chatChangeListeners = new Set<ChatChangeListener>();
+
+/**
+ * Follow bots moving between chats: a listener runs with the bot's id once
+ * its row names another conversation. The chat stream ends itself on it, so
+ * the client reconnects onto the new chat. Returns the unsubscribe.
+ */
+export function onBotChatChanged(listener: ChatChangeListener): () => void {
+  chatChangeListeners.add(listener);
+  return () => chatChangeListeners.delete(listener);
+}
+
+/**
+ * Move a bot off the chat it is on: `moveRow` points the row at the next
+ * conversation (a fresh one, or a Past chat's), then the chat it left is
+ * stopped, recorded as a Past chat, and the bot's followers are told.
+ */
+export async function leaveChat(
+  old: ChatRow,
+  moveRow: () => Promise<void> | void,
+  rt: LeaveChatRuntime,
+): Promise<void> {
+  await moveRow();
+  for (const listener of chatChangeListeners) {
+    try {
+      listener(old.id);
+    } catch (error) {
+      logger.warn({ error, botId: old.id }, "A chat-change listener failed");
+    }
+  }
+  await retireConversation(rt, old.conversationId);
+  await recordPastChat(endingChat(old), rt);
 }
 
 /**

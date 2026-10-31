@@ -8,20 +8,41 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
-  browserOpenState,
-  closeBrowserSession,
-  closeBrowserTab,
   conversationBrowserTarget,
+  createBrowserSessions,
   createBrowserToolkit,
-  getLiveBrowserSession,
   isBlockedPrivateUrl,
-  resetBrowserSessionsForTests,
-  setDriver,
-  startBrowserSession,
+  type BrowserDriver,
   type BrowserSession,
+  type BrowserSessions,
+  type BrowserTarget,
+  type BrowserToolkitOptions,
   type BrowserTransport,
 } from "../../../../packages/agent/src/toolkits/browser";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
+
+/**
+ * Each test's toolkit acts through a session manager of its own (the app
+ * creates one per process); the helpers below read and drive that manager
+ * the way the app's routes do.
+ */
+let current: BrowserSessions | undefined;
+function toolkit(options: BrowserToolkitOptions = {}): Capability {
+  current = createBrowserSessions(options);
+  return createBrowserToolkit({ ...options, sessions: current });
+}
+const getLiveBrowserSession = (target: BrowserTarget) => current?.get(target);
+const setDriver = (target: BrowserTarget, driver: BrowserDriver) =>
+  current!.setDriver(target, driver);
+const closeBrowserSession = (target: BrowserTarget) => current!.close(target);
+const closeBrowserTab = (target: BrowserTarget) => current!.closeTab(target);
+const startBrowserSession = (target: BrowserTarget) => current!.start(target);
+const browserOpenState = (target: BrowserTarget) => current!.openState(target);
+async function resetBrowserSessionsForTests() {
+  const previous = current;
+  current = undefined;
+  await previous?.closeAll();
+}
 
 /** The default mapping: conversation 4242 gets a browser of its own. */
 const TARGET = conversationBrowserTarget(4242);
@@ -104,13 +125,13 @@ function fakeTransport() {
 describe("browser toolkit", () => {
   // The session map is module-level (one per server process); tests must not
   // inherit each other's fake transports.
-  beforeEach(() => {
-    resetBrowserSessionsForTests();
+  beforeEach(async () => {
+    await resetBrowserSessionsForTests();
   });
 
   it("navigates and returns status + final url", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     const r = await run(tk, "browser_navigate", { url: "https://example.com/" });
     expect(r.isError).toBeUndefined();
     expect(r.text).toContain("200");
@@ -119,12 +140,12 @@ describe("browser toolkit", () => {
 
   it("refuses private hosts unless exempted", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     const denied = await run(tk, "browser_navigate", { url: "http://127.0.0.1:8080/" });
     expect(denied.isError).toBe(true);
     expect(denied.text).toContain("Private");
 
-    const ok = createBrowserToolkit({
+    const ok = toolkit({
       transport,
       profilesDir: "/tmp/ta-test-profiles",
       allowedPrivateHosts: "localhost, git.internal",
@@ -138,7 +159,7 @@ describe("browser toolkit", () => {
 
   it("refuses non-http and credential URLs", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     expect((await run(tk, "browser_navigate", { url: "file:///etc/passwd" })).isError).toBe(true);
     expect((await run(tk, "browser_navigate", { url: "https://u:p@example.com/" })).isError).toBe(
       true,
@@ -148,7 +169,7 @@ describe("browser toolkit", () => {
 
   it("clicks by ref from a snapshot and never echoes typed text", async () => {
     const { transport, log } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     const snap = await run(tk, "browser_snapshot", {});
     expect(snap.text).toContain("[ref=e2]");
     const typed = await run(tk, "browser_type", { ref: "e2", text: "hunter2" });
@@ -162,7 +183,7 @@ describe("browser toolkit", () => {
 
   it("invalid refs are rejected", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     const bad = await run(tk, "browser_click", { ref: "nope!" });
     expect(bad.isError).toBe(true);
     expect(bad.text).toContain("Invalid ref");
@@ -173,7 +194,7 @@ describe("browser toolkit", () => {
 
   it("action tools wait while the human drives, then proceed after release", async () => {
     const { transport, log } = fakeTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport,
       profilesDir: "/tmp/ta-test-profiles",
       humanDriverWaitMs: 1500,
@@ -191,7 +212,7 @@ describe("browser toolkit", () => {
 
   it("navigate waits while the human drives (takeover covers navigation)", async () => {
     const { transport, log } = fakeTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport,
       profilesDir: "/tmp/ta-test-profiles",
       humanDriverWaitMs: 1500,
@@ -210,7 +231,7 @@ describe("browser toolkit", () => {
 
   it("closeBrowserSession removes the session so the next call reopens", async () => {
     const { transport, log } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await run(tk, "browser_navigate", { url: "https://example.com/" });
     expect(getLiveBrowserSession(TARGET)).toBeDefined();
     await closeBrowserSession(TARGET);
@@ -224,7 +245,7 @@ describe("browser toolkit", () => {
 
   it("drops a browser that died so the next call opens a fresh one", async () => {
     const { transport, log, deaths } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await run(tk, "browser_navigate", { url: "https://example.com/" });
     expect(getLiveBrowserSession(TARGET)).toBeDefined();
     expect(deaths).toHaveLength(1);
@@ -242,7 +263,7 @@ describe("browser toolkit", () => {
 
   it("does not keep action tools waiting on an owner whose browser died", async () => {
     const { transport, deaths } = fakeTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport,
       profilesDir: "/tmp/ta-test-profiles",
       humanDriverWaitMs: 60_000,
@@ -262,7 +283,7 @@ describe("browser toolkit", () => {
 
   it("ignores a death reported by a session that was already closed or replaced", async () => {
     const { transport, log, deaths } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await run(tk, "browser_snapshot", {});
     await closeBrowserSession(TARGET);
     await run(tk, "browser_snapshot", {});
@@ -284,7 +305,7 @@ describe("browser toolkit", () => {
 
   it("releasing control makes the agent adopt the tab the owner left in front", async () => {
     const { transport, log } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await run(tk, "browser_snapshot", {});
     await setDriver(TARGET, "agent"); // already the agent: nothing to adopt
     expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(0);
@@ -306,7 +327,7 @@ describe("browser toolkit", () => {
       await gate;
       return inner(dir, open);
     };
-    const tk = createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
 
     const started = startBrowserSession(TARGET);
     const tool = run(tk, "browser_snapshot", {});
@@ -324,7 +345,7 @@ describe("browser toolkit", () => {
   });
 
   it("remembers why the last open failed until the next attempt", async () => {
-    createBrowserToolkit({
+    toolkit({
       transport: async () => {
         throw new Error("VM exec failed: no sudo");
       },
@@ -336,15 +357,15 @@ describe("browser toolkit", () => {
     expect(failed.opening === false && failed.error).toContain("no sudo");
 
     const { transport } = fakeTransport();
-    createBrowserToolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await startBrowserSession(TARGET);
     expect(browserOpenState(TARGET)).toEqual({ opening: false, error: undefined });
   });
 });
 
 describe("shared browser profiles", () => {
-  beforeEach(() => {
-    resetBrowserSessionsForTests();
+  beforeEach(async () => {
+    await resetBrowserSessionsForTests();
   });
 
   /** Conversation n is bot n's, and every bot is on the one shared profile. */
@@ -397,7 +418,7 @@ describe("shared browser profiles", () => {
 
   it("gives agents on one profile one browser, each in a tab of its own", async () => {
     const fake = tabbedTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport: fake.transport,
       resolveTarget,
       profilesDir: PROFILES,
@@ -420,7 +441,7 @@ describe("shared browser profiles", () => {
 
   it("closes a deleted agent's own tab and leaves the others (issue #88)", async () => {
     const fake = tabbedTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport: fake.transport,
       resolveTarget,
       profilesDir: PROFILES,
@@ -436,7 +457,7 @@ describe("shared browser profiles", () => {
 
   it("blanks the browser's first tab instead of closing the browser, then closes it once unused", async () => {
     const fake = tabbedTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport: fake.transport,
       resolveTarget,
       profilesDir: PROFILES,
@@ -457,7 +478,7 @@ describe("shared browser profiles", () => {
 
   it("brings an agent's tab to the front when another agent acted in between", async () => {
     const fake = tabbedTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport: fake.transport,
       resolveTarget,
       profilesDir: PROFILES,
@@ -473,7 +494,7 @@ describe("shared browser profiles", () => {
 
   it("pauses every agent in the browser while the owner drives, and hands back one tab", async () => {
     const fake = tabbedTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport: fake.transport,
       resolveTarget,
       profilesDir: PROFILES,
@@ -496,7 +517,7 @@ describe("shared browser profiles", () => {
 
   it("lets agents share the one tab where the transport cannot open tabs", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({ transport, resolveTarget, profilesDir: PROFILES });
+    const tk = toolkit({ transport, resolveTarget, profilesDir: PROFILES });
     await run(tk, "browser_snapshot", {}, "1");
     await run(tk, "browser_snapshot", {}, "2");
     const browser = getLiveBrowserSession(SHARED)!;
@@ -506,7 +527,7 @@ describe("shared browser profiles", () => {
 
   it("refuses a profile name that is not a plain directory name", async () => {
     const { transport } = fakeTransport();
-    const tk = createBrowserToolkit({
+    const tk = toolkit({
       transport,
       resolveTarget: () => ({ profile: "../escape", tab: "x" }),
       profilesDir: PROFILES,

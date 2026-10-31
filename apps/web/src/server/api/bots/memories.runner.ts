@@ -4,7 +4,7 @@
  */
 import { and, desc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
-import { GATEWAY_PROVIDER, stripAttachmentNotes } from "@tiny-agents/agent";
+import { stripAttachmentNotes } from "@tiny-agents/agent";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import {
   buildCapturePrompt,
@@ -19,6 +19,7 @@ import {
 } from "./memories.domain";
 import { bots, db, memories } from "../../db";
 import { chatOwner } from "./bots.owner";
+import { resolveSideCallModel, resolveSideCallModelId } from "./side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -102,15 +103,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function resolveCaptureModel(models: CaptureModels, modelId: string) {
-  const customPrefix = "custom:";
-  if (modelId.startsWith(customPrefix)) {
-    const rest = modelId.slice(customPrefix.length);
-    const slash = rest.indexOf("/");
-    return slash > 0 ? models.getModel(rest.slice(0, slash), rest.slice(slash + 1)) : undefined;
-  }
-  return models.getModel(GATEWAY_PROVIDER, modelId);
-}
+/** The side-call helpers under the names this module exported first (see side-call.ts). */
+export const resolveCaptureModel = resolveSideCallModel;
+export const resolveCaptureModelId = resolveSideCallModelId;
 
 export interface CaptureSideCall {
   models: CaptureModels;
@@ -224,18 +219,4 @@ export async function captureConversation(
   } catch (error) {
     logger.warn({ error, conversationId }, "Memory capture skipped after error");
   }
-}
-
-/** A bad override must not strand a bot whose own model still works. */
-export function resolveCaptureModelId(
-  runtime: Pick<AgentRuntime, "hasModel">,
-  botModelId: string,
-  override?: string,
-): string | undefined {
-  const explicit = override
-    ?.trim()
-    .replace(/^(['"])([\s\S]*)\1$/, "$2")
-    .trim();
-  if (explicit && runtime.hasModel(explicit)) return explicit;
-  return runtime.hasModel(botModelId) ? botModelId : undefined;
 }

@@ -165,7 +165,17 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     try {
       return await fn(s);
     } catch (error) {
-      session = undefined; // a session that just failed is not reused
+      // A session that just failed is not reused, and not left open either:
+      // its client would keep its keepalive timer running until the process
+      // exits.
+      if (session !== undefined) {
+        session = undefined;
+        try {
+          s.close();
+        } catch {
+          // already gone
+        }
+      }
       // Retry only when nothing was dispatched: a pre-dispatch failure
       // (channel open refused on a dead pooled connection) never started the
       // command, so re-running it cannot double a side effect. Anything after

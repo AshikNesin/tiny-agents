@@ -14,10 +14,22 @@ import {
   resetVncTicketsForTests,
 } from "../../../apps/web/src/server/api/bots/browser.vnc";
 import {
-  acquire,
-  resetBrowserSessionsForTests,
+  createBrowserSessions,
   type BrowserSession,
+  type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
+import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
+
+/** The manager the bridge reads through; a fresh one per live fake. */
+let sessions: BrowserSessions | undefined;
+async function resetBrowserSessionsForTests() {
+  await sessions?.closeAll();
+  sessions = createBrowserSessions({
+    transport: async () => session(),
+    profilesDir: "/tmp/ta-vnc-profiles",
+  });
+  setBrowserSessionsForTests(sessions);
+}
 
 const BOT = "bot-vnc";
 const TARGET = { profile: "shared", tab: BOT };
@@ -61,11 +73,13 @@ function session(openStream?: () => Promise<Duplex>): BrowserSession {
 }
 
 async function openLive(openStream?: () => Promise<Duplex>) {
-  resetBrowserSessionsForTests();
-  await acquire(
-    { transport: async () => session(openStream), profilesDir: "/tmp/ta-vnc-profiles" },
-    TARGET,
-  );
+  await sessions?.closeAll();
+  sessions = createBrowserSessions({
+    transport: async () => session(openStream),
+    profilesDir: "/tmp/ta-vnc-profiles",
+  });
+  setBrowserSessionsForTests(sessions);
+  await sessions.acquire(TARGET);
 }
 
 const ticketPath = (ticket: string, bot = BOT) =>
@@ -175,16 +189,17 @@ describe("VNC WebSocket bridge", () => {
     port = (server.address() as AddressInfo).port;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetVncTicketsForTests();
-    resetBrowserSessionsForTests();
+    await resetBrowserSessionsForTests();
   });
 
   afterEach(async () => {
     for (const ws of sockets.splice(0)) ws.close();
     bridge?.close();
     await new Promise((resolve) => server?.close(resolve));
-    resetBrowserSessionsForTests();
+    await sessions?.closeAll();
+    setBrowserSessionsForTests(undefined);
   });
 
   it("relays bytes both ways and tears down with either side", async () => {
@@ -269,7 +284,7 @@ describe("VNC WebSocket bridge", () => {
     await openLive();
     await listen();
     expect((await rawUpgrade(port, ticketPath(mint()))).status).toBe(404);
-    resetBrowserSessionsForTests();
+    await sessions!.closeAll();
     expect((await rawUpgrade(port, ticketPath(mint()))).status).toBe(404);
   });
 

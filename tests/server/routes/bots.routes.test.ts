@@ -1,89 +1,51 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { api, createTestApp } from "../helpers";
 import { db, bots, routineRuns, routines } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
-import {
-  ApprovalNotPendingError,
-  QuestionNotPendingError,
-} from "../../../packages/agent/src/runtime";
 import { InvalidAnswersError } from "../../../packages/agent/src/toolkits/questions";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
+import type { AgentRuntime } from "../../../packages/agent/src/index";
+import {
+  authToken,
+  closeAppRuntime,
+  installFakeRuntime,
+  openAppRuntime,
+  resetAppTables,
+  spyOnRuntime,
+  TEST_MODEL,
+  type SpiedRuntime,
+} from "../fixtures";
 
 /**
  * Route tests run against an app-shaped runtime fake installed through
  * `setAgentRuntimeForTests()` (bots.runtime.ts), with the real SQLite test DB.
  */
 
-const token = await generateToken({ userId: 1, email: "bots-test@example.com" });
+const token = await authToken("bots-test@example.com");
 const authorization = { Authorization: `Bearer ${token}` };
 
-const models = [
-  {
-    id: "known-model",
-    name: "Known Model",
-    family: "other" as const,
-    reasoning: false,
-    contextWindow: 8_192,
-    vision: false,
-  },
-  {
-    id: "vision-model",
-    name: "Vision Model",
-    family: "other" as const,
-    reasoning: false,
-    contextWindow: 8_192,
-    vision: true,
-  },
-];
-const emptyChat = { messages: [], busy: false, queued: [] };
-const activityListeners = new Set<(change: { conversation: number; busy: boolean }) => void>();
-
-const agentRuntime = {
-  createConversation: vi.fn().mockResolvedValue(100),
-  configure: vi.fn().mockResolvedValue(undefined),
-  submit: vi.fn().mockResolvedValue(undefined),
-  abort: vi.fn().mockResolvedValue(undefined),
-  withdraw: vi.fn().mockResolvedValue("withdrawn"),
-  readChatPage:
-    vi.fn<
-      (
-        ref: number,
-        query: { before: string; limit: number },
-      ) => Promise<{ messages: unknown[]; hasMore: boolean } | undefined>
-    >(),
-  watchChat: vi.fn(
-    async (
-      _ref: number,
-      listener: (events: [{ type: "snapshot"; state: typeof emptyChat }]) => void | Promise<void>,
-    ) => {
-      await listener([{ type: "snapshot", state: emptyChat }]);
-      return { initial: emptyChat, stop: async () => undefined };
-    },
-  ),
-  isBusy: vi.fn().mockReturnValue(false),
-  busyConversations: vi.fn().mockReturnValue([]),
-  onActivity: vi.fn((listener: (change: { conversation: number; busy: boolean }) => void) => {
-    activityListeners.add(listener);
-    listener({ conversation: 100, busy: true });
-    return () => activityListeners.delete(listener);
-  }),
-  listModels: vi.fn().mockReturnValue(models),
-  hasModel: vi.fn((modelId: string) => modelId === "known-model" || modelId === "vision-model"),
-  listCapabilities: vi.fn().mockReturnValue([
-    { id: "tasks", kind: "toolkit", name: "Tasks", description: "Tasks", tools: [] },
-    { id: "web", kind: "toolkit", name: "Web", description: "Web", tools: [] },
-  ]),
-  pendingApprovals: vi.fn().mockReturnValue(0),
-  decideApproval: vi.fn().mockResolvedValue(undefined),
-  pendingQuestions: vi.fn().mockReturnValue(0),
-  answerQuestions: vi.fn().mockResolvedValue(undefined),
-  dismissQuestions: vi.fn().mockResolvedValue(undefined),
-  close: vi.fn().mockResolvedValue(undefined),
-};
+/**
+ * Route tests run against the real runtime (in memory, faux model) spied
+ * method by method, with the real SQLite test DB. A spy's override injects
+ * what the model cannot: an approval that was never asked, a page before a
+ * cursor. The one case needing a model the catalog lacks (a vision model)
+ * runs on the shared typed fake, at the end.
+ */
+let rt: AgentRuntime;
+let agentRuntime: SpiedRuntime;
+/** The runtime's own `watchChat`, kept before the spies wrap it. */
+let realWatchChat: AgentRuntime["watchChat"];
+/** The bot's conversation, as the runtime refers to it. */
+const conv = (bot: { conversationId: string }) => Number(bot.conversationId);
+/** Live `onActivity` listeners (the events stream's), to see them unsubscribe on shutdown. */
+let activityListeners = 0;
+/**
+ * Every bot has every built-in toolkit (ADR 0004), plus the vision side-call
+ * for a model that does not see images itself; the faux test model does.
+ */
+let enabled: string[] = [];
 
 const app = createTestApp();
 
@@ -124,7 +86,7 @@ const createPayload = {
   name: "Research helper",
   description: "Finds answers",
   systemPrompt: "Be precise.",
-  modelId: "known-model",
+  modelId: TEST_MODEL,
 };
 
 async function createBot(overrides: Record<string, unknown> = {}): Promise<Data> {
@@ -165,29 +127,28 @@ async function readFirstSse(
 describe("Bots API routes", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    activityListeners.clear();
-    agentRuntime.createConversation.mockResolvedValue(100);
-    agentRuntime.hasModel.mockImplementation(
-      (modelId: string) => modelId === "known-model" || modelId === "vision-model",
-    );
-    agentRuntime.isBusy.mockReturnValue(false);
-    agentRuntime.listModels.mockReturnValue(models);
-    agentRuntime.watchChat.mockImplementation(async (_ref, listener) => {
-      await listener([{ type: "snapshot", state: emptyChat }]);
-      return { initial: emptyChat, stop: async () => undefined };
-    });
+    rt = await openAppRuntime();
+    const realOnActivity = rt.onActivity.bind(rt);
+    realWatchChat = rt.watchChat.bind(rt);
+    enabled = rt.listModels().find((m) => m.id === TEST_MODEL)?.vision
+      ? [...BOT_TOOLKITS]
+      : [...BOT_TOOLKITS, "vision"];
+    agentRuntime = spyOnRuntime(rt);
+    activityListeners = 0;
     agentRuntime.onActivity.mockImplementation((listener) => {
-      activityListeners.add(listener);
-      listener({ conversation: 100, busy: true });
-      return () => activityListeners.delete(listener);
+      activityListeners += 1;
+      const off = realOnActivity(listener);
+      return () => {
+        activityListeners -= 1;
+        off();
+      };
     });
-    setAgentRuntimeForTests(agentRuntime);
-    await db.delete(bots);
+    await resetAppTables();
   });
 
   afterEach(async () => {
-    activityListeners.clear();
-    await db.delete(bots);
+    await resetAppTables();
+    await closeAppRuntime();
   });
 
   it("requires authentication for bots routes", async () => {
@@ -204,11 +165,11 @@ describe("Bots API routes", () => {
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        models,
+        models: rt.listModels(),
         gatewayConfigured: expect.any(Boolean),
       },
     });
-    expect(agentRuntime.listModels).toHaveBeenCalledOnce();
+    expect(agentRuntime.listModels).toHaveBeenCalled();
   });
 
   it("creates a bot row and its durable conversation", async () => {
@@ -220,15 +181,13 @@ describe("Bots API routes", () => {
       data: expect.objectContaining({
         name: createPayload.name,
         modelId: createPayload.modelId,
-        conversationId: "100",
+        conversationId: expect.any(String),
       }),
     });
     expect(agentRuntime.createConversation).toHaveBeenCalledWith({
       modelId: createPayload.modelId,
       systemPrompt: createPayload.systemPrompt,
-      // Every bot has every built-in toolkit (ADR 0004), plus the vision
-      // side-call for a text-only model.
-      capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
+      capabilities: { enabled, permissions: {} },
     });
 
     const bot = await findBot(response.body.data.id);
@@ -237,7 +196,11 @@ describe("Bots API routes", () => {
       description: createPayload.description,
       systemPrompt: createPayload.systemPrompt,
       modelId: createPayload.modelId,
-      conversationId: "100",
+      conversationId: response.body.data.conversationId,
+    });
+    // A real conversation, readable through the runtime.
+    expect(await rt.readChat(Number(response.body.data.conversationId))).toMatchObject({
+      messages: [],
     });
   });
 
@@ -278,7 +241,6 @@ describe("Bots API routes", () => {
 
   it("refuses renaming onto another bot's name, but a bot may recase its own", async () => {
     const echo = await createBot({ name: "Echo" });
-    agentRuntime.createConversation.mockResolvedValueOnce(101);
     const other = await createBot({ name: "Other" });
 
     for (const name of ["Echo", " eCHo "]) {
@@ -307,7 +269,7 @@ describe("Bots API routes", () => {
 
     const response = await call(`/api/v1/bots/${bot.id}`, {
       method: "PATCH",
-      json: { name: "Edited helper", systemPrompt: "Use bullet points.", modelId: "known-model" },
+      json: { name: "Edited helper", systemPrompt: "Use bullet points.", modelId: TEST_MODEL },
     });
     expect(response.status).toBe(200);
 
@@ -315,10 +277,10 @@ describe("Bots API routes", () => {
       success: true,
       data: expect.objectContaining({ id: bot.id, name: "Edited helper" }),
     });
-    expect(agentRuntime.configure).toHaveBeenCalledWith(100, {
-      modelId: "known-model",
+    expect(agentRuntime.configure).toHaveBeenCalledWith(conv(bot), {
+      modelId: TEST_MODEL,
       systemPrompt: "Use bullet points.",
-      capabilities: { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} },
+      capabilities: { enabled, permissions: {} },
     });
     await expect(findBot(bot.id)).resolves.toMatchObject({
       name: "Edited helper",
@@ -354,23 +316,16 @@ describe("Bots API routes", () => {
     expect(sent.status).toBe(200);
     const aborted = await call(`/api/v1/bots/${bot.id}/abort`, { method: "POST", json: {} });
     expect(aborted.status).toBe(200);
-    expect(agentRuntime.abort).toHaveBeenCalledWith(100);
+    expect(agentRuntime.abort).toHaveBeenCalledWith(conv(bot));
     agentRuntime.abort.mockClear();
     expect((await call(`/api/v1/bots/${bot.id}`, { method: "DELETE" })).status).toBe(200);
 
-    expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
+    expect(agentRuntime.submit).toHaveBeenCalledWith(conv(bot), {
       requestId: "client-generated-id",
       text: "Hello",
     });
-    // Vision-model bots do NOT get the vision toolkit auto-included.
-    const visionBot = await createBot({ modelId: "vision-model" });
-    const again = await call(`/api/v1/bots/${visionBot.id}/messages`, {
-      method: "POST",
-      json: { requestId: "client-generated-id-2", text: "Hello again" },
-    });
-    expect(again.status).toBe(200);
     // Deleting stops whatever the now-hidden conversation was still doing.
-    expect(agentRuntime.abort).toHaveBeenCalledWith(100);
+    expect(agentRuntime.abort).toHaveBeenCalledWith(conv(bot));
     await expect(findBot(bot.id)).resolves.toBeUndefined();
   });
 
@@ -381,7 +336,7 @@ describe("Bots API routes", () => {
       json: { requestId: "steering-client-id", text: "change course", whenBusy: "steer" },
     });
     expect(steer.status).toBe(200);
-    expect(agentRuntime.submit).toHaveBeenCalledWith(100, {
+    expect(agentRuntime.submit).toHaveBeenCalledWith(conv(bot), {
       requestId: "steering-client-id",
       text: "change course",
       whenBusy: "steer",
@@ -392,7 +347,7 @@ describe("Bots API routes", () => {
       json: { requestId: "plain-client-id", text: "plain hello" },
     });
     expect(plain.status).toBe(200);
-    expect(agentRuntime.submit).toHaveBeenLastCalledWith(100, {
+    expect(agentRuntime.submit).toHaveBeenLastCalledWith(conv(bot), {
       requestId: "plain-client-id",
       text: "plain hello",
     });
@@ -415,7 +370,7 @@ describe("Bots API routes", () => {
     const response = await withdraw("steering-client-id");
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ success: true, data: { withdrawn: true } });
-    expect(agentRuntime.withdraw).toHaveBeenCalledWith(100, "steering-client-id");
+    expect(agentRuntime.withdraw).toHaveBeenCalledWith(conv(bot), "steering-client-id");
 
     // Placed or settled inputs are a conflict; unknown ids are not found.
     agentRuntime.withdraw.mockResolvedValueOnce("already_placed");
@@ -437,29 +392,30 @@ describe("Bots API routes", () => {
 
   it("resets by swapping to a newly created conversation", async () => {
     const bot = await createBot();
-    agentRuntime.createConversation.mockResolvedValueOnce(200);
 
     const response = await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST", json: {} });
     expect(response.status).toBe(200);
 
-    expect(response.body).toMatchObject({
-      success: true,
-      data: expect.objectContaining({ conversationId: "200" }),
-    });
-    await expect(findBot(bot.id)).resolves.toMatchObject({
-      conversationId: "200",
-    });
+    const fresh = response.body.data.conversationId as string;
+    expect(fresh).not.toBe(bot.conversationId);
+    await expect(findBot(bot.id)).resolves.toMatchObject({ conversationId: fresh });
     // The old conversation's in-flight reply is stopped, the new one untouched.
-    expect(agentRuntime.abort).toHaveBeenCalledWith(100);
-    expect(agentRuntime.abort).not.toHaveBeenCalledWith(200);
+    expect(agentRuntime.abort).toHaveBeenCalledWith(conv(bot));
+    expect(agentRuntime.abort).not.toHaveBeenCalledWith(Number(fresh));
   });
 
   it("ends open chat and activity streams on shutdown and stops their watches", async () => {
     const bot = await createBot();
     const stop = vi.fn(async () => undefined);
-    agentRuntime.watchChat.mockImplementation(async (_ref, listener) => {
-      await listener([{ type: "snapshot", state: emptyChat }]);
-      return { initial: emptyChat, stop };
+    agentRuntime.watchChat.mockImplementation(async (ref, listener, options) => {
+      const subscription = await realWatchChat(ref, listener, options);
+      return {
+        initial: subscription.initial,
+        stop: async () => {
+          stop();
+          await subscription.stop();
+        },
+      };
     });
 
     const openUntilEnded = async (path: string) => {
@@ -493,13 +449,15 @@ describe("Bots API routes", () => {
     expect(chat).toContain('"type":"snapshot"');
     expect(activity).toContain('"type":"activity"');
     await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
-    expect(activityListeners.size).toBe(0);
+    expect(activityListeners).toBe(0);
   });
 
   it("gives every bot every toolkit and stores its tool permissions", async () => {
     const caps = await call("/api/v1/capabilities");
     expect(caps.status).toBe(200);
-    expect(caps.body.data.capabilities.map((c: { id: string }) => c.id)).toEqual(["tasks", "web"]);
+    expect(caps.body.data.capabilities.map((c: { id: string }) => c.id)).toEqual(
+      expect.arrayContaining(["tasks", "routines", "skills", "memory", "today", "bots"]),
+    );
 
     const created = await call("/api/v1/bots", {
       method: "POST",
@@ -512,7 +470,7 @@ describe("Bots API routes", () => {
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({
         capabilities: {
-          enabled: [...BOT_TOOLKITS, "vision"],
+          enabled: enabled,
           permissions: { web_fetch: "ask" },
         },
       }),
@@ -524,11 +482,11 @@ describe("Bots API routes", () => {
     });
     expect(patched.status).toBe(200);
     expect(patched.body.data.toolPermissions).toEqual({ web_fetch: "off" });
-    expect(agentRuntime.configure).toHaveBeenLastCalledWith(100, {
-      modelId: "known-model",
+    expect(agentRuntime.configure).toHaveBeenLastCalledWith(conv(created.body.data), {
+      modelId: TEST_MODEL,
       systemPrompt: "Be precise.",
       capabilities: {
-        enabled: [...BOT_TOOLKITS, "vision"],
+        enabled: enabled,
         permissions: { web_fetch: "off" },
       },
     });
@@ -538,7 +496,7 @@ describe("Bots API routes", () => {
     const created = await call("/api/v1/bots", { method: "POST", json: createPayload });
     expect(created.status).toBe(201);
     expect(created.body.data.autoReview).toBe(false);
-    const off = { enabled: [...BOT_TOOLKITS, "vision"], permissions: {} };
+    const off = { enabled: enabled, permissions: {} };
     expect(agentRuntime.createConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({ capabilities: off }),
     );
@@ -550,7 +508,7 @@ describe("Bots API routes", () => {
     expect(on.status).toBe(200);
     expect(on.body.data.autoReview).toBe(true);
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
-      100,
+      conv(created.body.data),
       expect.objectContaining({ capabilities: { ...off, autoReview: true } }),
     );
 
@@ -560,24 +518,26 @@ describe("Bots API routes", () => {
     });
     expect(offAgain.status).toBe(200);
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
-      100,
+      conv(created.body.data),
       expect.objectContaining({ capabilities: off }),
     );
   });
 
   it("answers approvals, with 'always allow' switching the tool to allow", async () => {
     const bot = await createBot();
+    // Nothing is waiting in a fresh conversation: stand in for a pending card.
+    agentRuntime.decideApproval.mockResolvedValueOnce(undefined);
     const approved = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
       method: "POST",
       json: { decision: "approved", alwaysAllow: "send_email" },
     });
     expect(approved.status).toBe(200);
-    expect(agentRuntime.decideApproval).toHaveBeenCalledWith(100, 7, "approved");
+    expect(agentRuntime.decideApproval).toHaveBeenCalledWith(conv(bot), 7, "approved");
     expect(agentRuntime.configure).toHaveBeenLastCalledWith(
-      100,
+      conv(bot),
       expect.objectContaining({
         capabilities: {
-          enabled: [...BOT_TOOLKITS, "vision"],
+          enabled: enabled,
           permissions: { send_email: "allow" },
         },
       }),
@@ -585,12 +545,13 @@ describe("Bots API routes", () => {
     const row = await findBot(bot.id);
     expect(JSON.parse(row!.toolPermissions)).toEqual({ send_email: "allow" });
 
-    agentRuntime.decideApproval.mockRejectedValueOnce(new ApprovalNotPendingError(7));
+    // The real runtime: no such call is waiting.
     const stale = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
       method: "POST",
       json: { decision: "denied" },
     });
     expect(stale.status).toBe(409);
+    expect(agentRuntime.decideApproval).toHaveBeenLastCalledWith(conv(bot), 7, "denied");
   });
 
   it("answers or dismisses a bot's questions", async () => {
@@ -599,14 +560,17 @@ describe("Bots API routes", () => {
     const post = (json: unknown, to = path) => call(to, { method: "POST", json });
     const answers = [{ selected: ["Postgres"] }, { selected: [], text: "Ship it Friday" }];
 
+    // Nothing is asking in a fresh conversation: stand in for a pending question.
+    agentRuntime.answerQuestions.mockResolvedValueOnce(undefined);
     const answered = await post({ answers });
     expect(answered.status).toBe(200);
     expect(answered.body.data).toEqual({ answered: true });
-    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, answers);
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(conv(bot), 7, answers);
+    agentRuntime.answerQuestions.mockResolvedValueOnce(undefined);
     const dismissed = await post({ dismissed: true });
     expect(dismissed.status).toBe(200);
     expect(dismissed.body.data).toEqual({ dismissed: true });
-    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(100, 7, null);
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(conv(bot), 7, null);
 
     // Neither or both, and malformed answers, never reach the runtime.
     agentRuntime.answerQuestions.mockClear();
@@ -622,8 +586,9 @@ describe("Bots API routes", () => {
     expect(zero.status).toBe(400);
     expect(agentRuntime.answerQuestions).not.toHaveBeenCalled();
 
-    agentRuntime.answerQuestions.mockRejectedValueOnce(new QuestionNotPendingError(7));
+    // The real runtime: no such question is waiting.
     expect((await post({ answers })).status).toBe(409);
+    expect(agentRuntime.answerQuestions).toHaveBeenCalledOnce();
     agentRuntime.answerQuestions.mockRejectedValueOnce(
       new InvalidAnswersError("Expected 3 answer(s), got 2"),
     );
@@ -646,7 +611,7 @@ describe("Bots API routes", () => {
       json: { requestId: "answer-in-chat-id", text: "Use SQLite", whenBusy: "steer" },
     });
     expect(inChat.status).toBe(200);
-    expect(agentRuntime.dismissQuestions).toHaveBeenCalledWith(100);
+    expect(agentRuntime.dismissQuestions).toHaveBeenCalledWith(conv(bot));
     // Submitted first, so the message joins the reply the dismissal resumes.
     expect(agentRuntime.submit.mock.invocationCallOrder.at(-1)).toBeLessThan(
       agentRuntime.dismissQuestions.mock.invocationCallOrder[0],
@@ -711,7 +676,7 @@ describe("Bots API routes", () => {
       name: "Unread bot",
       description: "",
       systemPrompt: "",
-      modelId: "known-model",
+      modelId: TEST_MODEL,
       conversationId: "301",
       lastReadAt: earlier,
       lastActivityAt: later,
@@ -721,7 +686,7 @@ describe("Bots API routes", () => {
       name: "Read bot",
       description: "",
       systemPrompt: "",
-      modelId: "known-model",
+      modelId: TEST_MODEL,
       conversationId: "302",
       lastReadAt: later,
       lastActivityAt: earlier,
@@ -765,14 +730,19 @@ describe("Bots API routes", () => {
     expect(response.text).toContain("data:");
     expect(response.text).toContain('"type":"snapshot"');
     // Only the newest messages (issue #92): older ones load from /messages.
-    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function), {
+    expect(agentRuntime.watchChat).toHaveBeenCalledWith(conv(bot), expect.any(Function), {
       window: CHAT_WINDOW,
     });
   });
 
   it("pages older transcript messages before a cursor (issue #92)", async () => {
     const bot = await createBot();
-    const page = { messages: [{ id: "e3", role: "user", text: "older" }], hasMore: true };
+    const page = {
+      messages: [
+        { id: "e3", role: "user" as const, text: "older", status: "done" as const, createdAt: 3 },
+      ],
+      hasMore: true,
+    };
     agentRuntime.readChatPage.mockResolvedValueOnce(page);
 
     const response = await call(
@@ -780,13 +750,16 @@ describe("Bots API routes", () => {
     );
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ success: true, data: page });
-    expect(agentRuntime.readChatPage).toHaveBeenCalledWith(100, { before: "e7", limit: 20 });
+    expect(agentRuntime.readChatPage).toHaveBeenCalledWith(conv(bot), { before: "e7", limit: 20 });
 
     // The page size defaults to 50.
     agentRuntime.readChatPage.mockResolvedValueOnce({ messages: [], hasMore: false });
     const defaults = await call(withQuery(`/api/v1/bots/${bot.id}/messages`, { before: "e7" }));
     expect(defaults.status).toBe(200);
-    expect(agentRuntime.readChatPage).toHaveBeenLastCalledWith(100, { before: "e7", limit: 50 });
+    expect(agentRuntime.readChatPage).toHaveBeenLastCalledWith(conv(bot), {
+      before: "e7",
+      limit: 50,
+    });
   });
 
   it("refuses history without auth, for an unknown bot, or with a bad cursor", async () => {
@@ -807,7 +780,6 @@ describe("Bots API routes", () => {
       expect((await call(withQuery(path, query))).status).toBe(400);
     }
     // Well-formed, but not (or no longer) in the transcript.
-    agentRuntime.readChatPage.mockResolvedValueOnce(undefined);
     const response = await call(withQuery(path, { before: "e999" }));
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({ success: false });
@@ -859,7 +831,7 @@ describe("Bots API routes", () => {
       }),
     ]);
     // The transcript itself is the chat's alone.
-    expect(agentRuntime.watchChat).toHaveBeenCalledWith(100, expect.any(Function), {
+    expect(agentRuntime.watchChat).toHaveBeenCalledWith(conv(bot), expect.any(Function), {
       window: CHAT_WINDOW,
     });
   });
@@ -913,7 +885,10 @@ describe("Bots API routes", () => {
 it("leaves the vision side-call out for a model with native vision", async () => {
   // The side-call's prompt section would order see_image calls with ids
   // that never reach a model that sees images inline (production:
-  // fabricated upload_ ULIDs).
+  // fabricated upload_ ULIDs). The faux catalog has no vision model, so this
+  // runs on the typed fake, whose catalog lists one.
+  const fake = installFakeRuntime();
+  await resetAppTables();
   const [bot] = await db
     .insert(bots)
     .values({
@@ -929,9 +904,20 @@ it("leaves the vision side-call out for a model with native vision", async () =>
     json: { requestId: "stale-vision-check", text: "Hi" },
   });
   expect(response.status).toBe(200);
-  expect(agentRuntime.configure).toHaveBeenCalledWith(777, {
+  expect(fake.configure).toHaveBeenCalledWith(777, {
     modelId: "vision-model",
     systemPrompt: "You help.",
     capabilities: { enabled: [...BOT_TOOLKITS], permissions: {} },
   });
+  // Created through the API, a vision-model bot gets no vision toolkit either.
+  const created = await call("/api/v1/bots", {
+    method: "POST",
+    json: { ...createPayload, name: "Sees", modelId: "vision-model" },
+  });
+  expect(created.status).toBe(201);
+  expect(fake.createConversation).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      capabilities: { enabled: [...BOT_TOOLKITS], permissions: {} },
+    }),
+  );
 });

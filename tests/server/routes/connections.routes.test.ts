@@ -10,7 +10,6 @@ import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { botConnections, bots, connections, db } from "../../../apps/web/src/server/db";
 import { McpServer, StreamableHTTPServerTransport } from "../../../packages/agent/src/testing";
 import {
@@ -20,10 +19,11 @@ import {
 import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
+import { authToken } from "../fixtures";
 
 let token: string;
 beforeAll(async () => {
-  token = await generateToken({ userId: 1, email: "mcp@example.com" });
+  token = await authToken("mcp@example.com");
 });
 
 const buildApp = (): TestApp => createTestApp();

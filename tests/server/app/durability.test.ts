@@ -6,20 +6,15 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import type { ChatEvent, ChatState } from "../../../packages/agent/src/index";
 import { openTestRuntime } from "../../../packages/agent/src/testing";
+import { until } from "../fixtures";
 
 const TIMEOUT_MS = 15_000;
-
-async function waitUntil(
-  check: () => boolean | Promise<boolean>,
-  description: string,
-  timeoutMs = TIMEOUT_MS,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!(await check())) {
-    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${description}`);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-}
+/** The fixture's poll with this suite's longer patience (restarts are slow). */
+const untilReady = <T>(
+  check: () => T | false | undefined | Promise<T | false | undefined>,
+  what: string,
+  ms = TIMEOUT_MS,
+) => until(check, what, ms);
 
 function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatState {
   let state = structuredClone(previous);
@@ -181,7 +176,7 @@ describe("AgentRuntime durability", () => {
         state = applyEvents(state, events);
       });
       try {
-        await waitUntil(() => {
+        await untilReady(() => {
           const userMessages = state.messages.filter((message) => message.role === "user");
           const assistantMessages = state.messages.filter(
             (message) => message.role === "assistant",

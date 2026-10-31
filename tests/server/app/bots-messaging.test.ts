@@ -6,80 +6,61 @@
  */
 import { asc, eq } from "drizzle-orm";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { db, botMessages, bots, routines } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { createDeliveries } from "../../../apps/web/src/server/api/bots/bots.delivery";
 import { createBotMessagingStore } from "../../../apps/web/src/server/api/bots/bots.messaging";
 import type { AgentRuntime } from "@tiny-agents/agent";
-import { openTestRuntime, TEST_MODEL } from "../../../packages/agent/src/testing";
+import {
+  authToken,
+  closeAppRuntime,
+  createFakeRuntime,
+  installFakeRuntime,
+  openAppRuntime,
+  resetAppTables,
+  seedBot as seedBotRow,
+  spyOnRuntime,
+  TEST_MODEL,
+  until,
+  type FakeRuntime,
+  type SpiedRuntime,
+} from "../fixtures";
 
-const token = await generateToken({ userId: 1, email: "relay-test@example.com" });
+const token = await authToken("relay-test@example.com");
 
-function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    createConversation: vi.fn(),
-    configure: vi.fn(),
-    submit: vi.fn().mockResolvedValue(undefined),
-    abort: vi.fn(),
-    isBusy: vi.fn().mockReturnValue(false),
-    busyConversations: vi.fn().mockReturnValue([]),
-    readChat: vi.fn().mockResolvedValue({ messages: [], busy: false, queued: [] }),
-    onActivity: vi.fn().mockReturnValue(() => undefined),
-    listModels: vi
-      .fn()
-      .mockReturnValue([
-        { id: "m1", name: "M1", family: "other", reasoning: false, contextWindow: 8192 },
-      ]),
-    hasModel: vi.fn().mockReturnValue(true),
-    listCapabilities: vi.fn().mockReturnValue([]),
-    pendingApprovals: vi.fn().mockReturnValue(0),
-    decideApproval: vi.fn(),
-    pendingQuestions: vi.fn().mockReturnValue(0),
-    answerQuestions: vi.fn(),
-    dismissQuestions: vi.fn(),
-    installCapability: vi.fn(),
-    ...overrides,
-  } as unknown as AgentRuntime;
-}
-
-async function seedBot(name: string, conversationId: string) {
-  const [bot] = await db.insert(bots).values({ name, modelId: "m1", conversationId }).returning();
-  return bot!;
+/** A bot with a conversation on whichever runtime is installed. */
+async function seedBot(name: string, conversationId?: string) {
+  return seedBotRow({ name, ...(conversationId ? { conversationId } : {}) });
 }
 
 /** The ledger row for a delivery's requestId. */
 const ledgerRow = (requestId: string) =>
   db.query.botMessages.findFirst({ where: eq(botMessages.requestId, requestId) });
 
-/** Clear the ledger and the bots (the ledger cascades with its bots too). */
-async function clearTables() {
-  await db.delete(botMessages);
-  await db.delete(bots);
-}
+const clearTables = resetAppTables;
 
 describe("mention delivery", () => {
   let app: TestApp;
-  let runtime: ReturnType<typeof fakeRuntime>;
+  let runtime: SpiedRuntime;
   const send = (botId: string, json: unknown) =>
     api(app, `/api/v1/bots/${botId}/messages`, { method: "POST", json, token });
+  const conv = (bot: { conversationId: string }) => Number(bot.conversationId);
 
   beforeEach(async () => {
-    runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
+    runtime = spyOnRuntime(await openAppRuntime());
     app = createTestApp();
     await clearTables();
   });
 
   afterEach(async () => {
     await clearTables();
+    await closeAppRuntime();
   });
 
   it("delivers a copy to every mentioned bot and records the ledger row", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
-    const other = await seedBot("Other", "3");
+    const host = await seedBot("Host");
+    const guest = await seedBot("Guest");
+    const other = await seedBot("Other");
     const res = await send(host.id, {
       requestId: "mention-req-0001",
       text: "@Guest and @Other, thoughts?",
@@ -87,11 +68,11 @@ describe("mention delivery", () => {
     });
     expect(res.status).toBe(200);
     // Host gets the raw text; guests get an attributed copy.
-    expect(runtime.submit).toHaveBeenCalledWith(1, {
+    expect(runtime.submit).toHaveBeenCalledWith(conv(host), {
       requestId: "mention-req-0001",
       text: "@Guest and @Other, thoughts?",
     });
-    const guestText = vi.mocked(runtime.submit).mock.calls.find((c) => c[0] === 2)?.[1].text;
+    const guestText = runtime.submit.mock.calls.find((c) => c[0] === conv(guest))?.[1].text;
     expect(guestText).toContain("[From the owner, in Host's chat]");
     expect(guestText).toContain("@Guest and @Other, thoughts?");
     const rows = await db.select().from(botMessages).orderBy(asc(botMessages.toBotId));
@@ -101,8 +82,8 @@ describe("mention delivery", () => {
   });
 
   it("is idempotent per requestId: a retried send never duplicates deliveries", async () => {
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
+    const host = await seedBot("Host");
+    const guest = await seedBot("Guest");
     const body = {
       requestId: "mention-req-0002",
       text: "@Guest hi",
@@ -118,19 +99,19 @@ describe("mention delivery", () => {
   it("reconciles the target's durable config before delivering a mention", async () => {
     // The target's conversation may be staler than its row (e.g. its model
     // gained vision): the mention must not submit under the stale selection.
-    const host = await seedBot("Host", "1");
-    const guest = await seedBot("Guest", "2");
+    const host = await seedBot("Host");
+    const guest = await seedBot("Guest");
     await send(host.id, {
       requestId: "mention-req-0003",
       text: "@Guest hi",
       mentions: [guest.id],
     });
-    const guestConfig = vi.mocked(runtime.configure).mock.calls.find((c) => c[0] === 2)?.[1];
-    expect(guestConfig).toMatchObject({ modelId: "m1" });
+    const guestConfig = runtime.configure.mock.calls.find((c) => c[0] === conv(guest))?.[1];
+    expect(guestConfig).toMatchObject({ modelId: TEST_MODEL });
   });
 
   it("ignores mentions of the host itself and unknown ids", async () => {
-    const host = await seedBot("Host", "1");
+    const host = await seedBot("Host");
     const res = await send(host.id, {
       requestId: "mention-req-0003",
       text: "just me",
@@ -143,10 +124,10 @@ describe("mention delivery", () => {
 });
 
 describe("messaging store (issues #13, #15, #16)", () => {
-  let runtime: ReturnType<typeof fakeRuntime>;
+  let runtime: FakeRuntime;
 
   beforeEach(async () => {
-    runtime = fakeRuntime();
+    runtime = installFakeRuntime(createFakeRuntime());
     await clearTables();
   });
 
@@ -284,34 +265,22 @@ describe("messaging store (issues #13, #15, #16)", () => {
   });
 });
 
-async function waitUntil(check: () => boolean | Promise<boolean>, what: string) {
-  const deadline = Date.now() + 8_000;
-  while (!(await check())) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
-
 describe("answering Deliveries (real runtime)", () => {
   let rt: AgentRuntime;
 
   beforeEach(async () => {
-    rt = await openTestRuntime({ storePath: ":memory:" });
+    rt = await openAppRuntime();
     await clearTables();
   });
 
   afterEach(async () => {
     await clearTables();
-    await rt.close();
+    await closeAppRuntime();
   });
 
   async function seedLiveBot(name: string) {
-    const conversation = await rt.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
-    const [bot] = await db
-      .insert(bots)
-      .values({ name, modelId: TEST_MODEL, conversationId: String(conversation) })
-      .returning();
-    return { ...bot!, ref: Number(conversation) };
+    const bot = await seedBot(name);
+    return { ...bot, ref: Number(bot.conversationId) };
   }
 
   const mention = (
@@ -344,12 +313,12 @@ describe("answering Deliveries (real runtime)", () => {
     expect(await deliveries.deliver(mention(host, guest.id, "m1", "hello"))).toMatchObject({
       status: "delivered",
     });
-    await waitUntil(async () => (await ledgerRow("m1"))?.answeredAt != null, "the answer");
+    await until(async () => (await ledgerRow("m1"))?.answeredAt != null, "the answer");
     expect(await userTexts(host.ref)).toContain("**Reply from Guest:** Echo: hello");
     const row = await ledgerRow("m1");
     expect(row).toMatchObject({ kind: "relay", conversationId: String(guest.ref) });
     // Answering again is a no-op: one answer per Delivery.
-    await waitUntil(() => !rt.isBusy(guest.ref), "the guest to settle");
+    await until(() => !rt.isBusy(guest.ref), "the guest to settle");
     expect(await deliveries.answer(guest.ref)).toBe(0);
   });
 
@@ -370,13 +339,13 @@ describe("answering Deliveries (real runtime)", () => {
     const deliveries = createDeliveries(rt);
     await deliveries.deliver(mention(host, guest.id, "q1", "question one"));
     await deliveries.deliver(mention(host, guest.id, "q2", "question two"));
-    await waitUntil(async () => !rt.isBusy(guest.ref), "the guest to finish both");
+    await until(async () => !rt.isBusy(guest.ref), "the guest to finish both");
     await deliveries.answer(guest.ref);
-    await waitUntil(async () => (await ledgerRow("q2"))?.answeredAt != null, "both answers");
+    await until(async () => (await ledgerRow("q2"))?.answeredAt != null, "both answers");
     // The second relay may wait behind the host's reply to the first.
     const relayedTexts = async () =>
       (await userTexts(host.ref)).filter((text) => text.startsWith("**Reply"));
-    await waitUntil(async () => (await relayedTexts()).length === 2, "both relays to land");
+    await until(async () => (await relayedTexts()).length === 2, "both relays to land");
     expect(await relayedTexts()).toEqual([
       "**Reply from Guest:** Echo: question one",
       "**Reply from Guest:** Echo: question two",
@@ -394,9 +363,9 @@ describe("answering Deliveries (real runtime)", () => {
       .update(bots)
       .set({ conversationId: String(fresh) })
       .where(eq(bots.id, guest.id));
-    await waitUntil(() => !rt.isBusy(guest.ref), "the old chat to finish");
+    await until(() => !rt.isBusy(guest.ref), "the old chat to finish");
     await deliveries.answer(guest.ref);
-    await waitUntil(async () => (await ledgerRow("pinned"))?.answeredAt != null, "the answer");
+    await until(async () => (await ledgerRow("pinned"))?.answeredAt != null, "the answer");
     expect(await userTexts(host.ref)).toContain("**Reply from Guest:** Echo: before the reset");
   });
 
@@ -435,32 +404,31 @@ describe("answering Deliveries (failed replies)", () => {
       text: "hello",
       deliveredAt: new Date(),
     });
-    const runtime = fakeRuntime({
-      readChat: vi.fn().mockResolvedValue({
-        busy: false,
-        queued: [],
-        messages: [
-          {
-            id: "e1",
-            role: "user",
-            text: "hello",
-            requestId: "r-error",
-            status: "done",
-            createdAt: 1,
-          },
-          {
-            id: "e2",
-            role: "assistant",
-            text: "",
-            status: "error",
-            error: "Provider unavailable: key sk-123",
-            createdAt: 2,
-          },
-        ],
-      }),
+    const runtime = createFakeRuntime();
+    runtime.readChat.mockResolvedValue({
+      busy: false,
+      queued: [],
+      messages: [
+        {
+          id: "e1",
+          role: "user",
+          text: "hello",
+          requestId: "r-error",
+          status: "done",
+          createdAt: 1,
+        },
+        {
+          id: "e2",
+          role: "assistant",
+          text: "",
+          status: "error",
+          error: "Provider unavailable: key sk-123",
+          createdAt: 2,
+        },
+      ],
     });
     expect(await createDeliveries(runtime).answer(2)).toBe(1);
-    const relayed = vi.mocked(runtime.submit).mock.calls[0]![1] as { text: string };
+    const relayed = runtime.submit.mock.calls[0]![1] as { text: string };
     expect(relayed.text).toBe("**Reply from Guest:** (couldn't answer: the model failed)");
   });
 });

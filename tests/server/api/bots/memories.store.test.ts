@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { createMemoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
+import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 /** Who sent the conversation's latest user message (what `isUnattended` reads). */
 let latest: { text: string; peer?: unknown } = { text: "Remember this, please." };
@@ -10,20 +11,14 @@ const memoryStore = createMemoryStore(() => ({
   readChat: async () => ({ messages: [{ role: "user", ...latest }] }) as never,
 }));
 
-const botIds: string[] = [];
 afterEach(async () => {
   latest = { text: "Remember this, please." };
-  await db.delete(bots).where(inArray(bots.id, botIds.splice(0)));
+  await resetAppTables();
 });
 
 async function seedBot() {
-  const conversationId = Math.floor(Math.random() * 1_000_000_000);
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: randomUUID(), conversationId: String(conversationId), modelId: "m" })
-    .returning();
-  botIds.push(bot!.id);
-  return { botId: bot!.id, conversationId };
+  const bot = await seedBotRow({ name: randomUUID(), modelId: "m" });
+  return { botId: bot.id, conversationId: Number(bot.conversationId) };
 }
 
 const remember = memoryStore.remember!;

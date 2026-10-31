@@ -12,8 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { addJob } from "@groot/jobs/server/queue";
 import { runTick } from "@groot/jobs/server/tick";
 import { clearJobHandlers } from "@groot/jobs/server/worker";
-import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../../apps/web/src/server/api/bots/bots.runtime";
+import { db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import {
   ROUTINE_FIRE_JOB,
   rearmRoutines,
@@ -21,30 +20,17 @@ import {
 import { registerRoutineJobs } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import { runRequestId } from "../../../../apps/web/src/server/api/routines/routines.runs";
 import { startRoutinesWatcher } from "../../../../apps/web/src/server/api/routines/routines.watcher";
-import type { AgentRuntime } from "@tiny-agents/agent";
+import type { AgentRuntime } from "../../../../packages/agent/src/index";
+import {
+  closeAppRuntime,
+  openAppRuntime,
+  resetAppTables,
+  seedBot,
+  spyOnRuntime,
+  type SpiedRuntime,
+} from "../../fixtures";
 
 const MINUTE = 60_000;
-/** The conversation the fake runtime creates for a routine on its first fire. */
-const ROUTINE_CONVERSATION = 42;
-
-function fakeRuntime() {
-  return {
-    createConversation: vi.fn().mockResolvedValue(ROUTINE_CONVERSATION),
-    configure: vi.fn().mockResolvedValue(undefined),
-    submit: vi.fn().mockResolvedValue(undefined),
-    abort: vi.fn(),
-    readChat: vi.fn(async () => ({ messages: [], busy: false, queued: [] })),
-    isBusy: vi.fn().mockReturnValue(false),
-    busyConversations: vi.fn().mockReturnValue([]),
-    onActivity: vi.fn().mockReturnValue(() => undefined),
-    listModels: vi.fn().mockReturnValue([]),
-    hasModel: vi.fn().mockReturnValue(true),
-    listCapabilities: vi.fn().mockReturnValue([]),
-    pendingApprovals: vi.fn().mockReturnValue(0),
-    decideApproval: vi.fn(),
-  } as unknown as AgentRuntime;
-}
-
 let botId = "";
 
 /** A routine as the database copy leaves it: armed, slot set, no live job. */
@@ -84,33 +70,31 @@ async function jobById(id: string) {
   return (await db.select().from(jobs).where(eq(jobs.id, id)))[0];
 }
 
-async function clearTables() {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  await db.delete(jobs);
+const clearTables = resetAppTables;
+
+/** The conversation a routine runs in, once its first fire created it. */
+async function routineConversation(id: string): Promise<number> {
+  return Number((await routineRow(id)).conversationId);
 }
 
 describe("re-arming routines on boot", () => {
-  let runtime: ReturnType<typeof fakeRuntime>;
+  let rt: AgentRuntime;
+  let runtime: SpiedRuntime;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     clearJobHandlers();
     registerRoutineJobs();
-    runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
+    rt = await openAppRuntime();
+    runtime = spyOnRuntime(rt);
     await clearTables();
-    const [bot] = await db
-      .insert(bots)
-      .values({ name: "Bot", modelId: "m1", conversationId: "7" })
-      .returning();
-    botId = bot!.id;
+    botId = (await seedBot({ name: "Bot" })).id;
   });
 
   afterEach(async () => {
     clearJobHandlers();
     await clearTables();
+    await closeAppRuntime();
   });
 
   it("queues a copied routine's next occurrence at its time", async () => {
@@ -136,7 +120,7 @@ describe("re-arming routines on boot", () => {
     // Not due yet: a tick leaves it waiting and submits nothing.
     await runTick();
     expect((await jobById(job!.id))?.state).toBe("created");
-    expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
+    expect(runtime.submit).not.toHaveBeenCalled();
   });
 
   it("leaves live jobs alone, replaces dead ones, and skips what is not armed", async () => {
@@ -189,9 +173,9 @@ describe("re-arming routines on boot", () => {
       status: "awaiting",
       requestId: runRequestId(routine.id, slot),
     });
-    const submits = vi.mocked(runtime.submit).mock.calls;
+    const submits = runtime.submit.mock.calls;
     expect(submits).toHaveLength(1);
-    expect(submits[0]![0]).toBe(ROUTINE_CONVERSATION);
+    expect(submits[0]![0]).toBe(await routineConversation(routine.id));
     expect(submits[0]![1].text).toContain("(late by 10m)");
     // The chain keeps its phase: the next slot is an hour after the late one.
     const row = await routineRow(routine.id);
@@ -211,7 +195,7 @@ describe("re-arming routines on boot", () => {
       where: eq(routineRuns.routineId, routine.id),
     });
     expect(run).toMatchObject({ status: "missed", requestId: runRequestId(routine.id, slot) });
-    expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
+    expect(runtime.submit).not.toHaveBeenCalled();
     const row = await routineRow(routine.id);
     expect(row.enabled).toBe(true);
     expect(row.nextRunAt!.getTime()).toBeGreaterThan(before);
@@ -224,8 +208,8 @@ describe("re-arming routines on boot", () => {
     expect(await rearmRoutines()).toBe(1);
     await runTick();
 
-    expect(vi.mocked(runtime.submit)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(runtime.submit).mock.calls[0]![1].text).toContain("(late by 3h)");
+    expect(runtime.submit).toHaveBeenCalledTimes(1);
+    expect(runtime.submit.mock.calls[0]![1].text).toContain("(late by 3h)");
     // Fired once: archived.
     expect(await routineRow(routine.id)).toMatchObject({
       enabled: false,
@@ -248,7 +232,7 @@ describe("re-arming routines on boot", () => {
     expect(await rearmRoutines()).toBe(1);
     await runTick();
 
-    expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
+    expect(runtime.submit).not.toHaveBeenCalled();
     const row = await routineRow(routine.id);
     expect(row.nextRunAt?.toISOString()).toBe(new Date(slot.getTime() + 60 * MINUTE).toISOString());
     const job = await jobById(row.pendingJobId!);
@@ -260,7 +244,7 @@ describe("re-arming routines on boot", () => {
     const slot = new Date(Date.now() + 30 * MINUTE);
     const routine = await seedArmed({ kind: "interval", minutes: 60 }, slot);
 
-    startRoutinesWatcher(runtime);
+    startRoutinesWatcher(rt);
 
     await vi.waitFor(async () => {
       expect((await routineRow(routine.id)).pendingJobId).toBeTypeOf("string");

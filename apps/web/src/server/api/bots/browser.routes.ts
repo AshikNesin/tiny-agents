@@ -19,16 +19,9 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import {
-  browserOpenState,
-  closeBrowserSession,
-  browserProfilesDir,
-  getLiveBrowserSession,
-  setDriver,
-  startBrowserSession,
-} from "@tiny-agents/agent";
 import type { BrowserTarget } from "@tiny-agents/agent";
 import * as botsService from "./bots.service";
+import { getBrowserSessions } from "./browser.sessions";
 import { browserTargetForBot, SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { issueVncTicket } from "./browser.vnc";
 
@@ -48,7 +41,7 @@ async function botTarget(id: string): Promise<BrowserTarget> {
 }
 
 function requireSession(target: BrowserTarget) {
-  const live = getLiveBrowserSession(target);
+  const live = getBrowserSessions().get(target);
   if (!live) throw Boom.notFound("No browser session for this bot yet.");
   return live;
 }
@@ -56,8 +49,9 @@ function requireSession(target: BrowserTarget) {
 router.get("/bots/:id/browser", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
-  const live = getLiveBrowserSession(target);
-  const opening = browserOpenState(target);
+  const sessions = getBrowserSessions();
+  const live = sessions.get(target);
+  const opening = sessions.openState(target);
   return ok(c, {
     active: Boolean(live),
     // "shared" when other bots use this browser (and its logins) too.
@@ -81,9 +75,11 @@ router.post("/bots/:id/browser/start", async (c) => {
   const target = await botTarget(id);
   // Also when the browser is live: a bot on the shared profile may not have
   // its tab yet, and this brings its tab to the front of the live view.
-  startBrowserSession(target).catch(() => {
-    // The failure is reported by the status route (`error`).
-  });
+  getBrowserSessions()
+    .start(target)
+    .catch(() => {
+      // The failure is reported by the status route (`error`).
+    });
   return ok(c, { starting: true });
 });
 
@@ -96,7 +92,9 @@ router.post("/bots/:id/browser/vnc-ticket", async (c) => {
   }
   // The viewer opens on this bot's tab (made now if the bot has none yet in
   // a shared browser); the stream still works if that fails.
-  await startBrowserSession(target).catch(() => {});
+  await getBrowserSessions()
+    .start(target)
+    .catch(() => {});
   const ticket = issueVncTicket({ userId: requireUser(c).userId, botId: id, target });
   live.lastActivity = Date.now();
   return ok(c, {
@@ -125,7 +123,7 @@ router.post("/bots/:id/browser/driver", async (c) => {
   const body = await parseBody(c, driverSchema);
   const target = await botTarget(id);
   const live = requireSession(target);
-  await setDriver(target, body.driver);
+  await getBrowserSessions().setDriver(target, body.driver);
   if (body.driver === "human") live.lastActivity = Date.now();
   return ok(c, { driver: body.driver });
 });
@@ -134,9 +132,10 @@ router.delete("/bots/:id/browser/profile", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const target = await botTarget(id);
   // On the shared profile this signs every bot that uses it out.
-  await closeBrowserSession(target, { wipeProfile: true });
+  const sessions = getBrowserSessions();
+  await sessions.close(target, { wipeProfile: true });
   const { rmSync } = await import("node:fs");
-  rmSync(`${browserProfilesDir()}/${target.profile}`, { recursive: true, force: true });
+  rmSync(`${sessions.profilesDir}/${target.profile}`, { recursive: true, force: true });
   return ok(c, { reset: true });
 });
 

@@ -6,7 +6,7 @@
  * binding (`terminal-ssh2.ts`).
  */
 import type { Duplex } from "node:stream";
-import type { HostKeyStore } from "../toolkits/sandbox-ssh2";
+import type { HostKeyStore } from "../ssh/connection";
 import {
   MAX_SESSIONS,
   TERM,
@@ -270,15 +270,23 @@ type ConnectShape = {
  */
 function lazySsh2Transport(connect: () => ConnectShape): TerminalTransport {
   // The promise is cached, not the result: concurrent first calls must bind
-  // one transport, or each would pool its own connection.
-  let bound: Promise<TerminalTransport> | undefined;
+  // one transport, or each would pool its own connection. The binding is
+  // keyed by the endpoint, so a changed host, port or user rebinds (and
+  // closes the pool dialed for the old one) instead of dialing it forever.
+  let bound: { key: string; transport: Promise<Ssh2Bound> } | undefined;
   const load = (): Promise<TerminalTransport> => {
-    if (bound) return bound;
-    const loading = loadTransport(connect);
+    const shape = connect();
+    const key = `${shape.host}:${shape.port}:${shape.user}`;
+    if (bound?.key === key) return bound.transport;
+    const stale = bound;
+    void stale?.transport.then((t) => t.close()).catch(() => {});
+    const loading = loadTransport(shape);
+    const next = { key, transport: loading };
     loading.catch(() => {
-      if (bound === loading) bound = undefined; // a failed import is retried
+      if (bound === next) bound = undefined; // a failed import is retried
     });
-    return (bound = loading);
+    bound = next;
+    return loading;
   };
   return {
     async exec(command) {
@@ -290,7 +298,9 @@ function lazySsh2Transport(connect: () => ConnectShape): TerminalTransport {
   };
 }
 
-async function loadTransport(connect: () => ConnectShape): Promise<TerminalTransport> {
+type Ssh2Bound = TerminalTransport & { close(): void };
+
+async function loadTransport(shape: ConnectShape): Promise<Ssh2Bound> {
   const { createSsh2TerminalTransport } = await import("./terminal-ssh2");
-  return createSsh2TerminalTransport(connect());
+  return createSsh2TerminalTransport(shape);
 }

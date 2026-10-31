@@ -7,14 +7,20 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { bots, db, jobs, routineRuns, routines } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { ROUTINE_FIRE_JOB } from "../../../apps/web/src/server/api/routines/routines.chain";
-import type { AgentRuntime } from "@tiny-agents/agent";
 import { api, createTestApp, type TestApp } from "../helpers";
+import {
+  authToken,
+  closeAppRuntime,
+  openAppRuntime,
+  resetAppTables,
+  seedBot as seedBotRow,
+  spyOnRuntime,
+  type SpiedRuntime,
+} from "../fixtures";
 
-const token = await generateToken({ userId: 1, email: "routines-test@example.com" });
+const token = await authToken("routines-test@example.com");
 
 type Routine = Record<string, unknown> & { id: string; botId: string };
 
@@ -40,41 +46,14 @@ async function routineRow(id: string) {
   return db.query.routines.findFirst({ where: eq(routines.id, id) });
 }
 
-const emptyChat = { messages: [], busy: false };
+const seedBot = async () => (await seedBotRow({ name: "Helper" })).id;
 
-function fakeRuntime(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    // A routine's own conversation (issue #63); the bot's chat is 100.
-    createConversation: vi.fn().mockResolvedValue(200),
-    configure: vi.fn().mockResolvedValue(undefined),
-    submit: vi.fn().mockResolvedValue(undefined),
-    abort: vi.fn().mockResolvedValue(undefined),
-    watchChat: vi.fn(async (_ref: number, listener: (events: unknown[]) => void) => {
-      await listener([{ type: "snapshot", state: emptyChat }]);
-      return { initial: emptyChat, stop: async () => undefined };
-    }),
-    isBusy: vi.fn().mockReturnValue(false),
-    busyConversations: vi.fn().mockReturnValue([]),
-    onActivity: vi.fn().mockReturnValue(() => undefined),
-    listModels: vi
-      .fn()
-      .mockReturnValue([
-        { id: "m1", name: "M1", family: "other", reasoning: false, contextWindow: 8192 },
-      ]),
-    hasModel: vi.fn().mockReturnValue(true),
-    listCapabilities: vi.fn().mockReturnValue([]),
-    pendingApprovals: vi.fn().mockReturnValue(0),
-    decideApproval: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  } as unknown as AgentRuntime;
+/** The bot behind a routine, and the conversation the routine ran in. */
+async function botConversation(botId: string): Promise<number> {
+  return Number((await db.query.bots.findFirst({ where: eq(bots.id, botId) }))!.conversationId);
 }
-
-async function seedBot(): Promise<string> {
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: "Helper", modelId: "m1", conversationId: "100" })
-    .returning();
-  return bot!.id;
+async function routineConversation(id: string): Promise<number> {
+  return Number((await routineRow(id))!.conversationId);
 }
 
 const cronPayload = {
@@ -95,24 +74,23 @@ async function createRoutine(app: TestApp, overrides: Record<string, unknown> = 
   return response.body.data!;
 }
 
-async function clearTables() {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  await db.delete(jobs);
-}
+const clearTables = resetAppTables;
 
 describe("Routines API routes", () => {
   let app: TestApp;
+  let runtime: SpiedRuntime;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    setAgentRuntimeForTests(fakeRuntime());
+    runtime = spyOnRuntime(await openAppRuntime());
     app = createTestApp();
     await clearTables();
   });
 
-  afterEach(clearTables);
+  afterEach(async () => {
+    await clearTables();
+    await closeAppRuntime();
+  });
 
   it("requires authentication", async () => {
     const response = await api(app, "/api/v1/routines");
@@ -270,10 +248,8 @@ describe("Routines API routes", () => {
   });
 
   it("run-now submits a manual occurrence without archiving a future once routine", async () => {
-    const runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app, {
-      schedule: { kind: "once", at: "2026-11-01T09:00:00+05:30" },
+      schedule: { kind: "once", at: "2026-12-01T09:00:00+05:30" },
     });
     const jobsBefore = (await fireJobs()).length;
 
@@ -289,10 +265,11 @@ describe("Routines API routes", () => {
     expect(run).toMatchObject({ status: "awaiting", trigger: "manual" });
     expect(run?.requestId).toMatch(/^routine:[a-z0-9]+:\d{4}-\d{2}-\d{2}T/);
 
-    // Into the routine's own conversation, never the bot's chat (100).
-    const submits = vi.mocked(runtime.submit).mock.calls;
+    // Into the routine's own conversation, never the bot's chat.
+    const submits = runtime.submit.mock.calls;
     expect(submits).toHaveLength(1);
-    expect(submits[0]![0]).toBe(200);
+    expect(submits[0]![0]).toBe(await routineConversation(routine.id));
+    expect(submits[0]![0]).not.toBe(await botConversation(routine.botId));
     expect(submits[0]![1].requestId).toBe(run?.requestId);
     expect(submits[0]![1].text).toContain('**Routine "weekday-digest"');
     expect(submits[0]![1].text).toContain("Summarize HN, only new things.");
@@ -305,27 +282,23 @@ describe("Routines API routes", () => {
   });
 
   it("moving a routine to another bot gives it a fresh conversation for that bot", async () => {
-    const runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app);
     const id = routine.id;
     expect((await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status).toBe(
       200,
     );
-    expect((await routineRow(id))?.conversationId).toBe("200");
+    const conversation = await routineConversation(id);
+    expect(conversation).toBeGreaterThan(0);
 
-    const [other] = await db
-      .insert(bots)
-      .values({ name: "Other", modelId: "m1", conversationId: "101" })
-      .returning();
+    const other = await seedBotRow({ name: "Other" });
     const moved = await api(app, `/api/v1/routines/${id}`, {
       method: "PATCH",
-      json: { botId: other!.id },
+      json: { botId: other.id },
       token,
     });
     expect(moved.status).toBe(200);
     expect((await routineRow(id))?.conversationId).toBeNull();
-    expect(vi.mocked(runtime.abort)).toHaveBeenCalledWith(200);
+    expect(runtime.abort).toHaveBeenCalledWith(conversation);
     // The run awaiting in the old conversation never gets its reply now.
     expect(
       await db.query.routineRuns.findFirst({ where: eq(routineRuns.routineId, id) }),
@@ -333,31 +306,30 @@ describe("Routines API routes", () => {
   });
 
   it("deleting a routine stops its conversation", async () => {
-    const runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app);
     const id = routine.id;
     expect((await api(app, `/api/v1/routines/${id}/run`, { method: "POST", token })).status).toBe(
       200,
     );
+    const conversation = await routineConversation(id);
     expect((await api(app, `/api/v1/routines/${id}`, { method: "DELETE", token })).status).toBe(
       200,
     );
-    expect(vi.mocked(runtime.abort)).toHaveBeenCalledWith(200);
-    expect(vi.mocked(runtime.abort)).not.toHaveBeenCalledWith(100);
+    expect(runtime.abort).toHaveBeenCalledWith(conversation);
+    expect(runtime.abort).not.toHaveBeenCalledWith(await botConversation(routine.botId));
   });
 
   it("deleting a bot stops its routines' conversations too", async () => {
-    const runtime = fakeRuntime();
-    setAgentRuntimeForTests(runtime);
     const routine = await createRoutine(app);
     expect(
       (await api(app, `/api/v1/routines/${routine.id}/run`, { method: "POST", token })).status,
     ).toBe(200);
+    const chat = await botConversation(routine.botId);
+    const conversation = await routineConversation(routine.id);
     expect(
       (await api(app, `/api/v1/bots/${routine.botId}`, { method: "DELETE", token })).status,
     ).toBe(200);
-    expect(vi.mocked(runtime.abort).mock.calls.map(([ref]) => ref)).toEqual([100, 200]);
+    expect(runtime.abort.mock.calls.map(([ref]) => ref)).toEqual([chat, conversation]);
   });
 
   it("run-now on a recurring routine does not disturb the scheduled chain", async () => {

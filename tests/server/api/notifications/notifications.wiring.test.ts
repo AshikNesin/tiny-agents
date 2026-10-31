@@ -15,13 +15,14 @@ import { registerRedactor } from "@groot/core/notification/scrub";
 import type { ChatMessage, FinishedReply, WaitEvent } from "@tiny-agents/agent";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import { watchBot } from "../../../../apps/web/src/server/api/bots/bots.viewers";
-import { bots, db, routineRuns, routines } from "../../../../apps/web/src/server/db";
+import { db, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import {
   notifyRoutineRun,
   notifyVaultAlert,
   startNotifications,
   type NotificationsWiring,
 } from "../../../../apps/web/src/server/api/notifications/notifications.wiring";
+import { createFakeRuntime, resetAppTables, seedBot, until } from "../../fixtures";
 
 const CONVERSATION = 4242;
 
@@ -40,19 +41,20 @@ const asMessage = (reply: FinishedReply, index: number): ChatMessage => ({
  * the wiring's settled step the way bots.settled.ts would, with the replies
  * set so far as the transcript.
  */
+/**
+ * The shared fake for the wait feed, plus `activity`: busy records the run's
+ * start and idle runs the wiring's settled step the way bots.settled.ts
+ * would, with the replies set so far as the transcript.
+ */
 function fakeRuntime() {
-  const wait = new Set<(event: WaitEvent) => void>();
+  const fake = createFakeRuntime();
   const starts = new Map<number, number>();
   let replies: FinishedReply[] = [];
-  return {
-    onWait: (listener: (event: WaitEvent) => void) => {
-      wait.add(listener);
-      return () => wait.delete(listener);
-    },
+  return Object.assign(fake, {
     setReplies: (next: FinishedReply[]) => {
       replies = next;
     },
-    wait: (event: WaitEvent) => wait.forEach((listener) => listener(event)),
+    wait: (event: WaitEvent) => fake.emitWait(event),
     activity: (busy: boolean, conversation = CONVERSATION) => {
       if (busy) {
         if (!starts.has(conversation)) starts.set(conversation, Date.now());
@@ -67,7 +69,7 @@ function fakeRuntime() {
         ...(startedAt !== undefined ? { startedAt } : {}),
       });
     },
-  };
+  });
 }
 
 function fakeNotifier(settings: Partial<NotificationSettings> = {}) {
@@ -83,37 +85,21 @@ function fakeNotifier(settings: Partial<NotificationSettings> = {}) {
   };
 }
 
-async function until(check: () => boolean, what: string) {
-  const deadline = Date.now() + 5_000;
-  while (!check()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 10));
-  }
-}
-
 const settle = () => new Promise((r) => setTimeout(r, 50));
 
 let botId: string;
 let wiring: NotificationsWiring | undefined;
 
 beforeEach(async () => {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: "Ops bot", modelId: "m1", conversationId: String(CONVERSATION) })
-    .returning();
-  botId = bot!.id;
+  await resetAppTables();
+  botId = (await seedBot({ name: "Ops bot", conversationId: String(CONVERSATION) })).id;
 });
 
 afterEach(async () => {
   wiring?.stop();
   wiring = undefined;
   vi.useRealTimers();
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
+  await resetAppTables();
 });
 
 describe("needs-input notifications", () => {

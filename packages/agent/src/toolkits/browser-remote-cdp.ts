@@ -20,7 +20,8 @@ import { createServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
 import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { chromium } from "playwright-core";
-import ssh2, { type Client } from "ssh2";
+import type { Client } from "ssh2";
+import { dialSsh, type HostKeyStore } from "../ssh/connection";
 import { pageSession } from "./browser-chromium";
 import {
   installStackCommand,
@@ -32,7 +33,12 @@ import {
   teardownStackCommand,
   wipeProfileCommand,
 } from "./browser-vm-setup";
-import type { BrowserSession, BrowserTransport, BrowserVnc, OpenBrowserOptions } from "./browser";
+import type {
+  BrowserSession,
+  BrowserTransport,
+  BrowserVnc,
+  OpenBrowserOptions,
+} from "./browser-sessions";
 
 export interface RemoteCdpTransportOptions {
   /** SSH host of the VM running the browser (MagicDNS name). */
@@ -40,6 +46,8 @@ export interface RemoteCdpTransportOptions {
   port?: number;
   /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
   user?: string;
+  /** TOFU host-key pinning, shared with the sandbox toolkit and the terminal. */
+  hostKeys?: HostKeyStore;
   connectTimeoutMs?: number;
 }
 
@@ -176,35 +184,14 @@ async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerU
 
 export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): BrowserTransport {
   const dial = (): Promise<Client> =>
-    new Promise((resolve, reject) => {
-      const client = new ssh2.Client();
-      let settled = false;
-      const fail = (error: Error) => {
-        if (settled) return;
-        settled = true;
-        client.end();
-        reject(error);
-      };
-      client
-        .on("ready", () => {
-          if (settled) return;
-          settled = true;
-          resolve(client);
-        })
-        // Stay subscribed for the connection's whole life: after a handshake
-        // timeout ssh2 emits a second, fatal "Connection lost" error, and an
-        // unhandled 'error' event would take the whole server down.
-        .on("error", fail)
-        .once("close", () => fail(new Error("SSH connection closed before ready")))
-        .connect({
-          host: options.host,
-          port: options.port ?? 22,
-          username: options.user ?? "exedev",
-          keepaliveInterval: 15_000,
-          readyTimeout: options.connectTimeoutMs ?? 10_000,
-          // The tailnet is the auth (tag:codevm -> tag:tiny-agents-vm accept
-          // rules), same trust model as the sandbox toolkit: no credentials.
-        });
+    dialSsh({
+      host: options.host,
+      port: options.port,
+      user: options.user,
+      hostKeys: options.hostKeys,
+      connectTimeoutMs: options.connectTimeoutMs,
+      // The tailnet is the auth (tag:codevm -> tag:tiny-agents-vm accept
+      // rules), same trust model as the sandbox toolkit: no credentials.
     });
 
   /** Run one command on a fresh connection and close it. */

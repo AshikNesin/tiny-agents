@@ -9,21 +9,20 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { addJob } from "@groot/jobs/server/queue";
-import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
+import { db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import { ROUTINE_FIRE_JOB } from "../../../../apps/web/src/server/api/routines/routines.chain";
 import {
   createRoutineStore,
   RECURSION_MSG,
 } from "../../../../apps/web/src/server/api/routines/routines.toolkit-store";
+import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 const CONVERSATION = 7;
 /** The routine's own conversation, where its runs happen (issue #63). */
 const ROUTINE_CONVERSATION = 70;
 
-async function seedBot(name = "Bot", conversationId = String(CONVERSATION)) {
-  const [bot] = await db.insert(bots).values({ name, modelId: "m1", conversationId }).returning();
-  return bot!;
-}
+const seedBot = (name = "Bot", conversationId = String(CONVERSATION)) =>
+  seedBotRow({ name, conversationId });
 
 async function seedRoutine(botId: string, conversationId?: number) {
   const [routine] = await db
@@ -61,12 +60,7 @@ async function routineRow(id: string) {
   return db.query.routines.findFirst({ where: eq(routines.id, id) });
 }
 
-async function clearTables() {
-  await db.delete(routineRuns);
-  await db.delete(routines);
-  await db.delete(bots);
-  await db.delete(jobs);
-}
+const clearTables = resetAppTables;
 
 describe("routines toolkit store adapter", () => {
   let store: ReturnType<typeof createRoutineStore>;

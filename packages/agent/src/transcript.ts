@@ -7,14 +7,13 @@ import type {
   ChatPage,
   ChatState,
   ChatToolCall,
-  ChatCredentialRequest,
   ChatToolStatus,
-  ChatVaultUse,
-  OwnerAnswer,
-  OwnerQuestion,
   QueuedMessage,
 } from "./types";
+import { approvalOf } from "./approvals";
+import { credentialsOf } from "./credentials";
 import { secretRedactor } from "./redact";
+import { questionsOf } from "./toolkits/questions";
 
 /** A tool call of the current round, as `pi.live` presents it. */
 export interface LiveTool {
@@ -54,7 +53,8 @@ const UNANSWERED_REASONS: Record<string, string> = {
   model_error: "The model returned an error.",
 };
 
-function textOf(content: unknown): string {
+/** The text blocks of a message's content, joined. */
+export function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
@@ -161,61 +161,16 @@ function sourcesOf(details: unknown): ChatToolCall["sources"] {
   return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
 }
 
-/** An `ask_owner` call's details (under `result` when the approval gate asked first). */
-function questionsOf(
-  details: unknown,
-): Pick<ChatToolCall, "questions" | "answers"> & { pending: boolean } {
-  const own = record(details);
-  const value = own?.question !== undefined ? own : record(own?.result);
-  if (!value || !Array.isArray(value.questions)) return { pending: false };
-  return {
-    pending: value.question === "pending",
-    questions: value.questions as OwnerQuestion[],
-    ...(Array.isArray(value.answers) ? { answers: value.answers as OwnerAnswer[] } : {}),
-  };
-}
-
-/** A vault sink's card (on the pending details only). */
-function vaultOf(details: unknown): ChatVaultUse | undefined {
-  const vault = record(record(details)?.vault);
-  return vault && typeof vault.handle === "string" ? (vault as unknown as ChatVaultUse) : undefined;
-}
-
-/** A `request_credentials` call's details (under `result` when the approval gate asked first). */
-function credentialsOf(details: unknown): ChatCredentialRequest | undefined {
-  const own = record(details);
-  const value = own?.credentials !== undefined ? own : record(own?.result);
-  const request = record(value?.request);
-  if (!value || typeof value.credentials !== "string" || !request) return undefined;
-  return {
-    status: value.credentials as ChatCredentialRequest["status"],
-    origin: String(request.origin ?? ""),
-    title: String(request.title ?? ""),
-    purpose: String(request.purpose ?? ""),
-    fields: (Array.isArray(request.fields) ? request.fields : []).map((field) => {
-      const f = record(field) ?? {};
-      return {
-        key: String(f.key ?? ""),
-        label: String(f.label ?? ""),
-        type: String(f.type ?? "text"),
-        required: f.required === true,
-      };
-    }),
-    ...(Array.isArray(value.filled) ? { filled: value.filled.map(String) } : {}),
-    ...(typeof value.savedHandle === "string" ? { savedHandle: value.savedHandle } : {}),
-  };
-}
-
-function expiresAtOf(details: unknown): number | undefined {
-  const at = record(details)?.expiresAt;
-  return typeof at === "number" ? at : undefined;
-}
-
 function resultStatus(result: ToolResult): ChatToolStatus {
-  const details = record(result.message.details);
-  if (details?.approval === "denied") return "denied";
-  if (details?.approval === "expired" || details?.credentials === "expired") return "expired";
-  if (details?.interrupted === true || result.codes.includes("interrupted")) return "interrupted";
+  const approval = approvalOf(result.message.details);
+  if (approval?.state === "denied") return "denied";
+  if (
+    approval?.state === "expired" ||
+    credentialsOf(result.message.details)?.status === "expired"
+  ) {
+    return "expired";
+  }
+  if (approval?.interrupted || result.codes.includes("interrupted")) return "interrupted";
   if (result.codes.includes("aborted")) return "aborted";
   return result.message.isError ? "error" : "done";
 }
@@ -236,14 +191,14 @@ function toolCallView(
   if (result) {
     const message = result.message;
     const output = textOf(message.content) || result.diagnostics.join("\n");
-    const details = record(message.details);
-    const approval = details?.approval;
+    const approved = approvalOf(message.details);
+    const approval = approved?.state;
     const sources = sourcesOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
     // The tool's clock includes any wait for the owner's approval: report
     // the run and the wait apart.
-    const waitedMs = typeof details?.waitedMs === "number" ? details.waitedMs : undefined;
+    const waitedMs = approved?.waitedMs;
     return {
       ...base,
       status: resultStatus(result),
@@ -265,11 +220,12 @@ function toolCallView(
     };
   }
   if (slot) {
-    const waiting = record(slot.details)?.approval === "pending";
+    const approval = approvalOf(slot.details);
+    const waiting = approval?.state === "pending";
     const asked = questionsOf(slot.details);
     const credentials = credentialsOf(slot.details);
-    const vault = waiting ? vaultOf(slot.details) : undefined;
-    const expiresAt = expiresAtOf(slot.details);
+    const vault = approval?.vault;
+    const expiresAt = approval?.expiresAt ?? credentialExpiry(slot.details);
     return {
       ...base,
       status: waiting
@@ -291,6 +247,17 @@ function toolCallView(
   }
   // No result and no live slot: still queued in a busy run, or cut off for good.
   return { ...base, status: settled ? "interrupted" : "pending" };
+}
+
+/** A pending credential request's deadline rides its own details, like an approval's. */
+function credentialExpiry(details: unknown): number | undefined {
+  const at = record(details)?.expiresAt;
+  return typeof at === "number" ? at : undefined;
+}
+
+/** How an assistant message that ended in a model error reads to the owner. */
+export function modelErrorText(message: Pick<AssistantMessage, "errorMessage">): string {
+  return message.errorMessage || "The model returned an error.";
 }
 
 /** Tool results stored after each assistant entry, by provider call id (in order, for duplicate ids). */
@@ -367,9 +334,7 @@ export function assistantToChat(
     ...(reasoning ? { reasoning } : {}),
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
     status,
-    ...(status === "error"
-      ? { error: message.errorMessage || "The model returned an error." }
-      : {}),
+    ...(status === "error" ? { error: modelErrorText(message) } : {}),
     model: message.model,
     createdAt: message.timestamp ?? 0,
   };

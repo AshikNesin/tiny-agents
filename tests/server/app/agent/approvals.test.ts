@@ -10,7 +10,7 @@ import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
-import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
+import { ApprovalNotPendingError, type AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
   fauxAssistantMessage,
   fauxText,
@@ -344,6 +344,63 @@ describe("capabilities and approvals", () => {
     await until(() => finalText(events) !== undefined || undefined, "reply");
     expect(toolCall(events, "read_inbox")?.status).toBe("error");
     expect(toolCall(events, "read_inbox")?.output).toMatch(/not available/);
+  }, 15_000);
+});
+
+describe("decisions for calls that are not waiting", () => {
+  it("refuses to decide a running call that never asked (an allowed tool mid-run)", async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    const slow: Capability = {
+      id: "slow",
+      kind: "toolkit",
+      name: "Slow",
+      description: "",
+      extension: defineExtension({
+        name: "slow",
+        tools: [
+          defineTool({
+            name: "slow_read",
+            description: "Read slowly",
+            parameters: Type.Object({}),
+            replay: "safe",
+            execute: async () => {
+              await hold;
+              return { output: [{ type: "text", text: "read" }] };
+            },
+          }),
+        ],
+      }),
+      tools: [{ name: "slow_read", label: "Read slowly", description: "", readOnly: true }],
+    };
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [slow],
+      respondWith: callThenReport("slow_read", {}),
+    });
+    runtimes.push(runtime);
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["slow"], permissions: {} },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "read" });
+    const running = await until(() => {
+      const call = toolCall(events, "slow_read");
+      return call?.status === "running" && call.taskId !== undefined ? call : undefined;
+    }, "the call to run");
+    // The call is a running pi.tool task, but no wait marked its approval document.
+    await expect(runtime.decideApproval(ref, running.taskId!, "approved")).rejects.toThrow(
+      ApprovalNotPendingError,
+    );
+    await expect(runtime.decideApproval(ref, running.taskId!, "denied")).rejects.toThrow(
+      ApprovalNotPendingError,
+    );
+    release();
+    expect(await until(() => finalText(events), "reply")).toBe("read");
+    expect(toolCall(events, "slow_read")?.approval).toBeUndefined();
   }, 15_000);
 });
 

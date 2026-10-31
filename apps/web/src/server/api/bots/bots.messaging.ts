@@ -7,7 +7,7 @@ import { and, asc, eq, gte, ne } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
-import { createDeliveries } from "./bots.delivery";
+import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
 
 /** Why a delivery was refused (the bots toolkit's reasons). */
@@ -44,7 +44,10 @@ export function botToBotText(fromName: string, text: string): string {
   return `**Message from ${fromName} (bot):** ${text}`;
 }
 
-export function createBotMessagingStore(rt: AgentRuntime): BotMessagingStore {
+/** What the store needs from the runtime: Deliveries, plus the activity feed for the turn budget. */
+export type BotMessagingRuntime = DeliveryRuntime & Pick<AgentRuntime, "onActivity">;
+
+export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingStore {
   /** The sending bot; `fromRoutine` when the send comes from one of its routine runs. */
   async function senderOf(conversationId: number) {
     const owner = await conversationOwner(conversationId);

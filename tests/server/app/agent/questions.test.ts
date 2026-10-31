@@ -18,6 +18,7 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
+import { finishedReplyTo } from "../../../../packages/agent/src/replies";
 import { InvalidAnswersError } from "../../../../packages/agent/src/toolkits/questions";
 import type {
   ActivityChange,
@@ -249,7 +250,13 @@ describe("ask_owner", () => {
     await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
     expect(await until(() => finalText(events), "reply")).toMatch(/Nobody can answer questions/);
     expect(runtime.pendingQuestions(ref)).toBe(0);
-    expect(toolCall(events)).toMatchObject({ status: "error" });
+    expect(toolCall(events)).toMatchObject({ status: "error", approval: "refused" });
+    // A Routine run reads the refusal off the Finished reply (issue #87).
+    await until(() => !runtime.isBusy(ref), "idle");
+    expect(finishedReplyTo(await runtime.readChat(ref), "r1")).toMatchObject({
+      status: "answered",
+      reply: { refused: ["ask_owner"] },
+    });
   }, 15_000);
 
   it("rejects answers that do not fit the questions and keeps waiting", async () => {

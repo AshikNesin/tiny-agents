@@ -9,10 +9,8 @@ import { pathToFileURL } from "node:url";
 import { eq } from "drizzle-orm";
 import { bootstrap } from "@groot/core/bootstrap";
 import { db, users } from "@groot/core/database";
-import { uploadsRoot } from "@groot/core/storage/node";
 import { hashPassword } from "@groot/core/utils/password.utils";
-import { asCoreDatabase } from "../apps/web/src/server/db";
-import { openAppDatabase } from "../apps/web/src/server/db/legacy-copy";
+import { applyDatabaseDefaults, openNodeAppDatabase } from "../apps/web/src/server/db/open";
 
 export const SEED_USER = {
   email: "demo@example.com",
@@ -22,16 +20,11 @@ export const SEED_USER = {
 
 /** Boot against `DATABASE_URL` (migrations applied) and make sure the demo data exists. */
 export async function seed(): Promise<void> {
+  applyDatabaseDefaults();
   bootstrap({
     env: process.env,
     config: { logging: { level: "warn" } },
-    db: (env) =>
-      asCoreDatabase(
-        openAppDatabase(env.DATABASE_URL, {
-          migrationsFolder: "apps/web/drizzle",
-          uploadsRoot: uploadsRoot(env),
-        }),
-      ),
+    db: (validated) => openNodeAppDatabase(validated),
   });
 
   const [existing] = await db.select().from(users).where(eq(users.email, SEED_USER.email)).limit(1);

@@ -9,7 +9,10 @@
  * request and then settles the document (`AgentRuntime.settleCredentialRequest`).
  */
 import type { JsonValue } from "@earendil-works/chord";
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
+import { innerDetails } from "./approvals";
+import type { ChatCredentialRequest } from "./types";
+import { pendingToolTask, sealedAsNotPending, type HostTx } from "./waiting";
 
 export type CredentialFieldType =
   | "text"
@@ -66,6 +69,117 @@ export const CredentialRequestDoc = defineDoc<{
   }),
   checkpointWhen: () => false,
 });
+
+/** The credential request was already answered, expired, or its call ended. */
+export class CredentialRequestNotPendingError extends Error {
+  constructor(taskId: number) {
+    super(`Tool call ${taskId} is not waiting for credentials`);
+    this.name = "CredentialRequestNotPendingError";
+  }
+}
+
+// ── The card's details: one shape, produced and parsed here ─────────────
+
+/** The details a `request_credentials` call shows while it waits. */
+export function pendingCredentialDetails(
+  request: CredentialRequest,
+  expiresAt: number,
+): JsonObject {
+  return { credentials: "pending", request: request as unknown as JsonObject, expiresAt };
+}
+
+/** The details a `request_credentials` call ends with. */
+export function credentialResultDetails(
+  doc: { status: CredentialRequestStatus; filled: string[]; savedHandle: string | null },
+  request: CredentialRequest,
+): JsonObject {
+  return {
+    credentials: doc.status,
+    request: request as unknown as JsonObject,
+    filled: doc.filled,
+    ...(doc.savedHandle ? { savedHandle: doc.savedHandle } : {}),
+  };
+}
+
+const record = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+/** A `request_credentials` call as the chat reads it off the call's details. */
+export function credentialsOf(details: unknown): ChatCredentialRequest | undefined {
+  const value = innerDetails(details);
+  const request = record(value?.request);
+  if (!value || typeof value.credentials !== "string" || !request) return undefined;
+  return {
+    status: value.credentials as ChatCredentialRequest["status"],
+    origin: String(request.origin ?? ""),
+    title: String(request.title ?? ""),
+    purpose: String(request.purpose ?? ""),
+    fields: (Array.isArray(request.fields) ? request.fields : []).map((field) => {
+      const f = record(field) ?? {};
+      return {
+        key: String(f.key ?? ""),
+        label: String(f.label ?? ""),
+        type: String(f.type ?? "text"),
+        required: f.required === true,
+      };
+    }),
+    ...(Array.isArray(value.filled) ? { filled: value.filled.map(String) } : {}),
+    ...(typeof value.savedHandle === "string" ? { savedHandle: value.savedHandle } : {}),
+  };
+}
+
+// ── Host side: the owner's sheet ────────────────────────────────────────
+
+/**
+ * The request a waiting `request_credentials` call shows, in the host's
+ * transaction. Throws `CredentialRequestNotPendingError` for a call that is
+ * not waiting on one (another tool's call, answered, expired, ended).
+ */
+export async function readPendingRequest(
+  tx: HostTx,
+  taskId: number,
+): Promise<{ conversation: number; request: CredentialRequest; expiresAt: number }> {
+  const id = taskId as TaskId;
+  const notPending = () => new CredentialRequestNotPendingError(taskId);
+  const conversation = await pendingToolTask(tx, id, undefined, notPending);
+  // Another tool's task has no request (and the throw rolls back the
+  // document this read would create).
+  const doc = await tx.doc(CredentialRequestDoc, id);
+  if (doc.status !== "pending" || !doc.request) throw notPending();
+  if (doc.expiresAt <= Date.now()) throw notPending();
+  return {
+    conversation,
+    // A plain copy: the draft is a proxy that structuredClone can't copy.
+    request: JSON.parse(JSON.stringify(storedRequest(doc))) as CredentialRequest,
+    expiresAt: doc.expiresAt,
+  };
+}
+
+/** Settle a waiting request with the owner's outcome (never values), in the host's transaction. */
+export async function settleRequest(
+  tx: HostTx,
+  taskId: number,
+  outcome: CredentialRequestOutcome,
+): Promise<void> {
+  const id = taskId as TaskId;
+  const notPending = () => new CredentialRequestNotPendingError(taskId);
+  await pendingToolTask(tx, id, undefined, notPending);
+  const doc = await tx.doc(CredentialRequestDoc, id);
+  if (doc.status !== "pending" || !doc.request) throw notPending();
+  doc.status = outcome.status;
+  if (outcome.status === "filled") {
+    doc.filled = [...outcome.filled];
+    doc.savedHandle = outcome.savedHandle ?? null;
+  }
+}
+
+/** Map a sealed-document error (the call ended) to `CredentialRequestNotPendingError`. */
+export function credentialRequestNotPending(error: unknown, taskId: number): never {
+  if (error instanceof CredentialRequestNotPendingError) throw error;
+  return sealedAsNotPending(error, () => new CredentialRequestNotPendingError(taskId));
+}
 
 /** How the owner answered a credential request. */
 export type CredentialRequestOutcome =

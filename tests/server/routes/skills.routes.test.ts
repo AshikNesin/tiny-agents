@@ -1,12 +1,12 @@
 /** Skills API (issue #1 M2): the shared library, bot assignment and imports. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { generateToken } from "@groot/core/utils/jwt.utils";
 import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
 import { parseGitHubUrl } from "../../../apps/web/src/server/api/skills/skills.parse";
 import { bots, db, skills } from "../../../apps/web/src/server/db";
 import { api, createTestApp } from "../helpers";
+import { authToken, seedBot as seedBotRow } from "../fixtures";
 
-const token = await generateToken({ userId: 1, email: "skills@example.com" });
+const token = await authToken("skills@example.com");
 const buildApp = () => createTestApp();
 
 interface SkillBody {
@@ -26,13 +26,8 @@ description: Write the weekly report from my notes
 
 1. Read notes`;
 
-async function seedBot(conversationId = "900") {
-  const [bot] = await db
-    .insert(bots)
-    .values({ name: "Ops", modelId: "m", conversationId })
-    .returning();
-  return bot!;
-}
+const seedBot = (conversationId = "900") =>
+  seedBotRow({ name: "Ops", modelId: "m", conversationId });
 
 describe("Skills API", () => {
   beforeEach(async () => {
@@ -182,5 +177,29 @@ describe("Skills API", () => {
     expect(deleted.status).toBe(200);
     expect(deleted.body.data).toEqual({ deleted: true });
     expect((await skillStore.list(901)).map((s) => s.name)).toEqual(["inbox-zero"]);
+  });
+
+  it("never lets a bot overwrite a skill it is not assigned: a new version of its own, or a new name", async () => {
+    const app = buildApp();
+    const ops = await seedBot("910");
+    await seedBot("911");
+    const imported = await api<SkillBody>(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "deploy", description: "Deploy", body: "careful", botIds: [ops.id] },
+      token,
+    });
+    expect(imported.status).toBe(201);
+
+    // The other bot has no "deploy": its save is refused, and the body stays.
+    await expect(
+      skillStore.save(911, { name: "deploy", description: "Deploy", body: "rm -rf /" }),
+    ).rejects.toThrow(/already exists and is not assigned to you/);
+    expect((await skillStore.get(910, "deploy"))?.body).toBe("careful");
+
+    // The assigned bot saves a new version of its own.
+    expect(
+      await skillStore.save(910, { name: "deploy", description: "Deploy", body: "v2" }),
+    ).toEqual({ created: false });
+    expect((await skillStore.get(910, "deploy"))?.body).toBe("v2");
   });
 });

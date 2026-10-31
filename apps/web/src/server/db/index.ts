@@ -24,6 +24,20 @@ export interface CreateAppDbOptions {
   migrationsFolder?: string;
 }
 
+/** The better-sqlite3 connection behind each instance `createAppDb` made. */
+const connections = new WeakMap<AppDatabase, Database.Database>();
+
+/**
+ * The raw connection behind an instance, for the few callers that must
+ * checkpoint or close it (the legacy copy's staging file). Throws for an
+ * instance this module did not open.
+ */
+export function sqliteConnection(instance: AppDatabase): Database.Database {
+  const sqlite = connections.get(instance);
+  if (!sqlite) throw new Error("Not a database this module opened");
+  return sqlite;
+}
+
 export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppDatabase {
   const file = resolveSqlitePath(url);
   if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
@@ -34,6 +48,7 @@ export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppD
   sqlite.pragma("busy_timeout = 5000");
 
   const instance = drizzle(sqlite, { schema });
+  connections.set(instance, sqlite);
   if (options.migrationsFolder) {
     if (!existsSync(options.migrationsFolder)) {
       throw new Error(`Migrations folder not found: ${options.migrationsFolder}`);
