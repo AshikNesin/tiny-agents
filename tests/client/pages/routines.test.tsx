@@ -176,6 +176,9 @@ describe("Routines page", () => {
   });
 
   it("sends a once schedule with the +05:30 IST offset", async () => {
+    // A one-time routine must be in the future, so date it next year rather
+    // than on a fixed day that eventually passes.
+    const year = new Date().getUTCFullYear() + 1;
     loadPage();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     mount();
@@ -184,17 +187,21 @@ describe("Routines page", () => {
     await user.click(await screen.findByRole("tab", { name: "Once" }));
     const at = screen.getByLabelText(/run at \(ist\)/i);
     await user.clear(at);
-    await user.type(at, "2026-11-01T09:00");
+    await user.type(at, `${year}-11-01T09:00`);
 
-    expect((await screen.findAllByText(/01 Nov 2026, 09:00 IST/)).length).toBe(2);
+    expect((await screen.findAllByText(`01 Nov ${year}, 09:00 IST`, { exact: false })).length).toBe(
+      2,
+    );
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getAllByText(/01 Nov 2026, 09:00 IST/).length).toBe(2);
+    expect(within(dialog).getAllByText(`01 Nov ${year}, 09:00 IST`, { exact: false }).length).toBe(
+      2,
+    );
     await fillBasics(user);
     await user.click(screen.getByRole("button", { name: "Create", exact: true }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock.mock.calls[0][0].schedule).toEqual({
       kind: "once",
-      at: "2026-11-01T09:00:00+05:30",
+      at: `${year}-11-01T09:00:00+05:30`,
     });
   });
 
