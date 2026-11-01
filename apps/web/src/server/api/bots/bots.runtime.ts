@@ -12,6 +12,7 @@ import {
   createBotsToolkit,
   createBrowserToolkit,
   createClassifier,
+  createComputerToolkit,
   createMemoryCapability,
   createReviewer,
   createRoutinesToolkit,
@@ -47,6 +48,11 @@ import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
 import { getBrowserSessions } from "./browser.sessions";
+import {
+  computerProfileForConversation,
+  computerSetupHint,
+  getComputerSessions,
+} from "./computer.sessions";
 import { sandboxEndpoint, unquoteEnv as unquote } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -98,6 +104,16 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       sessions: getBrowserSessions(env),
       resolveTarget: browserTargetForConversation,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
+      vault,
+      ownerWaits,
+    }),
+    // Computer (issue #108): an XFCE desktop per browser profile on the
+    // sandbox VM, seen with scrot and driven with xdotool. Without a VM it
+    // offers no tools and the bot editor shows why.
+    createComputerToolkit({
+      sessions: getComputerSessions(env) ?? undefined,
+      resolveProfile: computerProfileForConversation,
+      setupHint: computerSetupHint(env),
       vault,
       ownerWaits,
     }),

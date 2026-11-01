@@ -1,9 +1,11 @@
 /**
- * The streamed browser: a noVNC canvas wired to the server's VNC WebSocket.
+ * A streamed desktop: a noVNC canvas wired to the server's VNC WebSocket.
  *
  * The viewer stays view-only until the owner takes control. It reconnects
- * with backoff (fetching a fresh one-time ticket each try), fits the remote
- * desktop to its box, and carries the clipboard both ways.
+ * with backoff (fetching a fresh one-time ticket each try) and carries the
+ * clipboard both ways. For the browser it fits the remote desktop (and
+ * Chrome's window) to its box; the computer's desktop has a fixed size the
+ * bot's coordinates depend on, so that viewer only scales it.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { botsApi } from "../../lib/bots-api";
@@ -22,6 +24,8 @@ export interface VncHandle {
 
 interface VncViewProps {
   botId: string;
+  /** Which desktop to stream; default the bot's browser. */
+  kind?: "browser" | "computer";
   /** False keeps the viewer view-only (the agent is driving). */
   interactive: boolean;
   onState: (state: VncState) => void;
@@ -52,7 +56,7 @@ const PASTE_CHORD = {
 } as const;
 
 export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
-  { botId, interactive, onState },
+  { botId, kind = "browser", interactive, onState },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -99,9 +103,15 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       {
         // No ticket (session gone) retries too: the panel's status poll
         // removes this view when the session is truly gone.
-        ticket: () => botsApi.browserVncTicket(botId),
+        ticket: () =>
+          kind === "computer" ? botsApi.computerVncTicket(botId) : botsApi.browserVncTicket(botId),
         open: async (ticket, events) => {
-          const rfb = await createRfb(host, socketUrl(ticket.path), ticket.scale);
+          const rfb =
+            kind === "computer"
+              ? await createRfb(host, socketUrl(ticket.path), ticket.scale, {
+                  remoteResize: false,
+                })
+              : await createRfb(host, socketUrl(ticket.path), ticket.scale);
           rfbRef.current = rfb;
           rfb.viewOnly = !interactiveRef.current;
           rfb.addEventListener("connect", () => {
@@ -132,7 +142,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       },
     );
     return () => socket.close();
-  }, [botId]);
+  }, [botId, kind]);
 
   // Fit the remote Chrome window to the viewer. noVNC resizes the display
   // itself; the window inside it needs the same size (in CSS pixels), which
@@ -142,7 +152,8 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
   // winner.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || typeof ResizeObserver === "undefined") return;
+    // The computer's desktop never changes size: noVNC just scales it.
+    if (!host || kind !== "browser" || typeof ResizeObserver === "undefined") return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight = false;
@@ -191,7 +202,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       clearTimeout(timer);
       fitRef.current = () => undefined;
     };
-  }, [botId]);
+  }, [botId, kind]);
 
   // Cmd shortcuts on a Mac become Ctrl shortcuts on the remote Linux Chrome.
   // Captured before noVNC sees them: noVNC would send Meta as Super.
@@ -222,5 +233,11 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     };
   }, [paste]);
 
-  return <div ref={hostRef} className="bg-muted absolute inset-0" data-testid="browser-vnc" />;
+  return (
+    <div
+      ref={hostRef}
+      className="bg-muted absolute inset-0"
+      data-testid={kind === "computer" ? "computer-vnc" : "browser-vnc"}
+    />
+  );
 });

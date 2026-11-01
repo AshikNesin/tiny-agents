@@ -34,6 +34,7 @@ import {
   routineFailed,
   routinePausedBlocked,
   routineSucceeded,
+  takeoverRequested,
   runFailed,
   runLongDone,
   waitKey,
@@ -87,7 +88,9 @@ export function startNotifications(
         ? questionAsked(bot, event.task, event.preview)
         : event.tool === "request_credentials"
           ? credentialRequested(bot, event.task, event.subject, event.expiresAt)
-          : approvalRequested(bot, event.task, event.tool ?? "a tool", event),
+          : event.tool === "computer_request_takeover"
+            ? takeoverRequested(bot, event.task, event.preview)
+            : approvalRequested(bot, event.task, event.tool ?? "a tool", event),
     );
     const { reminderMinutes } = await notifier.getSettings();
     const key = waitKey(event.kind, event.conversation, event.task);

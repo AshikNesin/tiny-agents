@@ -36,7 +36,7 @@ export type VaultItemRow = VaultItem;
 
 /** Tools an item may be used by when its row names none. */
 export const KIND_DEFAULT_TOOLS: Record<VaultKind, string[]> = {
-  login: ["browser_fill_secret", "browser_enter_code"],
+  login: ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
   card: ["browser_fill_secret"],
   identity: [],
   api_key: ["http_request", "mcp"],
@@ -233,6 +233,10 @@ function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string)
     // The owner linked the item to the connection itself.
     case "connection":
       return true;
+    // A desktop window: the sink checks the bound window right before typing,
+    // and every use asks, showing the owner which window.
+    case "window":
+      return true;
     default:
       return false;
   }
@@ -330,8 +334,10 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   };
   const meta = parseJson<{ brand: string; last4: string }>(item.cardMetaJson);
   if (meta) card.card = { brand: meta.brand, last4: meta.last4 };
-  // A command is code the model wrote holding the secret: every use asks.
-  const everyUse = approval === "every_use" || use.targetKind === "command";
+  // A command is code the model wrote holding the secret, and a window is
+  // one the model named: every use asks.
+  const everyUse =
+    approval === "every_use" || use.targetKind === "command" || use.targetKind === "window";
   return {
     approve: everyUse || (approval === "per_conversation" && !use.granted),
     grantable: !everyUse,

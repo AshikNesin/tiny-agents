@@ -52,6 +52,7 @@ What ships in the box and how to use or extend it.
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you           |
 | [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks            |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                   |
+| [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view |
 | [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots       |
 
 ## Reference

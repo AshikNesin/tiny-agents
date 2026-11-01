@@ -19,6 +19,7 @@ export type ChatToolStatus =
   | "awaiting_approval"
   | "awaiting_answer"
   | "awaiting_credentials"
+  | "awaiting_takeover"
   | "done"
   | "error"
   | "denied"
@@ -50,6 +51,8 @@ export interface ChatToolCall {
   vault?: ChatVaultUse;
   /** request_credentials calls: the sheet's form and which keys were filled. */
   credentials?: ChatCredentialRequest;
+  /** computer_request_takeover calls (issue #108): what the bot asked the owner to do. */
+  takeover?: { status: "pending" | "released" | "expired"; reason: string };
 }
 
 export interface AttachmentRef {

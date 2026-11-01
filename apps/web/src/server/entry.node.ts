@@ -13,7 +13,11 @@ import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startWorkers, stopWorkers } from "@groot/jobs/server/worker";
-import { AgentRuntime, closeAllBrowserSessions } from "@tiny-agents/agent";
+import {
+  AgentRuntime,
+  closeAllBrowserSessions,
+  closeAllComputerSessions,
+} from "@tiny-agents/agent";
 import { appConfig } from "./config";
 import { agentDbPath, appEnv, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
@@ -39,6 +43,7 @@ import { createMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
+import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
 import { isAssetRequest } from "./static-assets";
 
@@ -159,6 +164,9 @@ async function main(): Promise<void> {
   // Browsers drive agent work, so they close before the runtime and after
   // everything that could still ask for a page.
   add({ name: "browser sessions", stop: () => closeAllBrowserSessions() });
+  // Desktops on the VM stop with the app; one left by a crash is reattached
+  // by the next launch for its profile.
+  add({ name: "computer sessions", stop: () => closeAllComputerSessions() });
 
   // Remote MCP connections: install cached tools now, connect in the
   // background (never blocks /health or boot).
@@ -270,6 +278,7 @@ async function main(): Promise<void> {
   // close() can finish, while everything they used is still up.
   let server!: http.Server;
   let browserVnc!: ReturnType<typeof attachBrowserVnc>;
+  let computerVnc!: ReturnType<typeof attachComputerVnc>;
   let terminalWs!: ReturnType<typeof attachTerminalWs>;
   add({
     name: "http server",
@@ -278,6 +287,7 @@ async function main(): Promise<void> {
       // VNC viewers for bot browsers and terminal tabs connect over WebSocket
       // on the same server; each handles only its own upgrade path.
       browserVnc = attachBrowserVnc(server);
+      computerVnc = attachComputerVnc(server);
       terminalWs = attachTerminalWs(server);
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
@@ -293,6 +303,7 @@ async function main(): Promise<void> {
       server.closeIdleConnections();
       endAllSse();
       browserVnc.close();
+      computerVnc.close();
       terminalWs.close();
       await closed;
     },

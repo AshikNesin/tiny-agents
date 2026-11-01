@@ -27,6 +27,18 @@ export interface OwnerActions {
   ): Promise<unknown>;
   /** Answer a bot's questions (one answer per question), or dismiss them with `null`. */
   answerQuestions(taskId: number, answers: OwnerAnswer[] | null): Promise<unknown>;
+  /**
+   * Hand the bot's computer back after a takeover it asked for (issue #108).
+   * Absent where the chat cannot reach the computer.
+   */
+  handBackComputer?(): Promise<unknown>;
+}
+
+/** Window event the chat listens for to bring the Computer panel up. */
+export const SHOW_COMPUTER_EVENT = "tiny-agents:show-computer";
+
+export function showComputerPanel(): void {
+  window.dispatchEvent(new Event(SHOW_COMPUTER_EVENT));
 }
 
 /** The HTTP adapter: owner actions for one bot's live chat. */
@@ -35,6 +47,7 @@ export function httpOwnerActions(botId: string): OwnerActions {
     decideApproval: (taskId, decision, options = {}) =>
       botsApi.decideApproval(botId, taskId, decision, options.alwaysAllow, options.grant),
     answerQuestions: (taskId, answers) => botsApi.answerQuestions(botId, taskId, answers),
+    handBackComputer: () => botsApi.computerDriver(botId, "agent"),
   };
 }
 

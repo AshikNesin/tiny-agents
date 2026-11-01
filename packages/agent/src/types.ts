@@ -41,6 +41,7 @@ export type ChatToolStatus =
   | "done"
   | "error"
   | "awaiting_credentials"
+  | "awaiting_takeover"
   | "denied"
   | "expired"
   | "interrupted"
@@ -71,6 +72,8 @@ export interface ChatToolCall {
   vault?: ChatVaultUse;
   /** `request_credentials` calls: the form the owner fills, and which keys were filled. */
   credentials?: ChatCredentialRequest;
+  /** `computer_request_takeover` calls: what the bot asked the owner to do on the computer. */
+  takeover?: { status: "pending" | "released" | "expired"; reason: string };
   /** Pages the call searched or read (web tools). */
   sources?: { url: string; title: string }[];
   /** `ask_owner` calls: the questions the bot asked the owner. */

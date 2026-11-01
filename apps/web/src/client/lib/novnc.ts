@@ -61,12 +61,21 @@ function scaleRemoteResize(rfb: RFB, rfbClass: typeof RFB, scale: number): void 
   };
 }
 
-/** Open a viewer in `host`. It starts view-only; the caller enables input. */
-export async function createRfb(host: HTMLElement, url: string, scale: number): Promise<RFB> {
+/**
+ * Open a viewer in `host`. It starts view-only; the caller enables input.
+ * With `remoteResize: false` (the computer's fixed-size desktop) the viewer
+ * only scales the remote screen and never asks it to change size.
+ */
+export async function createRfb(
+  host: HTMLElement,
+  url: string,
+  scale: number,
+  { remoteResize = true }: { remoteResize?: boolean } = {},
+): Promise<RFB> {
   const { default: RfbClass } = await import("@novnc/novnc");
   const rfb = new RfbClass(host, url, { shared: true });
   rfb.scaleViewport = true;
-  rfb.resizeSession = true;
+  rfb.resizeSession = remoteResize;
   rfb.clipViewport = false;
   rfb.focusOnClick = true;
   rfb.showDotCursor = false;
@@ -75,6 +84,6 @@ export async function createRfb(host: HTMLElement, url: string, scale: number): 
   rfb.qualityLevel = 8;
   rfb.compressionLevel = 2;
   rfb.viewOnly = true;
-  scaleRemoteResize(rfb, RfbClass, scale);
+  if (remoteResize) scaleRemoteResize(rfb, RfbClass, scale);
   return rfb;
 }

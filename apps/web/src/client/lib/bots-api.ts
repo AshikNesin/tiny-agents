@@ -317,6 +317,14 @@ export const botsApi = {
   browserResize: (id: string, size: { width: number; height: number }) =>
     apiClient.post(`/bots/${id}/browser/resize`, size),
   browserResetProfile: (id: string) => apiClient.delete(`/bots/${id}/browser/profile`),
+  computerStatus: (id: string) => apiClient.get<ComputerStatus>(`/bots/${id}/computer`),
+  computerDriver: (id: string, driver: "agent" | "human") =>
+    apiClient.post(`/bots/${id}/computer/driver`, { driver }),
+  computerStart: (id: string) =>
+    apiClient.post<{ starting: boolean }>(`/bots/${id}/computer/start`),
+  computerVncTicket: (id: string) =>
+    apiClient.post<BrowserVncTicket>(`/bots/${id}/computer/vnc-ticket`),
+  computerReset: (id: string) => apiClient.delete(`/bots/${id}/computer/profile`),
   listMemories: (id: string, includeArchived = true) =>
     apiClient.get<{ memories: MemoryRecord[] }>(`/bots/${id}/memories`, { includeArchived }),
   createMemory: (id: string, input: MemoryInput) =>
@@ -343,6 +351,25 @@ export interface BrowserStatus {
   phase?: "installing" | "starting" | null;
   /** Why the last open attempt failed, until the next attempt. */
   error?: string | null;
+}
+
+/** The bot's computer (issue #108): an XFCE desktop on the sandbox VM. */
+export interface ComputerStatus {
+  /** False without a sandbox VM; `setupHint` says what to set. */
+  configured: boolean;
+  setupHint: string | null;
+  active: boolean;
+  /** Whether the bot shares the desktop with other bots or has its own. */
+  profile: BrowserProfile;
+  driver: "agent" | "human" | null;
+  /** The desktop's fixed size, which the viewer scales. */
+  width: number | null;
+  height: number | null;
+  /** What the bot asked the owner to do while it waits for a hand-back. */
+  takeover: string | null;
+  starting: boolean;
+  phase: "installing" | "starting" | null;
+  error: string | null;
 }
 
 /** One-time credential for the VNC WebSocket; `path` is same-origin. */

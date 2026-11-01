@@ -57,8 +57,10 @@ export interface VaultItemMeta {
  * - `command`: code the model wrote, run confined to the item's hosts, so
  *   the item must name some; every use asks.
  * - `connection`: an MCP connection the owner linked the item to.
+ * - `window`: a desktop window on the bot's computer, bound by class and
+ *   title and checked right before typing; every use asks.
  */
-export type VaultTargetKind = "origin" | "host" | "command" | "connection";
+export type VaultTargetKind = "origin" | "host" | "command" | "connection" | "window";
 
 /** One intended use of an item: what policy, the approval card and the audit see. */
 export interface VaultUse {
