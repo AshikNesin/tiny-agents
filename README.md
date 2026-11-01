@@ -12,6 +12,15 @@ replies, durability as a first-class property.
 
 ## Demo
 
+[![Watch the 45-second tiny-agents teaser](docs/demo/teaser-poster.jpg)](docs/demo/tiny-agents-teaser.mp4)
+
+**In 45 seconds:** a trip to Japan from Chennai, planned by a bot that
+remembers you, browses and uses its own computer, and pays only after you
+approve (card filled from the Vault). You set each tool to Allow, Ask or Off,
+connect your tools over MCP, bots speak up first through routines and hand
+work to each other, and a reply survives a server restart. See
+[`scripts/demo/teaser/`](scripts/demo/teaser/README.md) to re-render it.
+
 [![Watch the tiny-agents demo (1:39)](docs/demo/poster.jpg)](docs/demo/tiny-agents-demo.mp4)
 
 A 1:39 tour: bots that ask before they act, a live browser (Google Flights,

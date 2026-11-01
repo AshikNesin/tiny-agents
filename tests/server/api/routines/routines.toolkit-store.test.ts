@@ -92,13 +92,17 @@ describe("routines toolkit store adapter", () => {
     expect(row?.nextRunAt).toBeTruthy();
   });
 
+  // One-time routines must be in the future, so date them next year rather
+  // than on a fixed day that eventually passes.
+  const NEXT_YEAR = new Date().getUTCFullYear() + 1;
+
   it("a create with the same idempotency key returns the same routine", async () => {
     await seedBot();
     const first = await store.create(CONVERSATION, {
       idempotencyKey: "pi:sess:7",
       name: "once",
       prompt: "Remind me.",
-      schedule: { kind: "once", at: "2026-11-01T09:00:00+05:30" },
+      schedule: { kind: "once", at: `${NEXT_YEAR}-11-01T09:00:00+05:30` },
     });
     const second = await store.create(CONVERSATION, {
       idempotencyKey: "pi:sess:7",
@@ -134,7 +138,7 @@ describe("routines toolkit store adapter", () => {
         idempotencyKey: "k3",
         name: "bare wall clock",
         prompt: "no",
-        schedule: { kind: "once", at: "2026-11-01T09:00:00" },
+        schedule: { kind: "once", at: `${NEXT_YEAR}-11-01T09:00:00` },
       }),
     ).rejects.toThrow(/explicit offset/);
     expect(await db.$count(routines)).toBe(0);

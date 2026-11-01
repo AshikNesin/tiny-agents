@@ -1,0 +1,2507 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>tiny-agents teaser</title>
+    <!--
+      A 45-second product film, drawn as a pure function of time: render(t)
+      sets every element from the timeline, so render.mjs can capture any
+      frame deterministically. No CSS transitions or animations anywhere.
+    -->
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        font-family: "Inter", system-ui, sans-serif;
+        font-feature-settings: "cv11", "ss01";
+        color: #f5f5f4;
+        -webkit-font-smoothing: antialiased;
+        background: #000;
+      }
+      .display {
+        font-family: "Inter Display", "Inter", sans-serif;
+      }
+      .abs {
+        position: absolute;
+      }
+      .grad {
+        background: linear-gradient(90deg, #c7d2fe 0%, #a5b4fc 30%, #5eead4 70%, #99f6e4 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .warm {
+        background: linear-gradient(90deg, #fdba74, #f9a8d4 60%, #c4b5fd);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      /* ── Background ─────────────────────────────────────────── */
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(120px);
+        will-change: transform;
+      }
+
+      /* ── Hero ───────────────────────────────────────────────── */
+      #hero {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 380px;
+        text-align: center;
+      }
+      #hero .big {
+        font-size: 168px;
+        font-weight: 700;
+        letter-spacing: -0.045em;
+        line-height: 1;
+      }
+      #hero .big span {
+        display: inline-block;
+        margin: 0 0.12em;
+      }
+      #hero .sub {
+        margin-top: 34px;
+        font-size: 50px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+
+      /* ── Captions ───────────────────────────────────────────── */
+      .cap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 70px;
+        text-align: center;
+        opacity: 0;
+      }
+      .cap .eyebrow {
+        display: inline-block;
+        font-size: 23px;
+        font-weight: 650;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      .cap .headline {
+        margin-top: 12px;
+        font-size: 74px;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 1.02;
+      }
+
+      /* ── App window ─────────────────────────────────────────── */
+      #win {
+        position: absolute;
+        top: 262px;
+        height: 764px;
+        border-radius: 22px;
+        background: #121211;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.09),
+          0 50px 120px rgba(0, 0, 0, 0.75),
+          0 0 160px rgba(129, 140, 248, 0.1);
+        overflow: hidden;
+        transform-origin: 50% 0%;
+        display: flex;
+      }
+      #rail {
+        width: 84px;
+        flex: none;
+        background: #0c0c0b;
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 22px;
+        gap: 16px;
+      }
+      #rail .logo {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 10px;
+      }
+      #rail .av {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        position: relative;
+      }
+      #rail .av.on::after {
+        content: "";
+        position: absolute;
+        left: -18px;
+        top: 12px;
+        width: 4px;
+        height: 24px;
+        border-radius: 4px;
+        background: #fafaf9;
+      }
+      #chat {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      #chatHead {
+        height: 78px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 26px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      #chatHead .name {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      #chatHead .status {
+        font-size: 15px;
+        color: #8a8a87;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 2px;
+      }
+      #chatHead .status i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 10px #34d399;
+      }
+      #msgs {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0 28px 10px;
+      }
+      .msg {
+        overflow: hidden;
+        flex: none;
+      }
+      .msg > .in {
+        padding: 9px 0;
+      }
+      .bubble-user {
+        margin-left: auto;
+        max-width: 78%;
+        width: fit-content;
+        background: #3d3c39;
+        color: #fcfcfc;
+        border-radius: 22px 22px 6px 22px;
+        padding: 15px 20px;
+        font-size: 20px;
+        line-height: 1.42;
+      }
+      .bot-text {
+        font-size: 20px;
+        line-height: 1.5;
+        color: #ecebe9;
+        max-width: 92%;
+      }
+      .bot-text b {
+        color: #fff;
+        font-weight: 650;
+      }
+      .tool {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16.5px;
+        color: #a3a3a0;
+        background: #1b1b19;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 12px;
+        padding: 9px 14px;
+      }
+      .tool svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .tool .ok {
+        color: #34d399;
+      }
+      .memhead {
+        font-size: 15.5px;
+        color: #8a8a87;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 17px;
+        font-weight: 500;
+        color: #f5f5f4;
+        background: linear-gradient(180deg, rgba(165, 180, 252, 0.16), rgba(94, 234, 212, 0.1));
+        border: 1px solid rgba(165, 180, 252, 0.32);
+        border-radius: 999px;
+        padding: 8px 15px;
+      }
+      .chip i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #a5b4fc, #5eead4);
+      }
+      #composer {
+        flex: none;
+        margin: 6px 24px 22px;
+        height: 66px;
+        border-radius: 20px;
+        background: #1d1d1b;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        padding: 0 12px 0 22px;
+        font-size: 19px;
+        color: #f5f5f4;
+        gap: 12px;
+      }
+      #composer .text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      #composer .ph {
+        color: #6b6b69;
+      }
+      #composer .caret {
+        display: inline-block;
+        width: 2px;
+        height: 24px;
+        background: #a5b4fc;
+        vertical-align: -5px;
+        margin-left: 1px;
+      }
+      #composer .send {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #fafaf9;
+        display: grid;
+        place-items: center;
+      }
+
+      /* Approval card */
+      .approval {
+        border-radius: 18px;
+        background: #191917;
+        border: 1px solid rgba(253, 186, 116, 0.35);
+        box-shadow: 0 0 0 4px rgba(253, 186, 116, 0.05);
+        padding: 20px 22px;
+        width: 560px;
+      }
+      .approval .kicker {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #fdba74;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .approval .title {
+        font-size: 23px;
+        font-weight: 650;
+        margin-top: 8px;
+        letter-spacing: -0.01em;
+      }
+      .approval .rows {
+        margin-top: 14px;
+        display: grid;
+        gap: 9px;
+      }
+      .approval .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 17px;
+        color: #a3a3a0;
+      }
+      .approval .row b {
+        color: #f5f5f4;
+        font-weight: 550;
+      }
+      .vaultpill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-left: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #5eead4;
+        background: rgba(94, 234, 212, 0.1);
+        border: 1px solid rgba(94, 234, 212, 0.3);
+        border-radius: 999px;
+        padding: 3px 10px;
+      }
+      .approval .btns {
+        display: flex;
+        gap: 12px;
+        margin-top: 18px;
+        position: relative;
+        height: 50px;
+      }
+      .approval .btn {
+        flex: 1;
+        height: 50px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .approval .deny {
+        background: #262624;
+        color: #d6d3d1;
+      }
+      .approval .approve {
+        background: #fafaf9;
+        color: #0a0a0a;
+      }
+      .approval .done {
+        position: absolute;
+        inset: 0;
+        border-radius: 14px;
+        background: #10261e;
+        border: 1px solid rgba(52, 211, 153, 0.45);
+        color: #6ee7b7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      /* Right pane: browser + desktop */
+      #pane {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: #0f0f0e;
+      }
+      .paneHead {
+        height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 22px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 16px;
+        color: #a3a3a0;
+      }
+      .live {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+        border-radius: 999px;
+        padding: 5px 11px;
+      }
+      .live i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #ef4444;
+      }
+      .url {
+        flex: 1;
+        height: 42px;
+        border-radius: 12px;
+        background: #1b1b19;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px;
+        color: #d6d3d1;
+        font-size: 16px;
+      }
+      .takeover {
+        height: 42px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        color: #e7e5e4;
+        font-weight: 550;
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+      }
+      .page {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 96px;
+        bottom: 18px;
+        border-radius: 14px;
+        background: #f8f8f7;
+        color: #1c1917;
+        overflow: hidden;
+        padding: 26px 30px;
+      }
+      .page .route {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .page .meta {
+        margin-top: 6px;
+        font-size: 16px;
+        color: #78716c;
+      }
+      .filters {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .filters span {
+        font-size: 15px;
+        font-weight: 550;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px solid #e7e5e4;
+        background: #fff;
+        color: #44403c;
+      }
+      .filters span.on {
+        background: #1c1917;
+        color: #fff;
+        border-color: #1c1917;
+      }
+      .flight {
+        margin-top: 14px;
+        height: 92px;
+        border-radius: 14px;
+        background: #fff;
+        border: 1px solid #ecebe9;
+        display: grid;
+        grid-template-columns: 56px 1.5fr 1fr 1fr 1fr;
+        align-items: center;
+        padding: 0 22px;
+        gap: 14px;
+        position: relative;
+      }
+      .flight .tail {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+      }
+      .flight .times {
+        font-size: 21px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .flight .sub {
+        font-size: 14px;
+        color: #78716c;
+        margin-top: 3px;
+        font-weight: 450;
+      }
+      .flight .col {
+        font-size: 17px;
+        font-weight: 550;
+      }
+      .flight .price {
+        font-size: 22px;
+        font-weight: 700;
+        text-align: right;
+      }
+      .flight .tag {
+        position: absolute;
+        right: 22px;
+        top: -12px;
+        font-size: 12.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #fff;
+        background: linear-gradient(90deg, #6366f1, #14b8a6);
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+      .seat {
+        font-size: 15px;
+        font-weight: 600;
+        color: #0f766e;
+      }
+
+      /* Desktop */
+      .desk {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 96px;
+        bottom: 18px;
+        border-radius: 14px;
+        overflow: hidden;
+        background:
+          radial-gradient(700px 400px at 20% 10%, #3b2a5c, transparent 70%),
+          radial-gradient(800px 500px at 90% 100%, #10433f, transparent 70%), #17151f;
+      }
+      .desk .bar {
+        height: 34px;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-size: 14px;
+        color: #d6d3d1;
+        font-weight: 500;
+      }
+      .sheet {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        top: 66px;
+        bottom: 36px;
+        border-radius: 12px;
+        background: #fbfbfa;
+        overflow: hidden;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+        color: #1c1917;
+      }
+      .sheet .tb {
+        height: 44px;
+        background: #efeeec;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 16px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #44403c;
+      }
+      .sheet .tb i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #d6d3d1;
+      }
+      .sheet table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 16.5px;
+      }
+      .sheet th {
+        text-align: left;
+        font-weight: 650;
+        font-size: 13.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #78716c;
+        background: #f5f5f4;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e7e5e4;
+      }
+      .sheet td {
+        padding: 0 16px;
+        height: 54px;
+        border-bottom: 1px solid #efeeec;
+        white-space: nowrap;
+      }
+      .sheet td:first-child {
+        color: #78716c;
+        font-variant-numeric: tabular-nums;
+        width: 110px;
+      }
+      .sheet td.city {
+        font-weight: 650;
+        width: 150px;
+      }
+      .sheet td.cell-on {
+        box-shadow: inset 0 0 0 2px #6366f1;
+        background: rgba(99, 102, 241, 0.06);
+      }
+
+      /* ── Permissions ────────────────────────────────────────── */
+      #perm {
+        position: absolute;
+        left: 470px;
+        width: 980px;
+        top: 282px;
+        border-radius: 24px;
+        background: #121211;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.09),
+          0 50px 120px rgba(0, 0, 0, 0.7);
+        padding: 28px 34px 18px;
+        opacity: 0;
+      }
+      #perm .top {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      #perm .top .n {
+        font-size: 24px;
+        font-weight: 650;
+      }
+      #perm .top .s {
+        font-size: 16px;
+        color: #8a8a87;
+        margin-top: 3px;
+      }
+      .prow {
+        display: flex;
+        align-items: center;
+        height: 82px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        gap: 18px;
+      }
+      .prow:last-child {
+        border-bottom: 0;
+      }
+      .prow .ic {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: #1d1d1b;
+        display: grid;
+        place-items: center;
+        color: #d6d3d1;
+      }
+      .prow .lbl {
+        flex: 1;
+        font-size: 21px;
+        font-weight: 550;
+      }
+      .prow .lbl small {
+        display: block;
+        font-size: 15px;
+        color: #8a8a87;
+        font-weight: 450;
+        margin-top: 2px;
+      }
+      .seg {
+        position: relative;
+        display: flex;
+        width: 300px;
+        height: 46px;
+        border-radius: 13px;
+        background: #1d1d1b;
+        padding: 4px;
+      }
+      .seg .knob {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        width: calc((100% - 8px) / 3);
+        border-radius: 10px;
+      }
+      .seg span {
+        position: relative;
+        flex: 1;
+        display: grid;
+        place-items: center;
+        font-size: 16.5px;
+        font-weight: 600;
+        color: #8a8a87;
+      }
+
+      /* ── MCP ────────────────────────────────────────────────── */
+      #mcp {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      .node {
+        position: absolute;
+        width: 196px;
+        height: 132px;
+        margin-left: -98px;
+        margin-top: -66px;
+        border-radius: 26px;
+        background: #141413;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.09),
+          0 30px 60px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #e7e5e4;
+      }
+      .node svg {
+        width: 40px;
+        height: 40px;
+      }
+      .node.any {
+        background: transparent;
+        box-shadow: 0 0 0 1.5px rgba(165, 180, 252, 0.45);
+        color: #c7d2fe;
+      }
+      #hub {
+        position: absolute;
+        width: 176px;
+        height: 176px;
+        left: 872px;
+        top: 552px;
+        border-radius: 44px;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.14),
+          0 0 120px rgba(129, 140, 248, 0.45);
+      }
+      .badge {
+        position: absolute;
+        left: 50%;
+        top: 744px;
+        transform: translateX(-50%);
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: 0.14em;
+        color: #c7d2fe;
+      }
+      #evt {
+        position: absolute;
+        border-radius: 18px;
+        background: #1a1a18;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.12),
+          0 30px 60px rgba(0, 0, 0, 0.6);
+        padding: 16px 20px;
+        width: 330px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      #evt .bar {
+        width: 5px;
+        align-self: stretch;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #fb923c, #f472b6);
+      }
+      #evt .t {
+        font-size: 19px;
+        font-weight: 650;
+      }
+      #evt .d {
+        font-size: 15px;
+        color: #a3a3a0;
+        margin-top: 3px;
+      }
+
+      /* ── Routines & proactive ──────────────────────────────── */
+      #proactive {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      #routine {
+        position: absolute;
+        left: 50%;
+        top: 300px;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 21px;
+        font-weight: 550;
+        color: #e7e5e4;
+        background: #141413;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        padding: 14px 26px 14px 18px;
+        white-space: nowrap;
+      }
+      #routine .clock {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #a5b4fc, #5eead4);
+        display: grid;
+        place-items: center;
+      }
+      #routine .muted {
+        color: #8a8a87;
+      }
+      .notif {
+        position: absolute;
+        left: 50%;
+        width: 900px;
+        margin-left: -450px;
+        border-radius: 30px;
+        background: rgba(38, 38, 36, 0.78);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.1),
+          0 30px 80px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(30px);
+        padding: 22px 26px;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .notif .av {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .notif .who {
+        display: flex;
+        justify-content: space-between;
+        font-size: 18px;
+        font-weight: 650;
+        color: #fafaf9;
+      }
+      .notif .who span {
+        font-weight: 450;
+        color: #a3a3a0;
+      }
+      .notif .body {
+        font-size: 21px;
+        line-height: 1.4;
+        color: #e7e5e4;
+        margin-top: 4px;
+      }
+      .notif .act {
+        display: inline-block;
+        margin-top: 12px;
+        font-size: 16px;
+        font-weight: 650;
+        color: #0a0a0a;
+        background: #fafaf9;
+        border-radius: 999px;
+        padding: 7px 16px;
+      }
+
+      /* ── Team & durable windows ─────────────────────────────── */
+      .cw {
+        position: absolute;
+        left: 410px;
+        top: 300px;
+        width: 1100px;
+        height: 640px;
+        border-radius: 22px;
+        background: #121211;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.09),
+          0 50px 120px rgba(0, 0, 0, 0.75),
+          0 0 160px rgba(129, 140, 248, 0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+      }
+      .cwHead {
+        height: 78px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 26px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .cwHead .hav {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+      }
+      .cwHead .name {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .cwHead .status {
+        font-size: 15px;
+        color: #8a8a87;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 2px;
+      }
+      .cwHead .status i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 10px #34d399;
+      }
+      .cwList {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0 32px 28px;
+      }
+      .handoffs {
+        display: grid;
+        gap: 12px;
+      }
+      .handoff {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: #191917;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 14px 18px;
+      }
+      .handoff .av {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .handoff .hb {
+        flex: 1;
+      }
+      .handoff .hn {
+        font-size: 15px;
+        font-weight: 650;
+        color: #c7d2fe;
+      }
+      .handoff .ht {
+        font-size: 19px;
+        color: #f5f5f4;
+        margin-top: 2px;
+      }
+      .handoff .hs {
+        position: relative;
+        width: 300px;
+        height: 34px;
+        text-align: right;
+      }
+      .handoff .hs span {
+        position: absolute;
+        right: 0;
+        top: 0;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 0 14px;
+      }
+      .handoff .work {
+        color: #a3a3a0;
+        background: #222220;
+      }
+      .handoff .work i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #a5b4fc;
+      }
+      .handoff .ok {
+        color: #6ee7b7;
+        background: rgba(52, 211, 153, 0.12);
+      }
+      .toast {
+        position: absolute;
+        left: 50%;
+        top: 108px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+        padding: 0 22px;
+        border-radius: 999px;
+        font-size: 18px;
+        font-weight: 600;
+        opacity: 0;
+        z-index: 5;
+      }
+      .toast.warn {
+        color: #fdba74;
+        background: #2a2015;
+        box-shadow: 0 0 0 1px rgba(253, 186, 116, 0.4);
+      }
+      .toast.good {
+        color: #6ee7b7;
+        background: #10261e;
+        box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.45);
+      }
+
+      /* ── Finale ─────────────────────────────────────────────── */
+      #finale {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      .team {
+        position: absolute;
+        width: 150px;
+        margin-left: -75px;
+        text-align: center;
+      }
+      .team .av {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+      }
+      .team .nm {
+        margin-top: 18px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #d6d3d1;
+        white-space: nowrap;
+      }
+      #fline {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 250px;
+        text-align: center;
+        font-size: 82px;
+        font-weight: 700;
+        letter-spacing: -0.045em;
+      }
+      #brand {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 330px;
+        text-align: center;
+        opacity: 0;
+      }
+      #brand .mark {
+        width: 172px;
+        height: 172px;
+        display: inline-block;
+        border-radius: 42px;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.16),
+          0 0 140px rgba(129, 140, 248, 0.38);
+      }
+      #brand .word {
+        margin-top: 38px;
+        font-size: 112px;
+        font-weight: 700;
+        letter-spacing: -0.05em;
+        line-height: 1;
+      }
+      #brand .tag {
+        margin-top: 22px;
+        font-size: 38px;
+        font-weight: 550;
+        letter-spacing: -0.02em;
+        color: #a8a29e;
+      }
+
+      /* ── Cursors ────────────────────────────────────────────── */
+      #cursor,
+      #botcursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        pointer-events: none;
+        z-index: 50;
+        opacity: 0;
+      }
+      #cursor svg {
+        width: 34px;
+        height: 34px;
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+      }
+      #botcursor svg {
+        width: 30px;
+        height: 30px;
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+      }
+      #botcursor .who {
+        position: absolute;
+        left: 24px;
+        top: 26px;
+        white-space: nowrap;
+        font-size: 14.5px;
+        font-weight: 650;
+        color: #fff;
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #f97316, #ec4899);
+      }
+      .ripple {
+        position: absolute;
+        width: 64px;
+        height: 64px;
+        margin: -32px 0 0 -32px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        opacity: 0;
+        z-index: 49;
+      }
+      #fade {
+        position: absolute;
+        inset: 0;
+        background: #000;
+        z-index: 100;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="bg">
+        <div class="blob" id="b1" style="width: 1100px; height: 800px; background: #3730a3"></div>
+        <div class="blob" id="b2" style="width: 1000px; height: 800px; background: #0f766e"></div>
+        <div class="blob" id="b3" style="width: 900px; height: 700px; background: #9d174d"></div>
+      </div>
+
+      <div id="hero">
+        <div class="big display"><span>Say</span><span>it</span><span>once.</span></div>
+        <div class="sub display grad">Your agents take it from there.</div>
+      </div>
+
+      <div class="cap" id="cap1">
+        <div class="eyebrow grad">Your agents</div>
+        <div class="headline display">Message them like a friend.</div>
+      </div>
+      <div class="cap" id="cap2">
+        <div class="eyebrow grad">Memory</div>
+        <div class="headline display">Remembers what matters to you.</div>
+      </div>
+      <div class="cap" id="cap3">
+        <div class="eyebrow grad">Browser use</div>
+        <div class="headline display">Browses the web. Live.</div>
+      </div>
+      <div class="cap" id="cap4">
+        <div class="eyebrow grad">Computer use</div>
+        <div class="headline display">Its own computer for everything else.</div>
+      </div>
+      <div class="cap" id="cap5">
+        <div class="eyebrow warm">Approvals &amp; Vault</div>
+        <div class="headline display">Nothing happens without your yes.</div>
+      </div>
+      <div class="cap" id="cap6">
+        <div class="eyebrow grad">Permissions</div>
+        <div class="headline display">You set the rules.</div>
+      </div>
+      <div class="cap" id="cap7">
+        <div class="eyebrow grad">MCP</div>
+        <div class="headline display">Works with the tools you use.</div>
+      </div>
+      <div class="cap" id="cap8">
+        <div class="eyebrow warm">Routines · Proactive</div>
+        <div class="headline display">It speaks up before you ask.</div>
+      </div>
+
+      <!-- App window -->
+      <div id="win">
+        <div id="rail">
+          <img class="logo" data-logo />
+          <div class="av on" data-av="travel"></div>
+          <div class="av" data-av="research"></div>
+          <div class="av" data-av="chief"></div>
+          <div class="av" data-av="code"></div>
+          <div class="av" data-av="writer"></div>
+        </div>
+        <div id="chat">
+          <div id="chatHead">
+            <div data-av="travel" style="width: 46px; height: 46px; border-radius: 50%"></div>
+            <div>
+              <div class="name">Travel Planner</div>
+              <div class="status"><i></i>Online</div>
+            </div>
+          </div>
+          <div id="msgs">
+            <div class="msg" id="m1">
+              <div class="in">
+                <div class="bubble-user">Plan 7 days in Japan this April. Flying from Chennai.</div>
+              </div>
+            </div>
+            <div class="msg" id="m2">
+              <div class="in">
+                <div class="memhead">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#a5b4fc"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M12 3a6 6 0 0 0-6 6c0 2.3 1.2 3.6 2.2 4.6.6.6.8 1.2.8 2V17h6v-1.4c0-.8.2-1.4.8-2 1-1 2.2-2.3 2.2-4.6a6 6 0 0 0-6-6Z"
+                    />
+                    <path d="M9.5 20.5h5" />
+                  </svg>
+                  Recalled from memory
+                </div>
+                <div class="chips">
+                  <span class="chip"><i></i>Vegetarian</span>
+                  <span class="chip"><i></i>Window seat</span>
+                  <span class="chip"><i></i>Budget ₹2.5L</span>
+                  <span class="chip"><i></i>Loves quiet temples</span>
+                </div>
+              </div>
+            </div>
+            <div class="msg" id="m3">
+              <div class="in"><div class="bot-text" data-stream></div></div>
+            </div>
+            <div class="msg" id="m4">
+              <div class="in">
+                <div class="tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                  </svg>
+                  Browsing flights · Chennai → Tokyo
+                  <svg
+                    class="ok"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.6"
+                  >
+                    <path d="m5 12 5 5 9-10" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="msg" id="m5">
+              <div class="in">
+                <div class="tool">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="12" rx="2" />
+                    <path d="M8 20h8M12 16v4" />
+                  </svg>
+                  Building your itinerary on its computer
+                  <svg
+                    class="ok"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.6"
+                  >
+                    <path d="m5 12 5 5 9-10" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="msg" id="m6">
+              <div class="in"><div class="bot-text" data-stream></div></div>
+            </div>
+            <div class="msg" id="m7">
+              <div class="in">
+                <div class="approval">
+                  <div class="kicker">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                    >
+                      <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z" />
+                    </svg>
+                    Needs your approval
+                  </div>
+                  <div class="title">Pay ₹1,36,840 for 2 tickets</div>
+                  <div class="rows">
+                    <div class="row"><span>Flight</span><b>MAA → NRT · Sat, 12 Apr · 23:40</b></div>
+                    <div class="row"><span>Seats</span><b>32A, 32C · window</b></div>
+                    <div class="row">
+                      <span>Card</span>
+                      <b
+                        >Visa ···· 4242<span class="vaultpill">
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.6"
+                          >
+                            <rect x="5" y="11" width="14" height="10" rx="2" />
+                            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                          </svg>
+                          From Vault</span
+                        ></b
+                      >
+                    </div>
+                  </div>
+                  <div class="btns">
+                    <div class="btn deny">Deny</div>
+                    <div class="btn approve" id="approveBtn">Approve</div>
+                    <div class="done" id="approved">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.8"
+                      >
+                        <path d="m5 12 5 5 9-10" />
+                      </svg>
+                      Approved by you
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="msg" id="m8">
+              <div class="in"><div class="bot-text" data-stream></div></div>
+            </div>
+          </div>
+          <div id="composer">
+            <div class="text"></div>
+            <div class="send">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#0a0a0a"
+                stroke-width="2.6"
+              >
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div id="pane">
+          <!-- Browser -->
+          <div class="layer" id="browser">
+            <div class="paneHead">
+              <span class="live"><i></i>LIVE</span>
+              <div class="url">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#a3a3a0"
+                  stroke-width="2.4"
+                >
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+                Flights · Chennai (MAA) to Tokyo (NRT) · Sat, 12 Apr
+              </div>
+              <div class="takeover">Take over</div>
+            </div>
+            <div class="page">
+              <div class="route">
+                Chennai <span style="color: #a8a29e; font-weight: 500">→</span> Tokyo
+              </div>
+              <div class="meta">Sat, 12 Apr · 2 adults · Economy</div>
+              <div class="filters">
+                <span class="on">1 stop or fewer</span><span class="on">Window seats</span
+                ><span>Veg meal</span><span>Under ₹80k</span>
+              </div>
+              <div class="flight" id="f1">
+                <div
+                  class="tail"
+                  style="background: linear-gradient(135deg, #0ea5e9, #6366f1)"
+                ></div>
+                <div>
+                  <div class="times">21:10 – 10:45<sup style="font-size: 12px">+1</sup></div>
+                  <div class="sub">MAA – NRT</div>
+                </div>
+                <div class="col">
+                  10h 05m
+                  <div class="sub">1 stop · SIN</div>
+                </div>
+                <div class="col">
+                  Window ✓
+                  <div class="sub">Veg meal ✓</div>
+                </div>
+                <div class="price">₹74,900</div>
+              </div>
+              <div class="flight" id="f2">
+                <div
+                  class="tail"
+                  style="background: linear-gradient(135deg, #f97316, #e11d48)"
+                ></div>
+                <div>
+                  <div class="times">23:40 – 15:05<sup style="font-size: 12px">+1</sup></div>
+                  <div class="sub">MAA – NRT</div>
+                </div>
+                <div class="col">
+                  11h 55m
+                  <div class="sub">1 stop · SIN</div>
+                </div>
+                <div class="col">
+                  Window ✓
+                  <div class="sub seat" id="seatline">Veg meal ✓</div>
+                </div>
+                <div class="price">₹68,420</div>
+                <div class="tag" id="besttag">Best match</div>
+              </div>
+              <div class="flight" id="f3">
+                <div
+                  class="tail"
+                  style="background: linear-gradient(135deg, #10b981, #0d9488)"
+                ></div>
+                <div>
+                  <div class="times">01:55 – 17:30</div>
+                  <div class="sub">MAA – NRT</div>
+                </div>
+                <div class="col">
+                  12h 05m
+                  <div class="sub">1 stop · BKK</div>
+                </div>
+                <div class="col">
+                  Window ✓
+                  <div class="sub">Veg meal ✓</div>
+                </div>
+                <div class="price">₹71,250</div>
+              </div>
+              <div class="flight" id="f4">
+                <div
+                  class="tail"
+                  style="background: linear-gradient(135deg, #a855f7, #6366f1)"
+                ></div>
+                <div>
+                  <div class="times">06:20 – 22:15</div>
+                  <div class="sub">MAA – NRT</div>
+                </div>
+                <div class="col">
+                  12h 25m
+                  <div class="sub">1 stop · HKG</div>
+                </div>
+                <div class="col">
+                  Aisle only
+                  <div class="sub">Veg meal ✓</div>
+                </div>
+                <div class="price">₹79,600</div>
+              </div>
+            </div>
+          </div>
+          <!-- Desktop -->
+          <div class="layer" id="desktop">
+            <div class="paneHead">
+              <span class="live"><i></i>LIVE</span>
+              <div class="url">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#a3a3a0"
+                  stroke-width="2.2"
+                >
+                  <rect x="3" y="4" width="18" height="12" rx="2" />
+                  <path d="M8 20h8M12 16v4" />
+                </svg>
+                Travel Planner's computer
+              </div>
+              <div class="takeover">Take over</div>
+            </div>
+            <div class="desk">
+              <div class="bar"><span>Desktop</span><span>Sun 7:42 PM</span></div>
+              <div class="sheet">
+                <div class="tb"><i></i><i></i><i></i>&nbsp; Japan itinerary — April</div>
+                <table id="sheet">
+                  <thead>
+                    <tr>
+                      <th>Day</th>
+                      <th>City</th>
+                      <th>Plan</th>
+                      <th>Veg food</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Permissions -->
+      <div id="perm">
+        <div class="top">
+          <div data-av="travel" style="width: 56px; height: 56px; border-radius: 50%"></div>
+          <div>
+            <div class="n">Travel Planner · Tools</div>
+            <div class="s" id="permSummary">4 allow · 2 ask</div>
+          </div>
+        </div>
+        <div id="prows"></div>
+      </div>
+
+      <!-- MCP -->
+      <div id="mcp">
+        <svg id="wires" class="abs" width="1920" height="1080" style="left: 0; top: 0"></svg>
+        <img id="hub" data-logo />
+        <div id="nodes"></div>
+        <div id="evt">
+          <div class="bar"></div>
+          <div>
+            <div class="t">Japan trip ✈</div>
+            <div class="d">12 – 19 Apr · added by Travel Planner</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Routines & proactive -->
+      <div id="proactive">
+        <div id="routine">
+          <div class="clock">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#0a0a0a"
+              stroke-width="2.4"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </div>
+          Routine <span class="muted">·</span> Every morning at 7:00 <span class="muted">·</span>
+          <span class="muted">Watch fares to Tokyo</span>
+        </div>
+        <div class="notif" id="n1">
+          <div class="av" data-av="travel"></div>
+          <div style="flex: 1">
+            <div class="who">Travel Planner <span>7:00 AM</span></div>
+            <div class="body">
+              Your return fare just dropped by ₹6,200. Same seats, same times. Want me to switch?
+            </div>
+            <div class="act">Switch &amp; save</div>
+          </div>
+        </div>
+        <div class="notif" id="n2">
+          <div class="av" data-av="research"></div>
+          <div style="flex: 1">
+            <div class="who">Researcher <span>8:15 AM</span></div>
+            <div class="body">
+              Kyoto's cherry blossoms peak 14–16 Apr this year. Your plan lines up perfectly.
+            </div>
+          </div>
+        </div>
+        <div class="notif" id="n3">
+          <div class="av" data-av="chief"></div>
+          <div style="flex: 1">
+            <div class="who">Chief of Staff <span>9:00 AM</span></div>
+            <div class="body">
+              Visa appointment today at 11:30. Your documents are ready in one folder.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cap" id="cap9">
+        <div class="eyebrow grad">Multi-agent</div>
+        <div class="headline display">They work as a team.</div>
+      </div>
+      <div class="cap" id="cap10">
+        <div class="eyebrow grad">Durable</div>
+        <div class="headline display">Refresh. Restart. It keeps going.</div>
+      </div>
+
+      <!-- Teamwork: the Chief of Staff hands work to other bots -->
+      <div class="cw" id="teamwin">
+        <div class="cwHead">
+          <div class="hav" data-av="chief"></div>
+          <div>
+            <div class="name">Chief of Staff</div>
+            <div class="status"><i></i>Online</div>
+          </div>
+        </div>
+        <div class="cwList">
+          <div class="msg" id="t1">
+            <div class="in"><div class="bubble-user">Get me ready for the Japan trip.</div></div>
+          </div>
+          <div class="msg" id="t2">
+            <div class="in"><div class="bot-text" data-stream></div></div>
+          </div>
+          <div class="msg" id="t3">
+            <div class="in">
+              <div class="handoffs">
+                <div class="handoff">
+                  <div class="av" data-av="travel"></div>
+                  <div class="hb">
+                    <div class="hn">@Travel Planner</div>
+                    <div class="ht">Book a ryokan in Hakone</div>
+                  </div>
+                  <div class="hs">
+                    <span class="work"><i></i>Working…</span
+                    ><span class="ok">✓ 2 nights, private onsen</span>
+                  </div>
+                </div>
+                <div class="handoff">
+                  <div class="av" data-av="writer"></div>
+                  <div class="hb">
+                    <div class="hn">@Writer</div>
+                    <div class="ht">Draft my out-of-office</div>
+                  </div>
+                  <div class="hs">
+                    <span class="work"><i></i>Working…</span><span class="ok">✓ Ready to send</span>
+                  </div>
+                </div>
+                <div class="handoff">
+                  <div class="av" data-av="research"></div>
+                  <div class="hb">
+                    <div class="hn">@Researcher</div>
+                    <div class="ht">Visa checklist for an Indian passport</div>
+                  </div>
+                  <div class="hs">
+                    <span class="work"><i></i>Working…</span
+                    ><span class="ok">✓ 6 items, saved to Files</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="msg" id="t4">
+            <div class="in"><div class="bot-text" data-stream></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Durable: a server restart mid-reply, and the reply carries on -->
+      <div class="cw" id="durwin">
+        <div class="cwHead">
+          <div class="hav" data-av="travel"></div>
+          <div>
+            <div class="name">Travel Planner</div>
+            <div class="status"><i></i>Online</div>
+          </div>
+        </div>
+        <div class="toast warn" id="toastDown">⟳&nbsp; Server restarted mid-reply</div>
+        <div class="toast good" id="toastUp">
+          ✓&nbsp; Reconnected · picking up where it left off
+        </div>
+        <div class="cwList" id="durList">
+          <div class="msg" id="d1">
+            <div class="in">
+              <div class="bubble-user">What should I pack for April in Japan?</div>
+            </div>
+          </div>
+          <div class="msg" id="d2">
+            <div class="in"><div class="bot-text" data-stream></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Finale -->
+      <div id="finale">
+        <div id="fline" class="display">A team that never clocks out.</div>
+        <div id="teamWrap"></div>
+        <div id="brand">
+          <img class="mark" data-logo />
+          <div class="word display">Tiny Agents</div>
+          <div class="tag display">Your team of always-on AI agents.</div>
+        </div>
+      </div>
+
+      <div id="botcursor">
+        <svg viewBox="0 0 26 26">
+          <path
+            d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+            fill="#f97316"
+            stroke="#fff"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <div class="who">Travel Planner</div>
+      </div>
+      <div id="cursor">
+        <svg viewBox="0 0 26 26">
+          <path
+            d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+            fill="#fff"
+            stroke="#111"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <div class="ripple" id="ripple"></div>
+      <div id="fade"></div>
+    </div>
+
+    <script>
+      // ── Brand assets ──────────────────────────────────────────
+      const LOGO =
+        "data:image/svg+xml;utf8," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#050505"/><path fill="#fcfcfc" d="M23 14h16a12 12 0 0 1 12 12v6a12 12 0 0 1-12 12H29l-11 8v-9.09A12 12 0 0 1 11 32v-6a12 12 0 0 1 12-12z"/><rect x="24" y="22" width="6" height="12" rx="3" fill="#050505"/><rect x="36" y="22" width="6" height="12" rx="3" fill="#050505"/><circle cx="49.5" cy="15.5" r="5.5" fill="#fcfcfc" stroke="#050505" stroke-width="3.5"/></svg>',
+        );
+      document.querySelectorAll("[data-logo]").forEach((img) => (img.src = LOGO));
+
+      // Bot faces: a gradient disc with the logo's two eyes.
+      const BOTS = {
+        travel: ["Travel Planner", "#fb923c", "#ec4899"],
+        research: ["Researcher", "#60a5fa", "#6366f1"],
+        chief: ["Chief of Staff", "#34d399", "#0d9488"],
+        code: ["Code Buddy", "#a78bfa", "#4f46e5"],
+        writer: ["Writer", "#fcd34d", "#f97316"],
+        fitness: ["Fitness Coach", "#fb7185", "#db2777"],
+      };
+      function face(key) {
+        const [, a, b] = BOTS[key];
+        return (
+          `url("data:image/svg+xml;utf8,` +
+          encodeURIComponent(
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><rect x="34" y="34" width="10" height="22" rx="5" fill="#111"/><rect x="56" y="34" width="10" height="22" rx="5" fill="#111"/><path d="M40 68q10 7 20 0" stroke="#111" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`,
+          ) +
+          `")`
+        );
+      }
+      document.querySelectorAll("[data-av]").forEach((el) => {
+        el.style.background = face(el.dataset.av) + " center/cover";
+      });
+
+      // ── Static content ────────────────────────────────────────
+      const ITIN = [
+        ["Sat 12", "Tokyo", "Land 15:05 · check in, Shinjuku", "Veg ramen, Shinjuku"],
+        ["Sun 13", "Tokyo", "Asakusa · Senso-ji at 7 am", "Shojin ryori lunch"],
+        ["Tue 15", "Hakone", "Ropeway · private onsen", "Tofu kaiseki dinner"],
+        ["Wed 16", "Kyoto", "Fushimi Inari before crowds", "Yuba & matcha"],
+        ["Thu 17", "Kyoto", "Ryoan-ji · Philosopher's Path", "Zen temple lunch"],
+        ["Fri 18", "Osaka", "Dotonbori · night food walk", "Veg okonomiyaki"],
+      ];
+      const tbody = document.querySelector("#sheet tbody");
+      ITIN.forEach(() => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<td></td><td class=city></td><td></td><td></td>";
+        tbody.appendChild(tr);
+      });
+      const cells = [...tbody.querySelectorAll("td")];
+
+      const ICON = {
+        search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+        globe:
+          '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+        monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+        lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+        card: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>',
+        term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
+        cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+        doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+        chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+        folder: '<path d="M3 6h7l2 2h9v11H3z"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>',
+      };
+      const svgIcon = (k, size = 22, color = "currentColor") =>
+        `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+
+      // value index: 0 allow, 1 ask, 2 off
+      const PERMS = [
+        ["search", "Search the web", "Read-only", 0],
+        ["globe", "Browse websites", "Opens pages, clicks, fills forms", 0],
+        ["monitor", "Use its computer", "Its own desktop on the sandbox", 0],
+        ["lock", "Fill from Vault", "Passwords and cards it never sees", 1],
+        ["card", "Make purchases", "Anything that spends money", 1],
+        ["term", "Run shell commands", "Not needed for travel", 0],
+      ];
+      const prows = document.getElementById("prows");
+      PERMS.forEach(([ic, lbl, sub]) => {
+        const row = document.createElement("div");
+        row.className = "prow";
+        row.innerHTML = `<div class="ic">${svgIcon(ic)}</div><div class="lbl">${lbl}<small>${sub}</small></div><div class="seg"><div class="knob"></div><span>Allow</span><span>Ask</span><span>Off</span></div>`;
+        prows.appendChild(row);
+      });
+      const segs = [...prows.querySelectorAll(".seg")];
+
+      const NODES = [
+        ["cal", "Calendar", 560, 470],
+        ["mail", "Email", 560, 810],
+        ["doc", "Docs", 1360, 470],
+        ["chat", "Team chat", 1360, 810],
+        ["folder", "Files", 960, 940],
+        ["plus", "Any MCP server", 960, 340],
+      ];
+      // The hub is centred at 960,640; nodes sit around it.
+      NODES[0][2] = 520;
+      NODES[0][3] = 450;
+      NODES[1][2] = 470;
+      NODES[1][3] = 800;
+      NODES[2][2] = 1400;
+      NODES[2][3] = 450;
+      NODES[3][2] = 1450;
+      NODES[3][3] = 800;
+      NODES[4][2] = 960;
+      NODES[4][3] = 940;
+      const nodesEl = document.getElementById("nodes");
+      const wires = document.getElementById("wires");
+      NODES.forEach(([ic, name, x, y], i) => {
+        const n = document.createElement("div");
+        n.className = "node" + (ic === "plus" ? " any" : "");
+        n.style.left = x + "px";
+        n.style.top = y + "px";
+        n.innerHTML = svgIcon(ic, 40, ic === "plus" ? "#c7d2fe" : "#e7e5e4") + `<div>${name}</div>`;
+        nodesEl.appendChild(n);
+        const ns = "http://www.w3.org/2000/svg";
+        const line = document.createElementNS(ns, "line");
+        line.setAttribute("x1", 960);
+        line.setAttribute("y1", 640);
+        line.setAttribute("x2", x);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "url(#wg)");
+        line.setAttribute("stroke-width", "2");
+        wires.appendChild(line);
+        const dot = document.createElementNS(ns, "circle");
+        dot.setAttribute("r", "6");
+        dot.setAttribute("fill", "#e0e7ff");
+        dot.style.filter = "drop-shadow(0 0 8px #a5b4fc)";
+        wires.appendChild(dot);
+      });
+      wires.insertAdjacentHTML(
+        "afterbegin",
+        '<defs><linearGradient id="wg" gradientUnits="userSpaceOnUse" x1="400" y1="0" x2="1520" y2="0"><stop offset="0" stop-color="#5eead4" stop-opacity=".55"/><stop offset=".5" stop-color="#a5b4fc" stop-opacity=".8"/><stop offset="1" stop-color="#5eead4" stop-opacity=".55"/></linearGradient></defs>',
+      );
+      const lines = [...wires.querySelectorAll("line")];
+      const dots = [...wires.querySelectorAll("circle")];
+      const nodeEls = [...nodesEl.children];
+      // A "line" has no length until rendered; compute it from coordinates.
+      const lineLen = NODES.map(([, , x, y]) => Math.hypot(x - 960, y - 640));
+
+      const TEAM = ["travel", "research", "chief", "code", "writer", "fitness"];
+      const teamWrap = document.getElementById("teamWrap");
+      TEAM.forEach((k) => {
+        const d = document.createElement("div");
+        d.className = "team";
+        d.innerHTML = `<div class="av"></div><div class="nm">${BOTS[k][0]}</div>`;
+        d.firstElementChild.style.background = face(k) + " center/cover";
+        teamWrap.appendChild(d);
+      });
+      const teamEls = [...teamWrap.children];
+
+      // ── Timing helpers ────────────────────────────────────────
+      const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+      const lerp = (a, b, p) => a + (b - a) * p;
+      const prog = (t, a, b) => clamp((t - a) / (b - a));
+      const ease = {
+        out: (x) => 1 - Math.pow(1 - x, 3),
+        out5: (x) => 1 - Math.pow(1 - x, 5),
+        inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+        in: (x) => x * x * x,
+        expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+        back: (x) => {
+          const c1 = 1.4,
+            c3 = c1 + 1;
+          return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+        },
+      };
+      const $ = (id) => document.getElementById(id);
+      const set = (el, s) => Object.assign(el.style, s);
+
+      /** Blur-up entrance and a soft lift-off exit between a and b. */
+      function reveal(el, t, a, b, o = {}) {
+        const { dy = 26, blur = 14, inD = 0.7, outD = 0.45, scale = 0, outDy = -14 } = o;
+        const i = ease.expo(prog(t, a, a + inD));
+        const x = b == null ? 0 : ease.inOut(prog(t, b - outD, b));
+        const op = i * (1 - x);
+        set(el, {
+          opacity: op,
+          transform: `translateY(${(1 - i) * dy + x * outDy}px) scale(${1 - (1 - i) * scale})`,
+          filter: op > 0.995 ? "none" : `blur(${(1 - i) * blur + x * 8}px)`,
+          visibility: op <= 0.001 ? "hidden" : "visible",
+        });
+        return op;
+      }
+
+      /** Streams text in like a model reply; keeps markup in <b>. */
+      function stream(el, html, t, a, b) {
+        const plain = html.replace(/<[^>]+>/g, "");
+        const n = Math.round(plain.length * prog(t, a, b));
+        let out = "",
+          seen = 0;
+        for (const part of html.split(/(<[^>]+>)/)) {
+          if (part.startsWith("<")) out += part;
+          else {
+            const take = Math.max(0, Math.min(part.length, n - seen));
+            out += part.slice(0, take);
+            seen += part.length;
+          }
+        }
+        if (el.innerHTML !== out) el.innerHTML = out;
+      }
+
+      /** A chat message grows from nothing, then fades in. */
+      function msg(id, t, a, hide = null) {
+        const el = $(id);
+        const inner = el.firstElementChild;
+        if (t < a || (hide != null && t >= hide + 0.4)) {
+          el.style.display = "none";
+          return;
+        }
+        el.style.display = "block";
+        const h = inner.offsetHeight;
+        const g = ease.out5(prog(t, a, a + 0.45));
+        const f = ease.out(prog(t, a + 0.08, a + 0.55));
+        const x = hide == null ? 0 : ease.inOut(prog(t, hide, hide + 0.4));
+        el.style.height = h * g * (1 - x) + "px";
+        set(inner, { opacity: f * (1 - x), transform: `translateY(${(1 - f) * 14}px)` });
+      }
+
+      /** Position of an element's point (fx, fy as fractions) in root space. */
+      function at(el, fx = 0.5, fy = 0.5) {
+        const r = el.getBoundingClientRect();
+        return [r.left + r.width * fx, r.top + r.height * fy];
+      }
+
+      /** Cursor along waypoints [[time, [x,y]], ...] with eased segments. */
+      function path(t, pts) {
+        if (t <= pts[0][0]) return pts[0][1];
+        for (let i = 1; i < pts.length; i++) {
+          const [t1, p1] = pts[i];
+          const [t0, p0] = pts[i - 1];
+          if (t <= t1) {
+            const e = ease.inOut(prog(t, t0, t1));
+            const arc =
+              Math.sin(Math.PI * e) * Math.min(36, Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) * 0.09);
+            return [lerp(p0[0], p1[0], e), lerp(p0[1], p1[1], e) - arc];
+          }
+        }
+        return pts[pts.length - 1][1];
+      }
+
+      function ripple(t, clicks) {
+        const r = $("ripple");
+        let shown = false;
+        for (const [ct, [x, y]] of clicks) {
+          const q = prog(t, ct, ct + 0.5);
+          if (t >= ct && q < 1) {
+            shown = true;
+            set(r, {
+              left: x + "px",
+              top: y + "px",
+              opacity: (1 - q) * 0.9,
+              transform: `scale(${0.3 + ease.out(q) * 1.1})`,
+            });
+          }
+        }
+        if (!shown) r.style.opacity = 0;
+      }
+
+      // ── Timeline (seconds) ────────────────────────────────────
+      // Music: 120 BPM, bars start on 0.5 s + 2 s·n. Every scene after the
+      // chat is two bars (4 s), so each cut lands on a downbeat.
+      const SC = {
+        chat: 2.5, // chat + memory (3 bars)
+        web: 8.5, // browser use
+        pc: 12.5, // computer use
+        ok: 16.5, // approval + vault
+        perm: 20.5, // permissions
+        mcp: 24.5, // MCP
+        pro: 28.5, // routines + proactive
+        team: 32.5, // bots hand off to each other
+        dur: 36.5, // durable
+        fin: 40.5, // the team
+        logo: 42.5, // logo
+      };
+      const END = 45.6;
+      const PROMPT = "Plan 7 days in Japan this April. Flying from Chennai.";
+      const M3 =
+        "Got it: <b>veg-friendly food, window seats, under ₹2.5L.</b> Checking flights from Chennai now…";
+      const M6 = "Best fit: <b>₹68,420 a seat</b>, one stop, window seats together. Book both?";
+      const M8 =
+        "Booked. Seats 32A and 32C. Your card was filled straight from the Vault, <b>I never saw the number.</b>";
+      const T2 = "On it. I've split this across the team:";
+      const T4 =
+        "All three are done. <b>Ryokan booked, out-of-office drafted, visa checklist in Files.</b>";
+      const D2 =
+        "Here's your list for 12–20 °C weather:<br>• Light layers and a packable jacket<br>• Shoes made for 20,000 steps a day<br>• A transit card on your phone<br>• Some cash, many temples are cash-only<br>• A Type A plug adapter";
+      // Click moments (the score puts a chime on the approval).
+      const APPROVE_AT = SC.ok + 1.85;
+      const SHELL_OFF_AT = SC.perm + 1.25;
+      const RESTART_AT = SC.dur + 1.5; // on a beat: the score tape-stops here
+      const RECONNECT_AT = RESTART_AT + 1.0; // and powers back up here
+
+      function render(t) {
+        // Background breathes slowly.
+        const k = t / END;
+        set($("b1"), {
+          left: lerp(-260, 120, k) + "px",
+          top: lerp(-380, -260, k) + "px",
+          opacity: 0.38,
+        });
+        set($("b2"), {
+          left: lerp(1180, 1000, k) + "px",
+          top: lerp(520, 420, k) + "px",
+          opacity: 0.3,
+        });
+        set($("b3"), {
+          left: lerp(900, 500, k) + "px",
+          top: lerp(-520, -460, k) + "px",
+          opacity: 0.16,
+        });
+        const bgDim =
+          1 -
+          0.55 * ease.inOut(prog(t, 2.4, 3.2)) +
+          0.55 * ease.inOut(prog(t, SC.fin - 0.2, SC.fin + 0.5));
+        $("bg").style.opacity =
+          bgDim * (1 - ease.inOut(prog(t, SC.logo - 0.5, SC.logo + 0.1)) * 0.4);
+
+        // ── 1. Hero ────────────────────────────────────────────
+        const words = [...document.querySelectorAll("#hero .big span")];
+        words.forEach((w, i) => reveal(w, t, 0.3 + i * 0.22, null, { dy: 40, blur: 22, inD: 0.8 }));
+        reveal(document.querySelector("#hero .sub"), t, 1.15, null, { dy: 24, inD: 0.8 });
+        const hx = ease.inOut(prog(t, 2.05, 2.65));
+        set($("hero"), {
+          opacity: 1 - hx,
+          transform: `translateY(${-hx * 90}px) scale(${1 - hx * 0.08})`,
+          filter: hx > 0 ? `blur(${hx * 12}px)` : "none",
+        });
+
+        // ── Captions ──────────────────────────────────────────
+        reveal($("cap1"), t, 2.75, 5.0);
+        reveal($("cap2"), t, 5.1, SC.web - 0.05);
+        reveal($("cap3"), t, SC.web + 0.05, SC.pc - 0.05);
+        reveal($("cap4"), t, SC.pc + 0.05, SC.ok - 0.05);
+        reveal($("cap5"), t, SC.ok + 0.05, SC.perm - 0.05);
+        reveal($("cap6"), t, SC.perm + 0.1, SC.mcp - 0.05);
+        reveal($("cap7"), t, SC.mcp + 0.05, SC.pro - 0.05);
+        reveal($("cap8"), t, SC.pro + 0.05, SC.team - 0.05);
+        reveal($("cap9"), t, SC.team + 0.05, SC.dur - 0.05);
+        reveal($("cap10"), t, SC.dur + 0.05, SC.fin - 0.1);
+
+        // ── 2–5. App window ───────────────────────────────────
+        const win = $("win");
+        const wIn = ease.out5(prog(t, 2.3, 3.3));
+        const wOut = ease.inOut(prog(t, SC.perm - 0.45, SC.perm + 0.2));
+        const split =
+          ease.inOut(prog(t, SC.web - 0.15, SC.web + 0.55)) *
+          (1 - ease.inOut(prog(t, SC.ok - 0.15, SC.ok + 0.5)));
+        const W = lerp(1180, 1760, split);
+        // Slow camera push-ins on the memory chips and the approval card.
+        const push =
+          1 +
+          0.07 *
+            ease.inOut(prog(t, 5.2, 6.9)) *
+            (1 - ease.inOut(prog(t, SC.web - 0.4, SC.web + 0.3))) +
+          0.1 * ease.inOut(prog(t, SC.ok + 0.8, SC.ok + 2.2));
+        set(win, {
+          display: t < 2.25 || t > SC.perm + 0.25 ? "none" : "flex",
+          width: W + "px",
+          left: (1920 - W) / 2 + "px",
+          opacity: wIn * (1 - wOut),
+          transformOrigin: "50% 80%",
+          transform: `perspective(1800px) translateY(${(1 - wIn) * 160 + wOut * -40}px) rotateX(${(1 - wIn) * 16}deg) scale(${(1 - (1 - wIn) * 0.06) * (1 - wOut * 0.1) * push})`,
+          filter: wOut > 0 ? `blur(${wOut * 14}px)` : "none",
+        });
+        const chatW = lerp(1180 - 84, 600, split);
+        $("chat").style.width = chatW + "px";
+        $("pane").style.display = split > 0.001 ? "block" : "none";
+
+        // Composer typing.
+        const typed = PROMPT.slice(0, Math.round(PROMPT.length * prog(t, 3.0, 4.3)));
+        const SEND = 4.45;
+        const sent = t >= SEND;
+        const comp = document.querySelector("#composer .text");
+        const caretOn = t > 2.9 && t < SEND && Math.floor(t * 2.6) % 2 === 0;
+        const showText = sent ? "" : typed;
+        const html =
+          (showText ? showText : `<span class="ph">Message Travel Planner</span>`) +
+          (caretOn || (showText && !sent) ? '<span class="caret"></span>' : "");
+        if (comp.innerHTML !== html) comp.innerHTML = html;
+        const sendBtn = document.querySelector("#composer .send");
+        sendBtn.style.opacity = showText ? 1 : 0.35;
+        sendBtn.style.transform = `scale(${1 - 0.12 * Math.sin(Math.PI * prog(t, SEND - 0.12, SEND + 0.1))})`;
+
+        // Fill streamed text first so each message measures its real height.
+        stream(document.querySelector("#m3 [data-stream]"), M3, t, 6.1, 7.4);
+        stream(document.querySelector("#m6 [data-stream]"), M6, t, SC.ok + 0.3, SC.ok + 0.95);
+        stream(document.querySelector("#m8 [data-stream]"), M8, t, SC.ok + 2.4, SC.ok + 3.2);
+        // Older messages leave as the chat fills up, to keep the card in view.
+        const clear = SC.ok - 0.1;
+        msg("m1", t, SEND);
+        msg("m2", t, 5.3, clear);
+        msg("m3", t, 6.05, clear);
+        msg("m4", t, SC.web + 0.4, clear);
+        msg("m5", t, SC.pc + 0.25, clear);
+        msg("m6", t, SC.ok + 0.25);
+        msg("m7", t, SC.ok + 0.85);
+        msg("m8", t, SC.ok + 2.35);
+        // The first prompt also leaves when the approval card arrives.
+        if (t > SC.ok + 0.6) {
+          const x = ease.inOut(prog(t, SC.ok + 0.6, SC.ok + 1.0));
+          const el = $("m1");
+          el.style.height = el.firstElementChild.offsetHeight * (1 - x) + "px";
+          el.firstElementChild.style.opacity = 1 - x;
+          if (x >= 1) el.style.display = "none";
+        }
+
+        // Approval resolves.
+        const appr = ease.out(prog(t, APPROVE_AT + 0.1, APPROVE_AT + 0.4));
+        set($("approved"), { opacity: appr, transform: `scale(${0.96 + 0.04 * appr})` });
+        document.querySelectorAll(".approval .btn").forEach((b) => (b.style.opacity = 1 - appr));
+        $("approveBtn").style.transform =
+          `scale(${1 - 0.05 * Math.sin(Math.PI * prog(t, APPROVE_AT, APPROVE_AT + 0.25))})`;
+
+        // Right pane: browser, then desktop.
+        const toDesk = ease.inOut(prog(t, SC.pc - 0.25, SC.pc + 0.35));
+        set($("browser"), {
+          opacity: 1 - toDesk,
+          transform: `translateX(${-toDesk * 60}px)`,
+        });
+        set($("desktop"), {
+          opacity: toDesk,
+          transform: `translateX(${(1 - toDesk) * 80}px)`,
+          display: toDesk > 0 ? "block" : "none",
+        });
+        const paneIn = ease.out(prog(t, SC.web, SC.web + 0.7));
+        $("pane").style.opacity = paneIn;
+
+        // Flight rows cascade in, then the pick is made.
+        ["f1", "f2", "f3", "f4"].forEach((id, i) =>
+          reveal($(id), t, SC.web + 0.45 + i * 0.12, null, { dy: 22, blur: 6, inD: 0.6 }),
+        );
+        const PICK = SC.web + 2.3;
+        const pick = ease.out(prog(t, PICK, PICK + 0.35));
+        set($("f2"), {
+          boxShadow: `0 0 0 ${pick * 3}px rgba(99,102,241,${pick}), 0 ${pick * 18}px ${pick * 40}px rgba(99,102,241,${pick * 0.25})`,
+          transform: `scale(${1 + pick * 0.015})`,
+        });
+        set($("besttag"), { opacity: pick, transform: `translateY(${(1 - pick) * 6}px)` });
+        const seatText = t > PICK + 0.2 ? "Seats 32A · 32C ✓" : "Veg meal ✓";
+        if ($("seatline").textContent !== seatText) $("seatline").textContent = seatText;
+
+        // Spreadsheet fills cell by cell.
+        const flat = ITIN.flat();
+        const cellsDone = (t - (SC.pc + 0.5)) / 0.09;
+        cells.forEach((td, i) => {
+          const local = clamp(cellsDone - i * 1.0, 0, 1);
+          const text = flat[i];
+          const shown = text.slice(0, Math.round(text.length * local));
+          if (td.textContent !== shown) td.textContent = shown;
+          td.classList.toggle("cell-on", local > 0 && local < 1);
+        });
+
+        // Bot's own cursor (browser + desktop).
+        const bc = $("botcursor");
+        let bpos = null;
+        const B0 = SC.web + 0.7;
+        if (t > B0 && t < SC.ok - 0.1) {
+          const b = $("browser").getBoundingClientRect();
+          const f1 = at($("f1"), 0.55, 0.5);
+          const f2 = at($("f2"), 0.86, 0.55);
+          const f3 = at($("f3"), 0.6, 0.5);
+          bpos = path(t, [
+            [B0 + 0.1, [b.left + b.width * 0.7, b.top + b.height * 0.45]],
+            [B0 + 0.8, f1],
+            [B0 + 1.3, f3],
+            [PICK - 0.05, f2],
+            [SC.pc - 0.3, f2],
+          ]);
+          if (t > SC.pc - 0.3) {
+            const rows = cells.filter((td) => td.classList.contains("cell-on"));
+            const target = rows.length
+              ? at(rows[0], 0.4, 0.75)
+              : at(cells[cells.length - 1], 0.5, 0.75);
+            const q = ease.inOut(prog(t, SC.pc - 0.3, SC.pc + 0.6));
+            bpos = [lerp(f2[0], target[0], q), lerp(f2[1], target[1], q)];
+          }
+        }
+        if (bpos) {
+          const vis =
+            ease.out(prog(t, B0, B0 + 0.3)) * (1 - ease.inOut(prog(t, SC.ok - 0.5, SC.ok - 0.1)));
+          set(bc, { opacity: vis * paneIn, transform: `translate(${bpos[0]}px, ${bpos[1]}px)` });
+        } else bc.style.opacity = 0;
+
+        // ── 6. Permissions ────────────────────────────────────
+        const perm = $("perm");
+        const pIn = ease.out5(prog(t, SC.perm - 0.05, SC.perm + 0.75));
+        const pOut = ease.inOut(prog(t, SC.mcp - 0.3, SC.mcp + 0.2));
+        set(perm, {
+          display: t < SC.perm - 0.1 || t > SC.mcp + 0.25 ? "none" : "block",
+          opacity: pIn * (1 - pOut),
+          transform: `perspective(1800px) translateY(${(1 - pIn) * 120 - pOut * 30}px) rotateX(${(1 - pIn) * 12}deg) scale(${(1 - pOut * 0.06) * (1 + 0.03 * ease.inOut(prog(t, SC.perm + 0.5, SC.mcp)))})`,
+          filter: pOut > 0 ? `blur(${pOut * 12}px)` : "none",
+        });
+        [...prows.children].forEach((row, i) =>
+          reveal(row, t, SC.perm + 0.15 + i * 0.06, null, { dy: 18, blur: 4, inD: 0.55 }),
+        );
+        const shellOff = ease.inOut(prog(t, SHELL_OFF_AT, SHELL_OFF_AT + 0.3));
+        segs.forEach((seg, i) => {
+          let v = PERMS[i][3];
+          if (i === 5) v = lerp(0, 2, shellOff);
+          const knob = seg.firstElementChild;
+          const colors = ["rgba(52,211,153,.2)", "rgba(253,186,116,.2)", "rgba(168,162,158,.2)"];
+          const strokes = [
+            "rgba(52,211,153,.55)",
+            "rgba(253,186,116,.55)",
+            "rgba(168,162,158,.45)",
+          ];
+          const c = Math.round(v);
+          set(knob, {
+            left: `calc(4px + ${v} * (100% - 8px) / 3)`,
+            background: colors[c],
+            boxShadow: `inset 0 0 0 1px ${strokes[c]}`,
+          });
+          const spans = seg.querySelectorAll("span");
+          spans.forEach(
+            (s, j) => (s.style.color = j === c ? ["#6ee7b7", "#fdba74", "#e7e5e4"][c] : "#76766f"),
+          );
+        });
+        const summary = t > SHELL_OFF_AT + 0.2 ? "3 allow · 2 ask · 1 off" : "4 allow · 2 ask";
+        if ($("permSummary").textContent !== summary) $("permSummary").textContent = summary;
+
+        // ── Human cursor: approve, then switch shell off ──────
+        const cur = $("cursor");
+        let cpos = null,
+          cvis = 0;
+        if (t > APPROVE_AT - 0.85 && t < APPROVE_AT + 0.75) {
+          const btn = at($("approveBtn"), 0.5, 0.55);
+          cpos = path(t, [
+            [APPROVE_AT - 0.75, [1560, 1000]],
+            [APPROVE_AT - 0.05, btn],
+            [APPROVE_AT + 0.75, [btn[0] + 160, btn[1] + 90]],
+          ]);
+          cvis =
+            ease.out(prog(t, APPROVE_AT - 0.85, APPROVE_AT - 0.6)) *
+            (1 - ease.inOut(prog(t, APPROVE_AT + 0.45, APPROVE_AT + 0.75)));
+        } else if (t > SHELL_OFF_AT - 0.65 && t < SHELL_OFF_AT + 1.0) {
+          const off = at(segs[5].querySelectorAll("span")[2], 0.5, 0.55);
+          cpos = path(t, [
+            [SHELL_OFF_AT - 0.6, [1560, 1010]],
+            [SHELL_OFF_AT - 0.05, off],
+            [SHELL_OFF_AT + 0.95, [off[0] + 120, off[1] + 120]],
+          ]);
+          cvis =
+            ease.out(prog(t, SHELL_OFF_AT - 0.65, SHELL_OFF_AT - 0.45)) *
+            (1 - ease.inOut(prog(t, SHELL_OFF_AT + 0.65, SHELL_OFF_AT + 0.95)));
+        }
+        if (cpos) set(cur, { opacity: cvis, transform: `translate(${cpos[0]}px, ${cpos[1]}px)` });
+        else cur.style.opacity = 0;
+        const clicks = [];
+        if (t > APPROVE_AT - 0.05 && t < APPROVE_AT + 0.55)
+          clicks.push([APPROVE_AT, at($("approveBtn"), 0.5, 0.5)]);
+        if (t > SHELL_OFF_AT - 0.05 && t < SHELL_OFF_AT + 0.55)
+          clicks.push([SHELL_OFF_AT, at(segs[5].querySelectorAll("span")[2], 0.5, 0.5)]);
+        ripple(t, clicks);
+
+        // ── 7. MCP ─────────────────────────────────────────────
+        const mcp = $("mcp");
+        const mIn = ease.out(prog(t, SC.mcp + 0.05, SC.mcp + 0.5));
+        const mOut = ease.inOut(prog(t, SC.pro - 0.3, SC.pro + 0.15));
+        set(mcp, {
+          display: t < SC.mcp || t > SC.pro + 0.2 ? "none" : "block",
+          opacity: mIn * (1 - mOut),
+          filter: mOut > 0 ? `blur(${mOut * 12}px)` : "none",
+          transform: `scale(${(1 + mOut * 0.06) * (1 + 0.025 * ease.inOut(prog(t, SC.mcp + 0.5, SC.pro)))})`,
+        });
+        const hubIn = ease.back(prog(t, SC.mcp + 0.1, SC.mcp + 0.65));
+        set($("hub"), { transform: `scale(${0.6 + 0.4 * hubIn})`, opacity: clamp(hubIn * 1.5) });
+        NODES.forEach((n, i) => {
+          const a = SC.mcp + 0.35 + i * 0.09;
+          const q = ease.out5(prog(t, a, a + 0.6));
+          const x = n[2],
+            y = n[3];
+          const nx = lerp(960, x, q),
+            ny = lerp(640, y, q);
+          set(nodeEls[i], {
+            left: nx + "px",
+            top: ny + "px",
+            opacity: clamp(q * 1.4),
+            transform: `scale(${0.7 + 0.3 * q})`,
+          });
+          const L = lineLen[i];
+          const lq = ease.out(prog(t, a + 0.15, a + 0.75));
+          lines[i].setAttribute("stroke-dasharray", `${L}`);
+          lines[i].setAttribute("stroke-dashoffset", `${L * (1 - lq)}`);
+          // A data pulse travels out and back once the wires exist.
+          const pq = ((t - (a + 0.8)) / 1.1) % 1;
+          const on = t > a + 0.8;
+          const s = on ? (pq < 0.5 ? pq * 2 : 2 - pq * 2) : 0;
+          dots[i].setAttribute("cx", lerp(960, x, 0.18 + 0.64 * s));
+          dots[i].setAttribute("cy", lerp(640, y, 0.18 + 0.64 * s));
+          dots[i].setAttribute("opacity", on ? 0.95 : 0);
+        });
+        const evIn = ease.back(prog(t, SC.mcp + 1.6, SC.mcp + 2.1));
+        set($("evt"), {
+          left: NODES[0][2] - 110 + "px",
+          top: NODES[0][3] - 230 + "px",
+          opacity: clamp(evIn * 1.3),
+          transform: `translateY(${(1 - evIn) * 30}px) scale(${0.85 + 0.15 * evIn})`,
+        });
+
+        // ── 8. Routines & proactive ───────────────────────────
+        const pr = $("proactive");
+        const rIn = ease.out(prog(t, SC.pro, SC.pro + 0.4));
+        const rOut = ease.inOut(prog(t, SC.team - 0.35, SC.team + 0.1));
+        set(pr, {
+          display: t < SC.pro - 0.05 || t > SC.team + 0.15 ? "none" : "block",
+          opacity: rIn * (1 - rOut),
+          filter: rOut > 0 ? `blur(${rOut * 14}px)` : "none",
+          transform: `translateY(${-rOut * 30}px)`,
+        });
+        reveal($("routine"), t, SC.pro + 0.2, null, { dy: 20, inD: 0.6 });
+        $("routine").style.transform += " translateX(-50%)";
+        const NOTIF_Y = [400, 588, 754];
+        ["n1", "n2", "n3"].forEach((id, i) => {
+          const a = SC.pro + 0.75 + i * 0.75;
+          const q = ease.out5(prog(t, a, a + 0.7));
+          set($(id), {
+            top: NOTIF_Y[i] + "px",
+            opacity: clamp(q * 1.3),
+            transform: `translateY(${(1 - q) * -60}px) scale(${0.92 + 0.08 * q})`,
+            filter: q > 0.99 ? "none" : `blur(${(1 - q) * 10}px)`,
+          });
+        });
+
+        // ── 9. Teamwork ───────────────────────────────────────
+        const tw = $("teamwin");
+        const twIn = ease.out5(prog(t, SC.team - 0.05, SC.team + 0.8));
+        const twOut = ease.inOut(prog(t, SC.dur - 0.35, SC.dur + 0.2));
+        set(tw, {
+          display: t < SC.team - 0.1 || t > SC.dur + 0.25 ? "none" : "flex",
+          opacity: twIn * (1 - twOut),
+          transformOrigin: "50% 80%",
+          transform: `perspective(1800px) translateY(${(1 - twIn) * 140 - twOut * 30}px) rotateX(${(1 - twIn) * 12}deg) scale(${(1 - twOut * 0.06) * (1 + 0.04 * ease.inOut(prog(t, SC.team + 0.8, SC.dur)))})`,
+          filter: twOut > 0 ? `blur(${twOut * 12}px)` : "none",
+        });
+        stream(document.querySelector("#t2 [data-stream]"), T2, t, SC.team + 0.75, SC.team + 1.15);
+        stream(document.querySelector("#t4 [data-stream]"), T4, t, SC.team + 3.0, SC.team + 3.6);
+        msg("t1", t, SC.team + 0.3);
+        msg("t2", t, SC.team + 0.7);
+        msg("t3", t, SC.team + 1.15);
+        msg("t4", t, SC.team + 2.95);
+        document.querySelectorAll("#t3 .handoff").forEach((row, i) => {
+          reveal(row, t, SC.team + 1.2 + i * 0.18, null, { dy: 16, blur: 4, inD: 0.5 });
+          const done = ease.out(prog(t, SC.team + 2.0 + i * 0.3, SC.team + 2.25 + i * 0.3));
+          const [work, ok] = row.querySelectorAll(".hs span");
+          set(work, { opacity: 1 - done, transform: `translateY(${-done * 8}px)` });
+          set(ok, { opacity: done, transform: `translateY(${(1 - done) * 8}px)` });
+          // The "working" dot pulses until the bot reports back.
+          work.firstElementChild.style.opacity =
+            0.35 + 0.65 * Math.abs(Math.sin((t - i * 0.3) * 4));
+        });
+
+        // ── 10. Durable ───────────────────────────────────────
+        const dw = $("durwin");
+        const dwIn = ease.out5(prog(t, SC.dur - 0.05, SC.dur + 0.8));
+        const dwOut = ease.inOut(prog(t, SC.fin - 0.35, SC.fin + 0.15));
+        // The restart: the view drops for a beat, then reconnects.
+        const down =
+          ease.out(prog(t, RESTART_AT, RESTART_AT + 0.12)) *
+          (1 - ease.inOut(prog(t, RECONNECT_AT - 0.1, RECONNECT_AT + 0.15)));
+        set(dw, {
+          display: t < SC.dur - 0.1 || t > SC.fin + 0.2 ? "none" : "flex",
+          opacity: dwIn * (1 - dwOut),
+          transformOrigin: "50% 80%",
+          transform: `perspective(1800px) translateY(${(1 - dwIn) * 140 - dwOut * 30}px) rotateX(${(1 - dwIn) * 12}deg) scale(${(1 - dwOut * 0.06) * (1 - down * 0.015)})`,
+          filter: dwOut > 0 ? `blur(${dwOut * 12}px)` : "none",
+        });
+        set($("durList"), {
+          opacity: 1 - down * 0.7,
+          filter: down > 0.01 ? `blur(${down * 4}px) saturate(${1 - down})` : "none",
+        });
+        // Reply progress: streams, freezes through the restart, resumes.
+        const p1 = 0.42 * prog(t, SC.dur + 0.6, RESTART_AT);
+        const p2 = 0.58 * prog(t, RECONNECT_AT + 0.1, SC.fin - 0.5);
+        stream(
+          document.querySelector("#d2 [data-stream]"),
+          D2,
+          SC.dur + (p1 + p2) * 10,
+          SC.dur,
+          SC.dur + 10,
+        );
+        msg("d1", t, SC.dur + 0.25);
+        msg("d2", t, SC.dur + 0.55);
+        const tDown =
+          ease.out(prog(t, RESTART_AT, RESTART_AT + 0.2)) *
+          (1 - ease.inOut(prog(t, RECONNECT_AT - 0.1, RECONNECT_AT + 0.1)));
+        set($("toastDown"), {
+          opacity: tDown,
+          transform: `translateX(-50%) translateY(${(1 - tDown) * -12}px)`,
+        });
+        const tUp =
+          ease.out(prog(t, RECONNECT_AT, RECONNECT_AT + 0.25)) *
+          (1 - ease.inOut(prog(t, RECONNECT_AT + 1.2, RECONNECT_AT + 1.5)));
+        set($("toastUp"), {
+          opacity: tUp,
+          transform: `translateX(-50%) translateY(${(1 - tUp) * -12}px)`,
+        });
+
+        // ── 11. Finale ────────────────────────────────────────
+        const fin = $("finale");
+        set(fin, {
+          display: t < SC.fin - 0.15 ? "none" : "block",
+          opacity: ease.out(prog(t, SC.fin - 0.1, SC.fin + 0.3)),
+        });
+        reveal($("fline"), t, SC.fin + 0.05, SC.logo - 0.15, { dy: 30, inD: 0.8 });
+        const conv = ease.inOut(prog(t, SC.logo - 0.55, SC.logo + 0.05));
+        teamEls.forEach((el, i) => {
+          const a = SC.fin + 0.1 + i * 0.07;
+          const q = ease.out5(prog(t, a, a + 0.8));
+          const gx = 960 + (i - 2.5) * 250;
+          const gy = 520;
+          const x = lerp(gx, 960, conv);
+          const y = lerp(gy, 540 + 80, conv);
+          set(el, {
+            left: x + "px",
+            top: y + (1 - q) * 80 + "px",
+            opacity: clamp(q * 1.3) * (1 - ease.in(prog(t, SC.logo - 0.3, SC.logo + 0.05))),
+            transform: `scale(${(0.8 + 0.2 * q) * (1 - conv * 0.6)})`,
+            filter: conv > 0 ? `blur(${conv * 6}px)` : "none",
+          });
+        });
+        const br = ease.out5(prog(t, SC.logo - 0.05, SC.logo + 0.8));
+        set($("brand"), {
+          opacity: br,
+          transform: `scale(${(0.94 + 0.06 * br) * (1 + 0.025 * ease.inOut(prog(t, SC.logo + 0.8, END)))})`,
+          filter: br > 0.99 ? "none" : `blur(${(1 - br) * 16}px)`,
+        });
+        reveal(document.querySelector("#brand .tag"), t, SC.logo + 0.45, null, {
+          dy: 16,
+          inD: 0.8,
+        });
+
+        // Fade from black at the top, to black at the end.
+        $("fade").style.opacity =
+          1 - ease.out(prog(t, 0, 0.35)) + ease.inOut(prog(t, END - 0.6, END));
+      }
+
+      window.render = render;
+      window.END = END;
+      render(0);
+    </script>
+  </body>
+</html>
