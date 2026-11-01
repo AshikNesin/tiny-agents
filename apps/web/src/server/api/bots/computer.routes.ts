@@ -103,8 +103,7 @@ router.post("/bots/:id/computer/vnc-ticket", async (c) => {
 
 router.post("/bots/:id/computer/driver", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  const body = await parseBody(c, driverSchema);
-  const profile = await botProfile(id);
+  const [body, profile] = await Promise.all([parseBody(c, driverSchema), botProfile(id)]);
   const sessions = requireSessions();
   if (!sessions.get(profile)) throw Boom.notFound("No desktop is running for this bot yet.");
   // Handing back also answers a bot's takeover request.

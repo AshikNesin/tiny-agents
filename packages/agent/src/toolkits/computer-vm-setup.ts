@@ -80,16 +80,15 @@ export function parseExtraPackages(raw: string | undefined): {
   packages: string[];
   invalid: string[];
 } {
-  const packages: string[] = [];
+  const packages = new Set<string>();
   const invalid: string[] = [];
   for (const entry of (raw ?? "").split(/[\s,]+/)) {
     const name = entry.trim();
     if (!name) continue;
-    if (PACKAGE_NAME.test(name)) {
-      if (!packages.includes(name)) packages.push(name);
-    } else invalid.push(name);
+    if (PACKAGE_NAME.test(name)) packages.add(name);
+    else invalid.push(name);
   }
-  return { packages, invalid };
+  return { packages: [...packages], invalid };
 }
 
 /** Desktop geometry: `COMPUTER_DESKTOP_SIZE` ("1280x800"), bounded to sizes a model reads well. */

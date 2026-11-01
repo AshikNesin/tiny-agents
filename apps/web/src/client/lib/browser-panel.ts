@@ -12,7 +12,7 @@
  * be unavailable (private mode, blocked site data), so a module-level set
  * backs it for the life of the page.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "./chat-types";
 
 export const BROWSER_DISMISSED_KEY = "tiny-agents:browser-dismissed";
@@ -97,38 +97,46 @@ export function computerInUse(messages: ChatMessage[]): boolean {
   );
 }
 
-function usePanel(store: Dismissals, conversationId: string, inUse: boolean) {
+function usePanel(store: Dismissals, conversationId: string, inUse: boolean, onOpen?: () => void) {
   const [open, setOpen] = useState(false);
+  const onOpenRef = useRef(onOpen);
+  useEffect(() => {
+    onOpenRef.current = onOpen;
+  }, [onOpen]);
+
+  /** Every way the panel opens tells the caller (to bring it to the front). */
+  const reveal = useCallback(() => {
+    setOpen(true);
+    onOpenRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (open || !inUse || store.has(conversationId)) return;
-    setOpen(true);
-  }, [open, inUse, conversationId, store]);
+    reveal();
+  }, [open, inUse, conversationId, store, reveal]);
 
   const close = useCallback(() => {
     store.add(conversationId);
     setOpen(false);
   }, [conversationId, store]);
 
-  const show = useCallback(() => setOpen(true), []);
-
   const toggle = useCallback(() => {
     if (open) close();
-    else setOpen(true);
-  }, [open, close]);
+    else reveal();
+  }, [open, close, reveal]);
 
-  return { open, close, toggle, show };
+  return { open, close, toggle, show: reveal };
 }
 
 /**
  * The panel's open state for one conversation. `close` and `toggle` are the
  * owner's actions, so both record the dismissal; only the auto-open reads it.
  */
-export function useBrowserPanel(conversationId: string, inUse: boolean) {
-  return usePanel(browserDismissals, conversationId, inUse);
+export function useBrowserPanel(conversationId: string, inUse: boolean, onOpen?: () => void) {
+  return usePanel(browserDismissals, conversationId, inUse, onOpen);
 }
 
 /** The Computer panel's open state, with dismissals of its own. */
-export function useComputerPanel(conversationId: string, inUse: boolean) {
-  return usePanel(computerDismissals, conversationId, inUse);
+export function useComputerPanel(conversationId: string, inUse: boolean, onOpen?: () => void) {
+  return usePanel(computerDismissals, conversationId, inUse, onOpen);
 }

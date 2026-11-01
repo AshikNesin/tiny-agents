@@ -185,11 +185,13 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   // in this conversation (friction #37); once the owner closes it, it stays
   // closed and the header toggle shows the activity instead.
   const browserActive = browserInUse(messages);
-  const browser = useBrowserPanel(bot.conversationId, browserActive);
+  // One live view at a time: the panel opened last is in front.
+  const [front, setFront] = useState<"browser" | "computer">("browser");
+  const browser = useBrowserPanel(bot.conversationId, browserActive, () => setFront("browser"));
   // The Computer panel (issue #108) follows the same rule, and also opens
   // when the bot asks the owner to take over its computer.
   const computerActive = computerInUse(messages);
-  const computer = useComputerPanel(bot.conversationId, computerActive);
+  const computer = useComputerPanel(bot.conversationId, computerActive, () => setFront("computer"));
   // Whether this server has a computer at all; the toggle hides otherwise.
   const [computerConfigured, setComputerConfigured] = useState(false);
   useEffect(() => {
@@ -204,14 +206,6 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       cancelled = true;
     };
   }, [bot.id]);
-  // One live view at a time: the panel opened last is in front.
-  const [front, setFront] = useState<"browser" | "computer">("browser");
-  useEffect(() => {
-    if (computer.open) setFront("computer");
-  }, [computer.open]);
-  useEffect(() => {
-    if (browser.open) setFront("browser");
-  }, [browser.open]);
   const showBrowser = browser.open && (!computer.open || front === "browser");
   const showComputer = computer.open && (!browser.open || front === "computer");
   const toggleBrowser = () =>
@@ -221,10 +215,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   // "Open computer" on a takeover card in the transcript.
   const showComputerPanel = computer.show;
   useEffect(() => {
-    const onShow = () => {
-      showComputerPanel();
-      setFront("computer");
-    };
+    const onShow = () => showComputerPanel();
     window.addEventListener(SHOW_COMPUTER_EVENT, onShow);
     return () => window.removeEventListener(SHOW_COMPUTER_EVENT, onShow);
   }, [showComputerPanel]);
