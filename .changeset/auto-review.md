@@ -17,5 +17,5 @@ classifiers through pi-ai: Clef by default, any other via `CLASSIFIER_MODEL`,
 e.g. `typesafe/jev`), `createReviewer`, the `reviewer` runtime option and
 `CapabilitySelection.autoReview`. Gated results of auto-approved calls carry
 `approval: "auto"`, and chat tool calls show it. The schema adds
-`Bot.autoReview` (default off). New env vars: `CLASSIFIER_MODEL` and
-`CLASSIFIER_API_KEY`. See docs/features/auto-review.md.
+`Bot.autoReview` (default off). New env var: `CLASSIFIER_MODEL`. See
+docs/features/auto-review.md.

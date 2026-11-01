@@ -165,9 +165,9 @@ export function agentRuntimeReady(): boolean {
 }
 
 /**
- * Auto-review's reviewer (issue #65): Clef on Workers AI unless
- * CLASSIFIER_MODEL names another classifier. Without its credentials bots
- * that turn auto-review on keep every approval card.
+ * Auto-review's reviewer (issue #65): Clef on Workers AI through the AI
+ * Gateway unless CLASSIFIER_MODEL names another classifier. Without the
+ * gateway settings bots that turn auto-review on keep every approval card.
  */
 function autoReviewer(env: Env = process.env): Reviewer | undefined {
   const classifier = createClassifier(env);

@@ -173,26 +173,33 @@ describe("ownerMessages", () => {
   });
 });
 
-describe("createClassifier (Workers AI)", () => {
+describe("createClassifier (Workers AI through the AI Gateway)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("needs an API key and the account id", () => {
+  const env = {
+    CLOUDFLARE_API_KEY: "gateway-key",
+    CLOUDFLARE_ACCOUNT_ID: "acct",
+    CLOUDFLARE_GATEWAY_ID: "gw",
+  };
+
+  it("needs every AI Gateway setting", () => {
     expect(createClassifier({})).toBeUndefined();
-    expect(createClassifier({ CLOUDFLARE_API_KEY: "key" })).toBeUndefined();
+    expect(createClassifier({ ...env, CLOUDFLARE_API_KEY: "" })).toBeUndefined();
+    expect(createClassifier({ ...env, CLOUDFLARE_ACCOUNT_ID: undefined })).toBeUndefined();
+    expect(createClassifier({ ...env, CLOUDFLARE_GATEWAY_ID: " " })).toBeUndefined();
   });
 
   it("defaults to Clef and turns off for a model Workers AI does not classify with", () => {
-    const env = { CLOUDFLARE_API_KEY: "key", CLOUDFLARE_ACCOUNT_ID: "acct" };
-    expect(createClassifier(env)?.id).toBe("cloudflare-workers-ai/@cf/cloudflare/clef");
+    expect(createClassifier(env)?.id).toBe("cloudflare-ai-gateway/@cf/cloudflare/clef");
     expect(createClassifier({ ...env, CLASSIFIER_MODEL: "typesafe/jev" })?.id).toBe(
-      "cloudflare-workers-ai/typesafe/jev",
+      "cloudflare-ai-gateway/typesafe/jev",
     );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/meta/llama" })).toBeUndefined();
     warn.mockRestore();
   });
 
-  it("speaks Clef's wire format and maps its answers back", async () => {
+  it("speaks Clef's wire format on the gateway's Workers AI route", async () => {
     const requests: { url: string; headers: Headers; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -221,31 +228,43 @@ describe("createClassifier (Workers AI)", () => {
         });
       }),
     );
-    const classifier = createClassifier({
-      CLOUDFLARE_API_KEY: "gateway-key",
-      CLASSIFIER_API_KEY: "workers-ai-key",
-      CLOUDFLARE_ACCOUNT_ID: "acct",
-    })!;
-    const verdict = await createReviewer(classifier)(input);
+    const verdict = await createReviewer(createClassifier(env)!)(input);
 
     expect(verdict).toEqual({
       approve: true,
-      classifier: "cloudflare-workers-ai/@cf/cloudflare/clef",
+      classifier: "cloudflare-ai-gateway/@cf/cloudflare/clef",
       requested: 0.95,
       risk: 0.5,
     });
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run");
-    expect(requests[0].headers.get("authorization")).toBe("Bearer workers-ai-key");
-    expect(requests[0].body).toMatchObject({
-      model: "@cf/cloudflare/clef",
-      input: {
-        state: reviewState(input),
-        questions: {
-          requested: { type: "noul", instructions: REVIEW_QUESTIONS.requested.instructions },
-          risk: { type: "score", criteria: REVIEW_QUESTIONS.risk.criteria },
-        },
+    expect(requests[0].url).toBe(
+      "https://gateway.ai.cloudflare.com/v1/acct/gw/workers-ai/@cf/cloudflare/clef",
+    );
+    // The gateway's native auth, as for chat models: no plain bearer.
+    expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
+    expect(requests[0].headers.get("authorization")).toBeNull();
+    // The body is the System One request itself; the model is in the URL.
+    expect(requests[0].body).toEqual({
+      state: reviewState(input),
+      questions: {
+        requested: expect.objectContaining({
+          type: "noul",
+          instructions: REVIEW_QUESTIONS.requested.instructions,
+        }),
+        risk: expect.objectContaining({ type: "score", criteria: REVIEW_QUESTIONS.risk.criteria }),
       },
     });
+  });
+
+  it("falls back to the card on a gateway error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ success: false, errors: [{ message: "Unauthorized" }] }, { status: 401 }),
+      ),
+    );
+    const verdict = await createReviewer(createClassifier(env)!)(input);
+    expect(verdict.approve).toBe(false);
+    expect(verdict.error).toBeTruthy();
   });
 });
