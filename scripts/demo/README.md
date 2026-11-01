@@ -12,6 +12,9 @@ faux model, and [`faux-director.mjs`](./faux-director.mjs) decides what it says
 per prompt. Web search results come from [`web-stub.mjs`](./web-stub.mjs) so no
 gateway credentials are needed.
 
+For the 45-second teaser (a motion-graphics cut that sells the benefits),
+see [`teaser/`](./teaser/README.md).
+
 ## Re-recording
 
 Needs a Debian/Ubuntu amd64 machine with root (it doubles as the sandbox VM),
