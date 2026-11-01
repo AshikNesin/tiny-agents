@@ -14,9 +14,11 @@ const { chromium } = await import("playwright-core").catch(() => require("playwr
 const FPS = Number(process.env.FPS ?? 60);
 const OUT = process.env.FRAMES_DIR ?? "tmp/demo/teaser-frames";
 const STILLS = process.env.STILLS?.split(",").map(Number);
+// FROM=<seconds> re-renders only the frames from that time on, keeping the rest.
+const FROM = Number(process.env.FROM ?? 0);
 const html = fileURLToPath(new URL("./teaser.html", import.meta.url));
 
-if (!STILLS) rmSync(OUT, { recursive: true, force: true });
+if (!STILLS && !FROM) rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
 // Several workers render interleaved frames in parallel (WORKERS, default 4).
@@ -43,7 +45,8 @@ const started = Date.now();
 let done = 0;
 await Promise.all(
   pages.map(async (page, w) => {
-    for (let i = w; i < times.length; i += WORKERS) {
+    const first = STILLS ? 0 : Math.floor(FROM * FPS);
+    for (let i = first + w; i < times.length; i += WORKERS) {
       const t = times[i];
       await page.evaluate((t) => window.render(t), t);
       const name = STILLS ? `still-${t.toFixed(2)}.png` : `f${String(i).padStart(5, "0")}.png`;
@@ -55,5 +58,5 @@ await Promise.all(
     }
   }),
 );
-console.log(`rendered ${times.length} frame(s) into ${OUT}`);
+console.log(`rendered ${done} frame(s) into ${OUT}`);
 await Promise.all(browsers.map((b) => b.close()));

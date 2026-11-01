@@ -28,7 +28,7 @@ score is original, synthesised with numpy, and royalty-free.
 | 32.5 | Multi-agent          | Chief of Staff hands off to Travel Planner, Writer, Researcher |
 | 36.5 | Durable              | Server restarts mid-reply; it reconnects and keeps streaming   |
 | 40.5 | Team                 | Six bots: "A team that never clocks out."                      |
-| 42.5 | Logo                 | tiny-agents, "Your team of always-on AI agents."               |
+| 42.5 | Logo                 | Tiny Agents, "Your team of always-on AI agents."               |
 
 The score is 120 BPM with bars starting at 0.5 s, and every scene after the
 chat is two bars long, so each cut lands on a downbeat. The opening bells
@@ -47,6 +47,7 @@ STILLS=4.8,9.4,15.2 node scripts/demo/teaser/render.mjs   # review stills in tmp
 ```
 
 `render.mjs` takes `WORKERS` (parallel pages, default 4), `FPS` (default 60),
+`FROM` (seconds; re-render only from there on, e.g. after a copy change),
 `FRAMES_DIR` and `CHROMIUM_PATH` (set it when the installed `playwright-core`
 expects a browser build that isn't downloaded).
 
