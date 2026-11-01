@@ -41,7 +41,7 @@ const PLACEHOLDER: Partial<Record<ValueField, string>> = {
 };
 
 const DEFAULT_TOOLS: Record<VaultKind, string[]> = {
-  login: ["browser_fill_secret", "browser_enter_code"],
+  login: ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
   card: ["browser_fill_secret"],
   identity: [],
   api_key: ["http_request", "mcp"],

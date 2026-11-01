@@ -136,6 +136,22 @@ export function approvalRequested(
   };
 }
 
+/** A bot asked the owner to take over its computer (issue #108). */
+export function takeoverRequested(bot: BotRef, task: number, reason?: string): Notification {
+  return {
+    event: "approval.requested",
+    category: "needs_input",
+    title: `✋ ${bot.name} needs you on the computer`,
+    message: `${scrubText(reason, 160) ?? "Take over the computer"}. Open the chat to take control.`,
+    path: chatPath(bot, `takeover:${task}`),
+    urlTitle: "Open chat",
+    priority: 1,
+    dedupeKey: waitKey("approval", bot.conversationId, task),
+    botId: bot.id,
+    coalesce: needsYou(bot),
+  };
+}
+
 export function credentialRequested(
   bot: BotRef,
   task: number,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { ChevronDown, Globe, Menu, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
+import { ChevronDown, Globe, Menu, Monitor, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
@@ -17,12 +17,19 @@ import { ownerSend, type OwnerSubmission } from "../store/owner-send";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
+import { ComputerPanel } from "./ComputerPanel";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
 import { ACTIVE_TOOL_STATUSES, TypingIndicator, USER_PILL } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { MessageAttachments } from "./Attachments";
 import { Transcript, type TranscriptPages } from "./Transcript";
-import { browserInUse, useBrowserPanel } from "../lib/browser-panel";
+import {
+  browserInUse,
+  computerInUse,
+  useBrowserPanel,
+  useComputerPanel,
+} from "../lib/browser-panel";
+import { SHOW_COMPUTER_EVENT } from "../lib/owner-actions";
 import { useHttpOwnerActions } from "../lib/owner-actions";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
@@ -179,6 +186,48 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   // closed and the header toggle shows the activity instead.
   const browserActive = browserInUse(messages);
   const browser = useBrowserPanel(bot.conversationId, browserActive);
+  // The Computer panel (issue #108) follows the same rule, and also opens
+  // when the bot asks the owner to take over its computer.
+  const computerActive = computerInUse(messages);
+  const computer = useComputerPanel(bot.conversationId, computerActive);
+  // Whether this server has a computer at all; the toggle hides otherwise.
+  const [computerConfigured, setComputerConfigured] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve()
+      .then(() => botsApi.computerStatus(bot.id))
+      .then((status) => {
+        if (!cancelled) setComputerConfigured(Boolean(status?.configured));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [bot.id]);
+  // One live view at a time: the panel opened last is in front.
+  const [front, setFront] = useState<"browser" | "computer">("browser");
+  useEffect(() => {
+    if (computer.open) setFront("computer");
+  }, [computer.open]);
+  useEffect(() => {
+    if (browser.open) setFront("browser");
+  }, [browser.open]);
+  const showBrowser = browser.open && (!computer.open || front === "browser");
+  const showComputer = computer.open && (!browser.open || front === "computer");
+  const toggleBrowser = () =>
+    browser.open && !showBrowser ? setFront("browser") : browser.toggle();
+  const toggleComputer = () =>
+    computer.open && !showComputer ? setFront("computer") : computer.toggle();
+  // "Open computer" on a takeover card in the transcript.
+  const showComputerPanel = computer.show;
+  useEffect(() => {
+    const onShow = () => {
+      showComputerPanel();
+      setFront("computer");
+    };
+    window.addEventListener(SHOW_COMPUTER_EVENT, onShow);
+    return () => window.removeEventListener(SHOW_COMPUTER_EVENT, onShow);
+  }, [showComputerPanel]);
 
   // Read/unread split (issue #3): messages older than the frozen pre-open
   // marker are read; the rest arrived while the owner was away. The first
@@ -331,24 +380,22 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
               variant="ghost"
               size="icon"
               className={`text-muted-foreground hover:text-foreground relative rounded-xl ${
-                browser.open ? "bg-accent text-foreground" : ""
+                showBrowser ? "bg-accent text-foreground" : ""
               }`}
-              onClick={browser.toggle}
+              onClick={toggleBrowser}
               aria-label={
-                browser.open
+                showBrowser
                   ? "Close browser panel"
                   : browserActive
                     ? `Open browser panel, ${bot.name} is using the browser`
                     : "Open browser panel"
               }
-              aria-pressed={browser.open}
-              title={
-                browserActive && !browser.open ? `${bot.name} is using the browser` : "Browser"
-              }
+              aria-pressed={showBrowser}
+              title={browserActive && !showBrowser ? `${bot.name} is using the browser` : "Browser"}
               data-testid="browser-toggle"
             >
               <Globe className="size-4" />
-              {browserActive && !browser.open && (
+              {browserActive && !showBrowser && (
                 <span
                   className="bg-success absolute top-1.5 right-1.5 size-2 animate-pulse rounded-full"
                   aria-hidden
@@ -356,6 +403,37 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                 />
               )}
             </Button>
+            {(computerConfigured || computer.open || computerActive) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`text-muted-foreground hover:text-foreground relative rounded-xl ${
+                  showComputer ? "bg-accent text-foreground" : ""
+                }`}
+                onClick={toggleComputer}
+                aria-label={
+                  showComputer
+                    ? "Close computer panel"
+                    : computerActive
+                      ? `Open computer panel, ${bot.name} is using the computer`
+                      : "Open computer panel"
+                }
+                aria-pressed={showComputer}
+                title={
+                  computerActive && !showComputer ? `${bot.name} is using the computer` : "Computer"
+                }
+                data-testid="computer-toggle"
+              >
+                <Monitor className="size-4" />
+                {computerActive && !showComputer && (
+                  <span
+                    className="bg-success absolute top-1.5 right-1.5 size-2 animate-pulse rounded-full"
+                    aria-hidden
+                    data-testid="computer-activity"
+                  />
+                )}
+              </Button>
+            )}
             <ChatHistoryMenu
               botId={bot.id}
               conversationId={bot.conversationId}
@@ -483,7 +561,9 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       </div>
       {/* Browser live view (issue #24): beside the conversation on desktop,
           full-screen overlay on mobile. */}
-      {browser.open && <BrowserPanel bot={bot} onClose={browser.close} />}
+      {showBrowser && <BrowserPanel bot={bot} onClose={browser.close} />}
+      {/* Computer live view (issue #108): same place, one panel at a time. */}
+      {showComputer && <ComputerPanel bot={bot} onClose={computer.close} />}
 
       {/* Confirmations */}
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>

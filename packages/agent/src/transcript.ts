@@ -13,6 +13,7 @@ import type {
 import { approvalOf } from "./approvals";
 import { credentialsOf } from "./credentials";
 import { secretRedactor } from "./redact";
+import { takeoverOf } from "./toolkits/computer-sessions";
 import { questionsOf } from "./toolkits/questions";
 
 /** A tool call of the current round, as `pi.live` presents it. */
@@ -196,6 +197,7 @@ function toolCallView(
     const sources = sourcesOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
+    const takeover = takeoverOf(approved?.result ?? message.details);
     // The tool's clock includes any wait for the owner's approval: report
     // the run and the wait apart.
     const waitedMs = approved?.waitedMs;
@@ -217,6 +219,7 @@ function toolCallView(
       ...(questions ? { questions } : {}),
       ...(answers ? { answers } : {}),
       ...(credentials ? { credentials } : {}),
+      ...(takeover ? { takeover } : {}),
     };
   }
   if (slot) {
@@ -224,6 +227,7 @@ function toolCallView(
     const waiting = approval?.state === "pending";
     const asked = questionsOf(slot.details);
     const credentials = credentialsOf(slot.details);
+    const takeover = takeoverOf(slot.details);
     const vault = approval?.vault;
     const expiresAt = approval?.expiresAt ?? credentialExpiry(slot.details);
     return {
@@ -234,14 +238,17 @@ function toolCallView(
           ? "awaiting_answer"
           : credentials?.status === "pending"
             ? "awaiting_credentials"
-            : slot.status === "running"
-              ? "running"
-              : "pending",
+            : takeover?.status === "pending"
+              ? "awaiting_takeover"
+              : slot.status === "running"
+                ? "running"
+                : "pending",
       ...(slot.taskId !== undefined ? { taskId: slot.taskId } : {}),
       ...(slot.output ? { output: clip(slot.output) } : {}),
       ...(asked.pending ? { questions: asked.questions } : {}),
       ...(vault ? { vault } : {}),
       ...(credentials ? { credentials } : {}),
+      ...(takeover ? { takeover } : {}),
       ...(expiresAt !== undefined ? { expiresAt } : {}),
     };
   }

@@ -43,7 +43,7 @@ Phase 1 is done when, on the Coolify deployment:
 Explicitly out of scope (see §15 Roadmap):
 
 - Tools / function calling, MCP, connected apps (Composio)
-- Per-bot computers (cloud desktop / VM), code execution
+- Per-bot computers (cloud desktop / VM), code execution (since shipped: the sandbox toolkit, and a desktop per bot on the sandbox VM, issue #108)
 - Group channels, @mentions, bot-to-bot messaging, "chief of staff" orchestration
 - Routines / schedules, memory files, skills
 - File/image uploads, attachments, avatar image upload/generation
@@ -372,7 +372,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 - Skills; notifications (bell in the nav header, web push); mobile bottom tab bar once there are several
   sections
 - Channels / group chats, bot-to-bot, chief-of-staff orchestration
-- Per-bot computers, connected apps / MCP
+- Per-bot computers, connected apps / MCP (computers shipped as desktops on the sandbox VM, issue #108; macOS and Windows machines remain out of scope)
 - Attachments, avatar upload / generation, voice
 - Orphaned conversation cleanup
 - Cloudflare Durable Objects hosting option

@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Ban, Check, Clock, Copy, ExternalLink, KeyRound, Sparkles } from "lucide-react";
+import { Ban, Check, Clock, Copy, ExternalLink, Hand, KeyRound, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
 import { markdownComponents } from "../lib/markdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
-import { type OwnerActions, useOwnerActions, useOwnerDecision } from "../lib/owner-actions";
+import {
+  type OwnerActions,
+  showComputerPanel,
+  useOwnerActions,
+  useOwnerDecision,
+} from "../lib/owner-actions";
 import { BotAvatar } from "./BotAvatar";
 import { BotHandoff } from "./BotHandoff";
 import {
@@ -161,6 +166,7 @@ const STATUS_TEXT: Partial<Record<ChatToolCall["status"], string>> = {
   awaiting_approval: "waiting for your approval",
   awaiting_answer: "waiting for your answers",
   awaiting_credentials: "waiting for you to sign in",
+  awaiting_takeover: "waiting for you on the computer",
   expired: "nobody answered in time",
   interrupted: "interrupted by a restart",
   aborted: "stopped",
@@ -187,6 +193,7 @@ export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set
   "awaiting_approval",
   "awaiting_answer",
   "awaiting_credentials",
+  "awaiting_takeover",
 ]);
 
 /** Map our tool status onto the trace step status. */
@@ -204,6 +211,7 @@ function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pen
     case "awaiting_approval":
     case "awaiting_answer":
     case "awaiting_credentials":
+    case "awaiting_takeover":
       return "pending";
     case "done":
       return undefined;
@@ -215,6 +223,7 @@ function statusIcon(call: ChatToolCall) {
     case "awaiting_approval":
     case "awaiting_answer":
     case "awaiting_credentials":
+    case "awaiting_takeover":
       return <Clock className="text-primary size-3.5" />;
     case "denied":
     case "expired":
@@ -283,6 +292,7 @@ function minutesLeft(expiresAt: number | undefined): string | undefined {
 const VAULT_VERB: Record<string, string> = {
   browser_fill_secret: "fill",
   browser_enter_code: "enter a code from",
+  computer_fill_secret: "type",
   http_request: "send",
 };
 
@@ -322,7 +332,7 @@ function VaultApprovalCard({
         <ItemDescription>
           {command
             ? `${(vault.env ?? []).join(", ")} ${vault.env?.length === 1 ? "is" : "are"} set for this command only, and it can reach only ${vault.hosts?.join(", ") || "nothing"}. ${botName} never sees the value, but the command can use it: check what it does.`
-            : `${vault.username ? `As ${vault.username}. ` : ""}The value goes straight ${vault.tool === "http_request" ? "into the request" : "into the page"}; ${botName} never sees it.`}
+            : `${vault.username ? `As ${vault.username}. ` : ""}The value goes straight ${vault.tool === "http_request" ? "into the request" : vault.tool === "computer_fill_secret" ? "into that window on the computer, and only if it is in front" : "into the page"}; ${botName} never sees it.`}
           {left ? ` Expires in ${left}.` : ""}
         </ItemDescription>
       </ItemContent>
@@ -381,6 +391,52 @@ function CredentialRequestCard({
         <Button size="xs" asChild>
           <Link to={`/vault/requests/${call.taskId}`}>Open</Link>
         </Button>
+      </ItemActions>
+    </Item>
+  );
+}
+
+/**
+ * The bot asked the owner to take over its computer (issue #108): Grok's
+ * "Action needed" card. The computer is already the owner's; the card
+ * brings the live view up and hands it back.
+ */
+function TakeoverCard({
+  call,
+  actions,
+  botName,
+}: {
+  call: ChatToolCall & { takeover: NonNullable<ChatToolCall["takeover"]> };
+  actions: OwnerActions;
+  botName: string;
+}) {
+  const { busy, run } = useOwnerDecision("Failed to hand the computer back", { settle: false });
+  return (
+    <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg" data-testid="takeover-card">
+      <ItemContent>
+        <ItemTitle>
+          <Hand className="size-4" />
+          {botName} needs you on the computer
+        </ItemTitle>
+        <ItemDescription>
+          {call.takeover.reason} You have control; {botName} waits and takes no screenshots until
+          you are done.
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions className="flex flex-col items-stretch gap-1.5">
+        <Button size="xs" onClick={showComputerPanel}>
+          Open computer
+        </Button>
+        {actions.handBackComputer && (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={busy}
+            onClick={() => run(() => actions.handBackComputer!())}
+          >
+            I'm done
+          </Button>
+        )}
       </ItemActions>
     </Item>
   );
@@ -507,6 +563,18 @@ function ToolRow({
   ) {
     return (
       <CredentialRequestCard call={{ ...call, credentials: call.credentials }} botName={botName} />
+    );
+  }
+
+  if (actions && call.status === "awaiting_takeover" && call.takeover) {
+    return (
+      <div data-waiting={call.taskId !== undefined ? `takeover:${call.taskId}` : undefined}>
+        <TakeoverCard
+          call={{ ...call, takeover: call.takeover }}
+          actions={actions}
+          botName={botName}
+        />
+      </div>
     );
   }
 

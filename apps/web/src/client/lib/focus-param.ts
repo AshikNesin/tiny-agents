@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
-const FOCUS = /^(approval|question):\d+$/;
+const FOCUS = /^(approval|question|takeover):\d+$/;
 /** How long to wait for the card to render (the chat stream loads first). */
 const WAIT_MS = 10_000;
 

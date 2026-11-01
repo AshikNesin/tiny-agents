@@ -198,6 +198,37 @@ export {
 } from "./toolkits/browser";
 export { createChromiumTransport } from "./toolkits/browser-chromium";
 export {
+  closeAllComputerSessions,
+  createComputerSessions,
+  createComputerToolkit,
+  DesktopGoneError,
+  normalizeKeys,
+  OWNER_DRIVING,
+  OwnerDrivingError,
+  SHARED_COMPUTER_PROFILE,
+  WindowMismatchError,
+  windowTarget,
+  type ComputerApp,
+  type ComputerDesktop,
+  type ComputerDriver,
+  type ComputerOpenState,
+  type ComputerPhase,
+  type ComputerSessions,
+  type ComputerSessionsOptions,
+  type ComputerToolkitOptions,
+  type ComputerTransport,
+  type ComputerWindow,
+  type LiveComputer,
+  type OpenDesktopOptions,
+  type WindowBinding,
+} from "./toolkits/computer";
+export {
+  createX11ComputerTransport,
+  type X11ComputerTransportOptions,
+} from "./toolkits/computer-x11";
+export { parseDesktopSize, parseExtraPackages } from "./toolkits/computer-vm-setup";
+
+export {
   dialSsh,
   hostKeyHash,
   verifyHostKey,

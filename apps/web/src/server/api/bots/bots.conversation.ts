@@ -93,6 +93,7 @@ export const BOT_TOOLKITS = [
   "web",
   "sandbox",
   "browser",
+  "computer",
   "bots",
   "skills",
   "memory",
