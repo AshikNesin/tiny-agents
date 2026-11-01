@@ -46,15 +46,22 @@ const unquote = (value: string | undefined) =>
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim() || undefined;
 
-/** A classifier over a pi-ai model registry (tests pass a faux one). */
+/**
+ * A classifier over a pi-ai model registry (tests pass a faux one).
+ * `headers` go on every request (e.g. the AI Gateway route).
+ */
 export function classifierFromModels(
   models: Models,
   model: ClassifierModel<ClassifierApi>,
+  headers?: Record<string, string>,
 ): Classifier {
   return {
     id: `${model.provider}/${model.id}`,
     async classify(context, signal) {
-      const result = await models.classify(model, context, signal ? { signal } : {});
+      const result = await models.classify(model, context, {
+        ...(signal ? { signal } : {}),
+        ...(headers ? { headers } : {}),
+      });
       if (result.stopReason !== "stop") {
         throw new Error(result.errorMessage ?? `Classifier ${result.stopReason}`);
       }
@@ -70,9 +77,10 @@ export function classifierFromModels(
  * The configured classifier, or `undefined` when its credentials are missing
  * or `CLASSIFIER_MODEL` names an unknown model (features using it stay off).
  *
- * Calls go to Workers AI directly with `CLASSIFIER_API_KEY`, else
- * `CLOUDFLARE_API_KEY` (the token needs Workers AI permission), on
- * `CLOUDFLARE_ACCOUNT_ID`.
+ * Calls go to Workers AI with `CLASSIFIER_API_KEY`, else `CLOUDFLARE_API_KEY`
+ * (the token needs Workers AI permission), on `CLOUDFLARE_ACCOUNT_ID`.
+ * They are logged by the AI Gateway `classifierGateway()` names; `off` (or
+ * no gateway id) calls Workers AI directly.
  */
 export function createClassifier(env: Env = process.env): Classifier | undefined {
   const credential = unquote(env.CLASSIFIER_API_KEY) ?? unquote(env.CLOUDFLARE_API_KEY);
@@ -95,5 +103,30 @@ export function createClassifier(env: Env = process.env): Classifier | undefined
     );
     return undefined;
   }
-  return classifierFromModels(models, model);
+  return classifierFromModels(models, model, gatewayHeaders(env));
+}
+
+/**
+ * The AI Gateway classifier calls go through: `CLASSIFIER_GATEWAY_ID`, else
+ * the chat models' `CLOUDFLARE_GATEWAY_ID`; `undefined` for `off` or none.
+ */
+function classifierGateway(env: Env): string | undefined {
+  const id = unquote(env.CLASSIFIER_GATEWAY_ID) ?? unquote(env.CLOUDFLARE_GATEWAY_ID);
+  return id && id.toLowerCase() !== "off" ? id : undefined;
+}
+
+/**
+ * Workers AI's REST endpoint routes through a gateway named by
+ * `cf-aig-gateway-id`. An authenticated gateway also wants its own token
+ * (`CLOUDFLARE_API_KEY`, as for chat models) in `cf-aig-authorization`;
+ * `Authorization` stays the Workers AI token.
+ */
+function gatewayHeaders(env: Env): Record<string, string> | undefined {
+  const gateway = classifierGateway(env);
+  if (!gateway) return undefined;
+  const gatewayKey = unquote(env.CLOUDFLARE_API_KEY);
+  return {
+    "cf-aig-gateway-id": gateway,
+    ...(gatewayKey ? { "cf-aig-authorization": `Bearer ${gatewayKey}` } : {}),
+  };
 }

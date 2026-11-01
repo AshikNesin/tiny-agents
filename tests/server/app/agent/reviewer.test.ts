@@ -237,6 +237,8 @@ describe("createClassifier (Workers AI)", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run");
     expect(requests[0].headers.get("authorization")).toBe("Bearer workers-ai-key");
+    // No gateway id: straight to Workers AI.
+    expect(requests[0].headers.get("cf-aig-gateway-id")).toBeNull();
     expect(requests[0].body).toMatchObject({
       model: "@cf/cloudflare/clef",
       input: {
@@ -247,5 +249,46 @@ describe("createClassifier (Workers AI)", () => {
         },
       },
     });
+  });
+
+  it("goes through the AI Gateway: CLASSIFIER_GATEWAY_ID, else CLOUDFLARE_GATEWAY_ID", async () => {
+    const requests: { url: string; headers: Headers }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        requests.push({ url: String(url), headers: new Headers(init?.headers) });
+        return Response.json({
+          success: true,
+          result: {
+            answers: {
+              requested: { type: "noul", noul: 0.95 },
+              risk: { type: "score", score: 0, legend: {}, probabilities: {}, confidence: 0.9 },
+            },
+          },
+        });
+      }),
+    );
+    const env = {
+      CLOUDFLARE_API_KEY: "gateway-key",
+      CLASSIFIER_API_KEY: "workers-ai-key",
+      CLOUDFLARE_ACCOUNT_ID: "acct",
+      CLOUDFLARE_GATEWAY_ID: "chat-gw",
+    };
+    await createReviewer(createClassifier(env)!)(input);
+    await createReviewer(createClassifier({ ...env, CLASSIFIER_GATEWAY_ID: "review-gw" })!)(input);
+    await createReviewer(createClassifier({ ...env, CLASSIFIER_GATEWAY_ID: "off" })!)(input);
+
+    expect(requests.map((r) => r.url)).toEqual(
+      Array(3).fill("https://api.cloudflare.com/client/v4/accounts/acct/ai/run"),
+    );
+    expect(requests.map((r) => r.headers.get("cf-aig-gateway-id"))).toEqual([
+      "chat-gw",
+      "review-gw",
+      null,
+    ]);
+    // Workers AI keeps its token; an authenticated gateway gets the gateway's.
+    expect(requests[0].headers.get("authorization")).toBe("Bearer workers-ai-key");
+    expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
+    expect(requests[2].headers.get("cf-aig-authorization")).toBeNull();
   });
 });

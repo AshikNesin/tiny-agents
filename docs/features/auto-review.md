@@ -44,13 +44,17 @@ a restart never reviews the same call twice.
 ## Setup
 
 The classifier is Cloudflare's [Clef](https://developers.cloudflare.com/workers-ai/models/clef/)
-on Workers AI, called directly (not through the AI Gateway) on
-`CLOUDFLARE_ACCOUNT_ID`.
+on Workers AI, on `CLOUDFLARE_ACCOUNT_ID`. When a gateway id is set (by
+default the chat models' `CLOUDFLARE_GATEWAY_ID`), calls go through that AI
+Gateway (the `cf-aig-gateway-id` header on Workers AI's REST endpoint), so
+reviews show up in its logs; an authenticated gateway gets `CLOUDFLARE_API_KEY`
+as its token, as for chat models.
 
-| Var                  | Default               | What it is                                                             |
-| -------------------- | --------------------- | ---------------------------------------------------------------------- |
-| `CLASSIFIER_API_KEY` | `CLOUDFLARE_API_KEY`  | A Cloudflare API token with **Workers AI** permission                  |
-| `CLASSIFIER_MODEL`   | `@cf/cloudflare/clef` | Any Workers AI classifier: `@cf/cloudflare/clef-flash`, `typesafe/jev` |
+| Var                     | Default                 | What it is                                                             |
+| ----------------------- | ----------------------- | ---------------------------------------------------------------------- |
+| `CLASSIFIER_API_KEY`    | `CLOUDFLARE_API_KEY`    | A Cloudflare API token with **Workers AI** permission                  |
+| `CLASSIFIER_MODEL`      | `@cf/cloudflare/clef`   | Any Workers AI classifier: `@cf/cloudflare/clef-flash`, `typesafe/jev` |
+| `CLASSIFIER_GATEWAY_ID` | `CLOUDFLARE_GATEWAY_ID` | The AI Gateway reviews go through; `off` calls Workers AI directly     |
 
 Without a key and account id, bots with auto-review on keep every card. An
 unknown `CLASSIFIER_MODEL` logs a warning at boot and turns it off.
