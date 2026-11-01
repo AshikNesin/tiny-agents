@@ -10,7 +10,7 @@ one shows it read-only, with older messages loading on scroll and the routine
 results from that period. From there you can continue the chat (the bot moves
 back onto it, and the chat it was on becomes a past chat) or delete it.
 Titles come from one lightweight side-call per "New chat" (`CHAT_TITLE_MODEL`,
-default `workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct`), with the first
+default `custom:custom-zai-coding-plan/glm-5.3-flash`), with the first
 message as the fallback. Adds the `BotChat` table (migration
 `20261030170000_bot_chats`). Chats ended before this release can't be
 recovered: nothing linked them to their bot.

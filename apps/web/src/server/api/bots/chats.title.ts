@@ -10,8 +10,12 @@ import { stripAttachmentNotes, stripPeerEnvelope, type AgentRuntime } from "@tin
 import { db, botChats } from "../../db";
 import { resolveSideCallModel, resolveSideCallModelId, type SideCallModels } from "./side-call";
 
-/** Lightweight and on Workers AI, so it needs no provider key of its own. */
-export const DEFAULT_CHAT_TITLE_MODEL = "workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct";
+/**
+ * Lightweight custom gateway model (GATEWAY_CUSTOM_PROVIDERS), in the
+ * "custom:<provider>/<model>" form the runtime resolves. A deployment without
+ * that provider falls back to the bot's own model.
+ */
+export const DEFAULT_CHAT_TITLE_MODEL = "custom:custom-zai-coding-plan/glm-5.3-flash";
 
 /** Longest stored title; also the provisional (first message) title's cap. */
 export const CHAT_TITLE_MAX = 80;
