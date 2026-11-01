@@ -1,11 +1,12 @@
 import {
   forwardRef,
+  type MouseEvent,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type MouseEvent,
 } from "react";
 import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -116,6 +117,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const [stopRequested, setStopRequested] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** Where the caret goes once the text that was just set is rendered. */
+  const pendingCaret = useRef<number | null>(null);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const pasteCount = useRef(0);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
@@ -311,13 +314,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     // textarea (it would otherwise land at the very end of the text).
     const target = mention.start + insertion.length;
     setCaret(target);
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.selectionStart = target;
-        textareaRef.current.selectionEnd = target;
-      }
-    });
+    pendingCaret.current = target;
   };
+
+  // Place the caret in the same commit that renders the inserted mention: a
+  // frame later it would race the owner's next keystrokes and jump back
+  // mid-word.
+  useLayoutEffect(() => {
+    const target = pendingCaret.current;
+    if (target === null || !textareaRef.current) return;
+    pendingCaret.current = null;
+    textareaRef.current.selectionStart = target;
+    textareaRef.current.selectionEnd = target;
+  }, [text]);
 
   // Pressing a round button must not steal focus from the textarea: on
   // desktop the caret stays put for the next message, on touch the
