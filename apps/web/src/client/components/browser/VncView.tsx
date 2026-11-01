@@ -19,11 +19,25 @@ export type VncState = "connecting" | "live" | "reconnecting";
 export interface VncHandle {
   /** Send the local clipboard to the remote browser and press Ctrl+V. */
   paste(): Promise<void>;
+  /** Press a chord the local browser would otherwise keep (Alt+Tab, Alt+F4). */
+  sendKeys(strokes: KeyStroke[]): void;
   focus(): void;
 }
 
+/** A one-time viewer ticket: a same-origin WebSocket path and its pixel density. */
+export interface VncTicket {
+  path: string;
+  scale: number;
+}
+
 interface VncViewProps {
+  /**
+   * Whose desktop: with `ticket` given, only the key that keeps one
+   * connection per desktop (e.g. a computer profile on the Computer page).
+   */
   botId: string;
+  /** Where tickets come from; default the bot's browser or computer ticket route. */
+  ticket?: () => Promise<VncTicket>;
   /** Which desktop to stream; default the bot's browser. */
   kind?: "browser" | "computer";
   /** False keeps the viewer view-only (the agent is driving). */
@@ -56,9 +70,13 @@ const PASTE_CHORD = {
 } as const;
 
 export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
-  { botId, kind = "browser", interactive, onState },
+  { botId, kind = "browser", ticket, interactive, onState },
   ref,
 ) {
+  const ticketRef = useRef(ticket);
+  useEffect(() => {
+    ticketRef.current = ticket;
+  }, [ticket]);
   const hostRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<RfbClient | null>(null);
   const interactiveRef = useRef(interactive);
@@ -90,7 +108,14 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
 
   useImperativeHandle(
     ref,
-    () => ({ paste, focus: () => rfbRef.current?.focus({ preventScroll: true }) }),
+    () => ({
+      paste,
+      sendKeys: (strokes) => {
+        const rfb = rfbRef.current;
+        if (rfb && interactiveRef.current) sendStrokes(rfb, strokes);
+      },
+      focus: () => rfbRef.current?.focus({ preventScroll: true }),
+    }),
     [paste],
   );
 
@@ -104,7 +129,11 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
         // No ticket (session gone) retries too: the panel's status poll
         // removes this view when the session is truly gone.
         ticket: () =>
-          kind === "computer" ? botsApi.computerVncTicket(botId) : botsApi.browserVncTicket(botId),
+          ticketRef.current
+            ? ticketRef.current()
+            : kind === "computer"
+              ? botsApi.computerVncTicket(botId)
+              : botsApi.browserVncTicket(botId),
         open: async (ticket, events) => {
           const rfb =
             kind === "computer"

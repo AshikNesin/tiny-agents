@@ -28,9 +28,14 @@ export interface VncTarget {
   touch(): void;
 }
 
-export interface VncBridgeOptions<T extends { userId: number; botId: string }> {
-  /** The upgrade path; its first capture group is the bot id. */
+export interface VncBridgeOptions<T extends { userId: number }> {
+  /**
+   * The upgrade path; its first capture group is the scope the ticket must
+   * be bound to (a bot id, or a desktop profile on the Computer page).
+   */
   path: RegExp;
+  /** The scope a ticket was issued for; also what the viewer cap counts by. */
+  scope(ticket: T): string;
   tickets: TicketStore<T>;
   /** The live desktop a ticket names, or undefined when it is gone. */
   resolve(ticket: T): VncTarget | undefined;
@@ -44,7 +49,7 @@ export interface VncBridgeOptions<T extends { userId: number; botId: string }> {
  * every other upgrade to its own listener. Returns a function that closes
  * every open viewer (graceful shutdown).
  */
-export function attachVncBridge<T extends { userId: number; botId: string }>(
+export function attachVncBridge<T extends { userId: number }>(
   httpServer: Server,
   options: VncBridgeOptions<T>,
 ): { close(): void } {
@@ -56,7 +61,7 @@ export function attachVncBridge<T extends { userId: number; botId: string }>(
     const botId = params[0]!;
     const ticket = options.tickets.redeem(
       url.searchParams.get("ticket") ?? "",
-      (found) => found.botId === botId,
+      (found) => options.scope(found) === botId,
     );
     if (!ticket) return rejectUpgrade(socket, "401 Unauthorized");
 

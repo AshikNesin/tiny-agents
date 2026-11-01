@@ -133,6 +133,35 @@ owner's (`computer_request_takeover`).
 - Clipboard: noVNC clipboard both ways (vncconfig on the VM). On a Mac, Cmd
   shortcuts map to Ctrl for the Linux desktop, as in the browser panel.
 
+## Computer page
+
+`/computer` (sidebar, beside Terminal) gives the owner the desktops directly,
+the way the Terminal page gives them the VM's shells:
+
+- **One tab per desktop:** Shared (every bot on the shared browser profile)
+  and one per bot with a profile of its own. Each tab shows whether the
+  desktop is live, starting, or waiting for you (a bot's takeover request).
+- **The live view** is the panel's `VncView`, scaled to the page and full
+  screen capable, view-only until you take control. Taking control is the
+  same driver flag the chat panel flips: the bots on that desktop pause and
+  take no screenshots until you release it, and releasing answers a bot's
+  takeover request.
+- **While you drive:** an **Apps** menu opens any installed application
+  (`gtk-launch`, the same path as `computer_open_app`), a **Keys** menu sends
+  the XFCE shortcuts the local browser would keep for itself (Alt+F1 menu,
+  Alt+F2 run, Ctrl+Alt+T terminal, Alt+Tab, Alt+F4, Ctrl+W, Esc, Super), and
+  **Paste** types your clipboard. A desktop that is off can be started from
+  its tab; **Reset** closes it and wipes its settings.
+- The chat's Computer panel links to the page.
+
+Routes (JWT): `GET /computer` (the desktops and their state),
+`POST /computer/:profile/start | vnc-ticket | driver`,
+`GET|POST /computer/:profile/apps` (opening needs the owner to be driving),
+`DELETE /computer/:profile`; viewer socket `/computer/:profile/vnc?ticket=`,
+with tickets of its own (a chat panel ticket cannot open it, nor the
+reverse). Only `shared` and the `bot-<id>` of an own-profile bot are
+accepted, so the page cannot start a desktop no bot owns.
+
 ## Security
 
 - **Nothing new is reachable.** Xtigervnc binds to localhost on the VM with no
@@ -194,5 +223,8 @@ toggle, and boot needs no new variable.
   teardown), and the bound secret typing script.
 - `computer-x11.test.ts`, `computer.routes.test.ts`,
   `computer-panel.test.tsx`.
+- `computer.page.routes.test.ts`, `computer.vnc.test.ts` and
+  `pages/computer.test.tsx`: the Computer page, its routes and its viewer
+  path.
 
 Follow-up: run the bot's Chrome inside its desktop, so one panel shows both.
