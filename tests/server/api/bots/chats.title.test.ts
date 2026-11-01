@@ -58,7 +58,8 @@ describe("past-chat titles (issue #101)", () => {
       models: { getModel, completeSimple } as never,
       hasModel: () => true,
     });
-    expect(getModel).toHaveBeenLastCalledWith(expect.any(String), DEFAULT_CHAT_TITLE_MODEL);
+    expect(DEFAULT_CHAT_TITLE_MODEL).toBe("custom:custom-zai-coding-plan/glm-5.3-flash");
+    expect(getModel).toHaveBeenLastCalledWith("custom-zai-coding-plan", "glm-5.3-flash");
 
     await titlePastChat("chat-1", input, {
       models: { getModel, completeSimple } as never,
