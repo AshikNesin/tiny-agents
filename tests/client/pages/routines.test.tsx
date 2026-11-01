@@ -106,7 +106,10 @@ async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Prompt"), "say the thing");
 }
 
-describe("Routines page", () => {
+// These tests type whole forms through user-event, which takes 1-2 s each
+// locally and several times that on a busy CI runner. A 15 s ceiling keeps
+// the default 5 s from failing them on slow runs while still catching a hang.
+describe("Routines page", { timeout: 15_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
