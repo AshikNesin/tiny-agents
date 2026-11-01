@@ -1,0 +1,1 @@
+export { ComputerPage } from "./Computer";

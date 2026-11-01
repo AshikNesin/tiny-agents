@@ -9,6 +9,7 @@
 import React from "react";
 import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ComputerPanel } from "@/components/ComputerPanel";
 import { botsApi, type Bot, type ComputerStatus } from "@/lib/bots-api";
@@ -33,7 +34,12 @@ vi.mock("@/lib/novnc", () => ({
 
 const bot = { id: "b1", name: "Clicker", conversationId: "1" } as unknown as Bot;
 
-const render = (ui: React.ReactElement) => rtlRender(<ConfirmProvider>{ui}</ConfirmProvider>);
+const render = (ui: React.ReactElement) =>
+  rtlRender(
+    <MemoryRouter>
+      <ConfirmProvider>{ui}</ConfirmProvider>
+    </MemoryRouter>,
+  );
 
 const liveStatus = (s: Partial<ComputerStatus> = {}): ComputerStatus => ({
   configured: true,

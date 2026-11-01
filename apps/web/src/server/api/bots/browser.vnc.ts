@@ -48,6 +48,7 @@ export function attachBrowserVnc(
   return attachVncBridge(httpServer, {
     path: PATH,
     tickets,
+    scope: (ticket) => ticket.botId,
     kind: "browser",
     isOriginAllowed: options.isOriginAllowed,
     resolve(ticket) {

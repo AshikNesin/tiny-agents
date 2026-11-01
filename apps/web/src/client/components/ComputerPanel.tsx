@@ -24,8 +24,10 @@ import {
   MonitorOff,
   MousePointerClick,
   RotateCcw,
+  SquareArrowOutUpRight,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button, Card, CardTitle, EmptyState, ErrorState, LoadingSpinner, Text } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
 import { toast } from "sonner";
@@ -316,6 +318,18 @@ export function ComputerPanel({ bot, onClose }: { bot: Bot; onClose: () => void 
               </Button>
             )}
             <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
+            {status?.configured && (
+              <Button variant="ghost" size="icon-sm" asChild>
+                <Link
+                  to="/computer"
+                  aria-label="Open the Computer page"
+                  title="Open the Computer page"
+                  data-testid="computer-open-page"
+                >
+                  <SquareArrowOutUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            )}
             {status?.configured && (
               <Button
                 variant="ghost"

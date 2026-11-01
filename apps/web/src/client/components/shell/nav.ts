@@ -4,6 +4,7 @@ import {
   CalendarClock,
   KeyRound,
   ListTodo,
+  Monitor,
   Plug,
   Sparkles,
   SquareTerminal,
@@ -19,6 +20,7 @@ export interface AppNavItem {
 export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Tasks", icon: ListTodo, to: "/tasks" },
   { label: "Terminal", icon: SquareTerminal, to: "/terminal" },
+  { label: "Computer", icon: Monitor, to: "/computer" },
 ];
 
 /** Set-up-and-forget pages: in the sidebar's account menu, not its nav. */

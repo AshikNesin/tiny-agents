@@ -14,6 +14,7 @@ import botsRoutes from "./api/bots/bots.routes";
 import memoriesRoutes from "./api/bots/memories.routes";
 import browserRoutes from "./api/bots/browser.routes";
 import computerRoutes from "./api/bots/computer.routes";
+import computerPageRoutes from "./api/bots/computer.page.routes";
 import terminalRoutes from "./api/terminal/terminal.routes";
 import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
@@ -51,6 +52,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", memoriesRoutes);
       api.route("/", browserRoutes);
       api.route("/", computerRoutes);
+      api.route("/", computerPageRoutes);
       api.route("/", terminalRoutes);
       api.route("/", uploadsRoutes);
       api.route("/", tasksRoutes);
