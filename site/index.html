@@ -326,24 +326,6 @@
         width: 16px;
         height: 16px;
       }
-      .works {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-items: baseline;
-        gap: 10px 28px;
-        margin-top: clamp(36px, 5vw, 56px);
-        padding-block: 22px;
-        border-block: 1px solid var(--line);
-        font-size: 0.95rem;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        color: color-mix(in srgb, var(--fg) 72%, transparent);
-      }
-      .works .eyebrow {
-        font-size: 0.72rem;
-        color: var(--muted);
-      }
       .film-note {
         margin-top: 14px;
         text-align: center;
@@ -1037,11 +1019,6 @@
           50 seconds: memory, browser and computer use, approvals, permissions, a terminal, MCP,
           alerts and a team of agents.
         </p>
-        <div class="works" aria-label="Works with">
-          <span class="eyebrow">Works with</span>
-          <span>Claude</span><span>GPT</span><span>Cloudflare AI Gateway</span><span>MCP</span
-          ><span>SQLite</span>
-        </div>
       </div>
 
       <section id="how">
@@ -1737,7 +1714,6 @@ a41c9e2 fix: round coupon totals after tax
     <footer>
       <div class="wrap">
         <span>Tiny Agents</span>
-        <span>Flights, fares and alerts in the film are illustrative.</span>
       </div>
     </footer>
 

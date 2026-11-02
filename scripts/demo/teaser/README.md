@@ -19,7 +19,7 @@ score is original, synthesised with numpy, and royalty-free.
 | ---- | ----------------- | -------------------------------------------------------------- |
 | 0.0  | Hook              | "Say it once." / "Your agents take it from there."             |
 | 2.5  | Chat              | "Plan 7 days in Japan this April. Flying from Chennai."        |
-| 5.1  | Memory            | Recalled: vegetarian, window seat, ₹2.5L budget, quiet temples |
+| 5.1  | Memory            | Recalled: window seat, ₹2.5L budget, quiet temples             |
 | 8.5  | Browser use       | Live browser, Chennai → Tokyo flights, the bot picks the best  |
 | 12.5 | Computer use      | Its own desktop, filling a day-by-day itinerary                |
 | 16.5 | Approvals & Vault | Pay ₹1,36,840? Approve. Card filled from the Vault, never seen |

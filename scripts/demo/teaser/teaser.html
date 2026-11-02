@@ -1311,7 +1311,6 @@
                   Recalled from memory
                 </div>
                 <div class="chips">
-                  <span class="chip"><i></i>Vegetarian</span>
                   <span class="chip"><i></i>Window seat</span>
                   <span class="chip"><i></i>Budget ₹2.5L</span>
                   <span class="chip"><i></i>Loves quiet temples</span>
@@ -1472,7 +1471,7 @@
               <div class="meta">Sat, 12 Apr · 2 adults · Economy</div>
               <div class="filters">
                 <span class="on">1 stop or fewer</span><span class="on">Window seats</span
-                ><span>Veg meal</span><span>Under ₹80k</span>
+                ><span>Under ₹80k</span>
               </div>
               <div class="flight" id="f1">
                 <div class="tail" style="background: #5b8def"></div>
@@ -1486,7 +1485,7 @@
                 </div>
                 <div class="col">
                   Window ✓
-                  <div class="sub">Veg meal ✓</div>
+                  <div class="sub">Bag 30 kg ✓</div>
                 </div>
                 <div class="price">₹74,900</div>
               </div>
@@ -1502,7 +1501,7 @@
                 </div>
                 <div class="col">
                   Window ✓
-                  <div class="sub seat" id="seatline">Veg meal ✓</div>
+                  <div class="sub seat" id="seatline">Bag 30 kg ✓</div>
                 </div>
                 <div class="price">₹68,420</div>
                 <div class="tag" id="besttag">Best match</div>
@@ -1519,7 +1518,7 @@
                 </div>
                 <div class="col">
                   Window ✓
-                  <div class="sub">Veg meal ✓</div>
+                  <div class="sub">Bag 30 kg ✓</div>
                 </div>
                 <div class="price">₹71,250</div>
               </div>
@@ -1535,7 +1534,7 @@
                 </div>
                 <div class="col">
                   Aisle only
-                  <div class="sub">Veg meal ✓</div>
+                  <div class="sub">Bag 30 kg ✓</div>
                 </div>
                 <div class="price">₹79,600</div>
               </div>
@@ -1571,7 +1570,7 @@
                       <th>Day</th>
                       <th>City</th>
                       <th>Plan</th>
-                      <th>Veg food</th>
+                      <th>Food</th>
                     </tr>
                   </thead>
                   <tbody></tbody>
@@ -1838,12 +1837,12 @@
 
       // ── Static content ────────────────────────────────────────
       const ITIN = [
-        ["Sat 12", "Tokyo", "Land 15:05 · check in, Shinjuku", "Veg ramen, Shinjuku"],
-        ["Sun 13", "Tokyo", "Asakusa · Senso-ji at 7 am", "Shojin ryori lunch"],
-        ["Tue 15", "Hakone", "Ropeway · private onsen", "Tofu kaiseki dinner"],
-        ["Wed 16", "Kyoto", "Fushimi Inari before crowds", "Yuba & matcha"],
-        ["Thu 17", "Kyoto", "Ryoan-ji · Philosopher's Path", "Zen temple lunch"],
-        ["Fri 18", "Osaka", "Dotonbori · night food walk", "Veg okonomiyaki"],
+        ["Sat 12", "Tokyo", "Land 15:05 · check in, Shinjuku", "Ramen, Shinjuku"],
+        ["Sun 13", "Tokyo", "Asakusa · Senso-ji at 7 am", "Tempura lunch, Asakusa"],
+        ["Tue 15", "Hakone", "Ropeway · private onsen", "Kaiseki dinner"],
+        ["Wed 16", "Kyoto", "Fushimi Inari before crowds", "Matcha at Nishiki Market"],
+        ["Thu 17", "Kyoto", "Ryoan-ji · Philosopher's Path", "Temple garden lunch"],
+        ["Fri 18", "Osaka", "Dotonbori · night food walk", "Okonomiyaki, Dotonbori"],
       ];
       const tbody = document.querySelector("#sheet tbody");
       ITIN.forEach(() => {
@@ -2077,7 +2076,7 @@
       const END = 49.6;
       const PROMPT = "Plan 7 days in Japan this April. Flying from Chennai.";
       const M3 =
-        "Got it: <b>veg-friendly food, window seats, under ₹2.5L.</b> Checking flights from Chennai now…";
+        "Got it: <b>window seats, under ₹2.5L, quiet temples.</b> Checking flights from Chennai now…";
       const M6 = "Best fit: <b>₹68,420 a seat</b>, one stop, window seats together. Book both?";
       const M8 =
         "Booked. Seats 32A and 32C. Your card was filled straight from the Vault, <b>I never saw the number.</b>";
@@ -2251,7 +2250,7 @@
           transform: `scale(${1 + pick * 0.015})`,
         });
         set($("besttag"), { opacity: pick, transform: `translateY(${(1 - pick) * 6}px)` });
-        const seatText = t > PICK + 0.2 ? "Seats 32A · 32C ✓" : "Veg meal ✓";
+        const seatText = t > PICK + 0.2 ? "Seats 32A · 32C ✓" : "Bag 30 kg ✓";
         if ($("seatline").textContent !== seatText) $("seatline").textContent = seatText;
 
         // Spreadsheet fills cell by cell.
