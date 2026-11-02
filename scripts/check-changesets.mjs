@@ -10,7 +10,7 @@
 // Rules:
 //   1. A branch that changes files under packages/[pkg]/src, apps/web/drizzle,
 //      or .groot needs a changeset naming each affected package, or a
-//      reviewed no-release reason file under .changeset/no-release/.
+//      reviewed no-release reason file under .no-release/.
 //   2. apps/web/drizzle and .groot belong to the root "groot" package, so a
 //      changeset naming "groot" covers them.
 //   3. The release bot's own commits are exempt, because versioning PRs are
@@ -194,7 +194,10 @@ function listChangesetFiles(root) {
 // The earliest no-release reason file, or null. Any recorded, non-empty
 // reason satisfies the gate for the branch that carries it.
 function findNoReleaseReason(root) {
-  const dir = path.join(root, ".changeset", "no-release");
+  // Lives outside .changeset/: @changesets/read's legacy v1 reader treats any
+  // directory there as an old-format changeset (needs changes.md + changes.json)
+  // and fails the Release workflow with ENOENT.
+  const dir = path.join(root, ".no-release");
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
@@ -253,7 +256,7 @@ export function evaluate(state) {
       `changesets: missing changeset for ${missing.join(", ")}\n` +
       `  changed managed files:\n` +
       state.changedManagedFiles.map((f) => `    ${f}\n`).join("") +
-      `  run pnpm changeset, or record the reviewed reason under .changeset/no-release/ for a docs-only or internal change\n`,
+      `  run pnpm changeset, or record the reviewed reason under .no-release/ for a docs-only or internal change\n`,
   };
 }
 
