@@ -13,11 +13,9 @@ const token = process.env.CLAUDE_WORKER_TOKEN?.trim() ?? "";
 const port = Number(process.env.CLAUDE_WORKER_PORT ?? "8765");
 
 async function loadSdk(): Promise<ClaudeSdkModule> {
-  const load = new Function("specifier", "return import(specifier)") as (
-    specifier: string,
-  ) => Promise<ClaudeSdkModule>;
   try {
-    const sdk = await load("@anthropic-ai/claude-agent-sdk");
+    // Optional: installed on the worker VM, not in CI. A missing package throws here.
+    const sdk = await import("@anthropic-ai/claude-agent-sdk");
     if (typeof sdk.query !== "function" || typeof sdk.tool !== "function") {
       throw new Error("SDK module is missing query() or tool().");
     }

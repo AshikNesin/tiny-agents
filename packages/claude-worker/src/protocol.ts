@@ -62,15 +62,14 @@ export function reconnectDelayMs(
   return Math.min(timings.reconnectMaxMs, exp);
 }
 
+/** JSON Schema documents are open: extra keywords (items, additionalProperties) stay. */
 const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
-  z
-    .object({
-      type: z.string().optional(),
-      description: z.string().optional(),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      required: z.array(z.string()).optional(),
-    })
-    .passthrough(),
+  z.looseObject({
+    type: z.string().optional(),
+    description: z.string().optional(),
+    properties: z.record(z.string(), z.unknown()).optional(),
+    required: z.array(z.string()).optional(),
+  }),
 );
 
 export interface JsonSchema {
@@ -81,7 +80,7 @@ export interface JsonSchema {
   [key: string]: unknown;
 }
 
-export const toolSpecSchema = z.object({
+export const toolSpecSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string(),
   inputSchema: jsonSchema,
@@ -89,7 +88,7 @@ export const toolSpecSchema = z.object({
 
 export type ToolSpec = z.infer<typeof toolSpecSchema>;
 
-export const imagePartSchema = z.object({
+export const imagePartSchema = z.strictObject({
   data: z.string(),
   mimeType: z.string().min(1),
 });
@@ -97,22 +96,22 @@ export const imagePartSchema = z.object({
 export type ImagePart = z.infer<typeof imagePartSchema>;
 
 export const sessionEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("session"), claudeSessionId: z.string().min(1) }),
-  z.object({ type: z.literal("text"), turnId: z.string(), text: z.string() }),
-  z.object({
+  z.strictObject({ type: z.literal("session"), claudeSessionId: z.string().min(1) }),
+  z.strictObject({ type: z.literal("text"), turnId: z.string(), text: z.string() }),
+  z.strictObject({
     type: z.literal("tool_use"),
     turnId: z.string(),
     toolUseId: z.string().min(1),
     name: z.string().min(1),
     input: z.unknown(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal("turn_end"),
     turnId: z.string(),
     stopReason: z.enum(["end_turn", "error", "paused", "aborted"]),
     error: z.string().optional(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal("usage_pause"),
     turnId: z.string(),
     reason: z.string(),
@@ -122,22 +121,22 @@ export const sessionEventSchema = z.discriminatedUnion("type", [
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
 
 export const clientMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("ping") }),
-  z.object({ type: z.literal("pong") }),
-  z.object({
+  z.strictObject({ type: z.literal("ping") }),
+  z.strictObject({ type: z.literal("pong") }),
+  z.strictObject({
     type: z.literal("resume"),
     sessionId: z.string().min(1),
     afterSeq: z.number().int().nonnegative(),
   }),
-  z.object({ type: z.literal("abort"), sessionId: z.string().min(1) }),
-  z.object({
+  z.strictObject({ type: z.literal("abort"), sessionId: z.string().min(1) }),
+  z.strictObject({
     type: z.literal("tool_result"),
     sessionId: z.string().min(1),
     toolUseId: z.string().min(1),
     content: z.string(),
     isError: z.boolean().optional(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal("turn"),
     sessionId: z.string().min(1),
     turnId: z.string().min(1),
@@ -153,17 +152,17 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
 export const workerMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("welcome") }),
-  z.object({ type: z.literal("ping") }),
-  z.object({ type: z.literal("pong") }),
-  z.object({
+  z.strictObject({ type: z.literal("welcome") }),
+  z.strictObject({ type: z.literal("ping") }),
+  z.strictObject({ type: z.literal("pong") }),
+  z.strictObject({
     type: z.literal("error"),
     code: z.string(),
     message: z.string(),
     sessionId: z.string().optional(),
     turnId: z.string().optional(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal("event"),
     sessionId: z.string().min(1),
     seq: z.number().int().positive(),

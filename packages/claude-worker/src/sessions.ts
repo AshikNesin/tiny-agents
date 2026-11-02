@@ -251,6 +251,9 @@ export class Session {
     const queue = this.turnQueue;
     const signal = this.abort.signal;
     while (!signal.aborted) {
+      // One consumer, in order. The next turn is pulled only after this yield
+      // returns, so two turns cannot run and a queued push cannot be stolen.
+      // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential turn queue
       const next = await queue.next();
       if (signal.aborted) return;
       this.running = true;
