@@ -92,10 +92,11 @@ export function aiProviderIds(
   const raw = unquote(env.AI_PROVIDERS);
   if (!raw) return [GATEWAY_PROVIDER];
   const known = builtinProviderIds();
-  const ids: string[] = [];
+  // A Set keeps first-seen order and drops repeats.
+  const ids = new Set<string>();
   for (const part of raw.split(",")) {
     const id = unquote(part)?.toLowerCase();
-    if (!id || ids.includes(id)) continue;
+    if (!id || ids.has(id)) continue;
     if (!known.has(id)) {
       warnOnce(
         `[tiny-agents] AI_PROVIDERS names "${id}", which is not a pi-ai provider — ignored. ` +
@@ -103,15 +104,15 @@ export function aiProviderIds(
       );
       continue;
     }
-    ids.push(id);
+    ids.add(id);
   }
-  if (ids.length === 0) {
+  if (ids.size === 0) {
     warnOnce(
       `[tiny-agents] AI_PROVIDERS has no known provider — using ${GATEWAY_PROVIDER} instead.`,
     );
     return [GATEWAY_PROVIDER];
   }
-  return ids;
+  return [...ids];
 }
 
 /** The provider bare model ids resolve against (the first of AI_PROVIDERS). */
