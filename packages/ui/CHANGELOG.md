@@ -1,5 +1,54 @@
 # @groot/ui
 
+## 0.9.0
+
+### Minor Changes
+
+- [#104](https://github.com/AshikNesin/tiny-agents/pull/104) [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Move to groot 3.0: Hono instead of Express, Drizzle on SQLite instead of
+  Prisma, a table-backed job queue instead of honker, code config instead of
+  config.yml and varlock. tiny-agents stays on Node (Chromium, ssh2 and the
+  pi-durable store run in-process).
+  
+  - **Your data moves over on the first boot.** A database from the Prisma
+    build is renamed to `app.db.prisma-backup-<time>` and every row is copied
+    into the new layout: users, passkeys, bots, past chats, skills, connections,
+    messages, tasks, vault items and audit events, uploads, routines and runs,
+    memories, the notification log, and key-value settings (local vault
+    secrets, SSH host keys, app and notification settings). Routines re-arm
+    their next run on boot.
+  - **Existing passwords keep working.** A bcrypt hash from the old build is
+    accepted once and replaced with a PBKDF2 hash on that sign-in. Vault
+    step-up accepts both.
+  - **Uploads persist across redeploys.** They now live beside the database
+    (`/app/data/uploads` with the current volume) instead of `./local/uploads`
+    in the container; files still in the old folder are copied over.
+  - The groot 3.0 UI refresh comes along: one control height scale, rounder
+    surfaces, toasts that follow dark mode, CodeMirror on the theme tokens, and
+    the warm palette now lives in the shell (app.css keeps only chat tokens).
+  - Fixes found on the way: a bot edit that only changed its skills or
+    connections returned 500 under Drizzle; the login page showed the raw error
+    instead of "Invalid email or password" with the fetch client; a server
+    error message without a code (the terminal's, for one) was replaced by the
+    generic fallback. `ApiError` now carries `fromServer` to tell the two apart.
+
+### Patch Changes
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Button: instant hover colors and a press scale
+  
+  The button animated every property (`transition-all`), so hover colors faded
+  in, against the DLS rule of instant color hover. It now transitions only
+  `transform`: pressing scales it to 0.97 over 150ms on a strong ease-out
+  (replacing the 1px nudge); menu triggers (`aria-haspopup`) still don't move,
+  and reduced motion turns the transition off.
+
+- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+
+- [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Tall dialogs keep their header, tabs and footer pinned and scroll only the middle. `DialogContent` is now a height-capped flex column and `@groot/ui/dialog` exports a `DialogBody` scroll region; the bot, routine, skill import/create and connection dialogs use it.
+
+- [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix dialogs growing wider than the viewport when their content has an unbreakable line (for example a code block in the skill import preview). `DialogContent` now uses a `minmax(0, 1fr)` grid column so children shrink and scroll instead of stretching the dialog.
+
+- [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rounder, taller Grok-style controls: larger corner radius, 36px default buttons and 40px inputs/selects, 2xl cards, 3xl dialogs with a flat footer, and a lighter dialog overlay. In sidebar mode the page title is larger and Settings uses the same 5xl width as other pages.
+
 ## 0.8.0
 
 ### Minor Changes

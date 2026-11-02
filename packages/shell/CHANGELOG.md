@@ -1,5 +1,80 @@
 # @groot/shell
 
+## 1.2.0
+
+### Minor Changes
+
+- [`a6a4e79`](https://github.com/AshikNesin/tiny-agents/commit/a6a4e79fded85cb2fa1e7bbd2c3560555ea07ea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `apiClient` takes per-request options. Every verb accepts a trailing
+  `{ headers }`, and `apiClient.request(method, path, { params, body, headers,
+  emptyOk })` covers the rest: extra headers such as a step-up token or an
+  idempotency key, and `emptyOk` for an endpoint that may answer with no data
+  (as `delete` always allowed). Apps no longer need a second copy of the
+  client's 401 handling and `ApiError` parsing to send one header.
+
+- [#104](https://github.com/AshikNesin/tiny-agents/pull/104) [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Move to groot 3.0: Hono instead of Express, Drizzle on SQLite instead of
+  Prisma, a table-backed job queue instead of honker, code config instead of
+  config.yml and varlock. tiny-agents stays on Node (Chromium, ssh2 and the
+  pi-durable store run in-process).
+  
+  - **Your data moves over on the first boot.** A database from the Prisma
+    build is renamed to `app.db.prisma-backup-<time>` and every row is copied
+    into the new layout: users, passkeys, bots, past chats, skills, connections,
+    messages, tasks, vault items and audit events, uploads, routines and runs,
+    memories, the notification log, and key-value settings (local vault
+    secrets, SSH host keys, app and notification settings). Routines re-arm
+    their next run on boot.
+  - **Existing passwords keep working.** A bcrypt hash from the old build is
+    accepted once and replaced with a PBKDF2 hash on that sign-in. Vault
+    step-up accepts both.
+  - **Uploads persist across redeploys.** They now live beside the database
+    (`/app/data/uploads` with the current volume) instead of `./local/uploads`
+    in the container; files still in the old folder are copied over.
+  - The groot 3.0 UI refresh comes along: one control height scale, rounder
+    surfaces, toasts that follow dark mode, CodeMirror on the theme tokens, and
+    the warm palette now lives in the shell (app.css keeps only chat tokens).
+  - Fixes found on the way: a bot edit that only changed its skills or
+    connections returned 500 under Drizzle; the login page showed the raw error
+    instead of "Invalid email or password" with the fetch client; a server
+    error message without a code (the terminal's, for one) was replaced by the
+    generic fallback. `ApiError` now carries `fromServer` to tell the two apart.
+
+- [#48](https://github.com/AshikNesin/tiny-agents/pull/48) [`bbf5163`](https://github.com/AshikNesin/tiny-agents/commit/bbf5163dae529c1fd7ee8f79dfd65003c89014fc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `ShellConfig.openNav` lets an app with `pageChrome: "sidebar"` open its own
+  navigation from every page: phones get one menu button where the back button
+  and profile circle were, while pages that pass the new `PageLayout` /
+  `TopBar` `backTo` keep a back button to their parent. On phones the page
+  description now sits under the title, above the action row, and on desktop
+  the title row has the same height with or without actions, so headers no
+  longer shift between pages.
+
+- [#60](https://github.com/AshikNesin/tiny-agents/pull/60) [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Push notifications via Pushover (issue [#57](https://github.com/AshikNesin/tiny-agents/issues/57)). `@groot/core/notification` replaces the `send-push-notification` wrapper with a small fetch client (`pushover.ts`) behind a channel port (`notifier.ts`) and a `NotificationService` whose `notify()` never blocks or throws: per-event switches, dedupe backed by the new `NotificationLog` table (so replays after a restart stay quiet), coalescing with cancel-on-resolve, quiet hours with a digest, throttling (30/h, 5/min per bot) with one "suppressed" summary, retries for transient failures only, and the 429/invalid-credentials channel states. Free text is scrubbed (`scrub.ts`: links, registered redactors, secret-looking runs, length caps). Settings live in the `notifications` app setting; `/api/v1/notifications` serves status, settings, a test send, re-validation and the log, and Settings gains a Notifications tab (`@groot/shell`). The agent's `WaitTracker` reports each waiting call (`onTransition`, with the tool and a preview) and `AgentRuntime.onWait` exposes it. App side: approvals, questions (plus one reminder), failed and long replies while the chat is closed, and routine results, misses and pauses push with deep links (`/chats/:botId?focus=approval:<task>` scrolls to the card); the startup ping becomes a silent `system.started`. Vault approvals name the item and target host, credential requests push to `/vault/requests/:task` and expire with the request, the vault's reveal/delete/refused-fill alerts become the locked `vault.alert` security event, and the vault's secret redactor scrubs every push (`WaitInfo` gains `subject` and `expiresAt`).
+
+- [`d419bdf`](https://github.com/AshikNesin/tiny-agents/commit/d419bdf388ac5b583b7329a3ef88cb3e7f1f321a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add TopBar + ProfileButton (Grok-style floating page chrome) and render
+  it from PageLayout. ShellConfig gains `nav` rows for the profile menu.
+
+### Patch Changes
+
+- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+
+- [`a111ade`](https://github.com/AshikNesin/tiny-agents/commit/a111ade11c5551a018328c218b34f4807f0c3b70) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix the login demo-credentials spacing and report failed message-copy attempts.
+
+- [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rounder, taller Grok-style controls: larger corner radius, 36px default buttons and 40px inputs/selects, 2xl cards, 3xl dialogs with a flat footer, and a lighter dialog overlay. In sidebar mode the page title is larger and Settings uses the same 5xl width as other pages.
+
+- [#46](https://github.com/AshikNesin/tiny-agents/pull/46) [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `PageLayout` passes page actions to the new `TopBar` `actions` slot: they
+  close the title row on desktop and wrap to their own row under it on
+  phones, instead of squeezing beside a multi-line description. The slot
+  follows the profile circle in the DOM, so focus order matches the layout.
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Gitleaks' two generic rules now match quoted literal values only, so ordinary code (`password: z.string()`, `const token = makeToken()`) no longer blocks commits; the demo login's credentials carry an inline `gitleaks:allow`. Sync tooling: a malformed conflict manifest or `boilerplate-sync.json` is reported as such instead of being treated as "nothing pending" / "not found"; `package.json` without a sync baseline is merged instead of getting conflict markers. `groot:setup` rejects names that give no usable slug, renames the Worker whatever its current name, and no longer breaks on `|`, `&` or `\` in the app name.
+
+- [#27](https://github.com/AshikNesin/tiny-agents/pull/27) [`3944039`](https://github.com/AshikNesin/tiny-agents/commit/39440393d04314b7cd9e8afbf5f8fb72105d0a2d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add optional `ShellConfig.pageChrome` (`"floating"` | `"sidebar"`). With `"sidebar"`, the top bar hides its back and profile buttons at md+ for apps that render their own sidebar. The shell theme also maps the chat surface tokens (`bubble`, `composer`, `fg-tertiary`, `link`) to Tailwind colors.
+
+- [`c760f77`](https://github.com/AshikNesin/tiny-agents/commit/c760f77e0919d0b7fccd44a68894889560833a7b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Storage rows show "-" in the Modified column for folders, matching the
+  Size column, instead of formatting the service's epoch sentinel as
+  1970-01-01.
+- Updated dependencies [[`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086), [`5bc76f2`](https://github.com/AshikNesin/tiny-agents/commit/5bc76f2e8a00227cc331067a8b4ed825fb1af8bf), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22), [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`9029da7`](https://github.com/AshikNesin/tiny-agents/commit/9029da718a59d989f03a27e9a581d81244cf6698)]:
+  - @groot/core@1.1.0
+  - @groot/ui@0.9.0
+
 ## 1.1.0
 
 ### Minor Changes

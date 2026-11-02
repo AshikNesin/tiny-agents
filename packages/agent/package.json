@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "tiny-agents' only boundary to pi-durable: durable bot conversations, chat streams and activity.",
   "type": "module",

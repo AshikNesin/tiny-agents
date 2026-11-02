@@ -1,5 +1,90 @@
 # @groot/core
 
+## 1.1.0
+
+### Minor Changes
+
+- [#104](https://github.com/AshikNesin/tiny-agents/pull/104) [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Move to groot 3.0: Hono instead of Express, Drizzle on SQLite instead of
+  Prisma, a table-backed job queue instead of honker, code config instead of
+  config.yml and varlock. tiny-agents stays on Node (Chromium, ssh2 and the
+  pi-durable store run in-process).
+  
+  - **Your data moves over on the first boot.** A database from the Prisma
+    build is renamed to `app.db.prisma-backup-<time>` and every row is copied
+    into the new layout: users, passkeys, bots, past chats, skills, connections,
+    messages, tasks, vault items and audit events, uploads, routines and runs,
+    memories, the notification log, and key-value settings (local vault
+    secrets, SSH host keys, app and notification settings). Routines re-arm
+    their next run on boot.
+  - **Existing passwords keep working.** A bcrypt hash from the old build is
+    accepted once and replaced with a PBKDF2 hash on that sign-in. Vault
+    step-up accepts both.
+  - **Uploads persist across redeploys.** They now live beside the database
+    (`/app/data/uploads` with the current volume) instead of `./local/uploads`
+    in the container; files still in the old folder are copied over.
+  - The groot 3.0 UI refresh comes along: one control height scale, rounder
+    surfaces, toasts that follow dark mode, CodeMirror on the theme tokens, and
+    the warm palette now lives in the shell (app.css keeps only chat tokens).
+  - Fixes found on the way: a bot edit that only changed its skills or
+    connections returned 500 under Drizzle; the login page showed the raw error
+    instead of "Invalid email or password" with the fetch client; a server
+    error message without a code (the terminal's, for one) was replaced by the
+    generic fallback. `ApiError` now carries `fromServer` to tell the two apart.
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `createApp({ openCorsPaths })` serves public endpoints to any website without credentials (`Access-Control-Allow-Origin: *`), bypassing the app's credentialed CORS allow-list for just those paths. Use it for embeddable widgets and tracking endpoints that customer sites call from their own origin; previously the global middleware answered their preflights first, so setting `CORS_ALLOWED_ORIGINS` silently broke them.
+  
+  Exact paths or a `prefix*` (`openCorsPaths: ["/api/track", "/widget/*"]`). Unset, nothing changes.
+
+- [#60](https://github.com/AshikNesin/tiny-agents/pull/60) [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Push notifications via Pushover (issue [#57](https://github.com/AshikNesin/tiny-agents/issues/57)). `@groot/core/notification` replaces the `send-push-notification` wrapper with a small fetch client (`pushover.ts`) behind a channel port (`notifier.ts`) and a `NotificationService` whose `notify()` never blocks or throws: per-event switches, dedupe backed by the new `NotificationLog` table (so replays after a restart stay quiet), coalescing with cancel-on-resolve, quiet hours with a digest, throttling (30/h, 5/min per bot) with one "suppressed" summary, retries for transient failures only, and the 429/invalid-credentials channel states. Free text is scrubbed (`scrub.ts`: links, registered redactors, secret-looking runs, length caps). Settings live in the `notifications` app setting; `/api/v1/notifications` serves status, settings, a test send, re-validation and the log, and Settings gains a Notifications tab (`@groot/shell`). The agent's `WaitTracker` reports each waiting call (`onTransition`, with the tool and a preview) and `AgentRuntime.onWait` exposes it. App side: approvals, questions (plus one reminder), failed and long replies while the chat is closed, and routine results, misses and pauses push with deep links (`/chats/:botId?focus=approval:<task>` scrolls to the card); the startup ping becomes a silent `system.started`. Vault approvals name the item and target host, credential requests push to `/vault/requests/:task` and expire with the request, the vault's reveal/delete/refused-fill alerts become the locked `vault.alert` security event, and the vault's secret redactor scrubs every push (`WaitInfo` gains `subject` and `expiresAt`).
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `createApp({ uploadPaths })` lets multipart endpoints that enforce their own size caps skip the JSON body limit (1 MB by default) on `/api/*`. Previously only groot's storage upload was exempt, so an app's own upload endpoint (a feedback form with screenshots and recordings, say) was cut off at 1 MB.
+  
+  Exact paths or a `prefix*` (`uploadPaths: ["/api/v1/feedback"]`). The storage upload stays exempt; unset, nothing changes.
+
+### Patch Changes
+
+- [`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser live view: serve frames over SSE instead of MJPEG. multipart/
+  x-mixed-replace in an <img> does not survive reverse proxies — Cloudflare
+  (in front of the production deploy) buffers or reshapes it and the panel
+  stays black even though the browser session is healthy. The live route now
+  emits `event: frame` SSE messages (base64 JPEG) — the same transport the
+  chat feed already streams through — and BrowserPanel paints each frame
+  into the viewport <img> as a blob URL. Verified end-to-end against the
+  sandbox VM chromium: first frame ~56ms after connect.
+
+- [#25](https://github.com/AshikNesin/tiny-agents/pull/25) [`5bc76f2`](https://github.com/AshikNesin/tiny-agents/commit/5bc76f2e8a00227cc331067a8b4ed825fb1af8bf) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser as a first-class bot capability (issue [#24](https://github.com/AshikNesin/tiny-agents/issues/24)): a `browser` toolkit
+  with seven gated tools (`browser_navigate`, `browser_snapshot`,
+  `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`,
+  `browser_screenshot`) driving one Chromium persistent context per bot
+  profile (in-process Playwright, no debug port). The web app gains
+  `/bots/:id/browser` routes: an MJPEG live view over a plain streaming
+  response (JWT-cookie `<img>`, no WebSocket), a POST input channel that
+  injects mouse/key events through the same CDP session the agent uses, a
+  driver flag for takeover (action tools wait while the human drives; a
+  masked secret field sends keystrokes straight into the page so values
+  never enter model context, logs, or the transcript), and a profile-reset
+  endpoint. Client: BrowserPanel docked beside the chat with live view,
+  driver badge, take-control/release, and the masked field. `@groot/core`:
+  the compression filter now also skips `multipart/x-mixed-replace` so the
+  MJPEG stream is never buffered.
+
+- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fixes from the 404less onboarding review:
+  
+  - `renameFile` onto its own path no longer deletes the file (it 404s for a missing source, otherwise no-ops).
+  - Only the multipart upload route skips the global JSON body limit; the other storage routes keep it.
+  - Downloads of HTML/SVG/XML/JS are served as attachments, and every download sends `X-Content-Type-Options: nosniff`, so an uploaded file cannot run script on the app origin.
+  - Uploaded file names containing `/` are rejected.
+  - `getContentType` no longer resolves `Object.prototype` members (`report.constructor`).
+  - `listKeys` rejects limits below 1 instead of returning a silently truncated page.
+  - The kv store's prefix match is case-sensitive (`clear("user:")` no longer deletes `User:1`).
+  - `parseForm` answers a malformed form body with 400 instead of 500; `verifyPassword` returns `false` for malformed stored hashes instead of throwing.
+  - Passkey names are trimmed, so whitespace-only names are rejected.
+  - Local (Node) storage writes through a temp file and renames it over the target, so an interrupted overwrite keeps the previous object.
+
+- [#59](https://github.com/AshikNesin/tiny-agents/pull/59) [`9029da7`](https://github.com/AshikNesin/tiny-agents/commit/9029da718a59d989f03a27e9a581d81244cf6698) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add the vault (issue [#56](https://github.com/AshikNesin/tiny-agents/issues/56)): bots use the owner's logins, cards, one-time codes and API keys by handle, and the model never sees a value. The agent package gains the `VaultBroker` port and `SecretValue`, a process-wide `secretRedactor` that scrubs every gated tool result and the transcript view, gate plans for tools (`withGatePlan`: refuse, ask regardless of permission, add to the card, offer a "for this chat" grant kept in the new `tiny.grants` document, expire the approval), expiring owner waits, the `vault` toolkit (`vault_list`), `browser_fill_secret`, `browser_enter_code` and `request_credentials` in the browser toolkit (with an in-page origin check and a login/payment form classifier), `http_request` in the web toolkit, and `secrets: [{handle, env}]` on `run_command`: values over stdin into env vars for one command, every use approved, the command confined in a locked-down systemd unit to its items' hosts. `SANDBOX_EGRESS_ALLOWLIST` confines every sandbox command to an outbound allowlist. `AgentRuntime.decideApproval` takes `{ grant }`, and `credentialRequest` / `settleCredentialRequest` answer credential requests; new chat tool statuses are `awaiting_credentials` and `expired`. Core's logger and Sentry run every message through a scrubber the app can register (`setScrubber`). The schema adds `VaultItem`, `VaultAuditEvent` and `Connection.secretRef`. The app ships 1Password Connect and local backends, the Vault page with step-up, credential request sheets, and vault approval cards; see docs/features/vault.md.
+
 ## 1.0.0
 
 ### Major Changes

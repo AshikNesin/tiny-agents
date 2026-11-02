@@ -1,5 +1,58 @@
 # @groot/jobs
 
+## 1.1.0
+
+### Minor Changes
+
+- [#104](https://github.com/AshikNesin/tiny-agents/pull/104) [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Move to groot 3.0: Hono instead of Express, Drizzle on SQLite instead of
+  Prisma, a table-backed job queue instead of honker, code config instead of
+  config.yml and varlock. tiny-agents stays on Node (Chromium, ssh2 and the
+  pi-durable store run in-process).
+  
+  - **Your data moves over on the first boot.** A database from the Prisma
+    build is renamed to `app.db.prisma-backup-<time>` and every row is copied
+    into the new layout: users, passkeys, bots, past chats, skills, connections,
+    messages, tasks, vault items and audit events, uploads, routines and runs,
+    memories, the notification log, and key-value settings (local vault
+    secrets, SSH host keys, app and notification settings). Routines re-arm
+    their next run on boot.
+  - **Existing passwords keep working.** A bcrypt hash from the old build is
+    accepted once and replaced with a PBKDF2 hash on that sign-in. Vault
+    step-up accepts both.
+  - **Uploads persist across redeploys.** They now live beside the database
+    (`/app/data/uploads` with the current volume) instead of `./local/uploads`
+    in the container; files still in the old folder are copied over.
+  - The groot 3.0 UI refresh comes along: one control height scale, rounder
+    surfaces, toasts that follow dark mode, CodeMirror on the theme tokens, and
+    the warm palette now lives in the shell (app.css keeps only chat tokens).
+  - Fixes found on the way: a bot edit that only changed its skills or
+    connections returned 500 under Drizzle; the login page showed the raw error
+    instead of "Invalid email or password" with the fetch client; a server
+    error message without a code (the terminal's, for one) was replaced by the
+    generic fallback. `ApiError` now carries `fromServer` to tell the two apart.
+
+### Patch Changes
+
+- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+
+- [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Import `PageLayout`/`Section` from their own files instead of the `components/layout` barrel. On case-insensitive filesystems (macOS) `@groot/shell/components/layout` resolved to `Layout.tsx`, which broke the dev server and typecheck.
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Jobs dashboard fixes: cancelling a schedule URL-encodes the job name; the stats tiles show their state colours; a failed background poll keeps showing the loaded job instead of "Job Not Found"; persisted `fatal` log rows render as errors; the Add Job button is disabled while the request is in flight, so a double click no longer enqueues the job twice.
+
+- [`db1c8aa`](https://github.com/AshikNesin/tiny-agents/commit/db1c8aa284e424ba3c92068466a87f0439af7fa2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Routines (issue [#18](https://github.com/AshikNesin/tiny-agents/issues/18)): schedule any bot to run a prompt on a once/cron/interval schedule in IST.
+  
+  Engine (phase A): Routine/RoutineRun tables (both engines, unique (routineId, scheduledFor) as the exactly-once ledger), a pure schedule module (next occurrence via cron-parser in Asia/Kolkata, grace clamp, cronstrue sentences, IST wall-clock labels), a fast LLM-free `routine-fire` job that submits the labeled prompt into the bot's durable conversation with a stable requestId and chains the next delayed job, an activity-feed completion watcher that resolves awaiting runs with a reply preview plus a boot sweep for restarts, and a JWT-protected REST API under /api/v1/routines (CRUD, pause/resume, run now, run history).
+  
+  UI (phase B): a Routines page with upcoming runs, schedule cards (enable toggle, run now, edit, delete), and recent executions with status chips, durations, and manual/schedule trigger badges. The editor dialog picks a bot and compiles Once / Daily / Weekly / Interval / Custom cron presets into the schedule union (once carries an explicit +05:30 IST offset), showing the plain-English sentence and the next 3 fire times in IST before saving.
+  
+  Chat toolkit (phase C): a `routines` toolkit on the agent package, per-bot enable like tasks/web, so the owner can set up a routine in chat. `create_routine(name, prompt, schedule)` validates the union exactly like the API and answers with a confirmation card (the cronstrue sentence plus the next 3 fire times in IST); `list_routines` shows each routine's sentence, next run, and paused marker; `update_routine` and `delete_routine` are partial and replay-safe (durable memo delete report); `run_routine_now` fires a manual occurrence. `list_routines` defaults to allow, the mutating tools to ask. Routine.sourceKey (nullable unique, both engines, same pattern as Task.sourceKey) makes creates exactly-once across pi-durable replays, and the app-side store adapter rejects routine management from routine-fired turns (the recursion guard) while list stays open.
+  
+  Also fixes a latent bug in the pg-boss queue adapter: `delaySeconds` was silently dropped (pg-boss v12 has no such option), so every delayed Postgres job ran immediately; it now maps onto `startAfter`.
+- Updated dependencies [[`a6a4e79`](https://github.com/AshikNesin/tiny-agents/commit/a6a4e79fded85cb2fa1e7bbd2c3560555ea07ea7), [`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086), [`5bc76f2`](https://github.com/AshikNesin/tiny-agents/commit/5bc76f2e8a00227cc331067a8b4ed825fb1af8bf), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`a111ade`](https://github.com/AshikNesin/tiny-agents/commit/a111ade11c5551a018328c218b34f4807f0c3b70), [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22), [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`bbf5163`](https://github.com/AshikNesin/tiny-agents/commit/bbf5163dae529c1fd7ee8f79dfd65003c89014fc), [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3), [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`3944039`](https://github.com/AshikNesin/tiny-agents/commit/39440393d04314b7cd9e8afbf5f8fb72105d0a2d), [`d419bdf`](https://github.com/AshikNesin/tiny-agents/commit/d419bdf388ac5b583b7329a3ef88cb3e7f1f321a), [`c760f77`](https://github.com/AshikNesin/tiny-agents/commit/c760f77e0919d0b7fccd44a68894889560833a7b), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`9029da7`](https://github.com/AshikNesin/tiny-agents/commit/9029da718a59d989f03a27e9a581d81244cf6698)]:
+  - @groot/shell@1.2.0
+  - @groot/core@1.1.0
+  - @groot/ui@0.9.0
+
 ## 1.0.1
 
 ### Patch Changes
