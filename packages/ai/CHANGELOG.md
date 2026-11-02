@@ -1,5 +1,15 @@
 # @groot/ai
 
+## 0.3.1
+
+### Patch Changes
+
+- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+
+- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - - `zodToTypeBox` keeps `.describe()` on objects, arrays, enums, literals and optional/nullable/default wrappers; defaulted fields are optional in the generated schema (Zod applies the default); zod 3 arrays are no longer converted to `Any`.
+  - Images passed as `data:` URLs without a `mimeType` use the URL's media type instead of `image/png`.
+  - Capability detection: only Gemini (not every Vertex-hosted model) is document-capable; `gpt-oss` is text-only; `qwen*-vl` / `glm-*v` vision variants accept images.
+
 ## 0.3.0
 
 ### Minor Changes
