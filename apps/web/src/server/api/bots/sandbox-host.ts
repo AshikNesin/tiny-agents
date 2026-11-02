@@ -1,9 +1,10 @@
 /**
- * The sandbox VM as the server reaches it: host, port, user and the one
- * host-key store, read from the SANDBOX_* env. One answer for the sandbox
+ * The sandbox VM as the server reaches it: host, port, user, the optional
+ * SSH key and the one host-key store, read from the SANDBOX_* env. One answer for the sandbox
  * toolkit, attachments, the browser's SSH tunnel and the terminal, so the
  * VM's key is pinned once, under one name, for every SSH user.
  */
+import { readFileSync } from "node:fs";
 import { createNamespaceKv } from "@groot/core/kv";
 import { createMemoryHostKeyStore, type HostKeyStore, type SshEndpoint } from "@tiny-agents/agent";
 
@@ -54,6 +55,36 @@ export function sandboxHostKeys(): HostKeyStore {
   return hostKeys;
 }
 
+const keyFiles = new Map<string, string>();
+
+/**
+ * The private key for public-key auth, or undefined for keyless Tailscale
+ * SSH (the default). `SANDBOX_SSH_KEY` holds the key itself (`\n` escapes
+ * allowed, for one-line env files); `SANDBOX_SSH_KEY_FILE` names a file, read
+ * once per path (a fix needs a restart). A local sandbox container (`docker/sandbox/`) needs one,
+ * because it is reached without a tailnet to authenticate the app.
+ */
+export function sandboxPrivateKey(env: Env = process.env): string | undefined {
+  const inline = unquoteEnv(env.SANDBOX_SSH_KEY);
+  if (inline) return `${inline.replaceAll("\\n", "\n").trim()}\n`;
+  const path = unquoteEnv(env.SANDBOX_SSH_KEY_FILE);
+  if (!path) return undefined;
+  if (keyFiles.has(path)) return keyFiles.get(path) || undefined;
+  let key = "";
+  try {
+    key = readFileSync(path, "utf8");
+  } catch (error) {
+    // Logged once, not thrown: a bad path must not take the whole runtime
+    // down. The sandbox tools then fail their SSH auth until it is fixed.
+    console.error(
+      `SANDBOX_SSH_KEY_FILE ${path} can't be read (${(error as Error).message}). ` +
+        "Run `pnpm sandbox:up` to create the local sandbox's key, or unset it for Tailscale SSH.",
+    );
+  }
+  keyFiles.set(path, key);
+  return key || undefined;
+}
+
 /** The endpoint every SSH user dials, or undefined when no sandbox is configured. */
 export function sandboxEndpoint(env: Env = process.env): SshEndpoint | undefined {
   const host = sandboxHost(env);
@@ -63,10 +94,12 @@ export function sandboxEndpoint(env: Env = process.env): SshEndpoint | undefined
     port: env.SANDBOX_PORT ? Number(env.SANDBOX_PORT) : undefined,
     user: unquoteEnv(env.SANDBOX_USER),
     hostKeys: sandboxHostKeys(),
+    privateKey: sandboxPrivateKey(env),
   };
 }
 
 /** Tests: forget the pinned-key store so the next call rebuilds it. */
 export function resetSandboxHostKeysForTests(): void {
   hostKeys = undefined;
+  keyFiles.clear();
 }

@@ -241,7 +241,9 @@ Without any of these, `browser_navigate` returns a setup hint naming the
 options and nothing else breaks.
 
 To try the VNC viewer from a laptop, set `SANDBOX_HOST` in your local env to
-the VM's address; the machine needs keyless SSH to it, as for the sandbox.
+the VM's address; the machine needs keyless SSH to it, as for the sandbox. Off
+the tailnet, run the local sandbox container instead
+([`guides/local-sandbox.md`](../guides/local-sandbox.md)).
 
 Tailscale-SSH realities the remote transport encodes (verified live): after
 a direct-tcpip channel closes, later channels on the same connection stall —

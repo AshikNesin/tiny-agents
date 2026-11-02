@@ -48,6 +48,8 @@ export interface RemoteCdpTransportOptions {
   user?: string;
   /** TOFU host-key pinning, shared with the sandbox toolkit and the terminal. */
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   connectTimeoutMs?: number;
 }
 
@@ -189,9 +191,11 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       port: options.port,
       user: options.user,
       hostKeys: options.hostKeys,
+      privateKey: options.privateKey,
       connectTimeoutMs: options.connectTimeoutMs,
       // The tailnet is the auth (tag:codevm -> tag:tiny-agents-vm accept
-      // rules), same trust model as the sandbox toolkit: no credentials.
+      // rules), same trust model as the sandbox toolkit: no credentials
+      // unless a local container's key is configured.
     });
 
   /** Run one command on a fresh connection and close it. */

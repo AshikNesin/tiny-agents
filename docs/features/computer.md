@@ -186,7 +186,9 @@ accepted, so the page cannot start a desktop no bot owns.
 There is nothing to set up beyond the sandbox itself.
 
 1. **Prerequisites** are the sandbox's: `SANDBOX_HOST` (and `SANDBOX_PORT`,
-   `SANDBOX_USER`), keyless SSH from the app host, passwordless sudo on the VM,
+   `SANDBOX_USER`), keyless SSH from the app host (or the local sandbox
+   container, [`guides/local-sandbox.md`](../guides/local-sandbox.md)),
+   passwordless sudo on the VM,
    and memory for a desktop per profile: budget 300 MB per desktop plus its
    apps (LibreOffice adds about 400 MB while open). A 2 vCPU / 8 GB VM runs two
    or three desktops beside Chrome.

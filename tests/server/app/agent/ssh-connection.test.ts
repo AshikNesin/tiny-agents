@@ -15,6 +15,7 @@ import {
 
 type ConnectConfig = {
   host: string;
+  privateKey?: string;
   hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => void;
 };
 
@@ -56,6 +57,14 @@ describe("dialSsh", () => {
     // An EventEmitter with no 'error' listener throws here; ours must not.
     expect(() => client.emit("error", new Error("Connection lost"))).not.toThrow();
     expect(() => client.emit("error", new Error("Connection lost again"))).not.toThrow();
+  });
+
+  it("dials keyless (Tailscale SSH) by default and with public-key auth when given a key", async () => {
+    const ssh = fakeSsh2();
+    await dialSsh({ host: "tiny-agents-vm" }, ssh.Client);
+    expect(ssh.clients[0]!.config).not.toHaveProperty("privateKey");
+    await dialSsh({ host: "127.0.0.1", port: 2222, privateKey: "KEY" }, ssh.Client);
+    expect(ssh.clients[1]!.config.privateKey).toBe("KEY");
   });
 
   it("rejects once on a failed handshake and swallows the second error", async () => {

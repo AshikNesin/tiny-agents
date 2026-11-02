@@ -17,18 +17,19 @@ them. The tech stack and workspace layout are in the
 
 How to work on and ship the app.
 
-| Document                                                           | What it covers                                                 |
-| ------------------------------------------------------------------ | -------------------------------------------------------------- |
-| [`guides/architecture.md`](./guides/architecture.md)               | `createApp()`, `bootstrap()`, request flow, the two runtimes   |
-| [`guides/development.md`](./guides/development.md)                 | Commands, conventions, adding a feature end to end             |
-| [`guides/database-migrations.md`](./guides/database-migrations.md) | Drizzle schema files, `pnpm db:generate`, how migrations apply |
-| [`guides/testing.md`](./guides/testing.md)                         | In-process Hono tests on in-memory SQLite, Playwright, CI      |
-| [`guides/portless-https.md`](./guides/portless-https.md)           | Local HTTPS via portless, certificate trust                    |
-| [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format           |
-| [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars  |
-| [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)    |
-| [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                  |
-| [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate            |
+| Document                                                           | What it covers                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| [`guides/architecture.md`](./guides/architecture.md)               | `createApp()`, `bootstrap()`, request flow, the two runtimes     |
+| [`guides/development.md`](./guides/development.md)                 | Commands, conventions, adding a feature end to end               |
+| [`guides/database-migrations.md`](./guides/database-migrations.md) | Drizzle schema files, `pnpm db:generate`, how migrations apply   |
+| [`guides/testing.md`](./guides/testing.md)                         | In-process Hono tests on in-memory SQLite, Playwright, CI        |
+| [`guides/portless-https.md`](./guides/portless-https.md)           | Local HTTPS via portless, certificate trust                      |
+| [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format             |
+| [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars    |
+| [`guides/local-sandbox.md`](./guides/local-sandbox.md)             | The sandbox VM as a Docker container, for machines off Tailscale |
+| [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)      |
+| [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                    |
+| [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate              |
 
 ## Features
 

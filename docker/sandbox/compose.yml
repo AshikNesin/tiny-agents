@@ -1,0 +1,36 @@
+# The local sandbox: a container standing in for the Tailscale sandbox VM.
+# Start it with `pnpm sandbox:up` (creates the SSH key, then runs this file);
+# see docs/guides/local-sandbox.md.
+name: tiny-agents-sandbox
+
+services:
+  sandbox:
+    build:
+      context: .
+      args:
+        EXTRA_PACKAGES: ${SANDBOX_EXTRA_PACKAGES:-}
+    # Google Chrome ships for amd64 only; Apple Silicon runs it emulated.
+    platform: linux/amd64
+    image: tiny-agents-sandbox:local
+    hostname: tiny-agents-sandbox
+    restart: unless-stopped
+    ports:
+      # Loopback only: nothing off this computer can reach the sandbox.
+      - "127.0.0.1:${SANDBOX_LOCAL_PORT:-2222}:22"
+    # Chrome and the XFCE desktops need more than Docker's 64 MB /dev/shm.
+    shm_size: 2gb
+    volumes:
+      - type: bind
+        source: ../../data/sandbox/id_ed25519.pub
+        target: /etc/tiny-agents/authorized_keys
+        read_only: true
+        bind:
+          create_host_path: false
+      - home:/home/exedev
+      - host-keys:/etc/ssh/host-keys
+
+volumes:
+  # Bots' files, browser profiles and desktops; survives rebuilds.
+  home:
+  # sshd's host key, so the app's pinned key stays valid.
+  host-keys:

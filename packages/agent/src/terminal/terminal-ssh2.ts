@@ -24,6 +24,8 @@ export interface Ssh2TerminalTransportOptions {
   port?: number;
   user?: string;
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   /** End the pooled connection after this long with no open channel. */
   idleTimeoutMs?: number;
 }
@@ -131,7 +133,13 @@ export function createSsh2TerminalTransport(
   const pool = createSshChannelPool(
     () =>
       dialSsh(
-        { host: options.host, port: options.port, user: options.user, hostKeys: options.hostKeys },
+        {
+          host: options.host,
+          port: options.port,
+          user: options.user,
+          hostKeys: options.hostKeys,
+          privateKey: options.privateKey,
+        },
         ClientClass,
       ),
     options.idleTimeoutMs ?? IDLE_TIMEOUT_MS,
