@@ -27,6 +27,8 @@ How to work on and ship the app.
 | [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format             |
 | [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars    |
 | [`guides/local-sandbox.md`](./guides/local-sandbox.md)             | The sandbox VM as a Docker container, for machines off Tailscale |
+| [`guides/claude-worker-macos.md`](./guides/claude-worker-macos.md) | Experimental Claude plan worker on macOS / a Cua or Lume VM      |
+| [`guides/claude-worker-linux.md`](./guides/claude-worker-linux.md) | Experimental Claude plan worker as a systemd user unit           |
 | [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)      |
 | [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                    |
 | [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate              |
@@ -43,6 +45,7 @@ What ships in the box and how to use or extend it.
 | [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                           |
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                           |
 | [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output                  |
+| [`claude-subscription.md`](./claude-subscription.md)                         | Experimental Claude Pro/Max path through Claude Code           |
 | [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client       |
 | [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                  |
 | [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page      |

@@ -58,6 +58,11 @@ a variable involves. LLM provider keys such as `OPENAI_API_KEY` are not in the
 schema: the provider SDKs behind `@groot/ai` read them from `process.env` when
 no `apiKey` is passed.
 
+Claude plan (experimental, off by default): `CLAUDE_CODE_ENGINE_ENABLED`,
+`CLAUDE_CODE_ENGINE_FALLBACK`, `CLAUDE_WORKER_URL`, `CLAUDE_WORKER_TOKEN`.
+The token is the worker's bearer, not a Claude credential. See
+[Use your Claude subscription](./claude-subscription.md).
+
 Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 
 ## Local development
