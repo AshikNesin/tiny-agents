@@ -385,24 +385,80 @@
         color: var(--muted);
         font-size: var(--step-1);
       }
-      .steps {
-        list-style: none;
-        margin: 6px 0 0;
-        padding: 0;
+      .examples {
         display: grid;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .ex {
+        display: grid;
+        grid-template-columns: 36px 1fr;
         gap: 14px;
+        align-items: center;
+        width: 100%;
+        text-align: left;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 16px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        transition: background-color 160ms ease;
       }
-      .steps li {
+      .ex .face {
+        width: 36px;
+        height: 36px;
+      }
+      .ex:hover {
+        background: color-mix(in srgb, var(--surface) 60%, transparent);
+      }
+      .ex[aria-selected="true"] {
+        background: var(--surface);
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .ex-text {
         display: grid;
-        grid-template-columns: 28px 1fr;
-        gap: 12px;
-        align-items: baseline;
+        gap: 1px;
+        min-width: 0;
       }
-      .steps b {
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        font-weight: 500;
+      .ex-text b {
+        font-weight: 650;
+      }
+      .ex-text span {
         color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .ex-text em {
+        font-style: normal;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--accent-a);
+        margin-top: 3px;
+      }
+      .panels {
+        display: grid;
+        /* Top-anchored, so switching examples of different lengths doesn't jump. */
+        align-self: start;
+      }
+      .stamp {
+        justify-self: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .short {
+        margin: 8px 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 4px;
+      }
+      .tool code,
+      .bot code {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
       }
       .chat {
         border-radius: var(--radius);
@@ -576,6 +632,11 @@
       @media (max-width: 860px) {
         .story {
           grid-template-columns: 1fr;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ex {
+          transition: none;
         }
       }
 
@@ -784,6 +845,54 @@
             stroke-linecap="round"
           />
         </symbol>
+        <linearGradient id="g-chief" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#34d399" />
+          <stop offset="1" stop-color="#0d9488" />
+        </linearGradient>
+        <symbol id="chief" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="50" fill="url(#g-chief)" />
+          <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
+          <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
+          <path
+            d="M40 68q10 7 20 0"
+            stroke="#111"
+            stroke-width="5"
+            fill="none"
+            stroke-linecap="round"
+          />
+        </symbol>
+        <linearGradient id="g-code" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#a78bfa" />
+          <stop offset="1" stop-color="#4f46e5" />
+        </linearGradient>
+        <symbol id="code" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="50" fill="url(#g-code)" />
+          <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
+          <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
+          <path
+            d="M40 68q10 7 20 0"
+            stroke="#111"
+            stroke-width="5"
+            fill="none"
+            stroke-linecap="round"
+          />
+        </symbol>
+        <linearGradient id="g-research" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#60a5fa" />
+          <stop offset="1" stop-color="#6366f1" />
+        </linearGradient>
+        <symbol id="research" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="50" fill="url(#g-research)" />
+          <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
+          <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
+          <path
+            d="M40 68q10 7 20 0"
+            stroke="#111"
+            stroke-width="5"
+            fill="none"
+            stroke-linecap="round"
+          />
+        </symbol>
       </defs>
     </svg>
 
@@ -843,7 +952,10 @@
             </span>
           </button>
         </div>
-        <p class="film-note">A trip to Japan from Chennai, planned in one conversation.</p>
+        <p class="film-note">
+          45 seconds: memory, browser and computer use, approvals, permissions, MCP, routines and a
+          team of agents.
+        </p>
         <div class="works" aria-label="Works with">
           <span class="eyebrow">Works with</span>
           <span>Claude</span><span>GPT</span><span>Cloudflare AI Gateway</span><span>MCP</span
@@ -855,77 +967,268 @@
         <div class="wrap story">
           <div class="copy">
             <span class="eyebrow">How it works</span>
-            <h2>Plan a week in Japan <span class="grad">in one message.</span></h2>
+            <h2>One message. <span class="grad">The work gets done.</span></h2>
             <p>
-              Ask Travel Planner for seven days in Japan, flying from Chennai. It already knows how
-              you travel, so it gets to work instead of asking twenty questions.
+              Pick an agent and say what you need in plain words. It plans, uses the tools you've
+              allowed, and checks with you before anything important.
             </p>
-            <ol class="steps">
-              <li>
-                <b>01</b><span>It recalls that you eat vegetarian and like a window seat.</span>
-              </li>
-              <li>
-                <b>02</b
-                ><span
-                  >It compares fares live in its own browser and builds the itinerary on its own
-                  computer.</span
+            <div class="examples" role="tablist" aria-label="Examples">
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-chief"
+                aria-controls="panel-chief"
+                aria-selected="true"
+                tabindex="0"
+              >
+                <svg class="face" aria-hidden="true"><use href="#chief" /></svg>
+                <span class="ex-text"
+                  ><b>Chief of Staff</b><span>Every weekday at 9, brief me on my day.</span
+                  ><em>Routines · MCP · Proactive</em></span
                 >
-              </li>
-              <li>
-                <b>03</b
-                ><span
-                  >It stops and asks before it pays. Your card comes from the Vault, so it never
-                  sees the number.</span
+              </button>
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-code"
+                aria-controls="panel-code"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                <svg class="face" aria-hidden="true"><use href="#code" /></svg>
+                <span class="ex-text"
+                  ><b>Code Buddy</b><span>Run the tests and fix what breaks.</span
+                  ><em>Computer use · Approvals</em></span
                 >
-              </li>
-            </ol>
+              </button>
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-research"
+                aria-controls="panel-research"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                <svg class="face" aria-hidden="true"><use href="#research" /></svg>
+                <span class="ex-text"
+                  ><b>Researcher</b><span>Shortlist coworking spaces for me.</span
+                  ><em>Browser use · Memory</em></span
+                >
+              </button>
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-travel"
+                aria-controls="panel-travel"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                <svg class="face" aria-hidden="true"><use href="#travel" /></svg>
+                <span class="ex-text"
+                  ><b>Travel Planner</b><span>Book a Friday flight to Bangalore.</span
+                  ><em>Browser use · Vault · Approvals</em></span
+                >
+              </button>
+            </div>
           </div>
 
-          <div class="chat" aria-label="Example conversation with Travel Planner">
-            <div class="chat-head">
-              <svg class="face" aria-hidden="true"><use href="#travel" /></svg>
-              <div class="who">
-                Travel Planner <small><i></i>Online</small>
-              </div>
-            </div>
-            <div class="chat-body">
-              <div class="bubble">Plan 7 days in Japan this April. Flying from Chennai.</div>
-              <div class="recall">
-                <small>Recalled from memory</small>
-                <div class="chips">
-                  <span class="chip"><i></i>Vegetarian</span>
-                  <span class="chip"><i></i>Window seat</span>
-                  <span class="chip"><i></i>Budget ₹2.5L</span>
+          <div class="panels">
+            <div class="chat" role="tabpanel" id="panel-chief" aria-labelledby="tab-chief">
+              <div class="chat-head">
+                <svg class="face" aria-hidden="true"><use href="#chief" /></svg>
+                <div class="who">
+                  Chief of Staff <small><i></i>Online</small>
                 </div>
               </div>
-              <span class="tool">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                </svg>
-                Browsed flights · MAA → NRT
-              </span>
-              <div class="bot">
-                Best fit: <strong>₹68,420 a seat</strong>, one stop, window seats together. Book
-                both?
+              <div class="chat-body">
+                <div class="bubble">
+                  Every weekday at 9, brief me on my calendar and anything urgent in email.
+                </div>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                  Created a routine · Weekdays at 9:00
+                </span>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <circle cx="4.5" cy="6" r="1.8" />
+                    <circle cx="19.5" cy="6" r="1.8" />
+                    <path d="m6 7 3.6 3M18 7l-3.6 3" />
+                  </svg>
+                  Reads your Calendar and Email over MCP
+                </span>
+                <div class="stamp">Monday, 9:00 AM</div>
+                <div class="bot">
+                  Good morning. <strong>Three meetings today</strong>; the 2 PM design review moved
+                  to 4. One urgent email: the venue wants the deposit by Wednesday. Want me to draft
+                  a reply?
+                </div>
               </div>
-              <div class="approval">
-                <span class="k">Needs your approval</span>
-                <span class="t">Pay ₹1,36,840 for 2 tickets</span>
-                <dl>
-                  <dt>Flight</dt>
-                  <dd>MAA → NRT · Sat 12 Apr · 23:40</dd>
-                  <dt>Card</dt>
-                  <dd>Visa ···· 4242<span class="vault">From Vault</span></dd>
-                </dl>
-                <div class="row" aria-hidden="true">
-                  <span>Deny</span><span class="yes">Approve</span>
+            </div>
+            <div class="chat" role="tabpanel" id="panel-code" aria-labelledby="tab-code" hidden>
+              <div class="chat-head">
+                <svg class="face" aria-hidden="true"><use href="#code" /></svg>
+                <div class="who">
+                  Code Buddy <small><i></i>Online</small>
+                </div>
+              </div>
+              <div class="chat-body">
+                <div class="bubble">Run the tests in acme-shop and fix what breaks.</div>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="m7 9 3 3-3 3M13 15h4" />
+                  </svg>
+                  Ran <code>npm test</code> on its computer · 2 failing
+                </span>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="m8 8-4 4 4 4M16 8l4 4-4 4" />
+                  </svg>
+                  Edited <code>cart/discount.ts</code>
+                </span>
+                <div class="bot">
+                  Fixed: coupon totals were rounded before tax.
+                  <strong>All 48 tests pass now.</strong> Push it to a branch?
+                </div>
+                <div class="approval">
+                  <span class="k">Needs your approval</span>
+                  <span class="t">Run git push origin fix/coupon-rounding</span>
+                  <dl>
+                    <dt>Where</dt>
+                    <dd>Code Buddy's computer</dd>
+                    <dt>Changes</dt>
+                    <dd>1 file · +6 −2</dd>
+                  </dl>
+                  <div class="row" aria-hidden="true">
+                    <span>Deny</span><span class="yes">Approve</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="chat"
+              role="tabpanel"
+              id="panel-research"
+              aria-labelledby="tab-research"
+              hidden
+            >
+              <div class="chat-head">
+                <svg class="face" aria-hidden="true"><use href="#research" /></svg>
+                <div class="who">
+                  Researcher <small><i></i>Online</small>
+                </div>
+              </div>
+              <div class="chat-body">
+                <div class="bubble">
+                  Find a quiet coworking space near Indiranagar, under ₹10k a month.
+                </div>
+                <div class="recall">
+                  <small>Recalled from memory</small>
+                  <div class="chips">
+                    <span class="chip"><i></i>Works mornings</span
+                    ><span class="chip"><i></i>Takes calls daily</span>
+                  </div>
+                </div>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                  </svg>
+                  Read 9 pages · reviews and price lists
+                </span>
+                <div class="bot">
+                  Three that fit your mornings and calls:
+                  <ul class="short">
+                    <li><strong>12th Main</strong> · ₹8,500/mo · two call booths</li>
+                    <li><strong>100 Feet Road</strong> · ₹9,200/mo · silent floor till noon</li>
+                    <li><strong>CMH Road</strong> · ₹7,800/mo · booths by the hour</li>
+                  </ul>
+                  Want me to book a free trial day at the first?
+                </div>
+              </div>
+            </div>
+            <div class="chat" role="tabpanel" id="panel-travel" aria-labelledby="tab-travel" hidden>
+              <div class="chat-head">
+                <svg class="face" aria-hidden="true"><use href="#travel" /></svg>
+                <div class="who">
+                  Travel Planner <small><i></i>Online</small>
+                </div>
+              </div>
+              <div class="chat-body">
+                <div class="bubble">Book me a Friday evening flight from Chennai to Bangalore.</div>
+                <div class="recall">
+                  <small>Recalled from memory</small>
+                  <div class="chips">
+                    <span class="chip"><i></i>Window seat</span
+                    ><span class="chip"><i></i>No red-eyes</span>
+                  </div>
+                </div>
+                <span class="tool">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                  </svg>
+                  Compared fares live · MAA → BLR
+                </span>
+                <div class="bot">
+                  Best fit: <strong>18:40, 55 min, ₹3,412</strong>, window seat. Book it?
+                </div>
+                <div class="approval">
+                  <span class="k">Needs your approval</span>
+                  <span class="t">Pay ₹3,412 for 1 ticket</span>
+                  <dl>
+                    <dt>Flight</dt>
+                    <dd>MAA → BLR · Fri · 18:40</dd>
+                    <dt>Card</dt>
+                    <dd>Visa ···· 4242<span class="vault">From Vault</span></dd>
+                  </dl>
+                  <div class="row" aria-hidden="true">
+                    <span>Deny</span><span class="yes">Approve</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1202,6 +1505,27 @@
           play();
         }),
       );
+      // Examples: a tab list that swaps the chat on the right.
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      function select(tab) {
+        tabs.forEach((t) => {
+          const on = t === tab;
+          t.setAttribute("aria-selected", String(on));
+          t.tabIndex = on ? 0 : -1;
+          document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+        });
+      }
+      tabs.forEach((tab, i) => {
+        tab.addEventListener("click", () => select(tab));
+        tab.addEventListener("keydown", (e) => {
+          const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+          if (!step) return;
+          e.preventDefault();
+          const next = tabs[(i + step + tabs.length) % tabs.length];
+          select(next);
+          next.focus();
+        });
+      });
     </script>
   </body>
 </html>
