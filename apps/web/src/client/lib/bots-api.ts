@@ -9,13 +9,15 @@ import type { ChatMessage, RoutineRunCard } from "./chat-types";
 export interface ModelInfo {
   id: string;
   name: string;
-  family: "anthropic" | "openai" | "workers-ai" | "other";
+  family: "anthropic" | "openai" | "workers-ai" | "claude-plan" | "other";
   /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
   provider?: string;
   reasoning: boolean;
   contextWindow: number;
   /** The model accepts image content natively (issue #17). */
   vision: boolean;
+  /** Short picker note, e.g. "uses your Claude plan". */
+  note?: string;
 }
 
 /** One inference provider (AI_PROVIDERS) and whether it has credentials. */
@@ -33,6 +35,18 @@ export interface ModelsResponse {
   gatewayConfigured: boolean;
   providers?: ProviderStatus[];
 }
+
+/** Claude plan engine status. Never includes a credential or the worker token. */
+export interface ClaudeCodeStatus {
+  enabled: boolean;
+  fallback: "gateway" | "pause";
+  configured: boolean;
+  workerHost?: string;
+}
+
+export const claudeCodeApi = {
+  status: () => apiClient.get<ClaudeCodeStatus>("/claude-code/status"),
+};
 
 export type ToolPermission = "allow" | "ask" | "off";
 
