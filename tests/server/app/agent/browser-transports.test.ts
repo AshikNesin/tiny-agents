@@ -447,7 +447,12 @@ describe("page interaction", () => {
             calls.push("click");
           },
           fill: async (text: string) => {
+            // Playwright's fill throws on a <select>, as the real one does.
+            if (element.tagName === "SELECT") throw new Error("Element is not an <input>");
             calls.push(`fill:${text}`);
+          },
+          selectOption: async (value: string) => {
+            calls.push(`select:${value}`);
           },
         };
       },
@@ -502,14 +507,14 @@ describe("page interaction", () => {
     expect(calls).toEqual(["ref:e4", "eval", "fill:2026-10-28"]);
   });
 
-  it("fills a select without opening the dropdown", async () => {
+  it("chooses a select's option without opening the dropdown", async () => {
     const { calls, session } = harness({
       tagName: "SELECT",
       disabled: false,
       isContentEditable: false,
     });
     expect(await session.type("e5", "Beta")).toEqual({ url: "https://example.com/form" });
-    expect(calls).toEqual(["ref:e5", "eval", "fill:Beta"]);
+    expect(calls).toEqual(["ref:e5", "eval", "select:Beta"]);
   });
 
   it("accepts a frame ref and fills that field", async () => {

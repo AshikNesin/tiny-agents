@@ -41,9 +41,10 @@ the agent can browse, but there is nothing to stream (the panel says so)
   the one under the cursor. `browser_type` replaces the field with one
   `fill`. On the headful VM Chrome, CDP text insertion is delivered to
   whichever surface has browser focus, often the address bar, so a text
-  field is clicked first to move that focus into the page. Date, color,
-  range and select fields are filled directly, so the native picker stays
-  closed. A key event per character is a round trip each over the VM link
+  field is clicked first to move that focus into the page. Date, color and
+  range fields are filled directly, and a select gets the option whose label
+  or value is the text (`selectOption`; `fill` throws on a select), so the
+  native picker stays closed. A key event per character is a round trip each over the VM link
   and timed out on anything longer than a short phrase. Scrolling parks
   the cursor in the page before the wheel event.
 - Driver flag: `setDriver(conversationId, "agent" | "human")`. Action tools
