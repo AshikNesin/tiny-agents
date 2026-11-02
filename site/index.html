@@ -209,6 +209,9 @@
         letter-spacing: -0.02em;
         white-space: nowrap;
       }
+      .brand {
+        min-height: 44px;
+      }
       .brand svg {
         width: 28px;
         height: 28px;
@@ -302,6 +305,12 @@
       /* ── Demo ────────────────────────────────────────── */
       .player {
         position: relative;
+        /* Never taller than the screen under the header, so the controls stay
+           on screen (a phone held sideways is only ~340px tall). */
+        width: min(100%, calc((100vh - 104px) * 16 / 9));
+        width: min(100%, calc((100svh - 104px) * 16 / 9));
+        margin-inline: auto;
+        scroll-margin-top: 72px;
         aspect-ratio: 16 / 9;
         border: 1px solid var(--line);
         border-radius: 16px;
@@ -414,6 +423,10 @@
       /* ── Sections ────────────────────────────────────── */
       .section {
         padding: clamp(72px, 9vw, 104px) 0;
+      }
+      .section,
+      .cta {
+        scroll-margin-top: 64px;
       }
       .section + .section {
         border-top: 1px solid var(--line2);
@@ -794,8 +807,8 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px 24px;
-        padding-top: 28px;
-        padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+        padding-top: 16px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
         font-size: 14px;
         color: var(--muted);
       }
@@ -806,6 +819,10 @@
       footer .brand svg {
         width: 22px;
         height: 22px;
+      }
+      footer a:not(.brand) {
+        display: inline-block;
+        padding-block: 12px;
       }
       footer a:not(.brand):hover {
         color: var(--ink);
@@ -871,7 +888,7 @@
         </nav>
         <a class="btn btn-secondary btn-sm" href="https://x.com/AshikNesin" rel="noopener">
           <svg aria-hidden="true"><use href="#x" /></svg>
-          Follow<span class="wide">&nbsp;for updates</span>
+          <span>Follow<span class="wide"> for updates</span></span>
         </a>
       </div>
     </header>
