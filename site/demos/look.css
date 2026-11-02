@@ -1,0 +1,42 @@
+/* The Tiny Agents look for every stage on the page: the site's graphite on
+   white, Inter, the app's 10 to 14px radii. Colour only where it means
+   something: green for online and done, amber for an approval. */
+.ta .ss-stage {
+  --ss-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ss-text-strong: #1f1f23;
+  --ss-text: #6f6f7a;
+  --ss-text-faint: #9a9aa3;
+  --ss-icon: #6f6f7a;
+  --ss-accent: #1f1f23;
+  --ss-accent-soft: rgb(31 31 35 / 8%);
+  --ss-line: #e6e6ea;
+  --ss-line-faint: #ededf0;
+  --ss-success: #2f8a5b;
+  --ss-success-text: #2f8a5b;
+  --ss-success-soft: rgb(47 138 91 / 10%);
+  --ss-warning: #b45309;
+  --ss-warning-text: #b45309;
+  --ss-warning-soft: rgb(180 83 9 / 8%);
+  --ss-radius-sm: 6px;
+  --ss-radius-md: 8px;
+  --ss-radius-lg: 12px;
+  --ss-row: 24px;
+  /* The page's tile ground shows through: the page is the ground */
+  overflow: hidden;
+  background: transparent;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.ta .ta-face {
+  display: block;
+  flex: none;
+}
+
+/* The one surface every step's hero sits on: white, a hairline, the long
+   faint fall the page's own cards use */
+.ta .ta-card {
+  position: absolute;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--ss-shadow-ground);
+}

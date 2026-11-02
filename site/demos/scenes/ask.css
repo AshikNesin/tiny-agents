@@ -1,0 +1,146 @@
+/* A chat panel: a 24px gutter at the sides and bottom, off the top */
+.ta-ask .ta-ask__panel {
+  top: -40px;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: 0 12px 12px;
+}
+
+/* Pinned to its bottom, as a conversation is: the earlier turn goes up and
+   out of the panel as the new one grows */
+.ta-ask .ta-ask__thread {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  padding: 0 4px 12px;
+  overflow: hidden;
+}
+
+.ta-ask .ta-ask__past {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 14px;
+}
+
+/* The space above each new turn lives inside its Collapse, so a turn that
+   hasn't arrived yet takes no room (a flex gap would leave a band for it) */
+.ta-ask .ta-ask__turn {
+  padding-top: 8px;
+}
+
+.ta-ask .ta-ask__past-q {
+  justify-self: end;
+}
+
+.ta-ask .ta-ask__q {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The person's message: the app's black bubble, tail corner bottom-right */
+.ta-ask .ta-ask__q .ss-text {
+  max-width: 84%;
+  padding: 7px 12px;
+  border-radius: 14px 14px 4px 14px;
+  background: #1f1f23;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.ta-ask .ta-ask__memory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ta-ask .ta-ask__memory-label {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--ss-text);
+}
+
+.ta-ask .ta-ask__chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: #44444c;
+}
+
+/* A tool call: the app's quiet row, working then done */
+.ta-ask .ta-ask__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  /* An even width (the longer label's, rounded up), so the glyphs in it
+     sit on whole pixels while the row drops in */
+  width: 190px;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+  font-size: 11.5px;
+  /* A whole, even line box, so the 14px glyphs centre on whole pixels */
+  line-height: 16px;
+  color: var(--ss-text);
+}
+
+.ta-ask .ta-ask__tool .ss-check {
+  color: var(--ss-text-faint);
+  transition: color 0.2s ease;
+}
+
+.ta-ask .ta-ask__tool[data-done] .ss-check {
+  color: var(--ss-success);
+}
+
+.ta-ask .ta-ask__globe {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.ta-ask .ta-ask__answer {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ss-text-strong);
+}
+
+/* The facts in the answer are set bold, as the app's markdown would */
+.ta-ask .ta-ask__answer .ss-stream__w[data-mark] {
+  background: none;
+  font-weight: 600;
+}
+
+/* The composer: the app's white field with a round send button, inset
+   6px all round, so the field's radius is the button's plus that inset */
+.ta-ask .ta-ask__composer .ss-field__box {
+  padding-right: 6px;
+  border-radius: 17px;
+  font-size: 12px;
+}
+
+.ta-ask .ta-ask__send {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: #e6e6ea;
+  color: #fff;
+  transition: background 0.2s ease;
+}
+
+.ta-ask .ta-ask__send[data-ready] {
+  background: #1f1f23;
+}

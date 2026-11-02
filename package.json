@@ -45,6 +45,7 @@
     "changeset:status": "changeset status",
     "doctor": "pnpm dlx react-doctor@latest",
     "build:client": "vp build",
+    "site:build": "vp build --config site/demos/vite.config.ts",
     "db:generate": "tsx scripts/db-generate.ts",
     "db:studio": "drizzle-kit studio",
     "dev:debug": "NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name node --inspect --import ./node_modules/tsx/dist/loader.mjs apps/web/src/server/entry.node.ts"
