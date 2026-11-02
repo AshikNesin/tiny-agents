@@ -23,8 +23,9 @@
       /*
         Layout: one narrow column that reads like a conversation. The film is
         the hero; one illustrated chat carries the story; a quiet grid lists
-        the rest. Dark-first in the app's warm greys, with the film's
-        indigo-to-teal accent used only on the words that matter.
+        the rest. Monochrome in the app's warm greys: hierarchy comes from
+        weight and grey, and colour appears only where it means something
+        (amber for an approval, green for online and the Vault).
       */
       :root {
         --bg: #0c0b0a;
@@ -33,14 +34,11 @@
         --line: rgb(255 250 240 / 8%);
         --fg: #f6f4f1;
         --muted: #a39f98;
-        --accent-a: #a5b4fc;
-        --accent-b: #5eead4;
         --warn: #fdba74;
         --ok: #6ee7b7;
         --user: #3d3c39;
         --on-solid: #0c0b0a;
         --solid: #f6f4f1;
-        --glow: rgb(129 140 248 / 16%);
 
         --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
         --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -63,14 +61,11 @@
           --line: rgb(20 18 15 / 9%);
           --fg: #121110;
           --muted: #6b6862;
-          --accent-a: #4f46e5;
-          --accent-b: #0d9488;
           --warn: #b45309;
           --ok: #047857;
           --user: #e7e5e2;
           --on-solid: #f8f7f5;
           --solid: #121110;
-          --glow: rgb(79 70 229 / 10%);
           color-scheme: light;
         }
       }
@@ -81,14 +76,11 @@
         --line: rgb(20 18 15 / 9%);
         --fg: #121110;
         --muted: #6b6862;
-        --accent-a: #4f46e5;
-        --accent-b: #0d9488;
         --warn: #b45309;
         --ok: #047857;
         --user: #e7e5e2;
         --on-solid: #f8f7f5;
         --solid: #121110;
-        --glow: rgb(79 70 229 / 10%);
         color-scheme: light;
       }
 
@@ -117,7 +109,7 @@
         color: inherit;
       }
       :focus-visible {
-        outline: 2px solid var(--accent-a);
+        outline: 2px solid var(--fg);
         outline-offset: 3px;
         border-radius: 6px;
       }
@@ -128,11 +120,8 @@
         padding-left: max(16px, env(safe-area-inset-left, 0px));
         padding-right: max(16px, env(safe-area-inset-right, 0px));
       }
-      .grad {
-        background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+      .soft {
+        color: var(--muted);
       }
       .eyebrow {
         font-size: 0.8rem;
@@ -296,7 +285,6 @@
         background: #000;
         box-shadow:
           0 0 0 1px var(--line),
-          0 40px 120px var(--glow),
           0 30px 80px rgb(0 0 0 / 35%);
         aspect-ratio: 16 / 9;
         max-width: 100%;
@@ -433,7 +421,7 @@
         font-style: normal;
         font-family: var(--font-mono);
         font-size: 0.72rem;
-        color: var(--accent-a);
+        color: var(--muted);
         margin-top: 3px;
       }
       .panels {
@@ -532,14 +520,14 @@
         border-radius: 999px;
         font-size: 0.85rem;
         font-weight: 500;
-        border: 1px solid color-mix(in srgb, var(--accent-a) 40%, transparent);
-        background: color-mix(in srgb, var(--accent-a) 10%, transparent);
+        border: 1px solid var(--line);
+        background: var(--surface-2);
       }
       .chip i {
         width: 7px;
         height: 7px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+        background: var(--muted);
       }
       .bot {
         line-height: 1.5;
@@ -605,8 +593,8 @@
         border-radius: 999px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--accent-b);
-        border: 1px solid color-mix(in srgb, var(--accent-b) 40%, transparent);
+        color: var(--ok);
+        border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
       }
       .approval .row {
         display: grid;
@@ -668,7 +656,7 @@
       .feature svg {
         width: 24px;
         height: 24px;
-        color: var(--accent-a);
+        color: var(--fg);
         margin-bottom: 6px;
       }
       .feature h3 {
@@ -765,7 +753,7 @@
         color: var(--muted);
       }
       .term-card .p {
-        color: var(--accent-b);
+        color: var(--muted);
         user-select: none;
       }
       @media (max-width: 860px) {
@@ -787,7 +775,7 @@
         border-radius: 20px;
         box-shadow:
           0 0 0 1px var(--line),
-          0 0 80px var(--glow);
+          0 20px 50px rgb(0 0 0 / 25%);
       }
       .closing h2 {
         font-size: var(--step-3);
@@ -829,12 +817,8 @@
           <rect x="36" y="22" width="6" height="12" rx="3" fill="#050505" />
           <circle cx="49.5" cy="15.5" r="5.5" fill="#fcfcfc" stroke="#050505" stroke-width="3.5" />
         </symbol>
-        <linearGradient id="sunset" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#fb923c" />
-          <stop offset="1" stop-color="#ec4899" />
-        </linearGradient>
         <symbol id="travel" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="50" fill="url(#sunset)" />
+          <circle cx="50" cy="50" r="50" fill="#ee8a5b" />
           <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
           <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
           <path
@@ -845,12 +829,8 @@
             stroke-linecap="round"
           />
         </symbol>
-        <linearGradient id="g-chief" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#34d399" />
-          <stop offset="1" stop-color="#0d9488" />
-        </linearGradient>
         <symbol id="chief" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="50" fill="url(#g-chief)" />
+          <circle cx="50" cy="50" r="50" fill="#4dbb98" />
           <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
           <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
           <path
@@ -861,12 +841,8 @@
             stroke-linecap="round"
           />
         </symbol>
-        <linearGradient id="g-code" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#a78bfa" />
-          <stop offset="1" stop-color="#4f46e5" />
-        </linearGradient>
         <symbol id="code" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="50" fill="url(#g-code)" />
+          <circle cx="50" cy="50" r="50" fill="#8e82dc" />
           <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
           <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
           <path
@@ -877,12 +853,8 @@
             stroke-linecap="round"
           />
         </symbol>
-        <linearGradient id="g-research" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#60a5fa" />
-          <stop offset="1" stop-color="#6366f1" />
-        </linearGradient>
         <symbol id="research" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="50" fill="url(#g-research)" />
+          <circle cx="50" cy="50" r="50" fill="#6f9fe0" />
           <rect x="34" y="34" width="10" height="22" rx="5" fill="#111" />
           <rect x="56" y="34" width="10" height="22" rx="5" fill="#111" />
           <path
@@ -967,7 +939,7 @@
         <div class="wrap story">
           <div class="copy">
             <span class="eyebrow">How it works</span>
-            <h2>One message. <span class="grad">The work gets done.</span></h2>
+            <h2>One message. <span class="soft">The work gets done.</span></h2>
             <p>
               Pick an agent and say what you need in plain words. It plans, uses the tools you've
               allowed, and checks with you before anything important.
@@ -1240,7 +1212,7 @@
         <div class="wrap">
           <div class="features-head">
             <span class="eyebrow">Features</span>
-            <h2>Built to act, <span class="grad">and to ask first.</span></h2>
+            <h2>Built to act, <span class="soft">and to ask first.</span></h2>
             <p>
               Each agent has its own persona, model and tools. You decide what each one may do on
               its own.
@@ -1431,7 +1403,7 @@
         <div class="wrap host">
           <div class="copy">
             <span class="eyebrow">Self-host</span>
-            <h2>Runs on <span class="grad">your server.</span></h2>
+            <h2>Runs on <span class="soft">your server.</span></h2>
             <p>
               One Node process and two SQLite files. Conversations are durable: refresh mid-reply,
               restart the server or redeploy, and the reply picks up where it left off.
@@ -1463,7 +1435,7 @@
       <section>
         <div class="wrap closing">
           <svg class="mark" aria-hidden="true"><use href="#logo" /></svg>
-          <h2>Your team of <span class="grad">always-on AI agents.</span></h2>
+          <h2>Your team of <span class="soft">always-on AI agents.</span></h2>
           <p>Message them like a friend. They take it from there.</p>
           <a class="btn" href="#film" data-play>
             <svg viewBox="0 0 16 16" aria-hidden="true">
