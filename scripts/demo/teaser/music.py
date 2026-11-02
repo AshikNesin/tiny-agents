@@ -7,11 +7,11 @@ the film's timeline in teaser.html (bars start at 0.5 s + 2 s * n):
   0.0  bell notes on "Say" / "it" / "once.", pad swell, riser
   2.5  groove drops as the app window lands (bar 1)
  12.5  claps join (computer use);  18.35 a chime on the "Approve" click
- 20.5  full groove: 16th hats, then a bell lead from 24.5
- 36.5  breakdown under the durable scene; the music tape-stops when the
-       server restarts (38.0) and powers back up on reconnect (39.0)
- 40.5  impact into the team shot (IV chord), half-time pulse
- 42.5  logo hit on the tonic, rings out to the end at 45.6 s
+ 20.5  full groove: 16th hats, then a bell lead from 24.5 (terminal)
+ 40.5  breakdown under the durable scene; the music tape-stops when the
+       server restarts (42.0) and powers back up on reconnect (43.0)
+ 44.5  impact into the team shot (IV chord), half-time pulse
+ 46.5  logo hit on the tonic, rings out to the end at 49.6 s
 
     python3 music.py [--out music.wav]
 
@@ -24,7 +24,7 @@ import wave
 import numpy as np
 
 SR = 44100
-LEN = 45.6
+LEN = 49.6
 BEAT = 0.5
 BAR = 2.0
 OFF = 0.5  # bar 0 starts here
@@ -40,8 +40,8 @@ def bar_t(n, beat=0.0):
     return OFF + n * BAR + beat * BEAT
 
 
-# I–V–vi–IV in D, rotated so bar 0 is G (IV), the groove lands on D at 2.5 s,
-# the team shot (bar 12) is G and the logo (bar 13) resolves on D.
+# I–V–vi–IV in D, counted back from the logo bar: the team shot is G (IV)
+# and the logo resolves on D (I).
 CHORDS = {
     "D": (38, [62, 66, 69, 73]),  # Dmaj7
     "A": (45, [61, 64, 69, 71]),  # Aadd9
@@ -52,7 +52,9 @@ ORDER = ["D", "A", "Bm", "G"]
 
 
 def chord_of(n):
-    return ORDER[(n + 3) % 4]
+    # Anchored on the logo bar (I), so the bar before it is IV however long
+    # the film runs.
+    return ORDER[(n - LOGO_BAR) % 4]
 
 
 # ── Buffers ──────────────────────────────────────────────────────────────
@@ -212,14 +214,14 @@ def delay(x, time=0.375, fb=0.35, mix=0.28):
 
 
 # ── Arrangement ──────────────────────────────────────────────────────────
-GROOVE = range(1, 18)  # bars 1–17: 2.5 – 36.5 s
+GROOVE = range(1, 20)  # bars 1–19: 2.5 – 40.5 s
 CLAPS_FROM = 6  # 12.5 s, computer use
 FULL_FROM = 10  # 20.5 s, permissions onward
-LEAD = range(12, 18)  # 24.5 – 36.5 s
-BREAK = range(18, 20)  # 36.5 – 40.5 s, durable
-TEAM_BAR, LOGO_BAR = 20, 21  # 40.5 s, 42.5 s
+LEAD = range(12, 20)  # 24.5 – 40.5 s, terminal onward
+BREAK = range(20, 22)  # 40.5 – 44.5 s, durable
+TEAM_BAR, LOGO_BAR = 22, 23  # 44.5 s, 46.5 s
 APPROVE_AT = 18.35
-RESTART_AT, RECONNECT_AT = 38.0, 39.0
+RESTART_AT, RECONNECT_AT = 42.0, 43.0
 
 
 def build():
