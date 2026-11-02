@@ -1,10 +1,16 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { createModels, createProvider, type MutableModels } from "@earendil-works/pi-ai/models";
-import { cloudflareAIGatewayProvider } from "@earendil-works/pi-ai/providers/cloudflare-ai-gateway";
+import {
+  createModels,
+  createProvider,
+  type Models,
+  type MutableModels,
+  type Provider,
+} from "@earendil-works/pi-ai/models";
+import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import type { ModelInfo } from "./types";
 
-/** The only inference provider tiny-agents uses (PRD §7.3). */
+/** The default inference provider (PRD §7.3): Cloudflare AI Gateway. */
 export const GATEWAY_PROVIDER = "cloudflare-ai-gateway";
 
 export const GATEWAY_ENV_KEYS = [
@@ -12,6 +18,109 @@ export const GATEWAY_ENV_KEYS = [
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_GATEWAY_ID",
 ] as const;
+
+/**
+ * The env vars a built-in provider reads its key from, for setup hints.
+ * pi-ai does not expose them, so this covers the common providers; any
+ * other provider's hint names it without variables.
+ */
+const PROVIDER_ENV_HINTS: Readonly<Record<string, readonly string[]>> = {
+  [GATEWAY_PROVIDER]: GATEWAY_ENV_KEYS,
+  openai: ["OPENAI_API_KEY"],
+  anthropic: ["ANTHROPIC_API_KEY"],
+  google: ["GEMINI_API_KEY"],
+  openrouter: ["OPENROUTER_API_KEY"],
+  groq: ["GROQ_API_KEY"],
+  mistral: ["MISTRAL_API_KEY"],
+  xai: ["XAI_API_KEY"],
+  deepseek: ["DEEPSEEK_API_KEY"],
+  "vercel-ai-gateway": ["AI_GATEWAY_API_KEY"],
+};
+
+/** One configured provider's state, for the models endpoint and the setup banner. */
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  /** Its auth resolves (key and any account settings present). */
+  configured: boolean;
+  /** What to set to configure it. */
+  setupHint: string;
+}
+
+/** A setup hint for one provider: the env vars to set, when known. */
+export function providerSetupHint(providerId: string, name = providerId): string {
+  const keys = PROVIDER_ENV_HINTS[providerId];
+  return keys?.length
+    ? `Set ${formatList(keys)} for ${name}, then restart.`
+    : `Configure ${name} credentials (see pi-ai's provider docs), then restart.`;
+}
+
+function formatList(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+let builtinIds: ReadonlySet<string> | undefined;
+const warned = new Set<string>();
+
+/** Warn once per message: AI_PROVIDERS is parsed at boot and again per runtime. */
+function warnOnce(message: string): void {
+  if (warned.has(message)) return;
+  warned.add(message);
+  console.warn(message);
+}
+
+/** Ids of every provider pi-ai ships (openai, anthropic, cloudflare-ai-gateway, ...). */
+export function builtinProviderIds(): ReadonlySet<string> {
+  builtinIds ??= new Set(builtinProviders().map((provider) => provider.id));
+  return builtinIds;
+}
+
+/**
+ * The inference providers this deployment uses, from AI_PROVIDERS: a
+ * comma-separated list of pi-ai built-in provider ids, in order. The first
+ * is the primary provider: its models keep bare ids (`gpt-5`); the others'
+ * models are namespaced `custom:<provider>/<model>`. Unknown ids are dropped
+ * with a warning. Unset or empty: the Cloudflare AI Gateway alone.
+ *
+ *   AI_PROVIDERS=openai                         # OpenAI direct only
+ *   AI_PROVIDERS=cloudflare-ai-gateway,openai   # both; gateway ids stay bare
+ */
+export function aiProviderIds(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string[] {
+  const raw = unquote(env.AI_PROVIDERS);
+  if (!raw) return [GATEWAY_PROVIDER];
+  const known = builtinProviderIds();
+  // A Set keeps first-seen order and drops repeats.
+  const ids = new Set<string>();
+  for (const part of raw.split(",")) {
+    const id = unquote(part)?.toLowerCase();
+    if (!id || ids.has(id)) continue;
+    if (!known.has(id)) {
+      warnOnce(
+        `[tiny-agents] AI_PROVIDERS names "${id}", which is not a pi-ai provider — ignored. ` +
+          `Known: ${[...known].sort().join(", ")}.`,
+      );
+      continue;
+    }
+    ids.add(id);
+  }
+  if (ids.size === 0) {
+    warnOnce(
+      `[tiny-agents] AI_PROVIDERS has no known provider — using ${GATEWAY_PROVIDER} instead.`,
+    );
+    return [GATEWAY_PROVIDER];
+  }
+  return [...ids];
+}
+
+/** The provider bare model ids resolve against (the first of AI_PROVIDERS). */
+export function primaryProviderId(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  return aiProviderIds(env)[0];
+}
 
 /**
  * Strip the literal quotes container UIs (Coolify, docker-compose editors)
@@ -32,14 +141,46 @@ export function isGatewayConfigured(
   return GATEWAY_ENV_KEYS.every((key) => (env[key] ?? "").trim() !== "");
 }
 
-/** pi-ai model registry with only the Cloudflare AI Gateway provider registered. */
-export function createGatewayModels(
+/**
+ * pi-ai model registry with the AI_PROVIDERS providers registered (default:
+ * the Cloudflare AI Gateway alone). Each built-in provider reads its own key
+ * from the environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, ...). The
+ * gateway's custom BYOK providers (GATEWAY_CUSTOM_PROVIDERS) route through
+ * the gateway, so they register only when it is one of the providers.
+ */
+export function createProviderModels(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): MutableModels {
+  const ids = aiProviderIds(env);
+  const byId = new Map(builtinProviders().map((provider) => [provider.id, provider]));
   const models = createModels();
-  models.setProvider(cloudflareAIGatewayProvider());
-  registerGatewayCustomProviders(models, env);
+  for (const id of ids) {
+    const provider = byId.get(id);
+    if (provider) models.setProvider(provider);
+  }
+  if (ids.includes(GATEWAY_PROVIDER)) registerGatewayCustomProviders(models, env);
   return models;
+}
+
+/** @deprecated Use `createProviderModels`; same registry (AI_PROVIDERS-driven). */
+export const createGatewayModels = createProviderModels;
+
+/**
+ * Which registered providers have complete auth right now (a key and any
+ * account settings). Uses pi-ai's own check, so it matches what a request
+ * would resolve.
+ */
+export async function configuredProviderIds(models: Models): Promise<Set<string>> {
+  const checks = await Promise.all(
+    models.getProviders().map(async (provider: Provider) => {
+      try {
+        return (await models.checkAuth(provider.id)) ? provider.id : undefined;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+  return new Set(checks.filter((id): id is string => id !== undefined));
 }
 
 /** Custom gateway models known to accept images even without `vision: true`. */
@@ -256,18 +397,31 @@ export function registerGatewayCustomProviders(
 
 /** `providerTag` is the "custom:<provider>" prefix a custom-provider model id carries. */
 function familyOf(model: Model<Api>, providerTag?: string): ModelInfo["family"] {
-  if (providerTag?.startsWith("custom:")) return "other";
+  // Gateway BYOK providers speak OpenAI-compat whatever the upstream is;
+  // a built-in provider (openai, anthropic, ...) keeps its real family.
+  if (providerTag?.startsWith("custom:") && !builtinProviderIds().has(model.provider)) {
+    return "other";
+  }
   if (model.id.startsWith("workers-ai/")) return "workers-ai";
   if (model.api === "anthropic-messages") return "anthropic";
   if (model.api === "openai-responses" || model.api === "openai-completions") return "openai";
   return "other";
 }
 
-export function toModelInfo(model: Model<Api>, providerTag?: string): ModelInfo {
+/**
+ * `providerTag` is the "custom:<provider>" prefix a non-primary model id
+ * carries; `providerName` is the display name of the provider serving it.
+ */
+export function toModelInfo(
+  model: Model<Api>,
+  providerTag?: string,
+  providerName?: string,
+): ModelInfo {
   return {
     id: providerTag ? `${providerTag}/${model.id}` : model.id,
     name: model.name,
     family: familyOf(model, providerTag),
+    provider: providerName ?? model.provider,
     reasoning: Boolean(model.reasoning),
     contextWindow: model.contextWindow,
     vision: (model.input ?? []).includes("image"),

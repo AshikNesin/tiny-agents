@@ -4,8 +4,9 @@ A messenger-style app where every contact is an AI bot you chat with — built
 on [pi-durable](https://earendil.com/posts/pi-durable/) for durable
 conversations (survive refreshes, crashes, redeploys) and the
 [groot](https://github.com/AshikNesin/groot) boilerplate (Hono + React 19 +
-Drizzle/SQLite + JWT/passkey auth, Node only). All inference goes through
-Cloudflare AI Gateway (provider keys live only in the gateway).
+Drizzle/SQLite + JWT/passkey auth, Node only). Inference goes through
+Cloudflare AI Gateway by default (provider keys live only in the gateway), or
+straight to any pi-ai provider such as OpenAI (`AI_PROVIDERS`).
 
 See `PRD.md` for the full spec. Phase 1: create bots, chat with streamed
 replies, durability as a first-class property.
@@ -39,8 +40,13 @@ pnpm dev          # http://localhost:3000 (demo@example.com / demo@example.com)
 No `.env` is needed for development; `.env.example` lists every variable.
 
 Set `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`
-(and optionally `DEFAULT_MODEL`) for real inference. Without them the app
-runs but shows a banner and disables sending. For UI/flow work without the
+(and optionally `DEFAULT_MODEL`) for real inference. To call a provider
+directly instead, list pi-ai provider ids in `AI_PROVIDERS` and set that
+provider's key, e.g. `AI_PROVIDERS=openai` with `OPENAI_API_KEY`
+(`AI_PROVIDERS=cloudflare-ai-gateway,openai` keeps both; see
+[`docs/features/model-providers.md`](docs/features/model-providers.md)).
+With no provider configured the app runs but shows a banner and disables
+sending. For UI/flow work without the
 gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model (send
 `/ask` to see a bot's questions for you).
 

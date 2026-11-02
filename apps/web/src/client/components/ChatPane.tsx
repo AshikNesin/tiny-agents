@@ -107,6 +107,7 @@ export function ChatPane(props: ChatPaneProps) {
 }
 
 function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }: ChatPaneProps) {
+  const providers = useBotsStore((s) => s.providers);
   const chat = useBotsStore((s) => s.chats[bot.id]);
   const connectChat = useBotsStore((s) => s.connectChat);
   const disconnectChat = useBotsStore((s) => s.disconnectChat);
@@ -448,8 +449,17 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
         {/* Warnings */}
         {!gatewayConfigured && (
           <div className="border-b bg-destructive/10 px-4 py-2 text-destructive text-xs">
-            Cloudflare AI Gateway is not configured. Set CLOUDFLARE_API_KEY, CLOUDFLARE_ACCOUNT_ID
-            and CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
+            {providers?.length ? (
+              <>
+                No model provider is configured.{" "}
+                {providers.map((provider) => provider.setupHint).join(" Or: ")} Sending is disabled.
+              </>
+            ) : (
+              <>
+                Cloudflare AI Gateway is not configured. Set CLOUDFLARE_API_KEY,
+                CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
+              </>
+            )}
           </div>
         )}
 

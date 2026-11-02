@@ -10,16 +10,28 @@ export interface ModelInfo {
   id: string;
   name: string;
   family: "anthropic" | "openai" | "workers-ai" | "other";
+  /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
+  provider?: string;
   reasoning: boolean;
   contextWindow: number;
   /** The model accepts image content natively (issue #17). */
   vision: boolean;
 }
 
+/** One inference provider (AI_PROVIDERS) and whether it has credentials. */
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  configured: boolean;
+  setupHint: string;
+}
+
 export interface ModelsResponse {
   models: ModelInfo[];
   defaultModel?: string;
+  /** Some provider can answer (the name predates providers other than the gateway). */
   gatewayConfigured: boolean;
+  providers?: ProviderStatus[];
 }
 
 export type ToolPermission = "allow" | "ask" | "off";

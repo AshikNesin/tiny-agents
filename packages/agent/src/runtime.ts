@@ -37,7 +37,15 @@ import {
 } from "./credentials";
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
-import { createGatewayModels, GATEWAY_PROVIDER, toModelInfo } from "./models";
+import {
+  aiProviderIds,
+  configuredProviderIds,
+  createProviderModels,
+  primaryProviderId,
+  providerSetupHint,
+  toModelInfo,
+  type ProviderStatus,
+} from "./models";
 import {
   applyPermissions,
   compilePolicy,
@@ -110,9 +118,9 @@ export class ConversationNotFoundError extends Error {
 export interface AgentRuntimeOptions {
   /** Path of the pi-durable SQLite store, or ":memory:" (tests). */
   storePath: string;
-  /** Model registry; defaults to the Cloudflare AI Gateway provider only. */
+  /** Model registry; defaults to the AI_PROVIDERS providers (Cloudflare AI Gateway when unset). */
   models?: MutableModels;
-  /** Provider id bots' models resolve against. Defaults to the gateway. */
+  /** Provider id bare model ids resolve against. Defaults to the first of AI_PROVIDERS. */
   provider?: string;
   /** How long to wait for another process to release the store lock. */
   lockWaitMs?: number;
@@ -177,6 +185,10 @@ export class AgentRuntime {
   readonly #approvals: WaitTracker;
   readonly #questions: WaitTracker;
   readonly #capabilities = new Map<string, Capability>();
+  /** Providers whose auth resolved at open (the env is snapshotted then too). */
+  #configured: ReadonlySet<string> = new Set();
+  /** The configured providers' ids, primary first (AI_PROVIDERS order). */
+  #providerIds: readonly string[] = [];
   #review: GateReview | undefined;
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
@@ -231,7 +243,8 @@ export class AgentRuntime {
     let runtime: AgentRuntime | undefined;
     try {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
-      const models = options.models ?? createGatewayModels(envSource);
+      const models = options.models ?? createProviderModels(envSource);
+      const configured = await configuredProviderIds(models);
       const registry = createRegistry();
       const approvals = options.approvalTracker ?? new WaitTracker();
       const questions = new WaitTracker();
@@ -274,7 +287,7 @@ export class AgentRuntime {
       const opened = new AgentRuntime(
         harness,
         models,
-        options.provider ?? GATEWAY_PROVIDER,
+        options.provider ?? primaryProviderId(envSource),
         lock,
         registry,
         approvals,
@@ -283,6 +296,10 @@ export class AgentRuntime {
         envSource,
       );
       opened.#review = review;
+      opened.#configured = configured;
+      opened.#providerIds = [opened.provider, ...aiProviderIds(envSource)].filter(
+        (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
+      );
       runtime = opened;
       harness.closed.then((end) => {
         if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
@@ -304,19 +321,53 @@ export class AgentRuntime {
   // ── Models ────────────────────────────────────────────────────────────
 
   listModels(): ModelInfo[] {
-    // Catalog models plus any registered gateway custom providers (their ids
-    // are namespaced "custom:<provider>/<model>" so bots' saved modelIds
-    // stay stable and never collide with catalog ids).
-    const catalog = this.#models.getModels(this.provider).map((m) => toModelInfo(m));
-    const custom = this.#models
+    // The primary provider's models plus every other registered provider's
+    // (AI_PROVIDERS extras such as openai, and gateway custom providers),
+    // whose ids are namespaced "custom:<provider>/<model>" so bots' saved
+    // modelIds stay stable and never collide with the primary's ids.
+    // Once any provider is configured, unconfigured providers' models are
+    // left out: they could not answer. With none configured all are listed
+    // and the client shows the setup banner.
+    const anyConfigured = this.#configured.size > 0;
+    const listed = (id: string) => !anyConfigured || this.#configured.has(id);
+    const nameOf = (id: string) => this.#models.getProvider(id)?.name ?? id;
+    const primary = listed(this.provider)
+      ? this.#models
+          .getModels(this.provider)
+          .map((m) => toModelInfo(m, undefined, nameOf(m.provider)))
+      : [];
+    const others = this.#models
       .getProviders()
-      .filter((p) => p.id !== this.provider)
+      .filter((p) => p.id !== this.provider && listed(p.id))
       .flatMap((p) =>
-        this.#models.getModels(p.id).map((model) => toModelInfo(model, `custom:${p.id}`)),
+        this.#models
+          .getModels(p.id)
+          .map((model) => toModelInfo(model, `custom:${p.id}`, nameOf(p.id))),
       );
-    const all = [...catalog, ...custom];
+    const all = [...primary, ...others];
     const allow = modelAllowlist(this.#env);
     return allow ? all.filter((m) => allow.has(m.id)) : all;
+  }
+
+  /**
+   * The inference providers this runtime was configured with (AI_PROVIDERS,
+   * or the provider it was opened on) and whether each has credentials.
+   */
+  providerStatus(): ProviderStatus[] {
+    return this.#providerIds.map((id) => {
+      const name = this.#models.getProvider(id)?.name ?? id;
+      return {
+        id,
+        name,
+        configured: this.#configured.has(id),
+        setupHint: providerSetupHint(id, name),
+      };
+    });
+  }
+
+  /** True when at least one inference provider has credentials. */
+  hasConfiguredProvider(): boolean {
+    return this.providerStatus().some((status) => status.configured);
   }
 
   hasModel(modelId: string): boolean {

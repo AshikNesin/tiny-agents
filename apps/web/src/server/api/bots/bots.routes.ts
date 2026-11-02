@@ -4,7 +4,7 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
-import { CHAT_WINDOW, isGatewayConfigured } from "@tiny-agents/agent";
+import { CHAT_WINDOW } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
@@ -38,13 +38,17 @@ router.get("/models", (c) => {
   const runtime = getAgentRuntime();
   const models = runtime.listModels();
   const override = env.DEFAULT_MODEL?.trim();
-  // The faux provider (dev/E2E) answers without the gateway, so it counts as
-  // configured; otherwise the real gateway env vars must all be present.
-  const configured = runtime.provider === "faux" || isGatewayConfigured();
+  // The faux provider (dev/E2E) answers without credentials, so it counts as
+  // configured; otherwise at least one AI_PROVIDERS provider (the gateway by
+  // default) must have its credentials. `gatewayConfigured` keeps its name
+  // for existing clients; it means "some provider can answer".
+  const providers = runtime.providerStatus();
+  const configured = runtime.provider === "faux" || runtime.hasConfiguredProvider();
   return ok(c, {
     models,
     defaultModel: override && runtime.hasModel(override) ? override : models[0]?.id,
     gatewayConfigured: configured,
+    providers,
   });
 });
 

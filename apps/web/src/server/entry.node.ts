@@ -232,6 +232,7 @@ async function main(): Promise<void> {
                   models: runtime.models,
                   hasModel: (id) => runtime.hasModel(id),
                   modelId: appEnv().MEMORY_CAPTURE_MODEL,
+                  provider: runtime.provider,
                 },
                 readTranscript: async (id) => (await runtime.readChat(id)).messages,
               }),
@@ -269,6 +270,7 @@ async function main(): Promise<void> {
         models: runtime.models,
         hasModel: (id) => runtime.hasModel(id),
         modelId: appEnv().CHAT_TITLE_MODEL,
+        provider: runtime.provider,
       });
     },
   });

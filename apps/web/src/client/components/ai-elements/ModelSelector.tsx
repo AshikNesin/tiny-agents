@@ -30,11 +30,18 @@ const FAMILY_LABEL: Record<ModelInfo["family"], string> = {
 /** AI Elements Model Selector: a grouped model picker (issue #1 D17). */
 export function ModelSelector({ models, value, onChange, unknownValue, id }: ModelSelectorProps) {
   const selected = models.find((m) => m.id === value);
-  const groups = new Map<ModelInfo["family"], ModelInfo[]>();
+  // With more than one provider (e.g. the gateway and OpenAI direct) the
+  // same model can be listed twice; the group label names the provider.
+  const multiProvider = new Set(models.map((m) => m.provider ?? "")).size > 1;
+  const groups = new Map<string, ModelInfo[]>();
   for (const model of models) {
-    const list = groups.get(model.family) ?? [];
+    const label =
+      multiProvider && model.provider
+        ? `${FAMILY_LABEL[model.family]} · ${model.provider}`
+        : FAMILY_LABEL[model.family];
+    const list = groups.get(label) ?? [];
     list.push(model);
-    groups.set(model.family, list);
+    groups.set(label, list);
   }
   return (
     <DropdownMenu>
@@ -58,9 +65,9 @@ export function ModelSelector({ models, value, onChange, unknownValue, id }: Mod
         )}
         {[...groups.entries()]
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([family, groupModels]) => (
-            <DropdownMenuGroup key={family}>
-              <DropdownMenuLabel>{FAMILY_LABEL[family]}</DropdownMenuLabel>
+          .map(([label, groupModels]) => (
+            <DropdownMenuGroup key={label}>
+              <DropdownMenuLabel>{label}</DropdownMenuLabel>
               {groupModels.map((model) => (
                 <DropdownMenuItem key={model.id} onSelect={() => onChange(model.id)}>
                   {model.id === value ? <Check className="size-4" /> : <span className="size-4" />}
