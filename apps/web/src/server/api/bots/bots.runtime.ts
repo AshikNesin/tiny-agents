@@ -16,6 +16,7 @@ import {
   createMemoryCapability,
   createReviewer,
   createRoutinesToolkit,
+  createSelfImproveCapability,
   createSandboxToolkit,
   createSkillsCapability,
   createTasksToolkit,
@@ -43,6 +44,7 @@ import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
+import { createInstructionsStore } from "./self-improve.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -70,6 +72,9 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
   return [
     createSkillsCapability(skillStore),
     createMemoryCapability(memoryStore),
+    // Self-improvement (issue #128): the bot edits its own system prompt;
+    // `askOnly`, so every change waits for the owner in chat.
+    createSelfImproveCapability(createInstructionsStore()),
     createTasksToolkit(taskStore),
     createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({
@@ -252,6 +257,8 @@ const FAUX_ASK: ToolCall["arguments"] = {
  * A message starting with "/ask" makes the bot ask the owner sample questions
  * (ask_owner); the answers it gets back are echoed like any text. "/browse N"
  * reads the browser page N times (browser_snapshot), one tool round each.
+ * "/improve" proposes appending a line to the bot's own instructions
+ * (update_instructions), so e2e can drive the self-improvement approval.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -289,6 +296,16 @@ export async function openFauxAgentRuntime(
     if (text.startsWith("/ask")) {
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };
+    }
+    // "/improve" proposes appending a line to the bot's own instructions,
+    // one tool round, so e2e can drive the self-improvement approval flow.
+    if (text.startsWith("/improve") && toolResults === 0) {
+      const call = fauxAssistantMessage(
+        fauxToolCall("update_instructions", {
+          append: "Self-improvement e2e: append this line.",
+        }),
+      );
+      return { ...call, stopReason: "toolUse" as const };
     }
     return fauxAssistantMessage(fauxText(`Echo: ${text}`));
   };

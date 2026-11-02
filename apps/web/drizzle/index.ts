@@ -3,9 +3,11 @@
 import m0 from "./0000_init.sql";
 import m1 from "./0001_even_power_man.sql";
 import m2 from "./0002_lumpy_gargoyle.sql";
+import m3 from "./0003_melodic_oracle.sql";
 
 export const migrations = [
   { name: "0000_init.sql", sql: m0 },
   { name: "0001_even_power_man.sql", sql: m1 },
   { name: "0002_lumpy_gargoyle.sql", sql: m2 },
+  { name: "0003_melodic_oracle.sql", sql: m3 },
 ];

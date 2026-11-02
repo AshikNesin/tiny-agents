@@ -23,6 +23,7 @@ import {
   bots,
   botSkills,
   connections,
+  promptRevisions,
   routines,
   skills,
 } from "../../db";
@@ -178,6 +179,13 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);
+  // A manual prompt edit lands in revision history too, so `update_instructions`
+  // changes and owner edits share one log (self-improvement).
+  if (data.systemPrompt !== undefined && data.systemPrompt !== before.systemPrompt) {
+    await db
+      .insert(promptRevisions)
+      .values({ botId: id, prompt: data.systemPrompt, source: "manual" });
+  }
   await updateRow(id, {
     ...(data.toolPermissions !== undefined
       ? { toolPermissions: JSON.stringify(data.toolPermissions) }

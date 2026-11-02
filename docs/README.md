@@ -51,6 +51,7 @@ What ships in the box and how to use or extend it.
 | [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page      |
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files        |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions        |
+| [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated  |
 | [`features/routines.md`](./features/routines.md)                             | tiny-agents: where routine runs happen, result cards        |
 | [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats         |
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you           |

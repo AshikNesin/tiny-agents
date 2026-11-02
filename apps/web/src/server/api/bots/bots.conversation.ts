@@ -97,6 +97,7 @@ export const BOT_TOOLKITS = [
   "bots",
   "skills",
   "memory",
+  "self-improve",
   "today",
   "questions",
   "vault",

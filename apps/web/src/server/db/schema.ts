@@ -376,6 +376,31 @@ export const memories = sqliteTable(
   (t) => [index("memories_bot_id_status_category_idx").on(t.botId, t.status, t.category)],
 );
 
+/**
+ * Full-snapshot revisions of a bot's system prompt (self-improvement):
+ * every applied `update_instructions` change lands here before the
+ * row is updated — append-only history, the database analog of committing
+ * an instructions file. The current prompt is `bots.system_prompt`; this
+ * table is the log that makes every change revertable.
+ */
+export const promptRevisions = sqliteTable(
+  "prompt_revisions",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** The complete system prompt after this change.
+     *
+     * manual (bot editor) | self (update_instructions tool).
+     */
+    prompt: text("prompt").notNull(),
+    source: text("source").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("prompt_revisions_bot_id_created_at_idx").on(t.botId, t.createdAt)],
+);
+
 export const routineRuns = sqliteTable(
   "routine_runs",
   {
