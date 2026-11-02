@@ -18,6 +18,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
+# Packages over HTTPS, with retries. Ubuntu's stock sources are plain HTTP
+# (http://archive.ubuntu.com), so a caching proxy on the path (Docker's or
+# Colima's network layer, a VPN, a corporate network) or a mirror mid-sync
+# can serve a .deb that fails apt's hash check — the "Hash Sum mismatch"
+# build failure. TLS pins the stream; retries ride out flaky fetches. The
+# base image ships no CA bundle, so the one bootstrap install below still
+# runs over HTTP — everything after it, including tzdata and the desktop,
+# goes over HTTPS.
+RUN printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/80-retries \
+ && apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends ca-certificates \
+ && for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
+      if [ -f "$f" ]; then sed -i 's|http://|https://|g' "$f"; fi; \
+    done \
+ && rm -rf /var/lib/apt/lists/*
+
 # Base: sshd (key-only), sudo, tmux for the terminal, and the tools the
 # app's scripts and bots' commands expect on the VM.
 RUN apt-get update -qq \

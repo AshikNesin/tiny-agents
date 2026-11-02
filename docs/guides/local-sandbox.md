@@ -117,3 +117,13 @@ The container restarts with Docker (`restart: unless-stopped`).
   again.
 - **The browser or desktop won't start**: `pnpm sandbox:shell`, then look at
   the logs in `~/.tiny-agents/` and the profile directories.
+- **"Hash Sum mismatch" / "Failed to fetch" during `pnpm sandbox:up`**: apt
+  fetched a `.deb` that disagrees with the package index — a caching proxy on
+  the path (a VPN, a corporate network) or an Ubuntu mirror mid-sync served
+  stale bytes. The image pins apt to HTTPS mirrors with retries, so this
+  should be rare; if a build still fails this way, drop Docker's build cache
+  and build again so every layer fetches fresh:
+
+  ```bash
+  docker builder prune -f && pnpm sandbox:up
+  ```
