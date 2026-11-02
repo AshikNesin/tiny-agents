@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>tiny-agents teaser</title>
     <!--
-      A 45-second product film, drawn as a pure function of time: render(t)
+      A 50-second product film, drawn as a pure function of time: render(t)
       sets every element from the timeline, so render.mjs can capture any
       frame deterministically. No CSS transitions or animations anywhere.
     -->
@@ -19,7 +19,7 @@
         width: 1920px;
         height: 1080px;
         overflow: hidden;
-        background: #000;
+        background: #0c0b0a;
       }
       #root {
         position: absolute;
@@ -29,7 +29,7 @@
         font-feature-settings: "cv11", "ss01";
         color: #f5f5f4;
         -webkit-font-smoothing: antialiased;
-        background: #000;
+        background: #0c0b0a;
       }
       .display {
         font-family: "Inter Display", "Inter", sans-serif;
@@ -37,17 +37,9 @@
       .abs {
         position: absolute;
       }
-      .grad {
-        background: linear-gradient(90deg, #c7d2fe 0%, #a5b4fc 30%, #5eead4 70%, #99f6e4 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
+      .grad,
       .warm {
-        background: linear-gradient(90deg, #fdba74, #f9a8d4 60%, #c4b5fd);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        color: #a39f98;
       }
 
       /* ── Background ─────────────────────────────────────────── */
@@ -116,8 +108,7 @@
         background: #121211;
         box-shadow:
           0 0 0 1px rgba(255, 255, 255, 0.09),
-          0 50px 120px rgba(0, 0, 0, 0.75),
-          0 0 160px rgba(129, 140, 248, 0.1);
+          0 50px 120px rgba(0, 0, 0, 0.75);
         overflow: hidden;
         transform-origin: 50% 0%;
         display: flex;
@@ -264,8 +255,8 @@
         font-size: 17px;
         font-weight: 500;
         color: #f5f5f4;
-        background: linear-gradient(180deg, rgba(165, 180, 252, 0.16), rgba(94, 234, 212, 0.1));
-        border: 1px solid rgba(165, 180, 252, 0.32);
+        background: #1d1d1b;
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 999px;
         padding: 8px 15px;
       }
@@ -273,7 +264,7 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #a5b4fc, #5eead4);
+        background: #a39f98;
       }
       #composer {
         flex: none;
@@ -301,7 +292,7 @@
         display: inline-block;
         width: 2px;
         height: 24px;
-        background: #a5b4fc;
+        background: #f5f5f4;
         vertical-align: -5px;
         margin-left: 1px;
       }
@@ -362,9 +353,9 @@
         margin-left: 10px;
         font-size: 13.5px;
         font-weight: 600;
-        color: #5eead4;
-        background: rgba(94, 234, 212, 0.1);
-        border: 1px solid rgba(94, 234, 212, 0.3);
+        color: #6ee7b7;
+        background: rgba(52, 211, 153, 0.1);
+        border: 1px solid rgba(52, 211, 153, 0.3);
         border-radius: 999px;
         padding: 3px 10px;
       }
@@ -559,7 +550,7 @@
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: #fff;
-        background: linear-gradient(90deg, #6366f1, #14b8a6);
+        background: #1c1917;
         padding: 4px 10px;
         border-radius: 999px;
       }
@@ -578,9 +569,7 @@
         bottom: 18px;
         border-radius: 14px;
         overflow: hidden;
-        background:
-          radial-gradient(700px 400px at 20% 10%, #3b2a5c, transparent 70%),
-          radial-gradient(800px 500px at 90% 100%, #10433f, transparent 70%), #17151f;
+        background: #2a2824;
       }
       .desk .bar {
         height: 34px;
@@ -654,8 +643,8 @@
         width: 150px;
       }
       .sheet td.cell-on {
-        box-shadow: inset 0 0 0 2px #6366f1;
-        background: rgba(99, 102, 241, 0.06);
+        box-shadow: inset 0 0 0 2px #1c1917;
+        background: rgba(28, 25, 23, 0.05);
       }
 
       /* ── Permissions ────────────────────────────────────────── */
@@ -777,8 +766,8 @@
       }
       .node.any {
         background: transparent;
-        box-shadow: 0 0 0 1.5px rgba(165, 180, 252, 0.45);
-        color: #c7d2fe;
+        box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.3);
+        color: #d6d3d1;
       }
       #hub {
         position: absolute;
@@ -789,7 +778,7 @@
         border-radius: 44px;
         box-shadow:
           0 0 0 1px rgba(255, 255, 255, 0.14),
-          0 0 120px rgba(129, 140, 248, 0.45);
+          0 30px 60px rgba(0, 0, 0, 0.6);
       }
       .badge {
         position: absolute;
@@ -799,7 +788,7 @@
         font-size: 18px;
         font-weight: 650;
         letter-spacing: 0.14em;
-        color: #c7d2fe;
+        color: #a39f98;
       }
       #evt {
         position: absolute;
@@ -818,7 +807,7 @@
         width: 5px;
         align-self: stretch;
         border-radius: 4px;
-        background: linear-gradient(180deg, #fb923c, #f472b6);
+        background: #ee8a5b;
       }
       #evt .t {
         font-size: 19px;
@@ -857,7 +846,7 @@
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #a5b4fc, #5eead4);
+        background: #f5f5f4;
         display: grid;
         place-items: center;
       }
@@ -925,8 +914,7 @@
         background: #121211;
         box-shadow:
           0 0 0 1px rgba(255, 255, 255, 0.09),
-          0 50px 120px rgba(0, 0, 0, 0.75),
-          0 0 160px rgba(129, 140, 248, 0.1);
+          0 50px 120px rgba(0, 0, 0, 0.75);
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -998,7 +986,7 @@
       .handoff .hn {
         font-size: 15px;
         font-weight: 650;
-        color: #c7d2fe;
+        color: #a39f98;
       }
       .handoff .ht {
         font-size: 19px;
@@ -1033,7 +1021,7 @@
         width: 7px;
         height: 7px;
         border-radius: 50%;
-        background: #a5b4fc;
+        background: #a3a3a0;
       }
       .handoff .ok {
         color: #6ee7b7;
@@ -1064,6 +1052,61 @@
         color: #6ee7b7;
         background: #10261e;
         box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.45);
+      }
+
+      /* ── Terminal ───────────────────────────────────────────── */
+      .cwHead .sub {
+        font-size: 15px;
+        color: #8a8a87;
+        margin-top: 2px;
+      }
+      .ttabs {
+        display: flex;
+        gap: 6px;
+        padding: 12px 22px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .ttabs span {
+        font:
+          500 15px/1 "JetBrains Mono",
+          "DejaVu Sans Mono",
+          monospace;
+        color: #8a8a87;
+        padding: 10px 14px;
+        border-radius: 10px 10px 0 0;
+      }
+      .ttabs span.on {
+        color: #f5f5f4;
+        background: #0a0a09;
+      }
+      #tty {
+        flex: 1;
+        margin: 0;
+        padding: 22px 28px;
+        background: #0a0a09;
+        color: #e7e5e4;
+        font:
+          400 20px/1.6 "JetBrains Mono",
+          "DejaVu Sans Mono",
+          monospace;
+        white-space: pre;
+        overflow: hidden;
+      }
+      #tty .ps {
+        color: #8a8a87;
+      }
+      #tty .ok {
+        color: #6ee7b7;
+      }
+      #tty .dim {
+        color: #8a8a87;
+      }
+      #tty .cur {
+        display: inline-block;
+        width: 11px;
+        height: 22px;
+        background: #f5f5f4;
+        vertical-align: -4px;
       }
 
       /* ── Finale ─────────────────────────────────────────────── */
@@ -1115,7 +1158,7 @@
         border-radius: 42px;
         box-shadow:
           0 0 0 1px rgba(255, 255, 255, 0.16),
-          0 0 140px rgba(129, 140, 248, 0.38);
+          0 30px 70px rgba(0, 0, 0, 0.6);
       }
       #brand .word {
         margin-top: 38px;
@@ -1162,7 +1205,7 @@
         color: #fff;
         padding: 5px 11px;
         border-radius: 999px;
-        background: linear-gradient(90deg, #f97316, #ec4899);
+        background: #ee8a5b;
       }
       .ripple {
         position: absolute;
@@ -1177,7 +1220,7 @@
       #fade {
         position: absolute;
         inset: 0;
-        background: #000;
+        background: #0c0b0a;
         z-index: 100;
         pointer-events: none;
       }
@@ -1185,11 +1228,7 @@
   </head>
   <body>
     <div id="root">
-      <div id="bg">
-        <div class="blob" id="b1" style="width: 1100px; height: 800px; background: #3730a3"></div>
-        <div class="blob" id="b2" style="width: 1000px; height: 800px; background: #0f766e"></div>
-        <div class="blob" id="b3" style="width: 900px; height: 700px; background: #9d174d"></div>
-      </div>
+      <div id="bg"></div>
 
       <div id="hero">
         <div class="big display"><span>Say</span><span>it</span><span>once.</span></div>
@@ -1225,7 +1264,7 @@
         <div class="headline display">Works with the tools you use.</div>
       </div>
       <div class="cap" id="cap8">
-        <div class="eyebrow warm">Routines · Proactive</div>
+        <div class="eyebrow warm">Routines · Alerts</div>
         <div class="headline display">It speaks up before you ask.</div>
       </div>
 
@@ -1261,7 +1300,7 @@
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#a5b4fc"
+                    stroke="#a3a3a0"
                     stroke-width="2"
                   >
                     <path
@@ -1436,10 +1475,7 @@
                 ><span>Veg meal</span><span>Under ₹80k</span>
               </div>
               <div class="flight" id="f1">
-                <div
-                  class="tail"
-                  style="background: linear-gradient(135deg, #0ea5e9, #6366f1)"
-                ></div>
+                <div class="tail" style="background: #5b8def"></div>
                 <div>
                   <div class="times">21:10 – 10:45<sup style="font-size: 12px">+1</sup></div>
                   <div class="sub">MAA – NRT</div>
@@ -1455,10 +1491,7 @@
                 <div class="price">₹74,900</div>
               </div>
               <div class="flight" id="f2">
-                <div
-                  class="tail"
-                  style="background: linear-gradient(135deg, #f97316, #e11d48)"
-                ></div>
+                <div class="tail" style="background: #e8774f"></div>
                 <div>
                   <div class="times">23:40 – 15:05<sup style="font-size: 12px">+1</sup></div>
                   <div class="sub">MAA – NRT</div>
@@ -1475,10 +1508,7 @@
                 <div class="tag" id="besttag">Best match</div>
               </div>
               <div class="flight" id="f3">
-                <div
-                  class="tail"
-                  style="background: linear-gradient(135deg, #10b981, #0d9488)"
-                ></div>
+                <div class="tail" style="background: #3fae8a"></div>
                 <div>
                   <div class="times">01:55 – 17:30</div>
                   <div class="sub">MAA – NRT</div>
@@ -1494,10 +1524,7 @@
                 <div class="price">₹71,250</div>
               </div>
               <div class="flight" id="f4">
-                <div
-                  class="tail"
-                  style="background: linear-gradient(135deg, #a855f7, #6366f1)"
-                ></div>
+                <div class="tail" style="background: #8e82dc"></div>
                 <div>
                   <div class="times">06:20 – 22:15</div>
                   <div class="sub">MAA – NRT</div>
@@ -1611,15 +1638,6 @@
           </div>
         </div>
         <div class="notif" id="n2">
-          <div class="av" data-av="research"></div>
-          <div style="flex: 1">
-            <div class="who">Researcher <span>8:15 AM</span></div>
-            <div class="body">
-              Kyoto's cherry blossoms peak 14–16 Apr this year. Your plan lines up perfectly.
-            </div>
-          </div>
-        </div>
-        <div class="notif" id="n3">
           <div class="av" data-av="chief"></div>
           <div style="flex: 1">
             <div class="who">Chief of Staff <span>9:00 AM</span></div>
@@ -1628,8 +1646,20 @@
             </div>
           </div>
         </div>
+        <div class="notif" id="n3">
+          <div class="av" data-av="code"></div>
+          <div style="flex: 1">
+            <div class="who">Code Buddy · Needs your approval <span>10:12 AM</span></div>
+            <div class="body">Wants to run <b>git push origin fix/coupon-rounding</b>.</div>
+            <div class="act">Review</div>
+          </div>
+        </div>
       </div>
 
+      <div class="cap" id="cap11">
+        <div class="eyebrow grad">Terminal</div>
+        <div class="headline display">A real shell, right in the app.</div>
+      </div>
       <div class="cap" id="cap9">
         <div class="eyebrow grad">Multi-agent</div>
         <div class="headline display">They work as a team.</div>
@@ -1637,6 +1667,18 @@
       <div class="cap" id="cap10">
         <div class="eyebrow grad">Durable</div>
         <div class="headline display">Refresh. Restart. It keeps going.</div>
+      </div>
+
+      <!-- Terminal: a shell on the sandbox VM the agents use -->
+      <div class="cw" id="termwin">
+        <div class="cwHead">
+          <div>
+            <div class="name">Terminal</div>
+            <div class="sub">Shells on the sandbox VM. Tabs keep running when you leave.</div>
+          </div>
+        </div>
+        <div class="ttabs"><span class="on">acme-shop</span><span>logs</span><span>+</span></div>
+        <pre id="tty"></pre>
       </div>
 
       <!-- Teamwork: the Chief of Staff hands work to other bots -->
@@ -1739,7 +1781,7 @@
         <svg viewBox="0 0 26 26">
           <path
             d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
-            fill="#f97316"
+            fill="#ee8a5b"
             stroke="#fff"
             stroke-width="1.6"
             stroke-linejoin="round"
@@ -1771,21 +1813,21 @@
         );
       document.querySelectorAll("[data-logo]").forEach((img) => (img.src = LOGO));
 
-      // Bot faces: a gradient disc with the logo's two eyes.
+      // Bot faces: a flat disc with the logo's two eyes.
       const BOTS = {
-        travel: ["Travel Planner", "#fb923c", "#ec4899"],
-        research: ["Researcher", "#60a5fa", "#6366f1"],
-        chief: ["Chief of Staff", "#34d399", "#0d9488"],
-        code: ["Code Buddy", "#a78bfa", "#4f46e5"],
-        writer: ["Writer", "#fcd34d", "#f97316"],
-        fitness: ["Fitness Coach", "#fb7185", "#db2777"],
+        travel: ["Travel Planner", "#ee8a5b"],
+        research: ["Researcher", "#6f9fe0"],
+        chief: ["Chief of Staff", "#4dbb98"],
+        code: ["Code Buddy", "#8e82dc"],
+        writer: ["Writer", "#e9b949"],
+        fitness: ["Fitness Coach", "#e47a8f"],
       };
       function face(key) {
-        const [, a, b] = BOTS[key];
+        const [, c] = BOTS[key];
         return (
           `url("data:image/svg+xml;utf8,` +
           encodeURIComponent(
-            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><rect x="34" y="34" width="10" height="22" rx="5" fill="#111"/><rect x="56" y="34" width="10" height="22" rx="5" fill="#111"/><path d="M40 68q10 7 20 0" stroke="#111" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`,
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${c}"/><rect x="34" y="34" width="10" height="22" rx="5" fill="#111"/><rect x="56" y="34" width="10" height="22" rx="5" fill="#111"/><path d="M40 68q10 7 20 0" stroke="#111" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`,
           ) +
           `")`
         );
@@ -1874,7 +1916,7 @@
         n.className = "node" + (ic === "plus" ? " any" : "");
         n.style.left = x + "px";
         n.style.top = y + "px";
-        n.innerHTML = svgIcon(ic, 40, ic === "plus" ? "#c7d2fe" : "#e7e5e4") + `<div>${name}</div>`;
+        n.innerHTML = svgIcon(ic, 40, ic === "plus" ? "#d6d3d1" : "#e7e5e4") + `<div>${name}</div>`;
         nodesEl.appendChild(n);
         const ns = "http://www.w3.org/2000/svg";
         const line = document.createElementNS(ns, "line");
@@ -1882,19 +1924,14 @@
         line.setAttribute("y1", 640);
         line.setAttribute("x2", x);
         line.setAttribute("y2", y);
-        line.setAttribute("stroke", "url(#wg)");
+        line.setAttribute("stroke", "rgba(255,255,255,0.22)");
         line.setAttribute("stroke-width", "2");
         wires.appendChild(line);
         const dot = document.createElementNS(ns, "circle");
         dot.setAttribute("r", "6");
-        dot.setAttribute("fill", "#e0e7ff");
-        dot.style.filter = "drop-shadow(0 0 8px #a5b4fc)";
+        dot.setAttribute("fill", "#f5f5f4");
         wires.appendChild(dot);
       });
-      wires.insertAdjacentHTML(
-        "afterbegin",
-        '<defs><linearGradient id="wg" gradientUnits="userSpaceOnUse" x1="400" y1="0" x2="1520" y2="0"><stop offset="0" stop-color="#5eead4" stop-opacity=".55"/><stop offset=".5" stop-color="#a5b4fc" stop-opacity=".8"/><stop offset="1" stop-color="#5eead4" stop-opacity=".55"/></linearGradient></defs>',
-      );
       const lines = [...wires.querySelectorAll("line")];
       const dots = [...wires.querySelectorAll("circle")];
       const nodeEls = [...nodesEl.children];
@@ -2029,14 +2066,15 @@
         pc: 12.5, // computer use
         ok: 16.5, // approval + vault
         perm: 20.5, // permissions
-        mcp: 24.5, // MCP
-        pro: 28.5, // routines + proactive
-        team: 32.5, // bots hand off to each other
-        dur: 36.5, // durable
-        fin: 40.5, // the team
-        logo: 42.5, // logo
+        term: 24.5, // terminal
+        mcp: 28.5, // MCP
+        pro: 32.5, // routines + alerts
+        team: 36.5, // bots hand off to each other
+        dur: 40.5, // durable
+        fin: 44.5, // the team
+        logo: 46.5, // logo
       };
-      const END = 45.6;
+      const END = 49.6;
       const PROMPT = "Plan 7 days in Japan this April. Flying from Chennai.";
       const M3 =
         "Got it: <b>veg-friendly food, window seats, under ₹2.5L.</b> Checking flights from Chennai now…";
@@ -2054,31 +2092,43 @@
       const RESTART_AT = SC.dur + 1.5; // on a beat: the score tape-stops here
       const RECONNECT_AT = RESTART_AT + 1.0; // and powers back up here
 
-      function render(t) {
-        // Background breathes slowly.
-        const k = t / END;
-        set($("b1"), {
-          left: lerp(-260, 120, k) + "px",
-          top: lerp(-380, -260, k) + "px",
-          opacity: 0.38,
-        });
-        set($("b2"), {
-          left: lerp(1180, 1000, k) + "px",
-          top: lerp(520, 420, k) + "px",
-          opacity: 0.3,
-        });
-        set($("b3"), {
-          left: lerp(900, 500, k) + "px",
-          top: lerp(-520, -460, k) + "px",
-          opacity: 0.16,
-        });
-        const bgDim =
-          1 -
-          0.55 * ease.inOut(prog(t, 2.4, 3.2)) +
-          0.55 * ease.inOut(prog(t, SC.fin - 0.2, SC.fin + 0.5));
-        $("bg").style.opacity =
-          bgDim * (1 - ease.inOut(prog(t, SC.logo - 0.5, SC.logo + 0.1)) * 0.4);
+      const TTY = [
+        // [time from scene start, kind, text]; "cmd" lines type out after the prompt.
+        [0.55, "cmd", "~", "cd acme-shop && npm test"],
+        [1.75, "out", "dim", "> acme-shop@1.4.0 test"],
+        [1.87, "out", "dim", "> node --test"],
+        [2.0, "out", "ok", "✔ cart totals add tax once"],
+        [2.1, "out", "ok", "✔ coupon totals round after tax"],
+        [2.2, "out", "ok", "✔ checkout keeps the cart on refresh"],
+        [2.35, "out", "", "ℹ tests 48 · pass 48 · fail 0"],
+        [2.6, "cmd", "~/acme-shop", "git log --oneline -1"],
+        [3.4, "out", "", "a41c9e2 fix: round coupon totals after tax"],
+      ];
+      const esc = (x) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      function renderTty(t) {
+        const local = t - SC.term;
+        let html = "";
+        let typing = false;
+        for (const [at, kind, a, b] of TTY) {
+          if (local < at) break;
+          if (kind === "cmd") {
+            const n = Math.round(b.length * prog(local, at + 0.12, at + 0.12 + b.length * 0.032));
+            typing = n < b.length;
+            html += `<span class="ps">exedev@vm:${a}$ </span>${esc(b.slice(0, n))}`;
+            html += typing ? "" : "\n";
+            if (typing) break;
+          } else {
+            html += `<span class="${a}">${esc(b)}</span>\n`;
+          }
+        }
+        const last = TTY[TTY.length - 1][0];
+        if (!typing && local > last) html += '<span class="ps">exedev@vm:~/acme-shop$ </span>';
+        const blink = typing || Math.floor(local * 2.4) % 2 === 0;
+        html += blink ? '<span class="cur"></span>' : "";
+        if ($("tty").innerHTML !== html) $("tty").innerHTML = html;
+      }
 
+      function render(t) {
         // ── 1. Hero ────────────────────────────────────────────
         const words = [...document.querySelectorAll("#hero .big span")];
         words.forEach((w, i) => reveal(w, t, 0.3 + i * 0.22, null, { dy: 40, blur: 22, inD: 0.8 }));
@@ -2096,7 +2146,8 @@
         reveal($("cap3"), t, SC.web + 0.05, SC.pc - 0.05);
         reveal($("cap4"), t, SC.pc + 0.05, SC.ok - 0.05);
         reveal($("cap5"), t, SC.ok + 0.05, SC.perm - 0.05);
-        reveal($("cap6"), t, SC.perm + 0.1, SC.mcp - 0.05);
+        reveal($("cap6"), t, SC.perm + 0.1, SC.term - 0.05);
+        reveal($("cap11"), t, SC.term + 0.05, SC.mcp - 0.05);
         reveal($("cap7"), t, SC.mcp + 0.05, SC.pro - 0.05);
         reveal($("cap8"), t, SC.pro + 0.05, SC.team - 0.05);
         reveal($("cap9"), t, SC.team + 0.05, SC.dur - 0.05);
@@ -2196,7 +2247,7 @@
         const PICK = SC.web + 2.3;
         const pick = ease.out(prog(t, PICK, PICK + 0.35));
         set($("f2"), {
-          boxShadow: `0 0 0 ${pick * 3}px rgba(99,102,241,${pick}), 0 ${pick * 18}px ${pick * 40}px rgba(99,102,241,${pick * 0.25})`,
+          boxShadow: `0 0 0 ${pick * 2.5}px rgba(28,25,23,${pick}), 0 ${pick * 18}px ${pick * 40}px rgba(28,25,23,${pick * 0.18})`,
           transform: `scale(${1 + pick * 0.015})`,
         });
         set($("besttag"), { opacity: pick, transform: `translateY(${(1 - pick) * 6}px)` });
@@ -2248,11 +2299,11 @@
         // ── 6. Permissions ────────────────────────────────────
         const perm = $("perm");
         const pIn = ease.out5(prog(t, SC.perm - 0.05, SC.perm + 0.75));
-        const pOut = ease.inOut(prog(t, SC.mcp - 0.3, SC.mcp + 0.2));
+        const pOut = ease.inOut(prog(t, SC.term - 0.3, SC.term + 0.2));
         set(perm, {
-          display: t < SC.perm - 0.1 || t > SC.mcp + 0.25 ? "none" : "block",
+          display: t < SC.perm - 0.1 || t > SC.term + 0.25 ? "none" : "block",
           opacity: pIn * (1 - pOut),
-          transform: `perspective(1800px) translateY(${(1 - pIn) * 120 - pOut * 30}px) rotateX(${(1 - pIn) * 12}deg) scale(${(1 - pOut * 0.06) * (1 + 0.03 * ease.inOut(prog(t, SC.perm + 0.5, SC.mcp)))})`,
+          transform: `perspective(1800px) translateY(${(1 - pIn) * 120 - pOut * 30}px) rotateX(${(1 - pIn) * 12}deg) scale(${(1 - pOut * 0.06) * (1 + 0.03 * ease.inOut(prog(t, SC.perm + 0.5, SC.term)))})`,
           filter: pOut > 0 ? `blur(${pOut * 12}px)` : "none",
         });
         [...prows.children].forEach((row, i) =>
@@ -2385,6 +2436,19 @@
             filter: q > 0.99 ? "none" : `blur(${(1 - q) * 10}px)`,
           });
         });
+
+        // ── Terminal ──────────────────────────────────────────
+        const tw0 = $("termwin");
+        const tIn = ease.out5(prog(t, SC.term - 0.05, SC.term + 0.8));
+        const tOut = ease.inOut(prog(t, SC.mcp - 0.35, SC.mcp + 0.2));
+        set(tw0, {
+          display: t < SC.term - 0.1 || t > SC.mcp + 0.25 ? "none" : "flex",
+          opacity: tIn * (1 - tOut),
+          transformOrigin: "50% 80%",
+          transform: `perspective(1800px) translateY(${(1 - tIn) * 140 - tOut * 30}px) rotateX(${(1 - tIn) * 12}deg) scale(${(1 - tOut * 0.06) * (1 + 0.04 * ease.inOut(prog(t, SC.term + 0.8, SC.mcp)))})`,
+          filter: tOut > 0 ? `blur(${tOut * 12}px)` : "none",
+        });
+        if (t > SC.term - 0.1 && t < SC.mcp + 0.25) renderTty(t);
 
         // ── 9. Teamwork ───────────────────────────────────────
         const tw = $("teamwin");

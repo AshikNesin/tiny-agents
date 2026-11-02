@@ -424,6 +424,115 @@
         color: var(--muted);
         margin-top: 3px;
       }
+      .tile {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: var(--surface-2);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .tile svg {
+        width: 18px;
+        height: 18px;
+      }
+      .term-head {
+        display: grid;
+        gap: 2px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .term-head span {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .term-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 10px 16px 0;
+        font: 500 0.82rem/1 var(--font-mono);
+        color: var(--muted);
+      }
+      .term-tabs span {
+        padding: 8px 12px;
+        border-radius: 8px 8px 0 0;
+      }
+      .term-tabs .on {
+        color: var(--fg);
+        background: var(--surface-2);
+      }
+      .term-card .ok {
+        color: var(--ok);
+      }
+      .alerts {
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow:
+          0 0 0 1px var(--line),
+          0 30px 80px rgb(0 0 0 / 22%);
+        overflow: hidden;
+      }
+      .alerts-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .alerts-head span {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .alerts ul {
+        list-style: none;
+        margin: 0;
+        padding: 10px;
+        display: grid;
+        gap: 6px;
+      }
+      .alert {
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--surface-2);
+      }
+      .alert .face {
+        width: 36px;
+        height: 36px;
+      }
+      .alert > div {
+        min-width: 0;
+      }
+      .alert-top {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      .alert-top span {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .alert-top time {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .alert p {
+        margin-top: 2px;
+        font-size: 0.95rem;
+        line-height: 1.45;
+      }
+      .alert code {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+      }
       .panels {
         display: grid;
         /* Top-anchored, so switching examples of different lengths doesn't jump. */
@@ -895,7 +1004,7 @@
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="M4 2.5v11l9-5.5z" fill="currentColor" />
             </svg>
-            Watch the film · 0:45
+            Watch the film · 0:50
           </a>
           <a class="btn ghost" href="#how">See how it works</a>
         </div>
@@ -914,7 +1023,7 @@
             class="play"
             id="filmPlay"
             type="button"
-            aria-label="Play the 45-second film with sound"
+            aria-label="Play the 50-second film with sound"
           >
             <span>
               <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -925,8 +1034,8 @@
           </button>
         </div>
         <p class="film-note">
-          45 seconds: memory, browser and computer use, approvals, permissions, MCP, routines and a
-          team of agents.
+          50 seconds: memory, browser and computer use, approvals, permissions, a terminal, MCP,
+          alerts and a team of agents.
         </p>
         <div class="works" aria-label="Works with">
           <span class="eyebrow">Works with</span>
@@ -941,8 +1050,8 @@
             <span class="eyebrow">How it works</span>
             <h2>One message. <span class="soft">The work gets done.</span></h2>
             <p>
-              Pick an agent and say what you need in plain words. It plans, uses the tools you've
-              allowed, and checks with you before anything important.
+              Pick an example. You say what you need in plain words; the agent plans, uses the tools
+              you've allowed, and checks with you before anything important.
             </p>
             <div class="examples" role="tablist" aria-label="Examples">
               <button
@@ -1003,6 +1112,58 @@
                 <span class="ex-text"
                   ><b>Travel Planner</b><span>Book a Friday flight to Bangalore.</span
                   ><em>Browser use · Vault · Approvals</em></span
+                >
+              </button>
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-terminal"
+                aria-controls="panel-terminal"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                <span class="tile" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="m7 9 3 3-3 3M13 15h4" /></svg
+                ></span>
+                <span class="ex-text"
+                  ><b>Terminal</b><span>Open a shell on the agents' machine.</span
+                  ><em>Terminal · Sandbox VM</em></span
+                >
+              </button>
+              <button
+                class="ex"
+                type="button"
+                role="tab"
+                id="tab-alerts"
+                aria-controls="panel-alerts"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                <span class="tile" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+                    <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                ></span>
+                <span class="ex-text"
+                  ><b>Alerts</b><span>Get a push when an agent needs you.</span
+                  ><em>Approvals · Questions · Routines</em></span
                 >
               </button>
             </div>
@@ -1204,6 +1365,79 @@
                 </div>
               </div>
             </div>
+            <div
+              class="term-card"
+              role="tabpanel"
+              id="panel-terminal"
+              aria-labelledby="tab-terminal"
+              hidden
+            >
+              <div class="term-head">
+                <b>Terminal</b>
+                <span>Shells on the sandbox VM. Tabs keep running when you leave.</span>
+              </div>
+              <div class="term-tabs" aria-hidden="true">
+                <span class="on">acme-shop</span><span>logs</span><span>+</span>
+              </div>
+              <pre><code><span class="p">$ </span>cd acme-shop &amp;&amp; npm test
+<span class="ok">✔ cart totals add tax once</span>
+<span class="ok">✔ coupon totals round after tax</span>
+<span class="ok">✔ checkout keeps the cart on refresh</span>
+<span class="c">ℹ tests 48 · pass 48 · fail 0</span>
+
+<span class="p">$ </span>git log --oneline -1
+a41c9e2 fix: round coupon totals after tax
+<span class="c"># the fix Code Buddy made, on the same machine</span></code></pre>
+            </div>
+            <div
+              class="alerts"
+              role="tabpanel"
+              id="panel-alerts"
+              aria-labelledby="tab-alerts"
+              hidden
+            >
+              <div class="alerts-head">
+                <b>Notifications</b><span>Choose which ones push in Settings</span>
+              </div>
+              <ul>
+                <li class="alert">
+                  <svg class="face" aria-hidden="true"><use href="#code" /></svg>
+                  <div>
+                    <div class="alert-top">
+                      <b>Approval needed</b><span>Code Buddy</span><time>10:12</time>
+                    </div>
+                    <p>Wants to run <code>git push origin fix/coupon-rounding</code>.</p>
+                  </div>
+                </li>
+                <li class="alert">
+                  <svg class="face" aria-hidden="true"><use href="#travel" /></svg>
+                  <div>
+                    <div class="alert-top">
+                      <b>Question asked</b><span>Travel Planner</span><time>9:40</time>
+                    </div>
+                    <p>Window or aisle for the return flight?</p>
+                  </div>
+                </li>
+                <li class="alert">
+                  <svg class="face" aria-hidden="true"><use href="#chief" /></svg>
+                  <div>
+                    <div class="alert-top">
+                      <b>Routine finished</b><span>Chief of Staff</span><time>9:00</time>
+                    </div>
+                    <p>Morning briefing: three meetings, one urgent email.</p>
+                  </div>
+                </li>
+                <li class="alert">
+                  <svg class="face" aria-hidden="true"><use href="#research" /></svg>
+                  <div>
+                    <div class="alert-top">
+                      <b>Still waiting</b><span>Researcher</span><time>Yesterday</time>
+                    </div>
+                    <p>Your approval to book the coworking trial day is still open.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -1394,6 +1628,59 @@
               </svg>
               <h3>A team</h3>
               <p>Agents hand work to each other. Mention one with @ and it picks up the job.</p>
+            </article>
+            <article class="feature">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="m7 9 3 3-3 3M13 15h4" />
+              </svg>
+              <h3>Terminal</h3>
+              <p>
+                Open a shell on the same machine your agents use. Tabs keep running when you leave.
+              </p>
+            </article>
+            <article class="feature">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+                <path d="M10 20a2 2 0 0 0 4 0" />
+              </svg>
+              <h3>Alerts</h3>
+              <p>
+                Push notifications when an agent needs approval, has a question or finishes a
+                routine.
+              </p>
+            </article>
+            <article class="feature">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 4h11l3 3v13H5z" />
+                <path d="M9 10h6M9 14h6" />
+              </svg>
+              <h3>Skills</h3>
+              <p>Reusable instructions any agent loads when a task needs them.</p>
             </article>
           </div>
         </div>

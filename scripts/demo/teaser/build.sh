@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders the 45-second teaser: frames (render.mjs), score (music.py),
+# Renders the 50-second teaser: frames (render.mjs), score (music.py),
 # master to -16 LUFS, and mux into docs/demo/tiny-agents-teaser.mp4.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -25,5 +25,5 @@ ffmpeg -v error -y -framerate 60 -i "$FRAMES/f%05d.png" -i tmp/demo/teaser-music
   -c:a aac -b:a 192k -shortest -movflags +faststart "$OUT"
 
 # Poster: the logo frame.
-ffmpeg -v error -y -ss 44.6 -i "$OUT" -frames:v 1 -q:v 3 "$(dirname "$OUT")/teaser-poster.jpg"
+ffmpeg -v error -y -ss 48.6 -i "$OUT" -frames:v 1 -q:v 3 "$(dirname "$OUT")/teaser-poster.jpg"
 echo "wrote $OUT"
