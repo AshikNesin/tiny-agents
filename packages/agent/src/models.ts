@@ -13,6 +13,86 @@ import type { ModelInfo } from "./types";
 /** The default inference provider (PRD §7.3): Cloudflare AI Gateway. */
 export const GATEWAY_PROVIDER = "cloudflare-ai-gateway";
 
+/**
+ * Prefix of a Claude Code OAuth access token (`claude auth login` /
+ * `claude setup-token`). The pinned pi-ai build impersonates the Claude Code
+ * client when it sees one. tiny-agents must never carry that token.
+ */
+export const CLAUDE_OAUTH_TOKEN_MARKER = "sk-ant-oat";
+
+/** Boot refused because model-provider config holds a Claude Code OAuth token. */
+export class ClaudeOauthTokenError extends Error {
+  /** Env key or config path that held the token. The token itself is not included. */
+  readonly where: string;
+
+  constructor(where: string) {
+    super(
+      `Refusing to start: ${where} contains a Claude Code OAuth token (${CLAUDE_OAUTH_TOKEN_MARKER}). ` +
+        "tiny-agents never reads or stores Claude.ai credentials. Remove it from the environment. " +
+        "Subscription chat uses the Claude Code engine; gateway chat uses a console API key stored only in Cloudflare AI Gateway.",
+    );
+    this.name = "ClaudeOauthTokenError";
+    this.where = where;
+  }
+}
+
+/**
+ * First place a Claude Code OAuth token appears in model-provider config.
+ * Walks strings and JSON so a token buried in `GATEWAY_CUSTOM_PROVIDERS`
+ * is caught before pi-ai can see it. Returns the key path, never the token.
+ */
+export function findClaudeOauthToken(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value !== "string" || value.length === 0) continue;
+    const hit = oauthTokenPath(value);
+    if (hit) return hit === "$" ? key : `${key}${hit}`;
+  }
+  return undefined;
+}
+
+/** Throw `ClaudeOauthTokenError` when model-provider config holds `sk-ant-oat`. */
+export function assertNoClaudeOauthToken(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): void {
+  const where = findClaudeOauthToken(env);
+  if (where) throw new ClaudeOauthTokenError(where);
+}
+
+function oauthTokenPath(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const hit = oauthTokenIn(JSON.parse(trimmed), "");
+      if (hit) return hit;
+    } catch {
+      // Not JSON. A raw token still matches below.
+    }
+  }
+  return value.includes(CLAUDE_OAUTH_TOKEN_MARKER) ? "$" : undefined;
+}
+
+function oauthTokenIn(value: unknown, path: string): string | undefined {
+  if (typeof value === "string") {
+    return value.includes(CLAUDE_OAUTH_TOKEN_MARKER) ? path || "$" : undefined;
+  }
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const hit = oauthTokenIn(value[i], `${path}[${i}]`);
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      const hit = oauthTokenIn(child, `${path}.${key}`);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
 export const GATEWAY_ENV_KEYS = [
   "CLOUDFLARE_API_KEY",
   "CLOUDFLARE_ACCOUNT_ID",
@@ -151,6 +231,7 @@ export function isGatewayConfigured(
 export function createProviderModels(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): MutableModels {
+  assertNoClaudeOauthToken(env);
   const ids = aiProviderIds(env);
   const byId = new Map(builtinProviders().map((provider) => [provider.id, provider]));
   const models = createModels();
