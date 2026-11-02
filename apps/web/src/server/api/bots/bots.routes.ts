@@ -34,6 +34,10 @@ function parseTaskId(value: string | undefined): number {
 
 // ── Models ────────────────────────────────────────────────────────────
 
+router.get("/claude-code/status", (c) => {
+  return ok(c, getAgentRuntime().claudeCodeStatus());
+});
+
 router.get("/models", (c) => {
   const runtime = getAgentRuntime();
   const models = runtime.listModels();

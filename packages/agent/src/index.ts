@@ -302,18 +302,33 @@ export {
   type OAuthTokens,
 } from "./mcp";
 export {
+  CLAUDE_OAUTH_TOKEN_MARKER,
+  ClaudeOauthTokenError,
   GATEWAY_ENV_KEYS,
   GATEWAY_PROVIDER,
   aiProviderIds,
+  assertNoClaudeOauthToken,
   builtinProviderIds,
   configuredProviderIds,
   createGatewayModels,
   createProviderModels,
+  findClaudeOauthToken,
   isGatewayConfigured,
   primaryProviderId,
   providerSetupHint,
   type ProviderStatus,
 } from "./models";
+export {
+  CLAUDE_CODE_MODEL_PREFIX,
+  CLAUDE_PLAN_NOTE,
+  claudeCodeBareModel,
+  claudeCodeEngineEnabled,
+  claudeCodeFallback,
+  engineKindForConfig,
+  engineKindForModel,
+  type AgentEngine,
+  type ClaudeEngineFallback,
+} from "./engine";
 export {
   deriveChat,
   diffChat,

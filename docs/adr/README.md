@@ -24,6 +24,7 @@ that the code alone cannot show.
 | 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                    | accepted                      |
 | 0006 | [The computer is a desktop on the sandbox VM](0006-computer-is-a-desktop-on-the-sandbox-vm.md)   | accepted                      |
 | 0007 | [A local sandbox container for machines off the tailnet](0007-local-sandbox-container.md)        | accepted                      |
+| 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)             | accepted                      |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md) | accepted (groot)              |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

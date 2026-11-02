@@ -15,7 +15,7 @@ import { Routines } from "./pages/routines/Routines";
 import { ChatWorkspace } from "./pages/chats/ChatsLayout";
 import { Storage } from "@groot/shell/pages/storage/Storage";
 import { Jobs, JobDetail } from "@groot/jobs/client";
-import { Settings } from "@groot/shell/pages/settings/Settings";
+import { SettingsPage } from "./pages/settings/SettingsPage";
 import { Login } from "@groot/shell/pages/auth/Login";
 import { GrootUIProvider } from "@groot/ui";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
@@ -114,7 +114,7 @@ const router = createBrowserRouter(
         <Route path="/storage" element={<Storage />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>,

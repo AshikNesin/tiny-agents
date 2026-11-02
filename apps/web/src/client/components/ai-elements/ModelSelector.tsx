@@ -24,6 +24,7 @@ const FAMILY_LABEL: Record<ModelInfo["family"], string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
   "workers-ai": "Workers AI",
+  "claude-plan": "Claude plan",
   other: "Other",
 };
 
@@ -72,7 +73,9 @@ export function ModelSelector({ models, value, onChange, unknownValue, id }: Mod
                 <DropdownMenuItem key={model.id} onSelect={() => onChange(model.id)}>
                   {model.id === value ? <Check className="size-4" /> : <span className="size-4" />}
                   <span className="truncate">{model.name}</span>
-                  {model.reasoning ? (
+                  {model.note ? (
+                    <span className="text-muted-foreground ml-auto text-xs">{model.note}</span>
+                  ) : model.reasoning ? (
                     <span className="text-muted-foreground ml-auto text-xs">reasoning</span>
                   ) : null}
                 </DropdownMenuItem>

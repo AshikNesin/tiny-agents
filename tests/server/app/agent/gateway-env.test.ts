@@ -5,7 +5,7 @@
  * (not crash) on genuinely malformed config.
  */
 import { describe, expect, it } from "vite-plus/test";
-import { createGatewayModels } from "../../../../packages/agent/src/models";
+import { createGatewayModels, ClaudeOauthTokenError } from "../../../../packages/agent/src/models";
 import { AgentRuntime } from "../../../../packages/agent/src/runtime";
 
 const GOOD_PROVIDERS = JSON.stringify([
@@ -164,5 +164,43 @@ describe("custom model image input", () => {
     });
     const m = providers[0].getModels().find((x) => x.id === "other-model");
     expect(m?.input).toContain("image");
+  });
+});
+
+describe("Claude Code OAuth token guard", () => {
+  it("refuses gateway setup when an env value holds an sk-ant-oat token", () => {
+    const token = "sk-ant-oat01-do-not-keep";
+    expect(() =>
+      createGatewayModels({
+        ANTHROPIC_API_KEY: token,
+        CLOUDFLARE_ACCOUNT_ID: "acc",
+        CLOUDFLARE_GATEWAY_ID: "gw",
+      }),
+    ).toThrow(ClaudeOauthTokenError);
+  });
+
+  it("refuses a token buried in custom provider JSON and does not echo the secret", () => {
+    const token = "sk-ant-oat01-buried";
+    try {
+      createGatewayModels({
+        GATEWAY_CUSTOM_PROVIDERS: JSON.stringify([{ id: "custom-x", apiKey: token, models: [] }]),
+        CLOUDFLARE_ACCOUNT_ID: "acc",
+        CLOUDFLARE_GATEWAY_ID: "gw",
+      });
+      throw new Error("expected the OAuth token to be refused");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ClaudeOauthTokenError);
+      expect((error as Error).message).not.toContain("buried");
+      expect((error as ClaudeOauthTokenError).where).toBe("GATEWAY_CUSTOM_PROVIDERS[0].apiKey");
+    }
+  });
+
+  it("refuses to open the runtime when model-provider config holds the token", async () => {
+    await expect(
+      AgentRuntime.open({
+        storePath: ":memory:",
+        env: { ANTHROPIC_AUTH_TOKEN: "sk-ant-oat01-runtime" },
+      }),
+    ).rejects.toBeInstanceOf(ClaudeOauthTokenError);
   });
 });

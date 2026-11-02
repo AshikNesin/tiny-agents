@@ -50,6 +50,15 @@ serves models, the picker's groups name the provider.
 `setupHint`) alongside the models; `gatewayConfigured` now means "some
 provider can answer" and keeps its name for existing clients.
 
+## Claude subscription
+
+`claude-code/<model>` is not a pi-ai provider. Those rows use the
+experimental Claude Code worker and your Pro/Max plan. They are listed
+beside whatever `AI_PROVIDERS` is set to, labelled "uses your Claude plan".
+An `ANTHROPIC_API_KEY` for the `anthropic` provider must be a console key.
+An `sk-ant-oat` token is refused at boot. See
+[Use your Claude subscription](../claude-subscription.md).
+
 ## What still needs the gateway
 
 - `GATEWAY_CUSTOM_PROVIDERS` and `GATEWAY_BASE_URL` route through the gateway,

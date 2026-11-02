@@ -150,3 +150,11 @@ const { model, complete, stream } = ai.raw();
 ```
 
 `embed` always calls the OpenAI API, whatever `provider` and `baseUrl` say, and sends the config's `apiKey` when one is set (otherwise `OPENAI_API_KEY`). Use a separate client for embeddings when the main one holds another provider's key. `embeddingModel` in the config picks the model.
+
+## Claude Max plan credits, and the token tiny-agents refuses
+
+A Claude Pro or Max subscription and a console API key are different credentials.
+
+- A Claude Code login is an OAuth token whose prefix is `sk-ant-oat`. The pinned pi-ai build impersonates the Claude Code client when it sees one. tiny-agents refuses to boot if that prefix appears in any model-provider environment value, including inside `GATEWAY_CUSTOM_PROVIDERS`. Do not paste a Claude Code token into this app, into `ANTHROPIC_API_KEY`, or into the gateway.
+- Max-plan API credits (and usage credits, formerly extra usage) are spent by a normal console API key (`sk-ant-api…`). Create that key in the Anthropic console, then store it only as the Anthropic BYOK secret in Cloudflare AI Gateway. tiny-agents still calls the gateway with `CLOUDFLARE_API_KEY`. The provider key never lands here. That is the supported way to spend Max-plan API credits through the existing gateway.
+- Talking to Claude as the subscription, without an API key in the gateway, is the experimental Claude Code engine. It does not use this adapter. See [Use your Claude subscription](../claude-subscription.md). It has ban-risk caveats. Leave it off unless you have read them.

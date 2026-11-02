@@ -55,10 +55,36 @@ Web search and page reading use
 (`TINYFISH_API_KEY`, from [agent.tinyfish.ai](https://agent.tinyfish.ai)).
 Search and Fetch are free; without the key those tools stay hidden.
 
+## Use your Claude subscription (experimental)
+
+A bot can answer on a Claude Pro or Max plan. Claude Code on a VM you
+control holds the login. tiny-agents does not. It will not read, store,
+or refresh that credential, and it will not proxy Anthropic.
+
+This is easy to get wrong in a way that risks the Claude account.
+Anthropic has restricted third-party use of subscription access. Read
+[docs/claude-subscription.md](docs/claude-subscription.md) before enabling
+it. Short version:
+
+- Leave `CLAUDE_CODE_ENGINE_ENABLED` unset until the worker guide is done.
+- Do not paste an `sk-ant-oat` token anywhere in this app. Boot refuses it.
+- The worker listens on `127.0.0.1` and is published only with
+  `tailscale serve` (not Funnel).
+- Pick a model labelled "uses your Claude plan", or keep using the gateway.
+- To spend Max-plan API credits without this engine, put a normal console
+  API key in Cloudflare AI Gateway BYOK only. See
+  [docs/features/ai-inference.md](docs/features/ai-inference.md).
+
+Worker setup: [macOS / Cua / Lume](docs/guides/claude-worker-macos.md),
+[Linux](docs/guides/claude-worker-linux.md).
+
 ## Layout
 
 - `packages/agent` — the only module that touches pi-durable (excluded from
-  groot sync; app-shaped API so pi-durable churn stays contained)
+  groot sync; app-shaped API so pi-durable churn stays contained). The
+  Claude plan client lives under `src/engines/claude-code/`
+- `packages/claude-worker` — loopback daemon that drives Claude Code. It
+  does not run inside the tiny-agents process
 - `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
   under `src/client`); everything else is the groot boilerplate, synced via
   `pnpm groot:sync` and never edited here

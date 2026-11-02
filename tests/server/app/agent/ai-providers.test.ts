@@ -94,7 +94,13 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
       const models = runtime.listModels();
       expect(models.length).toBeGreaterThan(0);
       expect(models.every((m) => !m.id.startsWith("custom:"))).toBe(true);
-      expect(models.every((m) => m.provider === "OpenAI")).toBe(true);
+      // Claude plan models are a separate engine, not another pi-ai provider.
+      const openai = models.filter((m) => m.family !== "claude-plan");
+      expect(openai.length).toBeGreaterThan(0);
+      expect(openai.every((m) => m.provider === "OpenAI")).toBe(true);
+      expect(
+        models.some((m) => m.id.startsWith("claude-code/") && m.provider === "Claude plan"),
+      ).toBe(true);
       expect(runtime.hasModel(models[0].id)).toBe(true);
       expect(runtime.providerStatus()).toEqual([
         {

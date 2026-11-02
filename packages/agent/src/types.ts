@@ -11,21 +11,33 @@ export type ConversationRef = number;
 export interface ModelInfo {
   id: string;
   name: string;
-  /** Upstream family, derived from the id: "anthropic", "openai" or "workers-ai". */
-  family: "anthropic" | "openai" | "workers-ai" | "other";
+  /** Upstream family, derived from the id: "anthropic", "openai", "workers-ai", or "claude-plan". */
+  family: "anthropic" | "openai" | "workers-ai" | "claude-plan" | "other";
   /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
   provider?: string;
   reasoning: boolean;
   contextWindow: number;
   /** The model accepts image content natively. */
   vision: boolean;
+  /** Short picker note, e.g. "uses your Claude plan". */
+  note?: string;
 }
+
+export type AgentEngineKind = "pi" | "claude-code";
 
 export interface BotAgentConfig {
   /** Persona / system prompt. Empty string means none. */
   systemPrompt: string;
-  /** Model id: bare for the primary provider, "custom:<provider>/<model>" otherwise. */
+  /**
+   * Model id: bare for the primary provider, "custom:<provider>/<model>" for
+   * another provider, or `claude-code/<model>` for the subscription engine.
+   */
   modelId: string;
+  /**
+   * Inference engine. Omitted: `claude-code/…` model ids select the Claude
+   * plan engine and every other id stays on pi. Set only when it matches the id.
+   */
+  engine?: AgentEngineKind;
   /**
    * Capabilities the bot may use and per-tool permissions. Omitted: leave the
    * conversation's tool selection unchanged (every installed extension).
