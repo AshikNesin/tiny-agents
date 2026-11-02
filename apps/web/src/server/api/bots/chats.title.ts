@@ -35,6 +35,8 @@ export interface ChatTitler {
   hasModel: AgentRuntime["hasModel"];
   /** CHAT_TITLE_MODEL; the default lightweight model when unset. */
   modelId?: string;
+  /** The runtime's primary provider (bare model ids). Default: the gateway. */
+  provider?: string;
 }
 
 let titler: ChatTitler | undefined;
@@ -130,7 +132,7 @@ export async function titlePastChat(
       input.botModelId,
       deps.modelId?.trim() || DEFAULT_CHAT_TITLE_MODEL,
     );
-    const model = modelId ? resolveSideCallModel(deps.models, modelId) : undefined;
+    const model = modelId ? resolveSideCallModel(deps.models, modelId, deps.provider) : undefined;
     if (!model) {
       logger.warn({ chatId, modelId }, "Chat title model unavailable; keeping the first message");
       return;

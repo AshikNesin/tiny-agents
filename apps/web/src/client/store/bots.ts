@@ -14,7 +14,13 @@
  */
 import { create } from "zustand";
 import { toast } from "sonner";
-import { botsApi, type Bot, type BotListEntry, type ModelInfo } from "../lib/bots-api";
+import {
+  botsApi,
+  type Bot,
+  type BotListEntry,
+  type ModelInfo,
+  type ProviderStatus,
+} from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { ChatEvent, ChatState } from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";
@@ -31,6 +37,8 @@ interface BotsState {
   loading: boolean;
   error: string | null;
   gatewayConfigured: boolean;
+  /** Inference providers and their setup state (the not-configured banner). */
+  providers: ProviderStatus[];
   defaultModel?: string;
   models: ModelInfo[];
   /** Full rows by id, fetched on demand (the chat, the edit dialog). */
@@ -273,6 +281,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
     loading: false,
     error: null,
     gatewayConfigured: false,
+    providers: [],
     defaultModel: undefined,
     models: [],
     fullBots: {},
@@ -303,8 +312,13 @@ export const useBotsStore = create<BotsState>((set, get) => {
 
     loadModels: async () => {
       try {
-        const { models, defaultModel, gatewayConfigured } = await botsApi.models();
-        set({ gatewayConfigured, models, defaultModel: defaultModel ?? models[0]?.id });
+        const { models, defaultModel, gatewayConfigured, providers } = await botsApi.models();
+        set({
+          gatewayConfigured,
+          providers: providers ?? [],
+          models,
+          defaultModel: defaultModel ?? models[0]?.id,
+        });
       } catch {
         // Banner state stays as-is; the chat pane shows its own error.
       }

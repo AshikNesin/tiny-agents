@@ -13,6 +13,8 @@ export interface ModelInfo {
   name: string;
   /** Upstream family, derived from the id: "anthropic", "openai" or "workers-ai". */
   family: "anthropic" | "openai" | "workers-ai" | "other";
+  /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
+  provider?: string;
   reasoning: boolean;
   contextWindow: number;
   /** The model accepts image content natively. */
@@ -22,7 +24,7 @@ export interface ModelInfo {
 export interface BotAgentConfig {
   /** Persona / system prompt. Empty string means none. */
   systemPrompt: string;
-  /** Model id from the gateway catalog. */
+  /** Model id: bare for the primary provider, "custom:<provider>/<model>" otherwise. */
   modelId: string;
   /**
    * Capabilities the bot may use and per-tool permissions. Omitted: leave the

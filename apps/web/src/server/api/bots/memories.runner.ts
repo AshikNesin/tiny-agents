@@ -112,6 +112,8 @@ export interface CaptureSideCall {
   hasModel: AgentRuntime["hasModel"];
   /** Optional override; otherwise capture uses the bot's own model. */
   modelId?: string;
+  /** The runtime's primary provider (bare model ids). Default: the gateway. */
+  provider?: string;
 }
 
 /** Run one capture for a conversation. Every failure is logged and swallowed. */
@@ -146,7 +148,9 @@ export async function captureConversation(
     if (!bot || !bot.memoryEnabled) return;
     if (!deps.sideCall) return;
     const modelId = resolveCaptureModelId(deps.sideCall, bot.modelId, deps.sideCall.modelId);
-    const model = modelId ? resolveCaptureModel(deps.sideCall.models, modelId) : undefined;
+    const model = modelId
+      ? resolveCaptureModel(deps.sideCall.models, modelId, deps.sideCall.provider)
+      : undefined;
     if (!model) {
       logger.warn(
         { conversationId, modelId },

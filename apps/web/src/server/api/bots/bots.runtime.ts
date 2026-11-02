@@ -37,7 +37,6 @@ import {
   fauxToolCall,
   TEST_MODEL,
 } from "@tiny-agents/agent/testing";
-import { GATEWAY_PROVIDER } from "@tiny-agents/agent";
 import { logger, setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
 import { skillStore } from "../skills/skills.store";
@@ -133,7 +132,7 @@ export function visionCapability(
 ): Capability {
   return createVisionToolkit(
     createVisionStore(rt),
-    createTranscriber(models, { providerId: GATEWAY_PROVIDER, env }),
+    createTranscriber(models, { providerId: rt.provider, env }),
   );
 }
 

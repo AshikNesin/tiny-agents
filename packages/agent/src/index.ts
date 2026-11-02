@@ -304,8 +304,15 @@ export {
 export {
   GATEWAY_ENV_KEYS,
   GATEWAY_PROVIDER,
+  aiProviderIds,
+  builtinProviderIds,
+  configuredProviderIds,
   createGatewayModels,
+  createProviderModels,
   isGatewayConfigured,
+  primaryProviderId,
+  providerSetupHint,
+  type ProviderStatus,
 } from "./models";
 export {
   deriveChat,

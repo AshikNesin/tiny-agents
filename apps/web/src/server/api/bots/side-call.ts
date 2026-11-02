@@ -29,16 +29,20 @@ export function resolveSideCallModelId(
 }
 
 /**
- * The registry model behind an app model id: gateway ids as they are;
- * custom providers as "custom:<provider>/<model>" (the slash inside the
- * model id is theirs).
+ * The registry model behind an app model id: the primary provider's ids as
+ * they are; other providers as "custom:<provider>/<model>" (the slash
+ * inside the model id is theirs). `primary` is the runtime's provider.
  */
-export function resolveSideCallModel(models: Pick<MutableModels, "getModel">, modelId: string) {
+export function resolveSideCallModel(
+  models: Pick<MutableModels, "getModel">,
+  modelId: string,
+  primary: string = GATEWAY_PROVIDER,
+) {
   const customPrefix = "custom:";
   if (modelId.startsWith(customPrefix)) {
     const rest = modelId.slice(customPrefix.length);
     const slash = rest.indexOf("/");
     return slash > 0 ? models.getModel(rest.slice(0, slash), rest.slice(slash + 1)) : undefined;
   }
-  return models.getModel(GATEWAY_PROVIDER, modelId);
+  return models.getModel(primary, modelId);
 }
