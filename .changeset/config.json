@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.0/schemas.json",
-  "changelog": false,
+  "changelog": ["@changesets/changelog-github", { "repo": "AshikNesin/tiny-agents" }],
   "commit": false,
   "fixed": [],
   "linked": [],
