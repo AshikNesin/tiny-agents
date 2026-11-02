@@ -63,7 +63,9 @@ export function DesktopFileRow({
         </button>
       </TableCell>
       <TableCell>{file.isDirectory ? "-" : formatBytes(file.size)}</TableCell>
-      <TableCell>{formatDate(file.lastModified)}</TableCell>
+      {/* Folders show "-" like Size: the service derives them from key
+          prefixes, which carry no mtime, so lastModified is an epoch sentinel. */}
+      <TableCell>{file.isDirectory ? "-" : formatDate(file.lastModified)}</TableCell>
       <TableCell className="text-right">
         {file.isDirectory ? (
           <div className="flex justify-end gap-2">

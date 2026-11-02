@@ -15,8 +15,11 @@ export function SettingsPage() {
       description="Manage your application preferences, configuration, and security."
       maxWidth="5xl"
     >
+      {/* At ~390px the four line tabs don't fit. max-w-full + overflow-x-auto
+          scrolls them; justify-start because the strip's justify-center would
+          center the overflow (first tab bleeds left, unreachable). */}
       <Tabs defaultValue="general">
-        <TabsList variant="line">
+        <TabsList variant="line" className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="general">
             <SettingsIcon className="size-4" />
             General
