@@ -4,10 +4,20 @@
  * runs, peer deliveries) are refused.
  */
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
-import { createInstructionsStore } from "../../../../apps/web/src/server/api/bots/self-improve.store";
-import { bots, db, promptRevisions, routines } from "../../../../apps/web/src/server/db";
+import {
+  createConnectionLinks,
+  createInstructionsStore,
+} from "../../../../apps/web/src/server/api/bots/self-improve.store";
+import {
+  botConnections,
+  bots,
+  connections,
+  db,
+  promptRevisions,
+  routines,
+} from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 /** Who sent the conversation's latest user message (what `isUnattended` reads). */
@@ -98,5 +108,83 @@ describe("createInstructionsStore", () => {
     await expect(store.update(999_999, { instructions: "x" })).resolves.toEqual({
       status: "disabled",
     });
+  });
+});
+
+describe("createConnectionLinks", () => {
+  const configure = vi.fn(async () => undefined);
+  const links = createConnectionLinks(() => ({
+    readChat: async () => ({ messages: [{ role: "user", ...latest }] }) as never,
+    configure,
+    listModels: () => [],
+  }));
+
+  async function seedConnection(slug: string, tools: string[], disabled: string[] = []) {
+    const [row] = await db
+      .insert(connections)
+      .values({
+        name: slug.toUpperCase(),
+        slug,
+        url: `https://${slug}.example/mcp`,
+        toolsCache: JSON.stringify(tools.map((name) => ({ name }))),
+        disabledTools: JSON.stringify(disabled),
+      })
+      .returning();
+    return row!;
+  }
+
+  it("offers the owner's unlinked connections that have tools", async () => {
+    const { botId, conversationId } = await seedBot();
+    await seedConnection("exa", ["web_search_exa", "crawling_exa"], ["crawling_exa"]);
+    const linear = await seedConnection("linear", ["list_issues"]);
+    await seedConnection("pending", []);
+    await db.insert(botConnections).values({ botId, connectionId: linear.id });
+    expect(await links.available(conversationId)).toEqual([
+      { slug: "exa", name: "EXA", tools: ["web_search_exa"] },
+    ]);
+  });
+
+  it("offers nothing in a routine's conversation", async () => {
+    const { botId, conversationId } = await seedBot();
+    await seedConnection("exa", ["web_search_exa"]);
+    await db.insert(routines).values({
+      botId,
+      name: "Daily",
+      schedule: { kind: "daily", at: "09:00" },
+      prompt: "hi",
+      sourceKey: randomUUID(),
+      conversationId: String(conversationId + 1),
+    });
+    expect(await links.available(conversationId + 1)).toEqual([]);
+  });
+
+  it("links the connection on the owner's turn and reconciles the chat", async () => {
+    const { botId, conversationId } = await seedBot();
+    const exa = await seedConnection("exa", ["web_search_exa"]);
+    configure.mockClear();
+    await expect(links.enable(conversationId, "exa")).resolves.toEqual({
+      status: "enabled",
+      name: "EXA",
+    });
+    const linked = await db.query.botConnections.findMany({
+      where: eq(botConnections.botId, botId),
+    });
+    expect(linked.map((link) => link.connectionId)).toEqual([exa.id]);
+    expect(configure).toHaveBeenCalledTimes(1);
+    // Asking again is harmless.
+    await expect(links.enable(conversationId, "exa")).resolves.toMatchObject({
+      status: "enabled",
+    });
+  });
+
+  it("refuses unknown names and turns that are not the owner's", async () => {
+    const { botId, conversationId } = await seedBot();
+    await seedConnection("exa", ["web_search_exa"]);
+    await expect(links.enable(conversationId, "nope")).resolves.toEqual({ status: "unknown" });
+    latest = { text: "enable exa", peer: { from: "Other Bot" } };
+    await expect(links.enable(conversationId, "exa")).resolves.toEqual({
+      status: "unattended",
+    });
+    expect(await db.$count(botConnections, eq(botConnections.botId, botId))).toBe(0);
   });
 });

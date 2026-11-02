@@ -278,7 +278,12 @@ export {
   type MemoryLine,
   type MemoryStore,
 } from "./toolkits/memory";
-export { createSelfImproveCapability, type InstructionsStore } from "./toolkits/self-improve";
+export {
+  createSelfImproveCapability,
+  type ConnectionLinks,
+  type ConnectionOffer,
+  type InstructionsStore,
+} from "./toolkits/self-improve";
 export {
   createWebToolkit,
   checkPublicUrl,

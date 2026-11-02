@@ -44,7 +44,7 @@ import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
-import { createInstructionsStore } from "./self-improve.store";
+import { createConnectionLinks, createInstructionsStore } from "./self-improve.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -72,9 +72,10 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
   return [
     createSkillsCapability(skillStore),
     createMemoryCapability(memoryStore),
-    // Self-improvement (issue #128): the bot edits its own system prompt;
-    // `askOnly`, so every change waits for the owner in chat.
-    createSelfImproveCapability(createInstructionsStore()),
+    // Self-improvement (issue #128): the bot edits its own system prompt and
+    // asks to enable the owner's other connections; `askOnly`, so every
+    // change waits for the owner in chat.
+    createSelfImproveCapability(createInstructionsStore(), createConnectionLinks()),
     createTasksToolkit(taskStore),
     createRoutinesToolkit(createRoutineStore()),
     createWebToolkit({

@@ -49,10 +49,35 @@ prompt for the rest of the reply; `reconcileBotConversation` re-applies the
 row on the next submit, so new instructions take effect from the bot's next
 message.
 
+## Enabling a connection
+
+The same capability lets a bot ask for one of the owner's connections it is
+not linked to — the "an Exa connector would help here, enable it?" moment:
+
+- A `## Connections you could use` prompt section lists, in the bot's chat
+  only, the owner's connections not linked to the bot (slug, name and a few
+  tool names). Connections with no tools yet (never connected, sign-in
+  unfinished) are left out, and the section is absent when nothing is left.
+- `enable_connection({ name: "<slug>" })` is `askOnly`: the owner sees an
+  approval card ("wants to enable a connection · exa") and approves or
+  denies. Denying leaves the bot as it was.
+- On approval the adapter inserts the `bot_connections` row and calls
+  `reconcileBotConversation` before the tool returns. The runtime applies a
+  configure from the next model request, so the connection's tools are usable
+  in the same reply — the owner does not have to send another message.
+- The `isUnattended` rule applies here too: routine runs and peer deliveries
+  are refused.
+
+Linking is permanent, the same as ticking the connection in the bot editor;
+the owner unlinks it there.
+
 ## Tests
 
 - `tests/server/app/agent/self-improve.test.ts` — the capability: section
-  renders, `askOnly` holds even at `allow`, refusals reach the model.
+  renders, `askOnly` holds even at `allow`, refusals reach the model, the
+  connections section lists offers and `enable_connection` waits for approval.
 - `tests/server/api/bots/self-improve.store.test.ts` — the adapter: replace
   and append write the row plus one revision each, unattended turns and
-  unknown conversations refuse without side effects.
+  unknown conversations refuse without side effects; connection offers skip
+  linked and tool-less ones, enabling links and reconciles, unknown names and
+  peer turns refuse.

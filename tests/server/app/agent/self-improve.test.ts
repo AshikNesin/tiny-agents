@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
   createSelfImproveCapability,
+  type ConnectionLinks,
   type InstructionsStore,
 } from "../../../../packages/agent/src/toolkits/self-improve";
 import {
@@ -181,5 +182,55 @@ describe("self-improve capability", () => {
     await runtime.decideApproval(ref, call.taskId!, "approved");
     await until(() => results.length === 1, "refusal");
     expect(results[0]).toContain("owner's own turns");
+  });
+
+  it("lists unlinked connections and enables one after the owner approves", async () => {
+    const { store } = memoryInstructions();
+    const enabled: string[] = [];
+    const links: ConnectionLinks = {
+      available: async () =>
+        enabled.length ? [] : [{ slug: "exa", name: "Exa", tools: ["web_search_exa"] }],
+      enable: async (_conversation, slug) => {
+        enabled.push(slug);
+        return { status: "enabled", name: "Exa" };
+      },
+    };
+    const prompts: string[] = [];
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [createSelfImproveCapability(store, links)],
+      respondWith: (context: PiContext) => {
+        prompts.push(JSON.stringify(context));
+        return context.messages.at(-1)?.role === "toolResult"
+          ? fauxAssistantMessage([fauxText("done")])
+          : {
+              ...fauxAssistantMessage([fauxToolCall("enable_connection", { name: "exa" })]),
+              stopReason: "toolUse" as const,
+            };
+      },
+    });
+    runtimes.push(runtime);
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: PROMPT,
+      // askOnly: still asks at allow.
+      capabilities: { enabled: ["self-improve"], permissions: { enable_connection: "allow" } },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.submit(ref, { requestId: "r1", text: "research this" });
+    const call = await until(
+      () =>
+        reduce(events)
+          ?.messages.flatMap((m) => m.toolCalls ?? [])
+          .find((c) => c.status === "awaiting_approval"),
+      "approval",
+    );
+    expect(prompts[0]).toContain("Connections you could use");
+    expect(prompts[0]).toContain("- exa (Exa): web_search_exa");
+    expect(enabled).toEqual([]);
+    await runtime.decideApproval(ref, call.taskId!, "approved");
+    await until(() => enabled.length === 1, "enable");
+    expect(enabled).toEqual(["exa"]);
   });
 });
