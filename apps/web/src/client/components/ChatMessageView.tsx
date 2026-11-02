@@ -152,6 +152,22 @@ function Reasoning({ text, running }: { text: string; running: boolean }) {
 }
 
 /** Short argument phrase for a tool row (“Fix SSE”, “pi-durable”). */
+/** The payload behind an approval: `instructions`/`append` for a
+ * self-improve change, else summarizeArgs' key. */
+function approvalPayload(call: ChatToolCall): string {
+  const args = call.args ?? {};
+  for (const key of ["instructions", "append"]) {
+    const value = args[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return summarizeArgs(call);
+}
+
+/** Beyond this many characters the approval card folds the payload behind
+ * "Read more" — approving from a 60-char slice of a 700-word change is
+ * rubber-stamping, and the one-line title can't hold it anyway. */
+const PAYLOAD_FOLD = 120;
+
 function summarizeArgs(call: ChatToolCall): string {
   const args = call.args ?? {};
   for (const key of ["title", "query", "url", "name", "id", "to", "text"]) {
@@ -251,15 +267,36 @@ function ApprovalCard({
   botName: string;
 }) {
   const { busy, run } = useOwnerDecision("Failed to answer");
+  const [showFull, setShowFull] = useState(false);
   const decide = (decision: "approved" | "denied", alwaysAllow?: string) =>
     run(() => actions.decideApproval(call.taskId, decision, { alwaysAllow }));
+  const summary = summarizeArgs(call);
+  const payload = approvalPayload(call);
+  const foldable = payload.length > PAYLOAD_FOLD;
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
           {botName} wants to {ask}
-          {summarizeArgs(call) ? ` — “${summarizeArgs(call)}”` : ""}
+          {summary ? ` — “${summary.slice(0, 60)}${summary.length > 60 ? "…" : ""}”` : ""}
         </ItemTitle>
+        {foldable ? (
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => setShowFull((v) => !v)}
+              className="text-muted-foreground hover:text-foreground text-xs font-medium underline underline-offset-4"
+              aria-expanded={showFull}
+            >
+              {showFull ? "Read less" : "Read more"}
+            </button>
+            {showFull && (
+              <pre className="bg-muted max-h-64 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap">
+                {payload}
+              </pre>
+            )}
+          </div>
+        ) : null}
         <ItemDescription>Nothing runs until you answer.</ItemDescription>
       </ItemContent>
       <ItemActions className="flex flex-col items-stretch gap-1.5">

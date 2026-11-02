@@ -299,10 +299,21 @@ export async function openFauxAgentRuntime(
     }
     // "/improve" proposes appending a line to the bot's own instructions,
     // one tool round, so e2e can drive the self-improvement approval flow.
-    if (text.startsWith("/improve") && toolResults === 0) {
+    // "/improve long" appends a paragraph, so the approval card's Read more
+    // (the payload folds past 120 chars) can also be driven e2e.
+    const improve = /^\/improve(?:\s+(long))?/.exec(text);
+    if (improve && toolResults === 0) {
+      const append = improve[1]
+        ? "Self-improvement e2e: a deliberately long change so the approval " +
+          "card folds it behind Read more.\n" +
+          "The owner must be able to read the whole proposal before " +
+          "approving it — a 60-character slice of a 700-word rewrite is " +
+          "rubber-stamping.\n" +
+          "This line exists only to push the payload over the fold threshold."
+        : "Self-improvement e2e: append this line.";
       const call = fauxAssistantMessage(
         fauxToolCall("update_instructions", {
-          append: "Self-improvement e2e: append this line.",
+          append,
         }),
       );
       return { ...call, stopReason: "toolUse" as const };

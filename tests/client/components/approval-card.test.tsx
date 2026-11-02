@@ -35,6 +35,7 @@ const toolAskLabels = {
   browser_navigate: "open a page",
   delete_task: "delete a task",
   run_routine_now: "run a routine now",
+  update_instructions: "update own instructions",
 };
 
 function awaiting(
@@ -92,6 +93,42 @@ describe("ApprovalCard wording", () => {
     );
     // Not in the catalog at all: the prettified connection tool name.
     expect(toolAskLabel({}, {}, "mcp__linear__create_issue")).toBe("use Create Issue via linear");
+  });
+});
+
+describe("ApprovalCard read-more (long payloads fold)", () => {
+  const user = userEvent.setup();
+  const longInstructions = "Engineer's only job: delegate coding tasks.\n".repeat(20);
+
+  it("folds a long update_instructions payload behind Read more", () => {
+    const el = card("update_instructions", { instructions: longInstructions });
+    expect(el).toHaveTextContent("E2E Test wants to update own instructions");
+    expect(screen.getByRole("button", { name: "Read more" })).toBeTruthy();
+    // The full text is hidden until expanded.
+    expect(el?.querySelector("pre")).toBeNull();
+  });
+
+  it("expands to the full payload and collapses again", async () => {
+    render(
+      <OwnerActionsProvider actions={actions}>
+        <ChatMessageView
+          message={awaiting("update_instructions", { instructions: longInstructions })}
+          botName="E2E Test"
+          toolAskLabels={{ update_instructions: "update own instructions" }}
+        />
+      </OwnerActionsProvider>,
+    );
+    const el = document.querySelector('[data-waiting="approval:7"]');
+    await user.click(screen.getByRole("button", { name: "Read more" }));
+    const pre = el?.querySelector("pre");
+    expect(pre?.textContent).toBe(longInstructions);
+    await user.click(screen.getByRole("button", { name: "Read less" }));
+    expect(el?.querySelector("pre")).toBeNull();
+  });
+
+  it("shows no expander for short payloads", () => {
+    card("browser_navigate", { url: "https://example.com" });
+    expect(screen.queryByRole("button", { name: "Read more" })).toBeNull();
   });
 });
 
