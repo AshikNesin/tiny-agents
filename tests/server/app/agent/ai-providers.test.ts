@@ -98,9 +98,9 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
       const openai = models.filter((m) => m.family !== "claude-plan");
       expect(openai.length).toBeGreaterThan(0);
       expect(openai.every((m) => m.provider === "OpenAI")).toBe(true);
-      expect(models.some((m) => m.id.startsWith("claude-code/") && m.provider === "Claude plan")).toBe(
-        true,
-      );
+      expect(
+        models.some((m) => m.id.startsWith("claude-code/") && m.provider === "Claude plan"),
+      ).toBe(true);
       expect(runtime.hasModel(models[0].id)).toBe(true);
       expect(runtime.providerStatus()).toEqual([
         {

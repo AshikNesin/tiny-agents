@@ -37,8 +37,7 @@ The app opens one WebSocket to the worker (`CLAUDE_WORKER_URL`,
 `CLAUDE_WORKER_TOKEN`). The worker keeps one Claude Code `query()` per
 conversation and feeds later turns with `streamInput()`. After a restart
 it passes `resume: sessionId`. The socket pings every 20 seconds and
-closes after 60 seconds of silence. Reconnect waits from 1 second up to
-30. Events carry a per-session sequence number; the worker keeps about
+closes after 60 seconds of silence. Reconnect waits from 1 second up to 30. Events carry a per-session sequence number; the worker keeps about
 1000 of them so a reconnect continues. Tool calls are idempotent on
 `tool_use_id`. A tool result that does not arrive in 120 seconds becomes
 an error result. An idle Claude process is evicted after 15 minutes. A
@@ -66,10 +65,10 @@ feature off.
 `CLAUDE_CODE_ENGINE_FALLBACK` chooses what a refused or unreachable turn
 does:
 
-| Value     | Behaviour                                                                 |
-| --------- | ------------------------------------------------------------------------- |
-| `pause`   | Default. The chat shows an error and nothing is sent.                    |
-| `gateway` | The turn is sent through Cloudflare AI Gateway on the bare model id.     |
+| Value     | Behaviour                                                            |
+| --------- | -------------------------------------------------------------------- |
+| `pause`   | Default. The chat shows an error and nothing is sent.                |
+| `gateway` | The turn is sent through Cloudflare AI Gateway on the bare model id. |
 
 Gateway fallback spends the gateway's Anthropic key (API credits or
 extra usage), not the subscription. The conversation then stays on the

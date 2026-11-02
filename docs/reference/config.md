@@ -84,24 +84,24 @@ not at module top level (module-level reads see the development defaults).
 Read on each turn by `@tiny-agents/agent`, not by `envSchema`. Unset means
 the engine is off. See [Use your Claude subscription](../claude-subscription.md).
 
-| Variable | Default | What it does |
-| --- | --- | --- |
-| `CLAUDE_CODE_ENGINE_ENABLED` | off | `1` / `true` / `yes` / `on` allows turns. Anything else pauses or falls back. Changing it does not redeploy the worker. |
-| `CLAUDE_CODE_ENGINE_FALLBACK` | `pause` | `pause` shows an error. `gateway` sends the turn through Cloudflare AI Gateway and latches that conversation onto pi. |
-| `CLAUDE_WORKER_URL` | unset | `wss://` URL from `tailscale serve` on the worker VM. |
-| `CLAUDE_WORKER_TOKEN` | unset | Same 32-byte bearer the worker checks. Not a Claude credential. |
-| `CLAUDE_WORKER_PING_MS` | `20000` | Heartbeat interval. |
-| `CLAUDE_WORKER_SILENCE_MS` | `60000` | Close the socket after this much silence. |
-| `CLAUDE_WORKER_RECONNECT_MIN_MS` | `1000` | First reconnect delay. Doubles until the max. |
-| `CLAUDE_WORKER_RECONNECT_MAX_MS` | `30000` | Cap on reconnect delay. |
-| `CLAUDE_WORKER_TOOL_TIMEOUT_MS` | `120000` | Tool result deadline. The worker then returns an error result. |
-| `CLAUDE_WORKER_IDLE_MS` | `900000` | Evict an idle Claude process (15 minutes). |
-| `CLAUDE_WORKER_MAX_AGE_MS` | `21600000` | Recycle a process older than 6 hours. |
-| `CLAUDE_WORKER_MAX_PROCESSES` | `2` | Live Claude processes. |
-| `CLAUDE_WORKER_MAX_TURNS` | `1` | Running turns. |
-| `CLAUDE_WORKER_EVENT_BUFFER` | `1000` | Events kept per session for resume. |
-| `CLAUDE_WORKER_QUERY_MAX_TURNS` | `30` | `maxTurns` passed to the Agent SDK. |
-| `CLAUDE_WORKER_PORT` | `8765` | Worker only. Bind stays `127.0.0.1`. |
+| Variable                         | Default    | What it does                                                                                                            |
+| -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `CLAUDE_CODE_ENGINE_ENABLED`     | off        | `1` / `true` / `yes` / `on` allows turns. Anything else pauses or falls back. Changing it does not redeploy the worker. |
+| `CLAUDE_CODE_ENGINE_FALLBACK`    | `pause`    | `pause` shows an error. `gateway` sends the turn through Cloudflare AI Gateway and latches that conversation onto pi.   |
+| `CLAUDE_WORKER_URL`              | unset      | `wss://` URL from `tailscale serve` on the worker VM.                                                                   |
+| `CLAUDE_WORKER_TOKEN`            | unset      | Same 32-byte bearer the worker checks. Not a Claude credential.                                                         |
+| `CLAUDE_WORKER_PING_MS`          | `20000`    | Heartbeat interval.                                                                                                     |
+| `CLAUDE_WORKER_SILENCE_MS`       | `60000`    | Close the socket after this much silence.                                                                               |
+| `CLAUDE_WORKER_RECONNECT_MIN_MS` | `1000`     | First reconnect delay. Doubles until the max.                                                                           |
+| `CLAUDE_WORKER_RECONNECT_MAX_MS` | `30000`    | Cap on reconnect delay.                                                                                                 |
+| `CLAUDE_WORKER_TOOL_TIMEOUT_MS`  | `120000`   | Tool result deadline. The worker then returns an error result.                                                          |
+| `CLAUDE_WORKER_IDLE_MS`          | `900000`   | Evict an idle Claude process (15 minutes).                                                                              |
+| `CLAUDE_WORKER_MAX_AGE_MS`       | `21600000` | Recycle a process older than 6 hours.                                                                                   |
+| `CLAUDE_WORKER_MAX_PROCESSES`    | `2`        | Live Claude processes.                                                                                                  |
+| `CLAUDE_WORKER_MAX_TURNS`        | `1`        | Running turns.                                                                                                          |
+| `CLAUDE_WORKER_EVENT_BUFFER`     | `1000`     | Events kept per session for resume.                                                                                     |
+| `CLAUDE_WORKER_QUERY_MAX_TURNS`  | `30`       | `maxTurns` passed to the Agent SDK.                                                                                     |
+| `CLAUDE_WORKER_PORT`             | `8765`     | Worker only. Bind stays `127.0.0.1`.                                                                                    |
 
 The worker also refuses `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
 `ANTHROPIC_BASE_URL`, and the Bedrock, Vertex, and Foundry switches.

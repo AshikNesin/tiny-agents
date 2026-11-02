@@ -45,7 +45,7 @@ What ships in the box and how to use or extend it.
 | [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                           |
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                           |
 | [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output                  |
-| [`claude-subscription.md`](./claude-subscription.md)                         | Experimental Claude Pro/Max path through Claude Code           |
+| [`claude-subscription.md`](./claude-subscription.md)                         | Experimental Claude Pro/Max path through Claude Code        |
 | [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client       |
 | [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                  |
 | [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page      |

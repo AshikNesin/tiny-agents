@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Loopback daemon that drives Claude Code through the Agent SDK for tiny-agents. Claude Code owns the subscription login.",
-  "type": "module",
   "bin": {
     "claude-worker": "./src/bin.ts"
   },
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
