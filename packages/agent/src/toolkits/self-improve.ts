@@ -74,7 +74,7 @@ export function createSelfImproveCapability(store: InstructionsStore): Capabilit
               `New instructions:\n${result.prompt ?? ""}`,
           },
         ],
-        details: { prompt: result.prompt },
+        ...(result.prompt !== undefined ? { details: { prompt: result.prompt } } : {}),
       };
     },
   });
