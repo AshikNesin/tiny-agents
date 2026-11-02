@@ -626,4 +626,25 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
     answerFirst([]);
     await expect(pageLoad).rejects.toThrow("network down");
   });
+
+  it("resolves the page's load across three overlapping generations (prod repro)", async () => {
+    // Mount, page and SSE refresh can overlap: gen1 (the page) registers a
+    // waiter on gen2, then gen3 supersedes gen2 before gen2 lands. Only the
+    // newest request settles waiters — gen1's waiter on gen2 would be
+    // stranded and the Memory page's skeleton would never resolve (prod).
+    const answerGen1 = deferredList();
+    const answerGen2 = deferredList();
+    const pageLoad = useBotsStore.getState().loadBots();
+    const middleLoad = useBotsStore.getState().loadBots();
+    // gen1 lands while gen2 is still in flight: gen1 parks on gen2.
+    answerGen1([]);
+    await Promise.resolve();
+    // gen3 starts and lands: it settles only its own waiters.
+    const newest = [listEntry("b1", "7")];
+    vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
+    await useBotsStore.getState().loadBots();
+    answerGen2([]);
+    await expect(middleLoad).resolves.toEqual(newest);
+    await expect(pageLoad).resolves.toEqual(newest);
+  });
 });

@@ -122,6 +122,31 @@ function settleWaiters(
 }
 
 /**
+ * A superseded request may itself carry waiters (promised its outcome by an
+ * even older caller). They will never be settled by it — only the newest
+ * request settles — so carry them forward to the newest generation before
+ * awaiting it; three overlapping loads (mount, page, SSE) otherwise strand
+ * the oldest caller's promise forever.
+ */
+function carryWaitersForward(request: number): void {
+  const stranded = waitingForNewest.get(request);
+  if (!stranded) return;
+  waitingForNewest.delete(request);
+  // The newest request may have already landed (and settled its own waiters):
+  // answer the stranded ones from its recorded outcome instead of parking
+  // them on a generation whose settleWaiters already ran.
+  if (newestOutcome !== undefined) {
+    for (const waiter of stranded) {
+      if ("error" in newestOutcome) waiter.reject(newestOutcome.error);
+      else waiter.resolve(newestOutcome.bots);
+    }
+    return;
+  }
+  const current = waitingForNewest.get(botsRequest) ?? [];
+  waitingForNewest.set(botsRequest, [...current, ...stranded]);
+}
+
+/**
  * A promise for the list the request numbered `request` will land, when that
  * request is newer than the caller's own (superseded) one.
  */
@@ -353,6 +378,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
           // Superseded: a newer load owns the store now. Wait for the newest
           // request to land so awaiting callers still see a fresh list, not
           // the pre-request snapshot they'd read off the store.
+          carryWaitersForward(request);
           return await newestBots(botsRequest);
         }
         // Patches older than this request are in its response (or the
@@ -367,6 +393,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
         if (request !== botsRequest) {
           // Superseded on failure: the newest request decides the store.
           // Surface this error only if nothing newer ever lands with data.
+          carryWaitersForward(request);
           try {
             return await newestBots(botsRequest);
           } catch {

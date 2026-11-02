@@ -11,3 +11,9 @@ and its failures read "SECRETS_KEY is not set." instead of the bare code
 "unconfigured". The mobile drawer lists Routines, Skills, Memory,
 Connections and Vault directly. Dev and Playwright boot the server with a
 1024MB heap cap; 512 OOM-crashed at startup.
+
+Follow-up (prod verification): three overlapping `loadBots` generations
+(mount, page, SSE) stranded the oldest caller's promise forever — a
+superseded middle generation carried waiters that only the newest request
+settles. Stranded waiters now carry forward to the newest generation (or
+answer from its recorded outcome when it already landed).
