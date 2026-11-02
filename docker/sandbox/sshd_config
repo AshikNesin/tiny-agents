@@ -1,0 +1,19 @@
+# Local sandbox sshd: public-key auth for exedev only. The port is published
+# on 127.0.0.1 by compose.yml, so only this computer can reach it.
+Port 22
+HostKey /etc/ssh/host-keys/ssh_host_ed25519_key
+AuthorizedKeysFile /etc/ssh/authorized-keys/%u
+AllowUsers exedev
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+UsePAM yes
+# The browser and computer live views tunnel to 127.0.0.1 on the VM.
+AllowTcpForwarding local
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp internal-sftp
+ClientAliveInterval 30

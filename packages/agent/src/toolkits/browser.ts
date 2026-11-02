@@ -215,6 +215,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
           name: "browser_type",
           description:
             "Replace the text in an editable element by ref. The whole string is inserted at once. " +
+            "For a dropdown (combobox), pass the label or value of the option to choose. " +
             "Never type credentials: use browser_fill_secret with a vault handle (see vault_list), " +
             "or request_credentials if no item exists.",
           parameters: Type.Object({

@@ -4,9 +4,11 @@
  * browser's CDP/VNC tunnels. Each is an adapter over the same dial, so the
  * rules hold in one place:
  *
- * - Auth is intentionally absent: Tailscale SSH terminates at the node and
- *   the tailnet's `accept` rules are the identity check, so ssh2 connects
- *   with no credentials and expects `none` auth to succeed.
+ * - Auth is absent by default: Tailscale SSH terminates at the node and the
+ *   tailnet's `accept` rules are the identity check, so ssh2 connects with no
+ *   credentials and expects `none` auth to succeed. An endpoint with a
+ *   `privateKey` (the local sandbox container, `docker/sandbox/`) uses
+ *   public-key auth instead, for hosts that can't join the tailnet.
  * - TOFU host-key pinning against one injected `HostKeyStore`: the first
  *   connection to a host remembers its key hash, a changed key refuses the
  *   handshake. No store = accept (WireGuard already authenticates the
@@ -53,6 +55,8 @@ export interface SshEndpoint {
   /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
   user?: string;
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   connectTimeoutMs?: number;
   /** Default 15s: a dead connection is noticed within a minute. */
   keepaliveIntervalMs?: number;
@@ -130,7 +134,8 @@ export function dialSsh(
               );
             }
           : undefined,
-        // no privateKey, no password: the tailnet is the authentication
+        // No key: the tailnet is the authentication. A key: public-key auth.
+        ...(endpoint.privateKey ? { privateKey: endpoint.privateKey } : {}),
       } satisfies ConnectConfig);
   });
 }

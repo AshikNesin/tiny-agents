@@ -87,6 +87,7 @@ export interface AttachmentsToolkitOptions {
     port?: number;
     user?: string;
     hostKeys?: HostKeyStore;
+    privateKey?: string;
     transport?: SandboxTransport;
   };
 }
@@ -474,6 +475,7 @@ export function createAttachmentsToolkit(
             port: sandbox.port ?? 22,
             user: sandbox.user ?? "exedev",
             hostKeys: sandbox.hostKeys,
+            privateKey: sandbox.privateKey,
           });
           if (dir)
             await session.exec(`mkdir -p '${dir.replace(/'/g, `'\\''`)}'`, { timeoutMs: 30_000 });

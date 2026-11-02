@@ -108,6 +108,8 @@ export interface TerminalServiceOptions {
   port?: number;
   user?: string;
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   /** Substitutable transport; default is the ssh2 binding. */
   transport?: TerminalTransport;
 }
@@ -136,6 +138,7 @@ export function createTerminalService(
           port: options.port ?? 22,
           user: options.user ?? "exedev",
           hostKeys: options.hostKeys,
+          privateKey: options.privateKey,
         }))
       : undefined);
   const configured = Boolean(transport);
@@ -262,6 +265,7 @@ type ConnectShape = {
   port: number;
   user: string;
   hostKeys?: HostKeyStore;
+  privateKey?: string;
 };
 
 /**

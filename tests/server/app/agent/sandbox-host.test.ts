@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vite-plus/test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   resetSandboxHostKeysForTests,
   sandboxEndpoint,
   sandboxHost,
+  sandboxPrivateKey,
 } from "../../../../apps/web/src/server/api/bots/sandbox-host";
 
 describe("sandboxHost", () => {
@@ -39,5 +43,51 @@ describe("sandboxEndpoint", () => {
     // The sandbox toolkit, the terminal and the browser tunnel pin by the same store.
     expect(first?.hostKeys).toBe(second?.hostKeys);
     expect(sandboxEndpoint({ NODE_ENV: "development" })).toBeUndefined();
+  });
+});
+
+describe("sandboxPrivateKey", () => {
+  const PEM =
+    "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----\n";
+
+  it("is unset by default: keyless Tailscale SSH", () => {
+    expect(sandboxPrivateKey({ SANDBOX_HOST: "vm" })).toBeUndefined();
+    expect(sandboxEndpoint({ SANDBOX_HOST: "vm" })?.privateKey).toBeUndefined();
+  });
+
+  it("takes an inline key, with \\n escapes from a one-line env file", () => {
+    const oneLine = PEM.trim().replaceAll("\n", "\\n");
+    expect(sandboxPrivateKey({ SANDBOX_SSH_KEY: `"${oneLine}"` })).toBe(PEM);
+  });
+
+  it("reads a key file, and the endpoint carries it to every SSH user", () => {
+    resetSandboxHostKeysForTests();
+    const dir = mkdtempSync(join(tmpdir(), "sandbox-key-"));
+    try {
+      const file = join(dir, "id_ed25519");
+      writeFileSync(file, PEM);
+      const env = { SANDBOX_HOST: "127.0.0.1", SANDBOX_PORT: "2222", SANDBOX_SSH_KEY_FILE: file };
+      expect(sandboxEndpoint(env)).toMatchObject({
+        host: "127.0.0.1",
+        port: 2222,
+        privateKey: PEM,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("logs an unreadable key file once instead of throwing", () => {
+    resetSandboxHostKeysForTests();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const env = { SANDBOX_SSH_KEY_FILE: join(tmpdir(), "no-such-sandbox-key") };
+      expect(sandboxPrivateKey(env)).toBeUndefined();
+      expect(sandboxPrivateKey(env)).toBeUndefined();
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(String(error.mock.calls[0]![0])).toContain("pnpm sandbox:up");
+    } finally {
+      error.mockRestore();
+    }
   });
 });

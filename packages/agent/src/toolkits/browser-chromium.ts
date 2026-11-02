@@ -223,16 +223,17 @@ async function clickRef(page: Page, ref: string) {
 }
 
 /**
- * `fill` sets date, color, range and select values itself. A click on
- * those opens the native picker, so they stay a fill. Text fields go
- * through CDP insertion, which on headful Chrome lands on whichever
- * surface has browser focus — often the address bar — so those are
- * clicked first.
+ * `fill` sets date, color, range and other value inputs itself, and
+ * `selectOption` picks a dropdown's option by label or value (`fill` throws
+ * on a <select>). A click on those opens the native picker, so they are
+ * never clicked. Text fields go through CDP insertion, which on headful
+ * Chrome lands on whichever surface has browser focus — often the address
+ * bar — so those are clicked first.
  */
-async function fieldKind(locator: Locator, ref: string): Promise<"text" | "set"> {
+async function fieldKind(locator: Locator, ref: string): Promise<"text" | "set" | "select"> {
   const kind = await locator.evaluate((el) => {
     const tag = el.tagName;
-    if (tag === "SELECT") return (el as HTMLSelectElement).disabled ? "locked" : "set";
+    if (tag === "SELECT") return (el as HTMLSelectElement).disabled ? "locked" : "select";
     if (tag === "TEXTAREA") {
       const area = el as HTMLTextAreaElement;
       return area.disabled || area.readOnly ? "locked" : "text";
@@ -250,7 +251,7 @@ async function fieldKind(locator: Locator, ref: string): Promise<"text" | "set">
     if ((el as HTMLElement).isContentEditable) return "text";
     return "other";
   });
-  if (kind !== "text" && kind !== "set") {
+  if (kind !== "text" && kind !== "set" && kind !== "select") {
     throw new Error(
       `Element ${ref} is not an editable field. Click it, or type into a text field from the snapshot.`,
     );
@@ -262,6 +263,11 @@ async function typeRef(page: Page, ref: string, text: string) {
   assertRefShape(ref);
   const locator = page.getByRef(ref);
   const kind = await fieldKind(locator, ref);
+  if (kind === "select") {
+    // Matches an option's value or its label; throws when none matches.
+    await locator.selectOption(text, { timeout: ACTION_TIMEOUT_MS });
+    return { url: page.url() };
+  }
   if (kind === "text") await locator.click({ timeout: ACTION_TIMEOUT_MS });
   // One fill replaces the value. A key per character is a round trip each
   // on the VM link and timed out on anything longer than a short phrase.

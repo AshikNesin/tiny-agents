@@ -288,6 +288,8 @@ export interface X11ComputerTransportOptions {
   port?: number;
   user?: string;
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   connectTimeoutMs?: number;
   /** `COMPUTER_EXTRA_PACKAGES`, already validated. */
   extraPackages?: string[];
@@ -315,6 +317,7 @@ export function createX11ComputerTransport(
       port: options.port,
       user: options.user,
       hostKeys: options.hostKeys,
+      privateKey: options.privateKey,
       connectTimeoutMs: options.connectTimeoutMs,
     });
 

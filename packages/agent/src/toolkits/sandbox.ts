@@ -80,6 +80,8 @@ export interface ConnectOptions {
   port: number;
   user: string;
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   connectTimeoutMs?: number;
 }
 
@@ -94,6 +96,8 @@ export interface SandboxToolkitOptions {
   user?: string;
   /** TOFU host-key pinning; unset trusts every connection (WireGuard still authenticates the endpoint). */
   hostKeys?: HostKeyStore;
+  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
+  privateKey?: string;
   /** Override for tests or alternate transports. Default: ssh2. */
   transport?: SandboxTransport;
   /** Command timeout in seconds (default 120). */
@@ -145,6 +149,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       port: options.port ?? 22,
       user: options.user ?? "exedev",
       hostKeys: options.hostKeys,
+      privateKey: options.privateKey,
     });
     attempt.catch(() => {
       if (session === attempt) session = undefined; // don't cache a failed dial
