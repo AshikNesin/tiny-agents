@@ -39,6 +39,7 @@ import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabili
 import { acquireStoreLock, type StoreLock } from "./lock";
 import {
   aiProviderIds,
+  assertNoClaudeOauthToken,
   configuredProviderIds,
   createProviderModels,
   primaryProviderId,
@@ -46,6 +47,15 @@ import {
   toModelInfo,
   type ProviderStatus,
 } from "./models";
+import { PiEngine } from "./engines/pi";
+import { claudeCodeBareModel, engineKindForConfig } from "./engine";
+import { claudePlanModels } from "./engines/claude-code/catalog";
+import { ClaudeCodeEngine, type ClaudeSessionSync } from "./engines/claude-code/engine";
+import {
+  claudeToolApi,
+  claudeToolSurface,
+  type ClaudeToolRunner,
+} from "./engines/claude-code/tools";
 import {
   applyPermissions,
   compilePolicy,
@@ -175,7 +185,10 @@ function modelAllowlist(
 
 export class AgentRuntime {
   readonly provider: string;
-  readonly #harness: Harness;
+  readonly #pi: PiEngine;
+  readonly #claude: ClaudeCodeEngine;
+  readonly #claudeRunners = new Map<ConversationRef, Map<string, ClaudeToolRunner>>();
+  readonly #claudeBusy = new Set<ConversationRef>();
   readonly #models: MutableModels;
   readonly #env: Readonly<Record<string, string | undefined>>;
   readonly #lock: StoreLock | undefined;
@@ -209,8 +222,15 @@ export class AgentRuntime {
     questions: WaitTracker,
     capabilities: readonly Capability[],
     envSource: Readonly<Record<string, string | undefined>> = process.env,
+    persistPath?: string,
   ) {
-    this.#harness = harness;
+    this.#pi = new PiEngine(harness);
+    this.#claude = new ClaudeCodeEngine({
+      env: () => process.env,
+      persistPath,
+      onBusy: (ref, busy) => this.#setClaudeBusy(ref, busy),
+      execute: (ref, call) => this.#executeClaudeTool(ref, call),
+    });
     this.#models = models;
     this.provider = provider;
     this.#lock = lock;
@@ -234,6 +254,7 @@ export class AgentRuntime {
     const envSource: Readonly<Record<string, string | undefined>> = options.env
       ? { ...options.env }
       : { ...process.env };
+    assertNoClaudeOauthToken(envSource);
     const inMemory = options.storePath === ":memory:";
     const lock = inMemory
       ? undefined
@@ -294,6 +315,7 @@ export class AgentRuntime {
         questions,
         capabilities,
         envSource,
+        inMemory ? undefined : `${options.storePath}.claude.json`,
       );
       opened.#review = review;
       opened.#configured = configured;
@@ -344,7 +366,7 @@ export class AgentRuntime {
           .getModels(p.id)
           .map((model) => toModelInfo(model, `custom:${p.id}`, nameOf(p.id))),
       );
-    const all = [...primary, ...others];
+    const all = [...primary, ...others, ...claudePlanModels()];
     const allow = modelAllowlist(this.#env);
     return allow ? all.filter((m) => allow.has(m.id)) : all;
   }
@@ -370,8 +392,80 @@ export class AgentRuntime {
     return this.providerStatus().some((status) => status.configured);
   }
 
+  /** Kill switch, fallback, and whether a worker URL is configured. No secrets. */
+  claudeCodeStatus(): ReturnType<ClaudeCodeEngine["status"]> {
+    return this.#claude.status();
+  }
+
   hasModel(modelId: string): boolean {
+    if (claudeCodeBareModel(modelId)) return true;
     return this.#resolveModel(modelId) !== undefined;
+  }
+
+  #anyCatalogModel(): { provider: string; model: string } | undefined {
+    const model = this.#models.getModels(this.provider)[0];
+    return model ? { provider: this.provider, model: model.id } : undefined;
+  }
+
+  /** A pi model a Claude-plan conversation can fall back onto. */
+  #standInForClaude(bare: string): { provider: string; model: string } | undefined {
+    const onPrimary = this.#resolveModel(bare);
+    if (onPrimary) return onPrimary;
+    for (const provider of this.#models.getProviders()) {
+      if (provider.id === this.provider) continue;
+      if (this.#models.getModel(provider.id, bare)) return { provider: provider.id, model: bare };
+    }
+    return this.#anyCatalogModel();
+  }
+
+  #rememberClaude(
+    ref: ConversationRef,
+    claude: (ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> }) | undefined,
+  ): void {
+    if (!claude) {
+      this.#claude.detach(ref);
+      this.#claudeRunners.delete(ref);
+      return;
+    }
+    const { runners, ...sync } = claude;
+    this.#claude.sync(ref, sync);
+    this.#claudeRunners.set(ref, runners);
+  }
+
+  async #executeClaudeTool(
+    ref: ConversationRef,
+    call: { name: string; input: unknown },
+  ): Promise<{ content: string; isError?: boolean }> {
+    const runner = this.#claudeRunners.get(ref)?.get(call.name);
+    if (!runner?.execute) {
+      return {
+        content: `${call.name} is not available on the Claude plan engine.`,
+        isError: true,
+      };
+    }
+    const args =
+      call.input && typeof call.input === "object" && !Array.isArray(call.input)
+        ? (call.input as Record<string, unknown>)
+        : {};
+    try {
+      const result = await runner.execute(args, claudeToolApi(call.name), ctx);
+      const text = (result.output ?? [])
+        .map((block) => (typeof block.text === "string" ? block.text : ""))
+        .filter(Boolean)
+        .join("\n");
+      return { content: text, ...(result.isError ? { isError: true } : {}) };
+    } catch (error) {
+      return { content: error instanceof Error ? error.message : String(error), isError: true };
+    }
+  }
+
+  #setClaudeBusy(ref: ConversationRef, busy: boolean): void {
+    if (busy) this.#claudeBusy.add(ref);
+    else this.#claudeBusy.delete(ref);
+    const was = this.#busy.has(ref);
+    if (busy) this.#busy.add(ref);
+    else this.#busy.delete(ref);
+    if (was !== this.#busy.has(ref)) this.#emitActivity(this.#activity(ref));
   }
 
   #resolveModel(modelId: string): { provider: string; model: string } | undefined {
@@ -385,17 +479,18 @@ export class AgentRuntime {
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
-    const { change, policy } = this.#compile(config);
-    const conversation = await this.#harness.createConversation(
+    const { change, policy, claude } = this.#compile(config);
+    const conversation = await this.#pi.harness.createConversation(
       { ownership: { kind: "ownerless" }, agent: change },
       ctx,
     );
     const ref = Number(conversation.id);
     if (policy) {
-      await this.#harness.commit(async (tx) => {
+      await this.#pi.harness.commit(async (tx) => {
         applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
       }, ctx);
     }
+    this.#rememberClaude(ref, claude);
     return ref;
   }
 
@@ -404,14 +499,15 @@ export class AgentRuntime {
    * request; history is kept.
    */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
-    const { change, policy } = this.#compile(config);
+    const { change, policy, claude } = this.#compile(config);
     await this.#conversation(ref);
-    await this.#harness.commit(async (tx) => {
+    await this.#pi.harness.commit(async (tx) => {
       await configureAgent(tx, ref as ConversationId, change);
       if (policy) {
         applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
       }
     }, ctx);
+    this.#rememberClaude(ref, claude);
   }
 
   /**
@@ -419,14 +515,61 @@ export class AgentRuntime {
    * gate reads it (the permissions), compiled by `policy.ts`. Without a
    * capability selection the conversation keeps its tools.
    */
-  #compile(config: BotAgentConfig): { change: AgentChange; policy?: CompiledPolicy } {
+  #compile(config: BotAgentConfig): {
+    change: AgentChange;
+    policy?: CompiledPolicy;
+    claude?: ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> };
+  } {
+    const bare = claudeCodeBareModel(config.modelId);
+    if (engineKindForConfig(config) === "claude-code") {
+      if (!bare) throw new ModelNotFoundError(config.modelId);
+      // The harness stores a real catalog model so a gateway/provider fallback
+      // can run there. It is not called unless this turn is handed to pi.
+      // Prefer the same model id on any configured provider (the primary one
+      // first), then any model of the primary provider.
+      const resolved = this.#standInForClaude(bare);
+      if (!resolved) throw new ModelNotFoundError(config.modelId);
+      const surface = claudeToolSurface(this.#capabilities, config.capabilities);
+      const change: AgentChange = {
+        model: { provider: resolved.provider, modelId: resolved.model },
+        instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
+      };
+      if (!config.capabilities) {
+        return {
+          change,
+          claude: {
+            model: bare,
+            system: config.systemPrompt,
+            tools: surface.tools,
+            permissions: surface.permissions,
+            runners: surface.runners,
+          },
+        };
+      }
+      const policy = compilePolicy(
+        this.#capabilities,
+        config.capabilities,
+        this.#registry.snapshot(),
+      );
+      return {
+        change: { ...change, extensions: policy.extensions, tools: { remove: policy.remove } },
+        policy,
+        claude: {
+          model: bare,
+          system: config.systemPrompt,
+          tools: surface.tools,
+          permissions: surface.permissions,
+          runners: surface.runners,
+        },
+      };
+    }
     const resolved = this.#resolveModel(config.modelId);
     if (!resolved) throw new ModelNotFoundError(config.modelId);
     const change: AgentChange = {
       model: { provider: resolved.provider, modelId: resolved.model },
       instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
     };
-    if (!config.capabilities) return { change };
+    if (!config.capabilities) return { change, claude: undefined };
     const policy = compilePolicy(
       this.#capabilities,
       config.capabilities,
@@ -503,8 +646,15 @@ export class AgentRuntime {
     decision: ApprovalDecision,
     options: { grant?: boolean } = {},
   ): Promise<void> {
+    if (this.#claude.ownsTask(taskId)) {
+      this.#claude.decide(taskId, decision);
+      return;
+    }
     try {
-      await this.#harness.commit((tx) => recordDecision(tx, ref, taskId, decision, options), ctx);
+      await this.#pi.harness.commit(
+        (tx) => recordDecision(tx, ref, taskId, decision, options),
+        ctx,
+      );
     } catch (error) {
       approvalNotPending(error, taskId);
     }
@@ -520,7 +670,7 @@ export class AgentRuntime {
     taskId: number,
   ): Promise<{ conversation: ConversationRef; request: CredentialRequest; expiresAt: number }> {
     try {
-      return await this.#harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
+      return await this.#pi.harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -529,7 +679,7 @@ export class AgentRuntime {
   /** Settle a credential request with the owner's outcome (never values). */
   async settleCredentialRequest(taskId: number, outcome: CredentialRequestOutcome): Promise<void> {
     try {
-      await this.#harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
+      await this.#pi.harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -552,7 +702,7 @@ export class AgentRuntime {
     answers: OwnerAnswer[] | null,
   ): Promise<void> {
     try {
-      await this.#harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
+      await this.#pi.harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
     } catch (error) {
       questionNotPending(error, taskId);
     }
@@ -591,6 +741,14 @@ export class AgentRuntime {
       whenBusy?: "steer" | "followUp";
     },
   ): Promise<void> {
+    if (this.#claude.handles(ref)) {
+      const outcome = await this.#claude.submit(ref, {
+        requestId: input.requestId,
+        text: input.text,
+        images: input.images,
+      });
+      if (outcome === "ran") return;
+    }
     const conversation = await this.#conversation(ref);
     const content = input.images?.length
       ? [
@@ -637,6 +795,10 @@ export class AgentRuntime {
 
   /** Stop the in-flight reply (and withdraw queued inputs). */
   async abort(ref: ConversationRef): Promise<void> {
+    if (this.#claude.handles(ref)) {
+      this.#claude.abort(ref);
+      return;
+    }
     const conversation = await this.#conversation(ref);
     await conversation.abort(ctx);
   }
@@ -647,14 +809,14 @@ export class AgentRuntime {
    * of the running reply, and a settled one is done.
    */
   async withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
-    const record = await this.#harness.commit(
+    const record = await this.#pi.harness.commit(
       (tx) => tx.submissionByRequest(ref as ConversationId, requestId),
       ctx,
     );
     // Writes (compaction summaries) and unknown ids are not owner messages.
     if (!record || record.type !== "input") return "not_found";
     if (record.status === "queued") {
-      const result = await this.#harness.abortSubmission(record.id, ctx, ref as ConversationId);
+      const result = await this.#pi.harness.abortSubmission(record.id, ctx, ref as ConversationId);
       if (result === "aborted") return "withdrawn";
       return result;
     }
@@ -673,6 +835,17 @@ export class AgentRuntime {
   }
 
   async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
+    if (this.#claude.handles(ref)) {
+      const state = await this.#claude.read(ref);
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const message = state.messages[i];
+        if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+        const text = message.error ? `⚠ ${message.error}` : message.text;
+        if (!text) continue;
+        return { role: message.role, text, createdAt: message.createdAt };
+      }
+      return undefined;
+    }
     const conversation = await this.#conversation(ref);
     const page = await conversation.entries({ order: "descending" }, 20, undefined, ctx);
     for (const entry of page.items) {
@@ -715,6 +888,7 @@ export class AgentRuntime {
    * reply and tool round show as the stream would show them.
    */
   async readChat(ref: ConversationRef): Promise<ChatState> {
+    if (this.#claude.handles(ref)) return this.#claude.read(ref);
     const conversation = await this.#conversation(ref);
     if (this.isBusy(ref)) {
       const subscription = await this.watchChat(ref, () => undefined);
@@ -736,6 +910,7 @@ export class AgentRuntime {
     ref: ConversationRef,
     { before, limit }: { before: string; limit: number },
   ): Promise<ChatPage | undefined> {
+    if (this.#claude.handles(ref)) return this.#claude.page(ref, before, limit);
     return pageBefore((await this.readChat(ref)).messages, before, limit);
   }
 
@@ -754,8 +929,9 @@ export class AgentRuntime {
     listener: (events: ChatEvent[]) => void | Promise<void>,
     options: { window?: number } = {},
   ): Promise<ChatSubscription> {
+    if (this.#claude.handles(ref)) return this.#claude.watch(ref, listener, options.window);
     const conversation = await this.#conversation(ref);
-    const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
+    const stream = await watchEvents(this.#pi.harness, ref as ConversationId, ctx);
     const projection = new ChatProjection(
       await this.#snapshot(conversation, ref, stream.snapshot),
       options,
@@ -817,11 +993,11 @@ export class AgentRuntime {
     const entries = new Map<number, EntryRecord>();
     for (const entry of await loadHistory(conversation)) entries.set(Number(entry.id), entry);
     for (const entry of live.entries) entries.set(Number(entry.id), entry);
-    const inspection = await this.#harness.inspect(ctx);
+    const inspection = await this.#pi.harness.inspect(ctx);
     const records = inspection.submissions.filter(
       (record) => Number(record.conversationId) === ref,
     );
-    const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
+    const inbox = await this.#pi.harness.snapshot(InboxDoc, ref as ConversationId, ctx);
     const items = inbox?.items ?? [];
     return {
       entries: [...entries.values()],
@@ -857,11 +1033,12 @@ export class AgentRuntime {
   }
 
   async #watchActivity(): Promise<void> {
-    const graph = await this.#harness.watchTaskGraph(ctx);
+    const graph = await this.#pi.harness.watchTaskGraph(ctx);
     this.#graph = graph;
     this.#busy = busyFromGraph(graph.value);
     graph.start(async (value) => {
       const next = busyFromGraph(value);
+      for (const ref of this.#claudeBusy) next.add(ref);
       const changed: ConversationRef[] = [];
       for (const ref of next) if (!this.#busy.has(ref)) changed.push(ref);
       for (const ref of this.#busy) if (!next.has(ref)) changed.push(ref);
@@ -897,8 +1074,9 @@ export class AgentRuntime {
     this.#closed = true;
     await Promise.allSettled([...this.#chats].map((chat) => chat.stop()));
     await this.#graph?.stop().catch(() => undefined);
+    await this.#claude.close().catch(() => undefined);
     try {
-      await this.#harness.close(ctx);
+      await this.#pi.harness.close(ctx);
     } finally {
       this.#lock?.release();
     }
@@ -911,10 +1089,10 @@ export class AgentRuntime {
    * than any event that triggered the refresh.
    */
   async #queued(ref: ConversationRef): Promise<QueuedMessage[]> {
-    const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
+    const inbox = await this.#pi.harness.snapshot(InboxDoc, ref as ConversationId, ctx);
     const items = inbox?.items ?? [];
     if (items.length === 0) return [];
-    const inspection = await this.#harness.inspect(ctx);
+    const inspection = await this.#pi.harness.inspect(ctx);
     const records = new Map(
       inspection.submissions
         .filter((record) => Number(record.conversationId) === ref)
@@ -924,7 +1102,7 @@ export class AgentRuntime {
   }
 
   async #conversation(ref: ConversationRef): Promise<Conversation> {
-    const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
+    const conversation = await this.#pi.harness.conversation(ref as ConversationId, ctx);
     if (!conversation) throw new ConversationNotFoundError(ref);
     return conversation;
   }

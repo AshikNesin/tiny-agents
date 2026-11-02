@@ -14,7 +14,8 @@
       "@groot/jobs/client": ["./packages/jobs/src/client/index.ts"],
       "@groot/jobs/client/*": ["./packages/jobs/src/client/*"],
       "@tiny-agents/agent": ["./packages/agent/src/index.ts"],
-      "@tiny-agents/agent/testing": ["./packages/agent/src/testing.ts"]
+      "@tiny-agents/agent/testing": ["./packages/agent/src/testing.ts"],
+      "@tiny-agents/claude-worker": ["./packages/claude-worker/src/index.ts"]
     }
   },
   "include": [
@@ -22,7 +23,8 @@
     "packages/ai/src/**/*",
     "packages/core/src/**/*",
     "packages/jobs/src/server/**/*",
-    "packages/agent/src/**/*"
+    "packages/agent/src/**/*",
+    "packages/claude-worker/src/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }
