@@ -40,6 +40,7 @@ export function claudePlanModels(): ModelInfo[] {
     id: `${CLAUDE_CODE_MODEL_PREFIX}${model.id}`,
     name: model.name,
     family: "claude-plan",
+    provider: "Claude plan",
     reasoning: model.reasoning,
     contextWindow: model.contextWindow,
     vision: model.vision,
