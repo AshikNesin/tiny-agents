@@ -80,7 +80,11 @@ function backendFailure(error: unknown): never {
     if (error.code === "not_found") throw Boom.notFound(error.message);
     if (error.code === "missing_field") throw Boom.badRequest(error.message);
     if (error.code === "invalid") throw Boom.badRequest(error.message);
-    throw Boom.badGateway(error.message, { code: error.code });
+    // The backend's code goes in the envelope's `code` (machine-readable),
+    // never in `details`: the client's error renderer treats the first
+    // string in `details` as a human message, so `{ code }` there surfaced
+    // the bare word "unconfigured" instead of error.message (issue #124).
+    throw Boom.badGateway(error.message, undefined, error.code);
   }
   throw error;
 }

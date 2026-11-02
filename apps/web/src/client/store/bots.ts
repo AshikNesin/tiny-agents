@@ -46,7 +46,14 @@ interface BotsState {
   /** Live MCP connection status by id (the Connections pages' badges). */
   connections: Record<string, ConnectionLive>;
 
-  loadBots: () => Promise<void>;
+  /**
+   * Refresh `bots` from the server. Resolves with the list that actually
+   * landed — including when a newer load superseded this one (then the
+   * newer list, once it lands) — so a caller that awaits and snapshots
+   * (the Memory page) never reads a stale store. Fire-and-forget callers
+   * ignore the value.
+   */
+  loadBots: () => Promise<BotListEntry[]>;
   loadModels: () => Promise<void>;
   refreshBotsInBackground: () => void;
   markRead: (botId: string) => void;
@@ -86,6 +93,51 @@ let activityConnection: { close(): void } | null = null;
 const chatConnections = new Map<string, { close(): void }>();
 /** Sequence of `loadBots` calls; a response from an older call is dropped. */
 let botsRequest = 0;
+/**
+ * How the request numbered `botsRequest` last settled, for `loadBots` calls
+ * whose own response was superseded: their promise resolves/rejects with
+ * the newest request's outcome. A late subscriber (the stale response
+ * arrives after the newest already landed) reads it instead of waiting.
+ */
+let newestOutcome: { bots: BotListEntry[] } | { error: unknown } | undefined;
+/**
+ * Resolvers for `loadBots` calls still waiting on the newest request's list
+ * (their own response was superseded). The newest call resolves them when
+ * its list lands; a failing newest call rejects them with its error.
+ */
+const waitingForNewest = new Map<
+  number,
+  Array<{ resolve(bots: BotListEntry[]): void; reject(error: unknown): void }>
+>();
+
+/** Settle every waiter registered for `request` (no-op when there are none). */
+function settleWaiters(
+  request: number,
+  settle: (waiter: { resolve(bots: BotListEntry[]): void; reject(error: unknown): void }) => void,
+): void {
+  const waiters = waitingForNewest.get(request);
+  if (!waiters) return;
+  waitingForNewest.delete(request);
+  for (const waiter of waiters) settle(waiter);
+}
+
+/**
+ * A promise for the list the request numbered `request` will land, when that
+ * request is newer than the caller's own (superseded) one.
+ */
+function newestBots(request: number): Promise<BotListEntry[]> {
+  // The newest request already settled before this stale caller arrived.
+  if (newestOutcome !== undefined && request === botsRequest) {
+    return "error" in newestOutcome
+      ? Promise.reject(newestOutcome.error)
+      : Promise.resolve(newestOutcome.bots);
+  }
+  return new Promise((resolve, reject) => {
+    const list = waitingForNewest.get(request) ?? [];
+    list.push({ resolve, reject });
+    waitingForNewest.set(request, list);
+  });
+}
 
 /**
  * Local changes to list entries (replying, waiting counts, pin, read), each
@@ -293,20 +345,41 @@ export const useBotsStore = create<BotsState>((set, get) => {
       // created, and the chat route would treat its link as stale.
       const request = ++botsRequest;
       const since = patchSeq;
+      newestOutcome = undefined;
       set({ loading: true, error: null });
       try {
         const bots = await botsApi.list();
-        if (request !== botsRequest) return;
+        if (request !== botsRequest) {
+          // Superseded: a newer load owns the store now. Wait for the newest
+          // request to land so awaiting callers still see a fresh list, not
+          // the pre-request snapshot they'd read off the store.
+          return await newestBots(botsRequest);
+        }
         // Patches older than this request are in its response (or the
         // server overruled them); the newer ones ride on top of it.
         patches = patches.filter((patch) => patch.seq > since);
-        set({ bots: applyPatches(bots, patches), loading: false });
+        const landed = applyPatches(bots, patches);
+        set({ bots: landed, loading: false });
+        newestOutcome = { bots: landed };
+        settleWaiters(request, (waiter) => waiter.resolve(landed));
+        return landed;
       } catch (error) {
-        if (request !== botsRequest) return;
+        if (request !== botsRequest) {
+          // Superseded on failure: the newest request decides the store.
+          // Surface this error only if nothing newer ever lands with data.
+          try {
+            return await newestBots(botsRequest);
+          } catch {
+            return Promise.reject(error);
+          }
+        }
+        newestOutcome = { error };
+        settleWaiters(request, (waiter) => waiter.reject(error));
         set({
           loading: false,
           error: errorMessage(error, "Failed to load bots"),
         });
+        return Promise.reject(error);
       }
     },
 

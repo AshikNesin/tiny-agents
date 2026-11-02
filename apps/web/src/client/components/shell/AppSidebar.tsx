@@ -200,6 +200,22 @@ export function AppSidebar() {
               onClick={closeDrawer}
             />
           ))}
+          {/* On mobile the account menu is two taps deep behind an unlabeled
+              avatar (issue #127): surface the secondary pages directly in the
+              drawer. Desktop keeps them in the account menu. */}
+          <div className="mt-1 border-t border-sidebar-border pt-1 md:hidden">
+            {SECONDARY_NAV.map((item) => (
+              <NavRow
+                key={item.to}
+                icon={item.icon}
+                label={item.label}
+                rail={false}
+                to={item.to}
+                active={isActive(item.to)}
+                onClick={closeDrawer}
+              />
+            ))}
+          </div>
         </nav>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>

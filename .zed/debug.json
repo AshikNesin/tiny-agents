@@ -4,7 +4,7 @@
     "label": "Debug Server",
     "type": "node",
     "request": "launch",
-    "program": "$ZED_WORKTREE_ROOT/server/src/index.ts",
+    "program": "$ZED_WORKTREE_ROOT/apps/web/src/server/entry.node.ts",
     "runtimeArgs": ["--import", "$ZED_WORKTREE_ROOT/node_modules/tsx/dist/loader.mjs"],
     "env": {
       "NODE_ENV": "development"

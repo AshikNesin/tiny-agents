@@ -62,6 +62,8 @@ export function AddConnectionDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [touched, setTouched] = useState({ name: false, url: false, secret: false });
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+  /** Why the last test failed; cleared by the next edit or a passing test. */
+  const [testError, setTestError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -70,6 +72,7 @@ export function AddConnectionDialog({
       setForm(EMPTY_FORM);
       setTouched({ name: false, url: false, secret: false });
       setTestResult(null);
+      setTestError(null);
       setTesting(false);
       setSaving(false);
     }
@@ -78,6 +81,7 @@ export function AddConnectionDialog({
   const setField = <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setTestResult(null);
+    setTestError(null);
   };
 
   const touch = (key: "name" | "url" | "secret") => () =>
@@ -94,6 +98,7 @@ export function AddConnectionDialog({
 
   const test = async () => {
     setTesting(true);
+    setTestError(null);
     try {
       setTestResult(
         await connectionsApi.test({
@@ -107,8 +112,10 @@ export function AddConnectionDialog({
         }),
       );
     } catch (error) {
+      // Inline in the dialog (issue #123): the failure and its reason must
+      // stay visible next to the button, not only in a fading toast.
       setTestResult(null);
-      toast.error(errorMessage(error, "Test failed"));
+      setTestError(errorMessage(error, "Test failed"));
     } finally {
       setTesting(false);
     }
@@ -267,6 +274,12 @@ export function AddConnectionDialog({
                   Only if the server requires a pre-registered app.
                 </p>
               </>
+            )}
+            {testError && (
+              <div className="space-y-1 rounded-lg bg-destructive/10 p-3" role="alert">
+                <p className="text-xs font-medium text-destructive">Test failed</p>
+                <p className="text-xs text-muted-foreground">{testError}</p>
+              </div>
             )}
             {testResult && (
               <div className="space-y-1.5 rounded-lg bg-muted/50 p-3">

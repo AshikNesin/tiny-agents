@@ -584,3 +584,46 @@ describe("bots store — full bots", () => {
     expect(useBotsStore.getState().bots).toEqual([]);
   });
 });
+
+describe("bots store — loadBots resolves with the landed list (issue #119)", () => {
+  beforeEach(() => {
+    listeners.clear();
+    useBotsStore.getState().disconnectActivity();
+    vi.mocked(botsApi.list).mockReset();
+    vi.mocked(botsApi.list).mockResolvedValue([]);
+    useBotsStore.setState({ bots: [], loading: false });
+  });
+
+  it("resolves an unopposed load with its own list", async () => {
+    const own = [listEntry("b1", "7")];
+    vi.mocked(botsApi.list).mockResolvedValueOnce(own);
+    const list = await useBotsStore.getState().loadBots();
+    expect(list).toEqual(own);
+  });
+
+  it("resolves a superseded load with the newer request's list, not a stale snapshot", async () => {
+    // The page's load starts first…
+    const answerFirst = deferredList();
+    const pageLoad = useBotsStore.getState().loadBots();
+    // …a newer load (app mount / SSE refresh) supersedes it and lands first.
+    const newest = [listEntry("b1", "7")];
+    vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
+    await useBotsStore.getState().loadBots();
+    // The stale response arrives last; it must not resolve the page's load
+    // with the (possibly empty) pre-request snapshot of the store.
+    answerFirst([]);
+    await expect(pageLoad).resolves.toEqual(newest);
+  });
+
+  it("rejects a superseded load when the newest request fails", async () => {
+    const answerFirst = deferredList();
+    const pageLoad = useBotsStore.getState().loadBots();
+    vi.mocked(botsApi.list).mockRejectedValueOnce(new Error("network down"));
+    await useBotsStore
+      .getState()
+      .loadBots()
+      .catch(() => undefined);
+    answerFirst([]);
+    await expect(pageLoad).rejects.toThrow("network down");
+  });
+});

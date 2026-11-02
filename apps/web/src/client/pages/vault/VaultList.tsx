@@ -236,6 +236,18 @@ export function VaultList() {
     void refresh();
   }, [refresh]);
 
+  // The primary backend must actually be able to create items (issue #124):
+  // the local backend is "configured" but unusable without SECRETS_KEY.
+  const primary = overview?.backends.find((b) => b.name === overview.primaryBackend);
+  const canCreate =
+    !!overview &&
+    (primary?.capabilities?.create ?? false) &&
+    [primary?.read.state, primary?.write?.state].every((s) => !s || s === "ready");
+  const createBlockedWhy =
+    primary?.read.state !== "ready" || primary?.write?.state !== "ready"
+      ? (primary?.read.detail ?? primary?.write?.detail)
+      : undefined;
+
   const byKind = useMemo(() => {
     const groups: Record<VaultKind, VaultItem[]> = {
       login: [],
@@ -258,10 +270,20 @@ export function VaultList() {
             <RefreshCw className="size-4" />
             Refresh
           </Button>
-          <Button onClick={() => setPicker(true)}>
-            <Plus className="size-4" />
-            New item
-          </Button>
+          {/* Wrapped so the reason still hovers while the button is disabled
+              (disabled buttons swallow pointer events). */}
+          <span
+            title={
+              canCreate
+                ? undefined
+                : `${createBlockedWhy ?? "The vault backend isn't ready."} New items are disabled until it is.`
+            }
+          >
+            <Button onClick={() => setPicker(true)} disabled={!canCreate}>
+              <Plus className="size-4" />
+              New item
+            </Button>
+          </span>
         </>
       }
     >

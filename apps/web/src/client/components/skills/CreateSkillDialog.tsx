@@ -17,9 +17,18 @@ import { Label } from "@groot/ui/label";
 import { skillsApi, type Skill } from "../../lib/skills-api";
 import { errorMessage } from "../../lib/errors";
 
-const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const EMPTY_FORM = { name: "", description: "", body: "" };
+
+/** Why the name is rejected, or null when it's valid (server's SKILL_NAME). */
+function nameProblem(name: string): string | null {
+  if (name.length === 0) return "Name is required.";
+  if (name.length > 64) return "Keep it to 64 characters or fewer.";
+  if (!NAME_PATTERN.test(name))
+    return "Lowercase letters, digits and single hyphens (no leading/trailing hyphen).";
+  return null;
+}
 
 export function CreateSkillDialog({
   open,
@@ -32,17 +41,31 @@ export function CreateSkillDialog({
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  /** Fields the user has interacted with — errors show only after that. */
+  const [touched, setTouched] = useState({ name: false, description: false });
 
   useEffect(() => {
-    if (open) setForm(EMPTY_FORM);
+    if (open) {
+      setForm(EMPTY_FORM);
+      setTouched({ name: false, description: false });
+    }
   }, [open]);
 
   const name = form.name.trim();
-  const nameValid = NAME_PATTERN.test(name) && name.length <= 64;
-  const descriptionValid = form.description.trim().length > 0;
-  const valid = nameValid && descriptionValid;
+  const nameError = nameProblem(name);
+  const descriptionError = form.description.trim().length > 0 ? null : "Description is required.";
+  const valid = nameError === null && descriptionError === null;
+  const showNameError = touched.name && nameError !== null;
+  const showDescriptionError = touched.description && descriptionError !== null;
 
   const create = async () => {
+    // A click on a disabled button can't reach here, but a stray Enter in a
+    // text field could: surface the problems instead of silently doing nothing.
+    setTouched({ name: true, description: true });
+    if (!valid) {
+      toast.error("Fill in the required fields to create the skill.");
+      return;
+    }
     setSaving(true);
     try {
       const skill = await skillsApi.create({
@@ -78,12 +101,20 @@ export function CreateSkillDialog({
                 value={form.name}
                 maxLength={64}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
                 placeholder="pdf-form-filler"
-                aria-invalid={form.name.length > 0 && !nameValid}
+                aria-invalid={showNameError}
+                aria-describedby={showNameError ? "new-skill-name-error" : undefined}
               />
-              <p className="text-muted-foreground text-xs">
-                Lowercase letters, digits and hyphens — bots reference the skill by this name.
-              </p>
+              {showNameError ? (
+                <p id="new-skill-name-error" className="text-xs text-destructive">
+                  {nameError}
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  Lowercase letters, digits and hyphens — bots reference the skill by this name.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-skill-description">Description</Label>
@@ -93,8 +124,16 @@ export function CreateSkillDialog({
                 maxLength={1024}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onBlur={() => setTouched((prev) => ({ ...prev, description: true }))}
                 placeholder="What the skill does and when the bot should load it"
+                aria-invalid={showDescriptionError}
+                aria-describedby={showDescriptionError ? "new-skill-description-error" : undefined}
               />
+              {showDescriptionError && (
+                <p id="new-skill-description-error" className="text-xs text-destructive">
+                  {descriptionError}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-skill-body">Instructions</Label>

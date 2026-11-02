@@ -37,7 +37,10 @@ async function main() {
   console.log("\n🚀 Starting dev server...\n");
   devServer = spawn(
     "node_modules/.bin/tsx",
-    ["watch", "--max-old-space-size=512", "apps/web/src/server/entry.node.ts"],
+    // The tiny-agents server (Chromium, ssh2, pi-durable) needs ~600MB of
+    // heap while booting; 512 (groot's default) OOM-crashed on startup
+    // (issue #121).
+    ["watch", "--max-old-space-size=1024", "apps/web/src/server/entry.node.ts"],
     {
       stdio: "inherit",
       env: {
