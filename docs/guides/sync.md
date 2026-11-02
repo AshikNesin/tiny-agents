@@ -68,7 +68,7 @@ changes a managed surface without naming its package:
 | `apps/web/drizzle/**`, `.groot/**`                                       | `groot`                           |
 
 Docs-only or internal changes to those paths can instead carry a reviewed
-reason file under `.changeset/no-release/` (any non-empty `.md`; it covers the
+reason file under `.no-release/` (any non-empty `.md`; it covers the
 whole branch). The release bot's own commits are exempt.
 
 ### Writing a Changeset (for AI Agents)

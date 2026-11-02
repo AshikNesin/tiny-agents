@@ -49,7 +49,7 @@ This file is intentionally brief. Detailed guidance lives in `docs/` — start a
 - **A change to a managed surface needs a changeset.** Edits under
   `packages/*/src`, `packages/*/package.json`, `apps/web/drizzle`, or `.groot/`
   must carry a changeset naming the affected package (`pnpm changeset`) or a
-  reviewed no-release reason under `.changeset/no-release/` for docs-only or
+  reviewed no-release reason under `.no-release/` for docs-only or
   internal changes; `pnpm check:changesets` and CI enforce this, exempting the
   release bot.
 
