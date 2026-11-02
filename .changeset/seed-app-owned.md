@@ -1,5 +1,4 @@
 ---
-"groot": patch
 ---
 
 sync: `scripts/seed.ts` is app-owned

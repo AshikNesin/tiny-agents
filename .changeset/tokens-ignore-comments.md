@@ -1,5 +1,4 @@
 ---
-"groot": patch
 ---
 
 tooling: `pnpm check:tokens` ignores comment lines

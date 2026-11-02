@@ -1,6 +1,5 @@
 ---
 "@tiny-agents/agent": minor
-"groot": minor
 "@groot/web": minor
 ---
 

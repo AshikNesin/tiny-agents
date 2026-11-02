@@ -1,5 +1,4 @@
 ---
-"groot": minor
 "@groot/web": minor
 ---
 

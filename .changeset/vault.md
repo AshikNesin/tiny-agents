@@ -1,7 +1,6 @@
 ---
 "@tiny-agents/agent": minor
 "@groot/core": patch
-"groot": minor
 "@groot/web": minor
 ---
 

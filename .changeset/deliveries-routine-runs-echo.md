@@ -1,5 +1,4 @@
 ---
-"groot": patch
 "@groot/web": minor
 ---
 
