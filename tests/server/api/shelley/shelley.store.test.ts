@@ -65,26 +65,44 @@ describe("Shelley hand-off store", () => {
     ]);
   });
 
-  it("keeps each bot to its own hand-offs, and re-arms a finished one on follow-up", async () => {
+  it("adopts an existing conversation on send, and re-arms a finished hand-off on follow-up", async () => {
+    // Started elsewhere (Shelley's UI, the Code page, an earlier curl).
+    shelley.conversations.set("cExisting", {
+      messages: [],
+      conversation: {
+        conversation_id: "cExisting",
+        slug: "old-work",
+        cwd: "/repo",
+        agent_working: false,
+      },
+    });
+    expect(
+      await shelleyStore.send({
+        conversationId: 202,
+        idempotencyKey: "send-1",
+        shelleyConversationId: "cMissing",
+        message: "x",
+      }),
+    ).toEqual({ error: "not_found" });
+    expect(
+      await shelleyStore.send({
+        conversationId: 202,
+        idempotencyKey: "send-2",
+        shelleyConversationId: "cExisting",
+        message: "continue",
+      }),
+    ).toEqual({ status: "accepted" });
+    const adopted = await shelleyStore.list(202);
+    expect(adopted).toMatchObject([
+      { conversationId: "cExisting", slug: "old-work", cwd: "/repo", status: "running" },
+    ]);
+    expect(await shelleyStore.list(101)).toEqual([]);
+
     const handoff = await shelleyStore.start({
       conversationId: 101,
       idempotencyKey: "task-2",
       task: "t",
     });
-    expect(
-      await shelleyStore.send({
-        conversationId: 202,
-        shelleyConversationId: handoff.conversationId,
-        message: "x",
-      }),
-    ).toEqual({ error: "not_found" });
-    expect(
-      await shelleyStore.status({
-        conversationId: 202,
-        shelleyConversationId: handoff.conversationId,
-      }),
-    ).toBeUndefined();
-
     const [row] = await db
       .select()
       .from(shelleyHandoffs)
@@ -94,6 +112,7 @@ describe("Shelley hand-off store", () => {
     expect(
       await shelleyStore.send({
         conversationId: 101,
+        idempotencyKey: "send-3",
         shelleyConversationId: handoff.conversationId,
         message: "also logout",
         queue: true,
@@ -101,6 +120,14 @@ describe("Shelley hand-off store", () => {
     ).toEqual({ status: "queued" });
     const [after] = await db.select().from(shelleyHandoffs).where(eq(shelleyHandoffs.id, row.id));
     expect(after.status).toBe("running");
+    expect(await shelleyStore.list(101)).toHaveLength(1);
+  });
+
+  it("lists Shelley's ready models, its default first", async () => {
+    expect(await shelleyStore.models()).toEqual([
+      { id: "glm-5-3-zai-int-exe-xyz", name: "GLM 5.3", isDefault: true },
+      { id: "claude-opus-5.5", isDefault: false },
+    ]);
   });
 
   it("reports status with the working tree's changed files", async () => {
@@ -132,6 +159,7 @@ describe("shelley toolkit", () => {
       "shelley_send",
       "shelley_status",
       "shelley_list",
+      "shelley_models",
     ]);
     // Starting and steering run code on Shelley's machine: they ask first.
     expect(on.tools.filter((t) => !t.readOnly).map((t) => t.name)).toEqual([

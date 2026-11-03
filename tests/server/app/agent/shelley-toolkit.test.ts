@@ -73,6 +73,10 @@ function fakeStore() {
       url: "/code/cH",
     }),
     list: async () => [],
+    models: async () => [
+      { id: "glm-5-3-zai-int-exe-xyz", name: "GLM 5.3", isDefault: true },
+      { id: "glm-5-3-flash-zai-int-exe-xyz", isDefault: false },
+    ],
   };
   return { store, calls };
 }
@@ -115,6 +119,23 @@ describe("shelley toolkit", () => {
     const result = await run(store, "shelley_status", { conversationId: "cH" });
     expect(result?.text).toContain("a.ts (modified, +2 −1)");
     expect(result?.text).not.toMatch(/Last message from Shelley: Message from the owner/);
+  });
+
+  it("lists Shelley's models with the default marked", async () => {
+    const { store } = fakeStore();
+    const result = await run(store, "shelley_models", {});
+    expect(result?.text).toBe(
+      "glm-5-3-zai-int-exe-xyz (GLM 5.3) — default\nglm-5-3-flash-zai-int-exe-xyz",
+    );
+  });
+
+  it("keys an adopting send to the durable tool task", async () => {
+    const { store, calls } = fakeStore();
+    await run(store, "shelley_send", { conversationId: "cH", message: "go" });
+    expect(calls[0].input).toMatchObject({
+      idempotencyKey: "pi:session-1:3",
+      shelleyConversationId: "cH",
+    });
   });
 
   it("offers no tools without Shelley", async () => {

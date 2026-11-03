@@ -6,7 +6,7 @@
  * its routines).
  */
 import type { ShelleyChangedFile, ShelleyHandoffRecord, ShelleyStore } from "@tiny-agents/agent";
-import { Boom } from "@groot/core/errors";
+import { Boom, HttpError } from "@groot/core/errors";
 import type { ShelleyHandoff } from "../../db";
 import { conversationOwner } from "../bots/bots.owner";
 import { shelleyJson } from "./shelley.client";
@@ -17,6 +17,7 @@ import {
   listHandoffs,
   readTurnOutcome,
   recordHandoff,
+  type TurnOutcome,
   reopenHandoff,
 } from "./shelley.service";
 
@@ -68,36 +69,76 @@ export const shelleyStore: ShelleyStore = {
 
   async send(input) {
     const botId = await botOf(input.conversationId);
-    const handoff = await findHandoff(botId, input.shelleyConversationId);
-    if (!handoff) return { error: "not_found" };
+    let handoff = await findHandoff(botId, input.shelleyConversationId);
+    // An existing conversation (started earlier, in Shelley or on the Code
+    // page): check Shelley has it, then adopt it so its finish comes back.
+    let adopt: TurnOutcome | undefined;
+    if (!handoff) {
+      try {
+        adopt = await readTurnOutcome(input.shelleyConversationId);
+      } catch (error) {
+        if (error instanceof HttpError && error.statusCode === 404) return { error: "not_found" };
+        throw error;
+      }
+    }
     const result = await shelleyJson<{ status?: string }>(
       `/conversation/${encodeURIComponent(input.shelleyConversationId)}/chat`,
       { method: "POST", json: { message: input.message, ...(input.queue ? { queue: true } : {}) } },
     );
-    // The follow-up's turn ends with a finish the bot should hear about too.
-    if (handoff.status === "finished") await reopenHandoff(handoff.id);
+    if (adopt) {
+      handoff = await recordHandoff({
+        botId,
+        idempotencyKey: input.idempotencyKey,
+        task: input.message,
+        ...(adopt.cwd ? { cwd: adopt.cwd } : {}),
+        shelleyConversationId: input.shelleyConversationId,
+        slug: adopt.slug,
+      });
+    } else if (handoff?.status === "finished") {
+      // The follow-up's turn ends with a finish the bot should hear about too.
+      await reopenHandoff(handoff.id);
+    }
     return { status: result.status === "queued" ? "queued" : "accepted" };
   },
 
   async status(input) {
-    const botId = await botOf(input.conversationId);
-    const handoff = await findHandoff(botId, input.shelleyConversationId);
-    if (!handoff) return undefined;
-    const outcome = await readTurnOutcome(input.shelleyConversationId);
+    await botOf(input.conversationId);
+    let outcome: TurnOutcome;
+    try {
+      outcome = await readTurnOutcome(input.shelleyConversationId);
+    } catch (error) {
+      if (error instanceof HttpError && error.statusCode === 404) return undefined;
+      throw error;
+    }
     let changedFiles: ShelleyChangedFile[] | undefined;
-    if (handoff.cwd) {
+    if (outcome.cwd) {
       changedFiles = await shelleyJson<ShelleyChangedFile[]>(
-        `/git/diffs/working/files?cwd=${encodeURIComponent(handoff.cwd)}`,
+        `/git/diffs/working/files?cwd=${encodeURIComponent(outcome.cwd)}`,
       ).catch(() => undefined);
     }
     return {
       working: outcome.working,
-      slug: outcome.slug ?? handoff.slug,
+      slug: outcome.slug,
       text: outcome.text,
       failed: outcome.failed,
       ...(Array.isArray(changedFiles) ? { changedFiles } : {}),
       url: codePath(input.shelleyConversationId),
     };
+  },
+
+  async models() {
+    const list =
+      await shelleyJson<
+        Array<{ id: string; display_name?: string; ready?: boolean; is_default?: boolean }>
+      >("/models");
+    return (Array.isArray(list) ? list : [])
+      .filter((m) => m.ready !== false)
+      .map((m) => ({
+        id: m.id,
+        ...(m.display_name ? { name: m.display_name } : {}),
+        isDefault: Boolean(m.is_default),
+      }))
+      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
   },
 
   async list(conversationId) {

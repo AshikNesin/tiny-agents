@@ -34,18 +34,21 @@ import { Composer } from "./Composer";
 import { loadModels } from "./ConversationView";
 
 const CWD_KEY = "tiny-agents:shelley-cwd";
+const MODEL_KEY = "tiny-agents:shelley-model";
+const THINKING_KEY = "tiny-agents:shelley-thinking";
 
-function readCwd(): string {
+function read(key: string, fallback = ""): string {
   try {
-    return window.localStorage.getItem(CWD_KEY) ?? "";
+    return window.localStorage.getItem(key) ?? fallback;
   } catch {
-    return "";
+    return fallback;
   }
 }
 
-function saveCwd(cwd: string) {
+/** Remembered per browser: the last directory, model and reasoning level used. */
+function save(key: string, value: string) {
   try {
-    window.localStorage.setItem(CWD_KEY, cwd);
+    window.localStorage.setItem(key, value);
   } catch {
     // not remembered in private mode
   }
@@ -147,17 +150,25 @@ function DirectoryBrowser({
 
 export function NewConversation({ rows }: { rows: ShelleyConversation[] }) {
   const navigate = useNavigate();
-  const [cwd, setCwd] = useState(readCwd);
+  const [cwd, setCwd] = useState(() => read(CWD_KEY));
   const [cwdError, setCwdError] = useState<string | null>(null);
   const [worktree, setWorktree] = useState(false);
   const [models, setModels] = useState<ShelleyModel[]>([]);
-  const [model, setModel] = useState("default");
-  const [thinking, setThinking] = useState<ThinkingLevel | "default">("default");
+  const [model, setModel] = useState(() => read(MODEL_KEY, "default"));
+  const [thinking, setThinking] = useState<ThinkingLevel | "default">(
+    () => read(THINKING_KEY, "default") as ThinkingLevel | "default",
+  );
   const [browsing, setBrowsing] = useState(false);
 
   useEffect(() => {
     void loadModels()
-      .then((list) => setModels(list.filter((m) => m.ready)))
+      .then((list) => {
+        const ready = list.filter((m) => m.ready);
+        setModels(ready);
+        setModel((current) =>
+          current === "default" || ready.some((m) => m.id === current) ? current : "default",
+        );
+      })
       .catch(() => setModels([]));
   }, []);
 
@@ -198,7 +209,9 @@ export function NewConversation({ rows }: { rows: ShelleyConversation[] }) {
       if (!created.path) throw new Error("Shelley could not create a worktree here.");
       dir = created.path;
     }
-    if (cwd.trim()) saveCwd(cwd.trim());
+    if (cwd.trim()) save(CWD_KEY, cwd.trim());
+    save(MODEL_KEY, model);
+    save(THINKING_KEY, thinking);
     const { conversationId } = await shelleyApi.create({
       message,
       ...(dir ? { cwd: dir } : {}),

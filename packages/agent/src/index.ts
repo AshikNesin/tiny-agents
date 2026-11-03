@@ -126,6 +126,7 @@ export {
   type ShelleyChangedFile,
   type ShelleyConversationStatus,
   type ShelleyHandoffRecord,
+  type ShelleyModelRecord,
   type ShelleyStore,
   type ShelleyToolkitOptions,
 } from "./toolkits/shelley";

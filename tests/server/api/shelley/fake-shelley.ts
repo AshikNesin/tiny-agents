@@ -69,7 +69,7 @@ export async function startFakeShelley(): Promise<FakeShelley> {
       if (path === "/api/conversations/new") {
         created += 1;
         const id = `cNew${created}`;
-        const parsed = JSON.parse(body.toString() || "{}") as { message?: string };
+        const parsed = JSON.parse(body.toString() || "{}") as { message?: string; cwd?: string };
         conversations.set(id, {
           messages: [],
           conversation: {
@@ -77,6 +77,7 @@ export async function startFakeShelley(): Promise<FakeShelley> {
             slug: `task-${created}`,
             agent_working: true,
             prompt: parsed.message,
+            cwd: parsed.cwd ?? null,
           },
         });
         return json(res, 201, { status: "accepted", conversation_id: id });
@@ -109,6 +110,13 @@ export async function startFakeShelley(): Promise<FakeShelley> {
       if (path === "/api/git/diffs/working/files") {
         return json(res, 200, [
           { path: "math.js", status: "modified", additions: 4, deletions: 0, isGenerated: false },
+        ]);
+      }
+      if (path === "/api/models") {
+        return json(res, 200, [
+          { id: "claude-opus-5.5", ready: true },
+          { id: "glm-5-3-zai-int-exe-xyz", display_name: "GLM 5.3", ready: true, is_default: true },
+          { id: "offline", ready: false },
         ]);
       }
       if (path === "/api/upload/raw") return json(res, 200, { path: "/tmp/shelley-uploads/x.png" });

@@ -69,12 +69,13 @@ fails or messages you while no tab shows it.
 
 Every bot has the `shelley` toolkit (no tools without `SHELLEY_URL`):
 
-| Tool             | Permission | What it does                                                    |
-| ---------------- | ---------- | --------------------------------------------------------------- |
-| `shelley_start`  | ask        | Start a Shelley conversation; returns at once with a link       |
-| `shelley_send`   | ask        | Steer or queue a follow-up on one of this bot's hand-offs       |
-| `shelley_status` | allow      | Working or idle, the last answer, and uncommitted changed files |
-| `shelley_list`   | allow      | This bot's hand-offs                                            |
+| Tool             | Permission | What it does                                                             |
+| ---------------- | ---------- | ------------------------------------------------------------------------ |
+| `shelley_start`  | ask        | Start a Shelley conversation; returns at once with a link                |
+| `shelley_send`   | ask        | Steer or follow up any conversation by id (adopts one started elsewhere) |
+| `shelley_status` | allow      | Working or idle, the last answer, and uncommitted changed files          |
+| `shelley_list`   | allow      | This bot's hand-offs                                                     |
+| `shelley_models` | allow      | Shelley's ready models (custom ones included), its default first         |
 
 The chat shows a `shelley_start` call as a card with the live state and
 **Open in Code**. When Shelley's turn ends, the outcome arrives in the bot's

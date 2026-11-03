@@ -146,6 +146,7 @@ interface ShelleyMessageRow {
 export interface TurnOutcome {
   working: boolean;
   slug: string | null;
+  cwd?: string | null;
   /** Text of the last agent message, or the last error. */
   text: string;
   failed: boolean;
@@ -175,7 +176,7 @@ export async function readTurnOutcome(
 ): Promise<TurnOutcome> {
   const data = await shelleyJson<{
     messages?: ShelleyMessageRow[];
-    conversation?: { agent_working?: boolean; slug?: string | null };
+    conversation?: { agent_working?: boolean; slug?: string | null; cwd?: string | null };
   }>(`/conversation/${encodeURIComponent(conversationId)}`, {}, options);
   const messages = data.messages ?? [];
   let text = "";
@@ -194,6 +195,7 @@ export async function readTurnOutcome(
   return {
     working: Boolean(data.conversation?.agent_working),
     slug: data.conversation?.slug ?? null,
+    cwd: data.conversation?.cwd ?? null,
     text,
     failed,
     endedAt,
