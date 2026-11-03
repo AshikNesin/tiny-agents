@@ -36,6 +36,13 @@ Tailscale.
   missed finishes are reconciled on every reconnect.
 - tiny-agents keeps only what Shelley cannot: hand-offs and what the owner
   has seen (`shelley_seen`).
+- One setting, `SHELLEY_URL`. Requests always carry `X-Exedev-Userid`
+  (exe.dev's `-require-header`); "Open in Shelley" links to the same URL.
+- An exception to ADR 0004's "effectful tools ask": `shelley_start` and
+  `shelley_send` default to Allow (`ToolInfo.allowByDefault`). Handing coding
+  work to Shelley is what the owner asked the bot for; an approval card per
+  hand-off only delays it. Shelley's own rules (and the bot's prompt) govern
+  pushes and destructive actions; the owner can set either tool to Ask.
 
 ## Consequences
 

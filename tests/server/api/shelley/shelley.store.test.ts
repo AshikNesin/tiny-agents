@@ -6,6 +6,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createShelleyToolkit } from "../../../../packages/agent/src/toolkits/shelley";
+import {
+  defaultPermission,
+  effectivePermission,
+} from "../../../../packages/agent/src/capabilities";
 import { db, bots, shelleyHandoffs } from "../../../../apps/web/src/server/db";
 import { shelleyStore } from "../../../../apps/web/src/server/api/shelley/shelley.store";
 import {
@@ -161,10 +165,15 @@ describe("shelley toolkit", () => {
       "shelley_list",
       "shelley_models",
     ]);
-    // Starting and steering run code on Shelley's machine: they ask first.
-    expect(on.tools.filter((t) => !t.readOnly).map((t) => t.name)).toEqual([
-      "shelley_start",
-      "shelley_send",
+    // Handing work to Shelley is the bot's job: allowed by default, like
+    // the read-only tools (the owner can still set Ask or Off).
+    expect(on.tools.map((t) => [t.name, defaultPermission(t)])).toEqual([
+      ["shelley_start", "allow"],
+      ["shelley_send", "allow"],
+      ["shelley_status", "allow"],
+      ["shelley_list", "allow"],
+      ["shelley_models", "allow"],
     ]);
+    expect(effectivePermission(on.tools[0], { shelley_start: "ask" })).toBe("ask");
   });
 });

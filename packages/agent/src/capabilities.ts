@@ -26,6 +26,13 @@ export interface ToolInfo {
   description: string;
   /** Read-only tools default to `allow`; everything else to `ask`. */
   readOnly?: boolean;
+  /**
+   * An effectful tool that defaults to `allow` anyway, because asking would
+   * defeat its purpose (`shelley_start`: the owner's coding agent takes the
+   * work, and it is approval enough that the owner asked the bot for it).
+   * The owner can still set it to Ask or Off.
+   */
+  allowByDefault?: boolean;
   /** Tools that can never run unattended (e.g. `save_skill`): `allow` is not offered. */
   askOnly?: boolean;
   /**
@@ -72,7 +79,8 @@ export interface CapabilitySelection {
 }
 
 export function defaultPermission(tool: ToolInfo): ToolPermission {
-  return tool.readOnly && !tool.askOnly ? "allow" : "ask";
+  if (tool.askOnly) return "ask";
+  return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
 }
 
 /** The permission a tool runs with for a selection (`askOnly` tools never resolve to `allow`). */

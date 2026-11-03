@@ -286,12 +286,14 @@ export function createShelleyToolkit(options: ShelleyToolkitOptions): Capability
         label: "Started Shelley",
         askLabel: "start a coding task in Shelley",
         description: "Start a coding task in Shelley",
+        allowByDefault: true,
       },
       {
         name: "shelley_send",
         label: "Messaged Shelley",
         askLabel: "send Shelley a message",
         description: "Steer or follow up a Shelley conversation",
+        allowByDefault: true,
       },
       {
         name: "shelley_status",

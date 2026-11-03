@@ -8,20 +8,20 @@ login. Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md).
 
 ## Setup
 
-1. Run Shelley where the app host can reach it (e.g. `shelley serve -port 9000`
-   on a VM on your tailnet). Shelley has no auth of its own; never expose it
-   publicly.
-2. Set `SHELLEY_URL=http://<vm>:9000` and restart. The sidebar gains **Code**.
-3. Optional: `SHELLEY_TOKEN` (a bearer for an authenticating proxy in front of
-   Shelley) and `SHELLEY_PUBLIC_URL` (the URL your browser uses, for
-   "Open in Shelley").
+Set `SHELLEY_URL` to Shelley's address on your tailnet (e.g.
+`SHELLEY_URL=http://100.100.200.200:9999`) and restart. That is the only
+setting; the sidebar gains **Code**. Shelley has no auth of its own, so never
+expose it publicly.
 
-4. **exe.dev VMs:** Shelley there runs with `-require-header X-Exedev-Userid`
-   (the exe.dev proxy normally adds it). Reached directly over Tailscale it
-   answers `403 missing required header: X-Exedev-Userid`; set
-   `SHELLEY_HEADERS="X-Exedev-Userid: <any value>"` (any non-empty value
-   passes; `;`-separate several headers, e.g. add `X-ExeDev-Email: you@…` to
-   attribute your messages).
+Defaults, no configuration:
+
+- Every request sends `X-Exedev-Userid`. exe.dev runs Shelley with
+  `-require-header X-Exedev-Userid` (its proxy normally adds it), and reached
+  directly over Tailscale it answers 403 without it; any non-empty value passes.
+- "Open in Shelley" links to `SHELLEY_URL` (reachable from your tailnet).
+- The bot tools `shelley_start` and `shelley_send` are allowed by default (no
+  approval card): handing coding work to Shelley is what the owner asked the
+  bot for. Set them to Ask or Off per bot in its Tools tab.
 
 Without `SHELLEY_URL` nothing changes: no nav entry, no stream, no bot tools.
 
@@ -71,8 +71,8 @@ Every bot has the `shelley` toolkit (no tools without `SHELLEY_URL`):
 
 | Tool             | Permission | What it does                                                             |
 | ---------------- | ---------- | ------------------------------------------------------------------------ |
-| `shelley_start`  | ask        | Start a Shelley conversation; returns at once with a link                |
-| `shelley_send`   | ask        | Steer or follow up any conversation by id (adopts one started elsewhere) |
+| `shelley_start`  | allow      | Start a Shelley conversation; returns at once with a link                |
+| `shelley_send`   | allow      | Steer or follow up any conversation by id (adopts one started elsewhere) |
 | `shelley_status` | allow      | Working or idle, the last answer, and uncommitted changed files          |
 | `shelley_list`   | allow      | This bot's hand-offs                                                     |
 | `shelley_models` | allow      | Shelley's ready models (custom ones included), its default first         |

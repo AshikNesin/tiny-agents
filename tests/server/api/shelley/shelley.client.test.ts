@@ -1,11 +1,10 @@
 /**
- * Shelley started with `-require-header X-Exedev-Userid` (exe.dev's default)
- * answers 403 to requests without it; SHELLEY_HEADERS supplies it, and the
- * 403 says how.
+ * Only SHELLEY_URL is configured. Every request carries the headers a
+ * Shelley run with `-require-header X-Exedev-Userid` (exe.dev's default)
+ * demands, so it works over Tailscale without any other setting.
  */
 import { describe, expect, it } from "vite-plus/test";
 import {
-  parseShelleyHeaders,
   shelleyConfig,
   shelleyFetch,
   type FetchLike,
@@ -24,37 +23,20 @@ function requireHeader(name: string): { fetch: FetchLike; sent: Headers[] } {
   return { fetch, sent };
 }
 
-describe("Shelley request headers", () => {
-  it("parses Name: value pairs like Shelley's CLI -H, skipping malformed ones", () => {
-    expect(
-      parseShelleyHeaders(
-        "X-Exedev-Userid: ashik; X-ExeDev-Email: me@example.com\nbad header: x;novalue:",
-      ),
-    ).toEqual({ "X-Exedev-Userid": "ashik", "X-ExeDev-Email": "me@example.com" });
-    expect(parseShelleyHeaders(undefined)).toEqual({});
+describe("Shelley client", () => {
+  it("needs only SHELLEY_URL", () => {
+    expect(shelleyConfig({})).toBeUndefined();
+    expect(shelleyConfig({ SHELLEY_URL: " http://100.100.200.200:9999/ " })).toEqual({
+      url: "http://100.100.200.200:9999",
+    });
   });
 
-  it("explains the 403 a require-header Shelley answers, then works once the header is set", async () => {
+  it("passes an exe.dev Shelley's require-header guard without any setting", async () => {
     const shelley = requireHeader("X-Exedev-Userid");
-    const without = shelleyConfig({ SHELLEY_URL: "http://vm:9000" })!;
-    await expect(
-      shelleyFetch("/conversations", {}, { config: without, fetch: shelley.fetch }),
-    ).rejects.toMatchObject({
-      statusCode: 403,
-      message: expect.stringContaining('Set SHELLEY_HEADERS="X-Exedev-Userid: <any value>"'),
-    });
-
-    const withHeader = shelleyConfig({
-      SHELLEY_URL: "http://vm:9000",
-      SHELLEY_HEADERS: "X-Exedev-Userid: ashik",
-    })!;
-    const response = await shelleyFetch(
-      "/conversations",
-      {},
-      { config: withHeader, fetch: shelley.fetch },
-    );
+    const config = shelleyConfig({ SHELLEY_URL: "http://vm:9999" })!;
+    const response = await shelleyFetch("/conversations", {}, { config, fetch: shelley.fetch });
     expect(response.status).toBe(200);
-    expect(shelley.sent.at(-1)?.get("x-exedev-userid")).toBe("ashik");
-    expect(shelley.sent.at(-1)?.get("x-shelley-request")).toBe("1");
+    expect(shelley.sent[0].get("x-exedev-userid")).toBeTruthy();
+    expect(shelley.sent[0].get("x-shelley-request")).toBe("1");
   });
 });

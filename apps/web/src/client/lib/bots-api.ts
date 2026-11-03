@@ -150,6 +150,7 @@ export interface ToolInfo {
   description: string;
   readOnly?: boolean;
   askOnly?: boolean;
+  allowByDefault?: boolean;
 }
 
 export interface CapabilityInfo {

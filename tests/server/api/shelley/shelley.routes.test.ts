@@ -28,14 +28,12 @@ beforeEach(async () => {
   shelley.rows.length = 0;
   shelley.conversations.clear();
   process.env.SHELLEY_URL = shelley.url;
-  process.env.SHELLEY_TOKEN = "proxy-secret";
-  setShelleyHub(createShelleyHub({ config: { url: shelley.url, token: "proxy-secret" } }));
+  setShelleyHub(createShelleyHub({ config: { url: shelley.url } }));
 });
 
 afterEach(() => {
   setShelleyHub(undefined);
   delete process.env.SHELLEY_URL;
-  delete process.env.SHELLEY_TOKEN;
 });
 
 const get = <T = unknown>(path: string) => api<T>(app, `/api/v1/shelley${path}`, { token });
@@ -102,7 +100,7 @@ describe("Shelley proxy", () => {
       ["cC", true, false],
     ]);
     const snapshot = shelley.seen.find((s) => s.url === "/api/conversations/snapshot")!;
-    expect(snapshot.headers.authorization).toBe("Bearer proxy-secret");
+    expect(snapshot.headers["x-exedev-userid"]).toBeTruthy();
     expect(snapshot.headers["x-shelley-request"]).toBe("1");
     const archived = await get<Array<{ conversation_id: string }>>("/conversations?view=archived");
     expect(archived.body.data?.[0].conversation_id).toBe("cOld");

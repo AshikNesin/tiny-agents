@@ -128,7 +128,8 @@ router.get("/shelley/status", (c) => {
   const hub = shelleyHub();
   return ok(c, {
     configured: Boolean(config),
-    publicUrl: config?.publicUrl ?? null,
+    // "Open in Shelley": the same address, reachable from the owner's tailnet.
+    publicUrl: config?.url ?? null,
     connection: hub?.status() ?? { state: "disabled" },
   });
 });

@@ -8,52 +8,29 @@ import { Boom, HttpError } from "@groot/core/errors";
 import { appEnv } from "../../env";
 
 export interface ShelleyConfig {
-  /** Base URL the server dials (`http://my-vm:9000`), no trailing slash. */
+  /** Base URL the server dials (`http://my-vm:9999`), no trailing slash. */
   url: string;
-  /** Optional bearer for an authenticating proxy in front of Shelley. */
-  token?: string;
-  /** Base URL the owner's browser uses for "Open in Shelley"; unset hides the link. */
-  publicUrl?: string;
-  /**
-   * Extra headers on every request (`SHELLEY_HEADERS`), e.g. the one a
-   * Shelley started with `-require-header X-Exedev-Userid` demands.
-   */
-  headers?: Record<string, string>;
 }
 
-const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
-
-/**
- * `SHELLEY_HEADERS`: `Name: value` pairs separated by newlines or `;`, the
- * same form as Shelley's own CLI (`shelley client -H "X-Exedev-Userid: me"`).
- * Malformed entries are skipped.
- */
-export function parseShelleyHeaders(raw: string | undefined): Record<string, string> {
-  const headers: Record<string, string> = {};
-  for (const entry of (raw ?? "").split(/[\n;]/)) {
-    const colon = entry.indexOf(":");
-    if (colon <= 0) continue;
-    const name = entry.slice(0, colon).trim();
-    const value = entry.slice(colon + 1).trim();
-    if (!HEADER_NAME.test(name) || !value || /[\r\n]/.test(value)) continue;
-    headers[name] = value;
-  }
-  return headers;
-}
-
+/** Only `SHELLEY_URL`: everything else has a working default. */
 export function shelleyConfig(
   source: Record<string, string | undefined> = process.env,
 ): ShelleyConfig | undefined {
-  const { SHELLEY_URL, SHELLEY_TOKEN, SHELLEY_PUBLIC_URL, SHELLEY_HEADERS } = appEnv(source);
-  const url = trimUrl(SHELLEY_URL);
-  if (!url) return undefined;
-  return {
-    url,
-    token: SHELLEY_TOKEN?.trim() || undefined,
-    publicUrl: trimUrl(SHELLEY_PUBLIC_URL),
-    headers: parseShelleyHeaders(SHELLEY_HEADERS),
-  };
+  const url = trimUrl(appEnv(source).SHELLEY_URL);
+  return url ? { url } : undefined;
 }
+
+/**
+ * Sent on every request. Shelley's `-require-header` guard checks only that
+ * the header is non-empty; exe.dev runs Shelley with `-require-header
+ * X-Exedev-Userid` (its proxy normally adds it), and reached directly over
+ * Tailscale it answers 403 without it. `X-Shelley-Request` is the header
+ * Shelley's own clients send.
+ */
+export const SHELLEY_HEADERS: Readonly<Record<string, string>> = {
+  "X-Shelley-Request": "1",
+  "X-Exedev-Userid": "tiny-agents",
+};
 
 function trimUrl(raw: string | undefined): string | undefined {
   const url = raw?.trim().replace(/\/+$/, "");
@@ -87,13 +64,7 @@ export async function shelleyFetch(
 ): Promise<Response> {
   const config = options.config ?? shelleyConfig();
   if (!config) throw Boom.unavailable("Shelley is not configured: set SHELLEY_URL.");
-  const headers: Record<string, string> = {
-    // Shelley's optional require-header guard; harmless when it is off.
-    "X-Shelley-Request": "1",
-    ...config.headers,
-    ...init.headers,
-  };
-  if (config.token) headers.Authorization = `Bearer ${config.token}`;
+  const headers: Record<string, string> = { ...SHELLEY_HEADERS, ...init.headers };
   let body = init.body;
   if (init.json !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -116,11 +87,7 @@ export async function shelleyFetch(
   }
   if (!response.ok) {
     const text = (await response.text().catch(() => "")).trim().slice(0, 500);
-    let message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
-    // Shelley started with `-require-header <Name>` (exe.dev's default is
-    // X-Exedev-Userid): say how to send it.
-    const required = /missing required header: ([\w-]+)/.exec(text)?.[1];
-    if (required) message += `. Set SHELLEY_HEADERS="${required}: <any value>" and restart.`;
+    const message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
     if (response.status >= 400 && response.status < 500) {
       throw new HttpError(response.status, message);
     }

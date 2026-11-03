@@ -8,9 +8,13 @@ import type { CapabilityInfo, ToolPermission } from "./bots-api";
 export type ToolInfo = CapabilityInfo["tools"][number];
 export type Permissions = Record<string, ToolPermission>;
 
-/** Read-only tools run unattended; anything that changes something asks. */
+/**
+ * Read-only tools run unattended; anything that changes something asks,
+ * unless its toolkit marks it `allowByDefault` (the Shelley hand-off).
+ */
 export function defaultPermission(tool: ToolInfo): ToolPermission {
-  return tool.readOnly && !tool.askOnly ? "allow" : "ask";
+  if (tool.askOnly) return "ask";
+  return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
 }
 
 export function permissionOf(permissions: Permissions, tool: ToolInfo): ToolPermission {

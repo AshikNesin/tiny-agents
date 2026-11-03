@@ -28,15 +28,6 @@ const appEnvSchema = z.object({
    * Tailscale). Unset = the Code page says it is not configured.
    */
   SHELLEY_URL: z.string().optional(),
-  /** Optional bearer token, for a Shelley behind an authenticating proxy. */
-  SHELLEY_TOKEN: z.string().optional(),
-  /** Shelley's URL as the owner's browser reaches it, for "Open in Shelley". */
-  SHELLEY_PUBLIC_URL: z.string().optional(),
-  /**
-   * Extra headers on every Shelley request, `Name: value` separated by `;` or
-   * newlines (e.g. `X-Exedev-Userid: me` for a Shelley run with -require-header).
-   */
-  SHELLEY_HEADERS: z.string().optional(),
   /** "1" boots the faux agent runtime (no network, no keys): dev and e2e only. */
   TINY_AGENTS_FAUX: z.string().optional(),
 });

@@ -58,9 +58,7 @@ a variable involves. LLM provider keys such as `OPENAI_API_KEY` are not in the
 schema: the provider SDKs behind `@groot/ai` read them from `process.env` when
 no `apiKey` is passed.
 
-Shelley coding agent (optional): `SHELLEY_URL`, `SHELLEY_TOKEN`,
-`SHELLEY_PUBLIC_URL`, `SHELLEY_HEADERS` (e.g. `X-Exedev-Userid: me` for an
-exe.dev Shelley). Without `SHELLEY_URL` the Code page and the `shelley_*`
+Shelley coding agent (optional): `SHELLEY_URL`, the only setting. Without `SHELLEY_URL` the Code page and the `shelley_*`
 tools stay off. See [Code](./features/code.md).
 
 Claude plan (experimental, off by default): `CLAUDE_CODE_ENGINE_ENABLED`,
