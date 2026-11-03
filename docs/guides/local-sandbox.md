@@ -95,8 +95,10 @@ The container restarts with Docker (`restart: unless-stopped`).
   fail. Leave `SANDBOX_EGRESS_ALLOWLIST` unset with the local sandbox, and use
   the browser's vault fill rather than secrets in commands.
 - **amd64 only.** Google Chrome ships for linux/amd64. On Apple Silicon,
-  Docker runs the image emulated (Rosetta in Docker Desktop or OrbStack):
-  slower to start, fine for normal use.
+  Docker runs the image emulated: slower to start, fine for normal use, as
+  long as the emulator is **Rosetta** (macOS 15 or later). Docker's fallback,
+  QEMU, has no AVX, and native tools that need it crash; see
+  [Troubleshooting](#troubleshooting).
 - **Your network.** The container reaches the internet through Docker's
   network, so a corporate proxy or TLS-inspecting firewall applies to it as it
   does to the host. Bots' commands can reach anything this machine can.
@@ -115,6 +117,19 @@ The container restarts with Docker (`restart: unless-stopped`).
   the key (check `SANDBOX_SSH_KEY_FILE`; the app logs once when it can't read
   it), or the container was started with another key. Run `pnpm sandbox:up`
   again.
+- **Claude Code's installer (or Bun) crashes with "CPU lacks AVX support" /
+  "Segmentation fault"**, or a terminal tab is labelled `qemu-x86_64`: Docker
+  is emulating amd64 with QEMU, which has no AVX (`pnpm sandbox:up` warns
+  about this). Switch the emulator to Rosetta, which supports AVX on macOS 15
+  or later, then recreate the container with `pnpm sandbox:down` and
+  `pnpm sandbox:up`:
+  - **Docker Desktop:** Settings → General → turn on "Use Rosetta for
+    x86_64/amd64 emulation on Apple Silicon" (needs the Apple Virtualization
+    framework).
+  - **Colima:** `colima delete && colima start --vm-type vz --vz-rosetta`
+    (this deletes Colima's VM, including its images and volumes).
+  - **OrbStack:** uses Rosetta by default; check Settings → System → "Use
+    Rosetta to run Intel code" is on.
 - **The browser or desktop won't start**: `pnpm sandbox:shell`, then look at
   the logs in `~/.tiny-agents/` and the profile directories.
 - **"Hash Sum mismatch" / "Failed to fetch" during `pnpm sandbox:up`**: apt
