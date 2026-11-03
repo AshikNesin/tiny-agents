@@ -5,13 +5,20 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { motion } from "motion/react";
 
 import { cn } from "../lib/utils";
-import {
-  dialogPanelClass,
-  overlayClass,
-  panelMotion,
-  panelPlacement,
-  useModalPresence,
-} from "../lib/modal-motion";
+import { useModalPresence } from "../motion";
+
+// Same backdrop, panel and motion as dialog.tsx, kept local like the rest of
+// this port's styling.
+const overlayClass = "fixed inset-0 isolate z-50 bg-black/40 dark:bg-black/70";
+const panelClass =
+  "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[400px] flex-col gap-5 rounded-3xl bg-popover p-6 text-sm text-popover-foreground shadow-2xl shadow-black/10 ring-1 ring-foreground/10 outline-none";
+const panelInitial = { opacity: 0, scale: 0.97, x: "-50%", y: "-50%" };
+const panelAnimate = (open: boolean) => ({
+  opacity: open ? 1 : 0,
+  scale: open ? 1 : 0.97,
+  x: "-50%",
+  y: "-50%",
+});
 import { Button, type ButtonProps } from "../button";
 
 /**
@@ -98,8 +105,9 @@ function AlertDialogContent({
       </AlertDialogPrimitive.Overlay>
       <AlertDialogPrimitive.Content data-slot="alert-dialog-content" asChild forceMount {...props}>
         <motion.div
-          className={cn(dialogPanelClass, panelPlacement("center"), "max-w-[400px]", className)}
-          {...panelMotion(open, "center")}
+          className={cn(panelClass, className)}
+          initial={panelInitial}
+          animate={panelAnimate(open)}
           transition={transition}
           onAnimationComplete={onExitComplete}
         >

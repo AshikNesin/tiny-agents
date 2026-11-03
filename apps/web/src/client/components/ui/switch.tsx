@@ -2,30 +2,162 @@
 
 import * as React from "react";
 import { Switch as SwitchPrimitive } from "radix-ui";
+import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 
 import { cn } from "@groot/shell/lib/utils";
+
+/**
+ * Toggle switch with Fluid Functionalism's thumb
+ * (https://www.fluidfunctionalism.com/docs/switch): it springs between the
+ * ends, stretches into a pill on hover, squashes on press, and follows a drag
+ * (released past the midpoint, it toggles). Radix still owns the checkbox
+ * semantics, keyboard toggling and form wiring, so the API is unchanged.
+ */
+
+// Track/thumb geometry per size. Each track is its thumb plus 4px, so a
+// resting thumb sits 2px from every edge.
+const METRICS = {
+  default: { trackWidth: 34, trackHeight: 20, thumb: 16, hoverExtend: 2, pressExtend: 4 },
+  sm: { trackWidth: 28, trackHeight: 16, thumb: 12, hoverExtend: 2, pressExtend: 3 },
+} as const;
+const OFFSET = 2;
+/** Pointer travel (px) before a press becomes a drag; under it a tap still toggles. */
+const DRAG_DEAD_ZONE = 2;
+const SPRING = { type: "spring", duration: 0.16, bounce: 0 } as const;
 
 function Switch({
   className,
   size = "default",
+  checked: checkedProp,
+  defaultChecked,
+  onCheckedChange,
+  disabled,
+  onClick,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onPointerEnter,
+  onPointerLeave,
   ...props
 }: React.ComponentProps<typeof SwitchPrimitive.Root> & {
   size?: "sm" | "default";
 }) {
+  const [uncontrolled, setUncontrolled] = React.useState(defaultChecked ?? false);
+  const checked = checkedProp ?? uncontrolled;
+  const setChecked = (next: boolean) => {
+    if (checkedProp === undefined) setUncontrolled(next);
+    onCheckedChange?.(next);
+  };
+
+  const reduceMotion = useReducedMotion() ?? false;
+  const m = METRICS[size];
+  const travel = m.trackWidth - m.thumb - OFFSET * 2;
+  const [hovered, setHovered] = React.useState(false);
+  const [pressed, setPressed] = React.useState(false);
+
+  const width = pressed ? m.thumb + m.pressExtend : hovered ? m.thumb + m.hoverExtend : m.thumb;
+  const height = pressed ? m.thumb - m.pressExtend : m.thumb;
+  // Checked, the extra width grows leftward so the outer edge stays pinned.
+  const restX = checked ? OFFSET + travel - (width - m.thumb) : OFFSET;
+
+  const x = useMotionValue(restX);
+  const mounted = React.useRef(false);
+  const drag = React.useRef<{ startX: number; originX: number; active: boolean } | null>(null);
+  // Outlives the pointerup by one click so the click that ends a drag is swallowed.
+  const swallowClick = React.useRef(false);
+
+  React.useEffect(() => {
+    if (drag.current?.active) return;
+    if (!mounted.current || reduceMotion) x.set(restX);
+    else void animate(x, restX, SPRING);
+    mounted.current = true;
+  }, [restX, x, reduceMotion]);
+
+  const dragBounds = () => ({
+    min: OFFSET,
+    max: m.trackWidth - OFFSET - (m.thumb + m.pressExtend),
+  });
+
+  const endPress = (commit: boolean) => {
+    const state = drag.current;
+    drag.current = null;
+    setPressed(false);
+    if (!state?.active) return;
+    swallowClick.current = true;
+    const { min, max } = dragBounds();
+    const on = x.get() > (min + max) / 2;
+    if (commit && on !== checked) setChecked(on);
+    else void animate(x, restX, SPRING);
+  };
+
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
+      checked={checked}
+      onCheckedChange={setChecked}
+      disabled={disabled}
       className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent outline-none group-has-[:focus-visible]/field-label:border-transparent group-has-[:focus-visible]/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "peer relative inline-flex shrink-0 touch-none rounded-full outline-none select-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,
       )}
+      style={{ width: m.trackWidth, height: m.trackHeight }}
+      onPointerEnter={(e) => {
+        onPointerEnter?.(e);
+        if (e.pointerType === "mouse") setHovered(true);
+      }}
+      onPointerLeave={(e) => {
+        onPointerLeave?.(e);
+        setHovered(false);
+      }}
+      onPointerDown={(e) => {
+        onPointerDown?.(e);
+        if (disabled || (e.pointerType === "mouse" && e.button !== 0)) return;
+        setPressed(true);
+        swallowClick.current = false;
+        drag.current = { startX: e.clientX, originX: x.get(), active: false };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        onPointerMove?.(e);
+        const state = drag.current;
+        if (!state) return;
+        const delta = e.clientX - state.startX;
+        if (!state.active) {
+          if (Math.abs(delta) < DRAG_DEAD_ZONE) return;
+          state.active = true;
+        }
+        const { min, max } = dragBounds();
+        x.set(Math.max(min, Math.min(max, state.originX + delta)));
+      }}
+      onPointerUp={(e) => {
+        onPointerUp?.(e);
+        endPress(true);
+      }}
+      onPointerCancel={(e) => {
+        onPointerCancel?.(e);
+        endPress(false);
+      }}
+      onClick={(e) => {
+        onClick?.(e);
+        // The click that ends a drag: the drag already decided.
+        if (swallowClick.current) {
+          swallowClick.current = false;
+          e.preventDefault();
+        }
+      }}
       {...props}
     >
-      <SwitchPrimitive.Thumb
-        data-slot="switch-thumb"
-        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground"
-      />
+      <SwitchPrimitive.Thumb data-slot="switch-thumb" asChild>
+        <motion.span
+          className="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
+          initial={false}
+          style={{ x }}
+          animate={{ y: OFFSET + (m.thumb - height) / 2, width, height }}
+          transition={mounted.current && !reduceMotion ? SPRING : { duration: 0 }}
+        />
+      </SwitchPrimitive.Thumb>
     </SwitchPrimitive.Root>
   );
 }

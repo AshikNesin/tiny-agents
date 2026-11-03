@@ -5,14 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { motion } from "motion/react";
 
 import { cn } from "./lib/utils";
-import {
-  dialogPanelClass,
-  dialogSizes,
-  overlayClass,
-  panelMotion,
-  panelPlacement,
-  useModalPresence,
-} from "./lib/modal-motion";
+import { useModalPresence } from "./motion";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
 
@@ -23,6 +16,40 @@ import { XIcon } from "lucide-react";
  * stays mounted, so closing animates instead of vanishing. Radix still owns
  * focus trapping, scroll lock, dismissal and the ARIA wiring.
  */
+
+/** The dimmed backdrop behind a modal panel. */
+const overlayClass = "fixed inset-0 isolate z-50 bg-black/40 dark:bg-black/70";
+
+/**
+ * Panel widths (each capped at the viewport less a 1rem gutter per side):
+ * `sm` 400px, the default; `md` 480px; `lg` 540px; `xl` 880px, the canvas for
+ * composed layouts. A `sm:max-w-*` class still overrides it from 640px up.
+ */
+const dialogSizes = {
+  sm: "max-w-[400px]",
+  md: "max-w-[480px]",
+  lg: "max-w-[540px]",
+  xl: "max-w-[880px]",
+} as const;
+
+/** Base panel classes, shared by the dialog and the alert dialog. */
+const dialogPanelClass =
+  "fixed left-1/2 z-50 flex w-[calc(100%-2rem)] flex-col gap-5 rounded-3xl bg-popover p-6 text-sm text-popover-foreground shadow-2xl shadow-black/10 ring-1 ring-foreground/10 outline-none";
+
+function panelPlacement(position: "center" | "top") {
+  return position === "top"
+    ? "top-[12dvh] max-h-[calc(88dvh-1rem)]"
+    : "top-1/2 max-h-[calc(100dvh-2rem)]";
+}
+
+/** Motion targets for the panel: centered panels translate by half their height. */
+function panelMotion(open: boolean, position: "center" | "top") {
+  const y = position === "top" ? 0 : "-50%";
+  return {
+    initial: { opacity: 0, scale: 0.97, x: "-50%", y },
+    animate: { opacity: open ? 1 : 0, scale: open ? 1 : 0.97, x: "-50%", y },
+  };
+}
 
 /** Whether the enclosing Dialog is open: the content keeps itself mounted through the exit. */
 const DialogOpenContext = React.createContext(false);

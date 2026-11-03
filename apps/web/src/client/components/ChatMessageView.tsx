@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { cn } from "@groot/ui/lib/utils";
 import { Ban, Check, Clock, Copy, ExternalLink, Hand, KeyRound, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
@@ -76,6 +78,80 @@ function CopyButton({ text, at }: { text: string; at?: number }) {
   );
 }
 
+/**
+ * Fluid ChatMessage's meta row under a message: when it was sent, and copy.
+ * It keeps its height so revealing it never shifts the transcript; hidden
+ * until the message is hovered or focused, and always shown on touch.
+ */
+function MessageMeta({
+  text,
+  at,
+  align = "start",
+}: {
+  text: string;
+  at?: number;
+  align?: "start" | "end";
+}) {
+  const stamp = at ? messageTime(at) : undefined;
+  return (
+    <div
+      data-slot="message-meta"
+      className={cn(
+        "-mt-0.5 flex h-6 items-center gap-1.5 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100",
+        align === "end" && "flex-row-reverse",
+      )}
+    >
+      <CopyAction text={text} />
+      {stamp && (
+        <time
+          dateTime={new Date(at!).toISOString()}
+          title={stamp.full}
+          className="text-muted-foreground text-xs tabular-nums whitespace-nowrap"
+        >
+          {stamp.short}
+        </time>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fluid ChatMessage's entrance: a message that just arrived rises 8px and
+ * scales up from its bubble corner. History already on screen when the
+ * transcript renders (or remounts while scrolling) stays still.
+ */
+function MessageEnter({
+  fresh,
+  align,
+  className,
+  children,
+}: {
+  fresh: boolean;
+  align: "start" | "end";
+  className?: string;
+  children: ReactNode;
+}) {
+  const [animate] = useState(fresh);
+  const reduceMotion = useReducedMotion() ?? false;
+  return (
+    <motion.div
+      className={className}
+      initial={animate && !reduceMotion ? { opacity: 0, y: 8, scale: 0.96 } : false}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: "spring", duration: 0.16, bounce: 0 }}
+      style={{ transformOrigin: align === "end" ? "bottom right" : "bottom left" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Arrived within the last few seconds (or is being streamed now). */
+function isFresh(message: ChatMessage): boolean {
+  if (message.status === "streaming") return true;
+  return Boolean(message.createdAt) && Date.now() - message.createdAt < 5_000;
+}
+
 function CopyAction({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -98,9 +174,9 @@ function CopyAction({ text }: { text: string }) {
   );
 }
 
-/** The owner's pill: dark in light mode, mid-grey in dark (Grok palette). */
+/** The owner's bubble: Fluid ChatMessage's soft accent tint (tokens in app.css). */
 export const USER_PILL =
-  "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-3xl px-4 py-3 text-[15px] leading-[22.5px] wrap-break-word";
+  "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";
 
 const WORKING_WORDS = ["Thinking", "Working", "Planning", "Refining"] as const;
 const REPLYING_WORDS = ["Replying"] as const;
@@ -766,20 +842,22 @@ export function ChatMessageView({
         {/* content-visibility on the scroller item breaks percentage
             max-widths, so the pill is capped by the flex parent chain
             instead of a nested wrapper. */}
-        <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
+        <MessageEnter
+          fresh={isFresh(message)}
+          align="end"
+          className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1"
+        >
           {message.attachments && message.attachments.length > 0 && (
             <MessageAttachments attachments={message.attachments} />
           )}
           {text && (
-            <div className="flex max-w-full min-w-0 items-center gap-2">
-              <CopyButton text={text} at={message.createdAt || undefined} />
-              <div className={USER_PILL}>
-                <p className="whitespace-pre-wrap">{text}</p>
-              </div>
+            <div className={USER_PILL}>
+              <p className="whitespace-pre-wrap">{text}</p>
             </div>
           )}
           {failed && <p className="text-destructive text-right text-xs">{message.error}</p>}
-        </div>
+          {text && <MessageMeta text={text} at={message.createdAt || undefined} align="end" />}
+        </MessageEnter>
       </Message>
     );
   }
@@ -936,10 +1014,15 @@ function assistantView(
             streaming) shows just its trace rows; rendering the card anyway
             painted an empty box. */}
         {(message.text || (hasNotice && !streaming)) && (
-          <div className="flex min-w-0 items-center gap-2">
+          <MessageEnter
+            fresh={isFresh(message)}
+            align="start"
+            className="flex min-w-0 flex-col items-start gap-1"
+          >
             <div
               data-slot="reply-card"
-              className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
+              data-variant="plain"
+              className="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
             >
               <Streamdown components={markdownComponents}>{message.text}</Streamdown>
               {message.status === "error" && (
@@ -954,8 +1037,10 @@ function assistantView(
                 <p className="text-destructive mt-1 text-xs">{message.error}</p>
               )}
             </div>
-            {message.text && <CopyButton text={message.text} at={message.createdAt || undefined} />}
-          </div>
+            {message.text && !streaming && (
+              <MessageMeta text={message.text} at={message.createdAt || undefined} />
+            )}
+          </MessageEnter>
         )}
         {/* Nothing visible yet: dots, unless a running tool row or the
             reasoning block already shows the bot at work. */}

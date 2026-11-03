@@ -23,6 +23,7 @@
     "./list-row": "./src/list-row.tsx",
     "./loading-skeleton": "./src/loading-skeleton.tsx",
     "./loading-spinner": "./src/loading-spinner.tsx",
+    "./motion": "./src/motion.tsx",
     "./pagination": "./src/pagination.tsx",
     "./provider": "./src/provider.tsx",
     "./select": "./src/select.tsx",

@@ -9,8 +9,9 @@
 /* Chat surfaces */
 :root {
   --bubble: #f0efed;
-  --bubble-user: #070707;
-  --bubble-user-foreground: #ffffff;
+  /* Fluid ChatMessage: the owner's bubble is the accent tint, not a dark pill. */
+  --bubble-user: color-mix(in oklab, var(--accent), var(--foreground) 4%);
+  --bubble-user-foreground: var(--foreground);
   --composer: #ffffff;
   --fg-tertiary: #6b6b6b;
   --link: oklch(0.5 0.2 267.7);
@@ -20,8 +21,8 @@
 
 .dark {
   --bubble: #201f1d;
-  --bubble-user: #5a5a5a;
-  --bubble-user-foreground: #fcfcfc;
+  --bubble-user: color-mix(in oklab, var(--accent), var(--foreground) 6%);
+  --bubble-user-foreground: var(--foreground);
   --composer: #201f1d;
   --fg-tertiary: #858585;
   --link: oklch(0.72 0.146 271.2);
