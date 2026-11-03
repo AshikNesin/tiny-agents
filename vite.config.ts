@@ -131,7 +131,17 @@ export default defineConfig({
 
   // Linting configuration
   lint: {
-    ignorePatterns: ["dist/**", "node_modules/**"],
+    // Vendored code is linted where it comes from: the Stageshow skill
+    // (installed by `npx skills`), its kit copied into the site, and the
+    // site's built demo bundle.
+    ignorePatterns: [
+      "dist/**",
+      "node_modules/**",
+      ".agents/skills/stageshow/**",
+      ".claude/skills/stageshow/**",
+      "site/demos/kit/**",
+      "site/assets/**",
+    ],
   },
 
   // Formatting configuration
@@ -143,7 +153,13 @@ export default defineConfig({
     // every "chore: version packages" merge — the release workflow commits the
     // raw changeset output with VITE_GIT_HOOKS=0, so the pre-commit formatter
     // never gets a chance to normalize them.
-    ignorePatterns: ["**/CHANGELOG.md"],
+    ignorePatterns: [
+      "**/CHANGELOG.md",
+      ".agents/skills/stageshow/**",
+      ".claude/skills/stageshow/**",
+      "site/demos/kit/**",
+      "site/assets/**",
+    ],
     semi: true,
     singleQuote: false,
   },
