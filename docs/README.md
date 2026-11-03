@@ -37,29 +37,29 @@ How to work on and ship the app.
 
 What ships in the box and how to use or extend it.
 
-| Document                                                                     | What it covers                                                  |
-| ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`features/todos.md`](./features/todos.md)                                   | The reference feature module (table, routes, service, jobs)     |
-| [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI     |
-| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, R2, memory     |
-| [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                               |
-| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                               |
-| [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output                      |
-| [`claude-subscription.md`](./claude-subscription.md)                         | Experimental Claude Pro/Max path through Claude Code            |
-| [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client           |
-| [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                      |
-| [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page          |
-| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files            |
-| [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions            |
-| [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated      |
-| [`features/routines.md`](./features/routines.md)                             | tiny-agents: where routine runs happen, result cards            |
-| [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats             |
-| [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you               |
-| [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks                |
-| [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                       |
-| [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view     |
-| [`features/code.md`](./features/code.md)                                     | tiny-agents: drive the Shelley coding agent, live and steerable |
-| [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots           |
+| Document                                                                     | What it covers                                                 |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [`features/todos.md`](./features/todos.md)                                   | The reference feature module (table, routes, service, jobs)    |
+| [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI    |
+| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, R2, memory    |
+| [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                              |
+| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                              |
+| [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output                     |
+| [`claude-subscription.md`](./claude-subscription.md)                         | Experimental Claude Pro/Max path through Claude Code           |
+| [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client          |
+| [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                     |
+| [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page         |
+| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files           |
+| [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions           |
+| [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated     |
+| [`features/routines.md`](./features/routines.md)                             | tiny-agents: where routine runs happen, result cards           |
+| [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats            |
+| [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you              |
+| [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks               |
+| [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                      |
+| [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view    |
+| [`features/code.md`](./features/code.md)                                     | tiny-agents: Shelley workspace, subagents, diffs, bot hand-off |
+| [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots          |
 
 ## Reference
 

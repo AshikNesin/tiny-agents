@@ -121,6 +121,14 @@ export {
   type TaskStatus,
   type TaskPriority,
 } from "./toolkits/tasks";
+export {
+  createShelleyToolkit,
+  type ShelleyChangedFile,
+  type ShelleyConversationStatus,
+  type ShelleyHandoffRecord,
+  type ShelleyStore,
+  type ShelleyToolkitOptions,
+} from "./toolkits/shelley";
 export { createTodayCapability, type TodayOptions } from "./toolkits/today";
 export {
   createSandboxToolkit,

@@ -90,6 +90,8 @@ export interface ChatToolCall {
   takeover?: { status: "pending" | "released" | "expired"; reason: string };
   /** Pages the call searched or read (web tools). */
   sources?: { url: string; title: string }[];
+  /** `shelley_start` calls (issue #143): the Shelley conversation it started. */
+  shelley?: { conversationId: string; slug: string | null; cwd: string | null; url: string };
   /** `ask_owner` calls: the questions the bot asked the owner. */
   questions?: OwnerQuestion[];
   /**

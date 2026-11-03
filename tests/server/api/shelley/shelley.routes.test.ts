@@ -1,146 +1,215 @@
 /**
- * The Code page's Shelley proxy against a fake Shelley: the allowlisted
- * calls reach it with the right paths and bodies, its errors keep their
- * meaning, and its SSE stream is relayed frame by frame.
+ * The Code page's curated Shelley proxy (issue #143) against a fake Shelley:
+ * owner-only, a fixed allowlist, ids and paths validated before they reach
+ * a URL, Shelley's 4xx kept, and the list decorated with followed / unread.
  */
-import { createServer, type IncomingMessage, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { api, createTestApp } from "../../helpers";
-import { authToken } from "../../fixtures";
+import { authToken, resetAppTables } from "../../fixtures";
+import {
+  createShelleyHub,
+  setShelleyHub,
+} from "../../../../apps/web/src/server/api/shelley/shelley.hub";
+import { markSeen } from "../../../../apps/web/src/server/api/shelley/shelley.service";
+import { startFakeShelley, type FakeShelley } from "./fake-shelley";
 
-const token = await authToken("shelley-test@example.com");
+const token = await authToken("shelley-routes@example.com");
 const app = createTestApp();
-
-interface Seen {
-  method: string;
-  url: string;
-  headers: IncomingMessage["headers"];
-  body: string;
-}
-const seen: Seen[] = [];
-let shelley: Server;
-let shelleyUrl = "";
+let shelley: FakeShelley;
 
 beforeAll(async () => {
-  shelley = createServer((req, res) => {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      seen.push({ method: req.method ?? "", url: req.url ?? "", headers: req.headers, body });
-      const json = (status: number, value: unknown) => {
-        res.writeHead(status, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(value));
-      };
-      if (req.url?.startsWith("/api/conversations?")) {
-        return json(200, [{ conversation_id: "cAbc", slug: "fix-tests" }]);
-      }
-      if (req.url === "/api/conversations/new") {
-        return json(201, { status: "accepted", conversation_id: "cNew" });
-      }
-      if (req.url === "/api/conversation/cAbc/chat") return json(202, { status: "queued" });
-      if (req.url === "/api/conversation/cGone/chat") {
-        res.writeHead(404);
-        return res.end("conversation not found");
-      }
-      if (req.url === "/api/conversation/cAbc/cancel") return json(200, { status: "cancelled" });
-      if (req.url === "/api/conversation/cAbc/stream") {
-        res.writeHead(200, { "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ conversation_state: { working: true } })}\n\n`);
-        res.write(`data: ${JSON.stringify({ stream_delta: { type: "text", text: "Hi" } })}\n\n`);
-        return res.end();
-      }
-      res.writeHead(500);
-      res.end("unexpected");
-    });
-  });
-  await new Promise<void>((resolve) => shelley.listen(0, "127.0.0.1", resolve));
-  shelleyUrl = `http://127.0.0.1:${(shelley.address() as AddressInfo).port}`;
+  shelley = await startFakeShelley();
 });
+afterAll(() => shelley.close());
 
-afterAll(() => new Promise<void>((resolve) => shelley.close(() => resolve())));
+beforeEach(async () => {
+  await resetAppTables();
+  shelley.seen.length = 0;
+  shelley.rows.length = 0;
+  shelley.conversations.clear();
+  process.env.SHELLEY_URL = shelley.url;
+  process.env.SHELLEY_TOKEN = "proxy-secret";
+  setShelleyHub(createShelleyHub({ config: { url: shelley.url, token: "proxy-secret" } }));
+});
 
 afterEach(() => {
-  seen.length = 0;
+  setShelleyHub(undefined);
   delete process.env.SHELLEY_URL;
+  delete process.env.SHELLEY_TOKEN;
 });
 
-describe("shelley proxy", () => {
-  it("says when Shelley is not configured", async () => {
-    const status = await api<{ configured: boolean }>(app, "/api/v1/shelley/status", { token });
-    expect(status.body.data).toEqual({ configured: false, url: null });
-    const list = await api(app, "/api/v1/shelley/conversations", { token });
-    expect(list.status).toBe(503);
+const get = <T = unknown>(path: string) => api<T>(app, `/api/v1/shelley${path}`, { token });
+const post = <T = unknown>(path: string, json?: unknown) =>
+  api<T>(app, `/api/v1/shelley${path}`, {
+    method: "POST",
+    token,
+    ...(json !== undefined ? { json } : {}),
   });
 
-  it("needs the owner's login", async () => {
-    process.env.SHELLEY_URL = shelleyUrl;
-    const response = await api(app, "/api/v1/shelley/conversations");
-    expect(response.status).toBe(401);
-    expect(seen).toHaveLength(0);
+describe("Shelley proxy", () => {
+  it("says when Shelley is not configured, and needs the owner's login", async () => {
+    setShelleyHub(undefined);
+    delete process.env.SHELLEY_URL;
+    const status = await get<{ configured: boolean }>("/status");
+    expect(status.body.data).toMatchObject({
+      configured: false,
+      connection: { state: "disabled" },
+    });
+    expect((await get("/conversations")).status).toBe(503);
+    process.env.SHELLEY_URL = shelley.url;
+    expect((await api(app, "/api/v1/shelley/conversations")).status).toBe(401);
   });
 
-  it("lists, starts, steers and stops conversations", async () => {
-    process.env.SHELLEY_URL = `${shelleyUrl}/`;
-    const list = await api<unknown[]>(app, "/api/v1/shelley/conversations", { token });
-    expect(list.body.data).toEqual([{ conversation_id: "cAbc", slug: "fix-tests" }]);
-    expect(seen[0].headers["x-shelley-request"]).toBe("1");
+  it("lists conversations with subagents, marking followed and unread ones", async () => {
+    shelley.rows.push(
+      {
+        conversation_id: "cA",
+        slug: "a",
+        parent_conversation_id: null,
+        working: false,
+        max_sequence_id: 9,
+        updated_at: "x",
+        created_at: "x",
+      },
+      {
+        conversation_id: "cB",
+        slug: "b",
+        parent_conversation_id: "cA",
+        working: true,
+        max_sequence_id: 3,
+        updated_at: "x",
+        created_at: "x",
+      },
+      {
+        conversation_id: "cC",
+        slug: "c",
+        parent_conversation_id: null,
+        working: false,
+        max_sequence_id: 4,
+        updated_at: "x",
+        created_at: "x",
+      },
+    );
+    await markSeen("cA", 5);
+    await markSeen("cC", 4);
+    const list =
+      await get<Array<{ conversation_id: string; followed: boolean; unread: boolean }>>(
+        "/conversations",
+      );
+    expect(list.body.data?.map((r) => [r.conversation_id, r.followed, r.unread])).toEqual([
+      ["cA", true, true],
+      ["cB", false, false],
+      ["cC", true, false],
+    ]);
+    const snapshot = shelley.seen.find((s) => s.url === "/api/conversations/snapshot")!;
+    expect(snapshot.headers.authorization).toBe("Bearer proxy-secret");
+    expect(snapshot.headers["x-shelley-request"]).toBe("1");
+    const archived = await get<Array<{ conversation_id: string }>>("/conversations?view=archived");
+    expect(archived.body.data?.[0].conversation_id).toBe("cOld");
+  });
 
-    const created = await api<{ conversationId: string }>(app, "/api/v1/shelley/conversations", {
-      method: "POST",
-      json: { message: "run the tests", cwd: "/repo" },
-      token,
+  it("starts a conversation with options and follows it", async () => {
+    const created = await post<{ conversationId: string }>("/conversations", {
+      message: "run the tests",
+      cwd: "/repo",
+      model: "claude-opus-5.5",
+      thinkingLevel: "high",
     });
     expect(created.status).toBe(201);
-    expect(created.body.data).toEqual({ conversationId: "cNew" });
-    expect(JSON.parse(seen[1].body)).toEqual({ message: "run the tests", cwd: "/repo" });
-
-    const chat = await api<{ status: string }>(app, "/api/v1/shelley/conversations/cAbc/chat", {
-      method: "POST",
-      json: { message: "use pnpm", queue: true },
-      token,
+    const sent = JSON.parse(
+      shelley.seen.find((s) => s.url === "/api/conversations/new")!.body.toString(),
+    );
+    expect(sent).toEqual({
+      message: "run the tests",
+      cwd: "/repo",
+      model: "claude-opus-5.5",
+      conversation_options: { thinking_level: "high" },
     });
-    expect(chat.body.data).toEqual({ status: "queued" });
-    expect(JSON.parse(seen[2].body)).toEqual({ message: "use pnpm", queue: true });
-
-    const cancel = await api(app, "/api/v1/shelley/conversations/cAbc/cancel", {
-      method: "POST",
-      token,
-    });
-    expect(cancel.status).toBe(200);
-    expect(seen[3]).toMatchObject({ method: "POST", url: "/api/conversation/cAbc/cancel" });
+    const list = await get<Array<{ conversation_id: string; followed: boolean }>>("/conversations");
+    expect(list.status).toBe(200);
   });
 
-  it("keeps Shelley's 4xx answers and rejects odd ids before calling it", async () => {
-    process.env.SHELLEY_URL = shelleyUrl;
-    const gone = await api(app, "/api/v1/shelley/conversations/cGone/chat", {
-      method: "POST",
-      json: { message: "hello" },
-      token,
+  it("steers, queues with skills, stops, and keeps Shelley's 404", async () => {
+    shelley.conversations.set("cA", { messages: [], conversation: { conversation_id: "cA" } });
+    const steer = await post<{ status: string }>("/conversations/cA/chat", { message: "use pnpm" });
+    expect(steer.body.data).toEqual({ status: "accepted" });
+    const queued = await post<{ status: string }>("/conversations/cA/chat", {
+      message: "then the changelog",
+      queue: true,
+      skills: ["commit-highlights"],
     });
-    expect(gone.status).toBe(404);
-    const odd = await api(app, "/api/v1/shelley/conversations/..%2Fx/cancel", {
-      method: "POST",
-      token,
+    expect(queued.body.data).toEqual({ status: "queued" });
+    expect(JSON.parse(shelley.seen.at(-1)!.body.toString())).toEqual({
+      message: "then the changelog",
+      queue: true,
+      skills: ["commit-highlights"],
     });
-    expect(odd.status).toBe(400);
-    expect(seen).toHaveLength(1);
+    expect((await post("/conversations/cA/cancel")).status).toBe(200);
+    expect((await post("/conversations/cA/queued/send?queuedId=q-1")).status).toBe(200);
+    expect(shelley.seen.at(-1)!.url).toBe("/api/conversation/cA/send-queued?queued_id=q-1");
+    expect((await post("/conversations/cGone/chat", { message: "hi" })).status).toBe(404);
   });
 
-  it("relays the conversation stream frame by frame", async () => {
-    process.env.SHELLEY_URL = shelleyUrl;
-    const response = await app.request("/api/v1/shelley/conversations/cAbc/stream", {
+  it("rejects odd ids, traversal and unknown settings before calling Shelley", async () => {
+    const before = shelley.seen.length;
+    expect((await post("/conversations/..%2Fx/cancel")).status).toBe(400);
+    expect((await get("/diffs/working/file?cwd=/repo&path=../../etc/passwd")).status).toBe(400);
+    expect((await get("/diffs/HEAD~1/files?cwd=/repo")).status).toBe(400);
+    expect((await post("/conversations/cA/settings", { system_prompt: "pwned" })).status).toBe(400);
+    expect((await post("/conversations/cA/queued/send")).status).toBe(400);
+    expect(shelley.seen.length).toBe(before);
+  });
+
+  it("forwards diffs per path segment, uploads raw bodies, and serves files sandboxed", async () => {
+    const diff = await get<{ path: string }>("/diffs/working/file?cwd=/repo&path=src/a%20b.ts");
+    expect(diff.body.data?.path).toBe("src/a b.ts");
+    expect(shelley.seen.at(-1)!.url).toBe("/api/git/file-diff/working/src/a%20b.ts?cwd=%2Frepo");
+
+    const upload = await app.request("/api/v1/shelley/uploads?filename=shot.png", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "image/png" },
+      body: new Uint8Array([1, 2, 3]),
+    });
+    expect(upload.status).toBe(201);
+    expect(((await upload.json()) as { data: { path: string } }).data.path).toBe(
+      "/tmp/shelley-uploads/x.png",
+    );
+    expect(shelley.seen.at(-1)!.body).toEqual(Buffer.from([1, 2, 3]));
+    expect((await post("/uploads?filename=..%2F..%2Fx")).status).toBe(400);
+
+    const file = await app.request("/api/v1/shelley/files?path=/tmp/shot.png", {
       headers: { authorization: `Bearer ${token}` },
     });
-    expect(response.headers.get("content-type")).toMatch(/text\/event-stream/);
-    const text = await response.text();
-    const frames = text
-      .split("\n\n")
-      .filter((f) => f.startsWith("data:"))
-      .map((f) => JSON.parse(f.slice(5)));
-    expect(frames).toEqual([
-      { conversation_state: { working: true } },
-      { stream_delta: { type: "text", text: "Hi" } },
-    ]);
+    expect(file.headers.get("content-type")).toBe("image/png");
+    expect(file.headers.get("content-security-policy")).toContain("sandbox");
+  });
+
+  it("streams status and list events, and one conversation's frames", async () => {
+    const hub = createShelleyHub({ config: { url: shelley.url }, listDebounceMs: 10 });
+    setShelleyHub(hub);
+    hub.start();
+    await shelley.waitForStreams(1);
+    const response = await app.request("/api/v1/shelley/events?conversation=cA&list=0", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    const read = async (until: (s: string) => boolean) => {
+      while (!until(text)) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value);
+      }
+    };
+    await read((s) => s.includes('"type":"status"'));
+    shelley.push({ conversation_id: "cZ", tool_progress: { tool_use_id: "z", output: "other" } });
+    shelley.push({ conversation_id: "cA", tool_progress: { tool_use_id: "t", output: "PASS" } });
+    await read((s) => s.includes("PASS"));
+    await reader.cancel();
+    expect(text).toContain('"type":"frame"');
+    expect(text).not.toContain("other");
+    expect(text).not.toContain('"type":"list"');
+    hub.stop();
   });
 });

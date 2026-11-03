@@ -66,6 +66,14 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
+    event: "shelley.update",
+    label: "Shelley updates",
+    description:
+      "A Shelley conversation you follow finished, failed or messaged you while you were away.",
+    category: "notify",
+    defaultEnabled: true,
+  },
+  {
     event: "vault.alert",
     label: "Vault alerts",
     description: "A vault value was revealed or an item deleted, or a bot was refused a fill.",
@@ -310,6 +318,33 @@ export function runLongDone(
     priority: -1,
     dedupeKey: `long-done:${bot.conversationId}:${replyAt}`,
     botId: bot.id,
+  };
+}
+
+/** What a followed Shelley conversation did while nobody watched it (issue #143). */
+export type ShelleyUpdateKind = "finished" | "failed" | "message";
+
+export function shelleyUpdate(
+  conversation: { id: string; title: string },
+  kind: ShelleyUpdateKind,
+  text: string | undefined,
+  at: number,
+): Notification {
+  const title =
+    kind === "finished"
+      ? `✅ Shelley finished ${conversation.title}`
+      : kind === "failed"
+        ? `⚠️ Shelley hit an error in ${conversation.title}`
+        : `💬 Shelley: ${conversation.title}`;
+  return {
+    event: "shelley.update",
+    category: "notify",
+    title,
+    message: scrubText(text) ?? (kind === "finished" ? "The turn ended." : "Open it to see why."),
+    path: `/code/${conversation.id}`,
+    urlTitle: "Open in Code",
+    priority: kind === "message" ? 0 : -1,
+    dedupeKey: `shelley:${conversation.id}:${kind}:${at}`,
   };
 }
 

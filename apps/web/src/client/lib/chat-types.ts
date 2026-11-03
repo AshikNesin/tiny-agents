@@ -41,6 +41,8 @@ export interface ChatToolCall {
   /** `auto`: auto-review approved the call, no card was shown; `refused`: nobody was there to ask. */
   approval?: "approved" | "denied" | "auto" | "refused";
   sources?: { url: string; title: string }[];
+  /** `shelley_start` calls (issue #143): the Shelley conversation it started. */
+  shelley?: { conversationId: string; slug: string | null; cwd: string | null; url: string };
   /** ask_owner calls: the questions the bot asked. */
   questions?: OwnerQuestion[];
   /** ask_owner calls: the owner's answers; absent while waiting and once dismissed. */

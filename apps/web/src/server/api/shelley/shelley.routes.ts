@@ -1,206 +1,417 @@
 /**
- * The Code page's window onto Shelley (https://github.com/boldsoftware/shelley),
- * the coding agent running on another machine (usually reached over
- * Tailscale). tiny-agents runs no agent loop for it: these routes forward a
- * small allowlist of Shelley's HTTP API — list, start, steer, stop, and the
- * live per-conversation event stream — so the browser only ever talks to this
- * app, under its own login, and Shelley never has to be exposed to the browser.
+ * The Code page's window onto Shelley (issue #143): a curated allowlist of
+ * Shelley's official API, under this app's login. Each route forwards to one
+ * Shelley endpoint; ids are validated and paths encoded before they reach a
+ * URL. Shelley admin (profiles, models, MCP, integrations), terminals and
+ * file writes are deliberately absent: they stay in Shelley's own UI.
  *
- * Shelley's API contract: API.md in its repository.
+ * Live updates come from the hub (one `stream2` connection for the whole
+ * app), fanned out on `GET /shelley/events`.
  */
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppContext, AppEnv } from "@groot/core/types";
-import { Boom, HttpError } from "@groot/core/errors";
+import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
-import { appEnv } from "../../env";
 import { openSse } from "../bots/bots.sse";
+import { shelleyConfig, shelleyFetch, shelleyJson } from "./shelley.client";
+import { shelleyHub, type ShelleyRow } from "./shelley.hub";
+import { follow, markSeen, seenMap } from "./shelley.service";
 
-const REQUEST_TIMEOUT_MS = 20_000;
-const LIST_LIMIT = 50;
+const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
-/** Shelley ids are short slugs (`cXYZ123`); anything else never reaches its URL. */
-const conversationIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const diffIdSchema = z.string().regex(/^(working|[0-9a-f]{4,64})$/);
 
-const newConversationSchema = z.object({
-  message: z.string().trim().min(1).max(100_000),
-  cwd: z.string().trim().max(1024).optional(),
-  model: z.string().trim().max(200).optional(),
-});
-
-const chatSchema = z.object({
-  message: z.string().trim().min(1).max(100_000),
-  /** true: hold the message until the running turn ends instead of steering it now. */
-  queue: z.boolean().optional(),
-});
-
-interface ShelleyConfig {
-  url: string;
-  token?: string;
-}
-
-function shelleyConfig(): ShelleyConfig | undefined {
-  const { SHELLEY_URL, SHELLEY_TOKEN } = appEnv();
-  const url = SHELLEY_URL?.trim().replace(/\/+$/, "");
-  if (!url) return undefined;
-  return { url, token: SHELLEY_TOKEN?.trim() || undefined };
-}
-
-/**
- * One request to Shelley's `/api`. Shelley's 4xx answers (a bad model, an
- * archived conversation) keep their status and text; network failures and
- * its 5xx become 502s that say what went wrong.
- */
-async function shelley(
-  path: string,
-  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
-): Promise<Response> {
-  const config = shelleyConfig();
-  if (!config) throw Boom.unavailable("Shelley is not configured: set SHELLEY_URL.");
-  const headers: Record<string, string> = {
-    // Shelley's optional require-header guard; harmless when it is off.
-    "X-Shelley-Request": "1",
-  };
-  if (config.token) headers.Authorization = `Bearer ${config.token}`;
-  if (init.body !== undefined) headers["Content-Type"] = "application/json";
-
-  let response: Response;
-  try {
-    response = await fetch(`${config.url}/api${path}`, {
-      method: init.method ?? "GET",
-      headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw Boom.badGateway(`Shelley is unreachable at ${config.url}: ${reason}`);
-  }
-  if (!response.ok) {
-    const text = (await response.text().catch(() => "")).trim().slice(0, 500);
-    const message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
-    if (response.status >= 400 && response.status < 500) {
-      throw new HttpError(response.status, message);
-    }
-    throw Boom.badGateway(message);
-  }
-  return response;
-}
-
-async function shelleyJson<T = unknown>(
-  path: string,
-  init?: { method?: string; body?: unknown },
-): Promise<T> {
-  const response = await shelley(path, init);
-  const text = await response.text();
-  return (text ? JSON.parse(text) : {}) as T;
-}
-
-function conversationId(c: AppContext): string {
-  const parsed = conversationIdSchema.safeParse(c.req.param("id"));
-  if (!parsed.success) throw Boom.badRequest("Invalid conversation id");
+function param(c: AppContext, name: string, schema: z.ZodType<string> = idSchema): string {
+  const parsed = schema.safeParse(c.req.param(name));
+  if (!parsed.success) throw Boom.badRequest(`Invalid ${name}`);
   return parsed.data;
 }
 
-/**
- * Re-emit each `data:` frame of Shelley's SSE body as one event on `write`,
- * until the body ends (or the read fails, e.g. the fetch was aborted).
- */
-export async function relaySseFrames(
-  body: ReadableStream<Uint8Array>,
-  write: (event: unknown) => void,
-): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return;
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    let boundary: number;
-    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const data = frame
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n");
-      if (!data) continue;
-      try {
-        write(JSON.parse(data));
-      } catch {
-        // A malformed frame is skipped, not fatal.
-      }
-    }
-  }
+function query(c: AppContext, name: string, required = true): string | undefined {
+  const value = c.req.query(name);
+  if (required && !value) throw Boom.badRequest(`${name} is required`);
+  if (value && value.length > 4096) throw Boom.badRequest(`${name} is too long`);
+  return value || undefined;
 }
+
+function qs(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params))
+    if (value !== undefined) search.set(key, value);
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
+/** A repo-relative path, encoded per segment for Shelley's `file-diff/<id>/<path>`. */
+function encodePath(path: string): string {
+  if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
+    throw Boom.badRequest("Invalid path");
+  }
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+/** Snapshot rows plus what tiny-agents knows: followed and unread. */
+async function decorate(rows: ShelleyRow[]) {
+  const seen = await seenMap();
+  return rows.map((row) => {
+    const last = seen.get(row.conversation_id);
+    const working = Boolean(row.working ?? row.agent_working);
+    return {
+      ...row,
+      working,
+      followed: last !== undefined,
+      unread: last !== undefined && !working && (row.max_sequence_id ?? 0) > last,
+    };
+  });
+}
+
+async function activeList() {
+  const hub = shelleyHub();
+  if (!hub) throw Boom.unavailable("Shelley is not configured: set SHELLEY_URL.");
+  if (!hub.list()) await hub.refreshList();
+  const rows = hub.list();
+  if (!rows) throw Boom.badGateway("Shelley's conversation list is not available yet");
+  return decorate(rows);
+}
+
+/** Forward a binary GET (files, images) with its content type. */
+async function passthrough(path: string): Promise<Response> {
+  const upstream = await shelleyFetch(path);
+  const headers = new Headers();
+  for (const name of ["content-type", "content-length", "last-modified", "etag"]) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  headers.set("cache-control", "private, max-age=300");
+  headers.set("x-content-type-options", "nosniff");
+  // Never let a file Shelley serves run as a page of this app.
+  headers.set("content-security-policy", "sandbox; default-src 'none'; img-src 'self' data:");
+  return new Response(upstream.body, { status: 200, headers });
+}
+
+const message = z.string().trim().min(1).max(100_000);
+
+const newConversationSchema = z.object({
+  message,
+  cwd: z.string().trim().max(1024).optional(),
+  model: z.string().trim().max(200).optional(),
+  thinkingLevel: z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
+});
+
+const chatSchema = z.object({
+  message,
+  /** true: hold the message until the running turn ends instead of steering it now. */
+  queue: z.boolean().optional(),
+  skills: z.array(z.string().max(200)).max(20).optional(),
+});
+
+const settingsSchema = z
+  .object({
+    model: z.string().max(200).optional(),
+    thinking_level: z.string().max(20).optional(),
+  })
+  .strict();
 
 const router = new Hono<AppEnv>();
 
+// --- status and live events ---------------------------------------------------
+
 router.get("/shelley/status", (c) => {
   const config = shelleyConfig();
-  return ok(c, { configured: Boolean(config), url: config?.url ?? null });
-});
-
-router.get("/shelley/models", async (c) => ok(c, await shelleyJson("/models")));
-
-router.get("/shelley/conversations", async (c) =>
-  ok(c, await shelleyJson(`/conversations?limit=${LIST_LIMIT}`)),
-);
-
-router.post("/shelley/conversations", async (c) => {
-  const { message, cwd, model } = await parseBody(c, newConversationSchema);
-  const created = await shelleyJson<{ conversation_id?: string }>("/conversations/new", {
-    method: "POST",
-    body: { message, ...(cwd ? { cwd } : {}), ...(model ? { model } : {}) },
+  const hub = shelleyHub();
+  return ok(c, {
+    configured: Boolean(config),
+    publicUrl: config?.publicUrl ?? null,
+    connection: hub?.status() ?? { state: "disabled" },
   });
-  if (!created.conversation_id) throw Boom.badGateway("Shelley did not return a conversation id");
-  return ok(c, { conversationId: created.conversation_id }, 201);
-});
-
-router.post("/shelley/conversations/:id/chat", async (c) => {
-  const id = conversationId(c);
-  const { message, queue } = await parseBody(c, chatSchema);
-  // While a turn runs, Shelley injects the message into it (steering);
-  // `queue` holds it for the next turn instead.
-  const result = await shelleyJson<{ status?: string }>(`/conversation/${id}/chat`, {
-    method: "POST",
-    body: { message, ...(queue ? { queue: true } : {}) },
-  });
-  return ok(c, { status: result.status ?? "accepted" });
-});
-
-router.post("/shelley/conversations/:id/cancel", async (c) => {
-  const id = conversationId(c);
-  await shelley(`/conversation/${id}/cancel`, { method: "POST" });
-  return ok(c, { cancelled: true });
 });
 
 /**
- * The live transcript: Shelley replays the conversation's messages, then
- * streams new messages, working state, tool output and text deltas. Each
- * Shelley frame goes out as one event on our own SSE response (heartbeats,
- * shutdown and disconnect handled there). When Shelley's stream ends the
- * response ends too and the client reconnects for a fresh replay.
+ * One SSE per open Code page: `status` and `list` events always, plus
+ * `frame` events for `?conversation=` (Shelley's stream2 frames for it).
  */
-router.get("/shelley/conversations/:id/stream", async (c) => {
-  const id = conversationId(c);
-  const upstream = new AbortController();
-  // Connect before the SSE response opens so a 404 or 502 is a real API error.
-  const response = await shelley(`/conversation/${id}/stream`, { signal: upstream.signal });
-  if (!response.body) throw Boom.badGateway("Shelley returned an empty stream");
-  const body = response.body;
+router.get("/shelley/events", (c) => {
+  const hub = shelleyHub();
+  if (!hub) throw Boom.unavailable("Shelley is not configured: set SHELLEY_URL.");
+  const raw = c.req.query("conversation");
+  const conversationId = raw ? idSchema.safeParse(raw).data : undefined;
+  if (raw && !conversationId) throw Boom.badRequest("Invalid conversation");
+  // `list=0`: a conversation view's own stream; the app-wide one carries the list.
+  const withList = c.req.query("list") !== "0";
   return openSse(c, async (sse) => {
-    sse.onClose(() => upstream.abort());
-    try {
-      await relaySseFrames(body, (event) => sse.write(event));
-    } catch {
-      // Upstream aborted or dropped: the client's reconnect replays.
+    const sendList = async () => {
+      const rows = hub.list();
+      if (rows) sse.write({ type: "list", conversations: await decorate(rows) });
+    };
+    sse.onClose(
+      hub.onChange((change) => {
+        if (change === "status") sse.write({ type: "status", connection: hub.status() });
+        else if (withList) void sendList();
+      }),
+    );
+    if (conversationId) {
+      sse.onClose(hub.subscribe(conversationId, (frame) => sse.write({ type: "frame", frame })));
     }
-    sse.end();
+    sse.write({ type: "status", connection: hub.status() });
+    if (!withList) return;
+    if (!hub.list()) await hub.refreshList();
+    await sendList();
   });
+});
+
+// --- lists ----------------------------------------------------------------------
+
+router.get("/shelley/conversations", async (c) => {
+  if (c.req.query("view") === "archived") {
+    const rows = await shelleyJson<ShelleyRow[]>("/conversations/archived");
+    return ok(c, await decorate(Array.isArray(rows) ? rows : []));
+  }
+  return ok(c, await activeList());
+});
+
+router.get("/shelley/conversations/search", async (c) => {
+  const q = query(c, "q")!;
+  const archived = c.req.query("archived") === "true" ? "true" : undefined;
+  return ok(c, await shelleyJson(`/conversations/search${qs({ q, archived })}`));
+});
+
+router.get("/shelley/conversations/by-slug/:slug", async (c) => {
+  const slug = param(c, "slug", z.string().regex(/^[A-Za-z0-9_-]{1,200}$/));
+  return ok(c, await shelleyJson(`/conversation-by-slug/${encodeURIComponent(slug)}`));
+});
+
+// --- one conversation ------------------------------------------------------------
+
+router.get("/shelley/conversations/:id", async (c) => {
+  const id = param(c, "id");
+  const [conversation, subagents] = await Promise.all([
+    shelleyJson<Record<string, unknown>>(`/conversation/${id}`),
+    shelleyJson<unknown[]>(`/conversation/${id}/subagents`).catch(() => []),
+  ]);
+  return ok(c, { ...conversation, subagents: Array.isArray(subagents) ? subagents : [] });
+});
+
+for (const part of ["btw", "background-jobs", "subagent-usage", "settings"] as const) {
+  router.get(`/shelley/conversations/:id/${part}`, async (c) =>
+    ok(c, await shelleyJson(`/conversation/${param(c, "id")}/${part}`)),
+  );
+}
+
+router.post("/shelley/conversations/:id/seen", async (c) => {
+  const id = param(c, "id");
+  const { sequenceId } = await parseBody(c, z.object({ sequenceId: z.number().int().min(0) }));
+  await markSeen(id, sequenceId);
+  return ok(c, { seen: sequenceId });
+});
+
+// --- start -----------------------------------------------------------------------
+
+router.post("/shelley/conversations", async (c) => {
+  const { message: text, cwd, model, thinkingLevel } = await parseBody(c, newConversationSchema);
+  const created = await shelleyJson<{ conversation_id?: string }>("/conversations/new", {
+    method: "POST",
+    json: {
+      message: text,
+      ...(cwd ? { cwd } : {}),
+      ...(model ? { model } : {}),
+      ...(thinkingLevel ? { conversation_options: { thinking_level: thinkingLevel } } : {}),
+    },
+  });
+  if (!created.conversation_id) throw Boom.badGateway("Shelley did not return a conversation id");
+  await follow(created.conversation_id);
+  void shelleyHub()?.refreshList();
+  return ok(c, { conversationId: created.conversation_id }, 201);
+});
+
+router.post("/shelley/worktrees", async (c) => {
+  const { cwd } = await parseBody(c, z.object({ cwd: z.string().trim().min(1).max(1024) }));
+  return ok(c, await shelleyJson("/git/create-worktree", { method: "POST", json: { cwd } }), 201);
+});
+
+// --- steer -----------------------------------------------------------------------
+
+router.post("/shelley/conversations/:id/chat", async (c) => {
+  const id = param(c, "id");
+  const { message: text, queue, skills } = await parseBody(c, chatSchema);
+  // While a turn runs Shelley injects the message into it (steering);
+  // `queue` holds it for when the turn ends.
+  const result = await shelleyJson<{ status?: string }>(`/conversation/${id}/chat`, {
+    method: "POST",
+    json: {
+      message: text,
+      ...(queue ? { queue: true } : {}),
+      ...(skills?.length ? { skills } : {}),
+    },
+  });
+  await follow(id);
+  return ok(c, { status: result.status ?? "accepted" });
+});
+
+/** Steer endpoints that take no body or a small fixed one. */
+const actions: Record<string, z.ZodType<Record<string, unknown> | undefined>> = {
+  cancel: z.undefined(),
+  retry: z.undefined(),
+  resume: z.undefined(),
+  "new-generation": z.undefined(),
+  archive: z.undefined(),
+  unarchive: z.undefined(),
+  delete: z.undefined(),
+  continue: z.object({ model: z.string().max(200).optional() }),
+  fork: z.object({
+    message_id: z.string().max(128).optional(),
+    sequence_id: z.number().optional(),
+  }),
+  cwd: z.object({ cwd: z.string().trim().min(1).max(1024) }),
+  rename: z.object({ slug: z.string().trim().min(1).max(200) }),
+  tags: z.object({ tags: z.array(z.string().max(100)).max(50) }),
+  settings: settingsSchema,
+};
+
+for (const [action, schema] of Object.entries(actions)) {
+  router.post(`/shelley/conversations/:id/${action}`, async (c) => {
+    const id = param(c, "id");
+    const body = schema instanceof z.ZodUndefined ? undefined : await parseBody(c, schema);
+    const result = await shelleyJson(`/conversation/${id}/${action}`, {
+      method: "POST",
+      ...(body !== undefined ? { json: body } : {}),
+    });
+    if (["archive", "unarchive", "delete", "rename", "fork"].includes(action)) {
+      void shelleyHub()?.refreshList();
+    }
+    return ok(c, result);
+  });
+}
+
+const queuedActions = { send: "send-queued", cancel: "cancel-queued", retry: "retry-queued" };
+for (const [action, upstream] of Object.entries(queuedActions)) {
+  router.post(`/shelley/conversations/:id/queued/${action}`, async (c) => {
+    const id = param(c, "id");
+    const queuedId = c.req.query("queuedId");
+    if (queuedId && !idSchema.safeParse(queuedId).success)
+      throw Boom.badRequest("Invalid queuedId");
+    if (!queuedId && action !== "cancel") throw Boom.badRequest("queuedId is required");
+    return ok(
+      c,
+      await shelleyJson(`/conversation/${id}/${upstream}${qs({ queued_id: queuedId })}`, {
+        method: "POST",
+      }),
+    );
+  });
+}
+
+router.post("/shelley/conversations/:id/background-jobs/:job/kill", async (c) => {
+  const id = param(c, "id");
+  const job = param(c, "job");
+  return ok(
+    c,
+    await shelleyJson(`/conversation/${id}/background-jobs/${job}/kill`, { method: "POST" }),
+  );
+});
+
+// --- composer --------------------------------------------------------------------
+
+router.get("/shelley/models", async (c) => ok(c, await shelleyJson("/models")));
+
+router.get("/shelley/skills", async (c) =>
+  ok(
+    c,
+    await shelleyJson(
+      `/skills${qs({ cwd: query(c, "cwd")!, conversation_id: query(c, "conversationId", false) })}`,
+    ),
+  ),
+);
+
+router.get("/shelley/find-files", async (c) => {
+  const content = c.req.query("content");
+  return ok(
+    c,
+    await shelleyJson(
+      `/find-files${qs({
+        dir: query(c, "dir")!,
+        q: query(c, "q", false),
+        content: content === "only" || content === "skip" ? content : undefined,
+        include_dirs: c.req.query("includeDirs") === "true" ? "true" : undefined,
+      })}`,
+    ),
+  );
+});
+
+/** Raw upload (screenshots, logs): the body goes to Shelley as-is; answers `{ path }`. */
+router.post("/shelley/uploads", async (c) => {
+  const filename = query(c, "filename")!;
+  if (filename.length > 255 || /[/\\\0]/.test(filename)) throw Boom.badRequest("Invalid filename");
+  const length = Number(c.req.header("content-length") ?? "0");
+  if (length > UPLOAD_MAX_BYTES) throw Boom.entityTooLarge("Uploads are limited to 25 MB");
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength > UPLOAD_MAX_BYTES) throw Boom.entityTooLarge("Uploads are limited to 25 MB");
+  const result = await shelleyJson<{ path?: string }>(`/upload/raw${qs({ filename })}`, {
+    method: "POST",
+    body: new Blob([body]),
+    headers: { "Content-Type": c.req.header("content-type") ?? "application/octet-stream" },
+    timeoutMs: 120_000,
+  });
+  if (!result.path) throw Boom.badGateway("Shelley did not return the uploaded path");
+  return ok(c, { path: result.path }, 201);
+});
+
+// --- files and directories ---------------------------------------------------------
+
+router.get("/shelley/repos", async (c) => ok(c, await shelleyJson("/git/repos")));
+
+router.get("/shelley/directories", async (c) =>
+  ok(c, await shelleyJson(`/list-directory${qs({ path: query(c, "path", false) })}`)),
+);
+
+router.get("/shelley/validate-cwd", async (c) =>
+  ok(c, await shelleyJson(`/validate-cwd${qs({ path: query(c, "path")! })}`)),
+);
+
+router.get("/shelley/files", async (c) => passthrough(`/read${qs({ path: query(c, "path")! })}`));
+
+router.get("/shelley/messages/:mid/image/:content/:result", async (c) => {
+  const mid = param(c, "mid");
+  const content = param(c, "content", z.string().regex(/^-?\d{1,4}$/));
+  const result = param(c, "result", z.string().regex(/^-?\d{1,4}$/));
+  return passthrough(`/message/${mid}/image/${content}/${result}`);
+});
+
+// --- diffs -------------------------------------------------------------------------
+
+router.get("/shelley/diffs", async (c) =>
+  ok(
+    c,
+    await shelleyJson(
+      `/git/diffs${qs({ cwd: query(c, "cwd")!, commit: query(c, "commit", false) })}`,
+    ),
+  ),
+);
+
+router.get("/shelley/diffs/:diff/files", async (c) => {
+  const diff = param(c, "diff", diffIdSchema);
+  return ok(
+    c,
+    await shelleyJson(
+      `/git/diffs/${diff}/files${qs({ cwd: query(c, "cwd")!, to: query(c, "to", false) })}`,
+    ),
+  );
+});
+
+router.get("/shelley/diffs/:diff/file", async (c) => {
+  const diff = param(c, "diff", diffIdSchema);
+  const path = encodePath(query(c, "path")!);
+  return ok(
+    c,
+    await shelleyJson(
+      `/git/file-diff/${diff}/${path}${qs({ cwd: query(c, "cwd")!, to: query(c, "to", false) })}`,
+    ),
+  );
 });
 
 export default router;

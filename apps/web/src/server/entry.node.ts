@@ -45,6 +45,7 @@ import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
+import { startShelley } from "./api/shelley/shelley.boot";
 import { isAssetRequest } from "./static-assets";
 
 /**
@@ -259,6 +260,18 @@ async function main(): Promise<void> {
   // Deliveries a restart interrupted are answered once the settled listener
   // is in place (above), whatever order the boot awaits in.
   add({ name: "delivery sweep", start: () => void deliveries.sweep().catch(() => undefined) });
+
+  // Shelley (issue #143): one live stream to the coding agent; hand-off
+  // finishes go into bots' chats and followed conversations push. Off
+  // without SHELLEY_URL.
+  let stopShelley = () => {};
+  add({
+    name: "shelley",
+    start: () => {
+      stopShelley = startShelley(runtime);
+    },
+    stop: () => stopShelley(),
+  });
 
   // Past-chat titles (issue #101): one lightweight side-call per "New chat"
   // names the chat that ended. Faux mode keeps the first-message titles.

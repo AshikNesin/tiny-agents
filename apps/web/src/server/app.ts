@@ -32,7 +32,7 @@ export function registerJobHandlers(): void {
  * Upload routes take multipart bodies far larger than the JSON limit; they
  * enforce their own size caps.
  */
-const UPLOAD_PATHS = ["/api/v1/uploads*"];
+const UPLOAD_PATHS = ["/api/v1/uploads*", "/api/v1/shelley/uploads"];
 
 /** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
 export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
