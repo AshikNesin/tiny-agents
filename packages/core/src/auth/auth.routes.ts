@@ -18,6 +18,19 @@ router.post("/login", authRateLimiter, async (c) => {
   return ok(c, result);
 });
 
+// First-run setup: open only while no account exists, so a fresh deploy can
+// create its first user from the browser instead of via the admin API.
+router.get("/setup", async (c) => {
+  return ok(c, { needsSetup: !(await authService.hasAnyUser()) });
+});
+
+router.post("/setup", authRateLimiter, async (c) => {
+  const body = await parseBody(c, createUserSchema);
+  const result = await authService.createFirstUser(body);
+  setAuthCookie(c, result.token);
+  return ok(c, result, 201);
+});
+
 router.post("/logout", jwtAuthMiddleware, (c) => {
   clearAuthCookie(c);
   return ok(c, { status: "logged out" });

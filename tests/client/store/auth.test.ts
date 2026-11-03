@@ -44,6 +44,16 @@ describe("session", () => {
     expect(useAuthStore.getState().generation).toBe(generation + 1);
   });
 
+  it("signs in as the account first-run setup creates", async () => {
+    serve({
+      "/auth/setup": { status: 201, body: { success: true, data: { token: "t", user: USER } } },
+    });
+    await expect(
+      useAuthStore.getState().setup({ email: USER.email, password: "secret" }),
+    ).resolves.toEqual(USER);
+    expect(useAuthStore.getState()).toMatchObject({ user: USER, isAuthenticated: true });
+  });
+
   it("words a rejected password as wrong credentials", async () => {
     serve({ "/auth/login": unauthorized });
     const error = await useAuthStore

@@ -17,6 +17,7 @@ import { Storage } from "@groot/shell/pages/storage/Storage";
 import { Jobs, JobDetail } from "@groot/jobs/client";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { Login } from "@groot/shell/pages/auth/Login";
+import { Setup } from "@groot/shell/pages/auth/Setup";
 import { GrootUIProvider } from "@groot/ui";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
 import { BotMessageSquare, History, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
@@ -86,6 +87,7 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Root />}>
       <Route path="/login" element={<Login />} />
+      <Route path="/setup" element={<Setup />} />
       <Route
         element={
           <ProtectedRoute>

@@ -21,6 +21,11 @@ interface AuthState {
 
   /** Sign in with email and password. Word a rejection with `loginErrorDescription`. */
   login: (email: string, password: string) => Promise<SessionUser>;
+  /**
+   * First-run setup: create the first account and sign in as it. The server
+   * refuses (403) once any account exists.
+   */
+  setup: (values: { email: string; password: string; name?: string }) => Promise<SessionUser>;
   /** Sign in with a passkey (WebAuthn). Word a rejection with `loginErrorDescription`. */
   loginWithPasskey: () => Promise<SessionUser>;
   /** Clear the server cookie and the local session. Never rejects. */
@@ -111,6 +116,12 @@ export const useAuthStore = create<AuthState>((set) => {
           email,
           password,
         });
+        return user;
+      }),
+
+    setup: (values) =>
+      signIn(async () => {
+        const { user } = await apiClient.post<{ user: SessionUser }>("/auth/setup", values);
         return user;
       }),
 

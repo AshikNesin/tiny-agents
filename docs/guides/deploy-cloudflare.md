@@ -36,7 +36,8 @@ entry is `apps/web/src/server/entry.worker.ts`.
    `pnpm exec wrangler secret put ADMIN_AUTH_KEY`; optionally `SENTRY_DSN`.
    The Worker refuses to boot in production without them.
 7. **Deploy**: `pnpm deploy:worker` (builds the client, then `wrangler deploy`).
-8. **First user** — there is no seed script on Workers; use the admin API:
+8. **First user** — there is no seed script on Workers. Open the app and
+   create it at `/setup` (open only while no user exists), or use the admin API:
 
    ```bash
    curl -X POST https://groot.example.workers.dev/api/v1/auth/users \

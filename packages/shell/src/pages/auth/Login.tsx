@@ -1,10 +1,11 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@groot/ui/button";
 import { displayClass, h1Class } from "@groot/ui/typography";
 import { Input } from "@groot/ui/input";
 import { Form, FormField } from "@groot/ui/form";
 import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
+import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
 import { z } from "zod";
 import { toast } from "sonner";
 import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-react";
@@ -64,6 +65,8 @@ export function Login() {
     config.login?.description ??
     "Everything you need to launch a full-stack SaaS (auth, storage, background jobs, and a polished UI) without the busywork.";
   const features = config.login?.features ?? FEATURES;
+  // A fresh install has nobody to sign in as: send them to first-run setup.
+  const needsSetup = useSetupStatus();
 
   const onSubmit = async (values: LoginValues) => {
     try {
@@ -86,6 +89,8 @@ export function Login() {
       });
     }
   };
+
+  if (needsSetup) return <Navigate to="/setup" replace />;
 
   return (
     <div className="flex min-h-dvh bg-background">

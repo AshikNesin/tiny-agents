@@ -17,7 +17,7 @@ export const loginSchema = z.object({
 export type LoginDTO = z.infer<typeof loginSchema>;
 
 /**
- * Create user schema (admin only)
+ * Create user schema (admin API and first-run setup)
  */
 export const createUserSchema = z.object({
   email: emailField,
@@ -37,4 +37,9 @@ export interface SessionUser {
   id: number;
   email: string;
   name: string | null;
+}
+
+/** `GET /auth/setup`: whether the first account still needs creating. */
+export interface SetupStatus {
+  needsSetup: boolean;
 }
