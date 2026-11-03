@@ -102,3 +102,55 @@ body:has(aside[aria-label="Sidebar"]) .fbx-launch {
     opacity: 0.85;
   }
 }
+
+/*
+ * Fluid Functionalism kit (components/fluid, vendored from
+ * fluidfunctionalism.com). Its state tokens are drawn from the foreground so
+ * hover, selection and focus stay in the warm monochrome palette instead of
+ * the kit's blue accent.
+ */
+:root {
+  --hover: color-mix(in oklab, var(--foreground) 4%, transparent);
+  --active: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --tint: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --tint-hover: color-mix(in oklab, var(--foreground) 6.5%, transparent);
+  --focus-ring: color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+
+.dark {
+  --hover: color-mix(in oklab, var(--foreground) 6%, transparent);
+  --active: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --tint: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --tint-hover: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --focus-ring: color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+
+/* ThinkingIndicator: a bright band sweeping across the label's letters. */
+@keyframes fluid-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+.shimmer-text {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: fluid-shimmer 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text {
+    animation: none;
+  }
+}

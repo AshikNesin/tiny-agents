@@ -37,7 +37,8 @@ function CommandDialog({
   return (
     <Dialog {...props}>
       <DialogContent
-        className={cn("top-1/3 translate-y-0 overflow-hidden p-0", className)}
+        position="top"
+        className={cn("overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
       >
         <DialogHeader className="sr-only">

@@ -56,7 +56,8 @@ describe("LeaveGuard", () => {
     expect(router.state.location.pathname).toBe("/edit");
     expect((screen.getByLabelText("Body") as HTMLInputElement).value).toBe("draft");
 
-    await user.click(screen.getByRole("link", { name: "Leave" }));
+    // The dialog animates out before the page behind it is interactive again.
+    await user.click(await screen.findByRole("link", { name: "Leave" }));
     await user.click(await screen.findByRole("button", { name: "Discard" }));
     expect(await screen.findByText("Elsewhere")).toBeTruthy();
   });

@@ -43,15 +43,16 @@ test.describe("Questions for the owner", () => {
     await page.reload();
     await expect(card).toBeVisible({ timeout: 15_000 });
 
-    await card.getByRole("radio", { name: /React/ }).check();
-    await card.getByRole("button", { name: "Next" }).click();
-    await card.getByRole("checkbox", { name: "Auth" }).check();
-    await card.getByRole("checkbox", { name: "Tests" }).check();
-    await card.getByRole("button", { name: "Next" }).click();
+    // A single-choice question answers on the click and moves on.
+    await card.getByRole("radio", { name: /React/ }).click();
+    await expect(card.getByText("Question 2 of 3")).toBeVisible();
+    await card.getByRole("checkbox", { name: /Auth/ }).click();
+    await card.getByRole("checkbox", { name: /Tests/ }).click();
+    await card.getByRole("button", { name: /Next/ }).click();
     await card
       .getByRole("textbox", { name: "Anything else I should know?" })
       .fill("Ship it Friday");
-    await card.getByRole("button", { name: "Send answers" }).click();
+    await card.getByRole("button", { name: /Send answers/ }).click();
 
     await expect(card).not.toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Echo: The owner answered your questions/).first()).toBeVisible({

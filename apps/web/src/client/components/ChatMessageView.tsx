@@ -35,6 +35,7 @@ import {
 import { MessageAttachments } from "./Attachments";
 import { ownerText } from "../lib/attachment-notes";
 import { AskedQuestions, QuestionCard } from "./QuestionCard";
+import { ThinkingIndicator } from "./fluid/thinking-indicator";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
@@ -101,27 +102,23 @@ function CopyAction({ text }: { text: string }) {
 export const USER_PILL =
   "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-3xl px-4 py-3 text-[15px] leading-[22.5px] wrap-break-word";
 
+const WORKING_WORDS = ["Thinking", "Working", "Planning", "Refining"] as const;
+const REPLYING_WORDS = ["Replying"] as const;
+
 /**
- * Three bouncing dots: the bot is working but has nothing to show yet
- * (waiting on the first token, or between tool rounds).
+ * The bot is working but has nothing to show yet (waiting on the first token,
+ * or between tool rounds): Fluid Functionalism's ThinkingIndicator, a glyph
+ * morphing circle ⇄ infinity beside a shimmering status word.
  */
 export function TypingIndicator({ label = "thinking" }: { label?: string }) {
   return (
-    <span
-      role="status"
+    <ThinkingIndicator
       aria-label={`${label}…`}
+      label={`${label}…`}
+      words={label === "replying" ? REPLYING_WORDS : WORKING_WORDS}
       data-testid="typing-indicator"
-      className="bg-bubble inline-flex h-9 items-center gap-1 rounded-3xl px-4"
-    >
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          aria-hidden
-          className="bg-muted-foreground/60 size-1.5 animate-bounce rounded-full motion-reduce:animate-pulse"
-          style={{ animationDelay: `${i * 150}ms` }}
-        />
-      ))}
-    </span>
+      className="h-9 px-1 py-0"
+    />
   );
 }
 

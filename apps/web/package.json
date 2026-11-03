@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@groot/core": "workspace:*",
     "@groot/jobs": "workspace:*",
     "@groot/shell": "workspace:*",
@@ -23,6 +24,7 @@
     "drizzle-orm": "^0.45.4",
     "hono": "^4.10.0",
     "lucide-react": "^1.61.0",
+    "motion": "^14.9.0",
     "nuqs": "^2.10.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

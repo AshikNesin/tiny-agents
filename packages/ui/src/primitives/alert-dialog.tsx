@@ -2,21 +2,53 @@
 
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
+import { motion } from "motion/react";
 
 import { cn } from "../lib/utils";
+import {
+  dialogPanelClass,
+  overlayClass,
+  panelMotion,
+  panelPlacement,
+  useModalPresence,
+} from "../lib/modal-motion";
 import { Button, type ButtonProps } from "../button";
 
 /**
  * Radix AlertDialog-based confirm primitive — a faithful port of the shadcn
  * `alert-dialog` component, restyled to match this package's `dialog.tsx`
- * (rounded-3xl, ring, viewport-capped, plain footer). Lives under `@groot/ui/primitives` so
+ * (rounded-3xl, ring, viewport-capped, plain footer, and the same spring
+ * enter/exit motion). Lives under `@groot/ui/primitives` so
  * callers know it is a composed/Radix-backed primitive rather than a bespoke
  * widget. The declarative {@link AlertDialog} parts are the building blocks
  * for the imperative {@link ConfirmProvider} (see ./confirm).
  */
 
-function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+/** Whether the enclosing AlertDialog is open: the content keeps itself mounted through the exit. */
+const AlertDialogOpenContext = React.createContext(false);
+
+function AlertDialog({
+  open: controlledOpen,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const handleOpenChange = (next: boolean) => {
+    setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  return (
+    <AlertDialogOpenContext.Provider value={open}>
+      <AlertDialogPrimitive.Root
+        data-slot="alert-dialog"
+        open={open}
+        onOpenChange={handleOpenChange}
+        {...props}
+      />
+    </AlertDialogOpenContext.Provider>
+  );
 }
 
 function AlertDialogTrigger({
@@ -37,7 +69,8 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/40 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        overlayClass,
+        "duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -47,19 +80,32 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  children,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof AlertDialogPrimitive.Content>, "asChild" | "forceMount">) {
+  const open = React.useContext(AlertDialogOpenContext);
+  const { mounted, transition, onExitComplete } = useModalPresence(open);
+  if (!mounted) return null;
   return (
-    <AlertDialogPortal>
-      <AlertDialogOverlay />
-      <AlertDialogPrimitive.Content
-        data-slot="alert-dialog-content"
-        className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-3xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className,
-        )}
-        {...props}
-      />
+    <AlertDialogPortal forceMount>
+      <AlertDialogPrimitive.Overlay data-slot="alert-dialog-overlay" asChild forceMount>
+        <motion.div
+          className={overlayClass}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: open ? 1 : 0 }}
+          transition={transition}
+        />
+      </AlertDialogPrimitive.Overlay>
+      <AlertDialogPrimitive.Content data-slot="alert-dialog-content" asChild forceMount {...props}>
+        <motion.div
+          className={cn(dialogPanelClass, panelPlacement("center"), "max-w-[400px]", className)}
+          {...panelMotion(open, "center")}
+          transition={transition}
+          onAnimationComplete={onExitComplete}
+        >
+          {children}
+        </motion.div>
+      </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
   );
 }

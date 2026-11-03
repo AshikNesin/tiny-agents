@@ -9,7 +9,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ChatMessageView } from "@/components/ChatMessageView";
-import { readAnswers } from "@/components/QuestionCard";
+import { toOwnerAnswers } from "@/components/QuestionCard";
 import type { ChatMessage, ChatToolCall, OwnerQuestion } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 
@@ -74,18 +74,19 @@ describe("QuestionCard", () => {
     // No typing dots while the bot waits on the owner.
     expect(screen.queryByTestId("typing-indicator")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("radio", { name: "Postgres" }));
-    await user.click(screen.getByRole("button", { name: "Next" }));
+    // A single-choice question answers on the click.
+    await user.click(screen.getByRole("radio", { name: /Postgres/ }));
     expect(await screen.findByText("Question 2 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Pick any")).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /Auth/ }));
     await user.click(screen.getByRole("checkbox", { name: /Billing/ }));
     await user.type(
       screen.getByRole("textbox", { name: /Other answer to: Which features/ }),
       "CSV",
     );
-    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: /Next/ }));
     await user.type(await screen.findByRole("textbox", { name: "When is it due?" }), "Friday");
-    await user.click(screen.getByRole("button", { name: "Send answers" }));
+    await user.click(screen.getByRole("button", { name: /Send answers/ }));
 
     await waitFor(() =>
       expect(answerQuestions).toHaveBeenCalledWith(42, [
@@ -96,17 +97,34 @@ describe("QuestionCard", () => {
     );
   });
 
-  it("asks before moving on unanswered, and Skip leaves an empty answer", async () => {
+  it("an answer in the owner's own words replaces a picked option", async () => {
     view({});
-    await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Choose an answer or skip this question.",
+    await user.type(
+      screen.getByRole("textbox", { name: /Other answer to: Which database/ }),
+      "DuckDB{Enter}",
     );
-    await user.click(screen.getByRole("button", { name: "Skip" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Auth/ }));
-    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Question 2 of 3")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Back/ }));
+    await user.click(await screen.findByRole("radio", { name: /SQLite/ }));
+    await user.click(await screen.findByRole("button", { name: /Skip/ }));
+    await user.click(await screen.findByRole("button", { name: /Skip/ }));
+    await waitFor(() =>
+      expect(answerQuestions).toHaveBeenCalledWith(42, [
+        { selected: ["SQLite"] },
+        { selected: [] },
+        { selected: [] },
+      ]),
+    );
+  });
+
+  it("Skip leaves an empty answer, and Next waits for one", async () => {
+    view({});
+    await user.click(screen.getByRole("button", { name: /Skip/ }));
+    expect(await screen.findByRole("button", { name: /Next/ })).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /Auth/ }));
+    await user.click(screen.getByRole("button", { name: /Next/ }));
     // Skipping the last question sends the answers.
-    await user.click(await screen.findByRole("button", { name: "Skip" }));
+    await user.click(await screen.findByRole("button", { name: /Skip/ }));
     await waitFor(() =>
       expect(answerQuestions).toHaveBeenCalledWith(42, [
         { selected: [] },
@@ -122,11 +140,17 @@ describe("QuestionCard", () => {
     expect(answerQuestions).toHaveBeenCalledWith(42, null);
   });
 
-  it("an answer in the owner's own words replaces a picked option", () => {
-    const form = new FormData();
-    form.append("q0", "Something else");
-    form.append("q1", "Billing");
-    expect(readAnswers(form, QUESTIONS)).toEqual([
+  it("maps the questionnaire's answers to labels and text", () => {
+    expect(
+      toOwnerAnswers(
+        {
+          q0: { questionId: "q0", selectedIds: [], otherText: " Something else " },
+          q1: { questionId: "q1", selectedIds: ["o1"] },
+          q2: { questionId: "q2", selectedIds: [], otherText: "Friday", skipped: true },
+        },
+        QUESTIONS,
+      ),
+    ).toEqual([
       { selected: [], text: "Something else" },
       { selected: ["Billing"] },
       { selected: [] },
