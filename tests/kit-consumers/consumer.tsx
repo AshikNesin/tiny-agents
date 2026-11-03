@@ -126,6 +126,8 @@ import { useStorageFiles, type StorageFile } from "@groot/shell/pages/storage/ho
 import { useAppSettings, type AppSetting } from "@groot/shell/hooks/useAppSettings";
 // Shell pages and guards an app mounts as routes (or leaves out).
 import { Login } from "@groot/shell/pages/auth/Login";
+import { Setup } from "@groot/shell/pages/auth/Setup";
+import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
 import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Storage } from "@groot/shell/pages/storage/Storage";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
@@ -256,7 +258,7 @@ const checks = {
     jobsKeys,
     STATE_TABS,
   ],
-  shellPages: [Login, Settings, Storage, ProtectedRoute],
+  shellPages: [Login, Setup, useSetupStatus, Settings, Storage, ProtectedRoute],
   shell: [
     Layout,
     PageLayout,

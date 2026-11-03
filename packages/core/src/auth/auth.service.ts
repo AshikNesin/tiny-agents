@@ -57,6 +57,35 @@ export async function createUser(data: CreateUserDTO): Promise<PublicUser> {
   return user!;
 }
 
+/** True once any account exists — first-run setup is closed from then on. */
+export async function hasAnyUser(): Promise<boolean> {
+  const [row] = await db.select({ id: users.id }).from(users).limit(1);
+  return row !== undefined;
+}
+
+/**
+ * First-run setup: create the very first account and sign it in. Refused
+ * once any account exists. Two racing requests can both insert (no
+ * transactions in core), so whoever is not the lowest id removes its own
+ * row and is refused — exactly one setup wins.
+ */
+export async function createFirstUser(
+  data: CreateUserDTO,
+): Promise<{ token: string; user: SessionUser }> {
+  const closed = () => Boom.forbidden("Setup is already complete. Sign in instead.");
+  if (await hasAnyUser()) throw closed();
+
+  const user = await createUser(data);
+  const [first] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
+  if (first?.id !== user.id) {
+    await db.delete(users).where(eq(users.id, user.id));
+    throw closed();
+  }
+
+  const token = await generateToken({ userId: user.id, email: user.email });
+  return { token, user: { id: user.id, email: user.email, name: user.name } };
+}
+
 export async function getUserById({ userId }: { userId: number }): Promise<PublicUser> {
   const user = await findUserById(userId);
   if (!user) {

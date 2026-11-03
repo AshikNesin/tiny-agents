@@ -159,11 +159,12 @@ optional TTL; app settings and passkey challenges use it. See [KV](../features/k
 
 ## Authentication
 
-| Layer     | Routes                                                                         | Requirement                                                                           |
-| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Public    | `POST /api/v1/auth/login`, `POST /api/v1/passkey/login/*`, `/health`, `/ready` | none (login routes: 20 requests / 15 min per IP)                                      |
-| Protected | everything else under `/api/v1`                                                | JWT in the `token` httpOnly cookie or `Authorization: Bearer …` (`jwtAuthMiddleware`) |
-| Admin     | `POST` / `GET /api/v1/auth/users`                                              | `X-Admin-Auth-Key` equal to `ADMIN_AUTH_KEY` (`adminAuthMiddleware`)                  |
+| Layer     | Routes                                                                         | Requirement                                                                            |
+| --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Public    | `POST /api/v1/auth/login`, `POST /api/v1/passkey/login/*`, `/health`, `/ready` | none (login routes: 20 requests / 15 min per IP)                                       |
+| Setup     | `GET` / `POST /api/v1/auth/setup`                                              | none, but `POST` only succeeds while no user exists (403 after; rate-limited as login) |
+| Protected | everything else under `/api/v1`                                                | JWT in the `token` httpOnly cookie or `Authorization: Bearer …` (`jwtAuthMiddleware`)  |
+| Admin     | `POST` / `GET /api/v1/auth/users`                                              | `X-Admin-Auth-Key` equal to `ADMIN_AUTH_KEY` (`adminAuthMiddleware`)                   |
 
 Passwords are PBKDF2-SHA256 (100,000 iterations through WebCrypto); tokens are
 HS256 via jose, valid for `config.auth.jwtExpiresIn` (30 days). Login sets the

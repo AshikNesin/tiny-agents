@@ -10,10 +10,16 @@ Routes are defined in `apps/web/src/client/App.tsx` (React Router 7):
 | Route                   | Component            | From                                   | Auth      |
 | ----------------------- | -------------------- | -------------------------------------- | --------- |
 | `/login`                | `Login`              | `@groot/shell/pages/auth/Login`        | Public    |
+| `/setup`                | `Setup`              | `@groot/shell/pages/auth/Setup`        | Public    |
 | `/` → `/todos` (index)  | `Todos`              | `apps/web/src/client/pages/todo/Todos` | Protected |
 | `/storage`              | `Storage`            | `@groot/shell/pages/storage/Storage`   | Protected |
 | `/jobs`, `/jobs/:jobId` | `Jobs` / `JobDetail` | `@groot/jobs/client`                   | Protected |
 | `/settings`             | `Settings`           | `@groot/shell/pages/settings/Settings` | Protected |
+
+`/setup` is first-run setup: while no user exists, `Login` redirects there and
+it creates the first account (`POST /auth/setup`) and signs in. Once a user
+exists it redirects to `/login`. `useSetupStatus()`
+(`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
 
 Any other path redirects to `/`. The router sits inside nuqs's `NuqsAdapter`
 (URL state) and `GrootUIProvider` (`@groot/ui/provider`), which mounts the
@@ -61,14 +67,15 @@ about sessions: `apiClient.onUnauthorized(handler)` reports each 401 with its
 The session is `useAuthStore` (`@groot/shell/store/auth`, Zustand). The server
 keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 
-| Member                                          | Does                                                                                         |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled           |
-| `login(email, password)` / `loginWithPasskey()` | Sign in (`POST /auth/login`, or the WebAuthn ceremony); resolve with the user, or reject     |
-| `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                              |
-| `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                            |
-| `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                     |
-| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password."; network and WebAuthn cases) |
+| Member                                          | Does                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled              |
+| `login(email, password)` / `loginWithPasskey()` | Sign in (`POST /auth/login`, or the WebAuthn ceremony); resolve with the user, or reject        |
+| `setup({ email, password, name? })`             | First-run setup (`POST /auth/setup`): create the first account and sign in; 403 once one exists |
+| `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                                 |
+| `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                               |
+| `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                        |
+| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password."; network and WebAuthn cases)    |
 
 The store installs the 401 hook: a 401 for a request sent during the current
 session clears it, so `ProtectedRoute` redirects to `/login`. A 401 for a
