@@ -14,10 +14,10 @@ get every capability, live views and takeover included.
 App (pnpm dev, on this machine)
   │  SSH, ed25519 key, 127.0.0.1:2222
   ▼
-tiny-agents-sandbox container (Ubuntu 24.04, user exedev, passwordless sudo)
+tiny-agents-sandbox container (Debian 13, user exedev, passwordless sudo)
   ├─ run_command / read_file / write_file (exec + SFTP)
-  ├─ Terminal tabs: tmux 3.4
-  ├─ Browser: Google Chrome on an Xtigervnc display (CDP + VNC via SSH tunnels)
+  ├─ Terminal tabs: tmux 3.5
+  ├─ Browser: Google Chrome (Chromium on arm64) on an Xtigervnc display (CDP + VNC via SSH tunnels)
   └─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
 ```
 
@@ -94,9 +94,13 @@ The container restarts with Docker (`restart: unless-stopped`).
   systemd unit (`sandbox-egress.ts`). The container has no systemd, so those
   fail. Leave `SANDBOX_EGRESS_ALLOWLIST` unset with the local sandbox, and use
   the browser's vault fill rather than secrets in commands.
-- **amd64 only.** Google Chrome ships for linux/amd64. On Apple Silicon,
-  Docker runs the image emulated (Rosetta in Docker Desktop or OrbStack):
-  slower to start, fine for normal use.
+- **Chromium on Apple Silicon.** The image builds for your machine's
+  architecture, so it runs natively everywhere. Google Chrome has no Linux
+  arm64 build, so on arm64 (Apple Silicon) the browser is Debian's Chromium,
+  started under the same `google-chrome-stable` name the app uses. (An image
+  built before this change was amd64 under emulation, where QEMU's lack of
+  AVX crashed native tools such as Claude Code's installer; `pnpm sandbox:up`
+  rebuilds it natively.)
 - **Your network.** The container reaches the internet through Docker's
   network, so a corporate proxy or TLS-inspecting firewall applies to it as it
   does to the host. Bots' commands can reach anything this machine can.
@@ -119,7 +123,7 @@ The container restarts with Docker (`restart: unless-stopped`).
   the logs in `~/.tiny-agents/` and the profile directories.
 - **"Hash Sum mismatch" / "Failed to fetch" during `pnpm sandbox:up`**: apt
   fetched a `.deb` that disagrees with the package index — a caching proxy on
-  the path (a VPN, a corporate network) or an Ubuntu mirror mid-sync served
+  the path (a VPN, a corporate network) or a Debian mirror mid-sync served
   stale bytes. The image pins apt to HTTPS mirrors with retries, so this
   should be rare; if a build still fails this way, drop Docker's build cache
   and build again so every layer fetches fresh:

@@ -15,8 +15,8 @@ to a headless local Chromium with no live view.
 
 ## Decision
 
-- The sandbox can be a **local Docker container** (`docker/sandbox/`): Ubuntu
-  24.04, user `exedev` with passwordless sudo, sshd, tmux, and the browser and
+- The sandbox can be a **local Docker container** (`docker/sandbox/`): Debian
+  13, user `exedev` with passwordless sudo, sshd, tmux, and the browser and
   computer stacks preinstalled with the installers' markers. `pnpm
   sandbox:up` creates a key pair, builds and starts it.
 - The shared SSH dial (`packages/agent/src/ssh/connection.ts`) takes an
@@ -30,6 +30,11 @@ to a headless local Chromium with no live view.
 
 - Without Tailscale, the key is the identity check, so sshd takes only that
   key, and compose publishes the port on 127.0.0.1 only.
+- The image builds for the host's architecture. Google Chrome has no Linux
+  arm64 build, so on Apple Silicon the browser is Debian's Chromium behind
+  the same `google-chrome-stable` name (the reason for Debian over Ubuntu,
+  whose Chromium is a snap). Running the amd64 image emulated instead broke
+  native tools: Docker's QEMU emulation has no AVX.
 - Chrome runs with `--no-sandbox` in the container (Docker's default seccomp
   profile denies its user namespaces); the container is the boundary.
 - Confined commands (vault secrets in `run_command`, `SANDBOX_EGRESS_ALLOWLIST`)
