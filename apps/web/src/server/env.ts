@@ -23,6 +23,13 @@ const appEnvSchema = z.object({
   OP_CONNECT_VAULT_ID: z.string().optional(),
   OP_CONNECT_TOKEN: z.string().optional(),
   OP_CONNECT_ADMIN_TOKEN: z.string().optional(),
+  /**
+   * Shelley coding agent the Code page drives (e.g. `http://my-vm:9999` over
+   * Tailscale). Unset = the Code page says it is not configured.
+   */
+  SHELLEY_URL: z.string().optional(),
+  /** Optional bearer token, for a Shelley behind an authenticating proxy. */
+  SHELLEY_TOKEN: z.string().optional(),
   /** "1" boots the faux agent runtime (no network, no keys): dev and e2e only. */
   TINY_AGENTS_FAUX: z.string().optional(),
 });

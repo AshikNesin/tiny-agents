@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Brain,
   CalendarClock,
+  Code2,
   KeyRound,
   ListTodo,
   Monitor,
@@ -19,6 +20,7 @@ export interface AppNavItem {
 /** Everyday destinations besides Chats: always visible in the sidebar. */
 export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Tasks", icon: ListTodo, to: "/tasks" },
+  { label: "Code", icon: Code2, to: "/code" },
   { label: "Terminal", icon: SquareTerminal, to: "/terminal" },
   { label: "Computer", icon: Monitor, to: "/computer" },
 ];

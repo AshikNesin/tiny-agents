@@ -20,6 +20,7 @@ import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
+import shelleyRoutes from "./api/shelley/shelley.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
 /** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
@@ -59,6 +60,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", routinesRoutes);
       api.route("/", skillsRoutes);
       api.route("/", connectionsRoutes);
+      api.route("/", shelleyRoutes);
       api.use("/vault/*", vaultNoStore);
       api.route("/", vaultRoutes);
       api.route("/jobs", jobRoutes);
