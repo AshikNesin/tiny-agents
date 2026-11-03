@@ -10,17 +10,21 @@ import { uploadsRoot } from "@groot/core/storage/node";
 import type * as core from "@groot/core/database";
 import { asCoreDatabase } from "./index";
 import { openAppDatabase } from "./legacy-copy";
+import { productionDataDir } from "../env";
 
 /**
  * tiny-agents kept its database at /data/app.db in production before groot
  * 3.0 (whose default is /data/prod.db). Keep that path when DATABASE_URL is
- * unset. Call before `bootstrap()` validates the environment.
+ * unset, honouring `DATA_DIR` (default `/data`; see `productionDataDir()`).
+ * Call before `bootstrap()` validates the environment.
  */
-export const PRODUCTION_DATABASE_URL = "file:/data/app.db";
+export function productionDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return `file:${productionDataDir(env)}/app.db`;
+}
 
 export function applyDatabaseDefaults(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV === "production" && !env.DATABASE_URL)
-    env.DATABASE_URL = PRODUCTION_DATABASE_URL;
+    env.DATABASE_URL = productionDatabaseUrl(env);
 }
 
 /**

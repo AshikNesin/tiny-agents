@@ -10,6 +10,8 @@ import { env } from "@groot/core/env";
  * browser, vision) are read where they are used.
  */
 const appEnvSchema = z.object({
+  /** Directory production keeps SQLite state in (`/data` by default). Docker mounts a volume here. */
+  DATA_DIR: z.string().optional(),
   /** pi-durable agent store: a plain path or a `file:` URL. Default: see `agentDbPath()`. */
   AGENT_DB_PATH: z.string().optional(),
   /** Model for memory capture side-calls (issue #22); unset = the bot's own model. */
@@ -35,15 +37,24 @@ export function appEnv(source: Record<string, string | undefined> = process.env)
   return appEnvSchema.parse(cleaned);
 }
 
+/** The directory production keeps SQLite state in: `DATA_DIR`, or `/data`. */
+export function productionDataDir(
+  source: Record<string, string | undefined> = process.env,
+): string {
+  const raw = appEnv(source).DATA_DIR?.trim();
+  if (raw) return raw;
+  return "/data";
+}
+
 /**
  * The pi-durable agent store path. A plain path (not a `file:` URL): the store
- * owns the file and puts a `.lock` beside it. Production keeps it on the /data
- * volume next to the app database.
+ * owns the file and puts a `.lock` beside it. Production keeps it on the data
+ * volume (see `productionDataDir()`) next to the app database.
  */
 export function agentDbPath(source: Record<string, string | undefined> = process.env): string {
   const raw = appEnv(source).AGENT_DB_PATH?.trim();
   if (raw) return raw.startsWith("file:") ? raw.slice(5) : raw;
-  if (env.NODE_ENV === "production") return "/data/agent.db";
+  if (env.NODE_ENV === "production") return `${productionDataDir(source)}/agent.db`;
   if (env.NODE_ENV === "test") return "./tmp/agent-test.db";
   return "./data/agent.db";
 }

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   applyDatabaseDefaults,
   findMigrationsFolder,
-  PRODUCTION_DATABASE_URL,
+  productionDatabaseUrl,
 } from "../../../apps/web/src/server/db/open";
 
 const saved = process.env.GROOT_MIGRATIONS_DIR;
@@ -23,7 +23,8 @@ describe("database defaults", () => {
   it("keeps /data/app.db in production when DATABASE_URL is unset, and nothing else", () => {
     const env: NodeJS.ProcessEnv = { NODE_ENV: "production" };
     applyDatabaseDefaults(env);
-    expect(env.DATABASE_URL).toBe(PRODUCTION_DATABASE_URL);
+    expect(env.DATABASE_URL).toBe("file:/data/app.db");
+    expect(productionDatabaseUrl(env)).toBe("file:/data/app.db");
 
     const set: NodeJS.ProcessEnv = { NODE_ENV: "production", DATABASE_URL: "file:/x.db" };
     applyDatabaseDefaults(set);
@@ -32,6 +33,12 @@ describe("database defaults", () => {
     const dev: NodeJS.ProcessEnv = { NODE_ENV: "development" };
     applyDatabaseDefaults(dev);
     expect(dev.DATABASE_URL).toBeUndefined();
+  });
+
+  it("places the production default under DATA_DIR when set", () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "production", DATA_DIR: "/tmp/tiny-agents-data" };
+    applyDatabaseDefaults(env);
+    expect(env.DATABASE_URL).toBe("file:/tmp/tiny-agents-data/app.db");
   });
 });
 
