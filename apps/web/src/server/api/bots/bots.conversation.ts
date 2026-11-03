@@ -102,6 +102,7 @@ export const BOT_TOOLKITS = [
   "questions",
   "vault",
   "attachments",
+  "shelley",
 ] as const;
 
 /** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */

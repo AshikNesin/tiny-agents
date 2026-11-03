@@ -27,6 +27,7 @@ import { ConnectionsPage } from "./pages/connections/Connections";
 import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
+import { CodePage } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV } from "./components/shell/nav";
@@ -102,6 +103,10 @@ const router = createBrowserRouter(
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/computer" element={<ComputerPage />} />
+        <Route path="/code" element={<CodePage />} />
+        <Route path="/code/s/:slug" element={<CodePage />} />
+        <Route path="/code/:conversationId" element={<CodePage />} />
+        <Route path="/code/:conversationId/changes" element={<CodePage />} />
         <Route path="/routines" element={<Routines />} />
         <Route path="/skills" element={<SkillsPage />} />
         <Route path="/skills/:id" element={<SkillsPage />} />

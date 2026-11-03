@@ -16,6 +16,7 @@ import {
 } from "../lib/owner-actions";
 import { BotAvatar } from "./BotAvatar";
 import { BotHandoff } from "./BotHandoff";
+import { ShelleyHandoffCard } from "./ShelleyHandoffCard";
 import {
   CodeBlock,
   CodeBlockContent,
@@ -708,6 +709,11 @@ function ToolRow({
   // message_bot row: Grok's centered handoff line that opens the thread.
   if (call.name === "message_bot") {
     return <BotHandoff call={call} botName={botName} />;
+  }
+
+  // shelley_start (issue #143): the coding hand-off, linking to the Code page.
+  if (call.shelley) {
+    return <ShelleyHandoffCard handoff={call.shelley} />;
   }
 
   const line = (

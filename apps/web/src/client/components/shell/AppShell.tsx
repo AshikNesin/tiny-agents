@@ -1,6 +1,16 @@
 import { useEffect, useMemo } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import { Bot, LogOut, MessageSquare, Monitor, Moon, Plus, Settings, Sun } from "lucide-react";
+import {
+  Bot,
+  Code2,
+  LogOut,
+  MessageSquare,
+  Monitor,
+  Moon,
+  Plus,
+  Settings,
+  Sun,
+} from "lucide-react";
 import { Layout } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { useAuthStore } from "@groot/shell/store/auth";
@@ -8,6 +18,8 @@ import { useTheme } from "@groot/shell/lib/theme";
 import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
+import { useShelleyStore } from "../../store/shelley";
+import { conversationTitle } from "../../lib/shelley/api";
 import type { Bot as BotRow } from "../../lib/bots-api";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
@@ -37,6 +49,16 @@ export function AppShell() {
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
+
+  // Shelley (issue #143): one app-wide list stream (sidebar badge, ⌘K, Code page).
+  const connectShelley = useShelleyStore((s) => s.connect);
+  const disconnectShelley = useShelleyStore((s) => s.disconnect);
+  const shelleyConversations = useShelleyStore((s) => s.conversations);
+  const shelleyConfigured = useShelleyStore((s) => s.configured === true);
+  useEffect(() => {
+    connectShelley();
+    return () => disconnectShelley();
+  }, [connectShelley, disconnectShelley]);
 
   useEffect(() => {
     void loadBots();
@@ -76,14 +98,49 @@ export function AppShell() {
               })),
             },
           ];
+    // Top-level Shelley conversations, newest first (subagents open from their parent).
+    const codeGroup: CommandGroupEntry[] =
+      shelleyConversations && shelleyConversations.length > 0
+        ? [
+            {
+              heading: "Code",
+              items: shelleyConversations
+                .filter((c) => !c.parent_conversation_id)
+                .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+                .slice(0, 30)
+                .map((c) => ({
+                  id: `code-${c.conversation_id}`,
+                  label: conversationTitle(c),
+                  icon: Code2,
+                  onSelect: () => navigate(`/code/${c.conversation_id}`),
+                })),
+            },
+          ]
+        : [];
+    const navItems = APP_NAV.filter((item) => item.to !== "/code" || shelleyConfigured);
     return [
-      { heading: "Actions", items: [{ label: "New bot", icon: Plus, onSelect: openCreateBot }] },
+      {
+        heading: "Actions",
+        items: [
+          { label: "New bot", icon: Plus, onSelect: openCreateBot },
+          ...(shelleyConfigured
+            ? [
+                {
+                  label: "New Shelley conversation",
+                  icon: Code2,
+                  onSelect: () => navigate("/code"),
+                },
+              ]
+            : []),
+        ],
+      },
       ...botGroup,
+      ...codeGroup,
       {
         heading: "Navigation",
         items: [
           { label: "Chats", icon: MessageSquare, onSelect: () => navigate("/chats") },
-          ...APP_NAV.map((item) => ({
+          ...navItems.map((item) => ({
             label: item.label,
             icon: item.icon,
             onSelect: () => navigate(item.to),
@@ -127,7 +184,16 @@ export function AppShell() {
         ],
       },
     ];
-  }, [bots, navigate, openCreateBot, theme, setTheme, logout]);
+  }, [
+    bots,
+    navigate,
+    openCreateBot,
+    theme,
+    setTheme,
+    logout,
+    shelleyConversations,
+    shelleyConfigured,
+  ]);
 
   const onSaved = (bot: BotRow) => {
     // The saved row is the full bot: the open chat and the next edit read it.
@@ -145,7 +211,12 @@ export function AppShell() {
     }
   };
 
-  const inChats = pathname === "/chats" || pathname.startsWith("/chats/");
+  // Chats and Code (issue #143) are full-height workspaces with their own scroll.
+  const inChats =
+    pathname === "/chats" ||
+    pathname.startsWith("/chats/") ||
+    pathname === "/code" ||
+    pathname.startsWith("/code/");
 
   return (
     <div className="bg-background flex h-dvh overflow-hidden">

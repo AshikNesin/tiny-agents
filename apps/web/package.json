@@ -21,6 +21,7 @@
     "cron-parser": "5.10.2",
     "cronstrue": "3.38.0",
     "dayjs": "^1.11.23",
+    "diff": "8.0.4",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.10.0",
     "lucide-react": "^1.61.0",

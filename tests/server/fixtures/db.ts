@@ -13,6 +13,8 @@ import {
   memories,
   routineRuns,
   routines,
+  shelleyHandoffs,
+  shelleySeen,
   skills,
   tasks,
   uploads,
@@ -60,6 +62,8 @@ export const conversationOf = (bot: Pick<SeededBot, "conversationId">): number =
 
 /** Delete every app row, children before parents. */
 export async function resetAppTables(): Promise<void> {
+  await db.delete(shelleyHandoffs);
+  await db.delete(shelleySeen);
   await db.delete(routineRuns);
   await db.delete(routines);
   await db.delete(botMessages);

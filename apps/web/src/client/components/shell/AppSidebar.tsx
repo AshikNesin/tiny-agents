@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
+import { unreadCount, useShelleyStore } from "../../store/shelley";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
@@ -43,12 +44,15 @@ function NavRow({
   label,
   rail,
   active,
+  badge,
   ...rest
 }: {
   icon: LucideIcon;
   label: string;
   rail: boolean;
   active?: boolean;
+  /** A count shown at the end of the row (e.g. unread Shelley conversations). */
+  badge?: number;
 } & ({ to: string; onClick?: () => void } | { onClick: () => void; to?: undefined })) {
   const className = cn(
     NAV_ROW,
@@ -58,8 +62,30 @@ function NavRow({
   );
   const content = (
     <>
-      <Icon className="text-muted-foreground size-4 shrink-0" />
+      <span className="relative shrink-0">
+        <Icon className="text-muted-foreground size-4" />
+        {badge ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "bg-primary absolute -top-0.5 -right-0.5 hidden size-2 rounded-full",
+              rail && "md:block",
+            )}
+          />
+        ) : null}
+      </span>
       <span className={cn("truncate", rail && "md:hidden")}>{label}</span>
+      {badge ? (
+        <span
+          className={cn(
+            "bg-primary text-primary-foreground ml-auto rounded-full px-1.5 text-[11px] leading-4 font-medium tabular-nums",
+            rail && "md:hidden",
+          )}
+          aria-label={`${badge} unread`}
+        >
+          {badge}
+        </span>
+      ) : null}
     </>
   );
   if (rest.to !== undefined) {
@@ -113,6 +139,9 @@ export function AppSidebar() {
   const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
   const pointerOnFeedback = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  // Code (issue #143) shows only with Shelley configured, with its unread count.
+  const shelleyConfigured = useShelleyStore((s) => s.configured === true);
+  const codeUnread = useShelleyStore((s) => unreadCount(s.conversations));
   // A page that lives in the account menu still shows where you are: the
   // account row reads as selected while one of them is open.
   const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
@@ -189,7 +218,7 @@ export function AppSidebar() {
           aria-label="Primary"
           className={cn("space-y-0.5 px-2.5 pb-2", rail && "md:flex md:flex-col md:items-center")}
         >
-          {PRIMARY_NAV.map((item) => (
+          {PRIMARY_NAV.filter((item) => item.to !== "/code" || shelleyConfigured).map((item) => (
             <NavRow
               key={item.to}
               icon={item.icon}
@@ -198,6 +227,7 @@ export function AppSidebar() {
               to={item.to}
               active={isActive(item.to)}
               onClick={closeDrawer}
+              badge={item.to === "/code" ? codeUnread : undefined}
             />
           ))}
           {/* On mobile the account menu is two taps deep behind an unlabeled

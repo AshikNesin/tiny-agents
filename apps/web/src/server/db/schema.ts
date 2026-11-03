@@ -164,6 +164,49 @@ export const botMessages = sqliteTable(
   ],
 );
 
+/**
+ * Shelley hand-offs (issue #143): a bot started coding work in Shelley with
+ * `shelley_start`. When that conversation's turn ends, the finish is
+ * delivered once into the bot's chat (running → finished, compare-and-set).
+ */
+export const shelleyHandoffs = sqliteTable(
+  "shelley_handoffs",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    shelleyConversationId: text("shelley_conversation_id").notNull(),
+    slug: text("slug"),
+    /** What the bot asked Shelley to do (first message), for the card and list. */
+    task: text("task").notNull(),
+    cwd: text("cwd"),
+    /** Durable tool task identity: a replayed `shelley_start` returns this row. */
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    /** "running" | "finished". */
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    finishedAt: ms("finished_at"),
+  },
+  (t) => [
+    index("shelley_handoffs_conversation_idx").on(t.shelleyConversationId),
+    index("shelley_handoffs_bot_idx").on(t.botId, t.createdAt),
+  ],
+);
+
+/**
+ * Shelley conversations the owner follows from tiny-agents (started, opened
+ * or handed off here): unread markers and finish pushes (issue #143).
+ */
+export const shelleySeen = sqliteTable("shelley_seen", {
+  conversationId: text("conversation_id").primaryKey(),
+  /** Highest Shelley `sequence_id` the owner has seen in it. */
+  lastSeenSequenceId: integer("last_seen_sequence_id").notNull().default(0),
+  updatedAt: ms("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export const botSkills = sqliteTable(
   "bot_skills",
   {
@@ -529,6 +572,7 @@ export type Upload = typeof uploads.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
+export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
 
 export * from "@groot/core/database/schema";
 export * from "@groot/jobs/server/schema";

@@ -19,6 +19,7 @@ import {
   createSelfImproveCapability,
   createSandboxToolkit,
   createSkillsCapability,
+  createShelleyToolkit,
   createTasksToolkit,
   createTodayCapability,
   createTranscriber,
@@ -40,6 +41,7 @@ import {
 } from "@tiny-agents/agent/testing";
 import { logger, setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
+import { shelleyStore } from "../shelley/shelley.store";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
@@ -111,6 +113,13 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       vault,
       ownerWaits,
     }),
+    // Shelley (issue #143): hand coding work to the owner's Shelley coding
+    // agent; finishes come back into the chat. No tools without SHELLEY_URL.
+    createShelleyToolkit(
+      env.SHELLEY_URL?.trim()
+        ? { store: shelleyStore }
+        : { setupHint: "Set SHELLEY_URL to hand coding work to Shelley." },
+    ),
     // Computer (issue #108): an XFCE desktop per browser profile on the
     // sandbox VM, seen with scrot and driven with xdotool. Without a VM it
     // offers no tools and the bot editor shows why.
@@ -296,6 +305,15 @@ export async function openFauxAgentRuntime(
     if (text.startsWith("/ask")) {
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };
+    }
+    // "/code [cwd=PATH] task" hands the task to Shelley (issue #143), one
+    // tool round, so e2e can drive a hand-off and its finish.
+    const code = /^\/code\s+(?:cwd=(\S+)\s+)?([\s\S]+)/.exec(text);
+    if (code && toolResults === 0) {
+      const call = fauxAssistantMessage(
+        fauxToolCall("shelley_start", { task: code[2], ...(code[1] ? { cwd: code[1] } : {}) }),
+      );
+      return { ...call, stopReason: "toolUse" as const };
     }
     // "/improve" proposes appending a line to the bot's own instructions,
     // one tool round, so e2e can drive the self-improvement approval flow.

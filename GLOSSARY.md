@@ -33,6 +33,18 @@ _Avoid_: exchange, round (a turn has several tool rounds)
 One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` owns every state change and the card and push that follow.
 _Avoid_: job, execution
 
+**Shelley**:
+The owner's coding agent on another machine ([boldsoftware/shelley](https://github.com/boldsoftware/shelley)). tiny-agents is a client of its official API (Code page, `shelley_*` tools); it never runs or stores coding-agent state (ADR 0009).
+_Avoid_: coder, coding bot
+
+**Hand-off**:
+A bot giving coding work to Shelley with `shelley_start`: a `shelley_handoffs` row whose finish is delivered once into the bot's chat as a reply from Shelley.
+_Avoid_: job, delegation
+
+**Steer**:
+A message sent to Shelley while its turn runs: Shelley injects it into that turn. Queue holds a message for when the turn ends instead.
+_Avoid_: interrupt (Stop interrupts)
+
 **Vault use**:
 One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit; `useFromSink` in the agent package is the one sequence every sink follows.
 _Avoid_: fill, lookup, secret access

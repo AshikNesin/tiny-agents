@@ -162,6 +162,19 @@ function sourcesOf(details: unknown): ChatToolCall["sources"] {
   return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
 }
 
+/** A `shelley_start` result's hand-off (issue #143): the Code page card. */
+function shelleyOf(details: unknown): ChatToolCall["shelley"] {
+  const raw = record(record(details)?.shelley ?? record(record(details)?.result)?.shelley);
+  if (!raw || typeof raw.conversationId !== "string" || typeof raw.url !== "string")
+    return undefined;
+  return {
+    conversationId: raw.conversationId,
+    slug: typeof raw.slug === "string" ? raw.slug : null,
+    cwd: typeof raw.cwd === "string" ? raw.cwd : null,
+    url: raw.url,
+  };
+}
+
 function resultStatus(result: ToolResult): ChatToolStatus {
   const approval = approvalOf(result.message.details);
   if (approval?.state === "denied") return "denied";
@@ -195,6 +208,7 @@ function toolCallView(
     const approved = approvalOf(message.details);
     const approval = approved?.state;
     const sources = sourcesOf(message.details);
+    const shelley = shelleyOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
     const takeover = takeoverOf(approved?.result ?? message.details);
@@ -216,6 +230,7 @@ function toolCallView(
         ? { approval }
         : {}),
       ...(sources ? { sources } : {}),
+      ...(shelley ? { shelley } : {}),
       ...(questions ? { questions } : {}),
       ...(answers ? { answers } : {}),
       ...(credentials ? { credentials } : {}),
