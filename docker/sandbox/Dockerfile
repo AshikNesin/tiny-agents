@@ -8,7 +8,12 @@
 # the same markers, so the first bot call doesn't wait on apt. The package
 # lists mirror those files; tests/server/app/agent/local-sandbox.test.ts
 # keeps them in step.
-ARG BASE_IMAGE=ubuntu:24.04
+#
+# It builds for the host's architecture, so Apple Silicon runs it natively
+# (no amd64 emulation, whose QEMU CPU lacks the AVX that Claude Code's and
+# Bun's binaries need). Debian rather than Ubuntu because Debian ships
+# Chromium as a .deb for arm64, where Google Chrome has no Linux build.
+ARG BASE_IMAGE=debian:trixie
 FROM ${BASE_IMAGE}
 
 # Debian packages to preinstall besides the desktop (e.g. "libreoffice-calc gimp").
@@ -18,8 +23,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Packages over HTTPS, with retries. Ubuntu's stock sources are plain HTTP
-# (http://archive.ubuntu.com), so a caching proxy on the path (Docker's or
+# Packages over HTTPS, with retries. The base image's sources are plain HTTP
+# (http://deb.debian.org), so a caching proxy on the path (Docker's or
 # Colima's network layer, a VPN, a corporate network) or a mirror mid-sync
 # can serve a .deb that fails apt's hash check — the "Hash Sum mismatch"
 # build failure. TLS pins the stream; retries ride out flaky fetches. The
@@ -40,19 +45,26 @@ RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends \
       openssh-server sudo tini tmux locales ca-certificates curl wget gnupg \
       python3 python3-pip python3-venv git jq less nano vim-tiny unzip zip \
-      procps psmisc util-linux iproute2 iputils-ping dnsutils build-essential \
+      procps psmisc util-linux iproute2 iputils-ping bind9-dnsutils build-essential \
  && rm -rf /var/lib/apt/lists/*
 
-# Browser stack (browser-vm-setup.ts installStackCommand).
+# Browser stack (browser-vm-setup.ts installStackCommand). The app starts
+# `google-chrome-stable`: Google Chrome on amd64, as on the VM; Debian's
+# Chromium on arm64 (Chrome has no Linux arm64 build), under the same name
+# via the wrapper below.
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends \
       tigervnc-standalone-server tigervnc-common \
       fonts-liberation fonts-dejavu-core fonts-noto-color-emoji \
- && ARCH="$(dpkg --print-architecture)" \
- && if [ "$ARCH" != amd64 ]; then echo "Google Chrome needs linux/amd64 (got $ARCH); build with --platform linux/amd64" >&2; exit 1; fi \
- && curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
- && apt-get install -y -qq /tmp/chrome.deb \
- && rm -f /tmp/chrome.deb \
+ && if [ "$(dpkg --print-architecture)" = amd64 ]; then \
+      curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+      && apt-get install -y -qq /tmp/chrome.deb \
+      && rm -f /tmp/chrome.deb; \
+    else \
+      apt-get install -y -qq --no-install-recommends chromium \
+      && ln -s /usr/bin/chromium /usr/bin/google-chrome-stable \
+      && echo 'export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox --test-type"' > /etc/chromium.d/tiny-agents; \
+    fi \
  && rm -rf /var/lib/apt/lists/*
 
 # Computer stack (computer-vm-setup.ts COMPUTER_PACKAGES) plus the extras.
@@ -70,6 +82,8 @@ RUN apt-get update -qq \
 # profile denies. The container is the boundary here, so every way of
 # starting Chrome (the app's launch, the desktop's menu and panel) goes
 # through a wrapper that adds --no-sandbox: the real launcher is diverted.
+# (On arm64 that is the symlink to Chromium, whose own menu entry gets the
+# flag from /etc/chromium.d above.)
 COPY --chmod=755 chrome-wrapper.sh /usr/local/lib/tiny-agents/google-chrome-stable
 RUN dpkg-divert --local --rename --add /usr/bin/google-chrome-stable \
  && ln -s /usr/local/lib/tiny-agents/google-chrome-stable /usr/bin/google-chrome-stable

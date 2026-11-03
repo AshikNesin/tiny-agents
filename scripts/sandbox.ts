@@ -60,7 +60,7 @@ function probe(): Promise<string> {
     client
       .on("ready", () => {
         client.exec(
-          "echo \"$(whoami) on $(. /etc/os-release && echo $PRETTY_NAME)\"; tmux -V; google-chrome-stable --version; sudo -n true && echo 'sudo ok'; grep -qa qemu- /proc/1/cmdline && echo 'emulated by QEMU'",
+          "echo \"$(whoami) on $(. /etc/os-release && echo $PRETTY_NAME)\"; tmux -V; google-chrome-stable --version; sudo -n true && echo 'sudo ok'",
           (error, channel) => {
             if (error) return reject(error);
             let out = "";
@@ -102,17 +102,7 @@ async function up(): Promise<number> {
   if (status !== 0) return status;
   console.log("\nWaiting for the sandbox's SSH…");
   try {
-    const info = await waitForSsh();
-    console.log(info.replace(/^/gm, "  "));
-    if (info.includes("emulated by QEMU")) {
-      // QEMU's x86-64 emulation has no AVX, so native binaries that need it
-      // (Claude Code's installer, Bun) segfault in the sandbox.
-      console.warn(
-        "\nWarning: Docker runs this amd64 image with QEMU, which has no AVX: Claude Code's\n" +
-          "installer, Bun and other native tools crash in it. Switch Docker's amd64 emulation\n" +
-          "to Rosetta (see docs/guides/local-sandbox.md), then run `pnpm sandbox:down && pnpm sandbox:up`.",
-      );
-    }
+    console.log((await waitForSsh()).replace(/^/gm, "  "));
   } catch (error) {
     console.error(
       `The container started but SSH on 127.0.0.1:${port} didn't answer: ${(error as Error).message}\n` +

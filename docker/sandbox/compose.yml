@@ -9,8 +9,8 @@ services:
       context: .
       args:
         EXTRA_PACKAGES: ${SANDBOX_EXTRA_PACKAGES:-}
-    # Google Chrome ships for amd64 only; Apple Silicon runs it emulated.
-    platform: linux/amd64
+    # Built for the host's architecture: amd64 gets Google Chrome, arm64
+    # (Apple Silicon) Debian's Chromium, both natively.
     image: tiny-agents-sandbox:local
     hostname: tiny-agents-sandbox
     restart: unless-stopped
