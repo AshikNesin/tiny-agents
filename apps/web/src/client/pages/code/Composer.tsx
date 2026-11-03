@@ -6,17 +6,30 @@
  * skills, and a draft kept per conversation.
  *
  * Enter sends; while Shelley works, Enter steers the running turn and
- * "Queue" (or Alt+Enter) holds the message for when the turn ends.
+ * "Queue" (or Alt+Enter) holds the message for when the turn ends; with an
+ * empty draft the send button becomes Stop. The toolbar holds a "+" menu
+ * (files, skills) and the caller's chips (model, reasoning, context).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { File, Folder, ListPlus, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  ArrowUp,
+  File,
+  Folder,
+  ListPlus,
+  Paperclip,
+  Plus,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
-import { Textarea } from "@groot/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -75,6 +88,11 @@ function tokenAt(
   return undefined;
 }
 
+/** On touch screens Enter adds a newline; the send button sends. */
+function coarsePointer(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+}
+
 function quoteRef(path: string): string {
   return /[\s,:()"]/.test(path) ? `"${path.replace(/"/g, '\\"')}"` : path;
 }
@@ -89,8 +107,12 @@ export interface ComposerProps {
   autoFocus?: boolean;
   /** Text to add to the draft (a diff comment); consumed once. */
   insert?: { text: string; nonce: number } | null;
-  /** Rendered beside the buttons (the new-conversation form's options). */
-  footer?: React.ReactNode;
+  /** Chips in the toolbar: model, reasoning, context (or the new-conversation options). */
+  controls?: React.ReactNode;
+  /** Shown when Shelley works and the draft is empty: the send button becomes Stop. */
+  onStop?(): void;
+  /** A quiet line under the composer when idle (keyboard hints while working). */
+  hint?: string;
   submitLabel?: string;
   onSend(message: string, options: { queue: boolean; skills: string[] }): Promise<void>;
 }
@@ -103,10 +125,13 @@ export function Composer({
   placeholder,
   autoFocus,
   insert,
-  footer,
+  controls,
+  onStop,
+  hint,
   submitLabel,
   onSend,
 }: ComposerProps) {
+  const reduceMotion = useReducedMotion() ?? false;
   const [text, setText] = useState(() => readDraft(draftKey));
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -282,7 +307,7 @@ export function Composer({
         return;
       }
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !coarsePointer()) {
       event.preventDefault();
       void send(event.altKey && working);
     }
@@ -290,64 +315,11 @@ export function Composer({
 
   const updateToken = (value: string, cursor: number) => setToken(tokenAt(value, cursor));
 
-  const skillMenu = useMemo(
-    () =>
-      cwd ? (
-        <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Skills"
-              title="Skills"
-              className={cn(selectedSkills.length > 0 && "text-primary")}
-            >
-              <Sparkles />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-y-auto">
-            <DropdownMenuLabel>Skills for this message</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {skills === null ? (
-              <div className="p-2">
-                <Spinner />
-              </div>
-            ) : skills.length === 0 ? (
-              <p className="text-muted-foreground p-2 text-xs">
-                No skills found for this directory.
-              </p>
-            ) : (
-              skills.map((skill) => (
-                <DropdownMenuCheckboxItem
-                  key={skill.name}
-                  checked={selectedSkills.includes(skill.name)}
-                  onSelect={(e) => e.preventDefault()}
-                  onCheckedChange={(checked) =>
-                    setSelectedSkills((prev) =>
-                      checked ? [...prev, skill.name] : prev.filter((n) => n !== skill.name),
-                    )
-                  }
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{skill.name}</span>
-                    {skill.description && (
-                      <span className="text-muted-foreground line-clamp-2 text-xs">
-                        {skill.description}
-                      </span>
-                    )}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null,
-    [cwd, skills, selectedSkills, loadSkills],
-  );
+  const showStop = working && !text.trim() && ready.length === 0 && Boolean(onStop);
 
   return (
     <div
-      className={cn("relative", dragging && "ring-primary rounded-2xl ring-2")}
+      className="relative"
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
@@ -365,7 +337,8 @@ export function Composer({
       {suggestions.length > 0 && (
         <div
           role="listbox"
-          className="bg-popover text-popover-foreground border-border absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full max-w-xl overflow-y-auto rounded-xl border p-1 shadow-lg"
+          aria-label={token?.kind === "/" ? "Commands" : "Files"}
+          className="bg-popover text-popover-foreground absolute bottom-full left-0 z-20 mb-2 max-h-72 w-full max-w-xl overflow-y-auto rounded-xl p-1 shadow-md ring-1 ring-foreground/10"
         >
           {suggestions.map((s, i) => (
             <button
@@ -377,21 +350,22 @@ export function Composer({
                 e.preventDefault();
                 choose(i);
               }}
+              onMouseEnter={() => setActive(i)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm",
-                i === active ? "bg-muted" : "hover:bg-muted",
+                i === active ? "bg-muted text-foreground" : "text-muted-foreground",
               )}
             >
               {token?.kind === "@" ? (
                 s.dir ? (
-                  <Folder className="text-muted-foreground size-4 shrink-0" />
+                  <Folder className="size-4 shrink-0" />
                 ) : (
-                  <File className="text-muted-foreground size-4 shrink-0" />
+                  <File className="size-4 shrink-0" />
                 )
               ) : null}
-              <span className={cn("truncate", monoClass)}>{s.label}</span>
+              <span className={cn("shrink-0 truncate", monoClass)}>{s.label}</span>
               {s.detail && (
-                <span className="text-muted-foreground truncate text-xs">{s.detail}</span>
+                <span className="text-muted-foreground min-w-0 truncate text-xs">{s.detail}</span>
               )}
             </button>
           ))}
@@ -399,62 +373,66 @@ export function Composer({
       )}
 
       {(attachments.length > 0 || selectedSkills.length > 0) && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1" data-testid="code-composer-chips">
           {selectedSkills.map((name) => (
-            <span
+            <Chip
               key={name}
-              className="bg-muted flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2 text-xs"
-            >
-              <Sparkles className="size-3" />
-              {name}
-              <button
-                type="button"
-                aria-label={`Remove skill ${name}`}
-                onClick={() => setSelectedSkills((prev) => prev.filter((n) => n !== name))}
-                className="hover:bg-background rounded-full p-0.5"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+              icon={<Sparkles className="size-3" />}
+              label={name}
+              onRemove={() => setSelectedSkills((prev) => prev.filter((n) => n !== name))}
+              removeLabel={`Remove skill ${name}`}
+            />
           ))}
           {attachments.map((a) => (
-            <span
+            <Chip
               key={a.id}
-              className={cn(
-                "bg-muted flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2 text-xs",
-                a.status === "error" && "text-destructive",
-              )}
-            >
-              {a.status === "uploading" ? (
-                <Spinner className="size-3" />
-              ) : (
-                <Paperclip className="size-3" />
-              )}
-              <span className="max-w-40 truncate">{a.name}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${a.name}`}
-                onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                className="hover:bg-background rounded-full p-0.5"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+              icon={
+                a.status === "uploading" ? (
+                  <Spinner className="size-3" />
+                ) : (
+                  <Paperclip className="size-3" />
+                )
+              }
+              label={a.name}
+              tone={a.status === "error" ? "destructive" : undefined}
+              onRemove={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+              removeLabel={`Remove ${a.name}`}
+            />
           ))}
         </div>
       )}
 
-      <div className="bg-background border-border focus-within:ring-ring/50 rounded-2xl border focus-within:ring-2">
-        <Textarea
+      {/* Fluid InputMessage frame, as the bot chat's composer: a hairline ring
+          that gains contrast on hover and focus; clicking the padding focuses
+          the field. */}
+      <div
+        data-slot="composer-frame"
+        className={cn(
+          "bg-composer relative flex cursor-text flex-col gap-1 rounded-3xl p-2",
+          "shadow-[0_0_0_1px_var(--border),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+          "hover:shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_18%,transparent),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+          "focus-within:shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_32%,transparent),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+          dragging &&
+            "shadow-[0_0_0_2px_color-mix(in_oklab,var(--foreground)_45%,transparent)] hover:shadow-[0_0_0_2px_color-mix(in_oklab,var(--foreground)_45%,transparent)]",
+        )}
+        onMouseDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          e.preventDefault();
+          area.current?.focus();
+        }}
+      >
+        <textarea
           ref={area}
           autoFocus={autoFocus}
           value={text}
-          rows={2}
+          rows={1}
           placeholder={
-            placeholder ??
-            (working
-              ? "Steer Shelley — goes into the running turn (Alt+Enter queues)"
-              : "Message Shelley — @ for files, / for commands")
+            dragging
+              ? "Drop files to attach them"
+              : (placeholder ??
+                (working
+                  ? "Steer Shelley — goes into the running turn"
+                  : "Message Shelley — @ for files, / for commands"))
           }
           onChange={(e) => {
             setText(e.target.value);
@@ -470,57 +448,186 @@ export function Composer({
               upload(files);
             }
           }}
-          className="max-h-60 min-h-0 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none md:text-sm md:leading-6"
           data-testid="code-composer"
           aria-label="Message Shelley"
         />
-        <div className="flex items-center gap-1 px-2 pb-2">
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              if (e.target.files) upload(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => fileInput.current?.click()}
-            aria-label="Attach files"
-            title="Attach files (or paste / drop)"
-          >
-            <Paperclip />
-          </Button>
-          {skillMenu}
-          <div className="min-w-0 flex-1">{footer}</div>
-          {working && (
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files) upload(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <div className="flex min-w-0 items-center gap-1">
+          <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Add files or skills"
+                title="Add files or skills"
+                className={cn(
+                  "text-muted-foreground shrink-0 rounded-full",
+                  selectedSkills.length > 0 && "text-foreground",
+                )}
+                data-testid="code-composer-add"
+              >
+                <Plus />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="max-h-96 w-72">
+              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                <Paperclip />
+                Add files or images
+                <span className="text-muted-foreground ml-auto text-xs">paste · drop</span>
+              </DropdownMenuItem>
+              {cwd && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+                    Skills for this message
+                  </DropdownMenuLabel>
+                  {skills === null ? (
+                    <div className="flex justify-center p-2">
+                      <Spinner />
+                    </div>
+                  ) : skills.length === 0 ? (
+                    <p className="text-muted-foreground px-2 pb-2 text-xs">
+                      No skills in this directory.
+                    </p>
+                  ) : (
+                    skills.map((skill) => (
+                      <DropdownMenuCheckboxItem
+                        key={skill.name}
+                        checked={selectedSkills.includes(skill.name)}
+                        onSelect={(e) => e.preventDefault()}
+                        onCheckedChange={(checked) =>
+                          setSelectedSkills((prev) =>
+                            checked ? [...prev, skill.name] : prev.filter((n) => n !== skill.name),
+                          )
+                        }
+                      >
+                        <Sparkles className="text-muted-foreground" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate">{skill.name}</span>
+                          {skill.description && (
+                            <span className="text-muted-foreground line-clamp-2 text-xs">
+                              {skill.description}
+                            </span>
+                          )}
+                        </span>
+                      </DropdownMenuCheckboxItem>
+                    ))
+                  )}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+            {controls}
+          </div>
+          {working && !showStop && (
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground shrink-0 rounded-full"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => void send(true)}
               disabled={!canSend}
+              aria-label="Queue for when this turn ends"
               title="Queue for when this turn ends (Alt+Enter)"
               data-testid="code-queue"
             >
               <ListPlus />
-              Queue
             </Button>
           )}
           <Button
-            size="sm"
-            onClick={() => void send(false)}
-            disabled={!canSend}
-            data-testid="code-send"
-            title={working ? "Steer the running turn (Enter)" : "Send (Enter)"}
+            size="icon"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => (showStop ? onStop?.() : void send(false))}
+            disabled={showStop ? false : !canSend}
+            data-testid={showStop ? "code-stop" : "code-send"}
+            aria-label={showStop ? "Stop Shelley" : (submitLabel ?? (working ? "Steer" : "Send"))}
+            title={
+              showStop
+                ? "Stop (⌘.)"
+                : working
+                  ? "Steer the running turn (Enter)"
+                  : `${submitLabel ?? "Send"} (Enter)`
+            }
+            className="size-8 shrink-0 rounded-full disabled:opacity-30"
           >
-            {sending ? <Spinner /> : <Send />}
-            {submitLabel ?? (working ? "Steer" : "Send")}
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={showStop ? "stop" : sending ? "sending" : "send"}
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.6, transition: { duration: 0.06 } }
+                }
+                transition={{ type: "spring", duration: 0.08, bounce: 0 }}
+                className="flex items-center justify-center leading-none"
+              >
+                {showStop ? (
+                  <Square className="size-3 fill-current" />
+                ) : sending ? (
+                  <Spinner className="size-4" aria-hidden />
+                ) : (
+                  <ArrowUp className="size-4" />
+                )}
+              </motion.span>
+            </AnimatePresence>
           </Button>
         </div>
       </div>
+      {(working || hint) && (
+        <p
+          className="text-muted-foreground mt-1.5 truncate text-center text-[11px] leading-4 pointer-coarse:hidden"
+          data-testid="code-composer-hint"
+        >
+          {working ? "Enter steers · Alt+Enter queues · ⌘. stops" : hint}
+        </p>
+      )}
     </div>
+  );
+}
+
+function Chip({
+  icon,
+  label,
+  tone,
+  onRemove,
+  removeLabel,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  tone?: "destructive";
+  onRemove(): void;
+  removeLabel: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "bg-muted flex items-center gap-1 rounded-full py-0.5 pr-0.5 pl-2 text-xs",
+        tone === "destructive" && "text-destructive",
+      )}
+    >
+      {icon}
+      <span className="max-w-40 truncate">{label}</span>
+      <button
+        type="button"
+        aria-label={removeLabel}
+        onClick={onRemove}
+        className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
   );
 }

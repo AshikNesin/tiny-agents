@@ -14,6 +14,7 @@ import {
   Copy,
   GitFork,
   Info,
+  ListChecks,
   MessageCircle,
   RotateCcw,
   SquareTerminal,
@@ -43,7 +44,13 @@ import {
 } from "../../components/ui/code-block";
 import { Spinner } from "../../components/ui/spinner";
 import { shelleyApi, type ShelleyConversation } from "../../lib/shelley/api";
-import type { ToolItem, TranscriptItem } from "../../lib/shelley/transcript";
+import {
+  describeTools,
+  type DisplayItem,
+  type ToolGroup,
+  type ToolItem,
+  type TranscriptItem,
+} from "../../lib/shelley/transcript";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
 export interface TranscriptActions {
@@ -64,6 +71,9 @@ export function formatDuration(ms: number): string {
 export function formatCost(usd: number): string {
   return usd < 0.01 ? `$${usd.toFixed(3)}` : `$${usd.toFixed(2)}`;
 }
+
+const failedTool = (call: ToolItem) =>
+  call.status === "error" || (call.exitCode !== undefined && call.exitCode !== 0);
 
 function copy(text: string) {
   void navigator.clipboard
@@ -220,7 +230,7 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
       : JSON.stringify(call.input, null, 2);
   const command =
     call.toolKind === "bash" && typeof input?.command === "string" ? input.command : "";
-  const failed = call.status === "error" || (call.exitCode !== undefined && call.exitCode !== 0);
+  const failed = failedTool(call);
   const hasDetail = Boolean(command || argsJson || call.output || call.diff || call.images.length);
 
   const line = (
@@ -293,6 +303,44 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
   );
 }
 
+/** Finished tool calls folded into one line ("Ran 3 commands, edited 2 files"). */
+function ToolGroupRow({ group, rows }: { group: ToolGroup; rows: ShelleyConversation[] }) {
+  const failed = group.tools.filter(failedTool).length;
+  const duration = group.tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+  return (
+    <Trace data-testid="code-tool-group">
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>
+          <TraceLine>
+            <TraceIcon>
+              <ListChecks />
+            </TraceIcon>
+            <TraceTitle>{describeTools(group.tools)}</TraceTitle>
+            {failed > 0 && (
+              <TraceDescription className="text-destructive">· {failed} failed</TraceDescription>
+            )}
+            {duration > 0 && <TraceDescription>{formatDuration(duration)}</TraceDescription>}
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="space-y-2">
+          {group.items.map((item) =>
+            item.kind === "tool" ? (
+              <ToolRow key={item.key} call={item} rows={rows} />
+            ) : (
+              <p
+                key={item.key}
+                className="text-muted-foreground text-sm whitespace-pre-wrap italic"
+              >
+                {item.text}
+              </p>
+            ),
+          )}
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  );
+}
+
 function Notice({
   item,
   actions,
@@ -336,7 +384,7 @@ export function TranscriptRow({
   actions,
   isLastNotice,
 }: {
-  item: TranscriptItem;
+  item: DisplayItem;
   rows: ShelleyConversation[];
   actions: TranscriptActions;
   isLastNotice: boolean;
@@ -424,21 +472,25 @@ export function TranscriptRow({
       );
     case "notice":
       return <Notice item={item} actions={actions} isLast={isLastNotice} />;
-    case "turn":
+    case "turn": {
+      const parts = [
+        item.durationMs !== undefined ? `Worked for ${formatDuration(item.durationMs)}` : "Done",
+        item.costUsd !== undefined ? formatCost(item.costUsd) : undefined,
+      ].filter(Boolean);
       return (
-        <div
-          className="text-muted-foreground flex items-center gap-2 py-1 text-xs"
+        <p
+          className="text-muted-foreground/80 flex items-center gap-1.5 text-xs"
           data-testid="turn-divider"
         >
-          <span className="bg-border h-px flex-1" aria-hidden="true" />
-          Turn ended
-          {item.durationMs !== undefined && ` · ${formatDuration(item.durationMs)}`}
-          {item.costUsd !== undefined && ` · ${formatCost(item.costUsd)}`}
-          <span className="bg-border h-px flex-1" aria-hidden="true" />
-        </div>
+          <CircleCheck className="size-3.5" aria-hidden />
+          {parts.join(" · ")}
+        </p>
       );
+    }
     case "tool":
       return <ToolRow call={item} rows={rows} />;
+    case "tool-group":
+      return <ToolGroupRow group={item} rows={rows} />;
   }
 }
 

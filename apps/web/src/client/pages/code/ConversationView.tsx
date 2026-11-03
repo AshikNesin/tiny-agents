@@ -1,30 +1,32 @@
 /**
- * One Shelley conversation on the Code page (issue #143): live transcript,
- * header controls (model and reasoning, context, cost, stop), what is running
- * (the turn, background jobs, subagents), queued messages and the composer.
+ * One Shelley conversation on the Code page (issue #143): a one-line header
+ * (path, title menu, cost, Changes), the live transcript with finished tool
+ * runs folded into one line each, what is running (background jobs,
+ * subagents), queued messages, and the composer with the model, reasoning
+ * and context chips and Stop.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
+  Bot,
+  ChevronDown,
   ExternalLink,
   FileDiff,
   FolderOpen,
-  MoreHorizontal,
+  GitCommitHorizontal,
   Pencil,
-  Archive,
-  ArchiveRestore,
   Play,
   Send,
   Square,
+  SquareTerminal,
   Trash2,
   X,
-  Bot,
-  SquareTerminal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Input, monoClass } from "@groot/ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +55,6 @@ import {
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
-  THINKING_LEVELS,
   conversationTitle,
   queuedMessages,
   shelleyApi,
@@ -64,21 +65,21 @@ import {
   type ShelleyModel,
 } from "../../lib/shelley/api";
 import { ancestry } from "../../lib/shelley/list";
-import { totalCost } from "../../lib/shelley/transcript";
+import { groupTools, totalCost } from "../../lib/shelley/transcript";
 import { useShelleyConversation } from "../../lib/shelley/use-conversation";
 import { useShelleyStore } from "../../store/shelley";
 import { Composer } from "./Composer";
+import {
+  ContextRing,
+  DEFAULT,
+  ModelPicker,
+  ReasoningPicker,
+  loadModels,
+  useArchive,
+} from "./controls";
 import { StreamingTail, TranscriptRow, formatCost, type TranscriptActions } from "./Transcript";
 
-let modelsPromise: Promise<ShelleyModel[]> | undefined;
-/** Shelley's models, read once per page load. */
-export function loadModels(): Promise<ShelleyModel[]> {
-  modelsPromise ??= shelleyApi.models().catch((error: unknown) => {
-    modelsPromise = undefined;
-    throw error;
-  });
-  return modelsPromise;
-}
+export { loadModels };
 
 function PromptDialog({
   open,
@@ -140,31 +141,6 @@ function PromptDialog({
   );
 }
 
-function ContextMeter({ used, max, onCompact }: { used: number; max?: number; onCompact(): void }) {
-  if (!max || !used) return null;
-  const pct = Math.min(100, Math.round((used / max) * 100));
-  return (
-    <button
-      type="button"
-      onClick={onCompact}
-      title={`${used.toLocaleString()} of ${max.toLocaleString()} tokens. Click to compact.`}
-      className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs"
-      data-testid="code-context"
-    >
-      <span className="bg-muted relative h-1.5 w-14 overflow-hidden rounded-full">
-        <span
-          className={cn(
-            "absolute inset-y-0 left-0 rounded-full",
-            pct > 85 ? "bg-destructive" : pct > 65 ? "bg-warning" : "bg-primary",
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </span>
-      {pct}%
-    </button>
-  );
-}
-
 export function ConversationView({
   id,
   rows,
@@ -172,6 +148,7 @@ export function ConversationView({
   changesOpen,
   onToggleChanges,
   insert,
+  onCwd,
 }: {
   id: string;
   rows: ShelleyConversation[];
@@ -179,6 +156,7 @@ export function ConversationView({
   changesOpen: boolean;
   onToggleChanges(): void;
   insert: { text: string; nonce: number } | null;
+  onCwd?(cwd: string | null): void;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -192,6 +170,7 @@ export function ConversationView({
   const [subagentCost, setSubagentCost] = useState(0);
   const [dialog, setDialog] = useState<"rename" | "cwd" | null>(null);
   const patchList = useShelleyStore((s) => s.patch);
+  const archive = useArchive();
 
   useEffect(() => {
     void loadModels()
@@ -272,20 +251,21 @@ export function ConversationView({
   );
 
   const model = models.find((m) => m.id === (settings?.model || row?.model));
-  const levels = model?.supports_reasoning === false ? [] : THINKING_LEVELS;
+  const canReason = model?.supports_reasoning !== false;
   const queue = queuedMessages(conversation ?? listRow);
   const chain = ancestry(rows, id);
   const cost = totalCost(messages) + subagentCost;
+  const display = useMemo(() => groupTools(items), [items]);
   const runningSubagents = state.subagents
     .map((s) => rows.find((r) => r.conversation_id === s.conversation_id) ?? s)
     .filter((s) => s.working ?? s.agent_working);
-  const lastNoticeIndex = (() => {
+  const lastNoticeKey = (() => {
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
-      if (item.kind === "notice" && item.level === "error") return i;
-      if (item.kind === "assistant" || item.kind === "tool" || item.kind === "user") return -1;
+      if (item.kind === "notice" && item.level === "error") return item.key;
+      if (item.kind === "assistant" || item.kind === "tool" || item.kind === "user") return null;
     }
-    return -1;
+    return null;
   })();
 
   const changeSetting = (change: { model?: string; thinking_level?: string }) =>
@@ -295,220 +275,164 @@ export function ConversationView({
       toast.success("Takes effect on the next turn");
     });
 
+  const stop = () => void run("stop Shelley", () => shelleyApi.action(id, "cancel"));
   const archived = Boolean(row?.archived);
+  const cwd = row?.cwd ?? null;
+  useEffect(() => onCwd?.(cwd), [cwd, onCwd]);
+  const title = row ? conversationTitle(row) : id;
+  const toggleArchive = () =>
+    void archive({ conversation_id: id, slug: row?.slug ?? null }, !archived, {
+      leave: !archived,
+    }).then((done) => done && archived && void state.reload());
+  const remove = async () => {
+    const ok = await confirm({
+      title: "Delete this conversation?",
+      description: "Shelley deletes it and its messages. This can't be undone.",
+      destructive: true,
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    await run(
+      "delete",
+      () => shelleyApi.action(id, "delete"),
+      () => navigate("/code"),
+    );
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-border space-y-1 border-b px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Button
-            asChild
-            variant="ghost"
-            size="icon-sm"
-            className="md:hidden"
-            aria-label="All conversations"
-          >
-            <Link to="/code">
-              <ArrowLeft />
-            </Link>
-          </Button>
-          <div className="min-w-0 flex-1">
-            <nav aria-label="Conversation path" className="flex min-w-0 items-center gap-1 text-sm">
-              {chain.length > 1 ? (
-                chain.map((c, i) => (
-                  <span key={c.conversation_id} className="flex min-w-0 items-center gap-1">
-                    {i > 0 && <span className="text-muted-foreground">›</span>}
-                    {c.conversation_id === id ? (
-                      <span className="truncate font-medium">{conversationTitle(c)}</span>
-                    ) : (
-                      <Link
-                        to={`/code/${c.conversation_id}`}
-                        className="text-muted-foreground hover:text-foreground truncate"
-                      >
-                        {conversationTitle(c)}
-                      </Link>
-                    )}
-                  </span>
-                ))
-              ) : (
-                <span className="truncate font-medium" data-testid="code-title">
-                  {row ? conversationTitle(row) : id}
-                </span>
-              )}
-              {archived && (
-                <span className="text-muted-foreground shrink-0 text-xs">· archived</span>
-              )}
-            </nav>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {working ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void run("stop Shelley", () => shelleyApi.action(id, "cancel"))}
-                data-testid="code-stop"
-                title="Stop (⌘.)"
-              >
-                <Square />
-                Stop
-              </Button>
-            ) : row?.turn_interrupted ? (
-              <Button variant="outline" size="sm" onClick={actions.resume}>
-                <Play />
-                Resume
-              </Button>
-            ) : null}
-            <Button
-              variant={changesOpen ? "secondary" : "ghost"}
-              size="sm"
-              onClick={onToggleChanges}
-              disabled={!row?.cwd}
-              title="Changes (⌘⇧D)"
-              data-testid="code-changes-toggle"
+      <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 md:hidden"
+          aria-label="All conversations"
+        >
+          <Link to="/code">
+            <ArrowLeft />
+          </Link>
+        </Button>
+        <nav aria-label="Conversation path" className="flex min-w-0 items-center gap-0.5 text-sm">
+          {chain.slice(0, -1).map((c) => (
+            <span
+              key={c.conversation_id}
+              className="hidden min-w-0 shrink items-center gap-0.5 sm:flex"
             >
-              <FileDiff />
-              <span className="hidden sm:inline">Changes</span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="More">
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setDialog("rename")}>
-                  <Pencil />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setDialog("cwd")}>
-                  <FolderOpen />
-                  Change directory
-                </DropdownMenuItem>
-                {publicUrl && row?.slug && (
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={`${publicUrl}/c/${encodeURIComponent(row.slug)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink />
-                      Open in Shelley
-                    </a>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() =>
-                    void run(
-                      archived ? "unarchive" : "archive",
-                      () => shelleyApi.action(id, archived ? "unarchive" : "archive"),
-                      () => void state.reload(),
-                    )
-                  }
-                >
-                  {archived ? <ArchiveRestore /> : <Archive />}
-                  {archived ? "Unarchive" : "Archive"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() =>
-                    void (async () => {
-                      const ok = await confirm({
-                        title: "Delete this conversation?",
-                        description: "Shelley deletes it and its messages. This can't be undone.",
-                        destructive: true,
-                        confirmLabel: "Delete",
-                      });
-                      if (!ok) return;
-                      await run(
-                        "delete",
-                        () => shelleyApi.action(id, "delete"),
-                        () => navigate("/code"),
-                      );
-                    })()
-                  }
-                >
-                  <Trash2 />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="min-w-0 flex-1">
-            <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 text-xs">
-              {row?.cwd && (
-                <span className={cn("truncate", monoClass)} title={row.cwd}>
-                  {shortPath(row.cwd)}
+              <Link
+                to={`/code/${c.conversation_id}`}
+                className="text-muted-foreground hover:text-foreground max-w-40 truncate rounded-md px-1"
+              >
+                {conversationTitle(c)}
+              </Link>
+              <span className="text-muted-foreground/60" aria-hidden>
+                /
+              </span>
+            </span>
+          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="hover:bg-muted aria-expanded:bg-muted flex h-8 min-w-0 items-center gap-1 rounded-lg px-2 font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                aria-label={`${title}: conversation actions`}
+              >
+                {chain.length > 1 && <Bot className="text-muted-foreground size-4 shrink-0" />}
+                <span className="truncate" data-testid="code-title">
+                  {title}
                 </span>
+                <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              <DropdownMenuItem onSelect={() => setDialog("rename")}>
+                <Pencil />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setDialog("cwd")}>
+                <FolderOpen />
+                Change directory
+              </DropdownMenuItem>
+              {publicUrl && row?.slug && (
+                <DropdownMenuItem asChild>
+                  <a
+                    href={`${publicUrl}/c/${encodeURIComponent(row.slug)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink />
+                    Open in Shelley
+                  </a>
+                </DropdownMenuItem>
               )}
-              {row?.git_commit && (
-                <span className="truncate" title={row.git_subject}>
-                  <span className={monoClass}>{row.git_commit}</span>
-                  {row.git_subject ? ` ${row.git_subject}` : ""}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {models.length > 0 && settings && (
-              <Select
-                value={settings.model || row?.model || ""}
-                onValueChange={(m) => changeSetting({ model: m })}
-              >
-                <SelectTrigger size="sm" className="max-w-44" aria-label="Model">
-                  <SelectValue placeholder="Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {models
-                    .filter((m) => m.ready)
-                    .map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.display_name || m.id}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            )}
-            {settings && levels.length > 0 && (
-              <Select
-                value={settings.thinking_level || "default"}
-                onValueChange={(v) => changeSetting({ thinking_level: v === "default" ? "" : v })}
-              >
-                <SelectTrigger size="sm" className="w-28" aria-label="Reasoning">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  {levels.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <ContextMeter
-              used={state.contextWindow}
-              max={model?.max_context_tokens}
-              onCompact={() =>
-                void run("compact", async () => {
-                  await shelleyApi.chat(id, "/compact", { queue: working });
-                  toast.success("Compacting the context");
-                })
-              }
-            />
-            {cost > 0 && (
-              <span
-                className="text-muted-foreground text-xs tabular-nums"
-                title="Cost of this conversation, subagents included"
-              >
-                {formatCost(cost)}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={toggleArchive}>
+                {archived ? <ArchiveRestore /> : <Archive />}
+                {archived ? "Restore" : "Archive"}
+                <span className="text-muted-foreground ml-auto text-xs">with subagents</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => void remove()}>
+                <Trash2 />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </nav>
+        {(row?.cwd || row?.git_commit) && (
+          <span className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-2 overflow-hidden text-xs lg:flex">
+            {row?.cwd && (
+              <span className={cn("truncate", monoClass)} title={row.cwd}>
+                {shortPath(row.cwd)}
               </span>
             )}
-          </div>
-        </div>
+            {row?.git_commit && (
+              <span className="flex shrink-0 items-center gap-1" title={row.git_subject}>
+                <GitCommitHorizontal className="size-3.5 shrink-0" />
+                <span className={monoClass}>{row.git_commit.slice(0, 7)}</span>
+              </span>
+            )}
+          </span>
+        )}
+        <span className="min-w-2 flex-1" />
+        {cost > 0 && (
+          <span
+            className="text-muted-foreground hidden px-1 text-xs tabular-nums sm:inline"
+            title="Cost of this conversation, subagents included"
+            data-testid="code-cost"
+          >
+            {formatCost(cost)}
+          </span>
+        )}
+        {!working && row?.turn_interrupted && (
+          <Button variant="outline" size="sm" onClick={actions.resume}>
+            <Play />
+            Resume
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleArchive}
+          aria-label={archived ? "Restore conversation" : "Archive conversation"}
+          title={archived ? "Restore (with subagents)" : "Archive (with subagents)"}
+          className="text-muted-foreground"
+          data-testid="code-archive"
+        >
+          {archived ? <ArchiveRestore /> : <Archive />}
+        </Button>
+        <Button
+          variant={changesOpen ? "secondary" : "ghost"}
+          size="sm"
+          onClick={onToggleChanges}
+          disabled={!row?.cwd}
+          title="Changes (⌘⇧D)"
+          aria-pressed={changesOpen}
+          className={cn(!changesOpen && "text-muted-foreground")}
+          data-testid="code-changes-toggle"
+        >
+          <FileDiff />
+          <span className="hidden sm:inline">Changes</span>
+        </Button>
       </header>
 
       <div className="relative min-h-0 flex-1">
@@ -519,9 +443,9 @@ export function ConversationView({
         ) : (
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">
             <MessageScroller className="h-full">
-              <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-5">
-                <MessageScrollerContent className="space-y-3" data-testid="code-transcript">
-                  {items.map((item, i) => (
+              <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 pt-6 pb-4 sm:px-6">
+                <MessageScrollerContent className="gap-5" data-testid="code-transcript">
+                  {display.map((item) => (
                     <MessageScrollerItem
                       key={item.key}
                       messageId={item.key}
@@ -531,7 +455,7 @@ export function ConversationView({
                         item={item}
                         rows={rows}
                         actions={actions}
-                        isLastNotice={i === lastNoticeIndex}
+                        isLastNotice={item.key === lastNoticeKey}
                       />
                     </MessageScrollerItem>
                   ))}
@@ -548,29 +472,37 @@ export function ConversationView({
         )}
       </div>
 
-      {state.error && (
-        <p className="text-destructive border-border border-t px-4 py-1.5 text-xs">
-          {state.error} — reconnecting…
-        </p>
-      )}
-
-      <div className="border-border space-y-2 border-t p-3">
-        <div className="mx-auto max-w-3xl space-y-2">
-          {(working || jobs.length > 0 || runningSubagents.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="code-running">
-              <span className="text-muted-foreground">Running:</span>
-              {working && (
-                <span className="bg-muted flex items-center gap-1 rounded-full px-2 py-0.5">
-                  <Spinner className="size-3" />
-                  turn
-                </span>
-              )}
+      <div className="pb-3">
+        <div className="mx-auto max-w-3xl space-y-2 px-3 sm:px-5">
+          {state.error && (
+            <p className="text-destructive px-1 text-xs" role="status">
+              {state.error} — reconnecting…
+            </p>
+          )}
+          {archived && (
+            <div
+              className="bg-muted/60 text-muted-foreground flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+              data-testid="code-archived"
+            >
+              <Archive className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1">This conversation is archived.</span>
+              <Button size="xs" variant="outline" onClick={toggleArchive}>
+                <ArchiveRestore />
+                Restore
+              </Button>
+            </div>
+          )}
+          {(jobs.length > 0 || runningSubagents.length > 0) && (
+            <div
+              className="flex flex-wrap items-center gap-1.5 px-1 text-xs"
+              data-testid="code-running"
+            >
               {jobs.map((job) => (
                 <span
                   key={job.id}
-                  className="bg-muted flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2"
+                  className="bg-muted flex items-center gap-1.5 rounded-full py-0.5 pr-0.5 pl-2"
                 >
-                  <SquareTerminal className="size-3" />
+                  <SquareTerminal className="text-muted-foreground size-3" />
                   <span className={cn("max-w-48 truncate", monoClass)}>
                     {job.command ?? job.id}
                   </span>
@@ -578,7 +510,7 @@ export function ConversationView({
                     type="button"
                     aria-label="Kill job"
                     title="Kill job"
-                    className="hover:bg-background rounded-full p-0.5"
+                    className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
                     onClick={() =>
                       void run(
                         "kill the job",
@@ -594,9 +526,9 @@ export function ConversationView({
               {runningSubagents.map((s) => (
                 <span
                   key={s.conversation_id}
-                  className="bg-muted flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2"
+                  className="bg-muted flex items-center gap-1.5 rounded-full py-0.5 pr-0.5 pl-2"
                 >
-                  <Bot className="size-3" />
+                  <Spinner className="size-3" />
                   <Link
                     to={`/code/${s.conversation_id}`}
                     className="max-w-40 truncate hover:underline"
@@ -607,7 +539,7 @@ export function ConversationView({
                     type="button"
                     aria-label="Stop subagent"
                     title="Stop subagent"
-                    className="hover:bg-background rounded-full p-0.5"
+                    className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
                     onClick={() =>
                       void run("stop the subagent", () =>
                         shelleyApi.action(s.conversation_id, "cancel"),
@@ -621,11 +553,11 @@ export function ConversationView({
             </div>
           )}
           {queue.length > 0 && (
-            <ul className="space-y-1" data-testid="code-queued">
+            <ul className="flex flex-col items-end gap-1" data-testid="code-queued">
               {queue.map((q) => (
                 <li
                   key={q.id}
-                  className="bg-muted/60 flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm"
+                  className="bg-muted/60 flex max-w-[85%] min-w-0 items-center gap-2 rounded-2xl py-1 pr-1 pl-3 text-sm"
                 >
                   <span className="text-muted-foreground shrink-0 text-xs">
                     {q.fromSubagent ? `From ${q.fromSubagent}` : "Queued"}
@@ -662,6 +594,34 @@ export function ConversationView({
             conversationId={id}
             working={working}
             insert={insert}
+            onStop={stop}
+            controls={
+              <>
+                {models.length > 0 && settings && (
+                  <ModelPicker
+                    models={models}
+                    value={settings.model || row?.model || ""}
+                    onChange={(m) => changeSetting({ model: m })}
+                  />
+                )}
+                {settings && canReason && (
+                  <ReasoningPicker
+                    value={settings.thinking_level || DEFAULT}
+                    onChange={(v) => changeSetting({ thinking_level: v === DEFAULT ? "" : v })}
+                  />
+                )}
+                <ContextRing
+                  used={state.contextWindow}
+                  max={model?.max_context_tokens}
+                  onCompact={() =>
+                    void run("compact", async () => {
+                      await shelleyApi.chat(id, "/compact", { queue: working });
+                      toast.success("Compacting the context");
+                    })
+                  }
+                />
+              </>
+            }
             onSend={async (message, { queue: q, skills }) => {
               await shelleyApi.chat(id, message, { queue: q, skills });
             }}
