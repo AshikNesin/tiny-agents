@@ -4,8 +4,9 @@
  * own API through the app's curated proxy — every conversation and subagent,
  * live transcripts, steering, and the diff of what changed.
  *
- * Layout: list | conversation | changes on wide screens; one column at a
- * time on phones (`/code` → `/code/:id` → `/code/:id/changes`).
+ * Layout: list | conversation | changes on wide screens (the list steps
+ * aside for Changes until 2xl); one column at a time on phones (`/code` →
+ * `/code/new` or `/code/:id` → `/code/:id/changes`).
  */
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -51,9 +52,15 @@ export function CodePage() {
   const conversations = useShelleyStore((s) => s.conversations);
   const publicUrl = useShelleyStore((s) => s.publicUrl);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
+  // The open conversation's directory, for Changes even when it is not in the
+  // active list (archived, or not in the snapshot yet).
+  const [viewCwd, setViewCwd] = useState<string | null>(null);
   const changesOpen = Boolean(conversationId) && pathname.endsWith("/changes");
+  // `/code/new` is the new-conversation screen on phones (`/code` is the list there).
+  const composing = pathname === "/code/new";
   const rows = conversations ?? [];
   const row = rows.find((r) => r.conversation_id === conversationId);
+  const cwd = row?.cwd ?? viewCwd;
 
   const toggleChanges = useCallback(() => {
     if (!conversationId) return;
@@ -138,8 +145,10 @@ export function CodePage() {
       <div className="flex min-h-0 flex-1">
         <aside
           className={cn(
-            "border-border w-full shrink-0 flex-col border-r md:flex md:w-72 xl:w-80",
-            conversationId ? "hidden" : "flex",
+            "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
+            conversationId || composing ? "hidden" : "flex",
+            // With Changes open the list steps aside until there is room for all three.
+            changesOpen ? "2xl:flex" : "md:flex",
           )}
         >
           <div className="flex items-center gap-1 px-2 pt-2 md:hidden">
@@ -156,7 +165,13 @@ export function CodePage() {
         <main
           className={cn(
             "min-w-0 flex-1 flex-col",
-            conversationId ? (changesOpen ? "hidden lg:flex" : "flex") : "hidden md:flex",
+            conversationId
+              ? changesOpen
+                ? "hidden lg:flex"
+                : "flex"
+              : composing
+                ? "flex"
+                : "hidden md:flex",
           )}
         >
           {conversationId ? (
@@ -168,20 +183,21 @@ export function CodePage() {
               changesOpen={changesOpen}
               onToggleChanges={toggleChanges}
               insert={insert}
+              onCwd={setViewCwd}
             />
           ) : (
             <NewConversation rows={rows} />
           )}
         </main>
 
-        {conversationId && changesOpen && row?.cwd && (
+        {conversationId && changesOpen && cwd && (
           <section
-            className="border-border flex w-full min-w-0 flex-col lg:w-[44%] lg:max-w-3xl lg:border-l"
+            className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
             aria-label="Changes"
           >
             <ChangesPanel
-              cwd={row.cwd}
-              refreshKey={`${row.working}:${row.max_sequence_id}`}
+              cwd={cwd}
+              refreshKey={`${row?.working}:${row?.max_sequence_id}`}
               onClose={toggleChanges}
               onComment={(text) => {
                 setInsert({ text, nonce: Date.now() });

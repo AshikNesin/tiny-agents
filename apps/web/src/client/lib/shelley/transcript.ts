@@ -391,3 +391,78 @@ export function lastError(
   const data = parse<LlmData>(last.llm_data) ?? {};
   return { retryable: Boolean(data.ErrorRetryable), refusal: data.ErrorType === "refusal" };
 }
+
+/** A run of finished tool calls shown as one "Ran 3 commands, edited 2 files" line. */
+export interface ToolGroup {
+  kind: "tool-group";
+  key: string;
+  tools: ToolItem[];
+  /** The tools with the thinking between them, in order. */
+  items: Array<ToolItem | Extract<TranscriptItem, { kind: "thinking" }>>;
+}
+
+export type DisplayItem = TranscriptItem | ToolGroup;
+
+/** Tools that stand on their own: cards, messages, and steps whose screenshots matter. */
+function standsAlone(item: ToolItem): boolean {
+  return (
+    item.status === "running" ||
+    item.toolKind === "subagent" ||
+    item.toolKind === "message_user" ||
+    item.toolKind === "message_parent" ||
+    item.images.length > 0
+  );
+}
+
+/**
+ * Folds runs of two or more finished tool calls (and the thinking between
+ * them) into one collapsible group, so a long turn reads as its messages;
+ * running tools, subagents and screenshots stay in view.
+ */
+export function groupTools(items: TranscriptItem[]): DisplayItem[] {
+  const out: DisplayItem[] = [];
+  let run: ToolGroup["items"] = [];
+  const flush = () => {
+    // Thinking after the last tool belongs to what follows, not the group.
+    let end = run.length;
+    while (end > 0 && run[end - 1].kind === "thinking") end--;
+    const body = run.slice(0, end);
+    const tools = body.filter((i): i is ToolItem => i.kind === "tool");
+    if (tools.length >= 2) {
+      out.push({ kind: "tool-group", key: `group:${tools[0].key}`, tools, items: body });
+    } else {
+      out.push(...body);
+    }
+    out.push(...run.slice(end));
+    run = [];
+  };
+  for (const item of items) {
+    if (item.kind === "tool" && !standsAlone(item)) {
+      run.push(item);
+    } else if (item.kind === "thinking" && run.length > 0) {
+      run.push(item);
+    } else {
+      flush();
+      out.push(item);
+    }
+  }
+  flush();
+  return out;
+}
+
+/** "Ran 3 commands, edited 2 files" for a group's summary line. */
+export function describeTools(tools: ToolItem[]): string {
+  const count = (kind: ToolKind) => tools.filter((t) => t.toolKind === kind).length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const parts: string[] = [];
+  const bash = count("bash");
+  const patch = count("patch");
+  const browser = count("browser");
+  const other = tools.length - bash - patch - browser;
+  if (bash) parts.push(`ran ${plural(bash, "command", "commands")}`);
+  if (patch) parts.push(`edited ${plural(patch, "file", "files")}`);
+  if (browser) parts.push(`used the browser ${plural(browser, "time", "times")}`);
+  if (other) parts.push(`used ${plural(other, "tool", "tools")}`);
+  const text = parts.join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

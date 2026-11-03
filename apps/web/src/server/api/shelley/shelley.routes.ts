@@ -275,16 +275,70 @@ const actions: Record<string, z.ZodType<Record<string, unknown> | undefined>> = 
   settings: settingsSchema,
 };
 
+/** Every subagent below `id` in `rows` (children, grandchildren, …). */
+export function descendantIds(rows: ShelleyRow[], id: string): string[] {
+  const children = new Map<string, string[]>();
+  for (const row of rows) {
+    const parent = row.parent_conversation_id;
+    if (!parent) continue;
+    const list = children.get(parent) ?? [];
+    list.push(row.conversation_id);
+    children.set(parent, list);
+  }
+  const found: string[] = [];
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length > 0) {
+    for (const child of children.get(queue.shift()!) ?? []) {
+      if (seen.has(child)) continue; // a cycle in bad data must not loop
+      seen.add(child);
+      found.push(child);
+      queue.push(child);
+    }
+  }
+  return found;
+}
+
+/**
+ * Shelley archives one conversation at a time; the Code page archives a
+ * conversation with its subagents, so a finished task leaves the list whole.
+ * Subagents are found in the list they are leaving (active for archive,
+ * archived for unarchive) and moved best-effort after the parent.
+ */
+async function subagentsToMove(id: string, action: "archive" | "unarchive"): Promise<string[]> {
+  try {
+    if (action === "archive") {
+      const hub = shelleyHub();
+      if (hub && !hub.list()) await hub.refreshList();
+      return descendantIds(hub?.list() ?? [], id);
+    }
+    const archived = await shelleyJson<ShelleyRow[]>("/conversations/archived");
+    return descendantIds(Array.isArray(archived) ? archived : [], id);
+  } catch {
+    return [];
+  }
+}
+
 for (const [action, schema] of Object.entries(actions)) {
   router.post(`/shelley/conversations/:id/${action}`, async (c) => {
     const id = param(c, "id");
     const body = schema instanceof z.ZodUndefined ? undefined : await parseBody(c, schema);
+    const cascade =
+      action === "archive" || action === "unarchive" ? await subagentsToMove(id, action) : [];
     const result = await shelleyJson(`/conversation/${id}/${action}`, {
       method: "POST",
       ...(body !== undefined ? { json: body } : {}),
     });
+    // One subagent that will not move must not undo the parent's archive.
+    const settled = await Promise.allSettled(
+      cascade.map((child) => shelleyJson(`/conversation/${child}/${action}`, { method: "POST" })),
+    );
+    const moved = cascade.filter((_, i) => settled[i].status === "fulfilled");
     if (["archive", "unarchive", "delete", "rename", "fork"].includes(action)) {
       void shelleyHub()?.refreshList();
+    }
+    if ((action === "archive" || action === "unarchive") && result && typeof result === "object") {
+      return ok(c, { ...result, subagents: moved });
     }
     return ok(c, result);
   });

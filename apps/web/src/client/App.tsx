@@ -104,6 +104,7 @@ const router = createBrowserRouter(
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/computer" element={<ComputerPage />} />
         <Route path="/code" element={<CodePage />} />
+        <Route path="/code/new" element={<CodePage />} />
         <Route path="/code/s/:slug" element={<CodePage />} />
         <Route path="/code/:conversationId" element={<CodePage />} />
         <Route path="/code/:conversationId/changes" element={<CodePage />} />

@@ -223,7 +223,8 @@ export const shelleyApi = {
   action: (
     id: string,
     action: "cancel" | "retry" | "resume" | "new-generation" | "archive" | "unarchive" | "delete",
-  ) => apiClient.post(`${conv(id)}/${action}`),
+    // archive / unarchive move the conversation's subagents too and list them.
+  ) => apiClient.post<{ subagents?: string[] } | undefined>(`${conv(id)}/${action}`),
   continueWith: (id: string, model?: string) => apiClient.post(`${conv(id)}/continue`, { model }),
   fork: (id: string, messageId: string) =>
     apiClient.post<{ conversation_id?: string }>(`${conv(id)}/fork`, { message_id: messageId }),
