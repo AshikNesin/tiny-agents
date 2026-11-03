@@ -16,6 +16,13 @@ login. Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md).
    Shelley) and `SHELLEY_PUBLIC_URL` (the URL your browser uses, for
    "Open in Shelley").
 
+4. **exe.dev VMs:** Shelley there runs with `-require-header X-Exedev-Userid`
+   (the exe.dev proxy normally adds it). Reached directly over Tailscale it
+   answers `403 missing required header: X-Exedev-Userid`; set
+   `SHELLEY_HEADERS="X-Exedev-Userid: <any value>"` (any non-empty value
+   passes; `;`-separate several headers, e.g. add `X-ExeDev-Email: you@…` to
+   attribute your messages).
+
 Without `SHELLEY_URL` nothing changes: no nav entry, no stream, no bot tools.
 
 ## What a developer can do

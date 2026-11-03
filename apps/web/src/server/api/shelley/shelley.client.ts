@@ -14,18 +14,44 @@ export interface ShelleyConfig {
   token?: string;
   /** Base URL the owner's browser uses for "Open in Shelley"; unset hides the link. */
   publicUrl?: string;
+  /**
+   * Extra headers on every request (`SHELLEY_HEADERS`), e.g. the one a
+   * Shelley started with `-require-header X-Exedev-Userid` demands.
+   */
+  headers?: Record<string, string>;
+}
+
+const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+
+/**
+ * `SHELLEY_HEADERS`: `Name: value` pairs separated by newlines or `;`, the
+ * same form as Shelley's own CLI (`shelley client -H "X-Exedev-Userid: me"`).
+ * Malformed entries are skipped.
+ */
+export function parseShelleyHeaders(raw: string | undefined): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const entry of (raw ?? "").split(/[\n;]/)) {
+    const colon = entry.indexOf(":");
+    if (colon <= 0) continue;
+    const name = entry.slice(0, colon).trim();
+    const value = entry.slice(colon + 1).trim();
+    if (!HEADER_NAME.test(name) || !value || /[\r\n]/.test(value)) continue;
+    headers[name] = value;
+  }
+  return headers;
 }
 
 export function shelleyConfig(
   source: Record<string, string | undefined> = process.env,
 ): ShelleyConfig | undefined {
-  const { SHELLEY_URL, SHELLEY_TOKEN, SHELLEY_PUBLIC_URL } = appEnv(source);
+  const { SHELLEY_URL, SHELLEY_TOKEN, SHELLEY_PUBLIC_URL, SHELLEY_HEADERS } = appEnv(source);
   const url = trimUrl(SHELLEY_URL);
   if (!url) return undefined;
   return {
     url,
     token: SHELLEY_TOKEN?.trim() || undefined,
     publicUrl: trimUrl(SHELLEY_PUBLIC_URL),
+    headers: parseShelleyHeaders(SHELLEY_HEADERS),
   };
 }
 
@@ -64,6 +90,7 @@ export async function shelleyFetch(
   const headers: Record<string, string> = {
     // Shelley's optional require-header guard; harmless when it is off.
     "X-Shelley-Request": "1",
+    ...config.headers,
     ...init.headers,
   };
   if (config.token) headers.Authorization = `Bearer ${config.token}`;
@@ -89,7 +116,11 @@ export async function shelleyFetch(
   }
   if (!response.ok) {
     const text = (await response.text().catch(() => "")).trim().slice(0, 500);
-    const message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
+    let message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
+    // Shelley started with `-require-header <Name>` (exe.dev's default is
+    // X-Exedev-Userid): say how to send it.
+    const required = /missing required header: ([\w-]+)/.exec(text)?.[1];
+    if (required) message += `. Set SHELLEY_HEADERS="${required}: <any value>" and restart.`;
     if (response.status >= 400 && response.status < 500) {
       throw new HttpError(response.status, message);
     }
