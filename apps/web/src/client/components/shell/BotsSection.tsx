@@ -12,6 +12,7 @@ import type { BotListEntry } from "../../lib/bots-api";
 import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
 import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
+import { useIsGuest } from "../../store/people";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 
@@ -59,6 +60,7 @@ function BotRow({
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const navigate = useNavigate();
+  const guest = useIsGuest();
   const pinned = bot.pinnedAt !== null;
   const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
   const previewId = `bot-preview-${bot.id}`;
@@ -98,34 +100,37 @@ function BotRow({
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`${bot.name} actions`}
-            className="text-muted-foreground hover:bg-sidebar-accent absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="right">
-          <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
-            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-            {pinned ? "Unpin" : "Pin"}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void openEditBot(bot.id)}>
-            <Pencil className="size-4" /> Edit bot
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              onNavigate();
-              navigate(`/chats/${bot.id}?history=1`);
-            }}
-          >
-            <History className="size-4" /> Chat history
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Pin, edit and chat history are the owner's (issue #145). */}
+      {!guest && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${bot.name} actions`}
+              className="text-muted-foreground hover:bg-sidebar-accent absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right">
+            <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
+              {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+              {pinned ? "Unpin" : "Pin"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void openEditBot(bot.id)}>
+              <Pencil className="size-4" /> Edit bot
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                onNavigate();
+                navigate(`/chats/${bot.id}?history=1`);
+              }}
+            >
+              <History className="size-4" /> Chat history
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </li>
   );
 }
@@ -143,6 +148,7 @@ interface BotsSectionProps {
 /** The "Bots" block: pinned group, recent group, fold, and the + button. */
 export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSectionProps) {
   const openCreateBot = useUiStore((s) => s.openCreateBot);
+  const guest = useIsGuest();
   const [expanded, setExpanded] = useState(false);
   const { pinned, recent } = useMemo(() => groupBots(bots), [bots]);
   const shown = visibleRecent(recent, expanded, activeId);
@@ -153,17 +159,23 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
     <section aria-label="Bots" className="px-2.5">
       <div className="flex h-8 items-center justify-between px-1.5">
         <h2 className="text-fg-tertiary text-sm font-medium select-none">Bots</h2>
-        <button
-          type="button"
-          onClick={openCreateBot}
-          aria-label="New bot"
-          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 items-center justify-center rounded-lg"
-        >
-          <Plus className="size-4" />
-        </button>
+        {!guest && (
+          <button
+            type="button"
+            onClick={openCreateBot}
+            aria-label="New bot"
+            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 items-center justify-center rounded-lg"
+          >
+            <Plus className="size-4" />
+          </button>
+        )}
       </div>
 
-      {bots.length === 0 && <p className="text-fg-tertiary px-1.5 py-2 text-sm">No bots yet.</p>}
+      {bots.length === 0 && (
+        <p className="text-fg-tertiary px-1.5 py-2 text-sm">
+          {guest ? "Nothing shared with you yet." : "No bots yet."}
+        </p>
+      )}
 
       {pinned.length > 0 && (
         <>

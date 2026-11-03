@@ -138,7 +138,7 @@ router.post("/bots", async (c) => {
 });
 
 router.get("/bots", async (c) => {
-  return ok(c, await botsService.listBots());
+  return ok(c, await botsService.listBots(undefined, c.get("viewer")));
 });
 
 router.get("/bots/:id", async (c) => {
@@ -168,7 +168,7 @@ router.get("/bots/:id/messages", async (c) => {
 router.post("/bots/:id/messages", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, sendMessageSchema);
-  await botsService.sendMessage(id, payload);
+  await botsService.sendMessage(id, payload, undefined, c.get("viewer").userId);
   return ok(c, { submitted: true });
 });
 
@@ -226,7 +226,7 @@ router.post("/bots/:id/approvals/:taskId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, approvalSchema);
-  await botsService.decideApproval(id, { taskId, ...payload });
+  await botsService.decideApproval(id, { taskId, ...payload }, undefined, c.get("viewer"));
   return ok(c, { decided: payload.decision });
 });
 
@@ -246,7 +246,7 @@ router.post("/bots/:id/pin", async (c) => {
 
 router.post("/bots/:id/read", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  return ok(c, await botsService.markRead(id));
+  return ok(c, await botsService.markRead(id, c.get("viewer")));
 });
 
 export default router;

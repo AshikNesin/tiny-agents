@@ -2,6 +2,7 @@ import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@ea
 import type { EntryRecord, InboxItem, SubmissionRecord } from "@earendil-works/pi-durable";
 import type {
   AttachmentRef,
+  ChatAuthor,
   ChatEvent,
   ChatMessage,
   ChatPage,
@@ -86,6 +87,46 @@ export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
   return undefined;
 }
 
+/**
+ * What a bot reads for a message sent in a shared chat: the sender's name,
+ * then their words. The transcript strips the name again (`authorOfData`
+ * holds it), so the bubble shows only the words.
+ */
+export function authoredText(name: string, text: string): string {
+  return `${name}: ${text}`;
+}
+
+/** The trusted sender stored in a user entry's data (shared chats only). */
+function authorOfData(data: Record<string, unknown> | undefined): ChatAuthor | undefined {
+  const author = record(data?.author);
+  if (!author) return undefined;
+  return typeof author.id === "number" && typeof author.name === "string" && author.name
+    ? { id: author.id, name: author.name }
+    : undefined;
+}
+
+/** A shared-chat message's text without the sender prefix `authoredText` added. */
+function withoutAuthor(text: string, author: ChatAuthor | undefined): string {
+  if (!author) return text;
+  const prefix = authoredText(author.name, "");
+  return text.startsWith(prefix) ? text.slice(prefix.length) : text;
+}
+
+/**
+ * The reply a bot gives in a shared chat when the message was not for it
+ * (people talking to each other). Clients hide it; the Bot list ignores it.
+ */
+export const SKIP_REPLY = "[skip]";
+
+/** Whether an assistant message is a shared chat's silent `[skip]`. */
+export function isSkipReply(message: Pick<ChatMessage, "role" | "text" | "toolCalls">): boolean {
+  return (
+    message.role === "assistant" &&
+    message.text.trim() === SKIP_REPLY &&
+    (message.toolCalls?.length ?? 0) === 0
+  );
+}
+
 /** The submit request id stored in a `chat.user` entry's data. */
 function requestIdOf(entry: EntryRecord): string | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
@@ -130,11 +171,13 @@ export function queuedOf(
     const data = record(record(item.entry)?.data);
     if (data?.peer) continue;
     const attachments = attachmentsOfData(data);
+    const author = authorOfData(data);
     out.push({
       requestId: records.get(String(item.id))?.requestId ?? String(item.id),
       mode: item.mode,
-      text: textOf(item.content),
+      text: withoutAuthor(textOf(item.content), author),
       ...(attachments ? { attachments } : {}),
+      ...(author ? { author } : {}),
     });
   }
   return out;
@@ -429,13 +472,15 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       const attachments = attachmentsOf(entry);
       const peer = peerOf(entry);
       const requestId = requestIdOf(entry);
+      const author = entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
       out.push({
         id: `e${entry.id}`,
         role: "user",
-        text: textOf(message.content),
+        text: withoutAuthor(textOf(message.content), author),
         ...(attachments ? { attachments } : {}),
         ...(requestId ? { requestId } : {}),
         ...(peer ? { peer } : {}),
+        ...(author ? { author } : {}),
         status: "done",
         createdAt: message.timestamp ?? 0,
       });

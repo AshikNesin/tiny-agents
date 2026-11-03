@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { ChevronDown, Globe, Menu, Monitor, Paperclip, SquarePen, X, WifiOff } from "lucide-react";
+import {
+  ChevronDown,
+  Globe,
+  Menu,
+  Monitor,
+  Paperclip,
+  SquarePen,
+  Users,
+  X,
+  WifiOff,
+} from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
@@ -15,6 +25,7 @@ import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import { ownerSend, type OwnerSubmission } from "../store/owner-send";
 import { useUiStore } from "../store/ui";
+import { useIsGuest } from "../store/people";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
@@ -117,6 +128,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const ownerActions = useHttpOwnerActions(bot.id);
   const [confirmReset, setConfirmReset] = useState(false);
+  // A guest (issue #145) chats; settings, New chat and Chat history stay the owner's.
+  const guest = useIsGuest();
   // `?history=1` (the sidebar row's "Chat history") opens the history menu.
   const [searchParams, setSearchParams] = useSearchParams();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -169,7 +182,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const showLoading = useSettled(!loaded && messages.length === 0, 300);
   const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
   // A fresh conversation has nothing to start over from.
-  const canReset = messages.length > 0 || pending.length > 0 || queued.length > 0;
+  const canReset = !guest && (messages.length > 0 || pending.length > 0 || queued.length > 0);
 
   // ⇧⌘O / Ctrl+Shift+O asks for a new chat from anywhere in the pane.
   useEffect(() => {
@@ -352,10 +365,11 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <h1 className="flex min-w-0">
             <button
               type="button"
-              onClick={onEditBot}
-              className="text-foreground hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium"
-              aria-label={`Edit ${bot.name}`}
-              title="Bot settings"
+              onClick={guest ? undefined : onEditBot}
+              disabled={guest}
+              className="text-foreground enabled:hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium disabled:cursor-default"
+              aria-label={guest ? bot.name : `Edit ${bot.name}`}
+              title={guest ? undefined : "Bot settings"}
             >
               <BotAvatar name={bot.name} className="size-5" />
               <span className="truncate">{bot.name}</span>
@@ -364,8 +378,19 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                   {bot.description}
                 </span>
               )}
-              <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
+              {!guest && (
+                <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
+              )}
             </button>
+            {(bot.guestIds?.length ?? 0) > 0 && (
+              <span
+                className="text-muted-foreground flex items-center gap-1 self-center px-1 text-xs"
+                title="Shared chat: everyone in it sees every message"
+              >
+                <Users className="size-3.5" />
+                <span className="hidden sm:inline">Shared</span>
+              </span>
+            )}
           </h1>
           <div className="ml-auto flex shrink-0 items-center">
             <Button
@@ -426,23 +451,27 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                 )}
               </Button>
             )}
-            <ChatHistoryMenu
-              botId={bot.id}
-              conversationId={bot.conversationId}
-              open={historyOpen}
-              onOpenChange={setHistoryOpen}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground rounded-xl"
-              onClick={() => setConfirmReset(true)}
-              disabled={!canReset}
-              aria-label="Start a new chat"
-              title={`New chat (${NEW_CHAT_SHORTCUT})`}
-            >
-              <SquarePen className="size-4" />
-            </Button>
+            {!guest && (
+              <ChatHistoryMenu
+                botId={bot.id}
+                conversationId={bot.conversationId}
+                open={historyOpen}
+                onOpenChange={setHistoryOpen}
+              />
+            )}
+            {!guest && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground rounded-xl"
+                onClick={() => setConfirmReset(true)}
+                disabled={!canReset}
+                aria-label="Start a new chat"
+                title={`New chat (${NEW_CHAT_SHORTCUT})`}
+              >
+                <SquarePen className="size-4" />
+              </Button>
+            )}
           </div>
         </header>
 

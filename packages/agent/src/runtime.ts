@@ -737,6 +737,8 @@ export class AgentRuntime {
       attachments?: AttachmentRef[];
       /** Trusted attribution for a cross-bot delivery (rendered as a card). */
       peer?: ChatMessage["peer"];
+      /** Who sent it, in a shared chat (`text` already carries their name for the model). */
+      author?: ChatMessage["author"];
       /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
       whenBusy?: "steer" | "followUp";
     },
@@ -773,6 +775,7 @@ export class AgentRuntime {
           data: {
             requestId: input.requestId,
             ...(input.peer ? { peer: input.peer } : {}),
+            ...(input.author ? { author: { id: input.author.id, name: input.author.name } } : {}),
             ...(input.attachments?.length
               ? {
                   attachments: input.attachments.map((a) => ({

@@ -20,6 +20,8 @@ export const createBotSchema = z.object({
   browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),
+  /** Guests the bot is shared with (issue #145). */
+  guestIds: z.array(z.number().int().positive()).max(50).optional(),
 });
 
 export const updateBotSchema = z.object({
@@ -33,6 +35,8 @@ export const updateBotSchema = z.object({
   browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),
+  /** Guests the bot is shared with (issue #145); replaces the current list. */
+  guestIds: z.array(z.number().int().positive()).max(50).optional(),
 });
 
 /** Older transcript messages (issue #92): the page just before message `before`. */

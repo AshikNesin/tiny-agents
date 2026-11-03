@@ -36,3 +36,11 @@ export const SECONDARY_NAV: AppNavItem[] = [
 
 /** Every destination besides Chats: the ⌘K palette and the mobile profile menu. */
 export const APP_NAV: AppNavItem[] = [...PRIMARY_NAV, ...SECONDARY_NAV];
+
+/** Pages a guest may open besides Chats and Settings (issue #145): Code. */
+export const GUEST_PAGES = ["/code"] as const;
+
+/** The part of a nav list a guest sees. */
+export function guestNav(items: readonly AppNavItem[]): AppNavItem[] {
+  return items.filter((item) => (GUEST_PAGES as readonly string[]).includes(item.to));
+}

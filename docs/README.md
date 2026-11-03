@@ -60,6 +60,7 @@ What ships in the box and how to use or extend it.
 | [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view    |
 | [`features/code.md`](./features/code.md)                                     | tiny-agents: Shelley workspace, subagents, diffs, bot hand-off |
 | [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots          |
+| [`features/shared-bots.md`](./features/shared-bots.md)                       | tiny-agents: chat with a guest and a bot together              |
 
 ## Reference
 

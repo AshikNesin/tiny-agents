@@ -8,7 +8,7 @@ import {
   text,
   unique,
 } from "drizzle-orm/sqlite-core";
-import { timestamps } from "@groot/core/database/schema";
+import { timestamps, users } from "@groot/core/database/schema";
 import { createId } from "@groot/core/utils/id.utils";
 
 /**
@@ -473,6 +473,37 @@ export const routineRuns = sqliteTable(
   ],
 );
 
+/**
+ * Guests (shared bots): people the owner added to chat with the bots shared
+ * with them, and to use Code. An account with no row here is the owner.
+ */
+export const guests = sqliteTable("guests", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});
+
+/** Which guests a bot is shared with: they are in its chat with the owner. */
+export const botGuests = sqliteTable(
+  "bot_guests",
+  {
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The guest's own read marker (the bot row's is the owner's). */
+    lastReadAt: ms("last_read_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.botId, t.userId] }),
+    index("bot_guests_user_id_idx").on(t.userId),
+  ],
+);
+
 export * from "@groot/core/notification/notification.schema";
 
 // ── Relations (relational queries: `db.query.bots.findMany({ with: … })`) ──
@@ -486,6 +517,12 @@ export const botsRelations = relations(bots, ({ many }) => ({
   routines: many(routines),
   memories: many(memories),
   pastChats: many(botChats),
+  guests: many(botGuests),
+}));
+
+export const botGuestsRelations = relations(botGuests, ({ one }) => ({
+  bot: one(bots, { fields: [botGuests.botId], references: [bots.id] }),
+  user: one(users, { fields: [botGuests.userId], references: [users.id] }),
 }));
 
 export const botChatsRelations = relations(botChats, ({ one }) => ({
@@ -573,6 +610,7 @@ export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
 export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
+export type BotGuest = typeof botGuests.$inferSelect;
 
 export * from "@groot/core/database/schema";
 export * from "@groot/jobs/server/schema";

@@ -67,6 +67,23 @@ export interface AttachmentRef {
   height?: number;
 }
 
+/** The sender of a message in a shared chat (set by the server). */
+export interface ChatAuthor {
+  id: number;
+  name: string;
+}
+
+/** A shared chat's silent reply: the bot decided the message was not for it. */
+export const SKIP_REPLY = "[skip]";
+
+export function isSkipReply(message: Pick<ChatMessage, "role" | "text" | "toolCalls">): boolean {
+  return (
+    message.role === "assistant" &&
+    message.text.trim() === SKIP_REPLY &&
+    (message.toolCalls?.length ?? 0) === 0
+  );
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "marker";
@@ -77,6 +94,8 @@ export interface ChatMessage {
   requestId?: string;
   /** Trusted cross-bot attribution (delivery pipeline only; renders as a card). */
   peer?: import("@tiny-agents/agent").ChatMessage["peer"];
+  /** Who sent this user message, in a shared chat (issue #145). */
+  author?: ChatAuthor;
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   reasoning?: string;
@@ -111,6 +130,8 @@ export interface QueuedMessage {
   mode: "steer" | "followUp";
   text: string;
   attachments?: AttachmentRef[];
+  /** Who sent it, in a shared chat. */
+  author?: ChatAuthor;
 }
 
 /**

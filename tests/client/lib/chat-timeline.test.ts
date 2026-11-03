@@ -68,4 +68,14 @@ describe("chatTimeline", () => {
       "runs:tomorrow",
     ]);
   });
+
+  it("hides a shared chat's [skip] replies, also while they stream (issue #145)", () => {
+    const skip = { ...message("skip", 2_000), text: "[skip]" };
+    const streaming = { ...message("sk", 3_000), text: "[sk", status: "streaming" as const };
+    const real = { ...message("real", 4_000), text: "[skipping] is a word" };
+    expect(shape(chatTimeline([message("m1", 1_000), skip, streaming, real], []))).toEqual([
+      "m1#0",
+      "real#3",
+    ]);
+  });
 });

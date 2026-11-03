@@ -10,8 +10,14 @@
  * shared transcript read.
  */
 import { desc, eq } from "drizzle-orm";
-import { stripPeerEnvelope, type AgentRuntime, type AttachmentRef } from "@tiny-agents/agent";
+import {
+  isSkipReply,
+  stripPeerEnvelope,
+  type AgentRuntime,
+  type AttachmentRef,
+} from "@tiny-agents/agent";
 import { db, bots } from "../../db";
+import { guestReadMarkers, type Viewer } from "../people/people.service";
 import type { BotRow } from "./bots.conversation";
 import type { SettledStep } from "./bots.settled";
 
@@ -91,8 +97,15 @@ export function previewText(text: string, attachments?: AttachmentRef[]): string
   return hint.slice(0, PREVIEW_CHARS);
 }
 
-export async function listBots(rt: BotListRuntime): Promise<BotListEntry[]> {
-  const rows = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
+export async function listBots(rt: BotListRuntime, viewer?: Viewer): Promise<BotListEntry[]> {
+  const all = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
+  // A guest sees the bots shared with them, read against their own marker (issue #145).
+  const markers = viewer?.guest ? await guestReadMarkers(viewer.userId) : undefined;
+  const rows = markers
+    ? all
+        .filter((bot) => markers.has(bot.id))
+        .map((bot) => ({ ...bot, lastReadAt: markers.get(bot.id) ?? null }))
+    : all;
   const busy = new Set(rt.busyConversations());
   return rows.map((bot) => {
     const ref = Number(bot.conversationId);
@@ -136,6 +149,8 @@ export function botListStep(): SettledStep {
       const state = await chat();
       const last = state.messages.findLast((message) => message.role === "assistant");
       if (!last || last.status === "streaming") return;
+      // A shared chat's silent reply (issue #145) changes nothing in the list.
+      if (isSkipReply(last)) return;
       const text = last.status === "error" ? `⚠ ${last.error || "Model error"}` : last.text;
       await recordReply(String(conversationId), {
         role: "assistant",

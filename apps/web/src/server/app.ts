@@ -21,6 +21,8 @@ import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import shelleyRoutes from "./api/shelley/shelley.routes";
+import peopleRoutes from "./api/people/people.routes";
+import { guestGuard } from "./api/people/guest.guard";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
 /** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
@@ -49,6 +51,9 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       // Protected (JWT cookie or bearer token)
       const api = new Hono<AppEnv>();
       api.use(jwtAuthMiddleware);
+      // Guests reach only the bots shared with them and Code (issue #145).
+      api.use(guestGuard());
+      api.route("/", peopleRoutes);
       api.route("/", botsRoutes);
       api.route("/", memoriesRoutes);
       api.route("/", browserRoutes);

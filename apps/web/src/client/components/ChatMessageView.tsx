@@ -42,6 +42,7 @@ import { ThinkingIndicator } from "./fluid/thinking-indicator";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import { useAuthStore } from "@groot/shell/store/auth";
 
 /** "14:05" today, "Mon 14:05" this week, "12 Oct, 14:05" before; the full date in the tooltip. */
 function messageTime(at: number, now = Date.now()): { short: string; full: string } {
@@ -178,6 +179,10 @@ function CopyAction({ text }: { text: string }) {
 /** The owner's bubble: Fluid ChatMessage's soft accent tint (tokens in app.css). */
 export const USER_PILL =
   "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";
+
+/** Someone else's message in a shared chat: the reply bubble's surface, on the left. */
+const OTHER_PILL =
+  "bg-bubble min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";
 
 const WORKING_WORDS = ["Thinking", "Working", "Planning", "Refining"] as const;
 const REPLYING_WORDS = ["Replying"] as const;
@@ -843,32 +848,61 @@ export function ChatMessageView({
       );
     }
     const text = ownerText(message.text, Boolean(message.attachments?.length));
-    return (
-      <Message align="end" className="group">
-        {/* content-visibility on the scroller item breaks percentage
-            max-widths, so the pill is capped by the flex parent chain
-            instead of a nested wrapper. */}
-        <MessageEnter
-          fresh={isFresh(message)}
-          align="end"
-          className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1"
-        >
-          {message.attachments && message.attachments.length > 0 && (
-            <MessageAttachments attachments={message.attachments} />
-          )}
-          {text && (
-            <div className={USER_PILL}>
-              <p className="whitespace-pre-wrap">{text}</p>
-            </div>
-          )}
-          {failed && <p className="text-destructive text-right text-xs">{message.error}</p>}
-          {text && <MessageMeta text={text} at={message.createdAt || undefined} align="end" />}
-        </MessageEnter>
-      </Message>
-    );
+    return <UserMessage message={message} text={text} failed={failed} />;
   }
 
   return assistantView(message, { botName, toolLabels, toolAskLabels });
+}
+
+/**
+ * A person's message. Yours sits on the right; in a shared chat (issue #145)
+ * someone else's sits on the left under their name, like a group chat.
+ */
+function UserMessage({
+  message,
+  text,
+  failed,
+}: {
+  message: ChatMessage;
+  text: string;
+  failed: boolean;
+}) {
+  const me = useAuthStore((s) => s.user?.id);
+  const other = message.author !== undefined && message.author.id !== me;
+  const align = other ? "start" : "end";
+  return (
+    <Message align={align} className="group" data-author={message.author?.name}>
+      {/* content-visibility on the scroller item breaks percentage
+          max-widths, so the pill is capped by the flex parent chain
+          instead of a nested wrapper. */}
+      <MessageEnter
+        fresh={isFresh(message)}
+        align={align}
+        className={`flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 ${other ? "items-start" : "items-end"}`}
+      >
+        {other && (
+          <p className="text-muted-foreground flex items-center gap-1.5 px-1 text-xs">
+            <span className="bg-muted text-foreground/80 flex size-4 items-center justify-center rounded-full text-[10px] font-semibold">
+              {message.author!.name[0]?.toUpperCase()}
+            </span>
+            <span className="text-foreground/80 font-medium">{message.author!.name}</span>
+          </p>
+        )}
+        {message.attachments && message.attachments.length > 0 && (
+          <MessageAttachments attachments={message.attachments} />
+        )}
+        {text && (
+          <div className={other ? OTHER_PILL : USER_PILL}>
+            <p className="whitespace-pre-wrap">{text}</p>
+          </div>
+        )}
+        {failed && (
+          <p className={`text-destructive text-xs ${other ? "" : "text-right"}`}>{message.error}</p>
+        )}
+        {text && <MessageMeta text={text} at={message.createdAt || undefined} align={align} />}
+      </MessageEnter>
+    </Message>
+  );
 }
 
 /** One peer-traffic user message as a Grok-style attributed card. */

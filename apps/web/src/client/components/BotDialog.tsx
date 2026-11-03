@@ -14,6 +14,7 @@ import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { Switch } from "./ui/switch";
+import { peopleApi, type Guest } from "../lib/people-api";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ModelSelector } from "./ai-elements/ModelSelector";
 import { toast } from "sonner";
@@ -99,6 +100,7 @@ export function BotDialog({
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
   const [toolQuery, setToolQuery] = useState("");
   /** Toolkits the user opened or closed; the rest follow their size. */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -132,6 +134,10 @@ export function BotDialog({
     void skillsApi
       .list()
       .then((all) => setSkills(all.map(({ id, name, description }) => ({ id, name, description }))))
+      .catch(() => undefined);
+    void peopleApi
+      .list()
+      .then(({ guests: all }) => setGuests(all))
       .catch(() => undefined);
     void connectionsApi
       .list()
@@ -583,6 +589,46 @@ export function BotDialog({
     </div>
   );
 
+  // Sharing (issue #145): guests picked here are in the bot's chat with you.
+  const sharingTab = (
+    <div className="space-y-2">
+      <p className="text-muted-foreground text-xs">
+        Guests you share this bot with join its chat: everyone sees every message, and the bot works
+        for them with the tools you allowed. Vault use still waits for you, and memory is off while
+        the bot is shared. Its current chat history is visible to them too.
+      </p>
+      {guests.length === 0 && (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No guests yet. Add one in Settings → People.
+        </p>
+      )}
+      {guests.map((guest) => {
+        const shared = draft.guestIds.includes(guest.id);
+        const label = guest.name?.trim() || guest.email;
+        return (
+          <div key={guest.id} className="bg-secondary/50 flex items-center gap-3 rounded-2xl p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{label}</p>
+              <p className="text-muted-foreground truncate text-xs">{guest.email}</p>
+            </div>
+            <Switch
+              checked={shared}
+              onCheckedChange={(checked) =>
+                setDraft((current) => ({
+                  ...current,
+                  guestIds: checked
+                    ? [...new Set([...current.guestIds, guest.id])]
+                    : current.guestIds.filter((id) => id !== guest.id),
+                }))
+              }
+              aria-label={`Share with ${label}`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Dialog
       open={open}
@@ -614,6 +660,9 @@ export function BotDialog({
               <TabsTrigger value="skills" className="flex-1">
                 Skills
               </TabsTrigger>
+              <TabsTrigger value="sharing" className="flex-1">
+                Sharing
+              </TabsTrigger>
             </TabsList>
             <DialogBody>
               <TabsContent value="profile" className="space-y-4">
@@ -621,6 +670,7 @@ export function BotDialog({
               </TabsContent>
               <TabsContent value="tools">{tools}</TabsContent>
               <TabsContent value="skills">{skillsTab}</TabsContent>
+              <TabsContent value="sharing">{sharingTab}</TabsContent>
             </DialogBody>
           </Tabs>
         ) : (

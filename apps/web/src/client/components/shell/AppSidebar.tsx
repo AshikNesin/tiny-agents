@@ -24,7 +24,8 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { unreadCount, useShelleyStore } from "../../store/shelley";
-import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
+import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
+import { useIsGuest } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
 import { openFeedback } from "../../lib/feedback";
@@ -134,6 +135,10 @@ export function AppSidebar() {
   const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  // A guest (issue #145) sees their shared bots, Code and Settings only.
+  const guest = useIsGuest();
+  const primaryNav = guest ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
+  const secondaryNav = guest ? [] : SECONDARY_NAV;
 
   // How "Send feedback" was chosen, so the panel opens the matching way.
   const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
@@ -218,23 +223,25 @@ export function AppSidebar() {
           aria-label="Primary"
           className={cn("space-y-0.5 px-2.5 pb-2", rail && "md:flex md:flex-col md:items-center")}
         >
-          {PRIMARY_NAV.filter((item) => item.to !== "/code" || shelleyConfigured).map((item) => (
-            <NavRow
-              key={item.to}
-              icon={item.icon}
-              label={item.label}
-              rail={rail}
-              to={item.to}
-              active={isActive(item.to)}
-              onClick={closeDrawer}
-              badge={item.to === "/code" ? codeUnread : undefined}
-            />
-          ))}
+          {primaryNav
+            .filter((item) => item.to !== "/code" || shelleyConfigured)
+            .map((item) => (
+              <NavRow
+                key={item.to}
+                icon={item.icon}
+                label={item.label}
+                rail={rail}
+                to={item.to}
+                active={isActive(item.to)}
+                onClick={closeDrawer}
+                badge={item.to === "/code" ? codeUnread : undefined}
+              />
+            ))}
           {/* On mobile the account menu is two taps deep behind an unlabeled
               avatar (issue #127): surface the secondary pages directly in the
               drawer. Desktop keeps them in the account menu. */}
           <div className="mt-1 border-t border-sidebar-border pt-1 md:hidden">
-            {SECONDARY_NAV.map((item) => (
+            {secondaryNav.map((item) => (
               <NavRow
                 key={item.to}
                 icon={item.icon}
@@ -296,7 +303,7 @@ export function AppSidebar() {
                 openFeedback({ keyboard: request === "keyboard" });
               }}
             >
-              {[...SECONDARY_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
+              {[...secondaryNav, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
                 (item) => (
                   <DropdownMenuItem
                     key={item.to}
