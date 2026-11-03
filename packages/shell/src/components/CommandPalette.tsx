@@ -13,7 +13,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-  CommandSeparator,
+  CommandFooter,
 } from "@groot/ui/command";
 
 /** A single selectable entry inside a command-palette group. */
@@ -105,37 +105,40 @@ export function CommandPaletteDialog({ groups = [] }: { groups?: CommandGroupEnt
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="overflow-hidden p-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        size="lg"
+        position="top"
+        showCloseButton={false}
+        className="flex max-h-[min(440px,76dvh)] flex-col gap-0 overflow-hidden p-0"
+      >
         <DialogTitle className="sr-only">Command Menu</DialogTitle>
-        <Command className="[&_[cmdk-input-wrapper]]:border-b-0">
+        <Command className="min-h-0 flex-1 rounded-none! p-0">
           <CommandInput placeholder="Type a command or search..." />
-          <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            {resolvedGroups.map((group, idx) => (
-              <React.Fragment key={group.id ?? group.heading}>
-                {idx > 0 && <CommandSeparator />}
-                <CommandGroup heading={group.heading}>
-                  {group.items.map((entry) => {
-                    const Icon = entry.icon;
-                    return (
-                      <CommandItem
-                        key={entry.id ?? entry.label}
-                        onSelect={() => runCommand(entry.onSelect)}
-                        className={
-                          entry.variant === "destructive"
-                            ? "text-destructive data-[selected=true]:text-destructive"
-                            : undefined
-                        }
-                      >
-                        {Icon ? <Icon /> : null}
-                        <span>{entry.label}</span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              </React.Fragment>
+          <CommandList className="max-h-none min-h-0 flex-1 px-1.5 pb-1.5">
+            <CommandEmpty className="text-muted-foreground">No results found.</CommandEmpty>
+            {resolvedGroups.map((group) => (
+              <CommandGroup key={group.id ?? group.heading} heading={group.heading}>
+                {group.items.map((entry) => {
+                  const Icon = entry.icon;
+                  return (
+                    <CommandItem
+                      key={entry.id ?? entry.label}
+                      onSelect={() => runCommand(entry.onSelect)}
+                      className={
+                        entry.variant === "destructive"
+                          ? "text-destructive data-[selected=true]:text-destructive"
+                          : undefined
+                      }
+                    >
+                      {Icon ? <Icon /> : null}
+                      <span>{entry.label}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
             ))}
           </CommandList>
+          <CommandFooter />
         </Command>
       </DialogContent>
     </Dialog>

@@ -1,10 +1,14 @@
-import { useMemo, type FormEvent } from "react";
+import { useMemo } from "react";
 import { MessageCircleQuestion } from "lucide-react";
-import { Questionnaire } from "@shadcn/react/questionnaire";
 import { Button } from "@groot/ui/button";
-import { Input } from "@groot/ui/input";
+import { cn } from "@groot/ui/lib/utils";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../lib/chat-types";
 import { type OwnerActions, useOwnerDecision } from "../lib/owner-actions";
+import {
+  AskUserQuestions,
+  type AskUserAnswer,
+  type AskUserQuestion,
+} from "./fluid/ask-user-questions";
 import {
   Trace,
   TraceCollapsible,
@@ -19,36 +23,74 @@ import {
 /** Mirrors the agent package's MAX_ANSWER_TEXT (the server rejects longer answers). */
 const MAX_ANSWER_TEXT = 2_000;
 
-const itemName = (index: number) => `q${index}`;
+const questionId = (index: number) => `q${index}`;
+const optionId = (index: number) => `o${index}`;
 
 function countText(questions: readonly OwnerQuestion[]): string {
   return questions.length === 1 ? "a question" : `${questions.length} questions`;
 }
 
 /**
- * One answer per question from the questionnaire's form data: values that
- * are option labels were picked, anything else came from the "Other" field.
- * Skipped questions submit nothing, so their answer is empty.
+ * The owner's questions in the Fluid AskUserQuestions shape: options become
+ * rows (checkboxes when the question takes several) with an Other row for an
+ * answer in the owner's own words; a question without options is one open
+ * text field. The last question's submit button sends the answers.
  */
-export function readAnswers(form: FormData, questions: readonly OwnerQuestion[]): OwnerAnswer[] {
+export function toAskUserQuestions(questions: readonly OwnerQuestion[]): AskUserQuestion[] {
   return questions.map((question, index) => {
-    const labels = new Set(question.options?.map((option) => option.label));
-    const values = form.getAll(itemName(index)).map(String);
-    const selected = values.filter((value) => labels.has(value));
-    const text = values
-      .filter((value) => !labels.has(value))
-      .join("\n")
-      .trim();
+    const last = index === questions.length - 1;
+    const base = {
+      id: questionId(index),
+      title: question.question,
+      description: question.description,
+      maxLength: MAX_ANSWER_TEXT,
+      nextLabel: last ? "Send answers" : "Next",
+    };
+    if (!question.options?.length) {
+      return { ...base, freeText: true, freeTextPlaceholder: "Your answer…" };
+    }
+    return {
+      ...base,
+      multiSelect: question.multiple,
+      allowOther: true,
+      otherPlaceholder: "Something else…",
+      otherLabel: `Other answer to: ${question.question}`,
+      options: question.options.map((option, optionIndex) => ({
+        id: optionId(optionIndex),
+        title: option.label,
+        description: option.description,
+      })),
+    };
+  });
+}
+
+/**
+ * One answer per question from the questionnaire's answers: the picked
+ * options' labels, and the Other / open field's text. Skipped (or never
+ * reached) questions answer with nothing.
+ */
+export function toOwnerAnswers(
+  answers: Record<string, AskUserAnswer>,
+  questions: readonly OwnerQuestion[],
+): OwnerAnswer[] {
+  return questions.map((question, index) => {
+    const answer = answers[questionId(index)];
+    if (!answer || answer.skipped) return { selected: [] };
+    const options = question.options ?? [];
+    const selected = options
+      .filter((_, optionIndex) => answer.selectedIds.includes(optionId(optionIndex)))
+      .map((option) => option.label);
+    const text = answer.otherText?.trim();
     return text ? { selected, text } : { selected };
   });
 }
 
 /**
- * A bot's questions for the owner (ask_owner), as a shadcn Questionnaire: one
- * question per step, its options as radios (checkboxes when it takes
- * several), an "Other" field for an answer in the owner's own words, and Skip
- * for a question they'd rather not answer. The bot's reply waits on the
- * answers; Dismiss, or writing in the chat, lets it go on without them.
+ * A bot's questions for the owner (ask_owner), as a Fluid Functionalism
+ * AskUserQuestions card: one question per step, a single-choice question
+ * answers on a click (or its number key), a multiple-choice one with Next,
+ * and Skip for a question they'd rather not answer. The bot's reply waits on
+ * the answers; Dismiss, or writing in the chat, lets it go on without them.
  */
 export function QuestionCard({
   call,
@@ -62,114 +104,48 @@ export function QuestionCard({
   const { questions } = call;
   // Stay disabled after answering: the stream replaces this card with the answered row.
   const { busy, run } = useOwnerDecision("Failed to send your answers", { settle: false });
-  // Shortcut keys follow the declared option order.
-  const items = useMemo(
-    () =>
-      questions.map((question, index) => ({
-        name: itemName(index),
-        choices: question.options?.map((option) => ({ value: option.label })),
-      })),
-    [questions],
-  );
+  const items = useMemo(() => toAskUserQuestions(questions), [questions]);
 
   const respond = (answers: OwnerAnswer[] | null) =>
     run(() => actions.answerQuestions(call.taskId, answers));
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void respond(readAnswers(new FormData(event.currentTarget), questions));
-  };
-
   return (
-    <Questionnaire.Root
-      items={items}
-      shortcuts="numbers"
-      onSubmit={submit}
+    <div
+      role="group"
       aria-label={`Questions from ${botName}`}
+      aria-busy={busy || undefined}
       data-testid="question-card"
-      className="border-primary/40 bg-primary/5 my-1 flex max-w-lg flex-col gap-3 rounded-lg border p-3"
+      className="my-1 flex w-full max-w-lg min-w-0 flex-col gap-1.5"
     >
-      <div className="flex items-center gap-2">
-        <MessageCircleQuestion className="text-primary size-3.5 shrink-0" aria-hidden />
-        <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-          {botName} has {countText(questions)} for you
-        </p>
-        {questions.length > 1 && (
-          <Questionnaire.Progress className="text-muted-foreground shrink-0 text-xs tabular-nums" />
-        )}
-      </div>
-
-      {questions.map((question, index) => (
-        <Questionnaire.Item
-          key={itemName(index)}
-          name={itemName(index)}
-          multiple={question.multiple}
-          className="min-w-0 outline-none"
-        >
-          <Questionnaire.Title className="text-sm leading-snug font-medium">
-            {question.question}
-          </Questionnaire.Title>
-          {question.description && (
-            <Questionnaire.Description className="text-muted-foreground mt-0.5 text-xs">
-              {question.description}
-            </Questionnaire.Description>
-          )}
-          <Questionnaire.Choices className="mt-2.5 flex flex-col gap-1.5">
-            {question.options?.map((option) => (
-              <Questionnaire.Choice
-                key={option.label}
-                value={option.label}
-                className="border-border hover:bg-muted data-checked:border-primary/60 data-checked:bg-primary/10 flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2 has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
-              >
-                <Questionnaire.ChoiceInput className="accent-primary mt-0.5 size-4 shrink-0 outline-none" />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <Questionnaire.ChoiceLabel className="text-sm">
-                    {option.label}
-                  </Questionnaire.ChoiceLabel>
-                  {option.description && (
-                    <span className="text-muted-foreground text-xs">{option.description}</span>
-                  )}
-                </span>
-                <Questionnaire.ChoiceShortcut className="text-muted-foreground rounded-md border px-1.5 text-xs tabular-nums pointer-coarse:hidden" />
-              </Questionnaire.Choice>
-            ))}
-            {/* Dimmed while another option is picked: only the picked answer is sent. */}
-            <Questionnaire.Input
-              render={<Input className="h-9 [&[data-filled]:not([name])]:opacity-50" />}
-              aria-label={
-                question.options ? `Other answer to: ${question.question}` : question.question
-              }
-              placeholder={question.options ? "Other…" : "Your answer"}
-              maxLength={MAX_ANSWER_TEXT}
-            />
-          </Questionnaire.Choices>
-          <Questionnaire.Error className="text-destructive mt-1.5 text-xs" />
-        </Questionnaire.Item>
-      ))}
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void respond(null)}
-          title="Let the bot go on without your answers"
-        >
-          Dismiss
-        </Button>
-        <span className="grow" />
-        <Questionnaire.Previous render={<Button size="xs" variant="ghost" />}>
-          Back
-        </Questionnaire.Previous>
-        <Questionnaire.Skip render={<Button size="xs" variant="outline" disabled={busy} />} />
-        <Questionnaire.Next render={<Button size="xs" />} />
-        <Questionnaire.Submit render={<Button size="xs" disabled={busy} />}>
-          {busy ? "Sending…" : "Send answers"}
-        </Questionnaire.Submit>
-      </div>
-      <p className="text-muted-foreground text-xs">Or reply in the chat to skip these questions.</p>
-    </Questionnaire.Root>
+      <AskUserQuestions
+        questions={items}
+        onComplete={(answers) => void respond(toOwnerAnswers(answers, questions))}
+        className={cn("max-w-none", busy && "pointer-events-none opacity-60")}
+        heading={
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <MessageCircleQuestion className="size-3.5 shrink-0" aria-hidden />
+            <span className="truncate">
+              {busy ? "Sending your answers…" : `${botName} has ${countText(questions)} for you`}
+            </span>
+          </span>
+        }
+        headerAction={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void respond(null)}
+            title="Let the bot go on without your answers"
+          >
+            Dismiss
+          </Button>
+        }
+      />
+      <p className="text-muted-foreground px-1 text-xs">
+        Or reply in the chat to skip these questions.
+      </p>
+    </div>
   );
 }
 

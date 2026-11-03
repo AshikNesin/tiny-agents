@@ -109,6 +109,24 @@ above `--card` in dark mode so they show on cards), with no ring. Outline
 buttons are transparent in light mode, so they take the surface they sit on;
 in dark mode they add a faint `bg-input/30`.
 
+## Motion
+
+Motion follows [Fluid Functionalism](https://www.fluidfunctionalism.com)'s
+rule that motion carries information, and it lives in the primitives
+(`@groot/ui/motion` holds the shared pieces):
+
+- **Springs.** `spring.moderate` (160ms, no bounce) for short travel such as
+  indicators and highlights; `spring.slow` (240ms, a slight bounce) for panels.
+  Exits are faster than entrances.
+- **Modal surfaces** (`Dialog`, `AlertDialog`, `Tooltip`) spring in and stay
+  mounted through their exit (`useModalPresence`), so closing animates. The page
+  behind a closing dialog stays inert for that exit (about 160ms).
+- **Fluid hover.** Menus, selects and the command menu draw one highlight that
+  glides to the active row (`FluidHighlight`) instead of colouring each row;
+  `TabsList` slides its selected pill or underline the same way.
+- **Reduced motion** turns every transition instant. Client tests set
+  `MotionGlobalConfig.skipAnimations` (tests/client/setup.ts).
+
 ## Which primitive to use
 
 The primitives below are the _only_ way to render these things. Hand-rolling a

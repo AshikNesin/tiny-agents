@@ -1,9 +1,14 @@
 import { expect, afterEach } from "vite-plus/test";
 import { cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
+import { MotionGlobalConfig } from "motion/react";
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
+
+// Motion animations (dialogs, tooltips, tabs, …) finish at once under test, so
+// assertions never catch a surface mid-fade or still mounted for its exit.
+MotionGlobalConfig.skipAnimations = true;
 
 // jsdom lacks the Pointer Capture, scroll-into-view and ResizeObserver APIs
 // Radix primitives (Select, Dropdown, Tooltip, …) and cmdk rely on. Minimal stubs — enough for the

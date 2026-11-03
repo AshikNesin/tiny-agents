@@ -54,6 +54,7 @@ import { StatTile } from "@groot/ui/stat-tile";
 import { StatusBadge, type StatusVariant } from "@groot/ui/status-badge";
 import { Table, TableBody } from "@groot/ui/table";
 import { Tabs, TabsList } from "@groot/ui/tabs";
+import { FluidHighlight, spring, useModalPresence } from "@groot/ui/motion";
 import { Textarea } from "@groot/ui/textarea";
 import { Text } from "@groot/ui/typography";
 
@@ -165,6 +166,7 @@ import { Type, type AIConfig, type AnyModel } from "@groot/ai/types";
 const checks = {
   restoredKit: [Alert, Pagination, Select, Tooltip, addBreadcrumb, logPerformance, copyFile],
   uiBarrel: [ButtonFromBarrel, ToasterFromBarrel, Form, Field],
+  uiMotion: [FluidHighlight, spring.slow, useModalPresence],
   uiKit: [
     Badge,
     UiBreadcrumb,

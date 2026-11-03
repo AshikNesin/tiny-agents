@@ -9,7 +9,9 @@ import {
   useState,
 } from "react";
 import { ArrowUp, Paperclip, Square } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@groot/ui/button";
+import { cn } from "@groot/ui/lib/utils";
 import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import {
@@ -122,6 +124,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const pasteCount = useRef(0);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
+  const reduceMotion = useReducedMotion() ?? false;
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
@@ -385,7 +388,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           aria-label="Attach files"
           data-testid="file-input"
         />
-        <div className="bg-composer border-input focus-within:border-ring relative overflow-hidden rounded-3xl border">
+        {/* Fluid InputMessage frame: a hairline ring (not a border) that gains
+            contrast on hover and focus, over a soft drop shadow; clicking the
+            frame's padding focuses the field. */}
+        <div
+          data-slot="composer-frame"
+          className={cn(
+            "bg-composer relative flex flex-col gap-1 overflow-hidden rounded-3xl p-2",
+            "shadow-[0_0_0_1px_var(--border),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+            "hover:shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_18%,transparent),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+            "focus-within:shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_32%,transparent),0_1px_2px_-1px_rgb(0_0_0/0.06),0_4px_12px_-4px_rgb(0_0_0/0.08)]",
+            enabled && "cursor-text",
+          )}
+          onMouseDown={(e) => {
+            if (!enabled || e.target !== e.currentTarget) return;
+            e.preventDefault();
+            textareaRef.current?.focus();
+          }}
+        >
           <textarea
             ref={textareaRef}
             value={text}
@@ -434,9 +454,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             placeholder={`Message ${bot.name}`}
             rows={1}
             disabled={!enabled}
-            className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 text-base leading-7 outline-none disabled:opacity-50"
+            className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none disabled:opacity-50"
           />
-          <div className="flex items-center gap-2 px-2.5 pb-2.5">
+          <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -448,35 +468,56 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               <Paperclip className="size-5" />
             </Button>
             <div className="ml-auto shrink-0">
-              {showStop ? (
-                <Button
-                  size="icon"
-                  onMouseDown={keepFocus}
-                  onClick={() => void stop()}
-                  disabled={stopping}
-                  aria-label={stopping ? "Stopping" : "Stop generating"}
-                  title="Stop generating (Esc)"
-                  className="size-10 rounded-full"
-                >
-                  {stopping ? (
-                    <Spinner className="size-4" aria-hidden />
-                  ) : (
-                    <Square className="size-3.5 fill-current" />
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  size="icon"
-                  onMouseDown={keepFocus}
-                  onClick={() => void send("steer")}
-                  disabled={!canSend}
-                  aria-label={busy ? "Steer the reply" : "Send message"}
-                  title={busy ? "Add to the running reply (Enter)" : undefined}
-                  className="size-10 rounded-full disabled:opacity-30"
-                >
-                  <ArrowUp className="size-5" />
-                </Button>
-              )}
+              {/* One button that changes job: send/steer, or stop while a
+                  reply runs; the icon pops between the two (Fluid InputMessage). */}
+              <Button
+                size="icon"
+                onMouseDown={keepFocus}
+                onClick={() => void (showStop ? stop() : send("steer"))}
+                disabled={showStop ? stopping : !canSend}
+                aria-label={
+                  showStop
+                    ? stopping
+                      ? "Stopping"
+                      : "Stop generating"
+                    : busy
+                      ? "Steer the reply"
+                      : "Send message"
+                }
+                title={
+                  showStop
+                    ? "Stop generating (Esc)"
+                    : busy
+                      ? "Add to the running reply (Enter)"
+                      : undefined
+                }
+                className="size-10 rounded-full disabled:opacity-30"
+              >
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={showStop ? (stopping ? "stopping" : "stop") : "send"}
+                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={
+                      reduceMotion
+                        ? { opacity: 0 }
+                        : { opacity: 0, scale: 0.6, transition: { duration: 0.06 } }
+                    }
+                    transition={{ type: "spring", duration: 0.08, bounce: 0 }}
+                    className="flex items-center justify-center leading-none"
+                  >
+                    {showStop ? (
+                      stopping ? (
+                        <Spinner className="size-4" aria-hidden />
+                      ) : (
+                        <Square className="size-3.5 fill-current" />
+                      )
+                    ) : (
+                      <ArrowUp className="size-5" />
+                    )}
+                  </motion.span>
+                </AnimatePresence>
+              </Button>
             </div>
           </div>
         </div>
