@@ -29,7 +29,7 @@ export function shelleyConfig(
  */
 export const SHELLEY_HEADERS: Readonly<Record<string, string>> = {
   "X-Shelley-Request": "1",
-  "X-Exedev-Userid": "tiny-agents",
+  "X-Exedev-Userid": "exedev",
 };
 
 function trimUrl(raw: string | undefined): string | undefined {
