@@ -41,4 +41,15 @@ if [ -d /etc/tiny-agents/ssh ]; then
   done
 fi
 
+# Shelley's web UI (shelley-run installs it first when the image has none),
+# as exedev, restarted when it exits. SANDBOX_SHELLEY=0 turns it off. The
+# provider keys (SHELLEY_*_API_KEY) are handed to it and then dropped from
+# this shell, so sshd's sessions never see them.
+if [ "${SANDBOX_SHELLEY:-1}" != 0 ]; then
+  runuser -u exedev -- env HOME=/home/exedev USER=exedev LOGNAME=exedev SHELL=/bin/bash \
+    PATH=/home/exedev/.local/bin:/usr/local/bin:/usr/bin:/bin \
+    /usr/local/lib/tiny-agents/shelley-run </dev/null >/dev/null 2>&1 &
+fi
+unset SHELLEY_ANTHROPIC_API_KEY SHELLEY_OPENAI_API_KEY SHELLEY_GEMINI_API_KEY SHELLEY_FIREWORKS_API_KEY
+
 exec /usr/sbin/sshd -D -e

@@ -135,9 +135,26 @@ RUN set -e; \
     touch "$DIR/.stack-${CLAUDE_WORKER_STACK_VERSION}"; \
     chown -R exedev:exedev /opt/tiny-agents
 
+# Shelley (https://github.com/boldsoftware/shelley), a web-based coding agent,
+# started by the entrypoint and served on 127.0.0.1:9000 (compose.yml). Owned
+# by exedev so Shelley's own in-UI upgrade can replace it. SHELLEY_VERSION is
+# a release tag or `latest`; a failed download doesn't fail the build, since
+# the entrypoint installs Shelley on start when it finds none. Build with
+# INSTALL_SHELLEY=0 to leave it out of the image (it is then fetched on the
+# first start unless SANDBOX_SHELLEY=0).
+ARG INSTALL_SHELLEY=1
+ARG SHELLEY_VERSION=latest
+COPY --chmod=755 install-shelley.sh /usr/local/lib/tiny-agents/install-shelley
+COPY --chmod=755 shelley-run.sh /usr/local/lib/tiny-agents/shelley-run
+RUN if [ "$INSTALL_SHELLEY" = 1 ]; then \
+      /usr/local/lib/tiny-agents/install-shelley /usr/local/bin/shelley "$SHELLEY_VERSION" \
+      && chown exedev:exedev /usr/local/bin/shelley \
+      || echo "Shelley was not installed at build time; the entrypoint will install it on start." >&2; \
+    fi
+
 COPY sshd_config /etc/ssh/sshd_config
 COPY --chmod=755 entrypoint.sh /usr/local/bin/sandbox-entrypoint
 
-EXPOSE 22
+EXPOSE 22 9000
 # tini reaps the browsers and desktops the app starts with setsid/nohup.
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/sandbox-entrypoint"]

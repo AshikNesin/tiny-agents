@@ -9,6 +9,7 @@ services:
       context: .
       args:
         EXTRA_PACKAGES: ${SANDBOX_EXTRA_PACKAGES:-}
+        SHELLEY_VERSION: ${SANDBOX_SHELLEY_VERSION:-latest}
     # Built for the host's architecture: amd64 gets Google Chrome, arm64
     # (Apple Silicon) Debian's Chromium, both natively.
     image: tiny-agents-sandbox:local
@@ -17,6 +18,16 @@ services:
     ports:
       # Loopback only: nothing off this computer can reach the sandbox.
       - "127.0.0.1:${SANDBOX_LOCAL_PORT:-2222}:22"
+      # Shelley's web UI (it has no login of its own): loopback only too.
+      - "127.0.0.1:${SANDBOX_SHELLEY_PORT:-9000}:9000"
+    environment:
+      # SANDBOX_SHELLEY=0 stops Shelley from starting. The keys are optional
+      # (providers can be added in Shelley's UI) and reach only Shelley.
+      SANDBOX_SHELLEY: ${SANDBOX_SHELLEY:-1}
+      SHELLEY_ANTHROPIC_API_KEY: ${SHELLEY_ANTHROPIC_API_KEY:-}
+      SHELLEY_OPENAI_API_KEY: ${SHELLEY_OPENAI_API_KEY:-}
+      SHELLEY_GEMINI_API_KEY: ${SHELLEY_GEMINI_API_KEY:-}
+      SHELLEY_FIREWORKS_API_KEY: ${SHELLEY_FIREWORKS_API_KEY:-}
     # Chrome and the XFCE desktops need more than Docker's 64 MB /dev/shm.
     shm_size: 2gb
     volumes:

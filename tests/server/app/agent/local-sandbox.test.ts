@@ -64,6 +64,30 @@ describe("the local sandbox image", () => {
     expect(dockerfile).toContain("/opt/tiny-agents/claude-worker");
   });
 
+  it("installs Shelley and starts it on loopback, unless turned off", () => {
+    expect(dockerfile).toContain(
+      "/usr/local/lib/tiny-agents/install-shelley /usr/local/bin/shelley",
+    );
+    const install = readFileSync(join(dir, "install-shelley.sh"), "utf8");
+    expect(install).toContain("releases/latest/download");
+    expect(install).toContain("checksums.txt");
+    const run = readFileSync(join(dir, "shelley-run.sh"), "utf8");
+    // An owner-installed copy on the home volume wins; a missing one is installed.
+    expect(run).toContain('"$HOME/.local/bin/shelley" /usr/local/bin/shelley');
+    expect(run).toContain('install-shelley "$HOME/.local/bin/shelley"');
+    const entrypoint = readFileSync(join(dir, "entrypoint.sh"), "utf8");
+    expect(entrypoint).toMatch(/SANDBOX_SHELLEY:-1\}" != 0/);
+    expect(entrypoint).toContain("runuser -u exedev");
+    // Started before sshd, which must not inherit the provider keys.
+    expect(entrypoint.indexOf("shelley-run")).toBeLessThan(
+      entrypoint.indexOf("exec /usr/sbin/sshd"),
+    );
+    expect(entrypoint).toMatch(/^unset SHELLEY_ANTHROPIC_API_KEY/m);
+    const compose = readFileSync(join(dir, "compose.yml"), "utf8");
+    expect(compose).toContain('"127.0.0.1:${SANDBOX_SHELLEY_PORT:-9000}:9000"');
+    expect(compose).not.toMatch(/^\s+ANTHROPIC_API_KEY:/m);
+  });
+
   it("serves the user the app dials, by key only, on loopback only", () => {
     const sshd = readFileSync(join(dir, "sshd_config"), "utf8");
     expect(sshd).toMatch(/^AllowUsers exedev$/m);
