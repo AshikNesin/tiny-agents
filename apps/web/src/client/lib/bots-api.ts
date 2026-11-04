@@ -41,11 +41,21 @@ export interface ClaudeCodeStatus {
   enabled: boolean;
   fallback: "gateway" | "pause";
   configured: boolean;
+  /** `sandbox`: the app runs the worker on the sandbox. `none`: no sandbox configured. */
+  mode: "sandbox" | "none";
   workerHost?: string;
 }
 
+/** Whether Claude Code is installed and signed in where the worker runs. Never a credential. */
+export type ClaudeCodeAccount =
+  | { state: "unconfigured" }
+  | { state: "installing" }
+  | { state: "error"; detail: string }
+  | { state: "ready"; loggedIn: boolean; subscription: boolean; plan?: string; detail?: string };
+
 export const claudeCodeApi = {
   status: () => apiClient.get<ClaudeCodeStatus>("/claude-code/status"),
+  account: () => apiClient.get<ClaudeCodeAccount>("/claude-code/account"),
 };
 
 export type ToolPermission = "allow" | "ask" | "off";

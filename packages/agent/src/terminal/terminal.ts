@@ -19,6 +19,7 @@ import {
   listCommand,
   loginShellCommand,
   newSessionCommand,
+  typeLineCommand,
   parseSessionList,
   type SessionName,
 } from "./tmux";
@@ -97,7 +98,8 @@ export interface TerminalService {
   status(): Promise<TerminalStatus>;
   /** One exec answers both the status and the tab list (the poll path). */
   list(): Promise<TerminalServiceListResult>;
-  create(cols: number, rows: number): Promise<TerminalSessionRow>;
+  /** `typeLine` is typed into the new tab's shell (e.g. a sign-in command). */
+  create(cols: number, rows: number, options?: { typeLine?: string }): Promise<TerminalSessionRow>;
   kill(name: SessionName, options?: { force?: boolean }): Promise<void>;
   has(name: SessionName): Promise<boolean>;
   attach(name: SessionName, init: { cols: number; rows: number }): Promise<PtyStream>;
@@ -209,13 +211,19 @@ export function createTerminalService(
       return (await listInternal()).status;
     },
     list: listInternal,
-    async create(cols, rows) {
+    async create(cols, rows, createOptions) {
       const sessions = await requireReady();
       const name = allocateSessionName(sessions.map((s) => s.name));
       if (!name) throw new SessionLimitError();
       const made = await exec(newSessionCommand(name, cols, rows));
       if (made.exitCode !== 0) {
         throw new TerminalUnreachableError(made.stderr.trim() || "tmux new-session failed");
+      }
+      if (createOptions?.typeLine) {
+        const typed = await exec(typeLineCommand(name, createOptions.typeLine));
+        if (typed.exitCode !== 0) {
+          throw new TerminalUnreachableError(typed.stderr.trim() || "tmux send-keys failed");
+        }
       }
       // Re-list rather than fabricate: tmux owns createdAt, and the pane's
       // foreground may already be visible.

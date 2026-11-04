@@ -19,6 +19,8 @@ export {
   type WorkerMessage,
 } from "./protocol";
 export {
+  FORBIDDEN_BACKEND_FLAGS,
+  FORBIDDEN_OVERRIDE_KEYS,
   OverrideRefusal,
   assertNoOverrides,
   conflictingOverrides,

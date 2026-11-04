@@ -31,7 +31,11 @@ async function loadSdk(): Promise<ClaudeSdkModule> {
 
 async function main(): Promise<void> {
   assertNoOverrides(process.env);
-  await requireSubscriptionLogin(process.env);
+  // Listen even before Claude Code is signed in: the app sets the worker up
+  // ahead of the login, and every session re-checks it before it starts.
+  await requireSubscriptionLogin(process.env).catch((error: unknown) => {
+    console.warn(error instanceof Error ? error.message : error);
+  });
   const sdk = await loadSdk();
   const server = await createClaudeWorkerServer({
     token,
@@ -48,9 +52,7 @@ async function main(): Promise<void> {
     timings: timingsFromEnv(process.env),
     port: Number.isFinite(port) && port > 0 ? port : 8765,
   });
-  console.log(
-    `claude-worker listening on ${server.url} (loopback only; publish with tailscale serve)`,
-  );
+  console.log(`claude-worker listening on ${server.url} (loopback only)`);
 }
 
 main().catch((error: unknown) => {

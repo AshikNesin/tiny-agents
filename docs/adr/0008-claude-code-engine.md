@@ -1,6 +1,8 @@
 # ADR 0008: Claude subscription inference goes through Claude Code
 
-- Status: **accepted**
+- Status: **accepted**, amended by [0010](0010-claude-worker-runs-on-the-sandbox.md):
+  the worker now runs on the sandbox, set up by the app and reached over
+  SSH; the hand-run worker behind `tailscale serve` described below is gone.
 - Date: 2026-11-02
 
 ## Context
@@ -68,6 +70,5 @@ This decision is the same rule for the owner's Claude account.
 ## Links
 
 - [Claude subscription](../claude-subscription.md)
-- [macOS worker](../guides/claude-worker-macos.md)
-- [Linux worker](../guides/claude-worker-linux.md)
+- [ADR 0010](0010-claude-worker-runs-on-the-sandbox.md)
 - [ADR 0005](0005-secrets-live-outside-the-app.md)

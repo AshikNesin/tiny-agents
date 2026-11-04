@@ -61,8 +61,10 @@ no `apiKey` is passed.
 Shelley coding agent (optional): `SHELLEY_URL`, the only setting. Without `SHELLEY_URL` the Code page and the `shelley_*`
 tools stay off. See [Code](./features/code.md).
 
-Claude plan (experimental, off by default): `CLAUDE_CODE_ENGINE_ENABLED`,
-`CLAUDE_CODE_ENGINE_FALLBACK`, `CLAUDE_WORKER_URL`, `CLAUDE_WORKER_TOKEN`.
+Claude plan (experimental, off by default): `CLAUDE_CODE_ENGINE_ENABLED`
+is the only setting; the app sets Claude Code up on the sandbox and you
+sign in from Settings → Claude plan. `CLAUDE_CODE_ENGINE_FALLBACK` is
+optional.
 The token is the worker's bearer, not a Claude credential. See
 [Use your Claude subscription](./claude-subscription.md).
 

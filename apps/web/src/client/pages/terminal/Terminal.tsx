@@ -13,6 +13,7 @@
  * already in its buffer when the owner returns.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Keyboard,
@@ -105,7 +106,9 @@ export function TerminalPage() {
   const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
   const [status, setStatus] = useState<TerminalStatusWire | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [active, setActive] = useState<string | null>(null);
+  // `?tab=` opens on that tab (Settings → Claude plan → Sign in links here).
+  const [searchParams] = useSearchParams();
+  const [active, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
   const [creating, setCreating] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -150,12 +153,13 @@ export function TerminalPage() {
   // The active tab must exist: one closed elsewhere falls forward to the
   // first remaining tab; none left shows the ready empty state.
   useEffect(() => {
+    if (sessions === null) return; // not loaded yet: keep a requested tab
     if (names.length === 0) {
       setActive((current) => (current === null ? current : null));
       return;
     }
     if (!active || !names.includes(active)) setActive(names[0]!);
-  }, [names, active]);
+  }, [sessions, names, active]);
 
   // Prune statuses of tabs that left the list.
   useEffect(() => {

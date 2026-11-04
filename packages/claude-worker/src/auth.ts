@@ -10,8 +10,9 @@ export const INSTALL_HINT =
   "or set CLAUDE_CODE_COMMAND to the executable.";
 
 export const LOGIN_HINT =
-  "Claude Code is installed but not logged in with a subscription. " +
-  "On this machine run `claude auth login` or `claude setup-token`. tiny-agents will not do it.";
+  "Claude Code is not signed in to a Claude subscription. Open Settings → Claude plan and " +
+  "choose Sign in (it runs `claude auth login` in a terminal tab), or run `claude auth login` " +
+  "on the worker machine. tiny-agents never handles the login itself.";
 
 export interface ClaudeAuthStatus {
   loggedIn: boolean;

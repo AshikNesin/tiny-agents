@@ -111,6 +111,30 @@ RUN su exedev -c "mkdir -p ~/.tiny-agents \
  && touch ~/.tiny-agents/browser-stack-${BROWSER_STACK_VERSION} \
           ~/.tiny-agents/computer-stack-${COMPUTER_STACK_VERSION}"
 
+# Claude Code for the Claude plan engine (packages/agent/src/engines/claude-code/
+# sandbox-setup.ts): Node, the Agent SDK and the Claude Code CLI, pinned, in
+# the directory the app looks in first. The app uploads and starts the
+# worker itself; the owner only signs Claude Code in (Settings → Claude plan).
+# Outside the home volume, so a rebuild brings new pins even to an old volume.
+ARG CLAUDE_WORKER_STACK_VERSION=v1
+ARG CLAUDE_WORKER_NODE_VERSION=24.22.2
+ARG CLAUDE_AGENT_SDK_VERSION=0.3.318
+ARG CLAUDE_CODE_VERSION=2.1.318
+ARG CLAUDE_WORKER_WS_VERSION=8.22.0
+ARG CLAUDE_WORKER_ZOD_VERSION=4.6.7
+RUN set -e; \
+    DIR=/opt/tiny-agents/claude-worker; \
+    case "$(dpkg --print-architecture)" in amd64) NA=x64 ;; arm64) NA=arm64 ;; *) echo "unsupported arch" >&2; exit 1 ;; esac; \
+    mkdir -p "$DIR"; \
+    curl -fsSL "https://nodejs.org/dist/v${CLAUDE_WORKER_NODE_VERSION}/node-v${CLAUDE_WORKER_NODE_VERSION}-linux-${NA}.tar.gz" | tar -xz -C "$DIR"; \
+    mv "$DIR/node-v${CLAUDE_WORKER_NODE_VERSION}-linux-${NA}" "$DIR/node"; \
+    printf '{"name":"tiny-agents-claude-worker","private":true,"type":"module","dependencies":{"@anthropic-ai/claude-agent-sdk":"%s","@anthropic-ai/claude-code":"%s","ws":"%s","zod":"%s"}}\n' \
+      "$CLAUDE_AGENT_SDK_VERSION" "$CLAUDE_CODE_VERSION" "$CLAUDE_WORKER_WS_VERSION" "$CLAUDE_WORKER_ZOD_VERSION" > "$DIR/package.json"; \
+    cd "$DIR" && PATH="$DIR/node/bin:$PATH" npm install --omit=dev --no-audit --no-fund --loglevel=error; \
+    test -x "$DIR/node_modules/.bin/claude"; \
+    touch "$DIR/.stack-${CLAUDE_WORKER_STACK_VERSION}"; \
+    chown -R exedev:exedev /opt/tiny-agents
+
 COPY sshd_config /etc/ssh/sshd_config
 COPY --chmod=755 entrypoint.sh /usr/local/bin/sandbox-entrypoint
 

@@ -23,6 +23,24 @@ export const externalPackages = [
   "fsevents",
 ];
 
+/**
+ * The Claude plan worker, uploaded to the sandbox by the app
+ * (apps/web/src/server/api/bots/claude-worker.ts). It runs there under its
+ * own Node, so it is one file; the SDK, ws and zod are installed beside it.
+ */
+export function workerBuildOptions() {
+  return {
+    entryPoints: ["packages/claude-worker/src/bin.ts"],
+    outfile: "dist/server/claude-worker.mjs",
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    external: ["@anthropic-ai/claude-agent-sdk", "ws", "zod"],
+    logLevel: "info",
+  };
+}
+
 export function esbuildOptions({ externals, plugins }) {
   return {
     // The upload extraction worker (issue #58) runs in its own thread, so it
@@ -86,6 +104,7 @@ async function build() {
   // Bake the release into the bundle so Sentry events match the uploaded maps.
   if (release) options.define = { "process.env.SENTRY_RELEASE": JSON.stringify(release) };
   const result = await esbuild.build(options);
+  await esbuild.build(workerBuildOptions());
 
   await fs.mkdir("tmp", { recursive: true });
   await fs.writeFile("tmp/metafile.json", JSON.stringify(result.metafile));
@@ -94,7 +113,9 @@ async function build() {
   // can migrate on boot without the source tree.
   await fs.rm("dist/server/drizzle", { recursive: true, force: true });
   await fs.cp("apps/web/drizzle", "dist/server/drizzle", { recursive: true });
-  console.log("✓ Server bundle written to dist/server/bundle.js (+ drizzle migrations)");
+  console.log(
+    "✓ Server bundle written to dist/server/bundle.js (+ claude-worker.mjs, drizzle migrations)",
+  );
 }
 
 build().catch((error) => {

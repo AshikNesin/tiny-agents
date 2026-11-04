@@ -18,7 +18,8 @@ tiny-agents-sandbox container (Debian 13, user exedev, passwordless sudo)
   ├─ run_command / read_file / write_file (exec + SFTP)
   ├─ Terminal tabs: tmux 3.5
   ├─ Browser: Google Chrome (Chromium on arm64) on an Xtigervnc display (CDP + VNC via SSH tunnels)
-  └─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
+  ├─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
+  └─ Claude Code: Node, the Agent SDK and the CLI, preinstalled for the Claude plan engine
 ```
 
 ## Setup
@@ -46,6 +47,11 @@ You need Docker (Docker Desktop, OrbStack, Colima or Docker Engine) and about
 
 3. Restart `pnpm dev`. The browser panel, "Open computer" and the Terminal
    page now use the container.
+
+4. Optional: to let bots answer on your Claude plan, also set
+   `CLAUDE_CODE_ENGINE_ENABLED=1` and sign in from Settings → Claude plan.
+   Claude Code is already in the image; the login is kept in the `home`
+   volume. See [Claude subscription](../claude-subscription.md).
 
 ## Everyday commands
 

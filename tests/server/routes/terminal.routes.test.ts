@@ -59,8 +59,8 @@ function fakeService(overrides: Partial<TerminalService> = {}) {
   const svc: TerminalService = {
     status: async () => ({ kind: "ready" }),
     list: async () => ({ status: { kind: "ready" }, sessions }),
-    create: async (cols, rows) => {
-      calls.push(`create ${cols}x${rows}`);
+    create: async (cols, rows, options) => {
+      calls.push(`create ${cols}x${rows}${options?.typeLine ? ` typing ${options.typeLine}` : ""}`);
       sessions = [...sessions, row(sessions.length + 1)];
       return sessions.at(-1)!;
     },
@@ -152,6 +152,19 @@ describe("terminal routes", () => {
       json: { cols: 9999, rows: 1 },
     });
     expect(clamped.status).toBe(400); // zod rejects out-of-bounds, client must clamp
+  });
+
+  it("opens a Claude sign-in tab from a preset, never from free text", async () => {
+    const login = await call(app, "POST", "/api/v1/terminal/sessions", {
+      json: { run: "claude-login" },
+    });
+    expect(login.status).toBe(201);
+    expect(fake.calls.at(-1)).toMatch(/^create 120x34 typing .*claude auth login$/);
+
+    const other = await call(app, "POST", "/api/v1/terminal/sessions", {
+      json: { run: "rm -rf ~" },
+    });
+    expect(other.status).toBe(400);
   });
 
   it("answers 409 at the tab cap", async () => {
