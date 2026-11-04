@@ -28,26 +28,23 @@ function accountLine(account: ClaudeCodeAccount | undefined): string {
   }
 }
 
-/**
- * Settings card for the Claude plan engine. The app sets Claude Code up on
- * the sandbox by itself; the one step left to the owner is the login, which
- * runs in Claude Code's own prompt in a terminal tab. There is no field for
- * a Claude credential: Claude Code keeps the login on the sandbox.
- */
-export function ClaudePlanStatusCard() {
-  const navigate = useNavigate();
-  const [status, setStatus] = useState<ClaudeCodeStatus | undefined>();
-  const [account, setAccount] = useState<ClaudeCodeAccount | undefined>();
-  const [error, setError] = useState<string | undefined>();
-  const [opening, setOpening] = useState(false);
+function engineLine(status: ClaudeCodeStatus | undefined): string {
+  if (!status) return "Checking the Claude plan engine.";
+  return status.enabled
+    ? "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
+    : "The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1 to turn it on; nothing else to configure.";
+}
 
-  const check = useCallback(async () => {
-    try {
-      setAccount(await claudeCodeApi.account());
-    } catch (caught) {
-      setAccount({ state: "error", detail: errorMessage(caught, "Could not reach the sandbox") });
-    }
-  }, []);
+function fallbackLine(status: ClaudeCodeStatus): string {
+  const host = status.workerHost ? `Worker on ${status.workerHost}. ` : "";
+  const then = status.fallback === "gateway" ? "fall back to the AI gateway" : "pause";
+  return `${host}When the engine is off or Claude Code can't answer, turns ${then}.`;
+}
+
+/** The engine's switch and worker mode, read once. */
+function useClaudeStatus() {
+  const [status, setStatus] = useState<ClaudeCodeStatus | undefined>();
+  const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
@@ -59,10 +56,28 @@ export function ClaudePlanStatusCard() {
       .catch((caught: unknown) => {
         if (!cancelled) setError(errorMessage(caught, "Status unavailable"));
       });
-    void check();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  return { status, error };
+}
+
+/** The login state, re-read while Claude Code is still installing. */
+function useClaudeAccount() {
+  const [account, setAccount] = useState<ClaudeCodeAccount | undefined>();
+
+  const check = useCallback(async () => {
+    try {
+      setAccount(await claudeCodeApi.account());
+    } catch (caught) {
+      setAccount({ state: "error", detail: errorMessage(caught, "Could not reach the sandbox") });
+    }
+  }, []);
+
+  useEffect(() => {
+    void check();
   }, [check]);
 
   useEffect(() => {
@@ -70,6 +85,14 @@ export function ClaudePlanStatusCard() {
     const timer = setTimeout(() => void check(), INSTALL_POLL_MS);
     return () => clearTimeout(timer);
   }, [account, check]);
+
+  return { account, check };
+}
+
+/** Opens a terminal tab that runs `claude auth login`, then shows it. */
+function useClaudeSignIn() {
+  const navigate = useNavigate();
+  const [opening, setOpening] = useState(false);
 
   const signIn = useCallback(async () => {
     if (opening) return;
@@ -84,14 +107,49 @@ export function ClaudePlanStatusCard() {
     }
   }, [navigate, opening]);
 
-  const engine = !status
-    ? "Checking the Claude plan engine."
-    : status.enabled
-      ? "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
-      : "The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1 to turn it on; nothing else to configure.";
+  return { signIn, opening };
+}
 
+function AccountActions({
+  account,
+  onCheck,
+}: {
+  account: ClaudeCodeAccount | undefined;
+  onCheck: () => void;
+}) {
+  const { signIn, opening } = useClaudeSignIn();
+  const ready = account?.state === "ready";
+  const signedIn = ready && account.subscription;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ready ? (
+        <Button
+          size="sm"
+          variant={signedIn ? "outline" : "default"}
+          onClick={() => void signIn()}
+          disabled={opening}
+          data-testid="claude-plan-sign-in"
+        >
+          {signedIn ? "Sign in again" : "Sign in to Claude"}
+        </Button>
+      ) : null}
+      <Button size="sm" variant="ghost" onClick={onCheck}>
+        Check again
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Settings card for the Claude plan engine. The app sets Claude Code up on
+ * the sandbox by itself; the one step left to the owner is the login, which
+ * runs in Claude Code's own prompt in a terminal tab. There is no field for
+ * a Claude credential: Claude Code keeps the login on the sandbox.
+ */
+export function ClaudePlanStatusCard() {
+  const { status, error } = useClaudeStatus();
+  const { account, check } = useClaudeAccount();
   const onSandbox = status?.mode === "sandbox" || account?.state === "ready";
-  const signedIn = account?.state === "ready" && account.subscription;
 
   return (
     <Card>
@@ -104,36 +162,15 @@ export function ClaudePlanStatusCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p>
-          <Text>{error ?? engine}</Text>
+          <Text>{error ?? engineLine(status)}</Text>
         </p>
         <p>
           <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
         </p>
-        {onSandbox ? (
-          <div className="flex flex-wrap gap-2">
-            {account?.state === "ready" ? (
-              <Button
-                size="sm"
-                variant={signedIn ? "outline" : "default"}
-                onClick={() => void signIn()}
-                disabled={opening}
-                data-testid="claude-plan-sign-in"
-              >
-                {signedIn ? "Sign in again" : "Sign in to Claude"}
-              </Button>
-            ) : null}
-            <Button size="sm" variant="ghost" onClick={() => void check()}>
-              Check again
-            </Button>
-          </div>
-        ) : null}
+        {onSandbox ? <AccountActions account={account} onCheck={() => void check()} /> : null}
         {status ? (
           <p>
-            <Text variant="meta">
-              {status.workerHost ? `Worker on ${status.workerHost}. ` : ""}
-              When the engine is off or Claude Code can't answer, turns{" "}
-              {status.fallback === "gateway" ? "fall back to the AI gateway" : "pause"}.
-            </Text>
+            <Text variant="meta">{fallbackLine(status)}</Text>
           </p>
         ) : null}
         <p>
