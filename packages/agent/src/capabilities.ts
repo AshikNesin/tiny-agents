@@ -40,6 +40,13 @@ export interface ToolInfo {
    * e.g. `report_routine_blocked`: removed from the model in chats.
    */
   unattendedOnly?: boolean;
+  /**
+   * The tool can put a vault item's value somewhere (a sink, issue #56).
+   * The pi gate tells a vault use per call from the sink's gate plan; the
+   * Claude-plan engine has no plans, so YOLO mode keeps every call of a
+   * flagged tool asking there.
+   */
+  vault?: boolean;
 }
 
 export type CapabilityKind = "toolkit" | "skills" | "connection";

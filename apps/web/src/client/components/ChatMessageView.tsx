@@ -745,11 +745,15 @@ function ToolRow({
         )}
         {summary && call.name !== "load_skill" ? ` “${summary}”` : ""}
       </TraceTitle>
-      {(extra || call.approval === "approved" || call.approval === "auto") && (
+      {(extra ||
+        call.approval === "approved" ||
+        call.approval === "auto" ||
+        call.approval === "yolo") && (
         <TraceDescription>
           {extra}
           {extra && call.approval === "approved" ? " · approved by you" : ""}
           {call.approval === "auto" ? `${extra ? " · " : ""}auto-approved` : ""}
+          {call.approval === "yolo" ? `${extra ? " · " : ""}auto-approved (YOLO)` : ""}
         </TraceDescription>
       )}
       {call.durationMs !== undefined && (

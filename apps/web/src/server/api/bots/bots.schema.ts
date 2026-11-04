@@ -47,6 +47,9 @@ export const chatHistorySchema = z.object({
 
 export const pinBotSchema = z.object({ pinned: z.boolean() });
 
+/** YOLO mode for the bot's current chat (issue #151). */
+export const yoloSchema = z.object({ on: z.boolean() });
+
 export const approvalSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   /** Tool name to switch to `allow` for this bot along with approving. */

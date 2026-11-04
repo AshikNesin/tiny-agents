@@ -57,6 +57,10 @@ _Avoid_: consumer, client
 A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript and one record of when the reply started (`bots.settled.ts`). Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
 
+**YOLO mode**:
+A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The gate records such calls as `approval: "yolo"`.
+_Avoid_: auto-approve (that is auto-review's), trust mode
+
 **Owner wait**:
 A tool call paused until the owner answers: an approval (`approvals.ts`), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
 _Avoid_: pending approval (for the family), interrupt, prompt

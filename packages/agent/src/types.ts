@@ -77,9 +77,10 @@ export interface ChatToolCall {
   taskId?: number;
   /**
    * Set once the owner answered an approval for this call; `auto`: auto-review
-   * approved it; `refused`: it would have asked in a conversation nobody watches.
+   * approved it; `yolo`: the chat's YOLO mode ran it without asking;
+   * `refused`: it would have asked in a conversation nobody watches.
    */
-  approval?: "approved" | "denied" | "auto" | "refused";
+  approval?: "approved" | "denied" | "auto" | "yolo" | "refused";
   /** Epoch ms after which a pending approval or credential request expires. */
   expiresAt?: number;
   /** Vault sinks: the item and target the approval card shows (never a value). */

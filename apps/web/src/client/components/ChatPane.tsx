@@ -10,6 +10,7 @@ import {
   Users,
   X,
   WifiOff,
+  Zap,
 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -128,6 +129,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const ownerActions = useHttpOwnerActions(bot.id);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmYolo, setConfirmYolo] = useState(false);
   // A guest (issue #145) chats; settings, New chat and Chat history stay the owner's.
   const guest = useIsGuest();
   // `?history=1` (the sidebar row's "Chat history") opens the history menu.
@@ -175,6 +177,18 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const routineRuns = chat?.routineRuns ?? NO_RUNS;
   const busy = chat?.busy ?? false;
   const loaded = chat?.loaded ?? false;
+  // YOLO mode (issue #151): the owner's per-chat switch; the stream says its state.
+  const yolo = chat?.yolo === true;
+  const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
+  const setYolo = async (on: boolean) => {
+    setConfirmYolo(false);
+    try {
+      const result = await botsApi.setYolo(bot.id, on);
+      applyChatEvent(bot.id, { type: "yolo", on: result.on });
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not change YOLO mode"));
+    }
+  };
   // Brief stream hiccups reconnect on their own; only a drop that lasts
   // gets the notice. The first connection is "loading", not "reconnecting".
   const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
@@ -474,6 +488,28 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
               </Button>
             )}
             {!guest && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={
+                  yolo
+                    ? "bg-warning/15 text-warning hover:text-warning"
+                    : "text-muted-foreground hover:text-foreground"
+                }
+                onClick={() => (yolo ? void setYolo(false) : setConfirmYolo(true))}
+                aria-label={yolo ? "Turn off YOLO mode" : "Turn on YOLO mode"}
+                aria-pressed={yolo}
+                title={
+                  yolo
+                    ? "YOLO mode is on: tools run without asking (vault still asks)"
+                    : "YOLO mode: run tools in this chat without asking"
+                }
+                data-testid="yolo-toggle"
+              >
+                <Zap className="size-4" />
+              </Button>
+            )}
+            {!guest && (
               <ChatHistoryMenu
                 botId={bot.id}
                 conversationId={bot.conversationId}
@@ -600,6 +636,26 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           </ul>
         )}
 
+        {yolo && (
+          <div
+            role="status"
+            data-testid="yolo-banner"
+            className="mx-auto flex w-full max-w-[784px] items-center gap-2 px-4 pt-2 text-xs md:px-5"
+          >
+            <span className="bg-warning/10 text-warning flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1.5">
+              <Zap className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">
+                YOLO on — tools run without asking (vault items still ask)
+              </span>
+            </span>
+            {!guest && (
+              <Button size="xs" variant="ghost" onClick={() => void setYolo(false)}>
+                Turn off
+              </Button>
+            )}
+          </div>
+        )}
+
         <ChatComposer
           ref={composerRef}
           models={models}
@@ -620,6 +676,24 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       {showComputer && <ComputerPanel bot={bot} onClose={computer.close} />}
 
       {/* Confirmations */}
+      <Dialog open={confirmYolo} onOpenChange={setConfirmYolo}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Turn on YOLO mode?</DialogTitle>
+            <DialogDescription>
+              {bot.name} runs every tool call in this chat without asking you first, including ones
+              already waiting. Anything that uses a vault item still asks, and so do turns another
+              bot or a guest started. It stays on until you turn it off or start a new chat.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmYolo(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void setYolo(true)}>Turn on</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

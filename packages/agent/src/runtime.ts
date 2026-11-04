@@ -25,7 +25,9 @@ import {
   approvalNotPending,
   gateExtension,
   recordDecision,
+  recordYoloDecision,
   type ApprovalDecision,
+  type GateYolo,
 } from "./approvals";
 import {
   CredentialRequestNotPendingError,
@@ -63,7 +65,9 @@ import {
 import {
   applyPermissions,
   compilePolicy,
+  ownerTurn,
   PermissionsDoc,
+  YoloDoc,
   resolveModelId,
   type CompiledPolicy,
 } from "./policy";
@@ -211,6 +215,7 @@ export class AgentRuntime {
   /** The configured providers' ids, primary first (AI_PROVIDERS order). */
   #providerIds: readonly string[] = [];
   #review: GateReview | undefined;
+  #yoloGate: GateYolo | undefined;
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
   #closed = false;
@@ -286,24 +291,24 @@ export class AgentRuntime {
       // Capabilities must be installed before resume(): interrupted calls of
       // their tools (e.g. a pending approval or question) re-run against them.
       // Auto-review reads the owner's messages through the Harness opened below.
+      const recentEntries = async (id: number) => {
+        const conversation = await harness?.conversation(id as ConversationId, ctx);
+        if (!conversation) return [];
+        const page = await conversation.entries(
+          { order: "descending" },
+          REVIEW_ENTRY_LOOKBACK,
+          undefined,
+          ctx,
+        );
+        return page.items;
+      };
       const review: GateReview | undefined = options.reviewer
-        ? {
-            reviewer: options.reviewer,
-            recentEntries: async (id) => {
-              const conversation = await harness?.conversation(id as ConversationId, ctx);
-              if (!conversation) return [];
-              const page = await conversation.entries(
-                { order: "descending" },
-                REVIEW_ENTRY_LOOKBACK,
-                undefined,
-                ctx,
-              );
-              return page.items;
-            },
-          }
+        ? { reviewer: options.reviewer, recentEntries }
         : undefined;
+      // YOLO mode reads the newest user message to trust only the owner's turns.
+      const yolo: GateYolo = { recentEntries };
       for (const capability of capabilities) {
-        registry.install(gateExtension(capability.extension, approvals, review));
+        registry.install(gateExtension(capability.extension, approvals, review, yolo));
       }
       harness = await Harness.open(
         storage,
@@ -329,6 +334,7 @@ export class AgentRuntime {
         options.claudeWorker,
       );
       opened.#review = review;
+      opened.#yoloGate = yolo;
       opened.#configured = configured;
       opened.#providerIds = [opened.provider, ...aiProviderIds(envSource)].filter(
         (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
@@ -512,6 +518,7 @@ export class AgentRuntime {
       }, ctx);
     }
     this.#rememberClaude(ref, claude);
+    if (claude) await this.#syncClaudeYolo(ref);
     return ref;
   }
 
@@ -529,6 +536,80 @@ export class AgentRuntime {
       }
     }, ctx);
     this.#rememberClaude(ref, claude);
+    if (claude) await this.#syncClaudeYolo(ref);
+  }
+
+  // ── YOLO mode (issue #151) ────────────────────────────────────────────
+
+  /** Whether the conversation's YOLO mode is on. */
+  async yolo(ref: ConversationRef): Promise<boolean> {
+    return (await this.#readYolo(ref)).on;
+  }
+
+  /**
+   * Switch the conversation's YOLO mode: while on, every tool call that
+   * would ask the owner runs without a card, except vault uses and turns
+   * another bot or a guest started. `by` is the owner's user id (whose
+   * messages it trusts in a shared chat). Switching it on also approves
+   * the calls already waiting that it would have run; their task ids are
+   * returned.
+   */
+  async setYolo(
+    ref: ConversationRef,
+    on: boolean,
+    by?: number,
+  ): Promise<{ on: boolean; approved: number[] }> {
+    await this.#conversation(ref);
+    await this.#pi.harness.commit(async (tx) => {
+      const doc = await tx.doc(YoloDoc, ref as ConversationId);
+      doc.on = on;
+      if (on) {
+        doc.since = Date.now();
+        if (by !== undefined) doc.by = by;
+        else delete doc.by;
+      } else {
+        delete doc.since;
+        delete doc.by;
+      }
+    }, ctx);
+    const approved = this.#claude.setYolo(
+      ref,
+      on ? { on, ...(by !== undefined ? { by } : {}) } : { on },
+    );
+    if (on && this.#approvals.count(ref) > 0) {
+      const conversation = await this.#conversation(ref);
+      const page = await conversation.entries(
+        { order: "descending" },
+        REVIEW_ENTRY_LOOKBACK,
+        undefined,
+        ctx,
+      );
+      if (ownerTurn(page.items, by)) {
+        for (const taskId of this.#approvals.tasks(ref)) {
+          try {
+            await this.#pi.harness.commit((tx) => recordYoloDecision(tx, ref, taskId), ctx);
+            approved.push(taskId);
+          } catch {
+            // Not an approval YOLO answers (a vault use, a question, a
+            // credential request) or no longer waiting: it stays as it is.
+          }
+        }
+      }
+    }
+    return { on, approved };
+  }
+
+  async #readYolo(ref: ConversationRef): Promise<{ on: boolean; by?: number }> {
+    await this.#conversation(ref);
+    return this.#pi.harness.commit(async (tx) => {
+      const doc = await tx.doc(YoloDoc, ref as ConversationId);
+      return doc.on ? { on: true, ...(doc.by !== undefined ? { by: doc.by } : {}) } : { on: false };
+    }, ctx);
+  }
+
+  /** The Claude-plan engine keeps YOLO in memory: hand it the stored state. */
+  async #syncClaudeYolo(ref: ConversationRef): Promise<void> {
+    this.#claude.setYolo(ref, await this.#readYolo(ref));
   }
 
   /**
@@ -563,6 +644,7 @@ export class AgentRuntime {
             system: config.systemPrompt,
             tools: surface.tools,
             permissions: surface.permissions,
+            vaultTools: surface.vaultTools,
             runners: surface.runners,
           },
         };
@@ -580,6 +662,7 @@ export class AgentRuntime {
           system: config.systemPrompt,
           tools: surface.tools,
           permissions: surface.permissions,
+          vaultTools: surface.vaultTools,
           runners: surface.runners,
         },
       };
@@ -621,7 +704,9 @@ export class AgentRuntime {
    */
   installCapability(capability: Capability): void {
     this.#capabilities.set(capability.id, capability);
-    this.#registry.install(gateExtension(capability.extension, this.#approvals, this.#review));
+    this.#registry.install(
+      gateExtension(capability.extension, this.#approvals, this.#review, this.#yoloGate),
+    );
   }
 
   /** Withdraw a capability (connection removed or signed out). Bots keep it selected by name. */
@@ -769,6 +854,8 @@ export class AgentRuntime {
         requestId: input.requestId,
         text: input.text,
         images: input.images,
+        ...(input.peer ? { peer: input.peer } : {}),
+        ...(input.author ? { author: input.author } : {}),
       });
       if (outcome === "ran") return;
     }

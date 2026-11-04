@@ -332,6 +332,9 @@ export const botsApi = {
   deletePastChat: (id: string, chatId: string) => apiClient.delete(`/bots/${id}/chats/${chatId}`),
   read: (id: string) => apiClient.post(`/bots/${id}/read`),
   pin: (id: string, pinned: boolean) => apiClient.post<Bot>(`/bots/${id}/pin`, { pinned }),
+  /** YOLO mode for the bot's current chat (issue #151): owner only. */
+  setYolo: (id: string, on: boolean) =>
+    apiClient.put<{ on: boolean; approved: number[] }>(`/bots/${id}/yolo`, { on }),
   capabilities: () => (capabilitiesCache ??= fetchCapabilities()),
   decideApproval: (
     id: string,

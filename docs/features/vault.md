@@ -57,6 +57,10 @@ and "last used … by …".
 | `http_request`        | `web`     | ask     | A request the server makes itself (never through TinyFish), with `auth: <handle>` added as a header only for the item's allowed hosts. Private addresses (also after DNS) are refused; the header is dropped on a redirect to another host.             |
 | `run_command`         | `sandbox` | ask     | With `secrets: [{handle, env}]`: each value is set as an env var for that one command. Every such call asks (full command on the card), and the command runs confined to the items' hosts (below).                                                      |
 
+A chat's [YOLO mode](./yolo-mode.md) never covers a vault use: a call that
+carries a vault item always shows its card, and the broker still requires the
+owner's approval before it resolves a value.
+
 MCP connections take a vault handle as their header value
 (`Connection.secretRef`, set with `PATCH /connections/:id { secretRef }`); it
 is resolved at connect time, audited, and needs the item to allow `mcp`.

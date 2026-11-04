@@ -401,6 +401,7 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
             label: "Typed a saved login on the computer",
             askLabel: "type a saved login on the computer",
             description: "Type a vault login into a desktop window without seeing it.",
+            vault: true,
           },
         ]
       : []),
