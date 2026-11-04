@@ -5,7 +5,7 @@
  * It is chrome, not content: 11px mono labels, muted, no borders on keys,
  * every state readable without hover.
  */
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -14,9 +14,8 @@ import {
   Clipboard,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@groot/shell/lib/utils";
-import type { TerminalControls } from "./TerminalView";
+import { pasteFromClipboard, type TerminalControls } from "./TerminalView";
 
 /**
  * One key. `char` marks a typeable character, it composes with the sticky
@@ -72,6 +71,12 @@ function composeKey(key: PanelKey, ctrl: boolean, alt: boolean): string {
   return alt ? `\x1b${base}` : base;
 }
 
+/**
+ * Keys never take focus: on a phone, focus leaving xterm's textarea closes
+ * the soft keyboard after every press.
+ */
+const keepFocus = (event: MouseEvent) => event.preventDefault();
+
 /** Quiet chrome: text keys are labels; icons optically match at size-3.5. */
 const keyClass =
   "flex h-8 min-h-8 items-center justify-center rounded-md px-1 font-mono text-[11px] text-muted-foreground select-none hover:bg-muted hover:text-foreground active:bg-muted active:text-foreground md:min-w-8";
@@ -82,6 +87,7 @@ function KeyButton({ spec, onPress }: { spec: PanelKey; onPress: () => void }) {
     <button
       type="button"
       aria-label={spec.aria}
+      onMouseDown={keepFocus}
       onClick={onPress}
       className={keyClass}
       data-testid={spec.testid}
@@ -111,18 +117,16 @@ export function TerminalKeysPanel({
     controls?.focus();
   };
 
+  // A paste, not keystrokes: bracketed, so a multi-line paste doesn't run
+  // each line as it lands.
   const paste = async () => {
     setCtrl(false);
     setAlt(false);
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text) return;
+    await pasteFromClipboard((text) => {
       const controls = getControls();
-      controls?.send(ENCODER.encode(text));
+      controls?.paste(text);
       controls?.focus();
-    } catch {
-      toast.error("Clipboard unavailable");
-    }
+    });
   };
 
   const modifier = (active: boolean, toggle: () => void, label: string, testid: string) => (
@@ -130,6 +134,7 @@ export function TerminalKeysPanel({
       type="button"
       aria-pressed={active}
       aria-label={label}
+      onMouseDown={keepFocus}
       onClick={toggle}
       className={cn(keyClass, "aria-pressed:bg-muted aria-pressed:text-foreground")}
       data-testid={testid}
@@ -180,6 +185,7 @@ export function TerminalKeysPanel({
           <button
             type="button"
             aria-label="Paste from your clipboard"
+            onMouseDown={keepFocus}
             onClick={() => void paste()}
             className={keyClass}
             data-testid="terminal-key-paste"

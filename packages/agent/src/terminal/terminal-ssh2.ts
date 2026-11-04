@@ -70,7 +70,7 @@ class ChannelDuplex extends Duplex implements PtyStream {
     private readonly release: () => void,
   ) {
     // Not half-open: when the remote side ends (tmux exited, a missing
-    // session, another viewer detached us), the stream must close, or the
+    // session, the tmux client was detached), the stream must close, or the
     // bridge never learns the tab is gone.
     super({ allowHalfOpen: false });
     let resolveDone!: (value: { exitCode: number | null }) => void;

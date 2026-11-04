@@ -42,7 +42,8 @@ const connections: {
 
 const createTerminalMock = vi.fn();
 
-vi.mock("@/lib/xterm", () => ({
+vi.mock("@/lib/xterm", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/xterm")>()),
   createTerminal: (...args: unknown[]) => createTerminalMock(...args),
 }));
 
@@ -82,6 +83,12 @@ function fakeTerminal(): TerminalHandle {
       return () => undefined;
     }),
     onResize: vi.fn(() => () => undefined),
+    paste: vi.fn(),
+    hasSelection: vi.fn(() => false),
+    copySelection: vi.fn(async () => false),
+    selectAll: vi.fn(),
+    reset: vi.fn(),
+    setFontSize: vi.fn(),
     fit: vi.fn(() => null),
     proposeDimensions: vi.fn(() => null),
     setTheme: vi.fn(),
@@ -191,12 +198,13 @@ describe("Terminal page", () => {
   it("shows the connecting dot until a view reports live", async () => {
     listMock.mockResolvedValue(ready([session(1)]));
     mount();
-    const tab = await findTab(1);
-    expect(tab.querySelector("span[title='Reconnecting']")).not.toBeNull();
+    await findTab(1);
+    const dot = () => screen.getByTestId("terminal-tab-status-ta-term-1");
+    expect(dot().getAttribute("data-state")).toBe("connecting");
 
     await waitFor(() => expect(connections.length).toBeGreaterThan(0));
     connections[0]!.handlers.onStateChange("live");
-    await waitFor(() => expect(tab.querySelector("span[title='Reconnecting']")).toBeNull());
+    await waitFor(() => expect(dot().getAttribute("data-state")).toBe("live"));
   });
 
   it("says it is connecting while the first list is in flight", async () => {
@@ -341,29 +349,72 @@ describe("Terminal keys panel", () => {
     expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("pastes the clipboard into the active view", async () => {
+  /** The fake xterm handle the live view was given. */
+  async function liveTerminal(): Promise<TerminalHandle> {
+    return (await createTerminalMock.mock.results.at(-1)!.value) as TerminalHandle;
+  }
+
+  function secureClipboard(clipboard: unknown) {
+    Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+    Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+  }
+
+  it("pastes the clipboard into the active view as a (bracketed) paste", async () => {
     const { connection } = await mountLive();
+    const terminal = await liveTerminal();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const readText = vi.fn().mockResolvedValue("hi");
-    Object.defineProperty(navigator, "clipboard", {
-      value: { readText },
-      configurable: true,
-    });
+    secureClipboard({ readText: vi.fn().mockResolvedValue("ls\npwd") });
 
     await user.click(screen.getByTestId("terminal-key-paste"));
-    await waitFor(() => expect(sentBytes(connection)).toEqual([[0x68, 0x69]]));
+    // Through xterm's paste, never raw keystrokes: raw, each line would run
+    // the moment it landed.
+    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith("ls\npwd"));
+    expect(sentBytes(connection)).toEqual([]);
   });
 
-  it("toasts when the clipboard is unavailable", async () => {
+  it("points at the paste shortcut when the clipboard is refused", async () => {
     await mountLive();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    Object.defineProperty(navigator, "clipboard", {
-      value: { readText: vi.fn().mockRejectedValue(new Error("denied")) },
-      configurable: true,
-    });
+    secureClipboard({ readText: vi.fn().mockRejectedValue(new Error("denied")) });
 
     await user.click(screen.getByTestId("terminal-key-paste"));
-    expect(await screen.findByText("Clipboard unavailable")).toBeTruthy();
+    expect(await screen.findByText(/Press (Ctrl\+V|⌘V) to paste/)).toBeTruthy();
+    expect(screen.getByText(/blocked clipboard access/)).toBeTruthy();
+  });
+
+  it("explains plain-http pages, where the clipboard API does not exist", async () => {
+    await mountLive();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
+
+    await user.click(screen.getByTestId("terminal-key-paste"));
+    expect(await screen.findByText(/isn't served over https/)).toBeTruthy();
+  });
+
+  it("re-attaches into a clean terminal after a reconnect", async () => {
+    const { handlers } = await mountLive();
+    const terminal = await liveTerminal();
+    act(() => handlers.onStateChange("live"));
+    expect(terminal.reset).not.toHaveBeenCalled();
+    act(() => handlers.onStateChange("reconnecting"));
+    expect(await screen.findByTestId("terminal-reconnecting-ta-term-1")).toBeTruthy();
+    act(() => handlers.onStateChange("live"));
+    expect(terminal.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("steps the font size from the toolbar and remembers it", async () => {
+    await mountLive();
+    const terminal = await liveTerminal();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await user.click(screen.getByTestId("terminal-font-up"));
+    await user.click(screen.getByTestId("terminal-font-up"));
+    expect(screen.getByTestId("terminal-font-size").textContent).toBe("16");
+    await waitFor(() => expect(terminal.setFontSize).toHaveBeenLastCalledWith(16));
+    expect(window.localStorage.getItem("tiny-agents:terminal-font-size")).toBe("16");
+
+    await user.click(screen.getByTestId("terminal-font-size"));
+    expect(screen.getByTestId("terminal-font-size").textContent).toBe("14");
   });
 
   it("hides on the header toggle and remembers the choice", async () => {

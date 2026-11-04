@@ -7,13 +7,21 @@
  * everything the owner types.
  *
  * Close codes are a contract with the client's reconnect logic:
- *   1000 permanent — another viewer detached us, the tmux session died, or
+ *   1000 permanent — this tmux client was detached (Ctrl+B d), the session died, or
  *        it never existed (tmux's "can't find session" reaches the pane
  *        first); the client stops, the tab strip shows it.
  *   4000 idle      — ten minutes with no frames either way; the client
  *        reconnects with a fresh ticket when the user returns.
  *   1011 attach    — the SSH attach failed after the ticket was spent (the
  *        sandbox is unreachable); the client retries with backoff.
+ *
+ * Text frames are JSON control messages, client to server:
+ *   {t:"resize",cols,rows}  the grid changed (tmux redraws at the new size)
+ *   {t:"pause"} / {t:"resume"}  the browser's xterm is behind on rendering;
+ *        stop reading the VM until it catches up (watermark flow control)
+ *   {t:"ping"}  sent only while the page is visible: keeps the idle timer
+ *        off a tab someone is reading, and is answered {t:"pong"} so the
+ *        client can spot a half-open socket and reconnect on its own.
  */
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -110,6 +118,15 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
   await new Promise<void>((resolve) => {
     let alive = true;
     let idleTimer = armIdleTimer(ws);
+    // Two independent reasons to stop reading the pty: the socket's send
+    // buffer is full (a slow network) or the client asked (a slow renderer).
+    // Reading resumes only when neither holds.
+    let socketFull = false;
+    let clientPaused = false;
+    const syncFlow = () => {
+      if (socketFull || clientPaused) stream.pause();
+      else stream.resume();
+    };
 
     const ping = setInterval(() => {
       if (!alive) {
@@ -133,9 +150,15 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
       if (ws.readyState !== ws.OPEN) return;
       bumpIdle();
       ws.send(chunk, { binary: true }, () => {
-        if (ws.bufferedAmount < MAX_BUFFERED_BYTES) stream.resume();
+        if (socketFull && ws.bufferedAmount < MAX_BUFFERED_BYTES) {
+          socketFull = false;
+          syncFlow();
+        }
       });
-      if (ws.bufferedAmount >= MAX_BUFFERED_BYTES) stream.pause();
+      if (ws.bufferedAmount >= MAX_BUFFERED_BYTES) {
+        socketFull = true;
+        syncFlow();
+      }
     });
     ws.on("message", (data, isBinary) => {
       bumpIdle();
@@ -151,31 +174,22 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
         }
         return;
       }
-      // Control frames: only resize exists in v1. Malformed or unknown
-      // messages are ignored — a buggy client must not lose its terminal.
-      const message = String(data);
-      try {
-        const parsed: unknown = JSON.parse(message);
-        if (
-          parsed &&
-          typeof parsed === "object" &&
-          "t" in parsed &&
-          (parsed as { t?: unknown }).t === "resize" &&
-          "cols" in parsed &&
-          "rows" in parsed
-        ) {
-          const r = parsed as { cols: unknown; rows: unknown };
-          if (
-            typeof r.cols === "number" &&
-            typeof r.rows === "number" &&
-            Number.isFinite(r.cols) &&
-            Number.isFinite(r.rows)
-          ) {
-            stream.setWindow(clampRows(r.rows), clampCols(r.cols));
-          }
-        }
-      } catch {
-        // not JSON: ignore
+      // Control frames. Malformed or unknown messages are ignored: a buggy
+      // client must not lose its terminal.
+      const control = parseControl(String(data));
+      if (!control) return;
+      switch (control.t) {
+        case "resize":
+          stream.setWindow(clampRows(control.rows), clampCols(control.cols));
+          return;
+        case "pause":
+        case "resume":
+          clientPaused = control.t === "pause";
+          syncFlow();
+          return;
+        case "ping":
+          if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: "pong" }));
+          return;
       }
     });
 
@@ -185,9 +199,9 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
       stream.destroy();
       resolve();
     };
-    // The pty ended: the session was killed, or another viewer attached with
-    // `-d` and detached this one. Either way the tab is not recoverable by
-    // reconnecting — close 1000 so the client stops instead of retrying.
+    // The pty ended: the session was killed, or this client was detached
+    // (Ctrl+B d). Either way an automatic retry is wrong — close 1000 so the
+    // client stops; its overlay offers a manual Reconnect for the detach.
     stream.once("close", () => {
       if (ws.readyState === ws.OPEN) ws.close(1000, "Terminal session ended");
       finish();
@@ -199,6 +213,39 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
     ws.once("close", finish);
     ws.on("error", () => undefined);
   });
+}
+
+type ControlFrame =
+  | { t: "resize"; cols: number; rows: number }
+  | { t: "pause" }
+  | { t: "resume" }
+  | { t: "ping" };
+
+/** A well-formed control frame, or undefined for anything else. */
+export function parseControl(message: string): ControlFrame | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const frame = parsed as { t?: unknown; cols?: unknown; rows?: unknown };
+  switch (frame.t) {
+    case "resize":
+      return typeof frame.cols === "number" &&
+        typeof frame.rows === "number" &&
+        Number.isFinite(frame.cols) &&
+        Number.isFinite(frame.rows)
+        ? { t: "resize", cols: frame.cols, rows: frame.rows }
+        : undefined;
+    case "pause":
+    case "resume":
+    case "ping":
+      return { t: frame.t };
+    default:
+      return undefined;
+  }
 }
 
 function armIdleTimer(ws: WebSocket): ReturnType<typeof setTimeout> {
