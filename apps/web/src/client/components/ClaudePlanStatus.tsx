@@ -15,8 +15,6 @@ function accountLine(account: ClaudeCodeAccount | undefined): string {
   switch (account.state) {
     case "unconfigured":
       return "No sandbox is configured. Set SANDBOX_HOST, or run pnpm sandbox:up for a local one.";
-    case "external":
-      return "Turns go to the worker at CLAUDE_WORKER_URL. Sign Claude Code in on that machine.";
     case "installing":
       return "Installing Claude Code on the sandbox. This takes a minute or two, once.";
     case "error":

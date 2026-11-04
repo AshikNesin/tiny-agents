@@ -27,8 +27,6 @@ How to work on and ship the app.
 | [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format             |
 | [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars    |
 | [`guides/local-sandbox.md`](./guides/local-sandbox.md)             | The sandbox VM as a Docker container, for machines off Tailscale |
-| [`guides/claude-worker-macos.md`](./guides/claude-worker-macos.md) | Optional hand-run Claude plan worker on macOS / a Cua or Lume VM |
-| [`guides/claude-worker-linux.md`](./guides/claude-worker-linux.md) | Optional hand-run Claude plan worker as a systemd user unit      |
 | [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)      |
 | [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                    |
 | [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate              |

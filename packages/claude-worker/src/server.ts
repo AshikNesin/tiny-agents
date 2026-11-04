@@ -1,7 +1,7 @@
 /**
  * Loopback WebSocket server. Bind address is fixed at 127.0.0.1.
- * The app reaches it through an SSH tunnel to the sandbox (or, for a
- * hand-run worker, `tailscale serve`); never Funnel, never a public port.
+ * The app starts it on the sandbox and reaches it through an SSH tunnel;
+ * it is never published on a public port.
  * The bearer token is checked before the upgrade completes.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -39,7 +39,7 @@ const BIND_HOST = "127.0.0.1";
 export function assertWorkerToken(token: string): void {
   if (!is32ByteSecret(token)) {
     throw new Error(
-      "CLAUDE_WORKER_TOKEN must be a 32-byte secret. Create one with `openssl rand -base64 32`.",
+      "CLAUDE_WORKER_TOKEN must be a 32-byte secret (the app creates one on the sandbox).",
     );
   }
 }

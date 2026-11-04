@@ -77,10 +77,6 @@ it. Short version:
   API key in Cloudflare AI Gateway BYOK only. See
   [docs/features/ai-inference.md](docs/features/ai-inference.md).
 
-To run the worker on another machine instead (a Mac whose login is in the
-Keychain): [macOS / Cua / Lume](docs/guides/claude-worker-macos.md),
-[Linux](docs/guides/claude-worker-linux.md).
-
 ## Layout
 
 - `packages/agent` — the only module that touches pi-durable (excluded from

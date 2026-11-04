@@ -48,8 +48,7 @@ local container image, `~/.tiny-agents/claude-worker` on a VM.
 - Links `~/.local/bin/claude` to that CLI when the sandbox has no `claude`
   of its own, so a terminal tab can run it.
 
-Logs are in `worker.log` in that directory. Change the sandbox-side port
-with `CLAUDE_SANDBOX_WORKER_PORT`.
+Logs are in `worker.log` in that directory.
 
 ## What this project will not do
 
@@ -72,9 +71,8 @@ with `CLAUDE_SANDBOX_WORKER_PORT`.
   returned. Claude Code does not execute it.
 
 The login lives in the sandbox user's home, as any other login you make
-there does. Bots that run commands on the sandbox run as that user. If
-you want the Claude login on a machine bots cannot reach, use a
-[hand-run worker](#a-worker-on-another-machine) instead.
+there does. Bots that run commands on the sandbox run as that user, so
+treat the Claude login like any other login you keep on the sandbox.
 
 ## How turns flow
 
@@ -127,16 +125,6 @@ engine and do not paste a Claude Code token anywhere. Create a normal
 console API key that spends Max-plan API credits or usage credits, and
 store that key only as the Anthropic BYOK secret in Cloudflare AI
 Gateway. Details are in [AI inference](features/ai-inference.md).
-
-## A worker on another machine
-
-Set `CLAUDE_WORKER_URL` and `CLAUDE_WORKER_TOKEN` and the app uses that
-worker instead of the sandbox. Use this for a Mac whose Claude login is in
-the Keychain, or to keep the login off the machine bots run commands on.
-You set that worker up by hand:
-
-- macOS, including a Cua/Lume VM on a Mac mini: [claude-worker-macos.md](guides/claude-worker-macos.md)
-- Linux: [claude-worker-linux.md](guides/claude-worker-linux.md)
 
 ## Manual smoke test
 

@@ -8,9 +8,6 @@
  * direct-tcpip tunnel. Nothing is published: no `tailscale serve`, no
  * token to copy. The owner signs Claude Code in once, in a terminal tab,
  * and Claude Code keeps that login on the sandbox.
- *
- * `CLAUDE_WORKER_URL` + `CLAUDE_WORKER_TOKEN` still name a worker run by
- * hand elsewhere (a Mac whose login sits in the Keychain); when set they win.
  */
 import { createHash } from "node:crypto";
 import type { Server } from "node:net";
@@ -36,10 +33,8 @@ export interface ClaudeWorkerTarget {
 
 /** What Settings shows about the Claude login. Never a credential. */
 export type ClaudeAccountStatus =
-  /** No sandbox and no worker URL: nowhere to run Claude Code. */
+  /** No sandbox: nowhere to run Claude Code. */
   | { state: "unconfigured" }
-  /** A hand-run worker (`CLAUDE_WORKER_URL`): its machine owns the login. */
-  | { state: "external" }
   /** First use: Node, the SDK and Claude Code are going onto the sandbox. */
   | { state: "installing" }
   | { state: "error"; detail: string }
@@ -51,7 +46,7 @@ export type ClaudeAccountStatus =
       detail?: string;
     };
 
-export type ClaudeWorkerMode = "sandbox" | "external" | "none";
+export type ClaudeWorkerMode = "sandbox" | "none";
 
 /** The engine's view of the worker: where it is and how to reach it. */
 export interface ClaudeWorkerLocator {
@@ -64,15 +59,6 @@ export interface ClaudeWorkerLocator {
   prepare(): void;
   account(): Promise<ClaudeAccountStatus>;
   close(): void;
-}
-
-type Env = Readonly<Record<string, string | undefined>>;
-
-/** A worker from `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN`, or undefined when unset. */
-export function externalWorkerTarget(env: Env): ClaudeWorkerTarget | undefined {
-  const url = env.CLAUDE_WORKER_URL?.trim();
-  const token = env.CLAUDE_WORKER_TOKEN?.trim();
-  return url && token ? { url, token } : undefined;
 }
 
 export const noWorkerLocator: ClaudeWorkerLocator = {
@@ -308,32 +294,5 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       server = undefined;
       local = undefined;
     },
-  };
-}
-
-/** A locator over `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN`, read on each call. */
-export function createExternalWorkerLocator(env: () => Env): ClaudeWorkerLocator {
-  let host: string | undefined;
-  try {
-    const url = env().CLAUDE_WORKER_URL?.trim();
-    host = url ? new URL(url).host : undefined;
-  } catch {
-    host = undefined;
-  }
-  return {
-    mode: "external",
-    host,
-    async resolve() {
-      const target = externalWorkerTarget(env());
-      if (!target) {
-        throw new Error(
-          "Claude subscription engine has no CLAUDE_WORKER_URL or CLAUDE_WORKER_TOKEN.",
-        );
-      }
-      return target;
-    },
-    prepare: () => {},
-    account: async () => ({ state: "external" }),
-    close: () => {},
   };
 }

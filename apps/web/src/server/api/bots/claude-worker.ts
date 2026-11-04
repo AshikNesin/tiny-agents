@@ -51,10 +51,5 @@ export async function claudeWorkerScript(): Promise<string> {
 export function claudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
   const endpoint = sandboxEndpoint(env);
   if (!endpoint) return undefined;
-  const port = Number(env.CLAUDE_SANDBOX_WORKER_PORT);
-  return createSandboxClaudeWorker({
-    endpoint,
-    script: claudeWorkerScript,
-    ...(Number.isInteger(port) && port > 0 ? { port } : {}),
-  });
+  return createSandboxClaudeWorker({ endpoint, script: claudeWorkerScript });
 }

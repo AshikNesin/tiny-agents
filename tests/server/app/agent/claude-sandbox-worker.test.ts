@@ -25,10 +25,7 @@ import {
   uploadWorkerCommand,
   workerPackageJson,
 } from "../../../../packages/agent/src/engines/claude-code/sandbox-setup";
-import {
-  createExternalWorkerLocator,
-  createSandboxClaudeWorker,
-} from "../../../../packages/agent/src/engines/claude-code/sandbox-worker";
+import { createSandboxClaudeWorker } from "../../../../packages/agent/src/engines/claude-code/sandbox-worker";
 import { ClaudeCodeEngine } from "../../../../packages/agent/src/engines/claude-code/engine";
 import {
   FORBIDDEN_BACKEND_FLAGS,
@@ -262,26 +259,7 @@ describe("the engine's worker choice", () => {
     expect(await engine.account()).toEqual({ state: "installing" });
   });
 
-  it("prefers a hand-run worker named in the env", async () => {
-    const env = {
-      CLAUDE_CODE_ENGINE_ENABLED: "1",
-      CLAUDE_WORKER_URL: "wss://mac.tailnet.ts.net",
-      CLAUDE_WORKER_TOKEN: "x",
-    };
-    const engine = new ClaudeCodeEngine({
-      env: () => env,
-      execute: async () => ({ content: "" }),
-      worker: sandbox,
-    });
-    expect(engine.status()).toMatchObject({ mode: "external", workerHost: "mac.tailnet.ts.net" });
-    expect(await engine.account()).toEqual({ state: "external" });
-    expect(await createExternalWorkerLocator(() => env).resolve()).toEqual({
-      url: "wss://mac.tailnet.ts.net",
-      token: "x",
-    });
-  });
-
-  it("is unconfigured with neither", () => {
+  it("is unconfigured without a sandbox", () => {
     const engine = new ClaudeCodeEngine({
       env: () => ({}),
       execute: async () => ({ content: "" }),

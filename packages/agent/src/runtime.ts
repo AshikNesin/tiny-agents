@@ -165,8 +165,7 @@ export interface AgentRuntimeOptions {
   /** Env snapshot override (tests/faux boot). Defaults to process.env. */
   env?: Readonly<Record<string, string | undefined>>;
   /**
-   * Where Claude plan turns run: the sandbox worker the app sets up over
-   * SSH. `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN` override it.
+   * Where Claude plan turns run: the sandbox worker the app sets up over SSH.
    */
   claudeWorker?: ClaudeWorkerLocator;
 }

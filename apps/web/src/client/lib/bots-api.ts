@@ -41,15 +41,14 @@ export interface ClaudeCodeStatus {
   enabled: boolean;
   fallback: "gateway" | "pause";
   configured: boolean;
-  /** `sandbox`: the app runs the worker on the sandbox. `external`: CLAUDE_WORKER_URL. */
-  mode: "sandbox" | "external" | "none";
+  /** `sandbox`: the app runs the worker on the sandbox. `none`: no sandbox configured. */
+  mode: "sandbox" | "none";
   workerHost?: string;
 }
 
 /** Whether Claude Code is installed and signed in where the worker runs. Never a credential. */
 export type ClaudeCodeAccount =
   | { state: "unconfigured" }
-  | { state: "external" }
   | { state: "installing" }
   | { state: "error"; detail: string }
   | { state: "ready"; loggedIn: boolean; subscription: boolean; plan?: string; detail?: string };

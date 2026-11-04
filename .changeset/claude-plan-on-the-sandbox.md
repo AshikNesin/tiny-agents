@@ -13,6 +13,8 @@ reached through an SSH tunnel — no `tailscale serve`, token or unit file.
 Settings → Claude plan shows the setup and login state and opens a terminal tab
 running `claude auth login` to sign in (`POST /terminal/sessions` takes
 `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
-preinstalls Claude Code. `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN` still select a
-hand-run worker and win. The worker now starts without a login (each session
-checks it), and the launcher unsets API-key and backend overrides. See ADR 0010.
+preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+`CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
+systemd/launchd files are removed; the sandbox is the only path. The worker now
+starts without a login (each session checks it), and the launcher unsets
+API-key and backend overrides. See ADR 0010.

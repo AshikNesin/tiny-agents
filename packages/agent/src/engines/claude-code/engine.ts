@@ -30,8 +30,6 @@ import {
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
 import {
-  createExternalWorkerLocator,
-  externalWorkerTarget,
   noWorkerLocator,
   type ClaudeAccountStatus,
   type ClaudeWorkerLocator,
@@ -61,10 +59,7 @@ export interface ClaudeCodeEngineOptions {
   execute: (ref: ConversationRef, call: ToolUseCall) => Promise<ToolResultPayload>;
   /** When set, tests skip the real socket. */
   connect?: (url: string, token: string) => WebSocketLike;
-  /**
-   * The worker on the sandbox (set up over SSH on first use). A worker named
-   * by `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN` takes precedence.
-   */
+  /** The worker on the sandbox, set up over SSH on first use. */
   worker?: ClaudeWorkerLocator;
 }
 
@@ -278,9 +273,8 @@ export class ClaudeCodeEngine {
     if (claudeCodeEngineEnabled(this.env())) this.locator().prepare();
   }
 
-  /** A hand-run worker from the env wins; else the sandbox; else nothing. */
+  /** The sandbox worker, or none when no sandbox is configured. */
   private locator(): ClaudeWorkerLocator {
-    if (externalWorkerTarget(this.env())) return createExternalWorkerLocator(this.env);
     return this.options.worker ?? noWorkerLocator;
   }
 

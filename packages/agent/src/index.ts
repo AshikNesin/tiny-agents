@@ -247,7 +247,6 @@ export {
 } from "./ssh/connection";
 export {
   createSandboxClaudeWorker,
-  createExternalWorkerLocator,
   noWorkerLocator,
   type ClaudeAccountStatus,
   type ClaudeWorkerLocator,

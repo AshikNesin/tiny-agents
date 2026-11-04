@@ -88,9 +88,6 @@ the engine is off. See [Use your Claude subscription](../claude-subscription.md)
 | -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `CLAUDE_CODE_ENGINE_ENABLED`     | off        | `1` / `true` / `yes` / `on` allows turns. Anything else pauses or falls back. Changing it does not redeploy the worker. |
 | `CLAUDE_CODE_ENGINE_FALLBACK`    | `pause`    | `pause` shows an error. `gateway` sends the turn through Cloudflare AI Gateway and latches that conversation onto pi.   |
-| `CLAUDE_WORKER_URL`              | unset      | Only for a hand-run worker: its `wss://` URL. Unset, the app runs the worker on the sandbox itself.                     |
-| `CLAUDE_WORKER_TOKEN`            | unset      | Only with `CLAUDE_WORKER_URL`: the 32-byte bearer that worker checks. Not a Claude credential.                          |
-| `CLAUDE_SANDBOX_WORKER_PORT`     | `8765`     | Loopback port of the worker the app starts on the sandbox.                                                              |
 | `CLAUDE_WORKER_PING_MS`          | `20000`    | Heartbeat interval.                                                                                                     |
 | `CLAUDE_WORKER_SILENCE_MS`       | `60000`    | Close the socket after this much silence.                                                                               |
 | `CLAUDE_WORKER_RECONNECT_MIN_MS` | `1000`     | First reconnect delay. Doubles until the max.                                                                           |
