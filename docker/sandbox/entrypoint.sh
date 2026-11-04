@@ -25,4 +25,20 @@ mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 # A home volume created before the image changed keeps its own ownership.
 chown exedev:exedev /home/exedev
 
+# SSH files from the host (compose.override.yml mounts them under
+# /etc/tiny-agents/ssh): copied into ~/.ssh owned by exedev with mode 600, as
+# ssh requires, whatever their owner and mode on the host. Copied again on
+# every start, so a changed host file arrives with a restart.
+SSH_DIR=/home/exedev/.ssh
+mkdir -p "$SSH_DIR"
+chown exedev:exedev "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+if [ -d /etc/tiny-agents/ssh ]; then
+  for f in /etc/tiny-agents/ssh/* /etc/tiny-agents/ssh/.[!.]*; do
+    if [ -f "$f" ]; then
+      install -m 600 -o exedev -g exedev "$f" "$SSH_DIR/$(basename "$f")"
+    fi
+  done
+fi
+
 exec /usr/sbin/sshd -D -e

@@ -75,6 +75,53 @@ The container restarts with Docker (`restart: unless-stopped`).
 - **The key inline** instead of a file (for an env that can't hold files):
   `SANDBOX_SSH_KEY` takes the private key, with `\n` for newlines.
 
+## Mounting host files
+
+To give bots an SSH key or a working folder from this machine, copy the
+example override and edit it:
+
+```bash
+cp docker/sandbox/compose.override.example.yml docker/sandbox/compose.override.yml
+pnpm sandbox:up
+```
+
+`compose.override.yml` is gitignored, and every `pnpm sandbox:*` command
+merges it into `compose.yml` when it exists. The example mounts:
+
+```yaml
+services:
+  sandbox:
+    volumes:
+      - ${HOME}/.ssh/github:/etc/tiny-agents/ssh/github:ro
+      - ${HOME}/work:/home/exedev/work
+```
+
+- **SSH files** go under `/etc/tiny-agents/ssh/`, not straight into `~/.ssh`.
+  On every start the entrypoint copies each file there into
+  `/home/exedev/.ssh/`, owned by `exedev` with mode 600. ssh rejects a key
+  that other users can read or that it can't read itself, and a bind mount
+  keeps the host file's owner and mode, so mounting the key straight into
+  `~/.ssh` often fails. Mount a `config` the same way to choose the key per
+  host, for example:
+
+  ```
+  Host github.com
+    IdentityFile ~/.ssh/github
+    IdentitiesOnly yes
+  ```
+
+  Because these are copies, a key changed on the host shows up after
+  `pnpm sandbox:up` (or a container restart).
+
+- **Folders** such as `~/work` are mounted read-write at their own path, so
+  changes go both ways right away. On Linux, files keep the host's numeric
+  owner: `exedev` is uid 1000, so a host user with another uid gets read-only
+  access unless bots use `sudo`. Docker Desktop, OrbStack and Colima map
+  ownership for you.
+
+Docker reads the mounts when it creates the container, so run
+`pnpm sandbox:up` again after editing the file.
+
 ## How it is put together
 
 - `docker/sandbox/Dockerfile` installs what the app would install on the VM

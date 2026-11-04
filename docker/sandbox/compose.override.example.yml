@@ -1,0 +1,23 @@
+# Mount files and folders from this computer into the local sandbox.
+#
+#   cp docker/sandbox/compose.override.example.yml docker/sandbox/compose.override.yml
+#
+# then edit it and run `pnpm sandbox:up`. The copy is gitignored, and
+# `pnpm sandbox:*` merges it into compose.yml. See "Mounting host files" in
+# docs/guides/local-sandbox.md.
+services:
+  sandbox:
+    volumes:
+      # SSH keys and config: anything under /etc/tiny-agents/ssh/ is copied
+      # into /home/exedev/.ssh/ at start, owned by exedev with mode 600, so
+      # ssh accepts it whatever its owner and mode here. Copied again on every
+      # restart. The target's file name is its name in ~/.ssh in the
+      # container.
+      - ${HOME}/.ssh/github:/etc/tiny-agents/ssh/github:ro
+      # - ${HOME}/.ssh/github.pub:/etc/tiny-agents/ssh/github.pub:ro
+      # A config for the key (e.g. `Host github.com` + `IdentityFile ~/.ssh/github`):
+      # - ./ssh_config:/etc/tiny-agents/ssh/config:ro
+
+      # A working folder, read-write: bots and the desktop see it at ~/work,
+      # and changes land straight on this computer.
+      - ${HOME}/work:/home/exedev/work
