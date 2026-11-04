@@ -42,8 +42,9 @@ export interface TerminalCloseBlocked {
 
 export const terminalApi = {
   list: () => apiClient.get<TerminalList>("/terminal/sessions"),
-  create: (size?: { cols?: number; rows?: number }) =>
-    apiClient.post<TerminalSession>("/terminal/sessions", size ?? {}),
+  /** `run` types a fixed command into the new tab (`claude-login` signs Claude Code in). */
+  create: (size?: { cols?: number; rows?: number }, run?: "claude-login") =>
+    apiClient.post<TerminalSession>("/terminal/sessions", { ...size, ...(run ? { run } : {}) }),
   remove: (name: string, force = false) =>
     apiClient.delete<{ deleted: boolean }>(`/terminal/sessions/${name}${force ? "?force=1" : ""}`),
   /** One-time WS ticket; `path` is same-origin, already carries the ticket. */

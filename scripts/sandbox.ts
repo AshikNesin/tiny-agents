@@ -120,7 +120,9 @@ async function up(): Promise<number> {
         ? " .env already points the app at it; restart `pnpm dev` if it was running."
         : "\nPoint the app at it in .env, then restart `pnpm dev`:\n\n" +
           `  SANDBOX_HOST=127.0.0.1\n  SANDBOX_PORT=${port}\n  SANDBOX_USER=exedev\n` +
-          `  SANDBOX_SSH_KEY_FILE=${path.relative(root, keyFile)}\n`),
+          `  SANDBOX_SSH_KEY_FILE=${path.relative(root, keyFile)}\n`) +
+      "\nClaude Code is preinstalled. To let bots answer on your Claude plan, set\n" +
+      "CLAUDE_CODE_ENGINE_ENABLED=1 and sign in from Settings → Claude plan.",
   );
   return 0;
 }

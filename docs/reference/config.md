@@ -88,8 +88,6 @@ the engine is off. See [Use your Claude subscription](../claude-subscription.md)
 | -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `CLAUDE_CODE_ENGINE_ENABLED`     | off        | `1` / `true` / `yes` / `on` allows turns. Anything else pauses or falls back. Changing it does not redeploy the worker. |
 | `CLAUDE_CODE_ENGINE_FALLBACK`    | `pause`    | `pause` shows an error. `gateway` sends the turn through Cloudflare AI Gateway and latches that conversation onto pi.   |
-| `CLAUDE_WORKER_URL`              | unset      | `wss://` URL from `tailscale serve` on the worker VM.                                                                   |
-| `CLAUDE_WORKER_TOKEN`            | unset      | Same 32-byte bearer the worker checks. Not a Claude credential.                                                         |
 | `CLAUDE_WORKER_PING_MS`          | `20000`    | Heartbeat interval.                                                                                                     |
 | `CLAUDE_WORKER_SILENCE_MS`       | `60000`    | Close the socket after this much silence.                                                                               |
 | `CLAUDE_WORKER_RECONNECT_MIN_MS` | `1000`     | First reconnect delay. Doubles until the max.                                                                           |

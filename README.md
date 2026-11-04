@@ -57,26 +57,25 @@ Search and Fetch are free; without the key those tools stay hidden.
 
 ## Use your Claude subscription (experimental)
 
-A bot can answer on a Claude Pro or Max plan. Claude Code on a VM you
-control holds the login. tiny-agents does not. It will not read, store,
-or refresh that credential, and it will not proxy Anthropic.
+A bot can answer on a Claude Pro or Max plan. tiny-agents installs and
+runs Claude Code on your sandbox; you set `CLAUDE_CODE_ENGINE_ENABLED=1`
+and sign in once from Settings → Claude plan. Claude Code holds the
+login on the sandbox. tiny-agents does not: it will not read, store, or
+refresh that credential, and it will not proxy Anthropic.
 
 This is easy to get wrong in a way that risks the Claude account.
 Anthropic has restricted third-party use of subscription access. Read
 [docs/claude-subscription.md](docs/claude-subscription.md) before enabling
 it. Short version:
 
-- Leave `CLAUDE_CODE_ENGINE_ENABLED` unset until the worker guide is done.
+- Leave `CLAUDE_CODE_ENGINE_ENABLED` unset until you have read that page.
 - Do not paste an `sk-ant-oat` token anywhere in this app. Boot refuses it.
-- The worker listens on `127.0.0.1` and is published only with
-  `tailscale serve` (not Funnel).
+- The worker listens on the sandbox's `127.0.0.1` and the app reaches it
+  through its SSH tunnel; nothing is published.
 - Pick a model labelled "uses your Claude plan", or keep using the gateway.
 - To spend Max-plan API credits without this engine, put a normal console
   API key in Cloudflare AI Gateway BYOK only. See
   [docs/features/ai-inference.md](docs/features/ai-inference.md).
-
-Worker setup: [macOS / Cua / Lume](docs/guides/claude-worker-macos.md),
-[Linux](docs/guides/claude-worker-linux.md).
 
 ## Layout
 

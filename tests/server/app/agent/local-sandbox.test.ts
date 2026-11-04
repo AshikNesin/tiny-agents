@@ -17,6 +17,12 @@ import {
   COMPUTER_STACK_VERSION,
 } from "../../../../packages/agent/src/toolkits/computer-vm-setup";
 
+import {
+  CLAUDE_WORKER_NODE_VERSION,
+  CLAUDE_WORKER_PACKAGES,
+  CLAUDE_WORKER_STACK_VERSION,
+} from "../../../../packages/agent/src/engines/claude-code/sandbox-setup";
+
 const dir = join(import.meta.dirname, "../../../../docker/sandbox");
 const dockerfile = readFileSync(join(dir, "Dockerfile"), "utf8");
 const words = new Set(dockerfile.split(/[\s\\]+/));
@@ -40,6 +46,22 @@ describe("the local sandbox image", () => {
   it("leaves the install markers the app checks", () => {
     expect(dockerfile).toContain(`ARG BROWSER_STACK_VERSION=${STACK_VERSION}`);
     expect(dockerfile).toContain(`ARG COMPUTER_STACK_VERSION=${COMPUTER_STACK_VERSION}`);
+  });
+
+  it("preinstalls Claude Code at the pins the app checks for", () => {
+    const pins = CLAUDE_WORKER_PACKAGES;
+    expect(dockerfile).toContain(`ARG CLAUDE_WORKER_STACK_VERSION=${CLAUDE_WORKER_STACK_VERSION}`);
+    expect(dockerfile).toContain(`ARG CLAUDE_WORKER_NODE_VERSION=${CLAUDE_WORKER_NODE_VERSION}`);
+    expect(dockerfile).toContain(
+      `ARG CLAUDE_AGENT_SDK_VERSION=${pins["@anthropic-ai/claude-agent-sdk"]}`,
+    );
+    expect(dockerfile).toContain(`ARG CLAUDE_CODE_VERSION=${pins["@anthropic-ai/claude-code"]}`);
+    expect(dockerfile).toContain(`ARG CLAUDE_WORKER_WS_VERSION=${pins.ws}`);
+    expect(dockerfile).toContain(`ARG CLAUDE_WORKER_ZOD_VERSION=${pins.zod}`);
+    expect(Object.keys(pins).sort()).toEqual(
+      ["@anthropic-ai/claude-agent-sdk", "@anthropic-ai/claude-code", "ws", "zod"].sort(),
+    );
+    expect(dockerfile).toContain("/opt/tiny-agents/claude-worker");
   });
 
   it("serves the user the app dials, by key only, on loopback only", () => {

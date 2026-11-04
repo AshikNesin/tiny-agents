@@ -81,6 +81,15 @@ export function newSessionCommand(name: SessionName, cols: number, rows: number)
   );
 }
 
+/**
+ * Type one line into a session's shell and press Enter, as if the owner had:
+ * the shell stays when the command ends. `-l` sends the text literally.
+ */
+export function typeLineCommand(name: SessionName, line: string): string {
+  const literal = `'${line.replaceAll("'", `'\\''`)}'`;
+  return tmux(`send-keys -t ${name} -l ${literal}`) + ` \\; send-keys -t ${name} Enter`;
+}
+
 /** Attach, detaching any previous viewer first (one viewer per tab). */
 export function attachCommand(name: SessionName): string {
   return tmux(`attach-session -d -t ${name}`);

@@ -246,6 +246,21 @@ export {
   type SshEndpoint,
 } from "./ssh/connection";
 export {
+  createSandboxClaudeWorker,
+  noWorkerLocator,
+  type ClaudeAccountStatus,
+  type ClaudeWorkerLocator,
+  type ClaudeWorkerMode,
+  type ClaudeWorkerTarget,
+  type SandboxWorkerOptions,
+} from "./engines/claude-code/sandbox-worker";
+export {
+  CLAUDE_WORKER_NODE_VERSION,
+  CLAUDE_WORKER_PACKAGES,
+  CLAUDE_WORKER_STACK_VERSION,
+  claudeLoginShellLine,
+} from "./engines/claude-code/sandbox-setup";
+export {
   createRemoteCdpTransport,
   type RemoteCdpTransportOptions,
 } from "./toolkits/browser-remote-cdp";

@@ -11,6 +11,7 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import {
+  claudeLoginShellLine,
   parseSessionName,
   type SessionName,
   type TerminalSessionRow,
@@ -32,7 +33,14 @@ const router = new Hono<AppEnv>();
 const createSchema = z.object({
   cols: z.number().int().min(2).max(500).optional(),
   rows: z.number().int().min(2).max(300).optional(),
+  /** A fixed command the tab starts typing; never free text from the client. */
+  run: z.enum(["claude-login"]).optional(),
 });
+
+/** What each `run` preset types into the new tab. */
+const RUN_LINES: Record<"claude-login", string> = {
+  "claude-login": claudeLoginShellLine(),
+};
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 34;
@@ -71,6 +79,7 @@ router.post("/terminal/sessions", async (c) => {
     const created = await getTerminalService().create(
       body.cols ?? DEFAULT_COLS,
       body.rows ?? DEFAULT_ROWS,
+      body.run ? { typeLine: RUN_LINES[body.run] } : undefined,
     );
     return ok(c, sessionDto(created), 201);
   } catch (error) {
