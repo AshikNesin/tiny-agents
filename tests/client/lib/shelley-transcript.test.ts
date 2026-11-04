@@ -7,11 +7,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildTranscript,
+  describeTools,
+  groupTools,
   lastError,
   splitAttachments,
   summarizeInput,
   totalCost,
   type ToolItem,
+  type TranscriptItem,
 } from "@/lib/shelley/transcript";
 import type { ShelleyMessage } from "@/lib/shelley/api";
 import smorgasbord from "../../fixtures/shelley/smorgasbord.json";
@@ -133,5 +136,73 @@ describe("transcript helpers", () => {
       text: "see this\n\n [/etc/passwd]",
       attachments: ["/tmp/shelley-uploads/x.png"],
     });
+  });
+});
+
+describe("groupTools", () => {
+  const tool = (key: string, extra: Partial<ToolItem> = {}): ToolItem => ({
+    kind: "tool",
+    key,
+    toolKind: "bash",
+    name: "bash",
+    input: {},
+    summary: "",
+    status: "done",
+    images: [],
+    ...extra,
+  });
+  const text = (key: string): TranscriptItem => ({
+    kind: "assistant",
+    key,
+    messageId: key,
+    text: key,
+  });
+  const thinking = (key: string): TranscriptItem => ({ kind: "thinking", key, text: key });
+
+  it("folds runs of finished tools (with the thinking between them) into one group", () => {
+    const out = groupTools([
+      text("a"),
+      tool("t1"),
+      thinking("th1"),
+      tool("t2", { toolKind: "patch", name: "patch" }),
+      thinking("th2"),
+      text("b"),
+      tool("t3"),
+      text("c"),
+    ]);
+    expect(out.map((i) => i.key)).toEqual(["a", "group:t1", "th2", "b", "t3", "c"]);
+    const group = out[1];
+    expect(group.kind === "tool-group" && group.items.map((i) => i.key)).toEqual([
+      "t1",
+      "th1",
+      "t2",
+    ]);
+  });
+
+  it("keeps running tools, subagents and screenshots in view", () => {
+    const out = groupTools([
+      tool("t1"),
+      tool("run", { status: "running" }),
+      tool("t2"),
+      tool("sub", { toolKind: "subagent", name: "subagent" }),
+      tool("shot", { toolKind: "browser", name: "browser", images: ["x"] }),
+    ]);
+    expect(out.map((i) => i.key)).toEqual(["t1", "run", "t2", "sub", "shot"]);
+  });
+
+  it("summarizes a group the way a developer reads it", () => {
+    expect(
+      describeTools([
+        tool("a"),
+        tool("b"),
+        tool("c", { toolKind: "patch" }),
+        tool("d", { toolKind: "other" }),
+      ]),
+    ).toBe("Ran 2 commands, edited 1 file, used 1 tool");
+  });
+
+  it("groups the captured smorgasbord turn", () => {
+    const out = groupTools(buildTranscript(smorgasbord.messages as ShelleyMessage[]));
+    expect(out.some((i) => i.kind === "tool-group")).toBe(true);
   });
 });

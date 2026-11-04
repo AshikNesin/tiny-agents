@@ -136,6 +136,7 @@ const router = createBrowserRouter(
         {page("/terminal", <TerminalPage />)}
         {page("/computer", <ComputerPage />)}
         {page("/code", <CodePage />)}
+        {page("/code/new", <CodePage />)}
         {page("/code/s/:slug", <CodePage />)}
         {page("/code/:conversationId", <CodePage />)}
         {page("/code/:conversationId/changes", <CodePage />)}

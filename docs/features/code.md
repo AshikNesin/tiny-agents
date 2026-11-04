@@ -27,39 +27,55 @@ Without `SHELLEY_URL` nothing changes: no nav entry, no stream, no bot tools.
 
 ## What a developer can do
 
-**Find.** Every conversation: _Working now_ on top, then _Recent_, with
-**subagents nested under their parent** (live), an _Archived_ toggle, a
-repository filter, full-text search, unread dots for turns that ended since you
-last looked, and ⌘K to jump to any conversation. `/code/s/<slug>` opens a
-conversation by slug.
+The layout follows Cursor's cloud agents and Claude Code on the web: one
+line per conversation in the list, a one-line header, and every setting a
+turn needs (model, reasoning, context) as a chip inside the composer. Pickers
+are searchable (`components/ui/search-select.tsx`: type to filter, ↑ ↓ ↵).
 
-**Start.** A task, a working directory (recent ones, a folder browser, checked
-by Shelley), optionally a **new git worktree** for parallel work on one repo,
-and the model and reasoning level.
+**Find.** Every conversation, one line each: _Working now_ on top, then
+_Recent_, with **subagents nested under their parent** (live), an _Archived_
+toggle, a searchable repository filter, full-text search, unread dots for
+turns that ended since you last looked, and ⌘K to jump to any conversation.
+`/code/s/<slug>` opens a conversation by slug.
 
-**Write.** Enter sends. While Shelley works, Enter **steers** (the message goes
-into the running turn) and **Queue** (or Alt+Enter) holds it for when the turn
-ends; queued messages can be sent now or cancelled. `@` completes files and
-folders in the working directory; `/` hints Shelley's commands (`/model`,
-`/compact`, `/btw`, `/fork`, `/cwd`, `/new`, `/help`); paste or drop files to
-attach them; pick skills for a message. Drafts are kept per conversation.
+**Start.** `/code` (`/code/new` on phones): above the composer, the working
+directory (searchable: recent ones, a typed path, a folder browser, checked by
+Shelley) and an optional **new worktree** for parallel work on one repo; in
+it, the model and reasoning chips. The latest tasks are listed below.
 
-**Watch.** Streaming text, thinking, and one row per tool: `bash` with its
-command, **live output** while it runs and exit code; `patch` with its diff and
-+/−; `subagent` with a live status and **Open**; screenshots inline; subagent
-reports, background-job exits, errors (with **Retry** / **Try another model**),
-and turn dividers with duration and cost. The header shows the subagent path,
-cwd and commit, a **model and reasoning switch**, a **context meter** (click to
-compact) and the conversation's cost, subagents included. A running strip shows
-the turn, background jobs (kill) and running subagents (stop).
+**Write.** Enter sends (on touch screens the button sends; Enter is a newline).
+While Shelley works, Enter **steers** (the message goes into the running turn),
+the queue button (or Alt+Enter) holds it for when the turn ends, and with an
+empty draft the send button is **Stop**; queued messages can be sent now or
+cancelled. `@` completes files and folders in the working directory; `/` hints
+Shelley's commands (`/model`, `/compact`, `/btw`, `/fork`, `/cwd`, `/new`,
+`/help`); **+** attaches files (or paste / drop them) and picks skills for a
+message. Drafts are kept per conversation.
+
+**Watch.** Streaming text, thinking, and tool calls: a run of finished calls
+folds into one line ("Ran 3 commands, edited 2 files · 1 failed") that opens to
+each call; `bash` with its command, **live output** while it runs and exit
+code; `patch` with its diff and +/−; `subagent` with a live status and
+**Open**; screenshots inline; subagent reports, background-job exits, errors
+(with **Retry** / **Try another model**), and "Worked for 12s · $0.04" when a
+turn ends. The header shows the subagent path, the title (its menu holds the
+conversation's actions), cwd and commit, and the conversation's cost,
+subagents included. The composer's chips switch the **model** and
+**reasoning** (next turn) and show a **context ring** (click to compact).
+Running background jobs (kill) and subagents (stop) sit above the composer.
 
 **Control.** Stop (⌘.), Resume after a restart, rename, change directory, fork
-from any message, archive, delete, Open in Shelley.
+from any message, delete, Open in Shelley. **Archive** (hover a row, or the
+header) moves the conversation **with its subagents** — Shelley archives one
+conversation at a time, so the proxy cascades to every descendant — and the
+toast offers Undo; Restore in the archived view brings them back together.
 
-**Review.** **Changes** (⌘⇧D) shows the working tree and recent commits of the
-conversation's directory, their files with +/−, and each file's diff. Click a
-line number (shift-click to extend) and **Comment** to put `` `path:lines` `` in
-the composer — review feedback goes straight back to Shelley.
+**Review.** **Changes** (⌘⇧D) shows uncommitted changes or a recent commit of
+the conversation's directory (searchable), every changed file as a card with
+its +/− and diff in one scroll (generated files folded). Click a line number
+(shift-click to extend) and **Comment** to put `` `path:lines` `` in the
+composer — review feedback goes straight back to Shelley. Below 2xl the list
+steps aside while Changes is open.
 
 **Away.** A followed conversation (started, opened or handed off here) pushes a
 notification (Settings → Notifications → _Shelley updates_) when it finishes,

@@ -11,6 +11,7 @@ import {
   setShelleyHub,
 } from "../../../../apps/web/src/server/api/shelley/shelley.hub";
 import { markSeen } from "../../../../apps/web/src/server/api/shelley/shelley.service";
+import { descendantIds } from "../../../../apps/web/src/server/api/shelley/shelley.routes";
 import { startFakeShelley, type FakeShelley } from "./fake-shelley";
 
 const token = await authToken("shelley-routes@example.com");
@@ -156,6 +157,39 @@ describe("Shelley proxy", () => {
     expect((await post("/conversations/cA/settings", { system_prompt: "pwned" })).status).toBe(400);
     expect((await post("/conversations/cA/queued/send")).status).toBe(400);
     expect(shelley.seen.length).toBe(before);
+  });
+
+  it("archives a conversation with its subagents, and unarchives them together", async () => {
+    const row = (id: string, parent: string | null) => ({
+      conversation_id: id,
+      slug: id,
+      parent_conversation_id: parent,
+      working: false,
+      updated_at: "x",
+      created_at: "x",
+    });
+    shelley.rows.push(row("cA", null), row("cB", "cA"), row("cD", "cB"), row("cC", null));
+    const archived = await post<{ subagents: string[] }>("/conversations/cA/archive");
+    expect(archived.status).toBe(200);
+    expect(archived.body.data?.subagents).toEqual(["cB", "cD"]);
+    const calls = shelley.seen.map((s) => s.url).filter((u) => u.endsWith("/archive"));
+    expect(calls).toEqual([
+      "/api/conversation/cA/archive",
+      "/api/conversation/cB/archive",
+      "/api/conversation/cD/archive",
+    ]);
+    // The archived list has no subagents of cOld: only cOld moves.
+    const restored = await post<{ subagents: string[] }>("/conversations/cOld/unarchive");
+    expect(restored.body.data?.subagents).toEqual([]);
+  });
+
+  it("finds descendants without looping on a cycle", () => {
+    const rows = [
+      { conversation_id: "a", parent_conversation_id: "c" },
+      { conversation_id: "b", parent_conversation_id: "a" },
+      { conversation_id: "c", parent_conversation_id: "b" },
+    ] as unknown as Parameters<typeof descendantIds>[0];
+    expect(descendantIds(rows, "a")).toEqual(["b", "c"]);
   });
 
   it("forwards diffs per path segment, uploads raw bodies, and serves files sandboxed", async () => {
