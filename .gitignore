@@ -54,3 +54,6 @@ settings.local.json
 
 # Claude Code fork worktrees
 .claude/worktrees/
+
+# Local agent taste preferences
+.taste/
