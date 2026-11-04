@@ -374,6 +374,24 @@ router.post("/shelley/conversations/:id/background-jobs/:job/kill", async (c) =>
 
 router.get("/shelley/models", async (c) => ok(c, await shelleyJson("/models")));
 
+/** Pricing lookup for the usage popup: models.dev rates (USD per Mtok) for
+ *  the (model, url) pairs the conversation's usage records mention. */
+const modelCostsSchema = z.object({
+  models: z
+    .array(z.object({ model: z.string().min(1).max(400), url: z.string().max(2048).optional() }))
+    .max(50),
+});
+router.post("/shelley/model-costs", async (c) => {
+  const body = await parseBody(c, modelCostsSchema);
+  return ok(
+    c,
+    await shelleyJson("/model-costs", {
+      method: "POST",
+      json: { models: body.models.map((m) => ({ model: m.model, url: m.url ?? "" })) },
+    }),
+  );
+});
+
 router.get("/shelley/skills", async (c) =>
   ok(
     c,

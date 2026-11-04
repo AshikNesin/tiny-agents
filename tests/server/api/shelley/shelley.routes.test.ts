@@ -149,6 +149,39 @@ describe("Shelley proxy", () => {
     expect((await post("/conversations/cGone/chat", { message: "hi" })).status).toBe(404);
   });
 
+  it("looks up model pricing in a batch for the usage popup", async () => {
+    const r = await post("/model-costs", {
+      models: [
+        { model: "glm-5.3", url: "https://zai" },
+        { model: "mystery", url: "" },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toEqual({
+      costs: {
+        "glm-5.3": { input: 0.079, output: 1.4, cache_read: 0.055, cache_write: 0 },
+        mystery: null,
+      },
+    });
+    expect(JSON.parse(shelley.seen.at(-1)!.body.toString())).toEqual({
+      models: [
+        { model: "glm-5.3", url: "https://zai" },
+        { model: "mystery", url: "" },
+      ],
+    });
+  });
+
+  it("rejects an oversized or empty-named model-costs batch", async () => {
+    expect(
+      (
+        await post("/model-costs", {
+          models: Array.from({ length: 51 }, (_, i) => ({ model: `m${i}` })),
+        })
+      ).status,
+    ).toBe(400);
+    expect((await post("/model-costs", { models: [{ model: "" }] })).status).toBe(400);
+  });
+
   it("rejects odd ids, traversal and unknown settings before calling Shelley", async () => {
     const before = shelley.seen.length;
     expect((await post("/conversations/..%2Fx/cancel")).status).toBe(400);

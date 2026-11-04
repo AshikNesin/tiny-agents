@@ -67,10 +67,14 @@ export interface ShelleyMessage {
   llm_data?: string | null;
   user_data?: string | null;
   usage_data?: string | null;
+  /** Indirect LLM usage (compaction, slug generation, …): a JSON array of
+   *  usage_data-shaped records with the purpose that incurred them. */
+  other_usage_data?: string | null;
   display_data?: string | null;
   created_at: string;
   end_of_turn?: boolean | null;
   model_name?: string | null;
+  generation?: number;
 }
 
 export interface ConversationDetail {
@@ -181,6 +185,32 @@ export interface SubagentUsage {
   llm_calls: number;
   reported_usd: number;
   estimated_usd: number;
+  unpriced_reported_usd?: number;
+  unpriced_models?: string[];
+  unpriced_calls?: number;
+  per_model?: SubagentModelUsage[];
+}
+
+/** One (model, endpoint) aggregate of subagent usage (Shelley's
+ *  subagent-usage response). */
+export interface SubagentModelUsage {
+  model: string;
+  url?: string;
+  llm_calls: number;
+  input_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  output_tokens: number;
+  estimated_usd: number;
+  reported_usd: number;
+}
+
+/** models.dev pricing for one model, USD per million tokens. */
+export interface ModelCost {
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_write: number;
 }
 
 const base = "/shelley";
@@ -240,6 +270,12 @@ export const shelleyApi = {
     apiClient.post(`${conv(id)}/background-jobs/${encodeURIComponent(jobId)}/kill`),
 
   models: () => apiClient.get<ShelleyModel[]>(`${base}/models`),
+  /** models.dev pricing (USD per Mtok) for the (model, url) pairs a
+   *  conversation's usage records mention; unknown models map to null. */
+  modelCosts: (models: Array<{ model: string; url?: string }>) =>
+    apiClient.post<{ costs: Record<string, ModelCost | null> }>(`${base}/model-costs`, {
+      models,
+    }),
   skills: (cwd: string, conversationId?: string) =>
     apiClient.get<{ skills: Skill[] }>(`${base}/skills`, { cwd, conversationId }),
   findFiles: (dir: string, q: string, content?: "only") =>

@@ -613,6 +613,9 @@ export function ConversationView({
                 <ContextRing
                   used={state.contextWindow}
                   max={model?.max_context_tokens}
+                  conversationId={id}
+                  messages={messages}
+                  hasSubagents={subagentCount > 0}
                   onCompact={() =>
                     void run("compact", async () => {
                       await shelleyApi.chat(id, "/compact", { queue: working });

@@ -61,7 +61,13 @@ code; `patch` with its diff and +/−; `subagent` with a live status and
 turn ends. The header shows the subagent path, the title (its menu holds the
 conversation's actions), cwd and commit, and the conversation's cost,
 subagents included. The composer's chips switch the **model** and
-**reasoning** (next turn) and show a **context ring** (click to compact).
+**reasoning** (next turn) and show a **context ring**: clicking it opens the
+usage popup (a port of Shelley's own), with the context total, per-model
+token bands (cache read/write, input, output) at their models.dev rates and
+estimated cost, "other" indirect usage (compaction, slug generation, …), a
+sub-agent column when children exist, and **Compact in place** (which sends
+`/compact`). Pricing comes through the curated proxy
+(`POST /shelley/model-costs`).
 Running background jobs (kill) and subagents (stop) sit above the composer.
 
 **Control.** Stop (⌘.), Resume after a restart, rename, change directory, fork

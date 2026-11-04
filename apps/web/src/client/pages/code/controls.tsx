@@ -19,9 +19,11 @@ import {
   conversationTitle,
   shelleyApi,
   type ShelleyConversation,
+  type ShelleyMessage,
   type ShelleyModel,
   type ThinkingLevel,
 } from "../../lib/shelley/api";
+import { UsagePopover } from "./UsagePopover";
 
 let modelsPromise: Promise<ShelleyModel[]> | undefined;
 /** Shelley's models, read once per page load. */
@@ -166,15 +168,22 @@ export function ReasoningPicker({
   );
 }
 
-/** How full the context window is; click to compact. */
+/** How full the context window is; click for the usage popup (compaction
+ *  lives there, as in Shelley's own UI). */
 export function ContextRing({
   used,
   max,
   onCompact,
+  conversationId,
+  messages,
+  hasSubagents,
 }: {
   used: number;
   max?: number;
   onCompact(): void;
+  conversationId?: string;
+  messages: ShelleyMessage[];
+  hasSubagents?: boolean;
 }) {
   if (!max || !used) return null;
   const ratio = Math.min(1, used / max);
@@ -182,32 +191,45 @@ export function ContextRing({
   const r = 6;
   const circumference = 2 * Math.PI * r;
   return (
-    <button
-      type="button"
-      onClick={onCompact}
-      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%). Click to compact.`}
-      aria-label={`Context ${pct}% full. Compact`}
-      className={cn(searchSelectTriggerClass, "tabular-nums")}
-      data-testid="code-context"
+    <UsagePopover
+      used={used}
+      max={max}
+      conversationId={conversationId}
+      messages={messages}
+      hasSubagents={Boolean(hasSubagents)}
+      onCompact={onCompact}
     >
-      <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
-        <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
-        <circle
-          cx="8"
-          cy="8"
-          r={r}
-          fill="none"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - ratio)}
-          className={cn(
-            pct > 85 ? "stroke-destructive" : pct > 65 ? "stroke-warning" : "stroke-foreground/70",
-          )}
-        />
-      </svg>
-      <span className="hidden @[20rem]:inline">{pct}%</span>
-    </button>
+      <button
+        type="button"
+        title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%). Click for usage.`}
+        aria-label={`Context ${pct}% full. Usage`}
+        aria-haspopup="dialog"
+        className={cn(searchSelectTriggerClass, "tabular-nums")}
+        data-testid="code-context"
+      >
+        <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
+          <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
+          <circle
+            cx="8"
+            cy="8"
+            r={r}
+            fill="none"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - ratio)}
+            className={cn(
+              pct > 85
+                ? "stroke-destructive"
+                : pct > 65
+                  ? "stroke-warning"
+                  : "stroke-foreground/70",
+            )}
+          />
+        </svg>
+        <span className="hidden @[20rem]:inline">{pct}%</span>
+      </button>
+    </UsagePopover>
   );
 }
 

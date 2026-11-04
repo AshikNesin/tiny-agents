@@ -119,6 +119,18 @@ export async function startFakeShelley(): Promise<FakeShelley> {
           { id: "offline", ready: false },
         ]);
       }
+      if (path === "/api/model-costs") {
+        const parsed = JSON.parse(body.toString() || "{}") as {
+          models?: Array<{ model: string }>;
+        };
+        const costs: Record<string, unknown> = {};
+        for (const m of parsed.models ?? [])
+          costs[m.model] =
+            m.model === "glm-5.3"
+              ? { input: 0.079, output: 1.4, cache_read: 0.055, cache_write: 0 }
+              : null;
+        return json(res, 200, { costs });
+      }
       if (path === "/api/upload/raw") return json(res, 200, { path: "/tmp/shelley-uploads/x.png" });
       if (path === "/api/read") {
         res.writeHead(200, { "Content-Type": "image/png" });
