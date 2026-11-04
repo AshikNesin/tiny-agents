@@ -163,6 +163,17 @@ export interface AttachmentRef {
   status?: "none" | "pending" | "ready" | "failed" | "unsupported";
 }
 
+/**
+ * The person who sent a user message in a shared chat: set by the server
+ * from the signed-in account, never by the composer. Chats nobody else is
+ * in carry none.
+ */
+export interface ChatAuthor {
+  /** Account id (`users.id`). */
+  id: number;
+  name: string;
+}
+
 export interface ChatMessage {
   /** Stable id: `e<entryId>` for committed entries, `live` for the in-flight reply. */
   id: string;
@@ -187,6 +198,8 @@ export interface ChatMessage {
     | { kind: "reply"; name: string }
     | { kind: "message"; name: string }
     | { kind: "mention"; hostName: string };
+  /** Who sent this user message, in a shared chat. */
+  author?: ChatAuthor;
   /** Tool calls this assistant turn made, in order. */
   toolCalls?: ChatToolCall[];
   /** Model thinking, when the model emitted any. */
@@ -215,6 +228,8 @@ export interface QueuedMessage {
   text: string;
   /** Attachments the message carries (issue #17). */
   attachments?: AttachmentRef[];
+  /** Who sent it, in a shared chat. */
+  author?: ChatAuthor;
 }
 
 export interface ChatState {

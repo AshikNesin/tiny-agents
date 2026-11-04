@@ -6,6 +6,8 @@ import {
   db,
   botChats,
   botConnections,
+  botGuests,
+  guests,
   botMessages,
   botSkills,
   connections,
@@ -78,5 +80,7 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(vaultAuditEvents);
   await db.delete(vaultItems);
   await db.delete(tasks);
+  await db.delete(botGuests);
+  await db.delete(guests);
   await db.delete(bots);
 }

@@ -191,6 +191,8 @@ export interface UseContext {
   botId?: string;
   botName?: string;
   unattended: boolean;
+  /** A shared bot's chat (issue #145): guests are in it, so every use asks the owner. */
+  shared?: boolean;
 }
 
 export async function findItem(handle: string): Promise<VaultItemRow | null> {
@@ -337,7 +339,10 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   // A command is code the model wrote holding the secret, and a window is
   // one the model named: every use asks.
   const everyUse =
-    approval === "every_use" || use.targetKind === "command" || use.targetKind === "window";
+    approval === "every_use" ||
+    use.targetKind === "command" ||
+    use.targetKind === "window" ||
+    who.shared === true;
   return {
     approve: everyUse || (approval === "per_conversation" && !use.granted),
     grantable: !everyUse,

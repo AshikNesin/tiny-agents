@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
   MCP_DEFER_THRESHOLD,
+  SKIP_REPLY,
   type AgentRuntime,
   type AttachmentRef,
   type BotAgentConfig,
@@ -23,6 +24,7 @@ import {
 } from "@tiny-agents/agent";
 import { db, bots } from "../../db";
 import { resolveAttachments } from "../uploads/uploads.attach";
+import { participantNames } from "../people/people.service";
 
 /** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
 export interface BotRow {
@@ -60,6 +62,8 @@ export type Bot = Omit<BotRow, "toolPermissions"> & {
   connectionIds: string[];
   /** Capability ids of the bot's connections (`mcp:<slug>`). */
   connectionCapabilities: string[];
+  /** Guests the bot is shared with (issue #145): they are in its chat. */
+  guestIds: number[];
 };
 
 type ConnectionLink = {
@@ -70,6 +74,7 @@ type ConnectionLink = {
 type BotWithLinks = BotRow & {
   skills?: { skillId: string }[];
   connections?: ConnectionLink[];
+  guests?: { userId: number }[];
 };
 
 const withLinks = {
@@ -80,6 +85,7 @@ const withLinks = {
       connection: { columns: { slug: true, toolsCache: true, disabledTools: true } },
     },
   },
+  guests: { columns: { userId: true } },
 } as const;
 
 /**
@@ -119,7 +125,7 @@ function parseJson<T>(raw: string, fallback: T): T {
 }
 
 export function toBot(row: BotWithLinks): Bot {
-  const { skills, connections, ...bot } = row;
+  const { skills, connections, guests, ...bot } = row;
   return {
     ...bot,
     toolPermissions: parseJson<Record<string, ToolPermission>>(row.toolPermissions, {}),
@@ -127,6 +133,7 @@ export function toBot(row: BotWithLinks): Bot {
     connectionIds: connections?.map((link) => link.connectionId) ?? [],
     connectionCapabilities:
       connections?.map((link) => connectionCapabilityId(link.connection.slug)) ?? [],
+    guestIds: guests?.map((link) => link.userId) ?? [],
   };
 }
 
@@ -173,6 +180,22 @@ export const ROUTINE_RUN_GUIDANCE =
   "was simply nothing to do this time, just say so; that is not blocked.";
 
 /**
+ * Added to a shared bot's chat (issue #145): several people write in it, each
+ * message prefixed with its sender's name, and the bot stays quiet when they
+ * are only talking to each other.
+ */
+export function sharedChatGuidance(names: string[]): string {
+  const people =
+    names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join("");
+  return (
+    `This chat is shared by ${people}. Each message starts with its sender's name ` +
+    `("Name: message"); keep track of who asked for what, and address people by name ` +
+    `when it helps. Reply when someone talks to you, asks for something, or @mentions you. ` +
+    `If people are only talking to each other, reply with exactly ${SKIP_REPLY} and nothing else.`
+  );
+}
+
+/**
  * What the bot's durable conversation runs with: persona, model and
  * capabilities: every built-in toolkit, its connections, and the automatic
  * ones (vision for text-only models, tool search for large connections).
@@ -182,6 +205,8 @@ function agentConfig(
   bot: BotDraft & { connections?: ConnectionLink[] },
   rt: Pick<AgentRuntime, "listModels">,
   unattended = false,
+  /** Everyone in a shared chat (issue #145); empty when it is not shared. */
+  participants: string[] = [],
 ): BotAgentConfig {
   const connections = bot.connections ?? [];
   const largeServer = connections.some(
@@ -191,7 +216,9 @@ function agentConfig(
     modelId: bot.modelId,
     systemPrompt: unattended
       ? [bot.systemPrompt.trim(), ROUTINE_RUN_GUIDANCE].filter(Boolean).join("\n\n")
-      : bot.systemPrompt,
+      : participants.length > 0
+        ? [bot.systemPrompt.trim(), sharedChatGuidance(participants)].filter(Boolean).join("\n\n")
+        : bot.systemPrompt,
     capabilities: {
       enabled: [
         ...BOT_TOOLKITS,
@@ -216,12 +243,15 @@ function enabledToolCount(connection: ConnectionLink["connection"]): number {
   return tools.filter((tool: { name?: unknown }) => !off.has(tool?.name)).length;
 }
 
-function rowConfig(
+/** Config from a bot row; a shared bot's chat (not its routines) also names its people. */
+async function rowConfig(
   row: BotWithLinks,
   rt: Pick<AgentRuntime, "listModels">,
   unattended = false,
-): BotAgentConfig {
-  return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended);
+): Promise<BotAgentConfig> {
+  const participants =
+    !unattended && (row.guests?.length ?? 0) > 0 ? await participantNames(row.id) : [];
+  return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended, participants);
 }
 
 /**
@@ -237,7 +267,7 @@ export async function startBotConversation(
   const unattended = options.unattended ?? false;
   const config =
     typeof bot === "string"
-      ? rowConfig(await findBotRow(bot), rt, unattended)
+      ? await rowConfig(await findBotRow(bot), rt, unattended)
       : agentConfig(bot, rt, unattended);
   return String(await rt.createConversation(config));
 }
@@ -248,7 +278,7 @@ export async function reconcileBotConversation(
   rt: Pick<BotConversationRuntime, "configure" | "listModels">,
 ): Promise<Bot> {
   const row = await findBotRow(id);
-  await rt.configure(Number(row.conversationId), rowConfig(row, rt));
+  await rt.configure(Number(row.conversationId), await rowConfig(row, rt));
   return toBot(row);
 }
 
@@ -261,6 +291,8 @@ export interface BotSubmission {
   attachments?: string[];
   /** Trusted attribution for a cross-bot delivery (rendered as a card). */
   peer?: ChatMessage["peer"];
+  /** Who sent it, in a shared chat; `text` is already prefixed with their name. */
+  author?: ChatMessage["author"];
   /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
   whenBusy?: "steer" | "followUp";
 }
@@ -288,13 +320,14 @@ export async function submitToBot(
   const row = await findBotRow(id);
   const resolved = await resolveAttachments(submission, modelSeesImages(rt, row.modelId));
   const conversation = Number(target?.routineConversationId ?? row.conversationId);
-  await rt.configure(conversation, rowConfig(row, rt, target !== undefined));
+  await rt.configure(conversation, await rowConfig(row, rt, target !== undefined));
   await rt.submit(conversation, {
     requestId: submission.requestId,
     text: resolved.text,
     ...(resolved.images ? { images: resolved.images } : {}),
     ...(resolved.attachments ? { attachments: resolved.attachments } : {}),
     ...(submission.peer ? { peer: submission.peer } : {}),
+    ...(submission.author ? { author: submission.author } : {}),
     ...(submission.whenBusy ? { whenBusy: submission.whenBusy } : {}),
   });
   return {

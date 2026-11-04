@@ -7,7 +7,23 @@
  * Runs that finish back to back (no message between them, same day) fold
  * into one item, so a routine firing every few minutes stays one quiet line.
  */
-import type { ChatMessage, RoutineRunCard } from "./chat-types";
+import { SKIP_REPLY, isSkipReply, type ChatMessage, type RoutineRunCard } from "./chat-types";
+
+/**
+ * A shared chat's silent reply (issue #145): the bot judged the message was
+ * not for it. Hidden, also while it streams in (`[sk…`).
+ */
+export function isHiddenReply(message: ChatMessage): boolean {
+  if (isSkipReply(message)) return true;
+  const text = message.text.trim();
+  return (
+    message.role === "assistant" &&
+    message.status === "streaming" &&
+    text.length > 0 &&
+    SKIP_REPLY.startsWith(text) &&
+    (message.toolCalls?.length ?? 0) === 0
+  );
+}
 
 export type TimelineItem =
   | { kind: "message"; message: ChatMessage; index: number; at: number }
@@ -35,6 +51,7 @@ export function chatTimeline(
   };
   let next = 0;
   messages.forEach((message, index) => {
+    if (isHiddenReply(message)) return;
     while (next < cards.length && cards[next].at < message.createdAt) addRun(cards[next++]);
     items.push({ kind: "message", message, index, at: message.createdAt });
   });

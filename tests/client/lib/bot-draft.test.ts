@@ -24,6 +24,7 @@ const bot = {
   connectionIds: ["c1"],
   browserProfile: "own",
   autoReview: true,
+  guestIds: [7],
 } as unknown as Bot;
 
 describe("bot draft", () => {
@@ -41,6 +42,7 @@ describe("bot draft", () => {
       connectionIds: [],
       browserProfile: "shared",
       autoReview: false,
+      guestIds: [],
     });
     expect(draftFrom(null, undefined).modelId).toBe("");
   });
@@ -56,6 +58,7 @@ describe("bot draft", () => {
       connectionIds: ["c1"],
       browserProfile: "own",
       autoReview: true,
+      guestIds: [7],
     });
   });
 

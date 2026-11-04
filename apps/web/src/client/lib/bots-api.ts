@@ -90,6 +90,8 @@ export interface Bot {
   /** `shared`: the browser (and logins) every such bot uses; `own`: a browser of its own. */
   browserProfile: BrowserProfile;
   pinnedAt: string | null;
+  /** Guests the bot is shared with (issue #145): they are in its chat. */
+  guestIds: number[];
   createdAt: string;
   updatedAt: string;
 }
@@ -172,6 +174,8 @@ export interface BotInput {
   toolPermissions?: Record<string, ToolPermission>;
   skillIds?: string[];
   connectionIds?: string[];
+  /** Guests to share the bot with; replaces the current list. */
+  guestIds?: number[];
   memoryEnabled?: boolean;
   autoReview?: boolean;
   browserProfile?: BrowserProfile;

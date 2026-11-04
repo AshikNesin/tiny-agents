@@ -50,7 +50,7 @@ Explicitly out of scope (see §15 Roadmap):
 - Voice (TTS, calls), notifications
 - Message edit / regenerate, conversation forking, multiple threads per bot, search
 - Grok / Gemini models (not in pi-ai's gateway catalog yet)
-- Sharing / public bots, external channels (Telegram, Discord, …), analytics
+- Sharing / public bots (since shipped: sharing a bot's chat with a guest, issue #145), external channels (Telegram, Discord, …), analytics
 - Multi-user data ownership, roles, tenancy
 - Cloudflare Workers / Durable Objects hosting, Postgres for the agent store, horizontal scaling
 
@@ -62,7 +62,9 @@ Explicitly out of scope (see §15 Roadmap):
 - **No signup.** The owner creates their account manually via groot's admin endpoint
   (`POST /api/v1/auth/users` with `X-Admin-Auth-Key: $ADMIN_AUTH_KEY`). No seeding from env.
 - Additional users can be created the same way, but **bots and conversations are not user-scoped** — every
-  logged-in user sees everything (same as groot's `Todo`).
+  logged-in user sees everything (same as groot's `Todo`). Since shipped: **guests** (issue #145), added in
+  Settings → People, see only the bots shared with them (in the same chat as the owner) and Code; see
+  `docs/features/shared-bots.md`.
 - Every `/api/v1` route (including SSE streams) except groot's public auth/passkey routes and `/health`
   requires a valid JWT.
 

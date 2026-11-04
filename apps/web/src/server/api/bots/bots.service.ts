@@ -12,6 +12,7 @@ import { logger } from "@groot/core/logger";
 import {
   AgentRuntime,
   ApprovalNotPendingError,
+  authoredText,
   InvalidAnswersError,
   QuestionNotPendingError,
   type OwnerAnswer,
@@ -42,6 +43,7 @@ import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 import { findPastChat, leaveChat, retireConversation } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
 import { listBots as listBotEntries, previewText } from "./bots.list";
+import { authorOf, markGuestRead, setBotGuests, type Viewer } from "../people/people.service";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -71,8 +73,9 @@ function runtime(): BotAgentRuntime {
   return getAgentRuntime();
 }
 
-export async function listBots(rt: BotAgentRuntime = runtime()) {
-  return listBotEntries(rt);
+/** The sidebar's list: every bot for the owner, the shared ones for a guest (issue #145). */
+export async function listBots(rt: BotAgentRuntime = runtime(), viewer?: Viewer) {
+  return listBotEntries(rt, viewer);
 }
 
 export async function getBot(id: string): Promise<Bot> {
@@ -130,8 +133,9 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
     })
     .returning();
   if (!row) throw new Error("Bot insert returned no row");
-  if (data.skillIds || data.connectionIds) {
+  if (data.skillIds || data.connectionIds || data.guestIds?.length) {
     await setLinks(row.id, data.skillIds, data.connectionIds);
+    if (data.guestIds?.length) await setBotGuests(row.id, data.guestIds);
     return reconcileBotConversation(row.id, rt);
   }
   return getBot(row.id);
@@ -179,6 +183,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);
+  if (data.guestIds !== undefined) await setBotGuests(id, data.guestIds);
   // A manual prompt edit lands in revision history too, so `update_instructions`
   // changes and owner edits share one log (self-improvement).
   if (data.systemPrompt !== undefined && data.systemPrompt !== before.systemPrompt) {
@@ -269,12 +274,18 @@ export async function sendMessage(
     whenBusy?: "steer" | "followUp";
   },
   rt: BotAgentRuntime = runtime(),
+  /** The sender. In a shared bot's chat (issue #145) the bot reads their name with the message. */
+  senderId?: number,
 ) {
+  const shared = senderId !== undefined && (await findBotRow(id)).guests?.length;
+  const author = shared ? await authorOf(senderId) : undefined;
+  const text = author ? authoredText(author.name, input.text) : input.text;
   const { bot, attachments } = await submitToBot(
     id,
     {
       requestId: input.requestId,
-      text: input.text,
+      text,
+      ...(author ? { author } : {}),
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
     },
@@ -282,7 +293,7 @@ export async function sendMessage(
   );
   await updateRow(id, {
     lastActivityAt: new Date(),
-    lastMessagePreview: previewText(input.text, attachments),
+    lastMessagePreview: previewText(text, attachments),
   });
   if (input.mentions && input.mentions.length > 0) {
     await deliverMentions(bot, input, rt);
@@ -409,9 +420,11 @@ export async function setPinned(id: string, pinned: boolean) {
   return getBot(id);
 }
 
-export async function markRead(id: string) {
+/** Mark the chat read: the owner's marker is on the row, a guest's on their share. */
+export async function markRead(id: string, viewer?: Viewer) {
   await findBotRow(id);
-  await updateRow(id, { lastReadAt: new Date() });
+  if (viewer?.guest) await markGuestRead(id, viewer.userId);
+  else await updateRow(id, { lastReadAt: new Date() });
   return getBot(id);
 }
 
@@ -429,8 +442,19 @@ export async function decideApproval(
     grant?: boolean;
   },
   rt: BotAgentRuntime = runtime(),
+  viewer?: Viewer,
 ) {
   const bot = toBot(await findBotRow(id));
+  if (viewer?.guest) {
+    // A guest answers the bot's approvals, but the vault holds the owner's
+    // secrets and "always allow" changes the bot: both stay the owner's.
+    if (input.alwaysAllow || input.grant) throw Boom.forbidden("Only the owner can do that");
+    const chat = await rt.readChat(Number(bot.conversationId));
+    const call = chat.messages
+      .flatMap((message) => message.toolCalls ?? [])
+      .find((toolCall) => toolCall.taskId === input.taskId);
+    if (call?.vault) throw Boom.forbidden("Only the owner can approve vault use");
+  }
   if (input.decision === "approved" && input.alwaysAllow) {
     const toolPermissions = { ...bot.toolPermissions, [input.alwaysAllow]: "allow" as const };
     await updateRow(id, { toolPermissions: JSON.stringify(toolPermissions) });

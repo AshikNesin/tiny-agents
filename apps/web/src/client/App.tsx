@@ -6,7 +6,7 @@ import {
   createBrowserRouter,
   createRoutesFromElements,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react-router";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
@@ -30,8 +30,9 @@ import { ComputerPage } from "./pages/computer";
 import { CodePage } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
-import { APP_NAV } from "./components/shell/nav";
+import { APP_NAV, GUEST_PAGES, guestNav } from "./components/shell/nav";
 import { useUiStore } from "./store/ui";
+import { usePeopleStore, useIsGuest } from "./store/people";
 
 /** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
@@ -71,14 +72,45 @@ const TOASTER = { position: "top-center" } as const;
 
 /** Providers that need the router (nuqs reads and writes the URL). */
 function Root() {
+  // A guest's profile menu lists only what they may open (issue #145).
+  const guest = useIsGuest();
+  const config = useMemo<ShellConfig>(
+    () =>
+      guest
+        ? {
+            ...SHELL_CONFIG,
+            nav: [...guestNav(APP_NAV), { label: "Settings", icon: SettingsIcon, to: "/settings" }],
+          }
+        : SHELL_CONFIG,
+    [guest],
+  );
   return (
     <NuqsAdapter>
       <GrootUIProvider toaster={TOASTER}>
-        <ShellProvider config={SHELL_CONFIG}>
+        <ShellProvider config={config}>
           <Outlet />
         </ShellProvider>
       </GrootUIProvider>
     </NuqsAdapter>
+  );
+}
+
+/**
+ * The owner's pages: a guest (issue #145) is sent to their chats instead.
+ * The server refuses a guest everything here anyway; this keeps the shell
+ * from showing a page full of errors.
+ */
+function OwnerOnly({ children }: { children: ReactNode }) {
+  const guest = usePeopleStore((s) => s.guest);
+  if (guest === true) return <Navigate to="/chats" replace />;
+  return children;
+}
+
+/** Wrap a page element as owner-only unless guests may open it. */
+function page(path: string, element: ReactNode) {
+  const open = GUEST_PAGES.some((to) => path === to || path.startsWith(`${to}/`));
+  return (
+    <Route key={path} path={path} element={open ? element : <OwnerOnly>{element}</OwnerOnly>} />
   );
 }
 
@@ -100,28 +132,28 @@ const router = createBrowserRouter(
         <Route path="/chats" element={<ChatWorkspace />} />
         <Route path="/chats/:botId" element={<ChatWorkspace />} />
         <Route path="/chats/:botId/history/:chatId" element={<ChatWorkspace />} />
-        <Route path="/tasks" element={<Tasks />} />
-        <Route path="/terminal" element={<TerminalPage />} />
-        <Route path="/computer" element={<ComputerPage />} />
-        <Route path="/code" element={<CodePage />} />
-        <Route path="/code/new" element={<CodePage />} />
-        <Route path="/code/s/:slug" element={<CodePage />} />
-        <Route path="/code/:conversationId" element={<CodePage />} />
-        <Route path="/code/:conversationId/changes" element={<CodePage />} />
-        <Route path="/routines" element={<Routines />} />
-        <Route path="/skills" element={<SkillsPage />} />
-        <Route path="/skills/:id" element={<SkillsPage />} />
-        <Route path="/memory" element={<MemoryPage />} />
-        <Route path="/connections" element={<ConnectionsPage />} />
-        <Route path="/connections/:id" element={<ConnectionsPage />} />
-        <Route path="/connections/:id/tools/:tool" element={<ConnectionsPage />} />
-        <Route path="/vault" element={<VaultPage />} />
-        <Route path="/vault/new/:kind" element={<VaultPage />} />
-        <Route path="/vault/items/:handle" element={<VaultPage />} />
-        <Route path="/vault/requests/:taskId" element={<VaultPage />} />
-        <Route path="/storage" element={<Storage />} />
-        <Route path="/jobs" element={<Jobs />} />
-        <Route path="/jobs/:queueName/:jobId" element={<JobDetail />} />
+        {page("/tasks", <Tasks />)}
+        {page("/terminal", <TerminalPage />)}
+        {page("/computer", <ComputerPage />)}
+        {page("/code", <CodePage />)}
+        {page("/code/new", <CodePage />)}
+        {page("/code/s/:slug", <CodePage />)}
+        {page("/code/:conversationId", <CodePage />)}
+        {page("/code/:conversationId/changes", <CodePage />)}
+        {page("/routines", <Routines />)}
+        {page("/skills", <SkillsPage />)}
+        {page("/skills/:id", <SkillsPage />)}
+        {page("/memory", <MemoryPage />)}
+        {page("/connections", <ConnectionsPage />)}
+        {page("/connections/:id", <ConnectionsPage />)}
+        {page("/connections/:id/tools/:tool", <ConnectionsPage />)}
+        {page("/vault", <VaultPage />)}
+        {page("/vault/new/:kind", <VaultPage />)}
+        {page("/vault/items/:handle", <VaultPage />)}
+        {page("/vault/requests/:taskId", <VaultPage />)}
+        {page("/storage", <Storage />)}
+        {page("/jobs", <Jobs />)}
+        {page("/jobs/:queueName/:jobId", <JobDetail />)}
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

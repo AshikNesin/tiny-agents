@@ -23,7 +23,8 @@ import { conversationTitle } from "../../lib/shelley/api";
 import type { Bot as BotRow } from "../../lib/bots-api";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
-import { APP_NAV } from "./nav";
+import { APP_NAV, guestNav } from "./nav";
+import { useIsGuest, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
 /**
@@ -60,12 +61,15 @@ export function AppShell() {
     return () => disconnectShelley();
   }, [connectShelley, disconnectShelley]);
 
+  const loadPeople = usePeopleStore((s) => s.load);
+  const guest = useIsGuest();
   useEffect(() => {
+    void loadPeople();
     void loadBots();
     void loadModels();
     connectActivity();
     return () => disconnectActivity();
-  }, [loadBots, loadModels, connectActivity, disconnectActivity]);
+  }, [loadPeople, loadBots, loadModels, connectActivity, disconnectActivity]);
 
   // The tab says what needs you and where you are, even in the background (#90).
   useEffect(() => {
@@ -117,12 +121,14 @@ export function AppShell() {
             },
           ]
         : [];
-    const navItems = APP_NAV.filter((item) => item.to !== "/code" || shelleyConfigured);
+    const navItems = (guest ? guestNav(APP_NAV) : APP_NAV).filter(
+      (item) => item.to !== "/code" || shelleyConfigured,
+    );
     return [
       {
         heading: "Actions",
         items: [
-          { label: "New bot", icon: Plus, onSelect: openCreateBot },
+          ...(guest ? [] : [{ label: "New bot", icon: Plus, onSelect: openCreateBot }]),
           ...(shelleyConfigured
             ? [
                 {
@@ -193,6 +199,7 @@ export function AppShell() {
     logout,
     shelleyConversations,
     shelleyConfigured,
+    guest,
   ]);
 
   const onSaved = (bot: BotRow) => {

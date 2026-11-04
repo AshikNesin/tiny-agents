@@ -23,6 +23,7 @@ async function who(conversation: number, runtime: () => ChatReader): Promise<Use
   const owner = await conversationOwner(conversation);
   return {
     ...(owner ? { botId: owner.bot.id, botName: owner.bot.name } : {}),
+    ...(owner?.bot.shared ? { shared: true } : {}),
     unattended: await isUnattended(conversation, runtime(), owner ?? null),
   };
 }

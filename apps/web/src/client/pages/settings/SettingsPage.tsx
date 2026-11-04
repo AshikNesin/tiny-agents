@@ -4,11 +4,27 @@ import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { Bell, Settings as SettingsIcon, ShieldCheck, Sparkles } from "lucide-react";
+import { Bell, Settings as SettingsIcon, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { ClaudePlanStatusCard } from "../../components/ClaudePlanStatus";
+import { PeopleSettings } from "../../components/PeopleSettings";
+import { useIsGuest } from "../../store/people";
+
+/** A guest's settings (issue #145): the theme and their own sign-in. The rest is the owner's. */
+function GuestSettings() {
+  return (
+    <PageLayout title="Settings" description="Your theme and sign-in." maxWidth="5xl">
+      <div className="space-y-6">
+        <ThemeSettings />
+        <PasskeyManager />
+      </div>
+    </PageLayout>
+  );
+}
 
 /** App settings, plus the Claude plan status card. No credential fields. */
 export function SettingsPage() {
+  const guest = useIsGuest();
+  if (guest) return <GuestSettings />;
   return (
     <PageLayout
       title="Settings"
@@ -32,6 +48,10 @@ export function SettingsPage() {
             <ShieldCheck className="size-4" />
             Security
           </TabsTrigger>
+          <TabsTrigger value="people">
+            <Users className="size-4" />
+            People
+          </TabsTrigger>
           <TabsTrigger value="claude">
             <Sparkles className="size-4" />
             Claude plan
@@ -51,6 +71,10 @@ export function SettingsPage() {
 
         <TabsContent value="security" className="mt-6">
           <PasskeyManager />
+        </TabsContent>
+
+        <TabsContent value="people" className="mt-6">
+          <PeopleSettings />
         </TabsContent>
 
         <TabsContent value="claude" className="mt-6">

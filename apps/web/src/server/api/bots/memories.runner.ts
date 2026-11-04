@@ -145,7 +145,8 @@ export async function captureConversation(
         },
       },
     });
-    if (!bot || !bot.memoryEnabled) return;
+    // A shared chat (issue #145) holds other people's words too: never captured.
+    if (!bot || !bot.memoryEnabled || owner.shared) return;
     if (!deps.sideCall) return;
     const modelId = resolveCaptureModelId(deps.sideCall, bot.modelId, deps.sideCall.modelId);
     const model = modelId

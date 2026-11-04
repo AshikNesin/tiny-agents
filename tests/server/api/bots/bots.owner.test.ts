@@ -63,6 +63,7 @@ describe("conversationOwner", () => {
       modelId: "m",
       browserProfile: "own",
       memoryEnabled: true,
+      shared: false,
     };
     expect(await conversationOwner(chat)).toEqual({ kind: "chat", bot: fields });
     expect(await conversationOwner(routineConversation)).toEqual({

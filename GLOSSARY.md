@@ -92,3 +92,11 @@ _Avoid_: roster (that is the bots toolkit's name for the other bots), sidebar st
 **Past chat**:
 A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only until the owner continues it, which moves the bot back onto it; nothing is submitted or reconciled there before that.
 _Avoid_: archive, old thread, history (for the record itself)
+
+**Guest**:
+Someone the owner added (Settings → People) to chat with the bots shared with them and to use Code: an account with a `guests` row. Every other account is the owner. A guest reaches only the routes `guest.guard.ts` lists.
+_Avoid_: member, collaborator, user (for the role)
+
+**Shared bot**:
+A bot shared with one or more guests (`bot_guests`). Its chat is one conversation everybody in it sees live: each message carries its `author`, the bot reads it as `Name: message`, replies `[skip]` (hidden) when people only talk to each other, and memory is off.
+_Avoid_: group chat, team bot

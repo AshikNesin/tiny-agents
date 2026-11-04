@@ -21,7 +21,10 @@ export interface ConversationBot {
   name: string;
   modelId: string;
   browserProfile: string;
+  /** Memory capture and injection. Off while the bot is shared (issue #145), whatever the row says. */
   memoryEnabled: boolean;
+  /** Shared with guests (issue #145): several people write in its chat. */
+  shared: boolean;
 }
 
 export type ConversationOwner =
@@ -38,6 +41,22 @@ const botColumns = {
   memoryEnabled: true,
 } as const;
 
+/** One guest is enough to know the bot is shared. */
+const sharedWith = { guests: { columns: { userId: true }, limit: 1 } } as const;
+
+function conversationBot(row: {
+  id: string;
+  name: string;
+  modelId: string;
+  browserProfile: string;
+  memoryEnabled: boolean;
+  guests: { userId: number }[];
+}): ConversationBot {
+  const { guests, ...bot } = row;
+  const shared = guests.length > 0;
+  return { ...bot, memoryEnabled: bot.memoryEnabled && !shared, shared };
+}
+
 /** The bot (and routine) behind a conversation; undefined for a retired or deleted one. */
 export async function conversationOwner(
   conversation: number | string,
@@ -46,14 +65,17 @@ export async function conversationOwner(
   const bot = await db.query.bots.findFirst({
     where: eq(bots.conversationId, ref),
     columns: botColumns,
+    with: sharedWith,
   });
-  if (bot) return { kind: "chat", bot };
+  if (bot) return { kind: "chat", bot: conversationBot(bot) };
   const routine = await db.query.routines.findFirst({
     where: eq(routines.conversationId, ref),
     columns: { id: true },
-    with: { bot: { columns: botColumns } },
+    with: { bot: { columns: botColumns, with: sharedWith } },
   });
-  return routine ? { kind: "routine", bot: routine.bot, routineId: routine.id } : undefined;
+  return routine
+    ? { kind: "routine", bot: conversationBot(routine.bot), routineId: routine.id }
+    : undefined;
 }
 
 /** The bot whose chat this is; undefined for a routine's, a Past chat or a deleted bot's. */

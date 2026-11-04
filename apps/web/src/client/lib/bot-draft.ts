@@ -18,6 +18,8 @@ export interface BotDraft {
   connectionIds: string[];
   browserProfile: BrowserProfile;
   autoReview: boolean;
+  /** Guests the bot is shared with (issue #145). */
+  guestIds: number[];
 }
 
 /** What `botsApi.create` / `botsApi.update` take. */
@@ -43,6 +45,7 @@ export function draftFrom(bot: Bot | null | undefined, modelId: string | undefin
     connectionIds: bot?.connectionIds ?? [],
     browserProfile: bot?.browserProfile ?? "shared",
     autoReview: bot?.autoReview ?? false,
+    guestIds: bot?.guestIds ?? [],
   };
 }
 

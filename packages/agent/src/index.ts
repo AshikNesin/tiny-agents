@@ -350,6 +350,9 @@ export {
   peerOf,
   attachmentsOf,
   queuedOf,
+  authoredText,
+  isSkipReply,
+  SKIP_REPLY,
   type RawChat,
 } from "./transcript";
 export type * from "./types";
