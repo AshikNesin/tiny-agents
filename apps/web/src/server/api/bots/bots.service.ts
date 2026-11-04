@@ -60,6 +60,8 @@ export type BotAgentRuntime = Pick<
   | "listCapabilities"
   | "pendingApprovals"
   | "decideApproval"
+  | "yolo"
+  | "setYolo"
   | "pendingQuestions"
   | "answerQuestions"
   | "dismissQuestions"
@@ -468,6 +470,47 @@ export async function decideApproval(
     if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
     throw error;
   }
+}
+
+// ── YOLO mode (issue #151) ──────────────────────────────────────────────
+
+type YoloListener = (botId: string, on: boolean) => void;
+const yoloListeners = new Set<YoloListener>();
+
+/** Follow YOLO switching on and off, for the chat streams. Returns the unsubscribe. */
+export function onYoloChanged(listener: YoloListener): () => void {
+  yoloListeners.add(listener);
+  return () => yoloListeners.delete(listener);
+}
+
+/** Whether YOLO mode is on in the bot's current chat. */
+export async function getYolo(id: string, rt: BotAgentRuntime = runtime()): Promise<boolean> {
+  const bot = await findBotRow(id);
+  return rt.yolo(Number(bot.conversationId));
+}
+
+/**
+ * Switch YOLO mode for the bot's current chat: every tool call that would
+ * ask runs without a card, except vault uses and turns another bot or a
+ * guest started. Owner only (the route is not open to guests). Switching it
+ * on also approves the cards already waiting that it would have run.
+ */
+export async function setYolo(
+  id: string,
+  on: boolean,
+  ownerId: number,
+  rt: BotAgentRuntime = runtime(),
+): Promise<{ on: boolean; approved: number[] }> {
+  const bot = await findBotRow(id);
+  const result = await rt.setYolo(Number(bot.conversationId), on, ownerId);
+  for (const listener of yoloListeners) {
+    try {
+      listener(bot.id, on);
+    } catch (error) {
+      logger.warn({ error, botId: bot.id }, "YOLO listener failed");
+    }
+  }
+  return result;
 }
 
 /**

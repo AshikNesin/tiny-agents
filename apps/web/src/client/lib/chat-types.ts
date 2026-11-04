@@ -39,7 +39,8 @@ export interface ChatToolCall {
   waitedMs?: number;
   taskId?: number;
   /** `auto`: auto-review approved the call, no card was shown; `refused`: nobody was there to ask. */
-  approval?: "approved" | "denied" | "auto" | "refused";
+  /** `yolo`: the chat's YOLO mode ran it without asking (issue #151). */
+  approval?: "approved" | "denied" | "auto" | "yolo" | "refused";
   sources?: { url: string; title: string }[];
   /** `shelley_start` calls (issue #143): the Shelley conversation it started. */
   shelley?: { conversationId: string; slug: string | null; cwd: string | null; url: string };
@@ -172,6 +173,11 @@ export interface ChatState {
   loaded: boolean;
   /** Older messages exist above `messages[0]`; they load on scroll (issue #92). */
   hasMore?: boolean;
+  /**
+   * YOLO mode (issue #151): tool calls run without asking, except vault
+   * uses. Rides its own stream event; unknown until it arrives.
+   */
+  yolo?: boolean;
   /** A page of older messages is being fetched. */
   loadingOlder?: boolean;
   /**
@@ -201,6 +207,7 @@ export type ChatEvent =
   | { type: "busy"; busy: boolean }
   | { type: "routine-runs"; runs: RoutineRunCard[] }
   | { type: "routine-run"; run: RoutineRunCard }
+  | { type: "yolo"; on: boolean }
   | ActivityEvent
   | { type: "connection"; id: string; status: string; error?: string }
   | { type: "ping" }

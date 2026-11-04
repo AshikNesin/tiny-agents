@@ -241,6 +241,8 @@ describe("matchGuestRoute", () => {
     expect(matchGuestRoute("POST", "/uploads")).toEqual({});
 
     expect(matchGuestRoute("PATCH", "/bots/b1")).toBeUndefined();
+    // YOLO mode is the owner's switch (issue #151).
+    expect(matchGuestRoute("PUT", "/bots/b1/yolo")).toBeUndefined();
     expect(matchGuestRoute("POST", "/bots")).toBeUndefined();
     expect(matchGuestRoute("DELETE", "/bots/b1/browser/profile")).toBeUndefined();
     expect(matchGuestRoute("GET", "/bots/b1/chats")).toBeUndefined();

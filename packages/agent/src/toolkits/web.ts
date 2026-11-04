@@ -450,6 +450,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
               label: "Called an API",
               askLabel: "call an API",
               description: "Make an HTTP request, optionally with a vault API key",
+              vault: true,
             },
           ]
         : []),

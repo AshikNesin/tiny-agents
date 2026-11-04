@@ -43,12 +43,25 @@ export interface ClaudeSessionSync {
   system: string;
   tools: ToolSpec[];
   permissions: Record<string, ToolPermissionChoice>;
+  /** Tools that can use a vault item (`ToolInfo.vault`): YOLO never runs them unasked. */
+  vaultTools?: string[];
 }
 
 export interface ClaudeSubmitInput {
   requestId: string;
   text: string;
   images?: { data: string; mimeType: string }[];
+  /** Trusted attribution for a cross-bot delivery: YOLO does not trust its turn. */
+  peer?: ChatMessage["peer"];
+  /** Who sent it, in a shared chat. */
+  author?: ChatMessage["author"];
+}
+
+/** A conversation's YOLO mode as the engine applies it (issue #151). */
+export interface ClaudeYolo {
+  on: boolean;
+  /** The owner's user id: in a shared chat only their turns are trusted. */
+  by?: number;
 }
 
 export interface ClaudeCodeEngineOptions {
@@ -81,6 +94,8 @@ interface ClaudeSession {
   system: string;
   tools: ToolSpec[];
   permissions: Record<string, ToolPermissionChoice>;
+  vaultTools: Set<string>;
+  yolo: ClaudeYolo;
   claudeSessionId?: string;
   /** `pi` after a gateway fallback latches the conversation onto the harness. */
   surface: "claude" | "pi";
@@ -120,6 +135,7 @@ export class ClaudeCodeEngine {
     session.system = info.system;
     session.tools = info.tools;
     session.permissions = info.permissions;
+    session.vaultTools = new Set(info.vaultTools ?? []);
     if (session.surface !== "pi") session.surface = "claude";
   }
 
@@ -168,6 +184,8 @@ export class ClaudeCodeEngine {
       requestId: input.requestId,
       status: "done",
       createdAt: Date.now(),
+      ...(input.peer ? { peer: input.peer } : {}),
+      ...(input.author ? { author: input.author } : {}),
     };
     const assistantId = `a-${turnId}`;
     const assistant: ChatMessage = {
@@ -206,6 +224,34 @@ export class ClaudeCodeEngine {
     if (!session?.live) return;
     this.client?.send({ type: "abort", sessionId: String(ref) });
     this.finish(session, session.live.turnId, "aborted");
+  }
+
+  /**
+   * Apply the conversation's YOLO mode. Switching it on also runs the calls
+   * already waiting that it would have run (never a vault tool's, and only
+   * in the owner's turn). Returns their task ids.
+   */
+  setYolo(ref: ConversationRef, yolo: ClaudeYolo): number[] {
+    // Only a Claude plan conversation has a session; never create one here.
+    const session = this.sessions.get(ref);
+    if (!session) return [];
+    session.yolo = yolo;
+    if (!yolo.on) return [];
+    const approved: number[] = [];
+    for (const call of session.gate.waiting()) {
+      if (!this.yoloRuns(session, call.name)) continue;
+      session.gate.decide(call.taskId, "approved");
+      approved.push(call.taskId);
+    }
+    return approved;
+  }
+
+  /** Whether YOLO runs an `ask` call of this tool now: on, not a vault tool, the owner's turn. */
+  private yoloRuns(session: ClaudeSession, name: string): boolean {
+    if (!session.yolo.on || session.vaultTools.has(name)) return false;
+    const last = session.messages.findLast((message) => message.role === "user");
+    if (!last || last.peer) return false;
+    return last.author === undefined || last.author.id === session.yolo.by;
   }
 
   decide(taskId: number, decision: "approved" | "denied"): void {
@@ -342,6 +388,7 @@ export class ClaudeCodeEngine {
   private bindGate(ref: ConversationRef, session: ClaudeSession): ClaudeApprovalGate {
     return createClaudeApprovalGate({
       permission: (name) => session.permissions[name] ?? "ask",
+      yolo: (name) => this.yoloRuns(session, name),
       nextTaskId: () => {
         session.nextTask += 1;
         return session.nextTask;
@@ -356,12 +403,14 @@ export class ClaudeCodeEngine {
         });
         this.emit(ref);
       },
-      execute: async (call) => {
+      execute: async (call, approval) => {
+        const approved = approval ? { approval } : {};
         this.upsertTool(session, call.turnId, {
           id: call.toolUseId,
           name: call.name,
           args: asRecord(call.input),
           status: "running",
+          ...approved,
         });
         this.emit(ref);
         try {
@@ -378,6 +427,7 @@ export class ClaudeCodeEngine {
             args: asRecord(call.input),
             status: result.isError ? "error" : "done",
             output: result.content,
+            ...approved,
           });
           this.emit(ref);
           return result;
@@ -389,6 +439,7 @@ export class ClaudeCodeEngine {
             args: asRecord(call.input),
             status: "error",
             output: content,
+            ...approved,
           });
           this.emit(ref);
           return { content, isError: true };
@@ -511,6 +562,8 @@ export class ClaudeCodeEngine {
       system: "",
       tools: [] as ToolSpec[],
       permissions: {} as Record<string, ToolPermissionChoice>,
+      vaultTools: new Set<string>(),
+      yolo: { on: false } as ClaudeYolo,
       surface: "claude" as const,
       messages: [] as ChatMessage[],
       nextTask: TASK_ID_BASE,
@@ -540,7 +593,14 @@ export class ClaudeCodeEngine {
       for (const [key, value] of Object.entries(parsed.sessions ?? {})) {
         const ref = Number(key);
         if (this.sessions.has(ref)) continue;
-        const restored = { ...value, busy: false, live: undefined } as ClaudeSession;
+        // YOLO and the vault tools come from the runtime's sync, never the file.
+        const restored = {
+          ...value,
+          busy: false,
+          live: undefined,
+          vaultTools: new Set<string>(),
+          yolo: { on: false },
+        } as ClaudeSession;
         restored.gate = this.bindGate(ref, restored);
         this.sessions.set(ref, restored);
       }
@@ -553,7 +613,8 @@ export class ClaudeCodeEngine {
     if (!this.options.persistPath) return;
     const sessions: Record<string, ClaudeSession> = {};
     for (const [ref, session] of this.sessions) {
-      sessions[String(ref)] = { ...session, live: undefined, busy: false };
+      const { vaultTools: _vaultTools, yolo: _yolo, ...rest } = session;
+      sessions[String(ref)] = { ...rest, live: undefined, busy: false } as ClaudeSession;
     }
     await mkdir(dirname(this.options.persistPath), { recursive: true });
     await writeFile(this.options.persistPath, JSON.stringify({ sessions }), "utf8");

@@ -498,6 +498,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         label: "Ran a command",
         askLabel: "run a command",
         description: "Run a shell command on the sandbox VM",
+        vault: true,
       },
       {
         name: "read_file",

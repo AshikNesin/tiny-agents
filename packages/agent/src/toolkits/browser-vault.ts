@@ -63,12 +63,14 @@ export function browserVaultToolInfos(options: BrowserVaultOptions): ToolInfo[] 
             label: "Filled a saved login",
             askLabel: "fill a saved login",
             description: "Fill a vault login or card into the page without seeing it.",
+            vault: true,
           },
           {
             name: "browser_enter_code",
             label: "Entered a one-time code",
             askLabel: "enter a one-time code",
             description: "Fill a 2FA code from the vault, or ask you for it.",
+            vault: true,
           },
         ]
       : []),

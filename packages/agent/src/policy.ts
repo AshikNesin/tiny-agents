@@ -8,11 +8,17 @@
  * change pi-durable stores (extensions, hidden tools) and the conversation's
  * `tiny.permissions` document the approval gate reads.
  */
-import type { Extension, Registry, ToolRegistration } from "@earendil-works/pi-durable";
+import type {
+  EntryRecord,
+  Extension,
+  Registry,
+  ToolRegistration,
+} from "@earendil-works/pi-durable";
 import { defineDoc } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { effectivePermission, type Capability, type CapabilitySelection } from "./capabilities";
+import { authorOf, CHAT_USER_ENTRY, peerOf } from "./transcript";
 
 /**
  * Which tools of the conversation run without asking (`allow`), which of the
@@ -32,6 +38,24 @@ export const PermissionsDoc = defineDoc<{
   history: "latest",
   fork: "current",
   initial: () => ({ allow: [] }),
+  checkpointWhen: () => false,
+});
+
+/**
+ * YOLO mode (issue #151): the owner let every tool call in this chat run
+ * without asking, except vault uses. Its own document, not a field of
+ * `PermissionsDoc`, because that one is recompiled from the bot on every
+ * send; this one is the chat's and only the owner's toggle writes it.
+ * `by` is the owner's user id: in a shared chat only their messages are
+ * trusted. A fork (a new chat) starts with it off.
+ */
+export const YoloDoc = defineDoc<{ on: boolean; since?: number; by?: number }>({
+  kind: "tiny.yolo",
+  version: 1,
+  scope: "conversation",
+  history: "latest",
+  fork: "initial",
+  initial: () => ({ on: false }),
   checkpointWhen: () => false,
 });
 
@@ -144,6 +168,31 @@ export async function mustAsk(
 ): Promise<boolean> {
   const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
   return permissions !== undefined && !permissions.allow.includes(name);
+}
+
+/** Whether the conversation's YOLO mode is on, and whose messages it trusts. */
+export async function yoloOf(
+  api: ToolExecutionApi,
+  context: Context,
+): Promise<{ on: boolean; by?: number }> {
+  const yolo = await api.snapshot(YoloDoc, api.conversationId, context);
+  return yolo?.on === true
+    ? { on: true, ...(yolo.by !== undefined ? { by: yolo.by } : {}) }
+    : { on: false };
+}
+
+/**
+ * Whether the turn is the owner's: the newest user message (newest first)
+ * is not a peer delivery (another bot, a relayed reply or a mention) and,
+ * in a shared chat, was sent by the owner (`by`). YOLO trusts only that.
+ */
+export function ownerTurn(newestFirst: readonly EntryRecord[], by: number | undefined): boolean {
+  const last = newestFirst.find(
+    (entry) => entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY,
+  );
+  if (!last || peerOf(last)) return false;
+  const author = authorOf(last);
+  return author === undefined || author.id === by;
 }
 
 /** Whether auto-review may approve this tool's calls in the conversation. */

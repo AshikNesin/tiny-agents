@@ -19,6 +19,7 @@ import {
   chatHistorySchema,
   createBotSchema,
   pinBotSchema,
+  yoloSchema,
   updateBotSchema,
   sendMessageSchema,
 } from "./bots.schema";
@@ -133,6 +134,13 @@ router.get("/bots/:id/stream", async (c) => {
       }),
     );
     sse.write({ type: "routine-runs", runs: await chatCards(bot.id, bot.chatStartedAt) });
+    // YOLO mode of this chat (issue #151): now, and whenever the owner switches it.
+    sse.onClose(
+      botsService.onYoloChanged((botId, on) => {
+        if (botId === bot.id) sse.write({ type: "yolo", on });
+      }),
+    );
+    sse.write({ type: "yolo", on: await botsService.getYolo(bot.id) });
   });
 });
 
@@ -248,6 +256,13 @@ router.post("/bots/:id/pin", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, pinBotSchema);
   return ok(c, await botsService.setPinned(id, payload.pinned));
+});
+
+// Owner only: guest.guard.ts does not open it to guests.
+router.put("/bots/:id/yolo", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const payload = await parseBody(c, yoloSchema);
+  return ok(c, await botsService.setYolo(id, payload.on, c.get("viewer").userId));
 });
 
 router.post("/bots/:id/read", async (c) => {

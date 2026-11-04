@@ -263,8 +263,9 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         // pages already loaded above it (issue #92).
         ...mergeSnapshot(state, event.state),
         loadingOlder: false,
-        // Routine cards ride their own events; a transcript snapshot keeps them.
+        // Routine cards and YOLO ride their own events; a transcript snapshot keeps them.
         routineRuns: state.routineRuns,
+        ...(state.yolo !== undefined ? { yolo: state.yolo } : {}),
         queued: event.state.queued ?? [],
         connected: true,
         loaded: true,
@@ -279,6 +280,8 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, busy: event.busy };
     case "routine-runs":
       return { ...state, routineRuns: event.runs };
+    case "yolo":
+      return state.yolo === event.on ? state : { ...state, yolo: event.on };
     case "routine-run":
       // Listed and followed at connect, a run can arrive twice: keep one.
       return state.routineRuns.some((run) => run.id === event.run.id)

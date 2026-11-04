@@ -19,6 +19,8 @@ export interface ClaudeToolSurface {
   tools: ToolSpec[];
   permissions: Record<string, ToolPermissionChoice>;
   runners: Map<string, ClaudeToolRunner>;
+  /** Tools flagged `vault`: YOLO mode keeps them asking. */
+  vaultTools: string[];
 }
 
 interface LooseTool extends ClaudeToolRunner {
@@ -38,6 +40,7 @@ export function claudeToolSurface(
   const tools: ToolSpec[] = [];
   const permissions: Record<string, ToolPermissionChoice> = {};
   const runners = new Map<string, ClaudeToolRunner>();
+  const vaultTools: string[] = [];
   const enabled = selection ? new Set(selection.enabled) : undefined;
   for (const capability of catalog.values()) {
     if (enabled && !enabled.has(capability.id)) continue;
@@ -47,6 +50,7 @@ export function claudeToolSurface(
         ? effectivePermission(info, selection.permissions)
         : "ask";
       permissions[info.name] = permission;
+      if (info.vault) vaultTools.push(info.name);
       if (permission === "off") continue;
       if (info.unattendedOnly && !selection?.unattended) continue;
       const registration = declared.find((tool) => tool.name === info.name);
@@ -66,7 +70,7 @@ export function claudeToolSurface(
       if (registration) runners.set(info.name, registration);
     }
   }
-  return { tools, permissions, runners };
+  return { tools, permissions, runners, vaultTools };
 }
 
 /** A tool api that fails clearly when a pi-only tool touches the harness. */

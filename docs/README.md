@@ -54,6 +54,7 @@ What ships in the box and how to use or extend it.
 | [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats            |
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you              |
 | [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks               |
+| [`features/yolo-mode.md`](./features/yolo-mode.md)                           | tiny-agents: a chat runs its tools without asking (not vault)  |
 | [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                      |
 | [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view    |
 | [`features/code.md`](./features/code.md)                                     | tiny-agents: Shelley workspace, subagents, diffs, bot hand-off |

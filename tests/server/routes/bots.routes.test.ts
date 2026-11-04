@@ -655,6 +655,33 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).not.toHaveBeenCalled();
   });
 
+  it("switches YOLO mode for the bot's current chat and streams its state (issue #151)", async () => {
+    const bot = await createBot();
+    const off = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"yolo"');
+    expect(off.text).toContain('{"type":"yolo","on":false}');
+
+    const on = await call(`/api/v1/bots/${bot.id}/yolo`, { method: "PUT", json: { on: true } });
+    expect(on.status).toBe(200);
+    expect(on.body.data).toEqual({ on: true, approved: [] });
+    expect(agentRuntime.setYolo).toHaveBeenCalledWith(conv(bot), true, expect.any(Number));
+    expect(await rt.yolo(conv(bot))).toBe(true);
+    const streamed = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"yolo"');
+    expect(streamed.text).toContain('{"type":"yolo","on":true}');
+
+    // A new chat starts with it off.
+    await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" });
+    const fresh = await findBot(bot.id);
+    expect(await rt.yolo(Number(fresh!.conversationId))).toBe(false);
+
+    const invalid = await call(`/api/v1/bots/${bot.id}/yolo`, {
+      method: "PUT",
+      json: { on: "yes" },
+    });
+    expect(invalid.status).toBe(400);
+    const missing = await call("/api/v1/bots/missing/yolo", { method: "PUT", json: { on: true } });
+    expect(missing.status).toBe(404);
+  });
+
   it("rejects an invalid pin body and an unknown bot", async () => {
     const bot = await createBot();
     const invalid = await call(`/api/v1/bots/${bot.id}/pin`, {

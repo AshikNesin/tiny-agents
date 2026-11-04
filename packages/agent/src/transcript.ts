@@ -105,6 +105,11 @@ function authorOfData(data: Record<string, unknown> | undefined): ChatAuthor | u
     : undefined;
 }
 
+/** The trusted sender of a `chat.user` entry (shared chats only). */
+export function authorOf(entry: EntryRecord): ChatAuthor | undefined {
+  return entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
+}
+
 /** A shared-chat message's text without the sender prefix `authoredText` added. */
 function withoutAuthor(text: string, author: ChatAuthor | undefined): string {
   if (!author) return text;
@@ -269,6 +274,7 @@ function toolCallView(
       ...(approval === "approved" ||
       approval === "denied" ||
       approval === "auto" ||
+      approval === "yolo" ||
       approval === "refused"
         ? { approval }
         : {}),
