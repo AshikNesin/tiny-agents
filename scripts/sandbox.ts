@@ -15,6 +15,10 @@
  * public half and the app signs in with the private half
  * (SANDBOX_SSH_KEY_FILE). Set SANDBOX_LOCAL_PORT to publish on another
  * loopback port than 2222.
+ *
+ * docker/sandbox/compose.override.yml (gitignored; copy
+ * compose.override.example.yml) is merged in when present, for mounting
+ * files or folders from this machine into the container.
  */
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,12 +28,15 @@ import ssh2 from "ssh2";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const compose = path.join(root, "docker/sandbox/compose.yml");
+// `-f` turns off compose's own pickup of compose.override.yml, so pass it too.
+const override = path.join(root, "docker/sandbox/compose.override.yml");
+const composeFiles = ["-f", compose, ...(existsSync(override) ? ["-f", override] : [])];
 const keyDir = path.join(root, "data/sandbox");
 const keyFile = path.join(keyDir, "id_ed25519");
 const port = Number(process.env.SANDBOX_LOCAL_PORT || 2222);
 
 function docker(args: string[], { quiet = false } = {}): number {
-  const result = spawnSync("docker", ["compose", "-f", compose, ...args], {
+  const result = spawnSync("docker", ["compose", ...composeFiles, ...args], {
     stdio: quiet ? "ignore" : "inherit",
     env: { ...process.env, SANDBOX_LOCAL_PORT: String(port) },
   });
