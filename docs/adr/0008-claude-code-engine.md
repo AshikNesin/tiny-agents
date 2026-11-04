@@ -1,6 +1,8 @@
 # ADR 0008: Claude subscription inference goes through Claude Code
 
-- Status: **accepted**
+- Status: **accepted**, amended by [0010](0010-claude-worker-runs-on-the-sandbox.md):
+  the worker now runs on the sandbox and the app sets it up; a hand-run
+  worker behind `tailscale serve` is the override, not the default.
 - Date: 2026-11-02
 
 ## Context

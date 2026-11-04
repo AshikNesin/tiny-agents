@@ -1,23 +1,67 @@
 # Use your Claude subscription (experimental)
 
-This path lets a bot answer on a Claude Pro or Max subscription. Claude
-Code, on a machine you control, is the only process that holds the login.
-tiny-agents never reads it, stores it, or refreshes it.
+This path lets a bot answer on a Claude Pro or Max subscription through
+Claude Code. tiny-agents installs and runs Claude Code on your **sandbox**
+(the VM or local container the browser and terminal already use). You turn
+it on and sign in once. Claude Code holds the login on the sandbox;
+tiny-agents never reads, stores or refreshes it.
 
 **This can still put the Claude account at risk.** Anthropic's terms
 restrict how subscription access is used, and they have blocked
 third-party apps that impersonate Claude Code or relay its requests.
-Read this page before you turn the engine on. If you are unsure, leave
+Read [what this project will not do](#what-this-project-will-not-do)
+before you turn the engine on. If you are unsure, leave
 `CLAUDE_CODE_ENGINE_ENABLED` unset and use the gateway.
+
+## Turn it on
+
+You need a sandbox: `SANDBOX_HOST` (the Tailscale VM) or the local
+container from `pnpm sandbox:up` ([local sandbox](guides/local-sandbox.md)).
+
+1. Set `CLAUDE_CODE_ENGINE_ENABLED=1` and restart tiny-agents.
+2. Open **Settings → Claude plan**. On first use the app installs Node,
+   the Agent SDK and Claude Code on the sandbox (a minute or two; the
+   local container has them preinstalled). The card shows the progress.
+3. Choose **Sign in to Claude**. A terminal tab opens and types
+   `claude auth login`. Open the link it prints, approve, and paste the
+   code back into the tab. The card then shows "Signed in to Claude (max)".
+4. Give a bot a model labelled "uses your Claude plan".
+
+That's all. There is no URL, token, unit file or Tailscale serve to set
+up. The login survives restarts of the app and of the sandbox.
+
+### What the app does on the sandbox
+
+All of it under one directory: `/opt/tiny-agents/claude-worker` in the
+local container image, `~/.tiny-agents/claude-worker` on a VM.
+
+- Installs Node when the sandbox has no Node 20+ with npm (an official
+  build from nodejs.org, no apt, no sudo), then the pinned
+  `@anthropic-ai/claude-agent-sdk`, `@anthropic-ai/claude-code`, `ws` and
+  `zod`.
+- Uploads the worker (one bundled file) and starts it on
+  `127.0.0.1:8765` inside the sandbox with a random 32-byte token it
+  creates there (0600). It is restarted when the app's bundle changes or
+  the process is gone (a sandbox reboot), on the next turn.
+- Connects to it through an SSH tunnel over the sandbox's existing SSH
+  endpoint. Nothing is published on the network.
+- Links `~/.local/bin/claude` to that CLI when the sandbox has no `claude`
+  of its own, so a terminal tab can run it.
+
+Logs are in `worker.log` in that directory. Change the sandbox-side port
+with `CLAUDE_SANDBOX_WORKER_PORT`.
 
 ## What this project will not do
 
 - It will not read the Keychain, Claude Code's credential file, or an
-  OAuth token. `claude auth login` and `claude setup-token` are commands
-  you run yourself, on the worker machine.
+  OAuth token. The login is `claude auth login`, which you complete in
+  Claude Code's own prompt; the app only opens the terminal tab. It reads
+  `claude auth status` for `loggedIn` and the plan name, nothing else.
 - It will not set `ANTHROPIC_BASE_URL` or proxy an Anthropic request.
   There is no turn relay. The official Agent SDK drives the unmodified
-  `claude` binary.
+  `claude` binary. The launcher unsets `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` and the Bedrock, Vertex and
+  Foundry flags before the worker starts, and the worker refuses them too.
 - It will not spoof the Claude Code client. If any model-provider value
   contains an `sk-ant-oat` token, tiny-agents refuses to boot. pi-ai
   impersonates Claude Code when it sees one.
@@ -27,40 +71,41 @@ Read this page before you turn the engine on. If you are unsure, leave
   through the same approval gate as any other bot, and the result is
   returned. Claude Code does not execute it.
 
-## What you are turning on
+The login lives in the sandbox user's home, as any other login you make
+there does. Bots that run commands on the sandbox run as that user. If
+you want the Claude login on a machine bots cannot reach, use a
+[hand-run worker](#a-worker-on-another-machine) instead.
+
+## How turns flow
 
 A model id `claude-code/<model>` (the picker labels these "uses your
 Claude plan") selects `ClaudeCodeEngine`. Every other bot stays on the
 pi-durable harness.
 
-The app opens one WebSocket to the worker (`CLAUDE_WORKER_URL`,
-`CLAUDE_WORKER_TOKEN`). The worker keeps one Claude Code `query()` per
-conversation and feeds later turns with `streamInput()`. After a restart
-it passes `resume: sessionId`. The socket pings every 20 seconds and
-closes after 60 seconds of silence. Reconnect waits from 1 second up to 30. Events carry a per-session sequence number; the worker keeps about
-1000 of them so a reconnect continues. Tool calls are idempotent on
-`tool_use_id`. A tool result that does not arrive in 120 seconds becomes
-an error result. An idle Claude process is evicted after 15 minutes. A
-process older than 6 hours is recycled and resumed. At most two Claude
-processes are live, and one turn runs at a time. Those timings are the
-defaults; the `CLAUDE_WORKER_*` variables in
-[config](reference/config.md) override them.
-
-The worker binds `127.0.0.1` only. Publish it with `tailscale serve`.
-Do not use Funnel and do not open a public port. The bearer token is
-checked before the WebSocket upgrade. Run the worker as a normal user,
-not an admin.
+The app opens one WebSocket to the worker. The worker keeps one Claude
+Code `query()` per conversation and feeds later turns with
+`streamInput()`. After a restart it passes `resume: sessionId`. The
+socket pings every 20 seconds and closes after 60 seconds of silence.
+Reconnect waits from 1 second up to 30. Events carry a per-session
+sequence number; the worker keeps about 1000 of them so a reconnect
+continues. Tool calls are idempotent on `tool_use_id`. A tool result that
+does not arrive in 120 seconds becomes an error result. An idle Claude
+process is evicted after 15 minutes. A process older than 6 hours is
+recycled and resumed. At most two Claude processes are live, and one turn
+runs at a time. Those timings are the defaults; the `CLAUDE_WORKER_*`
+variables in [config](reference/config.md) override them.
 
 If Claude Code reports a rate limit with status `rejected`, error code
 `credits_required`, or `isUsingOverage` (that last field is undocumented
 and only checked when it is present), the turn pauses and is not retried.
 
+A turn sent before you sign in pauses with the sign-in hint.
+
 ## Kill switch
 
 `CLAUDE_CODE_ENGINE_ENABLED` is read on each turn, in tiny-agents. Set it
 to `1` to allow turns. Unset it, or set `0`, and the app stops sending
-turns. The worker can keep running. You do not redeploy it to shut the
-feature off.
+turns. The worker can keep running.
 
 `CLAUDE_CODE_ENGINE_FALLBACK` chooses what a refused or unreachable turn
 does:
@@ -83,45 +128,33 @@ console API key that spends Max-plan API credits or usage credits, and
 store that key only as the Anthropic BYOK secret in Cloudflare AI
 Gateway. Details are in [AI inference](features/ai-inference.md).
 
-## Set up the worker
+## A worker on another machine
+
+Set `CLAUDE_WORKER_URL` and `CLAUDE_WORKER_TOKEN` and the app uses that
+worker instead of the sandbox. Use this for a Mac whose Claude login is in
+the Keychain, or to keep the login off the machine bots run commands on.
+You set that worker up by hand:
 
 - macOS, including a Cua/Lume VM on a Mac mini: [claude-worker-macos.md](guides/claude-worker-macos.md)
 - Linux: [claude-worker-linux.md](guides/claude-worker-linux.md)
 
-Settings → Claude plan shows whether the kill switch is on and whether a
-worker host is configured. It has no credential fields.
-
 ## Manual smoke test
 
-Run this on a fresh VM after the guide, before you point a real bot at
-it. CI does not call Anthropic. This checklist is the live check.
+CI does not call Anthropic. Run this once on a fresh sandbox before you
+point a real bot at it.
 
-1. `claude auth status` prints `loggedIn: true` and a `subscriptionType`
-   (`pro` or `max`). It does not print a token. If it does not, stop and
-   run `claude auth login` or `claude setup-token` yourself.
-2. Confirm the worker process environment has no `ANTHROPIC_API_KEY`,
-   `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and no Bedrock, Vertex,
-   or Foundry flag. The worker must refuse to start when any of those
-   are set.
-3. `claude-worker` listens on `127.0.0.1` only (`lsof -nP -iTCP:8765` or
-   `ss -ltnp`). From another machine, the port is closed.
-4. `tailscale serve status` shows a tailnet HTTPS proxy to that port.
-   `tailscale funnel status` shows nothing for it.
-5. A client that is not tagged `tag:tiny-agents` cannot open the worker
-   URL. A client with the tag can.
-6. A WebSocket without `Authorization: Bearer <CLAUDE_WORKER_TOKEN>` is
-   rejected with 401.
-7. In tiny-agents, leave `CLAUDE_CODE_ENGINE_ENABLED` unset, pick a
-   "uses your Claude plan" model, and send. The turn pauses (or uses the
-   gateway, if you set that fallback). The worker log shows no new turn.
-8. Set `CLAUDE_CODE_ENGINE_ENABLED=1` and restart tiny-agents only. Send
-   again. The reply streams. Claude Code's own shell and edit tools do
-   not appear; a tiny-agents tool asks you before it runs.
-9. Leave the chat idle for several minutes. The socket stays up (pings
-   in the worker log). It should still be up after an hour.
-10. Stop the worker. The next turn pauses or falls back, and tiny-agents
-    does not retry it in a loop. Start the worker. The next turn resumes
-    the same Claude session (`resume` in the worker log) rather than
-    starting a stranger conversation.
-11. Search the tiny-agents host for `sk-ant-oat`. The app database, the
-    agent store, and `.claude.json` session file must not contain one.
+1. With `CLAUDE_CODE_ENGINE_ENABLED` unset, pick a "uses your Claude
+   plan" model and send. The turn pauses (or uses the gateway, if you set
+   that fallback). Nothing is installed on the sandbox.
+2. Set `CLAUDE_CODE_ENGINE_ENABLED=1` and restart. Settings → Claude plan
+   shows "Installing", then "not signed in".
+3. Sign in from the card. The terminal tab runs `claude auth login`; after
+   it, the card shows the plan.
+4. On the sandbox, `ss -ltnp | grep 8765` shows `127.0.0.1:8765` only.
+   From another machine the port is closed.
+5. Send again. The reply streams. Claude Code's own shell and edit tools
+   do not appear; a tiny-agents tool asks you before it runs.
+6. Kill the worker on the sandbox (`pkill -f claude-worker/worker.mjs`).
+   The next turn starts it again and resumes the same Claude session.
+7. Search the tiny-agents host for `sk-ant-oat`. The app database, the
+   agent store, and `.claude.json` session file must not contain one.

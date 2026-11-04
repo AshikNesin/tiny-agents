@@ -1,6 +1,7 @@
 /**
  * Loopback WebSocket server. Bind address is fixed at 127.0.0.1.
- * Publish it with `tailscale serve`, never Funnel and never a public port.
+ * The app reaches it through an SSH tunnel to the sandbox (or, for a
+ * hand-run worker, `tailscale serve`); never Funnel, never a public port.
  * The bearer token is checked before the upgrade completes.
  */
 import { createHash, timingSafeEqual } from "node:crypto";

@@ -51,6 +51,10 @@ import { PiEngine } from "./engines/pi";
 import { claudeCodeBareModel, engineKindForConfig } from "./engine";
 import { claudePlanModels } from "./engines/claude-code/catalog";
 import { ClaudeCodeEngine, type ClaudeSessionSync } from "./engines/claude-code/engine";
+import type {
+  ClaudeAccountStatus,
+  ClaudeWorkerLocator,
+} from "./engines/claude-code/sandbox-worker";
 import {
   claudeToolApi,
   claudeToolSurface,
@@ -160,6 +164,11 @@ export interface AgentRuntimeOptions {
   onFatal?: (error: unknown) => void;
   /** Env snapshot override (tests/faux boot). Defaults to process.env. */
   env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Where Claude plan turns run: the sandbox worker the app sets up over
+   * SSH. `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN` override it.
+   */
+  claudeWorker?: ClaudeWorkerLocator;
 }
 
 /**
@@ -223,11 +232,13 @@ export class AgentRuntime {
     capabilities: readonly Capability[],
     envSource: Readonly<Record<string, string | undefined>> = process.env,
     persistPath?: string,
+    claudeWorker?: ClaudeWorkerLocator,
   ) {
     this.#pi = new PiEngine(harness);
     this.#claude = new ClaudeCodeEngine({
       env: () => process.env,
       persistPath,
+      worker: claudeWorker,
       onBusy: (ref, busy) => this.#setClaudeBusy(ref, busy),
       execute: (ref, call) => this.#executeClaudeTool(ref, call),
     });
@@ -316,6 +327,7 @@ export class AgentRuntime {
         capabilities,
         envSource,
         inMemory ? undefined : `${options.storePath}.claude.json`,
+        options.claudeWorker,
       );
       opened.#review = review;
       opened.#configured = configured;
@@ -395,6 +407,16 @@ export class AgentRuntime {
   /** Kill switch, fallback, and whether a worker URL is configured. No secrets. */
   claudeCodeStatus(): ReturnType<ClaudeCodeEngine["status"]> {
     return this.#claude.status();
+  }
+
+  /** Whether Claude Code is installed and signed in on the worker's machine. No secrets. */
+  claudeCodeAccount(): Promise<ClaudeAccountStatus> {
+    return this.#claude.account();
+  }
+
+  /** Start setting up the sandbox worker (when the engine is on), so the first turn is quick. */
+  prepareClaudeCode(): void {
+    this.#claude.prepare();
   }
 
   hasModel(modelId: string): boolean {

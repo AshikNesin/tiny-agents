@@ -1,5 +1,11 @@
 # Claude Code worker on Linux
 
+> **Optional.** With a sandbox configured you do not need this page: the
+> app installs and runs the worker on the sandbox itself
+> ([Claude subscription](../claude-subscription.md)). Follow it only to run
+> the worker on a separate machine, then set `CLAUDE_WORKER_URL` and
+> `CLAUDE_WORKER_TOKEN`, which take precedence.
+
 Same rules as the [macOS guide](claude-worker-macos.md): the worker is a
 normal user on a Linux VM, loopback only, published with
 `tailscale serve`, and tiny-agents never holds the Claude login.

@@ -38,6 +38,12 @@ router.get("/claude-code/status", (c) => {
   return ok(c, getAgentRuntime().claudeCodeStatus());
 });
 
+// Is Claude Code installed and signed in where the worker runs? The first
+// call on a sandbox starts installing it; the client polls while it does.
+router.get("/claude-code/account", async (c) => {
+  return ok(c, await getAgentRuntime().claudeCodeAccount());
+});
+
 router.get("/models", (c) => {
   const runtime = getAgentRuntime();
   const models = runtime.listModels();

@@ -29,6 +29,14 @@ import {
 } from "./approvals";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
+import {
+  createExternalWorkerLocator,
+  externalWorkerTarget,
+  noWorkerLocator,
+  type ClaudeAccountStatus,
+  type ClaudeWorkerLocator,
+  type ClaudeWorkerMode,
+} from "./sandbox-worker";
 
 const TASK_ID_BASE = 2_000_000_000;
 
@@ -53,6 +61,11 @@ export interface ClaudeCodeEngineOptions {
   execute: (ref: ConversationRef, call: ToolUseCall) => Promise<ToolResultPayload>;
   /** When set, tests skip the real socket. */
   connect?: (url: string, token: string) => WebSocketLike;
+  /**
+   * The worker on the sandbox (set up over SSH on first use). A worker named
+   * by `CLAUDE_WORKER_URL` / `CLAUDE_WORKER_TOKEN` takes precedence.
+   */
+  worker?: ClaudeWorkerLocator;
 }
 
 interface Listener {
@@ -141,14 +154,15 @@ export class ClaudeCodeEngine {
         "Claude subscription engine is off (CLAUDE_CODE_ENGINE_ENABLED).",
       );
     }
-    const url = env.CLAUDE_WORKER_URL?.trim();
-    const token = env.CLAUDE_WORKER_TOKEN?.trim();
-    if (!url || !token) {
+    let target: { url: string; token: string };
+    try {
+      target = await this.locator().resolve();
+    } catch (error) {
       return this.unavailable(
         ref,
         session,
         fallback,
-        "Claude subscription engine has no CLAUDE_WORKER_URL or CLAUDE_WORKER_TOKEN.",
+        error instanceof Error ? error.message : String(error),
       );
     }
     const turnId = input.requestId;
@@ -176,7 +190,7 @@ export class ClaudeCodeEngine {
     const done = new Promise<void>((resolve, reject) => {
       session.live = { turnId, assistantId, resolve, reject };
     });
-    this.socket(url, token).send({
+    this.socket(target.url, target.token).send({
       type: "turn",
       sessionId: String(ref),
       turnId,
@@ -240,28 +254,39 @@ export class ClaudeCodeEngine {
     enabled: boolean;
     fallback: ClaudeEngineFallback;
     configured: boolean;
+    mode: ClaudeWorkerMode;
     workerHost?: string;
   } {
     const env = this.env();
-    const url = env.CLAUDE_WORKER_URL?.trim();
-    let workerHost: string | undefined;
-    if (url) {
-      try {
-        workerHost = new URL(url).host;
-      } catch {
-        workerHost = undefined;
-      }
-    }
+    const locator = this.locator();
     return {
       enabled: claudeCodeEngineEnabled(env),
       fallback: claudeCodeFallback(env),
-      configured: Boolean(url && env.CLAUDE_WORKER_TOKEN?.trim()),
-      ...(workerHost ? { workerHost } : {}),
+      configured: locator.mode !== "none",
+      mode: locator.mode,
+      ...(locator.host ? { workerHost: locator.host } : {}),
     };
+  }
+
+  /** Whether Claude Code is installed and signed in where the worker runs. No secrets. */
+  account(): Promise<ClaudeAccountStatus> {
+    return this.locator().account();
+  }
+
+  /** Set the worker up ahead of the first turn when the engine is on. */
+  prepare(): void {
+    if (claudeCodeEngineEnabled(this.env())) this.locator().prepare();
+  }
+
+  /** A hand-run worker from the env wins; else the sandbox; else nothing. */
+  private locator(): ClaudeWorkerLocator {
+    if (externalWorkerTarget(this.env())) return createExternalWorkerLocator(this.env);
+    return this.options.worker ?? noWorkerLocator;
   }
 
   async close(): Promise<void> {
     this.client?.close();
+    this.options.worker?.close();
     await this.persist();
   }
 

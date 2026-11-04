@@ -55,6 +55,9 @@ function fakeTmuxVm() {
       return { exitCode: 0 };
     }
     if (command === loginShellCommand()) return { stdout: "bash\n", exitCode: 0 };
+    if (/^LC_ALL=C\.UTF-8 tmux -L ta-terminal send-keys -t ta-term-\d+ -l /.test(command)) {
+      return { exitCode: 0 };
+    }
     const fg =
       /^LC_ALL=C\.UTF-8 tmux -L ta-terminal display-message -p -t ta-term-(\d+) '#{pane_current_command}'$/.exec(
         command,
@@ -200,6 +203,17 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
         " \\; set -g history-limit 50000" +
         " \\; set -g escape-time 10",
     );
+  });
+
+  it("types a requested line into the new tab's shell, quoted, then Enter", async () => {
+    vm.clear();
+    const baseline = server.execCalls.length;
+    await service.create(80, 24, { typeLine: `echo "it's $HOME"` });
+    expect(server.execCalls.slice(baseline)).toContain(
+      "LC_ALL=C.UTF-8 tmux -L ta-terminal send-keys -t ta-term-1 -l 'echo \"it'\\''s $HOME\"'" +
+        " \\; send-keys -t ta-term-1 Enter",
+    );
+    vm.clear();
   });
 
   it("creates at the lowest free number and refuses past 12", { timeout: 20_000 }, async () => {

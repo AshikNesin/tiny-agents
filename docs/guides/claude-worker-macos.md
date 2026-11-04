@@ -1,5 +1,11 @@
 # Claude Code worker on macOS
 
+> **Optional.** With a sandbox configured you do not need this page: the
+> app installs and runs the worker on the sandbox itself
+> ([Claude subscription](../claude-subscription.md)). Follow it only to run
+> the worker on a separate machine, then set `CLAUDE_WORKER_URL` and
+> `CLAUDE_WORKER_TOKEN`, which take precedence.
+
 The worker runs on a Mac that already has a Claude subscription login:
 a Mac mini, or a macOS VM on that mini (Cua or Lume). Claude Code keeps
 the login in the Keychain of the GUI user. The worker has to run as that
