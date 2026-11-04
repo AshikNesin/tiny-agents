@@ -189,8 +189,8 @@ export function Transcript({
   return (
     <OwnerActionsProvider actions={actions}>
       <MessageScroller className="h-full">
-        <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-2.5 py-4 sm:px-5">
-          <MessageScrollerContent className="space-y-4" data-testid={contentTestId}>
+        <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 pt-6 pb-4 sm:px-6">
+          <MessageScrollerContent className="gap-4" data-testid={contentTestId}>
             {hasMore && (
               <div
                 ref={sentinel}
@@ -219,10 +219,12 @@ export function Transcript({
                 );
               }
               const { message, index } = item;
+              const dividerHere =
+                unreadDividerId != null && (item.ids ?? [message.id]).includes(unreadDividerId);
               return (
                 <Fragment key={message.id}>
                   {dayDivider}
-                  {unreadDividerId === message.id && (
+                  {dividerHere && (
                     <div
                       data-testid="unread-divider"
                       className="text-muted-foreground/80 flex items-center gap-2 py-1 text-[11px]"

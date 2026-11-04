@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   ChevronDown,
+  Cpu,
   Globe,
   Menu,
   Monitor,
@@ -30,9 +31,8 @@ import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import { ACTIVE_TOOL_STATUSES, TypingIndicator, USER_PILL } from "./ChatMessageView";
+import { ACTIVE_TOOL_STATUSES, TypingIndicator } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
-import { MessageAttachments } from "./Attachments";
 import { Transcript, type TranscriptPages } from "./Transcript";
 import {
   browserInUse,
@@ -321,6 +321,18 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
       }
     : {};
 
+  // The composer's model chip: switching it saves the bot, like its settings.
+  const changeModel = async (modelId: string) => {
+    if (modelId === bot.modelId) return;
+    try {
+      const saved = await botsApi.update(bot.id, { modelId });
+      onBotReset(saved);
+      refreshBotsInBackground();
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not switch the model"));
+    }
+  };
+
   const doReset = async () => {
     setConfirmReset(false);
     try {
@@ -348,43 +360,36 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
             Drop files to attach
           </div>
         )}
-        {/* Header: the bot's name opens its settings (profile, tools,
-            skills, delete); the right side holds two quiet icons. Floats on
-            the page background, no border. */}
-        <header className="flex h-14 shrink-0 items-center gap-1 px-3">
+        {/* Header: one line, as on the Code page — the bot's name (opens its
+            settings), what it runs on, then the live views and the chat's
+            actions as quiet icons. */}
+        <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
           <Button
             variant="ghost"
-            size="icon"
-            className="rounded-xl md:hidden"
+            size="icon-sm"
+            className="shrink-0 md:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
           >
-            <Menu className="size-5" />
+            <Menu />
           </Button>
           {/* The page's heading is the bot's name; the name opens its settings. */}
-          <h1 className="flex min-w-0">
+          <h1 className="flex min-w-0 items-center text-sm">
             <button
               type="button"
               onClick={guest ? undefined : onEditBot}
               disabled={guest}
-              className="text-foreground enabled:hover:bg-accent group/name flex h-8 min-w-0 items-center gap-2 rounded-xl px-2 text-left text-sm font-medium disabled:cursor-default"
+              className="text-foreground enabled:hover:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3 disabled:cursor-default"
               aria-label={guest ? bot.name : `Edit ${bot.name}`}
               title={guest ? undefined : "Bot settings"}
             >
               <BotAvatar name={bot.name} className="size-5" />
               <span className="truncate">{bot.name}</span>
-              {bot.description && (
-                <span className="text-muted-foreground hidden min-w-0 truncate font-normal lg:inline">
-                  {bot.description}
-                </span>
-              )}
-              {!guest && (
-                <ChevronDown className="text-muted-foreground group-hover/name:text-foreground size-3.5 shrink-0" />
-              )}
+              {!guest && <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />}
             </button>
             {(bot.guestIds?.length ?? 0) > 0 && (
               <span
-                className="text-muted-foreground flex items-center gap-1 self-center px-1 text-xs"
+                className="text-muted-foreground flex items-center gap-1 px-1 text-xs"
                 title="Shared chat: everyone in it sees every message"
               >
                 <Users className="size-3.5" />
@@ -392,11 +397,28 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
               </span>
             )}
           </h1>
-          <div className="ml-auto flex shrink-0 items-center">
+          {(bot.description || model) && (
+            <span className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-2 overflow-hidden text-xs lg:flex">
+              {bot.description && <span className="truncate">{bot.description}</span>}
+              {bot.description && model && (
+                <span className="text-muted-foreground/60" aria-hidden>
+                  ·
+                </span>
+              )}
+              {model && (
+                <span className="flex shrink-0 items-center gap-1" title={model.provider}>
+                  <Cpu className="size-3.5 shrink-0" />
+                  {model.name}
+                </span>
+              )}
+            </span>
+          )}
+          <span className="min-w-2 flex-1" />
+          <div className="flex shrink-0 items-center gap-0.5">
             <Button
               variant="ghost"
-              size="icon"
-              className={`text-muted-foreground hover:text-foreground relative rounded-xl ${
+              size="icon-sm"
+              className={`text-muted-foreground hover:text-foreground relative ${
                 showBrowser ? "bg-accent text-foreground" : ""
               }`}
               onClick={toggleBrowser}
@@ -414,7 +436,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
               <Globe className="size-4" />
               {browserActive && !showBrowser && (
                 <span
-                  className="bg-success absolute top-1.5 right-1.5 size-2 animate-pulse rounded-full"
+                  className="bg-success absolute top-1 right-1 size-1.5 animate-pulse rounded-full"
                   aria-hidden
                   data-testid="browser-activity"
                 />
@@ -423,8 +445,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
             {(computerConfigured || computer.open || computerActive) && (
               <Button
                 variant="ghost"
-                size="icon"
-                className={`text-muted-foreground hover:text-foreground relative rounded-xl ${
+                size="icon-sm"
+                className={`text-muted-foreground hover:text-foreground relative ${
                   showComputer ? "bg-accent text-foreground" : ""
                 }`}
                 onClick={toggleComputer}
@@ -444,7 +466,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                 <Monitor className="size-4" />
                 {computerActive && !showComputer && (
                   <span
-                    className="bg-success absolute top-1.5 right-1.5 size-2 animate-pulse rounded-full"
+                    className="bg-success absolute top-1 right-1 size-1.5 animate-pulse rounded-full"
                     aria-hidden
                     data-testid="computer-activity"
                   />
@@ -462,8 +484,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
             {!guest && (
               <Button
                 variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground rounded-xl"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => setConfirmReset(true)}
                 disabled={!canReset}
                 aria-label="Start a new chat"
@@ -496,10 +518,6 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           message pinned unless the reader scrolled up). The provider mounts
           at the pane root so the body can drive it (send → scroll to end). */}
         <div className="relative min-h-0 flex-1">
-          <div
-            aria-hidden="true"
-            className="chat-header-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-4"
-          />
           {/* Stream health: the transcript is frozen while disconnected. A
               floating pill, so the transcript does not shift under it. */}
           {(!online || reconnecting) && (
@@ -559,27 +577,33 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
                     </Message>
                   </MessageScrollerItem>
                 )}
-                {/* Messages the server holds behind (or steering into) the
-                    running reply (issue #9), in queue order before the
-                    in-flight Echoes; placement turns them into real bubbles. */}
-                {queued.map((item) => (
-                  <MessageScrollerItem
-                    key={`queued-${item.requestId}`}
-                    messageId={`queued-${item.requestId}`}
-                  >
-                    <QueuedMessageView
-                      item={item}
-                      onCancel={() => void ownerSend.cancelQueued(bot.id, item.requestId)}
-                    />
-                  </MessageScrollerItem>
-                ))}
               </>
             }
           />
         </div>
 
+        {/* Messages the server holds behind (or steering into) the running
+            reply (issue #9), as compact rows over the composer like the Code
+            page's queue; placement turns them into real bubbles. */}
+        {queued.length > 0 && (
+          <ul
+            className="mx-auto flex w-full max-w-[784px] flex-col items-end gap-1 px-4 pt-2 md:px-5"
+            aria-label="Waiting to send"
+          >
+            {queued.map((item) => (
+              <QueuedMessageView
+                key={`queued-${item.requestId}`}
+                item={item}
+                onCancel={() => void ownerSend.cancelQueued(bot.id, item.requestId)}
+              />
+            ))}
+          </ul>
+        )}
+
         <ChatComposer
           ref={composerRef}
+          models={models}
+          onModelChange={guest ? undefined : changeModel}
           bot={bot}
           model={model}
           gatewayConfigured={gatewayConfigured}
@@ -620,35 +644,42 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
 /**
  * A message the server holds while the bot is replying (issue #9): a steer
  * joins the running reply after its current tool round, a follow-up is
- * answered by the next run. Rendered like the owner's pill with its state
- * and a cancel (x) that withdraws it from the queue.
+ * answered by the next run. One compact row over the composer (the Code
+ * page's queue) with its state and a cancel (x) that withdraws it.
  */
 function QueuedMessageView({ item, onCancel }: { item: QueuedMessage; onCancel: () => void }) {
+  const files = item.attachments?.length ?? 0;
   return (
-    <Message align="end" data-testid="queued-bubble" data-mode={item.mode}>
-      <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
-        {item.attachments && item.attachments.length > 0 && (
-          <MessageAttachments attachments={item.attachments} />
-        )}
-        {item.text && (
-          <div className={USER_PILL}>
-            <p className="whitespace-pre-wrap">{item.text}</p>
-          </div>
-        )}
-        <div className="text-muted-foreground flex items-center gap-1 px-1 text-xs">
-          <span>
-            {item.mode === "steer" ? "Steering into the reply" : "Queued for the next reply"}
-          </span>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="hover:bg-accent hover:text-foreground flex size-5 items-center justify-center rounded-full"
-            aria-label="Cancel this message"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      </div>
-    </Message>
+    <li
+      data-testid="queued-bubble"
+      data-mode={item.mode}
+      className="bg-muted/60 flex max-w-[85%] min-w-0 items-center gap-2 rounded-2xl py-1 pr-1 pl-3 text-sm"
+    >
+      <span className="text-muted-foreground shrink-0 text-xs">
+        {item.mode === "steer" ? "Steering" : "Queued"}
+      </span>
+      <span className="min-w-0 flex-1 truncate" title={item.text}>
+        {item.text}
+      </span>
+      {files > 0 && (
+        <span className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs">
+          <Paperclip className="size-3" />
+          {files}
+        </span>
+      )}
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        onClick={onCancel}
+        aria-label="Cancel this message"
+        title={
+          item.mode === "steer"
+            ? "Joins the running reply · cancel"
+            : "Sent after this reply · cancel"
+        }
+      >
+        <X />
+      </Button>
+    </li>
   );
 }

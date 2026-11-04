@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@groot/ui/lib/utils";
-import { Ban, Check, Clock, Copy, ExternalLink, Hand, KeyRound, Sparkles } from "lucide-react";
+import {
+  Ban,
+  Check,
+  Clock,
+  Copy,
+  ExternalLink,
+  Hand,
+  KeyRound,
+  ListChecks,
+  Sparkles,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
 import { markdownComponents } from "../lib/markdown";
@@ -777,6 +787,116 @@ function ToolRow({
   );
 }
 
+/** Finished tool states: the call is over, whatever its outcome. */
+const FINISHED_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
+  "done",
+  "error",
+  "denied",
+  "expired",
+  "aborted",
+  "interrupted",
+]);
+
+/**
+ * A finished call that renders as a plain trace line (no card of its own):
+ * the calls a turn's tool steps fold together.
+ */
+function foldable(call: ChatToolCall): boolean {
+  return (
+    FINISHED_TOOL_STATUSES.has(call.status) &&
+    !call.questions &&
+    !call.shelley &&
+    call.name !== "message_bot"
+  );
+}
+
+type ToolStep =
+  | { kind: "call"; call: ChatToolCall; i: number }
+  | { kind: "group"; calls: ChatToolCall[]; i: number };
+
+/** Runs of two or more foldable calls become one group; the rest stay rows. */
+function toolSteps(calls: ChatToolCall[]): ToolStep[] {
+  const steps: ToolStep[] = [];
+  let run: ChatToolCall[] = [];
+  let start = 0;
+  const flush = () => {
+    if (run.length >= 2) steps.push({ kind: "group", calls: run, i: start });
+    else run.forEach((call, k) => steps.push({ kind: "call", call, i: start + k }));
+    run = [];
+  };
+  calls.forEach((call, i) => {
+    if (!foldable(call)) {
+      flush();
+      steps.push({ kind: "call", call, i });
+      return;
+    }
+    if (run.length === 0) start = i;
+    run.push(call);
+  });
+  flush();
+  return steps;
+}
+
+const failedCall = (call: ChatToolCall) => call.status !== "done";
+
+/** "Read the page ×3, searched the web": what a run of calls did, by label. */
+export function describeCalls(calls: ChatToolCall[], labels: ToolLabels): string {
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    const label = call.name === "load_skill" ? "Used a skill" : toolLabel(labels, call.name);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const parts = [...counts].map(([label, n]) => (n > 1 ? `${label} ×${n}` : label));
+  return parts
+    .map((part, i) => (i === 0 ? part : part.charAt(0).toLowerCase() + part.slice(1)))
+    .join(", ");
+}
+
+/** Finished tool calls folded into one line, as on the Code page; each call inside. */
+function ToolGroupRow({
+  calls,
+  labels,
+  askLabels,
+  botName,
+}: {
+  calls: ChatToolCall[];
+  labels: ToolLabels;
+  askLabels: ToolLabels;
+  botName: string;
+}) {
+  const failed = calls.filter(failedCall).length;
+  const duration = calls.reduce((sum, call) => sum + (call.durationMs ?? 0), 0);
+  return (
+    <Trace data-testid="tool-group">
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>
+          <TraceLine>
+            <TraceIcon>
+              <ListChecks />
+            </TraceIcon>
+            <TraceTitle>{describeCalls(calls, labels)}</TraceTitle>
+            {failed > 0 && (
+              <TraceDescription className="text-destructive">· {failed} failed</TraceDescription>
+            )}
+            {duration > 0 && <TraceDescription>{formatDuration(duration)}</TraceDescription>}
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="space-y-1">
+          {calls.map((call, i) => (
+            <ToolRow
+              key={`${call.id}-${i}-${call.name}`}
+              call={call}
+              label={toolLabel(labels, call.name)}
+              ask={toolAskLabel(askLabels, labels, call.name)}
+              botName={botName}
+            />
+          ))}
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  );
+}
+
 /** Label lookup for tool names, from the capability catalog. */
 export type ToolLabels = Record<string, string>;
 
@@ -1037,15 +1157,25 @@ function assistantView(
       <div className="min-w-0 flex-1">
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mb-2 space-y-1">
-            {message.toolCalls.map((call, i) => (
-              <ToolRow
-                key={`${call.id}-${i}-${call.name}`}
-                call={call}
-                label={toolLabel(toolLabels, call.name)}
-                ask={toolAskLabel(toolAskLabels, toolLabels, call.name)}
-                botName={botName}
-              />
-            ))}
+            {toolSteps(message.toolCalls).map((step) =>
+              step.kind === "group" ? (
+                <ToolGroupRow
+                  key={`group-${step.calls[0].id}-${step.i}`}
+                  calls={step.calls}
+                  labels={toolLabels}
+                  askLabels={toolAskLabels}
+                  botName={botName}
+                />
+              ) : (
+                <ToolRow
+                  key={`${step.call.id}-${step.i}-${step.call.name}`}
+                  call={step.call}
+                  label={toolLabel(toolLabels, step.call.name)}
+                  ask={toolAskLabel(toolAskLabels, toolLabels, step.call.name)}
+                  botName={botName}
+                />
+              ),
+            )}
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}

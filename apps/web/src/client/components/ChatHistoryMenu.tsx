@@ -76,8 +76,8 @@ export function ChatHistoryMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className={`text-muted-foreground hover:text-foreground rounded-xl ${
+          size="icon-sm"
+          className={`text-muted-foreground hover:text-foreground ${
             activeChatId ? "bg-accent text-foreground" : ""
           }`}
           aria-label="Chat history"

@@ -8,9 +8,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowUp, Paperclip, Square } from "lucide-react";
+import { ArrowUp, AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Square } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@groot/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { toast } from "sonner";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
@@ -30,6 +36,7 @@ import {
   type MentionableBot,
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
+import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
 import { errorMessage } from "../lib/errors";
 
 /** Most attachments one message can carry. */
@@ -88,6 +95,10 @@ export interface ChatComposerHandle {
 interface ChatComposerProps {
   bot: Bot;
   model: ModelInfo | undefined;
+  /** The catalog, for the model chip. */
+  models?: ModelInfo[];
+  /** Switch the bot's model from the chip; leave out to show it read-only (a guest). */
+  onModelChange?: (modelId: string) => Promise<void> | void;
   gatewayConfigured: boolean;
   busy: boolean;
   /**
@@ -99,13 +110,76 @@ interface ChatComposerProps {
   onEditBot: () => void;
 }
 
+function formatContext(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 ? 1 : 0)}M`;
+  return `${Math.round(tokens / 1000)}k`;
+}
+
 /**
- * The Grok-style composer pill: textarea, staged attachments, @mention
- * overlay and one action button that is Stop while the bot replies with
- * nothing typed, and Send (steer) otherwise.
+ * The model chip in the composer's toolbar, as on the Code page: a
+ * searchable picker that saves the bot's model.
+ */
+function ModelChip({
+  models,
+  value,
+  onChange,
+}: {
+  models: ModelInfo[];
+  value: string;
+  onChange?: (modelId: string) => Promise<void> | void;
+}) {
+  const current = models.find((m) => m.id === value);
+  const options: SearchSelectOption[] = models.map((m) => ({
+    value: m.id,
+    label: m.name,
+    group: m.provider,
+    description: [m.contextWindow ? `${formatContext(m.contextWindow)} context` : undefined, m.note]
+      .filter(Boolean)
+      .join(" · "),
+    keywords: [m.id, m.family],
+  }));
+  const label = (
+    <>
+      <Cpu className="opacity-70" />
+      <span className="max-w-28 truncate @xs:max-w-48">{current?.name ?? value}</span>
+    </>
+  );
+  if (!onChange) {
+    return (
+      <span
+        className="text-muted-foreground inline-flex h-7 min-w-0 items-center gap-1 px-2 text-xs font-medium [&_svg]:size-3.5 [&_svg]:shrink-0"
+        title="Model"
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <SearchSelect
+      label="Model"
+      value={value}
+      onValueChange={(next) => void onChange(next)}
+      options={options}
+      searchPlaceholder="Search models…"
+      emptyText="No model matches."
+      side="top"
+      contentClassName="w-80"
+      data-testid="chat-model"
+    >
+      {label}
+      <ChevronDown className="opacity-50" />
+    </SearchSelect>
+  );
+}
+
+/**
+ * The composer, styled after the Code page's: one Fluid InputMessage frame
+ * holding the textarea and a toolbar — "+" (files, mention a bot), the
+ * model chip, Queue while a reply runs, and one round button that is Stop
+ * while the bot replies with nothing typed, and Send (steer) otherwise.
  */
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { bot, model, gatewayConfigured, busy, onSend, onStop, onEditBot },
+  { bot, model, models = [], onModelChange, gatewayConfigured, busy, onSend, onStop, onEditBot },
   ref,
 ) {
   const [text, setText] = useState(() => readDraft(bot.id));
@@ -320,6 +394,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     pendingCaret.current = target;
   };
 
+  /** "+" → Mention a bot: type an `@` at the caret, which opens the picker. */
+  const startMention = () => {
+    const el = textareaRef.current;
+    const at = el?.selectionStart ?? text.length;
+    const before = text.slice(0, at);
+    const insertion = before && !/\s$/.test(before) ? " @" : "@";
+    setText(before + insertion + text.slice(at));
+    const target = at + insertion.length;
+    setCaret(target);
+    setMentionClosed(false);
+    pendingCaret.current = target;
+    requestAnimationFrame(() => el?.focus({ preventScroll: true }));
+  };
+
   // Place the caret in the same commit that renders the inserted mention: a
   // frame later it would race the owner's next keystrokes and jump back
   // mid-word.
@@ -454,20 +542,62 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             placeholder={`Message ${bot.name}`}
             rows={1}
             disabled={!enabled}
-            className="placeholder:text-fg-tertiary field-sizing-content max-h-40 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none disabled:opacity-50"
+            className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none disabled:opacity-50 md:text-sm md:leading-6"
           />
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!enabled || staged.length >= MAX_ATTACHMENTS}
-              aria-label="Attach files"
-              className="text-muted-foreground size-10 shrink-0 rounded-full"
-            >
-              <Paperclip className="size-5" />
-            </Button>
-            <div className="ml-auto shrink-0">
+          <div className="flex min-w-0 items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!enabled}
+                  aria-label="Add files or mention a bot"
+                  title="Add files or mention a bot"
+                  className="text-muted-foreground shrink-0 rounded-full"
+                  data-testid="composer-add"
+                >
+                  <Plus />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-64">
+                <DropdownMenuItem
+                  disabled={staged.length >= MAX_ATTACHMENTS}
+                  onSelect={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip />
+                  Add files or images
+                  <span className="text-muted-foreground ml-auto text-xs">paste · drop</span>
+                </DropdownMenuItem>
+                {mentionCandidates.length > 0 && (
+                  <DropdownMenuItem onSelect={startMention}>
+                    <AtSign />
+                    Mention a bot
+                    <span className="text-muted-foreground ml-auto text-xs">@</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+              {models.length > 0 && (
+                <ModelChip models={models} value={bot.modelId} onChange={onModelChange} />
+              )}
+            </div>
+            {busy && !showStop && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground shrink-0 rounded-full"
+                onMouseDown={keepFocus}
+                onClick={() => void send("followUp")}
+                disabled={!canSend}
+                aria-label="Queue for after this reply"
+                title="Queue for after this reply (Alt+Enter)"
+                data-testid="composer-queue"
+              >
+                <ListPlus />
+              </Button>
+            )}
+            <div className="shrink-0">
               {/* One button that changes job: send/steer, or stop while a
                   reply runs; the icon pops between the two (Fluid InputMessage). */}
               <Button
@@ -491,7 +621,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                       ? "Add to the running reply (Enter)"
                       : undefined
                 }
-                className="size-10 rounded-full disabled:opacity-30"
+                className="size-8 rounded-full disabled:opacity-30"
               >
                 <AnimatePresence mode="popLayout" initial={false}>
                   <motion.span
@@ -510,10 +640,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                       stopping ? (
                         <Spinner className="size-4" aria-hidden />
                       ) : (
-                        <Square className="size-3.5 fill-current" />
+                        <Square className="size-3 fill-current" />
                       )
                     ) : (
-                      <ArrowUp className="size-5" />
+                      <ArrowUp className="size-4" />
                     )}
                   </motion.span>
                 </AnimatePresence>
@@ -531,9 +661,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               busy || mentionTip ? "opacity-100" : "opacity-0"
             }`}
           >
-            {busy
-              ? "Enter to steer · Alt+Enter to queue · Esc to stop"
-              : "Type @ to tag another bot"}
+            {busy ? "Enter steers · Alt+Enter queues · Esc stops" : "Type @ to tag another bot"}
           </p>
         )}
         {mentionOpen && mention && (

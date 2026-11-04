@@ -60,11 +60,6 @@
   line-height: 21px;
 }
 
-/* Fade behind the floating chat header so the transcript scrolls under it. */
-.chat-header-fade {
-  background: linear-gradient(to bottom, var(--background) 0%, var(--background) 60%, transparent);
-}
-
 /* FeedbackBee (index.html embed). The panel opens as a centered modal over
    a dimmed backdrop (lib/feedback.ts closes it on an outside click). Inside
    the app the floating launcher is hidden and "Send feedback" in the

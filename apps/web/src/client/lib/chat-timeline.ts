@@ -26,11 +26,36 @@ export function isHiddenReply(message: ChatMessage): boolean {
 }
 
 export type TimelineItem =
-  | { kind: "message"; message: ChatMessage; index: number; at: number }
+  | {
+      kind: "message";
+      message: ChatMessage;
+      index: number;
+      at: number;
+      /** Ids of the messages folded into this row (see `isToolRound`), the first one's leading. */
+      ids?: string[];
+    }
   /** Back-to-back routine runs, oldest first; `at` is the newest one's finish. */
   | { kind: "routine-runs"; runs: RoutineRunCard[]; at: number };
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
+
+/**
+ * A finished assistant round that only called tools (no text, no
+ * reasoning): the agent loop stores one per tool round, so a bot that reads
+ * three pages leaves three of them before its answer. The timeline folds a
+ * run of them into the assistant message that follows, as the Code page
+ * does, so the turn reads as one row: its tool steps, then the reply.
+ */
+export function isToolRound(message: ChatMessage): boolean {
+  return (
+    message.role === "assistant" &&
+    message.status === "done" &&
+    !message.peer &&
+    !message.reasoning &&
+    message.text.trim().length === 0 &&
+    (message.toolCalls?.length ?? 0) > 0
+  );
+}
 
 export function chatTimeline(
   messages: readonly ChatMessage[],
@@ -53,6 +78,25 @@ export function chatTimeline(
   messages.forEach((message, index) => {
     if (isHiddenReply(message)) return;
     while (next < cards.length && cards[next].at < message.createdAt) addRun(cards[next++]);
+    const last = items.at(-1);
+    if (
+      last?.kind === "message" &&
+      isToolRound(last.message) &&
+      message.role === "assistant" &&
+      !message.peer &&
+      sameDay(last.at, message.createdAt)
+    ) {
+      // Keep the first round's id: the row's key stays put as rounds land.
+      last.message = {
+        ...message,
+        id: last.message.id,
+        toolCalls: [...(last.message.toolCalls ?? []), ...(message.toolCalls ?? [])],
+      };
+      last.ids = [...(last.ids ?? [last.message.id]), message.id];
+      last.index = index;
+      last.at = message.createdAt;
+      return;
+    }
     items.push({ kind: "message", message, index, at: message.createdAt });
   });
   while (next < cards.length) addRun(cards[next++]);

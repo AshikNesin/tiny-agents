@@ -145,37 +145,45 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-1 px-3">
+      {/* One line, as on the Code page: back, then the path bot / chat. */}
+      <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
         <Button
           variant="ghost"
-          size="icon"
-          className="rounded-xl md:hidden"
+          size="icon-sm"
+          className="shrink-0 md:hidden"
           onClick={() => setMobileOpen(true)}
           aria-label="Open menu"
         >
-          <Menu className="size-5" />
+          <Menu />
         </Button>
         <Button
           variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground rounded-xl"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground shrink-0"
           onClick={goToCurrent}
           aria-label="Back to current chat"
           title="Back to current chat"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeft />
         </Button>
-        <h1 className="flex min-w-0 items-center gap-2 px-1 text-sm font-medium">
+        <h1 className="flex min-w-0 items-center gap-1 px-1 text-sm">
           <BotAvatar name={bot.name} className="size-5 shrink-0" />
-          <span className="truncate">{bot.name}</span>
+          <span
+            className={`truncate ${chat ? "text-muted-foreground hidden sm:inline" : "font-medium"}`}
+          >
+            {bot.name}
+          </span>
           {chat && (
-            // Phones keep the header for the bot's name; the footer names the chat.
-            <span className="text-muted-foreground hidden min-w-0 truncate font-normal sm:inline">
-              · {title}
-            </span>
+            <>
+              <span className="text-muted-foreground/60 hidden sm:inline" aria-hidden>
+                /
+              </span>
+              <span className="min-w-0 truncate font-medium">{title}</span>
+            </>
           )}
         </h1>
-        <div className="ml-auto flex shrink-0 items-center">
+        <span className="min-w-2 flex-1" />
+        <div className="flex shrink-0 items-center gap-0.5">
           <ChatHistoryMenu
             botId={bot.id}
             conversationId={bot.conversationId}
@@ -185,8 +193,8 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground rounded-xl"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
                 aria-label="Past chat actions"
                 title="More"
                 disabled={!chat}
@@ -207,10 +215,6 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
       </header>
 
       <div className="relative min-h-0 flex-1">
-        <div
-          aria-hidden="true"
-          className="chat-header-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-4"
-        />
         {!view && (
           <div className="text-muted-foreground absolute inset-0 flex items-center justify-center">
             <Spinner className="size-5" />

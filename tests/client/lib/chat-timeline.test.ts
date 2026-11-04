@@ -78,4 +78,34 @@ describe("chatTimeline", () => {
       "real#3",
     ]);
   });
+
+  it("folds a run of tool-only rounds into the reply that follows", () => {
+    const round = (id: string, at: number): ChatMessage => ({
+      ...message(id, at),
+      text: "",
+      toolCalls: [{ id: `${id}-call`, name: "browser_snapshot", args: {}, status: "done" }],
+    });
+    const user: ChatMessage = { ...message("u", 0), role: "user", text: "read it" };
+    const items = chatTimeline([user, round("r1", 1), round("r2", 2), message("reply", 3)], []);
+    expect(shape(items)).toEqual(["u#0", "r1#3"]);
+    const folded = items[1];
+    if (folded.kind !== "message") throw new Error("expected a message");
+    expect(folded.ids).toEqual(["r1", "r2", "reply"]);
+    expect(folded.message.text).toBe("reply");
+    expect(folded.message.toolCalls?.map((call) => call.id)).toEqual(["r1-call", "r2-call"]);
+  });
+
+  it("leaves a round with text, or one still streaming, as its own row", () => {
+    const streaming: ChatMessage = {
+      ...message("s", 1),
+      text: "",
+      status: "streaming",
+      toolCalls: [{ id: "c", name: "browser_snapshot", args: {}, status: "running" }],
+    };
+    expect(shape(chatTimeline([message("a", 0), streaming, message("b", 2)], []))).toEqual([
+      "a#0",
+      "s#1",
+      "b#2",
+    ]);
+  });
 });
