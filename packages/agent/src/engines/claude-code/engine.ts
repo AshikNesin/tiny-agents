@@ -273,11 +273,12 @@ export class ClaudeCodeEngine {
     return pageBefore(this.require(ref).messages, before, limit);
   }
 
-  watch(
+  async watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
     window?: number,
-  ): ChatSubscription {
+  ): Promise<ChatSubscription> {
+    await this.restore();
     const session = this.require(ref);
     const initial = this.state(session, window);
     const entry: Listener = { ref, listener, window };
@@ -592,7 +593,18 @@ export class ClaudeCodeEngine {
       const parsed = JSON.parse(raw) as { sessions?: Record<string, ClaudeSession> };
       for (const [key, value] of Object.entries(parsed.sessions ?? {})) {
         const ref = Number(key);
-        if (this.sessions.has(ref)) continue;
+        const existing = this.sessions.get(ref);
+        if (existing) {
+          // `sync()` ran before the file loaded (the first read after a
+          // restart): keep its config, take the saved transcript and resume id.
+          if (existing.messages.length === 0) {
+            existing.messages = value.messages ?? [];
+            existing.claudeSessionId ??= value.claudeSessionId;
+            existing.nextTask = Math.max(existing.nextTask, value.nextTask ?? TASK_ID_BASE);
+            if (value.surface === "pi") existing.surface = "pi";
+          }
+          continue;
+        }
         // YOLO and the vault tools come from the runtime's sync, never the file.
         const restored = {
           ...value,
@@ -611,6 +623,8 @@ export class ClaudeCodeEngine {
 
   private async persist(): Promise<void> {
     if (!this.options.persistPath) return;
+    // Never overwrite the file before it was read, or a restart loses it.
+    await this.restore();
     const sessions: Record<string, ClaudeSession> = {};
     for (const [ref, session] of this.sessions) {
       const { vaultTools: _vaultTools, yolo: _yolo, ...rest } = session;
