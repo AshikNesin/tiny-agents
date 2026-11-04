@@ -19,7 +19,8 @@ tiny-agents-sandbox container (Debian 13, user exedev, passwordless sudo)
   ├─ Terminal tabs: tmux 3.5
   ├─ Browser: Google Chrome (Chromium on arm64) on an Xtigervnc display (CDP + VNC via SSH tunnels)
   ├─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
-  └─ Claude Code: Node, the Agent SDK and the CLI, preinstalled for the Claude plan engine
+  ├─ Claude Code: Node, the Agent SDK and the CLI, preinstalled for the Claude plan engine
+  └─ Shelley: a web-based coding agent, started with the container on 127.0.0.1:9000
 ```
 
 ## Setup
@@ -53,6 +54,9 @@ You need Docker (Docker Desktop, OrbStack, Colima or Docker Engine) and about
    Claude Code is already in the image; the login is kept in the `home`
    volume. See [Claude subscription](../claude-subscription.md).
 
+5. Optional: open [Shelley](#shelley) at <http://127.0.0.1:9000> and add a
+   model provider, or start the sandbox with `SHELLEY_ANTHROPIC_API_KEY` set.
+
 ## Everyday commands
 
 | Command              | What it does                                                       |
@@ -74,6 +78,36 @@ The container restarts with Docker (`restart: unless-stopped`).
   `.env` still works too; the app installs those over SSH on first use.
 - **The key inline** instead of a file (for an env that can't hold files):
   `SANDBOX_SSH_KEY` takes the private key, with `\n` for newlines.
+
+## Shelley
+
+[Shelley](https://github.com/boldsoftware/shelley) is a web-based coding agent
+that works in the sandbox directly. The image installs the latest release, and
+the container starts it on every start, as `exedev`, at
+<http://127.0.0.1:9000>; it is restarted whenever it exits.
+
+- **Which binary:** `~/.local/bin/shelley` when you put one there (it lives on
+  the `home` volume, so it survives rebuilds), else the image's
+  `/usr/local/bin/shelley`. When neither exists (the download failed at build
+  time, or the image was built with `--build-arg INSTALL_SHELLEY=0`), the
+  latest release is installed into `~/.local/bin` on start. Every download is
+  checked against the release's `checksums.txt`. Shelley's own upgrade button
+  works too; `pnpm sandbox:up` after a rebuild brings the image's copy back
+  to the release it was built with.
+- **Models:** add a provider in Shelley's UI (kept in its database), or set
+  keys in the shell before `pnpm sandbox:up`: `SHELLEY_ANTHROPIC_API_KEY`,
+  `SHELLEY_OPENAI_API_KEY`, `SHELLEY_GEMINI_API_KEY`,
+  `SHELLEY_FIREWORKS_API_KEY`. Only Shelley's process gets them (under their
+  usual names); sshd, and so bots' commands and the Claude worker, never do.
+- **State:** `~/.config/shelley/` holds its database (`shelley.db`), CLI
+  socket and log (`serve.log`); `pnpm sandbox:reset` deletes it with the rest
+  of the home volume.
+- **Options:** `SANDBOX_SHELLEY_PORT=9001` publishes it on another loopback
+  port; `SANDBOX_SHELLEY=0` keeps it from starting; `SANDBOX_SHELLEY_VERSION`
+  pins the release tag the image installs (default `latest`).
+
+Shelley has no login of its own, so like SSH it is published on `127.0.0.1`
+only. Anyone who can reach that port can run commands as `exedev`.
 
 ## Mounting host files
 
@@ -128,8 +162,8 @@ Docker reads the mounts when it creates the container, so run
   on first use (the lists in `browser-vm-setup.ts` and `computer-vm-setup.ts`)
   and leaves the same markers, so the first bot call doesn't wait on apt.
   `tests/server/app/agent/local-sandbox.test.ts` fails when the lists drift.
-- `docker/sandbox/compose.yml` publishes SSH on **127.0.0.1 only**; nothing off
-  this machine can reach it. sshd accepts only `exedev` with the generated key.
+- `docker/sandbox/compose.yml` publishes SSH and Shelley on **127.0.0.1 only**;
+  nothing off this machine can reach them. sshd accepts only `exedev` with the generated key.
 - The `home` volume keeps `/home/exedev` (bots' files, browser profiles,
   desktops) across rebuilds. The `host-keys` volume keeps sshd's host key, so
   the key the app pinned on first connect stays valid.
