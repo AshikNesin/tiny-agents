@@ -44,12 +44,12 @@ strip, `TerminalView.tsx` one terminal) and `apps/web/src/client/lib/`
 
 ## The four ingredients
 
-| exe-scroll ingredient | This feature                                                                                                                                                                                                                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Network roaming       | The WS drops, the view retries with backoff (1, 3, 5, 10, 20, 30 s) and a **fresh single-use ticket per attempt**, and keeps the xterm buffer; the tab strip shows a pulsing dot while reconnecting. Output from the outage lands in tmux history and appears in the re-attach redraw.   |
-| Session management    | A tab **is** a tmux session on the VM. The tab list is read from the VM and polled every 5 s, so tabs survive the browser, the app process and the device, and tabs opened from another device appear on their own. Attach uses `attach-session -d`, so exactly one viewer drives a tab. |
-| Scrollback            | tmux history (`history-limit 50000`) with `mouse on` — the wheel scrolls into history on the VM; the attach redraw repaints the visible pane. The buffer living on the VM is the design, not an accident.                                                                                |
-| Modern terminal       | xterm.js 6 renders (colors, keys); the pty is requested with `term: "xterm-256color"`; resize propagates as a control frame through `setWindow` and tmux follows the SIGWINCH, so vim redraws.                                                                                           |
+| exe-scroll ingredient | This feature                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Network roaming       | The WS drops, the view retries with backoff (1, 3, 5, 10, 20, 30 s) and a **fresh single-use ticket per attempt**, and keeps the xterm buffer; the tab strip shows a pulsing dot while reconnecting. Output from the outage lands in tmux history and appears in the re-attach redraw.                                                                                |
+| Session management    | A tab **is** a tmux session on the VM. The tab list is read from the VM and polled every 5 s, so tabs survive the browser, the app process and the device, and tabs opened from another device appear on their own. Every browser tab is its own tmux client (no `-d`: it closed the other device's view for good); `window-size latest` lets the one typing size it. |
+| Scrollback            | tmux history (`history-limit 50000`) with `mouse on` — the wheel scrolls into history on the VM; the attach redraw repaints the visible pane. The buffer living on the VM is the design, not an accident.                                                                                                                                                             |
+| Modern terminal       | xterm.js 6 renders (WebGL, DOM fallback) with unicode11 widths so emoji/CJK agree with tmux; tmux gets `RGB`/`clipboard`/`hyperlinks` features, so truecolor, OSC 52 copy and OSC 8 links pass through; resize propagates as a control frame through `setWindow` and tmux follows the SIGWINCH.                                                                       |
 
 ## Transport: a fresh SSH connection per exec and per attach
 
@@ -68,18 +68,28 @@ ttyd-shaped, two frame kinds:
 
 - **Binary frames are raw pty bytes**, both directions, untouched. The
   bridge never parses or logs them — they are everything the owner types.
-- **Text frames are control.** v1 has one message, resize:
-  `{"t":"resize","cols":120,"rows":34}` (values clamped 2..500 cols,
-  2..300 rows; malformed control frames are ignored, not fatal — a buggy
-  client must not lose its terminal).
+- **Text frames are control** (malformed or unknown ones are ignored, not
+  fatal — a buggy client must not lose its terminal):
+  - `{"t":"resize","cols":120,"rows":34}`, clamped 2..500 cols, 2..300 rows.
+  - `{"t":"pause"}` / `{"t":"resume"}`: client flow control. The client
+    counts bytes received but not yet parsed by xterm; past 512 KB it
+    pauses the server (which stops reading the SSH channel), below 64 KB it
+    resumes. Independent of the server's own 4 MB socket-buffer pause; the
+    channel reads again only when neither holds.
+  - `{"t":"ping"}`, answered `{"t":"pong"}`. Sent every 20 s **only while
+    the page is visible**, plus once on every return to the page. No reply
+    within 8 s means a half-open socket (a laptop that slept, a proxy that
+    dropped it), so the client abandons it and reconnects at once. A hidden
+    page sends nothing, so the 10-minute idle close still frees tabs nobody
+    is looking at, but never one someone is reading.
 
 Close codes are a contract with the client's reconnect logic:
 
-| Code | Meaning                                              | Client behavior                                        |
-| ---- | ---------------------------------------------------- | ------------------------------------------------------ |
-| 1000 | another viewer detached us, or the tmux session died | stop; the 5 s poll shows the truth                     |
-| 4000 | idle: ten minutes with no frames either way          | reconnect with a fresh ticket when the user returns    |
-| 1011 | the SSH attach failed after the ticket was spent     | retry re-fetches a ticket, whose 404 stops it for good |
+| Code | Meaning                                           | Client behavior                                        |
+| ---- | ------------------------------------------------- | ------------------------------------------------------ |
+| 1000 | the tmux client was detached, or the session died | stop; overlay offers Reconnect; the poll shows truth   |
+| 4000 | idle: ten minutes with no frames either way       | reconnect with a fresh ticket when the user returns    |
+| 1011 | the SSH attach failed after the ticket was spent  | retry re-fetches a ticket, whose 404 stops it for good |
 
 Auth follows the VNC bridge exactly: browsers cannot set WS headers, so the
 page first calls `POST /terminal/sessions/:name/ticket` (normal session
@@ -92,7 +102,40 @@ Ping/pong every 30 s; a slow client is handled by pausing the SSH read side
 past 4 MB queued, then resuming (the VNC bridge's constant).
 
 Attach initial size rides the WS query (`?cols=&rows=`), validated at the
-boundary.
+boundary. The client measures before it connects, so tmux attaches at the
+rendered grid instead of 120x34 followed by a full-screen redraw.
+
+## Clipboard
+
+Why paste used to fail: xterm.js encodes Ctrl+V as `^V` and cancels the
+key event, so the browser never fired `paste` (on Windows/Linux only
+right-click paste worked). `classifyKey` in `lib/xterm.ts` returns `false`
+for the paste chords (Ctrl+V, Ctrl+Shift+V, Shift+Insert; Cmd+V on macOS)
+**without** `preventDefault`, so the browser's native paste event reaches
+xterm's textarea and xterm sends it bracketed. This needs no clipboard
+permission and works on plain http, where `navigator.clipboard` does not
+exist. Coolify and AgentsInTheCloud fix it the same way.
+
+Copy has two routes:
+
+- **tmux selection** (plain drag, double-click): tmux owns the mouse
+  (`mouse on`), so it makes the selection and, with `set-clipboard on` and
+  the `clipboard` terminal feature, sends it out as OSC 52. The xterm
+  clipboard addon gets a custom provider: tmux sends an _empty_ selection
+  parameter, which the stock provider ignores (it only accepts `c`), and
+  clipboard **reads** (`ESC]52;c;?`) are refused so a program on the VM can
+  never read the owner's clipboard. A "Copied" toast confirms.
+- **local selection**: Shift+drag (Option+drag on macOS,
+  `macOptionClickForcesSelection`) selects in xterm; Ctrl+C with a
+  selection, Ctrl+Shift+C, or Cmd+C copies it (Ctrl+C without one stays
+  `^C`). Writes fall back to `execCommand("copy")` off https.
+
+Right-click opens a Copy / Paste / Select all menu (tmux's own right-click
+menus are unbound). Its Paste, like the keys panel's, needs
+`navigator.clipboard.readText`; where that is missing or refused it tells
+the owner which chord to press instead. Pastes from the panel go through
+`term.paste()`, so a multi-line paste is bracketed and does not run line by
+line.
 
 ## Keys panel and full screen
 
@@ -128,6 +171,15 @@ boundary.
 
 ## Session model and UI behaviors
 
+- **Hidden hosts never fit.** A `display:none` host measures 0x0; fitting
+  it would shrink the pty and make tmux redraw everything twice. The view
+  column is `min-w-0 overflow-hidden` so the grid takes its width from the
+  layout, never from xterm's canvas (a bigger font used to widen the
+  column, which refit the grid, which widened it again).
+- **A re-attach starts from a clean terminal.** On every reconnect after
+  the first, the view calls `term.reset()` before tmux's redraw lands, so
+  modes left by the old attach (mouse tracking, bracketed paste, alt
+  screen) cannot bleed into the new picture.
 - **Tabs are always mounted, hidden with `display:none`.** One
   `TerminalView` per session exists for the whole time the session is
   listed; xterm.js happily renders into a `display:none` host (it just has
@@ -148,8 +200,10 @@ boundary.
   foreground process as a muted suffix while one runs.
 - Empty, setup and failed states use `EmptyState`/`ErrorState`: no tabs
   ("Open your first tab"), `SANDBOX_HOST` unset, tmux missing (with the
-  exact install command), sandbox unreachable. Ctrl+Shift+C copies the
-  selection; paste rides the browser's own paste event (bracketed paste).
+  exact install command), sandbox unreachable.
+- Font size is one setting for every tab (A−/A+ in the header, Ctrl/Cmd
+  `=`/`-`/`0` in the terminal), persisted per browser; a cols×rows badge
+  shows while the grid changes. Links open with Cmd/Ctrl+click only.
 
 ## API
 

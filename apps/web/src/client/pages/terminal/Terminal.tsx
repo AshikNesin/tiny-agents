@@ -20,6 +20,7 @@ import {
   Minimize2,
   MonitorOff,
   PackageOpen,
+  Minus,
   Plus,
   SquareTerminal,
   X,
@@ -38,6 +39,11 @@ import type { TerminalConnectionState } from "../../lib/terminal-ws";
 import { TerminalView, type TerminalControls } from "./TerminalView";
 import { TerminalKeysPanel } from "./TerminalKeysPanel";
 import { errorMessage } from "../../lib/errors";
+import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from "../../lib/xterm";
+import { isMac } from "../../lib/clipboard";
+
+/** The modifier the terminal's font chords use on this platform. */
+const MOD = isMac() ? "⌘" : "Ctrl";
 
 /** GET /terminal/sessions answers { status, sessions } (frozen contract). */
 
@@ -73,6 +79,26 @@ function storeKeysOpen(open: boolean): void {
   }
 }
 
+const FONT_KEY = "tiny-agents:terminal-font-size";
+
+function readFontSize(): number {
+  try {
+    const stored = Number(window.localStorage.getItem(FONT_KEY));
+    if (stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) return stored;
+  } catch {
+    /* storage unavailable: the default */
+  }
+  return DEFAULT_FONT_SIZE;
+}
+
+function storeFontSize(px: number): void {
+  try {
+    window.localStorage.setItem(FONT_KEY, String(px));
+  } catch {
+    /* storage unavailable: the choice just won't persist */
+  }
+}
+
 type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
 
 export function TerminalPage() {
@@ -84,6 +110,7 @@ export function TerminalPage() {
   const [creating, setCreating] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(readKeysOpen);
+  const [fontSize, setFontSize] = useState(readFontSize);
   const confirm = useConfirm();
   const regionRef = useRef<HTMLDivElement>(null);
 
@@ -213,6 +240,18 @@ export function TerminalPage() {
     regionRef.current?.requestFullscreen?.().catch(() => undefined);
   };
 
+  // One size for every tab: switching tabs never changes the text size.
+  const stepFont = useCallback((step: 1 | -1 | 0) => {
+    setFontSize((current) => {
+      const next =
+        step === 0
+          ? DEFAULT_FONT_SIZE
+          : Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, current + step));
+      storeFontSize(next);
+      return next;
+    });
+  }, []);
+
   const toggleKeys = () => {
     setKeysOpen((open) => {
       storeKeysOpen(!open);
@@ -310,16 +349,17 @@ export function TerminalPage() {
         >
           {sessions.map((session) => {
             const isActive = session.name === active;
-            const connecting = CONNECTING.has(tabStatus[session.name] ?? "connecting");
+            const state = tabStatus[session.name] ?? "connecting";
+            const connecting = CONNECTING.has(state);
             const command = session.process;
             return (
               <div
                 key={session.name}
                 className={cn(
-                  "flex shrink-0 items-center gap-1 rounded-t-lg px-2.5 py-1.5 text-sm",
+                  "group flex shrink-0 items-center gap-1 rounded-t-lg py-1.5 pr-1 pl-2.5 text-sm",
                   isActive
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    ? "bg-background text-foreground ring-1 ring-border [clip-path:inset(-1px_-1px_0_-1px)]"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
                 <button
@@ -330,12 +370,19 @@ export function TerminalPage() {
                   className="flex items-center gap-1.5"
                   data-testid={`terminal-tab-${session.name}`}
                 >
-                  {connecting && (
-                    <span
-                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning"
-                      title="Reconnecting"
-                    />
-                  )}
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      connecting
+                        ? "animate-pulse bg-warning"
+                        : state === "live"
+                          ? "bg-success"
+                          : "bg-muted-foreground/50",
+                    )}
+                    title={connecting ? "Connecting" : state === "live" ? "Connected" : "Ended"}
+                    data-testid={`terminal-tab-status-${session.name}`}
+                    data-state={state}
+                  />
                   <span className="font-medium">{tabLabel(session.name)}</span>
                   {command && <span className="text-xs opacity-60">{command}</span>}
                 </button>
@@ -343,7 +390,7 @@ export function TerminalPage() {
                   type="button"
                   onClick={() => void removeTab(session.name)}
                   aria-label={`Close tab ${tabLabel(session.name)}`}
-                  className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  className="rounded p-0.5 text-muted-foreground opacity-60 group-hover:opacity-100 hover:bg-muted hover:text-foreground"
                   data-testid={`terminal-close-${session.name}`}
                 >
                   <X className="size-3.5" />
@@ -367,12 +414,18 @@ export function TerminalPage() {
             row), at md+ it docks beside it, and since the terminal keeps
             its column either way, its box only changes on the md crossing. */}
         <div className="relative flex min-h-0 flex-1">
-          <div className="h-[60vh] min-h-[320px] w-full md:h-full md:min-h-0">
+          {/* min-w-0 + overflow-hidden: the column takes its width from the
+              row, never from xterm's canvas. Without them a bigger font
+              widened the column, which refit the grid, which widened it
+              again, and the keys panel got squeezed. */}
+          <div className="h-[60vh] min-h-[320px] min-w-0 flex-1 overflow-hidden md:h-full md:min-h-0">
             {sessions.map((session) => (
               <TerminalView
                 key={session.name}
                 name={session.name}
                 active={session.name === active}
+                fontSize={fontSize}
+                onFontSizeKey={stepFont}
                 onState={(state) => onState(session.name, state)}
                 onResize={(size) => {
                   sizeRef.current = size;
@@ -413,6 +466,45 @@ export function TerminalPage() {
           <>
             {active && (
               <>
+                <div
+                  className="flex items-center rounded-lg ring-1 ring-border"
+                  role="group"
+                  aria-label="Font size"
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => stepFont(-1)}
+                    disabled={fontSize <= MIN_FONT_SIZE}
+                    aria-label="Smaller text"
+                    title={`Smaller text (${MOD} −)`}
+                    className="text-muted-foreground hover:text-foreground"
+                    data-testid="terminal-font-down"
+                  >
+                    <Minus className="size-3.5" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => stepFont(0)}
+                    title={`Reset text size (${MOD} 0)`}
+                    className="min-w-7 text-center font-mono text-xs text-muted-foreground tabular-nums hover:text-foreground"
+                    data-testid="terminal-font-size"
+                  >
+                    {fontSize}
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => stepFont(1)}
+                    disabled={fontSize >= MAX_FONT_SIZE}
+                    aria-label="Larger text"
+                    title={`Larger text (${MOD} +)`}
+                    className="text-muted-foreground hover:text-foreground"
+                    data-testid="terminal-font-up"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
                   size="icon-sm"

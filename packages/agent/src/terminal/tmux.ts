@@ -67,23 +67,67 @@ export function versionCommand(): string {
 }
 
 /**
+ * The terminal settings, as one `\;`-joined tmux chain. Every entry is
+ * idempotent (plain `set`, an indexed `terminal-features` slot rather than
+ * `-a`, bind/unbind), so it runs on every create AND every attach: a tmux
+ * server started by an older build picks the settings up on the next
+ * attach instead of needing a restart.
+ *
+ * - `status off`, `mouse on`, `history-limit`, `escape-time`: the tab is the
+ *   whole window, the wheel scrolls tmux's history (the real scrollback), and
+ *   Esc is not held long enough to feel laggy in vim.
+ * - `set-clipboard on` + the `clipboard` feature: a mouse selection in tmux
+ *   (drag, double-click) is sent to the browser as OSC 52, and the page's
+ *   clipboard handler writes it to the system clipboard. Without the
+ *   feature tmux never learns the outer terminal can take it.
+ * - `RGB`: 24-bit colour passes through instead of being squashed to 256.
+ * - `hyperlinks`: OSC 8 links reach xterm, which makes them clickable.
+ * - `window-size latest`: every browser tab is its own tmux client (no
+ *   `attach -d` kicking the other device off); the one typing sizes it.
+ * - `focus-events`: vim/TUIs learn when the browser tab loses focus.
+ * - Shift+PageUp/PageDown page through tmux history from the keyboard.
+ * - Right-click is unbound so tmux's own popup menu never appears over the
+ *   page's context menu (Copy/Paste), which the browser shows instead.
+ */
+export const TERMINAL_SETTINGS: readonly string[] = [
+  "set -g status off",
+  "set -g mouse on",
+  `set -g history-limit ${SCROLLBACK}`,
+  "set -s escape-time 10",
+  "set -s set-clipboard on",
+  "set -s focus-events on",
+  "set -g window-size latest",
+  `set -s 'terminal-features[90]' 'xterm*:RGB:clipboard:hyperlinks:strikethrough:usstyle:overline'`,
+  "bind -n S-PPage copy-mode -eu",
+  "bind -T copy-mode S-PPage send -X page-up",
+  "bind -T copy-mode S-NPage send -X page-down",
+  "unbind -n MouseDown3Pane",
+  "unbind -n M-MouseDown3Pane",
+  "unbind -n MouseDown3Status",
+  "unbind -n MouseDown3StatusLeft",
+];
+
+/** tmux commands joined into one invocation's chain. */
+const chain = (commands: readonly string[]): string => commands.join(" \\; ");
+
+/**
  * Create a detached session and apply the terminal settings in the same
  * command. `set -g` runs against the fresh server, so it applies to every
  * later session on the socket too; re-running it is idempotent.
  */
 export function newSessionCommand(name: SessionName, cols: number, rows: number): string {
-  return (
-    `${tmux(`new-session -d -s ${name} -x ${cols} -y ${rows}`)}` +
-    ` \\; set -g status off` +
-    ` \\; set -g mouse on` +
-    ` \\; set -g history-limit ${SCROLLBACK}` +
-    ` \\; set -g escape-time 10`
-  );
+  return tmux(chain([`new-session -d -s ${name} -x ${cols} -y ${rows}`, ...TERMINAL_SETTINGS]));
 }
 
-/** Attach, detaching any previous viewer first (one viewer per tab). */
+/**
+ * Attach as one more client of the session. No `-d`: detaching the other
+ * viewers made a tab open on a second device (or a second browser tab)
+ * close the first one for good. tmux keeps every client in sync and
+ * `window-size latest` lets the most recently active one set the size.
+ * The settings run first so the attach itself sees them.
+ */
 export function attachCommand(name: SessionName): string {
-  return tmux(`attach-session -d -t ${name}`);
+  return tmux(chain([...TERMINAL_SETTINGS, `attach-session -t ${name}`]));
 }
 
 export function killCommand(name: SessionName): string {

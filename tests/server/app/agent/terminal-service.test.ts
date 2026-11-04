@@ -22,8 +22,10 @@ import {
 } from "../../../../packages/agent/src/terminal/terminal";
 import { createSsh2TerminalTransport } from "../../../../packages/agent/src/terminal/terminal-ssh2";
 import {
+  attachCommand,
   listCommand,
   loginShellCommand,
+  newSessionCommand,
   type SessionName,
 } from "../../../../packages/agent/src/terminal/tmux";
 
@@ -193,13 +195,7 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     await service.list();
     expect(server.execCalls[baseline]).toBe(listCommand());
     await service.create(120, 34);
-    expect(server.execCalls).toContain(
-      "LC_ALL=C.UTF-8 tmux -L ta-terminal new-session -d -s ta-term-1 -x 120 -y 34" +
-        " \\; set -g status off" +
-        " \\; set -g mouse on" +
-        " \\; set -g history-limit 50000" +
-        " \\; set -g escape-time 10",
-    );
+    expect(server.execCalls).toContain(newSessionCommand(name(1), 120, 34));
   });
 
   it("creates at the lowest free number and refuses past 12", { timeout: 20_000 }, async () => {
@@ -241,7 +237,8 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     const saw: Buffer[] = [];
     stream.on("data", (b: Buffer) => saw.push(b));
     const fake = attached.at(-1)!;
-    expect(fake.command).toBe("LC_ALL=C.UTF-8 tmux -L ta-terminal attach-session -d -t ta-term-1");
+    expect(fake.command).toBe(attachCommand(name(1)));
+    expect(fake.command).toMatch(/ \\; attach-session -t ta-term-1$/);
     expect(fake.term).toBe("xterm-256color");
     expect(fake.cols).toBe(100);
     expect(fake.rows).toBe(30);

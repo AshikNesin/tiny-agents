@@ -4,6 +4,7 @@
  * frozen (tabs in the ls format are real TAB bytes; LC_ALL is required
  * because ssh2 sessions carry no LANG).
  */
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 import {
   MAX_SESSIONS,
@@ -21,6 +22,7 @@ import {
   sessionNumber,
   versionCommand,
   type SessionName,
+  TERMINAL_SETTINGS,
 } from "../../../../packages/agent/src/terminal/tmux";
 
 const name = (n: number) => `ta-term-${n}` as SessionName;
@@ -66,17 +68,30 @@ describe("command builders", () => {
   it("creates a session and applies the settings in one command", () => {
     expect(newSessionCommand(name(3), 120, 34)).toBe(
       "LC_ALL=C.UTF-8 tmux -L ta-terminal new-session -d -s ta-term-3 -x 120 -y 34" +
-        " \\; set -g status off" +
-        " \\; set -g mouse on" +
-        " \\; set -g history-limit 50000" +
-        " \\; set -g escape-time 10",
+        TERMINAL_SETTINGS.map((setting) => ` \\; ${setting}`).join(""),
     );
   });
 
-  it("attaches with -d and targets by name", () => {
-    expect(attachCommand(name(5))).toBe(
-      "LC_ALL=C.UTF-8 tmux -L ta-terminal attach-session -d -t ta-term-5",
+  it("re-applies the settings on attach and never detaches other viewers", () => {
+    const command = attachCommand(name(5));
+    expect(command).toBe(
+      "LC_ALL=C.UTF-8 tmux -L ta-terminal " +
+        [...TERMINAL_SETTINGS, "attach-session -t ta-term-5"].join(" \\; "),
     );
+    // `-d` detached every other client: a second device closed the first.
+    expect(command).not.toMatch(/attach-session -d/);
+  });
+
+  it("has the settings copy and colour depend on", () => {
+    // OSC 52 out of tmux, so a mouse selection reaches the browser clipboard.
+    expect(TERMINAL_SETTINGS).toContain("set -s set-clipboard on");
+    const features = TERMINAL_SETTINGS.find((s) => s.includes("terminal-features"));
+    // An indexed slot, never `-a`: the chain runs on every attach.
+    expect(features).toMatch(/terminal-features\[\d+\]/);
+    expect(features).toMatch(/clipboard/);
+    expect(features).toMatch(/RGB/);
+    expect(TERMINAL_SETTINGS).toContain("set -g mouse on");
+    expect(TERMINAL_SETTINGS).toContain("set -g window-size latest");
   });
 
   it("kills, checks existence, reads the foreground process", () => {
@@ -206,5 +221,50 @@ describe("isBusy", () => {
   it("treats an unreadable login shell as busy (confirm, the safe side)", () => {
     expect(isBusy("bash", null)).toBe(true);
     expect(isBusy(null, null)).toBe(false);
+  });
+});
+
+const hasTmux = (() => {
+  try {
+    execFileSync("tmux", ["-V"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * The chain against a real tmux, where one is installed: a typo in an
+ * option name only fails here, and the strings above can't catch it.
+ */
+describe.skipIf(!hasTmux)("settings chain against real tmux", () => {
+  const socket = `ta-test-${process.pid}`;
+  const run = (command: string) =>
+    execFileSync("sh", ["-c", command.replace("-L ta-terminal", `-L ${socket}`)], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+  it("is accepted by tmux, twice, without duplicating anything", () => {
+    try {
+      run(newSessionCommand(name(1), 100, 30));
+      // The attach chain minus the attach itself (no tty here).
+      const settingsOnly = attachCommand(name(1)).replace(/ \\; attach-session -t \S+$/, "");
+      run(settingsOnly);
+      run(settingsOnly);
+      const tmux = `LC_ALL=C.UTF-8 tmux -L ${socket}`;
+      expect(run(`${tmux} show -s set-clipboard`).trim()).toBe("set-clipboard on");
+      const features = run(`${tmux} show -s terminal-features`)
+        .split("\n")
+        .filter((line) => line.includes("RGB"));
+      expect(features).toHaveLength(1);
+      expect(run(`${tmux} show -g window-size`).trim()).toBe("window-size latest");
+    } finally {
+      try {
+        execFileSync("tmux", ["-L", socket, "kill-server"], { stdio: "ignore" });
+      } catch {
+        // Already gone.
+      }
+    }
   });
 });

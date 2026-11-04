@@ -17,7 +17,14 @@ vi.mock("@/lib/terminal-api", () => ({
   },
 }));
 
-import { connectTerminal, type TerminalConnectionState } from "@/lib/terminal-ws";
+import {
+  connectTerminal,
+  HIGH_WATERMARK,
+  LOW_WATERMARK,
+  PING_INTERVAL_MS,
+  PONG_TIMEOUT_MS,
+  type TerminalConnectionState,
+} from "@/lib/terminal-ws";
 
 interface FakeCloseEvent {
   code: number;
@@ -59,6 +66,10 @@ class FakeWebSocket {
 
   deliver(bytes: Uint8Array): void {
     this.onmessage?.({ data: bytes.slice().buffer });
+  }
+
+  deliverText(text: string): void {
+    this.onmessage?.({ data: text });
   }
 
   drop(code = 1006): void {
@@ -225,5 +236,101 @@ describe("connectTerminal", () => {
     expect(ws.closeCalled).toBe(true);
     expect(ticketMock).toHaveBeenCalledTimes(1);
     expect(states.at(-1)).toBe("closed");
+  });
+
+  it("attaches at the rendered grid: cols/rows ride on the url", async () => {
+    connectTerminal("ta-term-1", {
+      onData: () => undefined,
+      onStateChange: () => undefined,
+      size: () => ({ cols: 173, rows: 41 }),
+    });
+    await settle();
+    const url = new URL(FakeWebSocket.instances[0]!.url);
+    expect(url.searchParams.get("ticket")).toBe("t1");
+    expect(url.searchParams.get("cols")).toBe("173");
+    expect(url.searchParams.get("rows")).toBe("41");
+  });
+
+  it("pauses the server past the high watermark and resumes below the low one", async () => {
+    const connection = connect();
+    await settle();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.open();
+
+    const chunk = new Uint8Array(128 * 1024);
+    const chunks = Math.ceil(HIGH_WATERMARK / chunk.byteLength) + 1;
+    for (let i = 0; i < chunks; i++) ws.deliver(chunk);
+    expect(ws.sent).toEqual(['{"t":"pause"}']);
+
+    // xterm catches up: not yet below the low mark, then below it.
+    connection.written(chunks * chunk.byteLength - LOW_WATERMARK);
+    expect(ws.sent).toEqual(['{"t":"pause"}']);
+    connection.written(1);
+    expect(ws.sent).toEqual(['{"t":"pause"}', '{"t":"resume"}']);
+  });
+
+  it("starts every new socket unpaused", async () => {
+    const connection = connect();
+    await settle();
+    const first = FakeWebSocket.instances[0]!;
+    first.open();
+    first.deliver(new Uint8Array(HIGH_WATERMARK + 1));
+    expect(first.sent).toEqual(['{"t":"pause"}']);
+
+    first.drop();
+    await vi.advanceTimersByTimeAsync(1000);
+    const second = FakeWebSocket.instances[1]!;
+    second.open();
+    // Late acknowledgements for the old socket's bytes send nothing stray.
+    connection.written(HIGH_WATERMARK + 1);
+    second.deliver(new Uint8Array(10));
+    expect(second.sent).toEqual([]);
+  });
+
+  it("pings while visible and reconnects at once when no pong comes back", async () => {
+    connect();
+    await settle();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.open();
+
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
+    expect(ws.sent).toEqual(['{"t":"ping"}']);
+    ws.deliverText('{"t":"pong"}');
+
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
+    expect(ws.sent).toEqual(['{"t":"ping"}', '{"t":"ping"}']);
+    // Half-open: nothing comes back.
+    await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS);
+    expect(ws.closeCalled).toBe(true);
+    expect(states.at(-1)).toBe("reconnecting");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it("does not ping a hidden page (the server's idle timer may reclaim it)", async () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    connect();
+    await settle();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.open();
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS * 3);
+    expect(ws.sent).toEqual([]);
+
+    // Coming back probes at once: a laptop that slept has a dead socket.
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(ws.sent).toEqual(['{"t":"ping"}']);
+    visibility.mockRestore();
+  });
+
+  it("treats any frame as proof of life", async () => {
+    connect();
+    await settle();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.open();
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
+    ws.deliver(new Uint8Array([1]));
+    await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS);
+    expect(ws.closeCalled).toBe(false);
   });
 });

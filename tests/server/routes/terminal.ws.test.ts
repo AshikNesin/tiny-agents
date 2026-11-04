@@ -213,7 +213,41 @@ describe("terminal WS bridge", () => {
     expect(ws.readyState).toBe(ws.OPEN); // still open: ignored, not fatal
   });
 
-  it("closes 1000 when the pty ends (session killed or another viewer detached us)", async () => {
+  it("stops reading the pty on {t:pause} and resumes on {t:resume}", async () => {
+    const pty = fakePtyStream();
+    const { svc } = serviceRecording(async () => pty.stream);
+    setTerminalServiceForTests(svc);
+    await listen();
+    const ws = connect(ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-1" as never })));
+    await opened(ws);
+    await vi.waitFor(() => expect(pty.stream.isPaused()).toBe(false));
+
+    ws.send(JSON.stringify({ t: "pause" }));
+    await vi.waitFor(() => expect(pty.stream.isPaused()).toBe(true));
+    ws.send(JSON.stringify({ t: "resume" }));
+    await vi.waitFor(() => expect(pty.stream.isPaused()).toBe(false));
+
+    // Bytes still flow after the round trip.
+    const reply = nextMessage(ws);
+    pty.stream.push(Buffer.from("after"));
+    expect(await reply).toBe("after");
+  });
+
+  it("answers {t:ping} with a {t:pong} text frame", async () => {
+    const pty = fakePtyStream();
+    const { svc } = serviceRecording(async () => pty.stream);
+    setTerminalServiceForTests(svc);
+    await listen();
+    const ws = connect(ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-1" as never })));
+    await opened(ws);
+
+    const reply = nextMessage(ws);
+    ws.send(JSON.stringify({ t: "ping" }));
+    expect(await reply).toBe('{"t":"pong"}');
+    expect(pty.received()).toBe(""); // control, never typed into the shell
+  });
+
+  it("closes 1000 when the pty ends (session killed or client detached)", async () => {
     const pty = fakePtyStream();
     const { svc } = serviceRecording(async () => pty.stream);
     setTerminalServiceForTests(svc);
