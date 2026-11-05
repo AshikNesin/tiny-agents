@@ -3,12 +3,14 @@
  *
  * Every message is namespaced `coding.*`, so the bot protocol in
  * `protocol.ts` is untouched. Requests carry a `requestId` and get exactly
- * one `coding.reply`. Session events carry a per-session `seq` and are kept
+ * one `reply` (the socket's envelope, `envelope.ts`, shared with the bot
+ * protocol). Session events carry a per-session `seq` and are kept
  * in a replay buffer for `coding.resume`, like bot sessions. Streaming text
  * (`coding.partial`) and the command catalog are not sequenced: they are
  * ephemeral and a reconnect starts from a fresh snapshot anyway.
  */
 import { z } from "zod";
+import type { ResumeResult } from "./envelope";
 
 export const DEFAULT_CODING_LIMITS = {
   /** Coding processes alive at once (their own budget, separate from bot chats). */
@@ -301,13 +303,6 @@ export type CodingCatalog = z.infer<typeof codingCatalogSchema>;
 
 export const codingWorkerMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({
-    type: z.literal("coding.reply"),
-    requestId,
-    ok: z.boolean(),
-    result: z.unknown().optional(),
-    error: z.strictObject({ code: z.string(), message: z.string() }).optional(),
-  }),
-  z.strictObject({
     type: z.literal("coding.event"),
     sessionId: id,
     seq: z.number().int().positive(),
@@ -366,15 +361,8 @@ export interface CodingSendResult {
   queuedId?: string;
 }
 
-export interface CodingResumeResult {
-  /** The worker has this session (false after a worker restart). */
-  known: boolean;
-  /** Events after `afterSeq` were dropped from the buffer: reload history. */
-  gap: boolean;
-  /** The oldest event still buffered (the replay starts here on a gap). */
-  firstSeq: number;
-  lastSeq: number;
-}
+/** `coding.resume` answers the envelope's resume result. */
+export type CodingResumeResult = ResumeResult;
 
 export interface CodingSettingsResult {
   settings: CodingState["settings"];

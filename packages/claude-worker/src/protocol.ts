@@ -1,6 +1,7 @@
 /**
- * Wire protocol between tiny-agents and the Claude Code worker.
+ * Wire protocol between tiny-agents and the Claude Code worker (bot chats).
  * One WebSocket, per-session sequence numbers, tool results keyed by tool_use_id.
+ * Welcome, ping/pong and replies are the socket's envelope (`envelope.ts`).
  * Neither side puts a Claude credential on this socket.
  */
 import { z } from "zod";
@@ -125,6 +126,8 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("pong") }),
   z.strictObject({
     type: z.literal("resume"),
+    /** Answered with a `ResumeResult` reply before the replay. */
+    requestId: z.string().min(1).max(100).optional(),
     sessionId: z.string().min(1),
     afterSeq: z.number().int().nonnegative(),
   }),
@@ -152,9 +155,6 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
 export const workerMessageSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("welcome") }),
-  z.strictObject({ type: z.literal("ping") }),
-  z.strictObject({ type: z.literal("pong") }),
   z.strictObject({
     type: z.literal("error"),
     code: z.string(),

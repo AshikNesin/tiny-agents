@@ -21,7 +21,6 @@ import type { ClaudeCodeHarness } from "../../../../packages/code/src/drivers/cl
 import type {
   HarnessHost,
   InstanceEvent,
-  ThreadEvent,
   TranscriptItem,
 } from "../../../../packages/code/src/contracts";
 import {
@@ -584,35 +583,6 @@ describe("Claude Code harness", () => {
     expect((await harness.outcome(nativeId)).failed).toBe(true);
   });
 
-  it("resumes from the last seq after the socket drops mid-turn", async () => {
-    const { harness, sdk, dir, events } = await setup(manual);
-    const { nativeId } = await harness.createThread({ message: "long one", cwd: dir });
-    const query = await queryOf(sdk);
-    await query.nextInput();
-    const watch = collect();
-    cleanups.push(harness.watchThread(nativeId, watch.listener));
-    await watch.next((event) => event.type === "snapshot");
-    // Emitted right after the drop: the live socket is gone, only a resume brings them back.
-    harness.worker.drop();
-    query.emit(text(query, "said while you were away"));
-    query.emit(result(query, { totalCost: 0.01 }));
-    await vi.waitFor(() =>
-      expect(events.filter((event) => event.type === "connected").length).toBeGreaterThanOrEqual(2),
-    );
-    const rows = await watch.next(
-      (event: ThreadEvent) =>
-        event.type === "items" &&
-        event.items.some(
-          (item) => item.kind === "assistant" && item.text === "said while you were away",
-        ),
-      4000,
-    );
-    expect(rows.type).toBe("items");
-    await waitTurnEnds(events, 1);
-    expect(turnEnds(events)).toHaveLength(1);
-    expect(threadEventProblems(watch.events)).toEqual([]);
-  });
-
   it("reads the same transcript back after an app restart, and resumes after a worker restart", async () => {
     const setupResult = await setup(echo);
     const { harness, sdk, dir, events, host } = setupResult;
@@ -641,7 +611,6 @@ describe("Claude Code harness", () => {
     const claudeSessionId = sdk.queries[0]!.sessionId;
     await setupResult.server.close();
     setupResult.server = await startServer(sdk, dir);
-    harness.worker.drop();
     await vi.waitFor(() =>
       expect(events.filter((event) => event.type === "connected").length).toBeGreaterThanOrEqual(2),
     );

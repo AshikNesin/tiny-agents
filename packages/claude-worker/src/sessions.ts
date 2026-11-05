@@ -102,6 +102,14 @@ export class Session {
     return this.buffer.filter((event) => event.seq > afterSeq);
   }
 
+  get firstSeq(): number {
+    return this.buffer[0]?.seq ?? this.seq + 1;
+  }
+
+  get lastSeq(): number {
+    return this.seq;
+  }
+
   settleTool(toolUseId: string, result: ToolResultPayload): boolean {
     return this.proxy.settle(toolUseId, result);
   }

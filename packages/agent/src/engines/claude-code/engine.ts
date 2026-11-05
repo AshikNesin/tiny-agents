@@ -1,6 +1,6 @@
 /**
  * Claude plan engine (ADR 0008, ADR 0014). Turns go to the worker over the
- * WebSocket client. The kill switch is read here, on each turn, from the
+ * Worker connection (`client.ts` puts the bot protocol on it). The kill switch is read here, on each turn, from the
  * environment: turning it off does not redeploy or stop the worker.
  * Transcripts for these conversations live here, beside the pi-durable
  * harness; tool calls go through the runtime's Tool gate.
@@ -51,6 +51,10 @@ import { claudeToolApi } from "./tools";
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
+/** How a turn the worker was running when it restarted ends. */
+export const WORKER_RESTARTED =
+  "The Claude worker restarted and this reply was cut off. Send your message again to continue.";
+
 /** Claude plan calls are numbered from here per conversation, apart from pi's task ids. */
 const TASK_ID_BASE = 2_000_000_000;
 
@@ -88,6 +92,8 @@ interface Listener {
 interface LiveTurn {
   turnId: string;
   assistantId: string;
+  /** The turn went out on an open socket (false: it waits in the connection's queue). */
+  dispatched: boolean;
   resolve: () => void;
   reject: (error: Error) => void;
 }
@@ -180,9 +186,9 @@ export class ClaudeCodeEngine implements AgentEngine {
         "Claude subscription engine is off (CLAUDE_CODE_ENGINE_ENABLED).",
       );
     }
-    let target: { url: string; token: string };
     try {
-      target = await this.locator().resolve();
+      // Sets the worker up when needed; the connection resolves it again on every reconnect.
+      await this.locator().resolve();
     } catch (error) {
       return this.unavailable(
         ref,
@@ -215,10 +221,21 @@ export class ClaudeCodeEngine implements AgentEngine {
     session.busy = true;
     this.options.onBusy?.(ref, true);
     this.emit(ref);
+    const live: LiveTurn = {
+      turnId,
+      assistantId,
+      dispatched: false,
+      resolve: () => undefined,
+      reject: () => undefined,
+    };
     const done = new Promise<void>((resolve, reject) => {
-      session.live = { turnId, assistantId, resolve, reject };
+      live.resolve = resolve;
+      live.reject = reject;
     });
-    this.socket(target.url, target.token).send({
+    session.live = live;
+    const worker = this.worker();
+    worker.track(String(ref));
+    live.dispatched = worker.send({
       type: "turn",
       sessionId: String(ref),
       turnId,
@@ -351,16 +368,35 @@ export class ClaudeCodeEngine implements AgentEngine {
     return "accepted";
   }
 
-  private socket(url: string, token: string): ClaudeWorkerClient {
-    if (this.client) return this.client;
-    this.client = new ClaudeWorkerClient({
-      url,
-      token,
-      connect: this.options.connect,
+  /** One connection for the engine's life; it finds the worker again on every reconnect. */
+  private worker(): ClaudeWorkerClient {
+    this.client ??= new ClaudeWorkerClient({
+      resolveTarget: () => this.locator().resolve(),
+      ...(this.options.connect ? { connect: this.options.connect } : {}),
       onEvent: (message) => this.onWorker(message),
       onTool: (call) => this.onTool(call),
+      onConnected: (rebooted) => this.onConnected(rebooted),
     });
     return this.client;
+  }
+
+  /**
+   * After every (re)connect, before queued turns go out. A worker that
+   * restarted lost the turns it was running: they end now, with an error the
+   * owner can see, instead of waiting forever. The conversation keeps its
+   * Claude session id, so the next turn resumes it. Turns still queued go to
+   * the new worker.
+   */
+  private onConnected(rebooted: boolean): void {
+    for (const session of this.sessions.values()) {
+      const live = session.live;
+      if (!live) continue;
+      if (rebooted && live.dispatched) {
+        this.finish(session, live.turnId, "error", WORKER_RESTARTED);
+        continue;
+      }
+      live.dispatched = true;
+    }
   }
 
   /**

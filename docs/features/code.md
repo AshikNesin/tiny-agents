@@ -143,8 +143,10 @@ waits for the owner on the Code page.
 - **Drivers:** `packages/code/src/drivers/<kind>/`:
   - `shelley`: one `stream2` connection, the snapshot list, Shelley's wire
     format normalized, and the usage maths.
-  - `claude-code`: the worker's coding mode over WebSocket, SDK messages and
-    session history normalized.
+  - `claude-code`: the worker's coding mode (`coding.*`) on its own Worker
+    connection (`@tiny-agents/claude-worker/client`, shared with the bot
+    engine: heartbeat, reconnect, resume, restart detection), SDK messages
+    and session history normalized.
 - **Thread feed:** `packages/code/src/server/feed.ts`. Drivers hand their
   `ThreadFeed` the whole thread (a snapshot, the full row list, the streaming
   text, state); the feed keeps the event order for every watcher, so no

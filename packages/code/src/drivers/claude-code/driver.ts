@@ -1,7 +1,7 @@
 /**
  * Claude Code as a Code page harness. Claude Code runs on the sandbox
  * through the worker (`@tiny-agents/claude-worker`, coding mode); this
- * driver talks to it over its own WebSocket.
+ * driver talks to it over its own Worker connection (`client.ts`).
  *
  * Claude Code keeps no thread list of its own that we use (sessions started
  * in a terminal are not discovered), so threads live in the app's thread
@@ -32,6 +32,7 @@ import {
   type CodingAsset,
   type CodingOp,
 } from "@tiny-agents/claude-worker";
+import type { ConnectionTimings } from "@tiny-agents/claude-worker/client";
 import {
   NO_CAPABILITIES,
   threadIdOf,
@@ -54,7 +55,7 @@ import {
 } from "../../contracts";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
 import { Emitter, excerpt, firstLine, lastAnswer, record } from "../../server/items";
-import { CodingWorkerClient, type ClientState, type CodingClientTimings } from "./client";
+import { CodingWorkerClient, type ClientState } from "./client";
 import {
   approvalRequestOf,
   normalizeEntries,
@@ -72,14 +73,11 @@ export interface ClaudeCodeHarnessOptions {
   resolveWorker: () => Promise<{ url: string; token: string }>;
   /** An extra hint (the Claude login, the sandbox): shown when it is not `connected`. */
   status?: () => InstanceStatus;
-  /** Socket timings (tests). */
-  timings?: Partial<CodingClientTimings>;
+  /** Connection timings (tests). */
+  timings?: Partial<ConnectionTimings>;
 }
 
-export interface ClaudeCodeHarness extends HarnessInstance {
-  /** The worker connection (tests drop it to exercise resume). */
-  readonly worker: CodingWorkerClient;
-}
+export type ClaudeCodeHarness = HarnessInstance;
 
 const CAPABILITIES: Capabilities = {
   ...NO_CAPABILITIES,
@@ -751,7 +749,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     id: instanceId,
     kind: "claude-code",
     label: "Claude Code",
-    worker: client,
 
     capabilities: () => CAPABILITIES,
 

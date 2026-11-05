@@ -22,6 +22,7 @@
       "@tiny-agents/agent/peer-envelope": ["./packages/agent/src/toolkits/peer-envelope.ts"],
       "@tiny-agents/agent/testing": ["./packages/agent/src/testing.ts"],
       "@tiny-agents/claude-worker": ["./packages/claude-worker/src/index.ts"],
+      "@tiny-agents/claude-worker/client": ["./packages/claude-worker/src/client.ts"],
       "@tiny-agents/code/contracts": ["./packages/code/src/contracts/index.ts"],
       "@tiny-agents/code/server": ["./packages/code/src/server/index.ts"],
       "@tiny-agents/code/testing": ["./packages/code/src/testing.ts"]

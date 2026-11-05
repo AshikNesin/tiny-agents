@@ -113,6 +113,10 @@ _Avoid_: screencast, preview
 The app's one SSH connection to the sandbox VM or the local sandbox container (`SandboxConnection`, `ssh/sandbox-connection.ts`), built once from the endpoint and handed to every user: the sandbox toolkit, attachments, the terminal, the computer, the browser and the Claude worker. It runs execs, ptys, file transfers and forwards as channels on one pooled connection, and owns the host-key pinning, the retry rule, the idle close and the "Cannot reach the sandbox" wording (ADR 0013).
 _Avoid_: endpoint (that is only the address), SSH session, transport (a computer or browser transport sits on top of it)
 
+**Worker connection**:
+The app's side of one WebSocket to the Claude worker (`WorkerConnection`, `@tiny-agents/claude-worker/client`). The Claude plan bot engine and the Claude Code harness each put their protocol on one (turns and tool results; `coding.*` requests) and never see a socket. It owns the heartbeat and silence close, reconnecting with backoff while finding the worker again on every attempt, the handshake and the `welcome` boot id that tells a worker restart from a dropped socket, a resume cursor per session, requests and their replies, the queue while disconnected, and the wording of a refused token or an HTTP status.
+_Avoid_: worker client (that is a protocol layer on it), tunnel (that is the Sandbox connection's forward under it), socket
+
 **Question**:
 A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply waits until the owner answers or dismisses it; writing in the chat instead dismisses it.
 _Avoid_: prompt, form, survey
