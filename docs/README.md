@@ -79,9 +79,8 @@ boundary; the areas that do not use pi-durable have their own subpaths, so a
 change to the terminal or a transport does not churn the root. Each subpath
 is an entry file under `packages/agent/src/subpaths/`, listed in the
 package's `exports` and in the root `tsconfig.json` `paths` (which the server
-build also resolves through). `/sandbox`, `/terminal` and `/computer` load no
-pi-durable code. `/browser` and `/claude-worker` still reach it indirectly:
-the browser's URL guard imports `checkPublicUrl` from the web toolkit.
+build also resolves through). No subpath loads pi-durable code: the URL
+guards the browser and the web toolkit share live in `toolkits/public-url.ts`.
 
 | Import                             | What it holds                                                                                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |

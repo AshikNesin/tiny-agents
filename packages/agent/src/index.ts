@@ -83,7 +83,8 @@ export {
   type MemoryStore,
 } from "./toolkits/memory";
 export { createSelfImproveCapability, type InstructionsStore } from "./toolkits/self-improve";
-export { createWebToolkit, checkPublicUrl } from "./toolkits/web";
+export { createWebToolkit } from "./toolkits/web";
+export { checkPublicUrl } from "./toolkits/public-url";
 export {
   connectMcp,
   createMcpCapability,

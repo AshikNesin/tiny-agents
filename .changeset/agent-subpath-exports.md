@@ -111,3 +111,7 @@ imported them; they stay exported from their source modules inside it):
 The package's own tests that used the root for internals
 (`policy`, `projection`, `runtime` and `attachments` tests) import them from
 their source modules, as the rest of `tests/server/app/agent` already does.
+
+`checkPublicUrl` and `isPrivateAddress` move to `toolkits/public-url.ts`, so
+no subpath loads pi-durable (`/browser` and `/claude-worker` reached it
+through the web toolkit).
