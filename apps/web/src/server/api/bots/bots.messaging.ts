@@ -4,7 +4,6 @@
  * sender's guards: the per-turn budget and the loop guard.
  */
 import { and, asc, eq, gte, ne } from "drizzle-orm";
-import type { AgentRuntime } from "@tiny-agents/agent";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
 import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
@@ -22,21 +21,30 @@ const TURN_LIMIT = 3;
 /**
  * Sends per conversation in the current reply. Charged only on first-time
  * deliveries (a replayed requestId returns early), and reset when the
- * conversation next goes idle (the store listens on the activity feed).
+ * conversation settles (the settled pipeline calls `reset`, bots.settled.ts).
  */
-function createTurnBudget(rt: Pick<AgentRuntime, "onActivity">) {
-  const sendsThisTurn = new Map<number, number>();
-  rt.onActivity((change) => {
-    if (!change.busy) sendsThisTurn.delete(Number(change.conversation));
-  });
-  return {
-    count(conversationId: number) {
-      return sendsThisTurn.get(conversationId) ?? 0;
-    },
-    charge(conversationId: number) {
-      sendsThisTurn.set(conversationId, this.count(conversationId) + 1);
-    },
-  };
+export interface TurnBudget {
+  count(conversationId: number): number;
+  charge(conversationId: number): void;
+  reset(conversationId: number): void;
+}
+
+/** One budget per runtime: the messaging store charges it, the settled pipeline resets it. */
+const turnBudgets = new WeakMap<object, TurnBudget>();
+
+export function turnBudgetOf(rt: object): TurnBudget {
+  let budget = turnBudgets.get(rt);
+  if (!budget) {
+    const sendsThisTurn = new Map<number, number>();
+    budget = {
+      count: (conversationId) => sendsThisTurn.get(conversationId) ?? 0,
+      charge: (conversationId) =>
+        void sendsThisTurn.set(conversationId, (sendsThisTurn.get(conversationId) ?? 0) + 1),
+      reset: (conversationId) => void sendsThisTurn.delete(conversationId),
+    };
+    turnBudgets.set(rt, budget);
+  }
+  return budget;
 }
 
 /** The message a bot sees when another bot writes to it. */
@@ -44,8 +52,8 @@ export function botToBotText(fromName: string, text: string): string {
   return `**Message from ${fromName} (bot):** ${text}`;
 }
 
-/** What the store needs from the runtime: Deliveries, plus the activity feed for the turn budget. */
-export type BotMessagingRuntime = DeliveryRuntime & Pick<AgentRuntime, "onActivity">;
+/** What the store needs from the runtime: Deliveries. */
+export type BotMessagingRuntime = DeliveryRuntime;
 
 export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingStore {
   /** The sending bot; `fromRoutine` when the send comes from one of its routine runs. */
@@ -55,7 +63,7 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
     return { id: owner.bot.id, name: owner.bot.name, fromRoutine: owner.kind === "routine" };
   }
 
-  const turnBudget = createTurnBudget(rt);
+  const turnBudget = turnBudgetOf(rt);
   const deliveries = createDeliveries(rt);
   return {
     async deliver(input) {

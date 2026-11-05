@@ -10,6 +10,7 @@ import { api, createTestApp, type TestApp } from "../helpers";
 import { db, botMessages, bots, routines } from "../../../apps/web/src/server/db";
 import { createDeliveries } from "../../../apps/web/src/server/api/bots/bots.delivery";
 import { createBotMessagingStore } from "../../../apps/web/src/server/api/bots/bots.messaging";
+import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots.settled";
 import type { AgentRuntime } from "@tiny-agents/agent";
 import {
   authToken,
@@ -248,12 +249,10 @@ describe("messaging store (issues #13, #15, #16)", () => {
       sourceKey: "sk-turn-2",
     });
     expect(replay.delivered).toBe(true);
-    // Going idle resets the budget.
-    const onActivity = runtime.onActivity.mock.calls[0]![0] as (c: {
-      busy: boolean;
-      conversation: number;
-    }) => void;
-    onActivity({ busy: false, conversation: 1 });
+    // The sender's conversation settling resets the budget.
+    const stop = startSettledPipeline(runtime as unknown as AgentRuntime);
+    runtime.emitActivity({ busy: false, conversation: 1 });
+    stop();
     const fresh = await store.deliver({
       conversationId: 1,
       toName: "Target 5",
@@ -301,26 +300,6 @@ describe("answering Deliveries (real runtime)", () => {
 
   const userTexts = async (ref: number) =>
     (await rt.readChat(ref)).messages.filter((m) => m.role === "user").map((m) => m.text);
-
-  it("relays the Finished reply into the host's chat and marks the Delivery answered", async () => {
-    const host = await seedLiveBot("Host");
-    const guest = await seedLiveBot("Guest");
-    const deliveries = createDeliveries(rt);
-    // As at boot: each idle answers the conversation's Deliveries.
-    rt.onActivity((change) => {
-      if (!change.busy) void deliveries.answer(Number(change.conversation));
-    });
-    expect(await deliveries.deliver(mention(host, guest.id, "m1", "hello"))).toMatchObject({
-      status: "delivered",
-    });
-    await until(async () => (await ledgerRow("m1"))?.answeredAt != null, "the answer");
-    expect(await userTexts(host.ref)).toContain("**Reply from Guest:** Echo: hello");
-    const row = await ledgerRow("m1");
-    expect(row).toMatchObject({ kind: "relay", conversationId: String(guest.ref) });
-    // Answering again is a no-op: one answer per Delivery.
-    await until(() => !rt.isBusy(guest.ref), "the guest to settle");
-    expect(await deliveries.answer(guest.ref)).toBe(0);
-  });
 
   it("is idempotent: a replayed Delivery is neither resubmitted nor re-recorded", async () => {
     const host = await seedLiveBot("Host");

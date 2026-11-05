@@ -34,13 +34,8 @@ import {
 } from "./api/bots/bots.runtime";
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
-import { createDeliveries } from "./api/bots/bots.delivery";
-import { onConversationSettled } from "./api/bots/bots.settled";
-import { botListStep } from "./api/bots/bots.list";
+import { startSettledPipeline } from "./api/bots/bots.settled";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
-import { startRoutinesWatcher } from "./api/routines/routines.watcher";
-import { createMemoryCapture } from "./api/bots/memories.capture";
-import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
@@ -218,51 +213,19 @@ async function main(): Promise<void> {
 
   // A conversation that settles (its reply finished) answers its Deliveries
   // (issue #12), resolves its awaiting routine runs (issue #63), updates the
-  // bot list, pushes and arms memory capture, in that order (bots.settled.ts).
-  // Memory capture (issue #22 phase B): settled Turns arm a debounce; the
-  // quiet window or 6 turns later one side-call extracts durable facts off
-  // the reply path. Faux mode never makes capture calls.
-  // Everything here is built from the opened runtime, so inside start: the
-  // runtime only exists once the "agent runtime" part has started.
-  let memoryCapture: ReturnType<typeof createMemoryCapture> | undefined;
-  let unsubscribeSettled = () => {};
+  // bot list, pushes and arms memory capture (issue #22), in that order, and
+  // the steps' boot sweeps run once it listens (bots.settled.ts). Faux mode
+  // has no side-caller, so it never makes capture calls.
+  let stopSettled = () => {};
   add({
     name: "settled conversations",
-    start: async () => {
-      const deliveries = createDeliveries(runtime);
-      const routineRuns = startRoutinesWatcher(runtime);
-      memoryCapture = sideCaller
-        ? createMemoryCapture({
-            captureNow: (conversationId) =>
-              captureConversation(conversationId, {
-                sideCaller,
-                model: appEnv().MEMORY_CAPTURE_MODEL,
-                readTranscript: async (id) => (await runtime.readChat(id)).messages,
-              }),
-          })
-        : undefined;
-      unsubscribeSettled = onConversationSettled(runtime, [
-        { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
-        {
-          name: "routine runs",
-          run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat),
-        },
-        botListStep(),
-        notifications.onSettled,
-        ...(memoryCapture ? [memoryCapture.onSettled] : []),
-      ]);
-      // Deliveries a restart interrupted are answered once the settled
-      // listener is in place.
-      void deliveries
-        .sweep()
-        .catch((error: unknown) => logger.warn({ error }, "Delivery sweep failed"));
+    start: () => {
+      stopSettled = startSettledPipeline(
+        runtime,
+        sideCaller ? { memoryCapture: { sideCaller, model: appEnv().MEMORY_CAPTURE_MODEL } } : {},
+      );
     },
-    // Unsubscribe first, then disarm capture timers: nothing may call into
-    // the runtime once it closes.
-    stop: () => {
-      unsubscribeSettled();
-      memoryCapture?.stop();
-    },
+    stop: () => stopSettled(),
   });
 
   // Code (issue #143, ADR 0011): one live connection per coding agent
