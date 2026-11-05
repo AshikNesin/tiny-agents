@@ -5,3 +5,13 @@
  */
 export * from "../contracts";
 export { Emitter, ItemTracker, excerpt, firstLine, record } from "./items";
+export {
+  HarnessError,
+  badGateway,
+  badRequest,
+  capabilityMissing,
+  notFound,
+  unavailable,
+} from "./errors";
+export * as shelley from "../drivers/shelley";
+export { createShelleyHarness, type ShelleyHarness } from "../drivers/shelley";

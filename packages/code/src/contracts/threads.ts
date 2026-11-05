@@ -167,28 +167,38 @@ export interface GitFileDiff {
 /** One token band of one model's usage (the context popup). */
 export interface UsageBand {
   label: string;
+  /** Chip color (any CSS color). */
   color: string;
   tokens: number;
   costUsd: number;
-  /** USD per million tokens, when priced. */
-  unitPrice?: number;
+  /** USD per million tokens; null when served at mixed rates. */
+  unitPrice: number | null;
+  priced: boolean;
+  /** Built from an aggregate: token counts only, no per-band price. */
+  aggregate?: boolean;
 }
 
 export interface UsageRow {
   /** Model id, or the purpose for indirect usage. */
   label: string;
+  /** Empty for indirect usage rows (they show tokens and calls). */
   bands: UsageBand[];
   costUsd: number;
+  priced: boolean;
+  tokens?: number;
   calls?: number;
-  /** Cost reported by the provider instead of estimated. */
-  reported?: boolean;
 }
 
 export interface UsageReport {
   totalUsd: number;
+  mainUsd: number;
+  subagentUsd: number;
+  otherUsd: number;
   models: UsageRow[];
+  /** Per model, matched to `models` by label. */
+  subagents: UsageRow[];
   /** Indirect usage (compaction, titles, …). */
   other: UsageRow[];
-  subagents: UsageRow[];
+  /** "Some models have no pricing", "Pricing lookup failed", … */
   notes: string[];
 }
