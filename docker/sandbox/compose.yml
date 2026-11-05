@@ -10,6 +10,7 @@ services:
       args:
         EXTRA_PACKAGES: ${SANDBOX_EXTRA_PACKAGES:-}
         SHELLEY_VERSION: ${SANDBOX_SHELLEY_VERSION:-latest}
+        CODEX_VERSION: ${SANDBOX_CODEX_VERSION:-latest}
     # Built for the host's architecture: amd64 gets Google Chrome, arm64
     # (Apple Silicon) Debian's Chromium, both natively.
     image: tiny-agents-sandbox:local
@@ -24,6 +25,10 @@ services:
       # SANDBOX_SHELLEY=0 stops Shelley from starting. The keys are optional
       # (providers can be added in Shelley's UI) and reach only Shelley.
       SANDBOX_SHELLEY: ${SANDBOX_SHELLEY:-1}
+      # SANDBOX_CLIS=0 skips the start-up check that installs gh and codex
+      # when the image lacks them.
+      SANDBOX_CLIS: ${SANDBOX_CLIS:-1}
+      SANDBOX_CODEX_VERSION: ${SANDBOX_CODEX_VERSION:-latest}
       SHELLEY_ANTHROPIC_API_KEY: ${SHELLEY_ANTHROPIC_API_KEY:-}
       SHELLEY_OPENAI_API_KEY: ${SHELLEY_OPENAI_API_KEY:-}
       SHELLEY_GEMINI_API_KEY: ${SHELLEY_GEMINI_API_KEY:-}

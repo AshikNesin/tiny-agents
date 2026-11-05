@@ -88,6 +88,22 @@ describe("the local sandbox image", () => {
     expect(compose).not.toMatch(/^\s+ANTHROPIC_API_KEY:/m);
   });
 
+  it("installs gh and codex at build time and again on start when missing", () => {
+    expect(dockerfile).toContain('/usr/local/lib/tiny-agents/install-clis "$CODEX_VERSION"');
+    const install = readFileSync(join(dir, "install-clis.sh"), "utf8");
+    // Each tool is checked first and skipped when present.
+    expect(install).toMatch(/for tool in gh codex; do\n\s+if have "\$tool"/);
+    expect(install).toContain("https://cli.github.com/packages");
+    expect(install).toContain("github.com/openai/codex/releases/latest/download");
+    const entrypoint = readFileSync(join(dir, "entrypoint.sh"), "utf8");
+    expect(entrypoint).toMatch(/SANDBOX_CLIS:-1\}" != 0/);
+    // In the background, before sshd, so SSH isn't held up by the install.
+    expect(entrypoint).toMatch(/install-clis [^\n]*&$/m);
+    expect(entrypoint.indexOf("install-clis")).toBeLessThan(
+      entrypoint.indexOf("exec /usr/sbin/sshd"),
+    );
+  });
+
   it("serves the user the app dials, by key only, on loopback only", () => {
     const sshd = readFileSync(join(dir, "sshd_config"), "utf8");
     expect(sshd).toMatch(/^AllowUsers exedev$/m);

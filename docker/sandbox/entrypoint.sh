@@ -41,6 +41,18 @@ if [ -d /etc/tiny-agents/ssh ]; then
   done
 fi
 
+# The prerequisite CLIs (gh, codex): checked on every start and installed
+# when missing, e.g. when the image was built without network. In the
+# background, so sshd isn't held up; the log is install-clis.log in exedev's
+# ~/.tiny-agents. SANDBOX_CLIS=0 skips the check.
+if [ "${SANDBOX_CLIS:-1}" != 0 ]; then
+  CLIS_LOG=/home/exedev/.tiny-agents/install-clis.log
+  mkdir -p /home/exedev/.tiny-agents
+  touch "$CLIS_LOG"
+  chown exedev:exedev /home/exedev/.tiny-agents "$CLIS_LOG"
+  /usr/local/lib/tiny-agents/install-clis "${SANDBOX_CODEX_VERSION:-latest}" </dev/null >>"$CLIS_LOG" 2>&1 &
+fi
+
 # Shelley's web UI (shelley-run installs it first when the image has none),
 # as exedev, restarted when it exits. SANDBOX_SHELLEY=0 turns it off. The
 # provider keys (SHELLEY_*_API_KEY) are handed to it and then dropped from
