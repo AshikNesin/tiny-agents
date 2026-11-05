@@ -19,6 +19,15 @@ export {
   type WorkerMessage,
 } from "./protocol";
 export {
+  replyFrameSchema,
+  resumeResultOf,
+  welcomeFrameSchema,
+  type EnvelopeFrame,
+  type ReplyFrame,
+  type ResumeResult,
+  type WelcomeFrame,
+} from "./envelope";
+export {
   FORBIDDEN_BACKEND_FLAGS,
   FORBIDDEN_OVERRIDE_KEYS,
   OverrideRefusal,
