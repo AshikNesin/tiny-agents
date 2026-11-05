@@ -4,7 +4,7 @@
  * times, and completing a task offers an undo.
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
@@ -84,6 +84,43 @@ describe("Tasks page", () => {
     const { title, dueAt } = createMock.mock.calls[0][0] as { title: string; dueAt: string };
     expect(title).toBe("Call mom");
     expect(new Date(dueAt).getTime()).toBe(endOfDay(0).getTime());
+  });
+
+  it("prevents duplicate quick-add submissions while saving", async () => {
+    listMock.mockResolvedValue([]);
+    let resolveCreate!: (value: Task) => void;
+    createMock.mockReturnValueOnce(new Promise<Task>((resolve) => { resolveCreate = resolve; }));
+    const user = userEvent.setup();
+    mount();
+    const input = await screen.findByLabelText("New task title");
+    await user.type(input, "Call mom{Enter}");
+
+    expect(input).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add task" })).toBeDisabled();
+    expect(screen.getByText("Adding…")).toBeVisible();
+    fireEvent.submit(input.closest("form")!);
+    expect(createMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveCreate(task({ title: "Call mom" })));
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+  });
+
+  it("keeps the quick-add draft and allows retry after a failed save", async () => {
+    listMock.mockResolvedValue([]);
+    createMock.mockRejectedValueOnce(new Error("Offline"));
+    const user = userEvent.setup();
+    mount();
+    const input = await screen.findByLabelText("New task title");
+    await user.type(input, "Call mom{Enter}");
+
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue("Call mom");
+    expect(screen.getByRole("button", { name: "Add task" })).toBeEnabled();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(input).toHaveValue(""));
   });
 
   it("reads a day and priority typed in quick-add (#97)", async () => {
