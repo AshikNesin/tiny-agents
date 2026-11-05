@@ -1,31 +1,8 @@
 /**
- * Helpers drivers share for live transcripts: rows are re-derived from the
- * harness's messages and only the rows that changed are sent on.
+ * Small helpers every driver's normalizer and live feed share. What goes
+ * out to watchers, and when, is `feed.ts`.
  */
 import type { TranscriptItem } from "../contracts";
-
-/** Remembers what a watcher was last sent and answers what changed since. */
-export class ItemTracker {
-  private readonly sent = new Map<string, string>();
-
-  /** Rows that are new or differ from the last call (in transcript order). */
-  changed(items: readonly TranscriptItem[]): TranscriptItem[] {
-    const out: TranscriptItem[] = [];
-    for (const item of items) {
-      const json = JSON.stringify(item);
-      if (this.sent.get(item.id) === json) continue;
-      this.sent.set(item.id, json);
-      out.push(item);
-    }
-    return out;
-  }
-
-  /** Forget everything (a new snapshot was sent). */
-  reset(items: readonly TranscriptItem[] = []): void {
-    this.sent.clear();
-    for (const item of items) this.sent.set(item.id, JSON.stringify(item));
-  }
-}
 
 /** Listener sets that never let one failing listener stop the others. */
 export class Emitter<T> {
