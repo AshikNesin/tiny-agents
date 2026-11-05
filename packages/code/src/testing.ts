@@ -1,7 +1,9 @@
 /**
  * `@tiny-agents/code/testing`: what driver tests share — an in-memory
- * thread index, a quiet host, and the contract check every driver must pass
- * (a capability is on exactly when its method exists).
+ * thread index, a quiet host, and the contract checks every driver must
+ * pass: a capability is on exactly when its method exists
+ * (`capabilityProblems`), and a watch keeps the event order
+ * (`threadEventProblems`).
  */
 import type {
   Capabilities,
@@ -108,6 +110,76 @@ export function capabilityProblems(instance: HarnessInstance): string[] {
     !caps.settings.permissionModes.includes(caps.settings.defaultPermissionMode)
   ) {
     problems.push("defaultPermissionMode is not one of permissionModes");
+  }
+  return problems;
+}
+
+/**
+ * Problems with a watch's event order (`contracts/events.ts`), read off what
+ * one listener received. Empty when the driver kept the protocol:
+ *
+ * - nothing but `error` comes before the first `snapshot`;
+ * - `items` carry at least one row, each new or changed for this watcher
+ *   (rows are diffed against the last snapshot and what came since);
+ * - a snapshot of a working thread is followed at once by the streaming
+ *   text, when the stream showed some that nothing has ended since.
+ */
+export function threadEventProblems(events: readonly ThreadEvent[]): string[] {
+  const problems: string[] = [];
+  const at = (i: number, event: ThreadEvent) => `event ${i} (${event.type})`;
+  let rows: Map<string, string> | undefined;
+  let streaming = false;
+  let owed: number | undefined;
+  events.forEach((event, i) => {
+    if (owed !== undefined) {
+      if (event.type !== "partial") {
+        problems.push(
+          `${at(owed, events[owed]!)} dropped the streaming text without re-sending it`,
+        );
+      }
+      owed = undefined;
+    }
+    if (event.type === "error") return;
+    if (!rows && event.type !== "snapshot") {
+      problems.push(`${at(i, event)} came before the first snapshot`);
+      return;
+    }
+    switch (event.type) {
+      case "snapshot": {
+        rows = new Map();
+        for (const item of event.snapshot.items) {
+          if (rows.has(item.id)) problems.push(`${at(i, event)} has row ${item.id} twice`);
+          rows.set(item.id, JSON.stringify(item));
+        }
+        if (!event.snapshot.thread.working) streaming = false;
+        if (streaming) owed = i;
+        break;
+      }
+      case "items": {
+        if (event.items.length === 0) problems.push(`${at(i, event)} is empty`);
+        const seen = new Set<string>();
+        for (const item of event.items) {
+          if (seen.has(item.id)) problems.push(`${at(i, event)} has row ${item.id} twice`);
+          seen.add(item.id);
+          const json = JSON.stringify(item);
+          if (rows!.get(item.id) === json) {
+            problems.push(`${at(i, event)} re-sent row ${item.id} unchanged`);
+          }
+          rows!.set(item.id, json);
+          if (item.kind === "assistant" || item.kind === "turn") streaming = false;
+        }
+        break;
+      }
+      case "partial":
+        streaming = Boolean(event.text || event.thinking);
+        break;
+      case "state":
+        if (!event.working) streaming = false;
+        break;
+    }
+  });
+  if (owed !== undefined) {
+    problems.push(`${at(owed, events[owed]!)} dropped the streaming text without re-sending it`);
   }
   return problems;
 }

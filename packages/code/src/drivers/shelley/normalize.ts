@@ -16,7 +16,7 @@ import {
   type ToolKind,
   type TranscriptItem,
 } from "../../contracts";
-import { firstLine, record } from "../../server/items";
+import { firstLine, isImageFile, pick as pickFrom, record } from "../../server/items";
 import type { ShelleyMessage, ShelleyRow } from "./wire";
 
 const TEXT = 2;
@@ -86,11 +86,11 @@ export function toolKind(name: string): ToolKind {
 export function summarizeInput(name: string, input: unknown): string {
   const args = record(input);
   if (!args) return "";
-  const pick = (key: string) => (typeof args[key] === "string" ? String(args[key]) : undefined);
+  const pick = (...keys: string[]) => pickFrom(args, ...keys);
   if (name === "subagent") return pick("slug") ?? "";
   if (name.startsWith("browser")) {
     const action = pick("action") ?? "";
-    const target = pick("url") ?? pick("selector") ?? pick("expression") ?? "";
+    const target = pick("url", "selector", "expression") ?? "";
     return firstLine([action, target].filter(Boolean).join(" "));
   }
   if (name === "apply_patch") {
@@ -107,15 +107,13 @@ export function summarizeInput(name: string, input: unknown): string {
   return key ? firstLine(String(args[key])) : "";
 }
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif)$/i;
-
 function basename(path: string): string {
   return path.split("/").filter(Boolean).at(-1) ?? path;
 }
 
 /** A file on Shelley's machine as an asset. */
 export function fileAsset(path: string): AssetRef {
-  return { ref: `file:${path}`, name: basename(path), image: IMAGE_FILE.test(path) };
+  return { ref: `file:${path}`, name: basename(path), image: isImageFile(path) };
 }
 
 /** Shelley serves images at /api/message/<id>/image/<c>/<t> and files at /api/read?path=. */
@@ -407,7 +405,12 @@ export function messageUserText(llmData: string): string | undefined {
   return call ? String(record(call.ToolInput)?.text) : undefined;
 }
 
-/** Text of the last agent message (or error) and when it was written. */
+/**
+ * Text of the last agent message (or error) and when it was written. Not
+ * the shared `lastAnswer(items)`: rows carry no time, a Shelley message's
+ * text blocks are one answer (rows split them), and a user message with no
+ * reply yet (a cancelled `delay`, a steer) keeps the previous answer here.
+ */
 export function lastAnswer(messages: ShelleyMessage[]): {
   text: string;
   failed: boolean;

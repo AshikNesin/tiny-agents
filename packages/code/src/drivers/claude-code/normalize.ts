@@ -28,7 +28,7 @@ import type {
   ToolKind,
   TranscriptItem,
 } from "../../contracts";
-import { excerpt, firstLine, record } from "../../server/items";
+import { excerpt, firstLine, isImageFile, pick as pickFrom, record } from "../../server/items";
 
 /** A live SDK message or a history entry. */
 export interface ClaudeEntry {
@@ -58,7 +58,6 @@ export interface NormalizeContext {
 const MAX_OUTPUT = 20_000;
 const COMPACT_SUMMARY = /^This session is being continued from a previous conversation/;
 const INTERRUPTED = /^\[Request interrupted by user[^\]]*\]$/;
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
 
 export function toolKindOf(name: string): ToolKind {
   if (name.startsWith("mcp__")) return "mcp";
@@ -96,13 +95,7 @@ function str(value: unknown): string | undefined {
 
 export function toolSummary(name: string, input: unknown): string {
   const args = record(input) ?? {};
-  const pick = (...keys: string[]) => {
-    for (const key of keys) {
-      const value = str(args[key]);
-      if (value) return value;
-    }
-    return undefined;
-  };
+  const pick = (...keys: string[]) => pickFrom(args, ...keys);
   if (name.startsWith("mcp__")) {
     const [, server = "", ...tool] = name.split("__");
     return `${server}: ${tool.join("__")}`;
@@ -245,7 +238,7 @@ export function splitAttachments(text: string): { text: string; attachments: Ass
   if (paths.length === 0) return { text, attachments: [] };
   const attachments = paths.map((line): AssetRef => {
     const path = line.slice(2).trim();
-    return { ref: path, name: path.slice(path.lastIndexOf("/") + 1), image: IMAGE_EXT.test(path) };
+    return { ref: path, name: path.slice(path.lastIndexOf("/") + 1), image: isImageFile(path) };
   });
   return { text: text.slice(0, at).trimEnd(), attachments };
 }
@@ -581,15 +574,4 @@ function requestRow(approval: ApprovalRecord): TranscriptItem {
     request: approvalRequestOf(approval),
     status: approval.status,
   };
-}
-
-/** The last assistant answer (or the last error) of a transcript. */
-export function lastAnswer(items: readonly TranscriptItem[]): { text: string; failed: boolean } {
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i]!;
-    if (item.kind === "assistant") return { text: item.text, failed: false };
-    if (item.kind === "notice" && item.level === "error") return { text: item.text, failed: true };
-    if (item.kind === "user") break;
-  }
-  return { text: "", failed: false };
 }

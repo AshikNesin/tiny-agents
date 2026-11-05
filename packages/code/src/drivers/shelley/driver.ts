@@ -16,14 +16,14 @@ import {
   type InstanceEvent,
   type ModelOption,
   type SendInput,
-  type ThreadEvent,
   type ThreadSettings,
   type ThreadSnapshot,
   type ThreadSummary,
   type TurnOutcome,
 } from "../../contracts";
 import { badGateway, badRequest } from "../../server/errors";
-import { Emitter, ItemTracker } from "../../server/items";
+import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
+import { Emitter } from "../../server/items";
 import {
   encodePath,
   qs,
@@ -303,13 +303,14 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     messages: Iterable<ShelleyMessage>,
     progress: Record<string, string> = {},
   ): Promise<ThreadSnapshot> {
-    const list = [...messages];
     const { row, children, settings } = loaded;
     const running = row.running_background_jobs ?? 0;
     const [jobs, subCost] = await Promise.all([
       running ? jobsOf(nativeId) : Promise.resolve([]),
       children.length ? subagentCost(nativeId) : Promise.resolve(0),
     ]);
+    // Read after the awaits: a live watch's map may have grown meanwhile.
+    const list = [...messages];
     return {
       thread: summary({
         ...row,
@@ -360,73 +361,62 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     },
 
     watchThread(nativeId, listener) {
+      // One feed per watch: each watch reads the conversation itself.
+      const feed = new ThreadFeed((error) =>
+        host.logger.warn("A Shelley thread watcher failed", { error: String(error) }),
+      );
+      const unsubscribe = feed.subscribe(listener);
       let closed = false;
-      let ready = false;
       const messages = new Map<number, ShelleyMessage>();
       const progress: Record<string, string> = {};
-      const tracker = new ItemTracker();
       let row: ShelleyRow | undefined;
       let working = false;
-      let partial = { text: "", thinking: "" };
       let loaded: Loaded | undefined;
       let lastJobs = -1;
 
-      const send = (event: ThreadEvent) => {
-        if (!closed) listener(event);
-      };
       const merge = (incoming: ShelleyMessage[]) => {
         for (const m of incoming) messages.set(m.sequence_id, m);
       };
       const pushItems = () => {
-        if (!ready) return;
-        const changed = tracker.changed(buildTranscript(messages.values(), id, { progress }));
-        if (changed.length) {
-          send({ type: "items", items: changed, cursor: maxSequence(messages.values()) });
-        }
-      };
-      const setPartial = (next: { text: string; thinking: string }) => {
-        if (next.text === partial.text && next.thinking === partial.thinking) return;
-        partial = next;
-        if (ready) send({ type: "partial", ...partial });
+        if (!feed.live) return;
+        feed.items(
+          buildTranscript(messages.values(), id, { progress }),
+          maxSequence(messages.values()),
+        );
       };
       const refreshJobs = (count: number) => {
-        if (!ready || count === lastJobs) return;
+        if (!feed.live || count === lastJobs) return;
         lastJobs = count;
         if (!count) {
-          send({ type: "state", working, jobs: [] });
+          feed.state({ jobs: [] });
           return;
         }
-        void jobsOf(nativeId).then((jobs) => send({ type: "state", working, jobs }));
+        void jobsOf(nativeId).then((jobs) => feed.state({ jobs }));
       };
 
       const off = stream.subscribe(nativeId, (frame) => {
         if (frame.messages?.length) {
           merge(frame.messages);
-          if (frame.messages.some((m) => m.type === "agent"))
-            setPartial({ text: "", thinking: "" });
           pushItems();
+          // A finished message replaces the streaming text.
+          if (frame.messages.some((m) => m.type === "agent")) feed.partial(NO_PARTIAL);
         }
         if (frame.conversation) {
           row = { ...row, ...frame.conversation };
-          if (ready) {
-            send({ type: "thread", thread: summary(row) });
-            send({ type: "state", working, queued: queuedMessages(row) });
+          if (feed.live) {
+            feed.thread(summary(row));
+            feed.state({ queued: queuedMessages(row) });
             refreshJobs(row.running_background_jobs ?? 0);
           }
         }
         if (frame.conversation_state) {
           const wasWorking = working;
           working = frame.conversation_state.working;
-          if (!working) setPartial({ text: "", thinking: "" });
-          if (ready) {
-            send({ type: "state", working });
-            if (wasWorking && !working) void sendCost();
-          }
+          feed.state({ working });
+          if (wasWorking && !working && feed.live) void sendCost();
         }
-        if (frame.context_window_size && ready) {
-          send({
-            type: "state",
-            working,
+        if (frame.context_window_size) {
+          feed.state({
             context: {
               used: frame.context_window_size,
               ...(loaded?.contextMax ? { max: loaded.contextMax } : {}),
@@ -439,19 +429,21 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
           pushItems();
         }
         const delta = frame.stream_delta;
-        if (delta?.type === "text") setPartial({ ...partial, text: partial.text + delta.text });
+        const partial = feed.partialNow;
+        if (delta?.type === "text") feed.partial({ ...partial, text: partial.text + delta.text });
         else if (delta?.type === "thinking") {
-          setPartial({ ...partial, thinking: partial.thinking + delta.text });
+          feed.partial({ ...partial, thinking: partial.thinking + delta.text });
         }
       });
 
       async function sendCost() {
         if (!loaded) return;
         const sub = loaded.children.length ? await subagentCost(nativeId) : 0;
-        send({ type: "state", working, costUsd: totalCost(messages.values()) + sub });
+        feed.state({ costUsd: totalCost(messages.values()) + sub });
       }
 
-      async function reload(first: boolean) {
+      /** Read the conversation and start the watcher over from a snapshot. */
+      async function reload() {
         try {
           const next = await load(nativeId);
           if (closed) return;
@@ -459,38 +451,21 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
           merge(next.detail.messages ?? []);
           row = { ...row, ...next.row };
           working = isWorking(row);
-          if (first || !ready) {
-            const snapshot = await snapshotOf(nativeId, next, messages.values(), progress);
-            if (closed) return;
-            tracker.reset(snapshot.items);
-            lastJobs = row.running_background_jobs ?? 0;
-            ready = true;
-            send({ type: "snapshot", snapshot });
-            if (partial.text || partial.thinking) send({ type: "partial", ...partial });
-            return;
-          }
-          pushItems();
-          send({ type: "thread", thread: summary(row) });
-          send({
-            type: "state",
-            working,
-            queued: queuedMessages(row),
-            settings: next.settings,
-            context: {
-              used: next.detail.context_window_size ?? 0,
-              ...(next.contextMax ? { max: next.contextMax } : {}),
-            },
-          });
+          const snapshot = await snapshotOf(nativeId, next, messages.values(), progress);
+          if (closed) return;
+          lastJobs = row.running_background_jobs ?? 0;
+          feed.snapshot(snapshot);
         } catch (error) {
-          send({ type: "error", message: error instanceof Error ? error.message : String(error) });
+          feed.error(error instanceof Error ? error.message : String(error));
         }
       }
 
       // Re-read after every reconnect: frames sent while the stream was down are gone.
-      const offConnected = stream.onConnected(() => void reload(false));
-      void reload(true);
+      const offConnected = stream.onConnected(() => void reload());
+      void reload();
       return () => {
         closed = true;
+        unsubscribe();
         off();
         offConnected();
       };

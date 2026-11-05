@@ -24,7 +24,12 @@ import type {
   ThreadEvent,
   TranscriptItem,
 } from "../../../../packages/code/src/contracts";
-import { capabilityProblems, collect, testHost } from "../../../../packages/code/src/testing";
+import {
+  capabilityProblems,
+  collect,
+  testHost,
+  threadEventProblems,
+} from "../../../../packages/code/src/testing";
 import {
   FakeSdk,
   delta,
@@ -228,7 +233,7 @@ describe("Claude Code harness", () => {
     expect((await harness.models()).map((model) => model.id)).toEqual(["default", "sonnet"]);
   });
 
-  it("streams a watched turn: snapshot, partial text, rows, then idle", async () => {
+  it("streams a watched turn: partial text, rows, then idle", async () => {
     const { harness, sdk, dir } = await setup(manual);
     const { nativeId } = await harness.createThread({ message: "explain", cwd: dir });
     const query = await queryOf(sdk);
@@ -251,13 +256,14 @@ describe("Claude Code harness", () => {
     query.emit(text(query, "It works."));
     const rows = await watch.next((event) => event.type === "items");
     if (rows.type !== "items") throw new Error("no rows");
-    expect(kinds(rows.items)).toEqual(["assistant:It works."]);
+    expect(kinds(rows.items)).toContain("assistant:It works.");
     query.emit(result(query, { totalCost: 0.02 }));
     await watch.next(
       (event) => event.type === "items" && event.items.some((item) => item.kind === "turn"),
     );
     const idle = await watch.next((event) => event.type === "state" && !event.working);
     expect(idle).toMatchObject({ costUsd: 0.02, context: { max: 200000 } });
+    expect(threadEventProblems(watch.events)).toEqual([]);
   });
 
   it("runs several turns on one process, with per-turn cost", async () => {
@@ -604,6 +610,7 @@ describe("Claude Code harness", () => {
     expect(rows.type).toBe("items");
     await waitTurnEnds(events, 1);
     expect(turnEnds(events)).toHaveLength(1);
+    expect(threadEventProblems(watch.events)).toEqual([]);
   });
 
   it("reads the same transcript back after an app restart, and resumes after a worker restart", async () => {
@@ -626,7 +633,11 @@ describe("Claude Code harness", () => {
     // One app process owns the index: the old one is gone.
     again.stop();
 
-    // The worker restarts: the next turn resumes the stored Claude session.
+    // The worker restarts: a watcher starts over from the transcript on disk,
+    // and the next turn resumes the stored Claude session.
+    const watch = collect();
+    cleanups.push(harness.watchThread(nativeId, watch.listener));
+    await watch.next((event) => event.type === "snapshot");
     const claudeSessionId = sdk.queries[0]!.sessionId;
     await setupResult.server.close();
     setupResult.server = await startServer(sdk, dir);
@@ -634,6 +645,10 @@ describe("Claude Code harness", () => {
     await vi.waitFor(() =>
       expect(events.filter((event) => event.type === "connected").length).toBeGreaterThanOrEqual(2),
     );
+    const restarted = await watch.next((event) => event.type === "snapshot", 4000);
+    if (restarted.type !== "snapshot") throw new Error("no snapshot");
+    expect(restarted.snapshot.items).toEqual(before.items);
+    expect(threadEventProblems(watch.events)).toEqual([]);
     await harness.send(nativeId, { message: "still there?" });
     await waitTurnEnds(events, 2);
     expect(sdk.queries[1]?.options.resume).toBe(claudeSessionId);

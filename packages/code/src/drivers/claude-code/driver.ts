@@ -46,18 +46,17 @@ import {
   type QueuedMessage,
   type RequestAnswer,
   type SlashCommand,
-  type ThreadEvent,
   type ThreadSettings,
   type ThreadSnapshot,
   type ThreadSummary,
   type TranscriptItem,
   type UsageReport,
 } from "../../contracts";
-import { Emitter, ItemTracker, excerpt, firstLine, record } from "../../server/items";
+import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
+import { Emitter, excerpt, firstLine, lastAnswer, record } from "../../server/items";
 import { CodingWorkerClient, type ClientState, type CodingClientTimings } from "./client";
 import {
   approvalRequestOf,
-  lastAnswer,
   normalizeEntries,
   toolSummary,
   type ApprovalRecord,
@@ -163,12 +162,6 @@ interface ThreadData {
   contextMax?: number;
 }
 
-interface Watcher {
-  listener: (event: ThreadEvent) => void;
-  tracker: ItemTracker;
-  ready: boolean;
-}
-
 interface Runtime {
   nativeId: string;
   row: IndexedThread;
@@ -180,8 +173,8 @@ interface Runtime {
   notified: Set<string>;
   working: boolean;
   queued: QueuedMessage[];
-  partial: { text: string; thinking: string };
-  watchers: Set<Watcher>;
+  /** What this thread's watchers are sent (rows, streaming text, state). */
+  feed: ThreadFeed;
   /** Events up to here are a replay (after an app restart): no pushes for them. */
   replayUntil: number;
   chain: Promise<void>;
@@ -238,11 +231,12 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       onPartial: (sessionId, partial) => {
         const runtime = loaded.get(sessionId);
         if (!runtime) return;
-        if (partial.reset) runtime.partial = { text: "", thinking: "" };
-        runtime.partial.text += partial.text ?? "";
-        runtime.partial.thinking += partial.thinking ?? "";
         if (!partial.text && !partial.thinking && !partial.reset) return;
-        broadcast(runtime, { type: "partial", ...runtime.partial });
+        const now = partial.reset ? NO_PARTIAL : runtime.feed.partialNow;
+        runtime.feed.partial({
+          text: now.text + (partial.text ?? ""),
+          thinking: now.thinking + (partial.thinking ?? ""),
+        });
       },
       onCatalog: (next) => {
         catalog = next;
@@ -295,8 +289,9 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           notified: new Set(),
           working: false,
           queued: [],
-          partial: { text: "", thinking: "" },
-          watchers: new Set(),
+          feed: new ThreadFeed((error) =>
+            log.warn("claude-code watcher failed", { nativeId, error: String(error) }),
+          ),
           replayUntil: 0,
           chain: Promise.resolve(),
           writes: Promise.resolve(),
@@ -362,11 +357,11 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     const wasWorking = runtime.working;
     runtime.working = false;
     runtime.queued = [];
-    runtime.partial = { text: "", thinking: "" };
     for (const request of runtime.requests.values()) {
       if (request.status === "open") request.status = "expired";
     }
     emitItems(runtime);
+    // Not working: the feed drops the streaming text with this state.
     emitState(runtime);
     if (wasWorking) events.emit({ type: "threads" });
   }
@@ -384,9 +379,9 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     runtime.history = undefined;
     runtime.live = [];
     runtime.liveIndex.clear();
-    if (runtime.watchers.size === 0) return;
+    if (runtime.feed.size === 0) return;
     await loadHistory(runtime);
-    for (const watcher of runtime.watchers) sendSnapshot(runtime, watcher);
+    runtime.feed.snapshot(snapshotOf(runtime));
   }
 
   async function loadHistory(runtime: Runtime): Promise<void> {
@@ -498,58 +493,28 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     };
   }
 
-  function snapshotOf(runtime: Runtime): { snapshot: ThreadSnapshot; items: TranscriptItem[] } {
-    const { items } = itemsOf(runtime);
+  function snapshotOf(runtime: Runtime): ThreadSnapshot {
     return {
-      items,
-      snapshot: {
-        thread: summaryOf(runtime.row, runtime),
-        items,
-        settings: settingsOf(runtime.row),
-        queued: runtime.queued,
-        jobs: [],
-        children: [],
-        context: contextOf(runtime),
-        costUsd: dataOf(runtime.row).costUsd ?? 0,
-      },
+      thread: summaryOf(runtime.row, runtime),
+      items: itemsOf(runtime).items,
+      settings: settingsOf(runtime.row),
+      queued: runtime.queued,
+      jobs: [],
+      children: [],
+      context: contextOf(runtime),
+      costUsd: dataOf(runtime.row).costUsd ?? 0,
     };
   }
 
-  function sendSnapshot(runtime: Runtime, watcher: Watcher): void {
-    const { snapshot, items } = snapshotOf(runtime);
-    watcher.tracker.reset(items);
-    watcher.ready = true;
-    safe(watcher, { type: "snapshot", snapshot });
-    if (runtime.partial.text || runtime.partial.thinking) {
-      safe(watcher, { type: "partial", ...runtime.partial });
-    }
-  }
-
-  function safe(watcher: Watcher, event: ThreadEvent): void {
-    try {
-      watcher.listener(event);
-    } catch (error) {
-      log.warn("claude-code watcher failed", { error: String(error) });
-    }
-  }
-
-  function broadcast(runtime: Runtime, event: ThreadEvent): void {
-    for (const watcher of runtime.watchers) if (watcher.ready) safe(watcher, event);
-  }
-
   function emitItems(runtime: Runtime): void {
-    if (![...runtime.watchers].some((watcher) => watcher.ready)) return;
+    // Normalizing the transcript is the costly part: only for someone watching.
+    if (!runtime.feed.live) return;
     const { items, cursor } = itemsOf(runtime);
-    for (const watcher of runtime.watchers) {
-      if (!watcher.ready) continue;
-      const changed = watcher.tracker.changed(items);
-      if (changed.length > 0) safe(watcher, { type: "items", items: changed, cursor });
-    }
+    runtime.feed.items(items, cursor);
   }
 
   function emitState(runtime: Runtime): void {
-    broadcast(runtime, {
-      type: "state",
+    runtime.feed.state({
       working: runtime.working,
       context: contextOf(runtime),
       queued: runtime.queued,
@@ -575,9 +540,12 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           if (entry.uuid) runtime.liveIndex.set(entry.uuid, runtime.live.length);
           runtime.live.push(entry);
         }
-        if (entry.type === "assistant") runtime.partial = { text: "", thinking: "" };
         emitItems(runtime);
-        if (entry.type === "assistant") emitState(runtime);
+        if (entry.type === "assistant") {
+          // The finished message replaces the streaming text.
+          runtime.feed.partial(NO_PARTIAL);
+          emitState(runtime);
+        }
         break;
       }
       case "state":
@@ -630,7 +598,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     const wasWorking = runtime.working;
     runtime.working = state.running;
     runtime.queued = state.queued.map((item) => ({ ...item }));
-    if (!state.running) runtime.partial = { text: "", thinking: "" };
     const data = dataOf(runtime.row);
     if (state.claudeSessionId && state.claudeSessionId !== data.claudeSessionId) {
       await saveData(runtime, { claudeSessionId: state.claudeSessionId });
@@ -814,38 +781,41 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     async getThread(nativeId) {
       const runtime = await runtimeOf(nativeId);
       await loadHistory(runtime);
-      return snapshotOf(runtime).snapshot;
+      return snapshotOf(runtime);
     },
 
     watchThread(nativeId, listener) {
-      const watcher: Watcher = { listener, tracker: new ItemTracker(), ready: false };
       let stopped = false;
-      let runtime: Runtime | undefined;
+      let unsubscribe: (() => void) | undefined;
       void (async () => {
-        runtime = await runtimeOf(nativeId);
+        const runtime = await runtimeOf(nativeId);
         if (stopped) return;
-        runtime.watchers.add(watcher);
+        unsubscribe = runtime.feed.subscribe(listener);
         try {
           await loadHistory(runtime);
         } catch (error) {
-          safe(watcher, {
-            type: "error",
-            message: `Could not read the transcript: ${error instanceof Error ? error.message : String(error)}`,
-          });
+          runtime.feed.error(
+            `Could not read the transcript: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
         if (stopped) return;
         // Run after any event already queued for this thread.
         await runtime.chain;
-        if (!stopped) sendSnapshot(runtime, watcher);
+        if (!stopped && runtime.feed.waiting) runtime.feed.snapshot(snapshotOf(runtime), "waiting");
       })().catch((error: unknown) => {
-        safe(watcher, {
-          type: "error",
-          message: error instanceof Error ? error.message : String(error),
-        });
+        // No such thread: there is no feed to carry the error.
+        try {
+          listener({
+            type: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        } catch (failure) {
+          log.warn("claude-code watcher failed", { nativeId, error: String(failure) });
+        }
       });
       return () => {
         stopped = true;
-        runtime?.watchers.delete(watcher);
+        unsubscribe?.();
       };
     },
 
@@ -923,7 +893,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       const clean = title.trim();
       if (!clean) throw badInput("A title cannot be empty.");
       await saveRow(runtime, { title: clean.slice(0, 200) });
-      broadcast(runtime, { type: "thread", thread: summaryOf(runtime.row, runtime) });
+      runtime.feed.thread(summaryOf(runtime.row, runtime));
       events.emit({ type: "threads" });
     },
 
@@ -966,6 +936,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       const attachments = (input.attachments ?? []).map((ref) => {
         if (!ref.startsWith("/")) throw badInput("Unknown attachment.");
         const name = ref.slice(ref.lastIndexOf("/") + 1);
+        // What the model takes as image input (narrower than what the page shows inline).
         return { path: ref, name, image: /\.(png|jpe?g|gif|webp)$/i.test(name) };
       });
       const result = await client.request<CodingSendResult>({

@@ -41,6 +41,10 @@ _Avoid_: provider (model providers), backend, engine (bot engines)
 What a harness really does (steer, approvals, diffs, …), declared by its driver. The Code page shows a control only when the thread's harness has its capability; it never fakes one.
 _Avoid_: feature flag
 
+**Thread feed**:
+What one harness thread's watchers are sent, and when (`ThreadFeed`, `@tiny-agents/code/server`). A driver tells it the thread as it is now (a snapshot, the full row list, the streaming text, a state change); the feed sends each watcher its snapshot first, then only rows that changed for it, re-sends the streaming text after a snapshot, and keeps one failing watcher from stopping the others. `threadEventProblems` in `@tiny-agents/code/testing` checks any driver's watch against the same rules.
+_Avoid_: watcher (the app's hand-off `code.watcher.ts`), tracker, stream (Shelley's `stream2`)
+
 **Shelley**:
 The owner's coding agent on another machine ([boldsoftware/shelley](https://github.com/boldsoftware/shelley)), one harness of the Code page and the default for bot hand-offs. tiny-agents is a client of its official API (ADR 0009, ADR 0011).
 _Avoid_: coder, coding bot
