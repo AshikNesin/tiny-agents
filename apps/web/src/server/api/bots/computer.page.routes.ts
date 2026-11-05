@@ -14,15 +14,13 @@
  * page is an owner action, so it needs the owner to be driving.
  */
 import { Hono } from "hono";
-import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
-import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
+import { parseBody, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
 import type { ComputerSessions } from "@tiny-agents/agent";
-import { db, bots } from "../../db";
-import { SHARED_BROWSER_PROFILE } from "./browser.targets";
+import { knownProfile, listProfiles } from "./profiles";
 import { computerSetupHint, getComputerSessions } from "./computer.sessions";
 import { issueDesktopVncTicket } from "./computer.vnc";
 
@@ -31,53 +29,8 @@ const router = new Hono<AppEnv>();
 const driverSchema = z.object({ driver: z.enum(["agent", "human"]) });
 const openAppSchema = z.object({ id: z.string().min(1).max(128) });
 
-/** One desktop the page lists: who uses it and how it stands. */
-interface DesktopEntry {
-  profile: string;
-  /** "Shared", or the bot's name. */
-  label: string;
-  /** Bots that use this desktop. */
-  bots: { id: string; name: string }[];
-}
-
-/** Every desktop a bot can have: the shared one, and one per own-profile bot. */
-async function desktops(): Promise<DesktopEntry[]> {
-  const rows = await db
-    .select({ id: bots.id, name: bots.name, browserProfile: bots.browserProfile })
-    .from(bots)
-    .orderBy(asc(bots.name));
-  const shared = rows.filter((row) => row.browserProfile !== "own");
-  return [
-    {
-      profile: SHARED_BROWSER_PROFILE,
-      label: "Shared",
-      bots: shared.map(({ id, name }) => ({ id, name })),
-    },
-    ...rows
-      .filter((row) => row.browserProfile === "own")
-      .map((row) => ({
-        profile: `bot-${row.id}`,
-        label: row.name,
-        bots: [{ id: row.id, name: row.name }],
-      })),
-  ];
-}
-
-/** The profile in the path, if it names a desktop a bot can have. */
-async function knownProfile(raw: string | undefined): Promise<string> {
-  const profile = parseStringParam(raw, "profile");
-  if (profile === SHARED_BROWSER_PROFILE) return profile;
-  const id = /^bot-(.+)$/.exec(profile)?.[1];
-  if (id) {
-    const [row] = await db
-      .select({ browserProfile: bots.browserProfile })
-      .from(bots)
-      .where(eq(bots.id, id))
-      .limit(1);
-    if (row?.browserProfile === "own") return profile;
-  }
-  throw Boom.notFound("No such desktop.");
-}
+/** The desktop a path names (`shared` or an own-profile bot's), else 404. */
+const knownDesktop = (raw: string | undefined) => knownProfile(raw, "No such desktop.");
 
 function requireSessions(): ComputerSessions {
   const sessions = getComputerSessions();
@@ -93,7 +46,7 @@ function requireLive(sessions: ComputerSessions, profile: string) {
 
 router.get("/computer", async (c) => {
   const sessions = getComputerSessions();
-  const list = await desktops();
+  const list = await listProfiles();
   return ok(c, {
     configured: Boolean(sessions),
     setupHint: sessions ? null : (computerSetupHint() ?? null),
@@ -118,7 +71,7 @@ router.get("/computer", async (c) => {
 // Starts in the background: the first run installs the desktop (minutes),
 // and the page follows the list route.
 router.post("/computer/:profile/start", async (c) => {
-  const profile = await knownProfile(c.req.param("profile"));
+  const profile = await knownDesktop(c.req.param("profile"));
   requireSessions()
     .start(profile)
     .catch(() => {
@@ -128,7 +81,7 @@ router.post("/computer/:profile/start", async (c) => {
 });
 
 router.post("/computer/:profile/vnc-ticket", async (c) => {
-  const profile = await knownProfile(c.req.param("profile"));
+  const profile = await knownDesktop(c.req.param("profile"));
   const live = requireLive(requireSessions(), profile);
   if (!live.desktop.vnc) throw Boom.conflict("This desktop has no live view.");
   const ticket = issueDesktopVncTicket({ userId: requireUser(c).userId, profile });
@@ -141,7 +94,7 @@ router.post("/computer/:profile/vnc-ticket", async (c) => {
 
 router.post("/computer/:profile/driver", async (c) => {
   const [profile, body] = await Promise.all([
-    knownProfile(c.req.param("profile")),
+    knownDesktop(c.req.param("profile")),
     parseBody(c, driverSchema),
   ]);
   const sessions = requireSessions();
@@ -151,7 +104,7 @@ router.post("/computer/:profile/driver", async (c) => {
 });
 
 router.get("/computer/:profile/apps", async (c) => {
-  const profile = await knownProfile(c.req.param("profile"));
+  const profile = await knownDesktop(c.req.param("profile"));
   const live = requireLive(requireSessions(), profile);
   try {
     return ok(c, { apps: await live.desktop.listApps() });
@@ -162,7 +115,7 @@ router.get("/computer/:profile/apps", async (c) => {
 
 router.post("/computer/:profile/apps", async (c) => {
   const [profile, body] = await Promise.all([
-    knownProfile(c.req.param("profile")),
+    knownDesktop(c.req.param("profile")),
     parseBody(c, openAppSchema),
   ]);
   const live = requireLive(requireSessions(), profile);
@@ -179,7 +132,7 @@ router.post("/computer/:profile/apps", async (c) => {
 
 // Reset: close the desktop and wipe its settings and app state on the VM.
 router.delete("/computer/:profile", async (c) => {
-  const profile = await knownProfile(c.req.param("profile"));
+  const profile = await knownDesktop(c.req.param("profile"));
   const sessions = requireSessions();
   try {
     await sessions.close(profile, { wipe: true });

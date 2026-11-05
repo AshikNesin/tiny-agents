@@ -25,6 +25,7 @@ import {
   MonitorOff,
   MousePointerClick,
   RotateCcw,
+  SquareArrowOutUpRight,
   X,
 } from "lucide-react";
 import {
@@ -40,6 +41,8 @@ import {
 import { cn } from "@groot/shell/lib/utils";
 import { toast } from "sonner";
 import { useConfirm } from "@groot/ui/primitives";
+import { Link } from "react-router-dom";
+import { useIsGuest } from "../store/people";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
 import { VncView, type VncHandle, type VncState } from "./browser/VncView";
@@ -174,6 +177,9 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
   // Bots share one browser profile unless set to their own, so a reset can
   // sign every one of them out: say which before wiping.
   const sharedProfile = status?.profile !== "own";
+  const guest = useIsGuest();
+  // The Browser page (issue #160) is the owner's; it opens on this browser.
+  const pageLink = `/browser?profile=${encodeURIComponent(sharedProfile ? "shared" : `bot-${bot.id}`)}`;
   const resetProfile = async () => {
     const ok = await confirm({
       title: sharedProfile ? "Reset the shared browser?" : "Reset this bot's browser?",
@@ -351,6 +357,18 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
               </Button>
             )}
             <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
+            {!guest && (
+              <Button variant="ghost" size="icon-sm" asChild>
+                <Link
+                  to={pageLink}
+                  aria-label="Open in the Browser page"
+                  title="Open in the Browser page"
+                  data-testid="browser-open-page"
+                >
+                  <SquareArrowOutUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"

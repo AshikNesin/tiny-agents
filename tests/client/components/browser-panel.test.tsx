@@ -9,6 +9,7 @@
 import React from "react";
 import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
+import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
@@ -57,7 +58,12 @@ const bot: Bot = {
 } as unknown as Bot;
 
 /** The panel confirms a reset through the app's confirm dialog. */
-const render = (ui: React.ReactElement) => rtlRender(<ConfirmProvider>{ui}</ConfirmProvider>);
+const render = (ui: React.ReactElement) =>
+  rtlRender(
+    <MemoryRouter>
+      <ConfirmProvider>{ui}</ConfirmProvider>
+    </MemoryRouter>,
+  );
 
 const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
   active: true,

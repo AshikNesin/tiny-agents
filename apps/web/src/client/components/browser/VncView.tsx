@@ -40,6 +40,11 @@ interface VncViewProps {
   ticket?: () => Promise<VncTicket>;
   /** Which desktop to stream; default the bot's browser. */
   kind?: "browser" | "computer";
+  /**
+   * How a browser viewer fits the remote window to its box; default the
+   * bot's browser resize route (the Browser page passes its profile's).
+   */
+  resize?: (size: { width: number; height: number }) => Promise<unknown>;
   /** False keeps the viewer view-only (the agent is driving). */
   interactive: boolean;
   onState: (state: VncState) => void;
@@ -70,13 +75,17 @@ const PASTE_CHORD = {
 } as const;
 
 export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
-  { botId, kind = "browser", ticket, interactive, onState },
+  { botId, kind = "browser", ticket, resize, interactive, onState },
   ref,
 ) {
   const ticketRef = useRef(ticket);
   useEffect(() => {
     ticketRef.current = ticket;
   }, [ticket]);
+  const resizeRef = useRef(resize);
+  useEffect(() => {
+    resizeRef.current = resize;
+  }, [resize]);
   const hostRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<RfbClient | null>(null);
   const interactiveRef = useRef(interactive);
@@ -197,11 +206,11 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       inFlight = true;
       const rect = host.getBoundingClientRect();
       const desktop = remoteWindowSize(rect.width, rect.height);
-      void botsApi
-        .browserResize(botId, {
-          width: Math.max(320, Math.round(desktop.width)),
-          height: Math.max(240, Math.round(desktop.height)),
-        })
+      const size = {
+        width: Math.max(320, Math.round(desktop.width)),
+        height: Math.max(240, Math.round(desktop.height)),
+      };
+      void (resizeRef.current ? resizeRef.current(size) : botsApi.browserResize(botId, size))
         .then(
           () => true,
           () => false,
