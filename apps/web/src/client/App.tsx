@@ -27,6 +27,7 @@ import { ConnectionsPage } from "./pages/connections/Connections";
 import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
+import { BrowserPage } from "./pages/browser";
 import { CodePage } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
@@ -135,6 +136,7 @@ const router = createBrowserRouter(
         {page("/tasks", <Tasks />)}
         {page("/terminal", <TerminalPage />)}
         {page("/computer", <ComputerPage />)}
+        {page("/browser", <BrowserPage />)}
         {page("/code", <CodePage />)}
         {page("/code/new", <CodePage />)}
         {page("/code/s/:slug", <CodePage />)}

@@ -147,6 +147,43 @@ Without a VNC display (local fallback, no `SANDBOX_HOST`) the panel shows
 "No live view for this browser" with the current URL, and Take control, Paste
 and Full screen are not offered.
 
+## Browser page
+
+`/browser` (sidebar, after Computer; issue #160) gives the owner the bots'
+browsers directly, the way the Computer page gives them the desktops:
+
+- **One tab per browser:** Shared (the default; every bot on the shared
+  profile) and one per bot with a profile of its own. Each tab shows whether
+  the browser is live, starting, failed or closed. The choice is remembered
+  (`localStorage`), and `/browser?profile=bot-<id>` opens a given browser; an
+  unknown profile falls back to Shared. The chat's Browser panel links here.
+- **The owner has a tab of their own** in every browser, keyed `owner`
+  instead of a bot id. "Open browser" opens the browser if needed and brings
+  that tab to the front, so the page never lands in a bot's tab. Handing
+  control back from the page moves only the `owner` tab to the tab left in
+  front, so every bot's tab stays where it was (handing back from a chat
+  panel gives that bot the front tab instead). The owner's tab closes with
+  the browser.
+- **The live view** is the panel's `VncView`, fit to the page through the
+  page's own resize route, view-only until you take control. Taking control
+  is the same driver flag the panel flips: every bot on that browser waits
+  until you release it. **Paste**, **Full screen** (with keyboard lock) and
+  **Reset** (closes the browser and wipes the profile; on Shared it names the
+  bots it signs out) work as in the panel.
+- **One window per browser.** The page and a chat panel both fit Chrome's
+  window to their view; the last to connect or resize wins, and the other
+  view scales.
+- Without a sandbox VM (or with `BROWSER_EXECUTABLE_PATH`) bots browse
+  headless, so the page says there is nothing to show and why.
+
+Routes (JWT, owner only): `GET /browser` (the browsers, their state and
+whether this server has a live view), `POST /browser/:profile/start |
+vnc-ticket | resize | driver`, `DELETE /browser/:profile`; viewer socket
+`/browser/:profile/vnc?ticket=`, with tickets of its own (a chat panel ticket
+cannot open it, nor the reverse). Only `shared` and the `bot-<id>` of an
+own-profile bot are accepted (`profiles.ts`, shared with the Computer page),
+so the page cannot start a browser no bot owns.
+
 ## First run on a VM
 
 The app installs what the browser needs the first time a bot opens one:

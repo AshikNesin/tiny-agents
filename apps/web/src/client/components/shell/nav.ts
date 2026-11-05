@@ -3,6 +3,7 @@ import {
   Brain,
   CalendarClock,
   Code2,
+  Globe,
   KeyRound,
   ListTodo,
   Monitor,
@@ -23,6 +24,7 @@ export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Code", icon: Code2, to: "/code" },
   { label: "Terminal", icon: SquareTerminal, to: "/terminal" },
   { label: "Computer", icon: Monitor, to: "/computer" },
+  { label: "Browser", icon: Globe, to: "/browser" },
 ];
 
 /** Set-up-and-forget pages: in the sidebar's account menu, not its nav. */

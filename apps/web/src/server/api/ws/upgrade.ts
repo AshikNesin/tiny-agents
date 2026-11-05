@@ -120,17 +120,27 @@ export interface UpgradeMatch {
  * bridge) to its own listener. An upgrade nobody listens for is closed
  * instead of left hanging.
  */
+/** The paths `onUpgrade` serves on each server, so a stray upgrade is dropped once none match. */
+const upgradePatterns = new WeakMap<Server, RegExp[]>();
+
 export function onUpgrade(
   httpServer: Server,
   pattern: RegExp,
   originAllowed: (req: IncomingMessage) => boolean,
   handle: (match: UpgradeMatch) => void,
 ): void {
+  const patterns = upgradePatterns.get(httpServer) ?? [];
+  upgradePatterns.set(httpServer, patterns);
+  patterns.push(pattern);
   httpServer.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://internal");
     const match = pattern.exec(url.pathname);
     if (!match) {
-      if (httpServer.listenerCount("upgrade") <= 1) socket.destroy();
+      // Nobody answers it: none of our paths match and no other listener
+      // (Vite's HMR, say) is attached to take it.
+      const ours = upgradePatterns.get(httpServer) ?? [];
+      const foreign = httpServer.listenerCount("upgrade") - ours.length;
+      if (foreign <= 0 && !ours.some((p) => p.test(url.pathname))) socket.destroy();
       return;
     }
     if (!originAllowed(req)) return rejectUpgrade(socket, "403 Forbidden");
