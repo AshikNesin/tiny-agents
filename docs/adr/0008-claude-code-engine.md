@@ -3,6 +3,8 @@
 - Status: **accepted**, amended by [0010](0010-claude-worker-runs-on-the-sandbox.md):
   the worker now runs on the sandbox, set up by the app and reached over
   SSH; the hand-run worker behind `tailscale serve` described below is gone.
+  Amended by [0014](0014-tool-gate-and-engine-seam.md): "through the approval
+  gate" is one Tool gate shared with the pi engine.
 - Date: 2026-11-02
 
 ## Context

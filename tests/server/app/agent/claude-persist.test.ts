@@ -49,9 +49,8 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
-    engine.sync(7, sync);
+    await engine.configure(7, { claude: sync });
     const state = await engine.read(7);
     expect(state.messages.map((message) => message.text)).toEqual([
       "remember the number 42",
@@ -63,9 +62,8 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
-    engine.sync(7, sync);
+    await engine.configure(7, { claude: sync });
     const subscription = await engine.watch(7, () => undefined);
     expect(subscription.initial.messages).toHaveLength(2);
   });
@@ -74,9 +72,8 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
-    engine.sync(7, sync);
+    await engine.configure(7, { claude: sync });
     await engine.close();
     const saved = JSON.parse(await readFile(path, "utf8"));
     expect(saved.sessions["7"].messages).toHaveLength(2);

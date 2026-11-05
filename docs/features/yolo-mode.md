@@ -40,20 +40,18 @@ is on, the button is highlighted and a banner above the composer says so.
   `packages/agent/src/policy.ts`): `{ on, since, by }`, where `by` is your user
   id. It is separate from `tiny.permissions`, which is recompiled from the bot
   on every send. A fork starts with it off.
-- Pi engine gate (`approvals.ts` `gateTool`): after the unattended refusal and
+- The Tool gate (`packages/agent/src/gate.ts`, [ADR 0014](../adr/0014-tool-gate-and-engine-seam.md)),
+  the same on pi and on the Claude plan: after the unattended refusal and
   before auto-review, a call that would ask and carries no vault plan
   (`plan.details.vault`) checks YOLO once (`gate:yolo` memo, so a replay or a
-  toggle mid-call never flips it). The turn must be yours (`ownerTurn`: the
-  newest user message is no peer delivery and, in a shared chat, its author is
-  `by`). The call then runs with `approval: "yolo"` and never sets
-  `gate:approved`.
-- Claude plan engine (`engines/claude-code`): its in-memory gate runs an `ask`
-  call without the card when YOLO is on, the turn is yours, and the tool is not
-  flagged `vault` on its `ToolInfo` (that engine has no gate plans, so every
-  vault-capable tool keeps asking there).
-- `AgentRuntime.setYolo(ref, on, by)` writes the document, syncs the Claude
-  session and, when switching on, approves the waiting non-vault cards
-  (`recordYoloDecision`). `AgentRuntime.yolo(ref)` reads it.
+  toggle mid-call never flips it). The turn must be yours (`ownerTurn` over the
+  engine's user messages: the newest is no peer delivery and, in a shared
+  chat, its author is `by`). The call then runs with `approval: "yolo"` and
+  never sets `gate:approved`.
+- `AgentRuntime.setYolo(ref, on, by)` writes the document and, when switching
+  on, has the gate approve the waiting non-vault cards in your turn
+  (`ToolGate.approveWaiting`: `recordYoloDecision` for a pi call, the held
+  answer for a Claude plan call). `AgentRuntime.yolo(ref)` reads it.
 - API: `PUT /api/v1/bots/:id/yolo` with `{ "on": boolean }` answers
   `{ on, approved }`. Owner only (not in `guest.guard.ts`). The bot's chat
   stream sends `{ "type": "yolo", "on": … }` when it opens and on every switch.

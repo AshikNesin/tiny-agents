@@ -1,70 +1,43 @@
 /**
- * Tool approvals (issue #1 D3/D4): the owner-wait of a gated tool call, end
- * to end. This module owns the approval's document, the card details the
- * chat renders (produced and parsed here, nowhere else), the host side that
- * records the owner's decision, and the gate that wraps every capability
- * tool:
+ * Tool approvals (issue #1 D3/D4): the owner-wait of a gated tool call. This
+ * module owns the approval's document, the card details the chat renders
+ * (produced and parsed here, nowhere else), the host side that records the
+ * owner's decision, and a tool's own say in its gate. The Tool gate
+ * (`gate.ts`) decides when a call asks; this is what asking is made of:
  *
- * - A conversation's `tiny.permissions` document (`policy.ts`) lists the
- *   tools that run without asking. A conversation without the document
- *   predates permissions and runs everything.
- * - A tool that must ask waits on its task-scoped `tiny.approval` document
- *   (`waitForOwner`, see `waiting.ts`), publishing `{ approval: "pending" }`
+ * - A call that asks waits on its task-scoped `tiny.approval` document
+ *   (`waitForApproval`, see `waiting.ts`), publishing `{ approval: "pending" }`
  *   details until the host records a decision (`recordDecision`, reached
  *   through `AgentRuntime.decideApproval`). Only a call that is waiting can
  *   be decided: the document is marked `asked` by the wait itself, so a
- *   decision for a running call that never asked is refused.
- * - The side effect itself keeps the wrapped tool's replay policy: for a tool
- *   that is not replay-safe, a durable memo records that the effect started, so
- *   a crash during it reports "interrupted" instead of running it twice. A
- *   tool whose call is replay-safe for some arguments says so (`replaySafe`).
+ *   decision for a running call that never asked is refused. An engine
+ *   without task documents (the Claude plan) has the gate hold the answer
+ *   instead, with the same card details.
  * - A tool can carry a gate plan (`withGatePlan`, used by vault sinks, issue
  *   #56): decided once per call before anything runs, it may refuse the call,
  *   ask even where the tool is allowed, add to the card, offer a standing
  *   grant for the conversation and let the approval expire.
- * - With a reviewer (auto-review, issue #65), a call that would ask the owner
- *   is first judged by a classifier for the tools the conversation's
- *   permissions list under `review`; an approval skips the card. Vault calls
- *   always ask. The verdict is memoized, so a replay never re-asks.
- * - With YOLO mode on (issue #151, `YoloDoc`), a call that would ask runs
- *   without a card, in the owner's own turns only: never a vault use, never
- *   a turn another bot or a guest started. Recorded as `approval: "yolo"`;
- *   it never sets `gate:approved`, so a vault broker would still refuse.
- * - A conversation nobody watches (`unattended`, a routine's, issue #63)
- *   never asks: a call that would wait for the owner is refused instead
- *   (`refuseUnattended`), which a Routine run reads as blocked.
- * - Every result leaves the gate scrubbed of registered secret values.
+ * - YOLO mode switched on approves calls already waiting
+ *   (`recordYoloDecision`), never a vault use.
  */
 import type { Context } from "@earendil-works/chord";
 import {
   defineDoc,
-  type Extension,
   type TaskId,
   type ToolExecutionApi,
   type ToolExecutionResult,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
-import type { EntryRecord } from "@earendil-works/pi-durable";
-import {
-  isUnattendedConversation,
-  mayAutoReview,
-  mustAsk,
-  ownerTurn,
-  PermissionsDoc,
-  yoloOf,
-} from "./policy";
-import { secretRedactor } from "./redact";
-import { ownerMessages, type GateReview, type ReviewVerdict } from "./reviewer";
+import { isUnattendedConversation, PermissionsDoc } from "./policy";
 import type { ChatVaultUse } from "./types";
 import { GrantsDoc } from "./vault";
 import {
   pendingToolTask,
-  refuseUnattended,
   sealedAsNotPending,
-  unattendedOnce,
   waitForOwner,
   type HostTx,
+  type WaitInfo,
   type WaitTracker,
 } from "./waiting";
 
@@ -177,7 +150,7 @@ export function innerDetails(details: unknown): Record<string, unknown> | undefi
 const text = (value: string) => [{ type: "text" as const, text: value }];
 
 /** A gated call's result once the owner declined, in either way. */
-function declinedResult(
+export function declinedResult(
   tool: string,
   decision: "denied" | "expired",
   waitedMs: number,
@@ -246,7 +219,7 @@ export function approvalNotPending(error: unknown, taskId: number): never {
   return sealedAsNotPending(error, () => new ApprovalNotPendingError(taskId));
 }
 
-// ── The gate ────────────────────────────────────────────────────────────
+// ── A tool's own say in its gate ────────────────────────────────────────
 
 /** A tool's own say in its gate, decided once per call (memoized for replays). */
 export interface GatePlan {
@@ -291,182 +264,14 @@ export function withGatePlan<T extends ToolRegistration>(
   return tool;
 }
 
+/** The gate hooks `withGatePlan` attached to a tool, if any. */
+export function gateHooksOf(tool: ToolRegistration): GateHooks<never> | undefined {
+  return gateHooks.get(tool);
+}
+
 /** Whether the owner approved this call at its gate (for tools whose sink re-checks). */
 export async function gateApproved(api: ToolExecutionApi, context: Context): Promise<boolean> {
   return (await api.memo<boolean>("gate:approved", context)) ?? false;
-}
-
-function scrubResult(result: ToolExecutionResult): ToolExecutionResult {
-  if (secretRedactor.size === 0) return result;
-  return {
-    ...result,
-    output: result.output?.map((block) =>
-      block.type === "text" ? { ...block, text: secretRedactor.scrub(block.text) } : block,
-    ),
-    ...(result.details !== undefined ? { details: secretRedactor.scrubJson(result.details) } : {}),
-  };
-}
-
-/**
- * What the gate needs for YOLO mode: the conversation's newest entries
- * (newest first), to tell the owner's turn from another bot's or a guest's.
- */
-export interface GateYolo {
-  recentEntries(conversationId: number): Promise<readonly EntryRecord[]>;
-}
-
-/** Wrap every tool of an extension in the approval gate. */
-export function gateExtension(
-  extension: Extension,
-  tracker: WaitTracker,
-  review?: GateReview,
-  yolo?: GateYolo,
-): Extension {
-  return {
-    ...extension,
-    tools: extension.tools?.map((tool) => gateTool(tool, tracker, review, yolo)),
-  };
-}
-
-export function gateTool(
-  tool: ToolRegistration,
-  tracker: WaitTracker,
-  review?: GateReview,
-  yolo?: GateYolo,
-): ToolRegistration {
-  const hooks = gateHooks.get(tool);
-  return {
-    ...tool,
-    replay: "safe",
-    async execute(args, api, context): Promise<ToolExecutionResult> {
-      const plan = hooks ? await planOnce(tool.name, hooks, args, api, context) : undefined;
-      if (plan?.refuse) {
-        return { output: text(plan.refuse), isError: true, details: { refused: true } };
-      }
-      // Decided once per call, so a permission change mid-call can't flip it on replay.
-      const ask = await api.memo(
-        "gate:ask",
-        plan ? plan.ask : await mustAsk(tool.name, api, context),
-        context,
-      );
-      if (ask && (await unattendedOnce(api, context))) {
-        return refuseUnattended(
-          `${tool.name} needs the owner's approval, and nobody is here to give it: this is a scheduled routine run. It did not run. Finish without it and say what it was for.`,
-        );
-      }
-      // Vault uses always reach the owner: their policy, not YOLO or the classifier, decides.
-      const vault = Boolean(plan?.details?.vault);
-      const yoloed = ask && !vault && yolo ? await yoloOnce(yolo, api, context) : false;
-      const verdict =
-        ask && !yoloed && review && !vault
-          ? await reviewOnce(tool.name, review, args, api, context)
-          : undefined;
-      const auto = yoloed || verdict?.approve === true;
-      // How long the call sat on the owner, so its duration can leave that out.
-      let waitedMs: number | undefined;
-      if (ask && !auto) {
-        const waitStarted = Date.now();
-        const decision = await waitForDecision(api, tracker, tool.name, context, plan);
-        waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
-        if (decision !== "approved") {
-          await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
-          return declinedResult(tool.name, decision, waitedMs);
-        }
-        await api.memo("gate:approved", true, context);
-      }
-      const replaySafe = tool.replay === "safe" || hooks?.replaySafe?.(args as never) === true;
-      if (!replaySafe) {
-        if (await api.memo<boolean>("gate:effect", context)) {
-          return {
-            output: text(
-              `Tool ${tool.name} was interrupted by a restart and may have partially run.`,
-            ),
-            isError: true,
-            details: {
-              interrupted: true,
-              ...(ask ? { approval: yoloed ? "yolo" : auto ? "auto" : "approved" } : {}),
-              ...(waitedMs !== undefined ? { waitedMs } : {}),
-            },
-          };
-        }
-        await api.memo("gate:effect", true, context);
-      }
-      const result = scrubResult(await tool.execute(args, api, context));
-      // The pending card's details must not outlive the decision.
-      if (!ask) return result;
-      return {
-        ...result,
-        details: yoloed
-          ? { approval: "yolo", result: result.details ?? null }
-          : auto
-            ? {
-                approval: "auto",
-                review: verdict as unknown as JsonObject,
-                result: result.details ?? null,
-              }
-            : { approval: "approved", waitedMs: waitedMs ?? 0, result: result.details ?? null },
-      };
-    },
-  };
-}
-
-/**
- * Whether YOLO mode runs this call, decided once (a replay or a toggle
- * mid-call never flips it): on, and the turn is the owner's.
- */
-async function yoloOnce(yolo: GateYolo, api: ToolExecutionApi, context: Context): Promise<boolean> {
-  const stored = await api.memo<boolean>("gate:yolo", context);
-  if (stored !== undefined) return stored;
-  const state = await yoloOf(api, context);
-  const decided =
-    state.on && ownerTurn(await yolo.recentEntries(Number(api.conversationId)), state.by);
-  return api.memo("gate:yolo", decided, context);
-}
-
-async function planOnce(
-  name: string,
-  hooks: GateHooks<never>,
-  args: unknown,
-  api: ToolExecutionApi,
-  context: Context,
-): Promise<GatePlan> {
-  const stored = await api.memo<JsonObject>("gate:plan", context);
-  if (stored) return stored as unknown as GatePlan;
-  const toolAsks = await mustAsk(name, api, context);
-  const plan = await hooks.plan(args as never, api, context, toolAsks);
-  const json = JSON.parse(JSON.stringify(plan)) as JsonObject;
-  return (await api.memo("gate:plan", json, context)) as unknown as GatePlan;
-}
-
-/**
- * Auto-review a call that would ask, once: `undefined` when the conversation
- * does not let auto-review approve this tool or no owner message is in reach
- * (the card shows as before). A verdict is memoized before it is acted on.
- */
-async function reviewOnce(
-  name: string,
-  review: GateReview,
-  args: unknown,
-  api: ToolExecutionApi,
-  context: Context,
-): Promise<ReviewVerdict | undefined> {
-  const stored = await api.memo<JsonObject>("gate:review", context);
-  if (stored) return stored as unknown as ReviewVerdict;
-  if (!(await mayAutoReview(name, api, context))) return undefined;
-  const messages = ownerMessages(await review.recentEntries(Number(api.conversationId)));
-  if (!messages) return undefined;
-  const { instructions } = await api.agent(context);
-  const verdict = await review.reviewer({
-    tool: name,
-    args,
-    instructions,
-    ownerMessages: messages,
-  });
-  // A verdict is flat JSON; only its unset fields must go before it is stored.
-  const json = Object.fromEntries(
-    Object.entries(verdict).filter(([, value]) => value !== undefined),
-  ) as JsonObject;
-  return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
 }
 
 /**
@@ -488,7 +293,17 @@ function vaultSubject(plan: GatePlan | undefined): { subject?: string } {
   return { subject: host ? `${vault.label} on ${host}` : vault.label };
 }
 
-async function waitForDecision(
+/** What the approvals tracker's listeners (push notifications) learn about a waiting call. */
+export function approvalWaitInfo(tool: string, plan: GatePlan | undefined): WaitInfo {
+  return { tool, ...vaultSubject(plan) };
+}
+
+/**
+ * Wait on the call's `tiny.approval` document until the owner decides (or
+ * it expires), counted by `tracker` and showing the card meanwhile. A
+ * re-run after a restart re-attaches to the same document.
+ */
+export async function waitForApproval(
   api: ToolExecutionApi,
   tracker: WaitTracker,
   tool: string,
@@ -515,7 +330,7 @@ async function waitForDecision(
         value.expiresAt = Date.now() + plan.expiresInMs;
       }
     },
-    { tool, ...vaultSubject(plan) },
+    approvalWaitInfo(tool, plan),
   );
   return doc.status as ApprovalDecision | "expired";
 }

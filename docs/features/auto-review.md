@@ -39,8 +39,10 @@ instructions come from. It answers two questions:
 | `risk`      | score 0 – 3 | worst-outcome score ≤ 1, with confidence ≥ 0.6 |
 
 The questions and thresholds live in `packages/agent/src/reviewer.ts`
-(`REVIEW_QUESTIONS`, `REVIEW_THRESHOLDS`). A verdict is stored with the call, so
-a restart never reviews the same call twice.
+(`REVIEW_QUESTIONS`, `REVIEW_THRESHOLDS`). The Tool gate (`gate.ts`,
+[ADR 0014](../adr/0014-tool-gate-and-engine-seam.md)) asks the reviewer, on pi
+and on the Claude plan alike. A verdict is stored with the call, so a restart
+never reviews the same call twice.
 
 ## Setup
 

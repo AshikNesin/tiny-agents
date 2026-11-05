@@ -81,12 +81,16 @@ _Avoid_: background call, LLM call
 One bot's memories and the rules every write follows, whether a memory comes from capture, the `remember` tool or the Memory page: one row per text (a tombstone is never re-added, except by the owner on the Memory page), supersession of the same bot's active memories only, expiry, the active budget, and the capture watermark, each write one transaction (`memoryLedger(botId)`, `memories.ledger.ts`).
 _Avoid_: memory store (that is the agent's port), memory service
 
+**Tool gate**:
+The one place a bot's tool call is let through, on either engine (`gate.ts`, ADR 0014): the tool's gate plan, its permission, the unattended refusal, YOLO mode, auto-review, the approval Owner wait and result redaction, decided once per call. Each engine hands it the call and the tool's run; answering a waiting call goes through it too.
+_Avoid_: approval gate (approvals are one thing it does), pi gate, Claude gate
+
 **YOLO mode**:
-A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The gate records such calls as `approval: "yolo"`.
+A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The Tool gate reads it on each call, whichever engine runs the chat, and records such calls as `approval: "yolo"`.
 _Avoid_: auto-approve (that is auto-review's), trust mode
 
 **Owner wait**:
-A tool call paused until the owner answers: an approval (`approvals.ts`), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
+A tool call paused until the owner answers: an approval (`approvals.ts`, asked by the Tool gate), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
 _Avoid_: pending approval (for the family), interrupt, prompt
 
 **Browser session**:

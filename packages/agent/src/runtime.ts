@@ -1,33 +1,24 @@
-import type { Context, JsonValue } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
-  configure as configureAgent,
   createRegistry,
   Harness,
   type Extension,
-  InboxDoc,
   MemoryStorage,
-  watchEvents,
   type AgentChange,
-  type Conversation,
   type ConversationId,
-  type Cursor,
-  type EntryRecord,
   type HarnessSettings,
   type Registry,
   type Storage,
-  type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import {
   ApprovalNotPendingError,
   approvalNotPending,
-  gateExtension,
   recordDecision,
   recordYoloDecision,
   type ApprovalDecision,
-  type GateYolo,
 } from "./approvals";
 import {
   CredentialRequestNotPendingError,
@@ -49,29 +40,25 @@ import {
   toModelInfo,
   type ProviderStatus,
 } from "./models";
-import { PiEngine } from "./engines/pi";
-import { claudeCodeBareModel, engineKindForConfig } from "./engine";
+import { gateExtension, PiEngine } from "./engines/pi";
+import {
+  claudeCodeBareModel,
+  ConversationNotFoundError,
+  engineKindForConfig,
+  type AgentEngine,
+  type CompiledConversation,
+  type EngineSubmission,
+} from "./engine";
 import { claudePlanModels } from "./engines/claude-code/catalog";
-import { ClaudeCodeEngine, type ClaudeSessionSync } from "./engines/claude-code/engine";
+import type { WebSocketLike } from "./engines/claude-code/client";
+import { ClaudeCodeEngine } from "./engines/claude-code/engine";
 import type {
   ClaudeAccountStatus,
   ClaudeWorkerLocator,
 } from "./engines/claude-code/sandbox-worker";
-import {
-  claudeToolApi,
-  claudeToolSurface,
-  type ClaudeToolRunner,
-} from "./engines/claude-code/tools";
-import {
-  applyPermissions,
-  compilePolicy,
-  ownerTurn,
-  PermissionsDoc,
-  YoloDoc,
-  resolveModelId,
-  type CompiledPolicy,
-} from "./policy";
-import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "./projection";
+import { claudeToolSurface } from "./engines/claude-code/tools";
+import { ToolGate } from "./gate";
+import { compilePolicy, YoloDoc, resolveModelId } from "./policy";
 import {
   createQuestionsCapability,
   QuestionNotPendingError,
@@ -79,20 +66,10 @@ import {
   recordAnswers,
 } from "./toolkits/questions";
 import { finishedReplyOf } from "./replies";
-import {
-  attachmentsOf,
-  CHAT_USER_ENTRY,
-  modelErrorText,
-  pageBefore,
-  queuedOf,
-  textOf,
-} from "./transcript";
 import type {
   ActivityChange,
-  AttachmentRef,
   BotAgentConfig,
   ChatEvent,
-  ChatMessage,
   ChatPage,
   ChatState,
   ChatSubscription,
@@ -101,35 +78,23 @@ import type {
   LastMessage,
   ModelInfo,
   OwnerAnswer,
-  QueuedMessage,
   WaitEvent,
   WithdrawOutcome,
 } from "./types";
+import { WaitTracker } from "./waiting";
+import type { Reviewer } from "./reviewer";
+import { GrantsDoc } from "./vault";
 
 // The three wait kinds own their not-pending errors; the app imports them from here.
 export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
-import { WaitTracker } from "./waiting";
-import { REVIEW_ENTRY_LOOKBACK, type GateReview, type Reviewer } from "./reviewer";
+export { ConversationNotFoundError };
 
 const ctx: Context = BACKGROUND_CONTEXT;
-
-/** Entries read per storage page when loading a chat's history. */
-const HISTORY_PAGE = 500;
-
-/** Task kinds that mean "the bot is replying" (background compaction does not). */
-const REPLY_TASK_KINDS = new Set(["pi.generation", "pi.tool"]);
 
 export class ModelNotFoundError extends Error {
   constructor(modelId: string) {
     super(`Unknown model "${modelId}"`);
     this.name = "ModelNotFoundError";
-  }
-}
-
-export class ConversationNotFoundError extends Error {
-  constructor(ref: ConversationRef) {
-    super(`Conversation ${ref} not found`);
-    this.name = "ConversationNotFoundError";
   }
 }
 
@@ -172,6 +137,8 @@ export interface AgentRuntimeOptions {
    * Where Claude plan turns run: the sandbox worker the app sets up over SSH.
    */
   claudeWorker?: ClaudeWorkerLocator;
+  /** Tests: open a fake worker socket instead of a WebSocket to the sandbox worker. */
+  claudeConnect?: (url: string, token: string) => WebSocketLike;
 }
 
 /**
@@ -195,16 +162,26 @@ function modelAllowlist(
   return ids.length > 0 ? new Set(ids) : null;
 }
 
+/**
+ * The single owner of pi-durable in tiny-agents (PRD §7.2). One instance per
+ * process, opened at boot before the HTTP server accepts requests.
+ *
+ * It owns the store (the pi-durable harness, its lock, and every
+ * conversation's documents: permissions, YOLO, Owner waits), the capability
+ * registry, the Tool gate, and the merged bot activity. Turns run on an
+ * `AgentEngine` it picks per conversation (ADR 0014): the Claude plan
+ * engine while it runs the conversation, pi otherwise.
+ */
 export class AgentRuntime {
   readonly provider: string;
+  readonly #harness: Harness;
   readonly #pi: PiEngine;
   readonly #claude: ClaudeCodeEngine;
-  readonly #claudeRunners = new Map<ConversationRef, Map<string, ClaudeToolRunner>>();
-  readonly #claudeBusy = new Set<ConversationRef>();
+  readonly #engines: readonly AgentEngine[];
+  readonly #gate: ToolGate;
   readonly #models: MutableModels;
   readonly #env: Readonly<Record<string, string | undefined>>;
   readonly #lock: StoreLock | undefined;
-  readonly #chats = new Set<ChatSubscription>();
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
   readonly #registry: Registry;
   readonly #approvals: WaitTracker;
@@ -214,10 +191,8 @@ export class AgentRuntime {
   #configured: ReadonlySet<string> = new Set();
   /** The configured providers' ids, primary first (AI_PROVIDERS order). */
   #providerIds: readonly string[] = [];
-  #review: GateReview | undefined;
-  #yoloGate: GateYolo | undefined;
+  /** Conversations replying on any engine. */
   #busy = new Set<ConversationRef>();
-  #graph: TaskGraphWatch | undefined;
   #closed = false;
 
   /** The model registry this runtime runs with (built or passed at open). */
@@ -231,21 +206,28 @@ export class AgentRuntime {
     provider: string,
     lock: StoreLock | undefined,
     registry: Registry,
+    gate: ToolGate,
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
     envSource: Readonly<Record<string, string | undefined>> = process.env,
     persistPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
+    claudeConnect?: (url: string, token: string) => WebSocketLike,
   ) {
-    this.#pi = new PiEngine(harness);
+    this.#harness = harness;
+    this.#gate = gate;
+    this.#pi = new PiEngine(harness, { onBusy: (ref) => this.#busyChanged(ref) });
     this.#claude = new ClaudeCodeEngine({
       env: () => process.env,
       persistPath,
       worker: claudeWorker,
-      onBusy: (ref, busy) => this.#setClaudeBusy(ref, busy),
-      execute: (ref, call) => this.#executeClaudeTool(ref, call),
+      ...(claudeConnect ? { connect: claudeConnect } : {}),
+      onBusy: (ref) => this.#busyChanged(ref),
+      gate,
+      docs: harness,
     });
+    this.#engines = [this.#pi, this.#claude];
     this.#models = models;
     this.provider = provider;
     this.#lock = lock;
@@ -290,25 +272,37 @@ export class AgentRuntime {
       for (const extension of options.extensions ?? []) registry.install(extension);
       // Capabilities must be installed before resume(): interrupted calls of
       // their tools (e.g. a pending approval or question) re-run against them.
-      // Auto-review reads the owner's messages through the Harness opened below.
-      const recentEntries = async (id: number) => {
-        const conversation = await harness?.conversation(id as ConversationId, ctx);
-        if (!conversation) return [];
-        const page = await conversation.entries(
-          { order: "descending" },
-          REVIEW_ENTRY_LOOKBACK,
-          undefined,
-          ctx,
-        );
-        return page.items;
-      };
-      const review: GateReview | undefined = options.reviewer
-        ? { reviewer: options.reviewer, recentEntries }
-        : undefined;
-      // YOLO mode reads the newest user message to trust only the owner's turns.
-      const yolo: GateYolo = { recentEntries };
+      // The gate reads the owner's messages and records answers through the
+      // Harness opened below.
+      const gate = new ToolGate({
+        approvals,
+        ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+        store: {
+          decide: async (conversation, taskId, decision, grant) => {
+            try {
+              await harness!.commit(
+                (tx) => recordDecision(tx, conversation, taskId, decision, grant),
+                ctx,
+              );
+            } catch (error) {
+              approvalNotPending(error, taskId);
+            }
+          },
+          approveForYolo: (conversation, taskId) =>
+            harness!.commit((tx) => recordYoloDecision(tx, conversation, taskId), ctx),
+          grant: (conversation, grant) =>
+            harness!.commit(async (tx) => {
+              const grants = await tx.doc(GrantsDoc, conversation as ConversationId);
+              if (!grants.grants.includes(grant)) grants.grants.push(grant);
+            }, ctx),
+        },
+      });
+      // The pi engine is built once the harness is open; its calls only
+      // run after that (resume() comes last).
+      let pi: PiEngine | undefined;
+      const userMessages = async (id: number) => (pi ? pi.userMessages(id) : []);
       for (const capability of capabilities) {
-        registry.install(gateExtension(capability.extension, approvals, review, yolo));
+        registry.install(gateExtension(capability.extension, gate, userMessages));
       }
       harness = await Harness.open(
         storage,
@@ -326,24 +320,26 @@ export class AgentRuntime {
         options.provider ?? primaryProviderId(envSource),
         lock,
         registry,
+        gate,
         approvals,
         questions,
         capabilities,
         envSource,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
+        options.claudeConnect,
       );
-      opened.#review = review;
-      opened.#yoloGate = yolo;
       opened.#configured = configured;
       opened.#providerIds = [opened.provider, ...aiProviderIds(envSource)].filter(
         (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
       );
       runtime = opened;
+      pi = opened.#pi;
       harness.closed.then((end) => {
         if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
       });
-      await opened.#watchActivity();
+      await opened.#pi.start();
+      opened.#busy = new Set(opened.#pi.busyConversations());
       harness.resume();
       return opened;
     } catch (error) {
@@ -445,56 +441,6 @@ export class AgentRuntime {
     return this.#anyCatalogModel();
   }
 
-  #rememberClaude(
-    ref: ConversationRef,
-    claude: (ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> }) | undefined,
-  ): void {
-    if (!claude) {
-      this.#claude.detach(ref);
-      this.#claudeRunners.delete(ref);
-      return;
-    }
-    const { runners, ...sync } = claude;
-    this.#claude.sync(ref, sync);
-    this.#claudeRunners.set(ref, runners);
-  }
-
-  async #executeClaudeTool(
-    ref: ConversationRef,
-    call: { name: string; input: unknown },
-  ): Promise<{ content: string; isError?: boolean }> {
-    const runner = this.#claudeRunners.get(ref)?.get(call.name);
-    if (!runner?.execute) {
-      return {
-        content: `${call.name} is not available on the Claude plan engine.`,
-        isError: true,
-      };
-    }
-    const args =
-      call.input && typeof call.input === "object" && !Array.isArray(call.input)
-        ? (call.input as Record<string, unknown>)
-        : {};
-    try {
-      const result = await runner.execute(args, claudeToolApi(call.name), ctx);
-      const text = (result.output ?? [])
-        .map((block) => (typeof block.text === "string" ? block.text : ""))
-        .filter(Boolean)
-        .join("\n");
-      return { content: text, ...(result.isError ? { isError: true } : {}) };
-    } catch (error) {
-      return { content: error instanceof Error ? error.message : String(error), isError: true };
-    }
-  }
-
-  #setClaudeBusy(ref: ConversationRef, busy: boolean): void {
-    if (busy) this.#claudeBusy.add(ref);
-    else this.#claudeBusy.delete(ref);
-    const was = this.#busy.has(ref);
-    if (busy) this.#busy.add(ref);
-    else this.#busy.delete(ref);
-    if (was !== this.#busy.has(ref)) this.#emitActivity(this.#activity(ref));
-  }
-
   #resolveModel(modelId: string): { provider: string; model: string } | undefined {
     return resolveModelId(
       modelId,
@@ -503,22 +449,37 @@ export class AgentRuntime {
     );
   }
 
+  /**
+   * The engine that runs the conversation's turns: the Claude plan engine
+   * while the bot is on a Claude plan model and the conversation has not
+   * fallen back, pi otherwise.
+   */
+  #engineFor(ref: ConversationRef): AgentEngine {
+    return this.#claude.runs(ref) ? this.#claude : this.#pi;
+  }
+
+  /** Every engine takes its part of the compiled config. */
+  async #configureEngines(ref: ConversationRef, compiled: CompiledConversation): Promise<void> {
+    for (const engine of this.#engines) await engine.configure(ref, compiled);
+  }
+
+  /** An engine's busy flag moved: the merged one may have. */
+  #busyChanged(ref: ConversationRef): void {
+    const was = this.#busy.has(ref);
+    const now = this.#engines.some((engine) => engine.busy(ref));
+    if (now) this.#busy.add(ref);
+    else this.#busy.delete(ref);
+    if (was !== now) this.#emitActivity(this.#activity(ref));
+  }
+
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
-    const { change, policy, claude } = this.#compile(config);
-    const conversation = await this.#pi.harness.createConversation(
-      { ownership: { kind: "ownerless" }, agent: change },
-      ctx,
-    );
-    const ref = Number(conversation.id);
-    if (policy) {
-      await this.#pi.harness.commit(async (tx) => {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
-      }, ctx);
-    }
-    this.#rememberClaude(ref, claude);
-    if (claude) await this.#syncClaudeYolo(ref);
+    const compiled = this.#compile(config);
+    // Every conversation has its durable pi conversation: the store of its
+    // documents, and the transcript a Claude plan conversation falls back onto.
+    const ref = await this.#pi.create(compiled);
+    await this.#claude.configure(ref, compiled);
     return ref;
   }
 
@@ -527,16 +488,7 @@ export class AgentRuntime {
    * request; history is kept.
    */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
-    const { change, policy, claude } = this.#compile(config);
-    await this.#conversation(ref);
-    await this.#pi.harness.commit(async (tx) => {
-      await configureAgent(tx, ref as ConversationId, change);
-      if (policy) {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
-      }
-    }, ctx);
-    this.#rememberClaude(ref, claude);
-    if (claude) await this.#syncClaudeYolo(ref);
+    await this.#configureEngines(ref, this.#compile(config));
   }
 
   // ── YOLO mode (issue #151) ────────────────────────────────────────────
@@ -552,7 +504,8 @@ export class AgentRuntime {
    * another bot or a guest started. `by` is the owner's user id (whose
    * messages it trusts in a shared chat). Switching it on also approves
    * the calls already waiting that it would have run; their task ids are
-   * returned.
+   * returned. The Tool gate reads the document on each call, whichever
+   * engine runs the conversation.
    */
   async setYolo(
     ref: ConversationRef,
@@ -560,7 +513,7 @@ export class AgentRuntime {
     by?: number,
   ): Promise<{ on: boolean; approved: number[] }> {
     await this.#conversation(ref);
-    await this.#pi.harness.commit(async (tx) => {
+    await this.#harness.commit(async (tx) => {
       const doc = await tx.doc(YoloDoc, ref as ConversationId);
       doc.on = on;
       if (on) {
@@ -572,44 +525,18 @@ export class AgentRuntime {
         delete doc.by;
       }
     }, ctx);
-    const approved = this.#claude.setYolo(
-      ref,
-      on ? { on, ...(by !== undefined ? { by } : {}) } : { on },
-    );
-    if (on && this.#approvals.count(ref) > 0) {
-      const conversation = await this.#conversation(ref);
-      const page = await conversation.entries(
-        { order: "descending" },
-        REVIEW_ENTRY_LOOKBACK,
-        undefined,
-        ctx,
-      );
-      if (ownerTurn(page.items, by)) {
-        for (const taskId of this.#approvals.tasks(ref)) {
-          try {
-            await this.#pi.harness.commit((tx) => recordYoloDecision(tx, ref, taskId), ctx);
-            approved.push(taskId);
-          } catch {
-            // Not an approval YOLO answers (a vault use, a question, a
-            // credential request) or no longer waiting: it stays as it is.
-          }
-        }
-      }
-    }
+    const approved = on
+      ? await this.#gate.approveWaiting(ref, by, () => this.#engineFor(ref).userMessages(ref))
+      : [];
     return { on, approved };
   }
 
   async #readYolo(ref: ConversationRef): Promise<{ on: boolean; by?: number }> {
     await this.#conversation(ref);
-    return this.#pi.harness.commit(async (tx) => {
+    return this.#harness.commit(async (tx) => {
       const doc = await tx.doc(YoloDoc, ref as ConversationId);
       return doc.on ? { on: true, ...(doc.by !== undefined ? { by: doc.by } : {}) } : { on: false };
     }, ctx);
-  }
-
-  /** The Claude-plan engine keeps YOLO in memory: hand it the stored state. */
-  async #syncClaudeYolo(ref: ConversationRef): Promise<void> {
-    this.#claude.setYolo(ref, await this.#readYolo(ref));
   }
 
   /**
@@ -617,11 +544,7 @@ export class AgentRuntime {
    * gate reads it (the permissions), compiled by `policy.ts`. Without a
    * capability selection the conversation keeps its tools.
    */
-  #compile(config: BotAgentConfig): {
-    change: AgentChange;
-    policy?: CompiledPolicy;
-    claude?: ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> };
-  } {
+  #compile(config: BotAgentConfig): CompiledConversation {
     const bare = claudeCodeBareModel(config.modelId);
     if (engineKindForConfig(config) === "claude-code") {
       if (!bare) throw new ModelNotFoundError(config.modelId);
@@ -636,19 +559,15 @@ export class AgentRuntime {
         model: { provider: resolved.provider, modelId: resolved.model },
         instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
       };
-      if (!config.capabilities) {
-        return {
-          change,
-          claude: {
-            model: bare,
-            system: config.systemPrompt,
-            tools: surface.tools,
-            permissions: surface.permissions,
-            vaultTools: surface.vaultTools,
-            runners: surface.runners,
-          },
-        };
-      }
+      const claude: CompiledConversation["claude"] = {
+        model: bare,
+        system: config.systemPrompt,
+        tools: surface.tools,
+        permissions: surface.permissions,
+        runners: surface.runners,
+      };
+      // Without a selection every Claude plan tool asks (no tool is allowed).
+      if (!config.capabilities) return { change, permissions: { allow: [] }, claude };
       const policy = compilePolicy(
         this.#capabilities,
         config.capabilities,
@@ -656,15 +575,8 @@ export class AgentRuntime {
       );
       return {
         change: { ...change, extensions: policy.extensions, tools: { remove: policy.remove } },
-        policy,
-        claude: {
-          model: bare,
-          system: config.systemPrompt,
-          tools: surface.tools,
-          permissions: surface.permissions,
-          vaultTools: surface.vaultTools,
-          runners: surface.runners,
-        },
+        permissions: policy.permissions,
+        claude,
       };
     }
     const resolved = this.#resolveModel(config.modelId);
@@ -673,7 +585,7 @@ export class AgentRuntime {
       model: { provider: resolved.provider, modelId: resolved.model },
       instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
     };
-    if (!config.capabilities) return { change, claude: undefined };
+    if (!config.capabilities) return { change };
     const policy = compilePolicy(
       this.#capabilities,
       config.capabilities,
@@ -687,7 +599,7 @@ export class AgentRuntime {
         extensions: policy.extensions,
         tools: { remove: policy.remove },
       },
-      policy,
+      permissions: policy.permissions,
     };
   }
 
@@ -705,7 +617,7 @@ export class AgentRuntime {
   installCapability(capability: Capability): void {
     this.#capabilities.set(capability.id, capability);
     this.#registry.install(
-      gateExtension(capability.extension, this.#approvals, this.#review, this.#yoloGate),
+      gateExtension(capability.extension, this.#gate, (id) => this.#pi.userMessages(id)),
     );
   }
 
@@ -720,7 +632,7 @@ export class AgentRuntime {
 
   /** Tool calls of the conversation waiting for the owner's approval. */
   pendingApprovals(ref: ConversationRef): number {
-    return this.#approvals.count(ref);
+    return this.#gate.waiting(ref);
   }
 
   /**
@@ -728,16 +640,8 @@ export class AgentRuntime {
    * what see_image may read. Bounded to the newest 50 user entries; a bot
    * referencing an attachment older than that gets the not-found result.
    */
-  async attachmentIds(ref: ConversationRef): Promise<string[]> {
-    const conversation = await this.#conversation(ref);
-    const page = await conversation.entries({ order: "descending" }, 50, undefined, ctx);
-    const ids: string[] = [];
-    for (const entry of page.items) {
-      for (const attachment of attachmentsOf(entry) ?? []) {
-        if (!ids.includes(attachment.uploadId)) ids.push(attachment.uploadId);
-      }
-    }
-    return ids;
+  attachmentIds(ref: ConversationRef): Promise<string[]> {
+    return this.#pi.attachmentIds(ref);
   }
 
   /**
@@ -752,18 +656,7 @@ export class AgentRuntime {
     decision: ApprovalDecision,
     options: { grant?: boolean } = {},
   ): Promise<void> {
-    if (this.#claude.ownsTask(taskId)) {
-      this.#claude.decide(taskId, decision);
-      return;
-    }
-    try {
-      await this.#pi.harness.commit(
-        (tx) => recordDecision(tx, ref, taskId, decision, options),
-        ctx,
-      );
-    } catch (error) {
-      approvalNotPending(error, taskId);
-    }
+    await this.#gate.decide(ref, taskId, decision, options);
   }
 
   // ── Credential requests ───────────────────────────────────────────────
@@ -776,7 +669,7 @@ export class AgentRuntime {
     taskId: number,
   ): Promise<{ conversation: ConversationRef; request: CredentialRequest; expiresAt: number }> {
     try {
-      return await this.#pi.harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
+      return await this.#harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -785,7 +678,7 @@ export class AgentRuntime {
   /** Settle a credential request with the owner's outcome (never values). */
   async settleCredentialRequest(taskId: number, outcome: CredentialRequestOutcome): Promise<void> {
     try {
-      await this.#pi.harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
+      await this.#harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -808,7 +701,7 @@ export class AgentRuntime {
     answers: OwnerAnswer[] | null,
   ): Promise<void> {
     try {
-      await this.#pi.harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
+      await this.#harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
     } catch (error) {
       questionNotPending(error, taskId);
     }
@@ -830,111 +723,30 @@ export class AgentRuntime {
    * Durably admit a user message. Retrying with the same `requestId` never
    * submits twice. While a reply is running, the message is queued: a steer
    * (`whenBusy: "steer"`) joins the reply after its current tool round; the
-   * default follow-up is answered by the next run.
+   * default follow-up is answered by the next run. On the Claude plan this
+   * runs the whole turn.
    */
-  async submit(
-    ref: ConversationRef,
-    input: {
-      requestId: string;
-      /** Plain text, or text plus inline image blocks. */
-      text: string;
-      images?: { data: string; mimeType: string }[];
-      /** Attachment refs stored on the entry for the transcript (issue #17). */
-      attachments?: AttachmentRef[];
-      /** Trusted attribution for a cross-bot delivery (rendered as a card). */
-      peer?: ChatMessage["peer"];
-      /** Who sent it, in a shared chat (`text` already carries their name for the model). */
-      author?: ChatMessage["author"];
-      /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
-      whenBusy?: "steer" | "followUp";
-    },
-  ): Promise<void> {
-    if (this.#claude.handles(ref)) {
-      const outcome = await this.#claude.submit(ref, {
-        requestId: input.requestId,
-        text: input.text,
-        images: input.images,
-        ...(input.peer ? { peer: input.peer } : {}),
-        ...(input.author ? { author: input.author } : {}),
-      });
-      if (outcome === "ran") return;
-    }
-    const conversation = await this.#conversation(ref);
-    const content = input.images?.length
-      ? [
-          ...(input.text ? [{ type: "text" as const, text: input.text }] : []),
-          ...input.images.map((image) => ({
-            type: "image" as const,
-            data: image.data,
-            mimeType: image.mimeType,
-          })),
-        ]
-      : input.text;
-    await conversation.submit(
-      {
-        type: "input",
-        content,
-        requestId: input.requestId,
-        ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
-        // Every user message records its request id on the entry, so a
-        // client can confirm its Echo by id instead of by text.
-        entry: {
-          kind: CHAT_USER_ENTRY,
-          data: {
-            requestId: input.requestId,
-            ...(input.peer ? { peer: input.peer } : {}),
-            ...(input.author ? { author: { id: input.author.id, name: input.author.name } } : {}),
-            ...(input.attachments?.length
-              ? {
-                  attachments: input.attachments.map((a) => ({
-                    uploadId: a.uploadId,
-                    kind: a.kind,
-                    name: a.name,
-                    mimeType: a.mimeType,
-                    size: a.size,
-                    ...(a.width !== undefined ? { width: a.width } : {}),
-                    ...(a.height !== undefined ? { height: a.height } : {}),
-                  })),
-                }
-              : {}),
-          } as unknown as JsonValue,
-        },
-      },
-      ctx,
-    );
+  async submit(ref: ConversationRef, input: EngineSubmission): Promise<void> {
+    const engine = this.#engineFor(ref);
+    if ((await engine.submit(ref, input)) === "accepted") return;
+    // The engine cannot run the turn and its fallback is the gateway: the
+    // conversation moves onto its pi transcript for good (ADR 0008).
+    this.#claude.leave(ref);
+    await this.#pi.submit(ref, input);
   }
 
   /** Stop the in-flight reply (and withdraw queued inputs). */
   async abort(ref: ConversationRef): Promise<void> {
-    if (this.#claude.handles(ref)) {
-      this.#claude.abort(ref);
-      return;
-    }
-    const conversation = await this.#conversation(ref);
-    await conversation.abort(ctx);
+    await this.#engineFor(ref).abort(ref);
   }
 
   /**
    * Withdraw a message by its request id. A queued input leaves the inbox
    * (settling `unanswered`, reason `aborted`); a placed one is already part
-   * of the running reply, and a settled one is done.
+   * of the running reply, and a settled one is done. Only pi queues.
    */
-  async withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
-    const record = await this.#pi.harness.commit(
-      (tx) => tx.submissionByRequest(ref as ConversationId, requestId),
-      ctx,
-    );
-    // Writes (compaction summaries) and unknown ids are not owner messages.
-    if (!record || record.type !== "input") return "not_found";
-    if (record.status === "queued") {
-      const result = await this.#pi.harness.abortSubmission(record.id, ctx, ref as ConversationId);
-      if (result === "aborted") return "withdrawn";
-      return result;
-    }
-    if (record.status === "placed") return "already_placed";
-    // An input already withdrawn (by cancel or Stop) stays withdrawn, not 409.
-    if (record.status === "unanswered" && record.reason === "aborted") return "withdrawn";
-    return "settled";
+  withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
+    return this.#pi.withdraw(ref, requestId);
   }
 
   isBusy(ref: ConversationRef): boolean {
@@ -945,37 +757,8 @@ export class AgentRuntime {
     return [...this.#busy];
   }
 
-  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
-    if (this.#claude.handles(ref)) {
-      const state = await this.#claude.read(ref);
-      for (let i = state.messages.length - 1; i >= 0; i--) {
-        const message = state.messages[i];
-        if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
-        const text = message.error ? `⚠ ${message.error}` : message.text;
-        if (!text) continue;
-        return { role: message.role, text, createdAt: message.createdAt };
-      }
-      return undefined;
-    }
-    const conversation = await this.#conversation(ref);
-    const page = await conversation.entries({ order: "descending" }, 20, undefined, ctx);
-    for (const entry of page.items) {
-      const message = entry.model?.[0];
-      if (!message) continue;
-      if ((entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) && message.role === "user") {
-        return {
-          role: "user",
-          text: textOf(message.content),
-          createdAt: message.timestamp ?? Date.now(),
-        };
-      }
-      if (entry.kind === "pi.assistant" && message.role === "assistant") {
-        const shown =
-          message.stopReason === "error" ? `⚠ ${modelErrorText(message)}` : textOf(message.content);
-        return { role: "assistant", text: shown, createdAt: message.timestamp ?? Date.now() };
-      }
-    }
-    return undefined;
+  lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
+    return this.#engineFor(ref).lastMessage(ref);
   }
 
   /**
@@ -994,22 +777,10 @@ export class AgentRuntime {
   /**
    * The conversation's chat state right now, for one-shot readers (Settled,
    * Deliveries, Routine runs, memory capture, history) that need the
-   * transcript but no stream. An idle conversation is read from the store
-   * alone (no watch opened); a busy one through a watch, so its in-flight
-   * reply and tool round show as the stream would show them.
+   * transcript but no stream.
    */
-  async readChat(ref: ConversationRef): Promise<ChatState> {
-    if (this.#claude.handles(ref)) return this.#claude.read(ref);
-    const conversation = await this.#conversation(ref);
-    if (this.isBusy(ref)) {
-      const subscription = await this.watchChat(ref, () => undefined);
-      await subscription.stop();
-      return subscription.initial;
-    }
-    const projection = new ChatProjection(
-      await this.#snapshot(conversation, ref, { entries: [], busy: false, tools: [] }),
-    );
-    return projection.state;
+  readChat(ref: ConversationRef): Promise<ChatState> {
+    return this.#engineFor(ref).read(ref);
   }
 
   /**
@@ -1017,110 +788,25 @@ export class AgentRuntime {
    * history above a windowed stream's snapshot. Undefined when `before` is
    * not (or no longer) in the transcript.
    */
-  async readChatPage(
+  readChatPage(
     ref: ConversationRef,
-    { before, limit }: { before: string; limit: number },
+    query: { before: string; limit: number },
   ): Promise<ChatPage | undefined> {
-    if (this.#claude.handles(ref)) return this.#claude.page(ref, before, limit);
-    return pageBefore((await this.readChat(ref)).messages, before, limit);
+    return this.#engineFor(ref).page(ref, query);
   }
 
   /**
    * Watch a conversation as chat events: a `snapshot` first, then minimal
-   * upserts/deltas per commit. Reconnecting clients simply watch again.
-   *
+   * upserts/deltas per change. Reconnecting clients simply watch again.
    * With `window`, snapshots carry only the newest `window` messages plus
-   * `hasMore`/`cursor` (issue #92). The window's start then stays put, so
-   * new messages arrive as upserts and nothing drops out of it; a
-   * re-snapshot (a slow client fell behind) re-windows to the newest ones.
-   * The fold itself is `ChatProjection`'s; this method is its event source.
+   * `hasMore`/`cursor` (issue #92).
    */
-  async watchChat(
+  watchChat(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
     options: { window?: number } = {},
   ): Promise<ChatSubscription> {
-    if (this.#claude.handles(ref)) return this.#claude.watch(ref, listener, options.window);
-    const conversation = await this.#conversation(ref);
-    const stream = await watchEvents(this.#pi.harness, ref as ConversationId, ctx);
-    const projection = new ChatProjection(
-      await this.#snapshot(conversation, ref, stream.snapshot),
-      options,
-    );
-    const initial = projection.state;
-    let stopped = false;
-
-    const subscription: ChatSubscription = {
-      initial,
-      stop: async () => {
-        if (stopped) return;
-        stopped = true;
-        this.#chats.delete(subscription);
-        await stream.stop();
-      },
-    };
-    this.#chats.add(subscription);
-
-    await listener([{ type: "snapshot", state: initial }]);
-
-    stream.start(async (events) => {
-      if (stopped) return;
-      const outcome = projection.fold(events);
-      if (outcome.resnapshot) {
-        const fresh = events.findLast((event) => event.type === "snapshot");
-        if (fresh && fresh.type === "snapshot") {
-          projection.reset(await this.#snapshot(conversation, ref, fresh));
-        }
-      } else if (outcome.inboxChanged) {
-        // The inbox doc moved (send while busy, placement, withdrawal); the
-        // items' content lives in the doc, not the event.
-        projection.setQueued(await this.#queued(ref));
-      }
-      const diff = projection.flush({ resnapshot: outcome.resnapshot });
-      if (diff.length > 0) await listener(diff);
-    });
-
-    return subscription;
-  }
-
-  /**
-   * Everything a projection starts from: the full stored history (not just
-   * what the model still sees), the stream's view of the in-flight reply
-   * and tool round, the queue, and the unanswered reasons recorded on the
-   * conversation's submissions (so they survive a reconnect and show in a
-   * one-shot read, not only after a live `submission` event).
-   */
-  async #snapshot(
-    conversation: Conversation,
-    ref: ConversationRef,
-    live: {
-      entries: readonly EntryRecord[];
-      generation?: { message?: ProjectionSnapshot["live"] };
-      run?: unknown;
-      busy?: boolean;
-      tools: ProjectionSnapshot["tools"];
-    },
-  ): Promise<ProjectionSnapshot> {
-    const entries = new Map<number, EntryRecord>();
-    for (const entry of await loadHistory(conversation)) entries.set(Number(entry.id), entry);
-    for (const entry of live.entries) entries.set(Number(entry.id), entry);
-    const inspection = await this.#pi.harness.inspect(ctx);
-    const records = inspection.submissions.filter(
-      (record) => Number(record.conversationId) === ref,
-    );
-    const inbox = await this.#pi.harness.snapshot(InboxDoc, ref as ConversationId, ctx);
-    const items = inbox?.items ?? [];
-    return {
-      entries: [...entries.values()],
-      live: live.generation?.message,
-      busy: live.busy ?? live.run !== undefined,
-      tools: live.tools,
-      queued:
-        items.length === 0
-          ? []
-          : queuedOf(items, new Map(records.map((record) => [String(record.id), record]))),
-      unanswered: unansweredOf(records),
-    };
+    return this.#engineFor(ref).watch(ref, listener, options);
   }
 
   // ── Activity (bot list "typing…") ─────────────────────────────────────
@@ -1141,21 +827,6 @@ export class AgentRuntime {
       offApprovals();
       offQuestions();
     };
-  }
-
-  async #watchActivity(): Promise<void> {
-    const graph = await this.#pi.harness.watchTaskGraph(ctx);
-    this.#graph = graph;
-    this.#busy = busyFromGraph(graph.value);
-    graph.start(async (value) => {
-      const next = busyFromGraph(value);
-      for (const ref of this.#claudeBusy) next.add(ref);
-      const changed: ConversationRef[] = [];
-      for (const ref of next) if (!this.#busy.has(ref)) changed.push(ref);
-      for (const ref of this.#busy) if (!next.has(ref)) changed.push(ref);
-      this.#busy = next;
-      for (const ref of changed) this.#emitActivity(this.#activity(ref));
-    });
   }
 
   #activity(ref: ConversationRef): ActivityChange {
@@ -1179,66 +850,21 @@ export class AgentRuntime {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
-  /** Stop watches, close the Harness (waits for running task code) and release the lock. */
+  /** Stop the engines, close the Harness (waits for running task code) and release the lock. */
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    await Promise.allSettled([...this.#chats].map((chat) => chat.stop()));
-    await this.#graph?.stop().catch(() => undefined);
-    await this.#claude.close().catch(() => undefined);
+    await Promise.allSettled(this.#engines.map((engine) => engine.close()));
     try {
-      await this.#pi.harness.close(ctx);
+      await this.#harness.close(ctx);
     } finally {
       this.#lock?.release();
     }
   }
 
-  /**
-   * The conversation's queued owner messages from `pi.inbox`. The inbox doc
-   * holds the items; the submission records (via `inspect()`) supply the
-   * request ids withdrawal addresses. Both reads are plain snapshots, newer
-   * than any event that triggered the refresh.
-   */
-  async #queued(ref: ConversationRef): Promise<QueuedMessage[]> {
-    const inbox = await this.#pi.harness.snapshot(InboxDoc, ref as ConversationId, ctx);
-    const items = inbox?.items ?? [];
-    if (items.length === 0) return [];
-    const inspection = await this.#pi.harness.inspect(ctx);
-    const records = new Map(
-      inspection.submissions
-        .filter((record) => Number(record.conversationId) === ref)
-        .map((record) => [String(record.id), record]),
-    );
-    return queuedOf(items, records);
-  }
-
-  async #conversation(ref: ConversationRef): Promise<Conversation> {
-    const conversation = await this.#pi.harness.conversation(ref as ConversationId, ctx);
+  /** The conversation's durable record; throws `ConversationNotFoundError`. */
+  async #conversation(ref: ConversationRef): Promise<void> {
+    const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
     if (!conversation) throw new ConversationNotFoundError(ref);
-    return conversation;
   }
-}
-
-function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
-  const busy = new Set<ConversationRef>();
-  for (const node of Object.values(value.tasks)) {
-    if (REPLY_TASK_KINDS.has(node.kind)) busy.add(Number(node.conversationId));
-  }
-  return busy;
-}
-
-/**
- * Every stored entry of a conversation, ascending — the full transcript, not
- * just what the model still sees after resets/compactions. Paged so a long
- * conversation never loads in one storage read.
- */
-async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
-  const entries: EntryRecord[] = [];
-  let cursor: Cursor | undefined;
-  do {
-    const page = await conversation.entries({ order: "ascending" }, HISTORY_PAGE, cursor, ctx);
-    entries.push(...page.items);
-    cursor = page.next;
-  } while (cursor !== undefined);
-  return entries;
 }
