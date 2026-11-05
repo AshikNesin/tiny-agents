@@ -58,7 +58,7 @@ import {
   getComputerSessions,
 } from "./computer.sessions";
 import { sandboxEndpoint, unquoteEnv as unquote } from "./sandbox-host";
-import { claudeWorkerLocator } from "./claude-worker";
+import { sharedClaudeWorkerLocator } from "./claude-worker";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -207,7 +207,7 @@ export async function openAgentRuntime(
     approvalTracker: ownerWaits,
     reviewer: options.reviewer ?? autoReviewer(options.env),
     capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
-    claudeWorker: options.claudeWorker ?? claudeWorkerLocator(options.env),
+    claudeWorker: options.claudeWorker ?? sharedClaudeWorkerLocator(options.env),
   });
   // With the Claude plan engine on, install and start its worker on the
   // sandbox now, so the first turn doesn't wait on it.

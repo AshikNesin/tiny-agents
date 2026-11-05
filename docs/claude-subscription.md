@@ -64,11 +64,18 @@ Logs are in `worker.log` in that directory.
 - It will not spoof the Claude Code client. If any model-provider value
   contains an `sk-ant-oat` token, tiny-agents refuses to boot. pi-ai
   impersonates Claude Code when it sees one.
-- It will not run Claude Code's own tools. The worker starts with
-  `tools: []`, `strictMcpConfig: true`, `settingSources: []`, and
-  `CLAUDE_CODE_MAX_RETRIES=0`. A tool call comes back to tiny-agents,
-  through the same approval gate as any other bot, and the result is
-  returned. Claude Code does not execute it.
+- For bot chats it will not run Claude Code's own tools. The worker starts
+  bot sessions with `tools: []`, `strictMcpConfig: true`,
+  `settingSources: []`, and `CLAUDE_CODE_MAX_RETRIES=0`. A tool call comes
+  back to tiny-agents, through the same approval gate as any other bot, and
+  the result is returned. Claude Code does not execute it.
+- The Code page's Claude Code harness is the one exception, by design
+  ([ADR 0012](./adr/0012-claude-code-coding-mode.md)). Its coding sessions
+  run Claude Code's own tools in the thread's working directory on the
+  sandbox. Claude Code's own permission modes decide what asks (edits are
+  accepted by default; commands ask), and the Code page shows the approval
+  cards. The same login and override rules apply. See
+  [Code](./features/code.md).
 
 The login lives in the sandbox user's home, as any other login you make
 there does. Bots that run commands on the sandbox run as that user, so
