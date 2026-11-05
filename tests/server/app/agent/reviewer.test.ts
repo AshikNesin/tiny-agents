@@ -199,7 +199,7 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
     warn.mockRestore();
   });
 
-  it("speaks Clef's wire format on the gateway's Workers AI route", async () => {
+  it("speaks Clef's wire format on Workers AI's /ai/run through the gateway", async () => {
     const requests: { url: string; headers: Headers; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -237,23 +237,70 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
       risk: 0.5,
     });
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/acct/gw/workers-ai/@cf/cloudflare/clef",
-    );
-    // The gateway's native auth, as for chat models: no plain bearer.
+    expect(requests[0].url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run");
+    // Workers AI needs the bearer token; the gateway id routes the call through the gateway.
+    expect(requests[0].headers.get("authorization")).toBe("Bearer gateway-key");
     expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
-    expect(requests[0].headers.get("authorization")).toBeNull();
-    // The body is the System One request itself; the model is in the URL.
+    expect(requests[0].headers.get("cf-aig-gateway-id")).toBe("gw");
+    // The System One request goes in `input`; the model is named beside it.
     expect(requests[0].body).toEqual({
-      state: reviewState(input),
-      questions: {
-        requested: expect.objectContaining({
-          type: "noul",
-          instructions: REVIEW_QUESTIONS.requested.instructions,
-        }),
-        risk: expect.objectContaining({ type: "score", criteria: REVIEW_QUESTIONS.risk.criteria }),
+      model: "@cf/cloudflare/clef",
+      input: {
+        state: reviewState(input),
+        questions: {
+          requested: expect.objectContaining({
+            type: "noul",
+            instructions: REVIEW_QUESTIONS.requested.instructions,
+          }),
+          risk: expect.objectContaining({
+            type: "score",
+            criteria: REVIEW_QUESTIONS.risk.criteria,
+          }),
+        },
       },
     });
+  });
+
+  it("reads Jev's completed-run envelope", async () => {
+    const requests: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        requests.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+        return Response.json({
+          success: true,
+          result: {
+            state: "Completed",
+            result: {
+              model: "jev-1.14.0",
+              answers: {
+                requested: { type: "noul", noul: 0.97 },
+                risk: {
+                  type: "score",
+                  score: 0.2,
+                  legend: {},
+                  probabilities: { "0": 0.8, "1": 0.2 },
+                  confidence: 0.9,
+                },
+              },
+              usage: { input_tokens: 800, output_tokens: 0 },
+            },
+          },
+        });
+      }),
+    );
+    const verdict = await createReviewer(
+      createClassifier({ ...env, CLASSIFIER_MODEL: "typesafe/jev" })!,
+    )(input);
+
+    expect(verdict).toEqual({
+      approve: true,
+      classifier: "cloudflare-ai-gateway/typesafe/jev",
+      requested: 0.97,
+      risk: 0.2,
+    });
+    expect(requests[0].url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run");
+    expect(requests[0].body).toMatchObject({ model: "typesafe/jev" });
   });
 
   it("falls back to the card on a gateway error", async () => {

@@ -193,8 +193,11 @@ function autoReviewer(env: Env = process.env): Reviewer | undefined {
   if (!classifier) return undefined;
   return createReviewer(classifier, {
     // Scores and outcome only: never the call's arguments.
+    // A failed review is a card the owner did not need: warn so it is noticed.
     onReview: ({ tool, verdict, durationMs }) =>
-      logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
+      verdict.error
+        ? logger.warn({ tool, ...verdict, durationMs }, "Auto-review failed; asking the owner")
+        : logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
   });
 }
 

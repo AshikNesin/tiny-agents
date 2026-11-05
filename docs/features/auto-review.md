@@ -11,7 +11,8 @@ Turn it on per bot in **Edit bot → Tools → Auto-review**. It is off by defau
 
 - It only **removes** cards. It never denies a call and never touches tools set
   to **Allow** or **Off**. When it does not approve, or fails (an error, a
-  timeout, a malformed reply), you get the card exactly as before.
+  timeout after 10 seconds, a malformed reply), you get the card exactly as
+  before.
 - These always ask, whatever the classifier says:
   - vault uses (logins, cards, API keys: their own policy decides),
   - **Ask (always)** tools (`askOnly`, e.g. saving a skill),
@@ -44,10 +45,18 @@ a restart never reviews the same call twice.
 ## Setup
 
 The classifier is Cloudflare's [Clef](https://developers.cloudflare.com/workers-ai/models/clef/)
-on Workers AI, called through your Cloudflare AI Gateway (its `workers-ai`
-route) with the same settings as chat models: `CLOUDFLARE_API_KEY` (sent as
-`cf-aig-authorization`), `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_GATEWAY_ID`.
-Every review shows up in the gateway's logs.
+on Workers AI, called through your Cloudflare AI Gateway with the same settings
+as chat models: `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_GATEWAY_ID`. Calls go to Workers AI's
+`/accounts/{account}/ai/run` with the `cf-aig-gateway-id` header (Cloudflare's
+recommended gateway route, which serves `@cf/…` and third-party models such as
+`typesafe/jev`), so every review shows up in the gateway's logs.
+
+`CLOUDFLARE_API_KEY` is sent as `Authorization` (and as `cf-aig-authorization`
+for an authenticated gateway), so the token needs **Account → Workers AI →
+Read** as well as AI Gateway permission. A token with only AI Gateway
+permission gets `401` (code `10000`) and every call falls back to the card.
+A failed review logs `Auto-review failed; asking the owner` with the error.
 
 | Var                | Default               | What it is                                                             |
 | ------------------ | --------------------- | ---------------------------------------------------------------------- |
