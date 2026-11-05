@@ -36,7 +36,7 @@ const GUEST_ROUTES: Rule[] = [
     path: /^\/bots\/(?<bot>[^/]+)\/(browser|computer)(\/(start|vnc-ticket|resize|driver))?$/,
   },
   { methods: "*", path: /^\/uploads(\/.*)?$/ },
-  { methods: "*", path: /^\/shelley(\/.*)?$/ },
+  { methods: "*", path: /^\/code(\/.*)?$/ },
 ];
 
 /** The rule a guest's request matches, with the bot it names; undefined = owner only. */

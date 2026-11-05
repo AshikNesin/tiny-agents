@@ -1,101 +1,73 @@
 /**
  * The context usage popup (issue #143), opened from the composer's context
- * ring: a port of Shelley's own usage table (its TokenCostGraph.vue), minus
- * the graphs — total and subtotal, one row group per model with its token
- * bands (cache read/write, input, output), "Other (indirect)" rows for usage
- * a conversation incurs outside its own turns (compaction, slug generation,
- * …), a subagent column when children exist, and "Compact in place".
- *
- * Costs are estimated from models.dev rates (fetched through our proxy);
- * models without pricing show provider-reported cost where the gateway
- * reports one, and the notes say when a total may be incomplete.
+ * ring: the harness's usage report (ADR 0011) as a table — total and
+ * subtotal, one row group per model with its token bands (cache
+ * read/write, input, output), "Other (indirect)" rows for usage a thread
+ * incurs outside its own turns, a subagent column when children exist, and
+ * "Compact in place" when the harness can compact.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@groot/ui/table";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
-import {
-  shelleyApi,
-  type ModelCost,
-  type ShelleyMessage,
-  type SubagentModelUsage,
-} from "../../lib/shelley/api";
-import {
-  distinctModels,
-  formatTokenCount,
-  formatUnitPrice,
-  formatUsd,
-  otherUsageBreakdown,
-  otherUsageEntries,
-  perModelUsage,
-  subagentModelUsage,
-  TOKEN_BANDS,
-  usageEntries,
-  type BandRow,
-  type ModelUsage,
-} from "../../lib/shelley/usage";
+import { codeApi, type UsageBand, type UsageReport, type UsageRow } from "../../lib/code/api";
+import { formatTokenCount, formatUnitPrice, formatUsd } from "../../lib/code/format";
 
-function TokenBandCell({ row }: { row: BandRow }) {
-  if (!row.tokens) {
+function TokenBandCell({ band }: { band: UsageBand }) {
+  if (!band.tokens) {
     return <span className="text-muted-foreground/50">{formatTokenCount(0)}</span>;
   }
-  if (row.aggregate) {
-    return <span className="text-muted-foreground">{formatTokenCount(row.tokens)}</span>;
+  if (band.aggregate) {
+    return <span className="text-muted-foreground">{formatTokenCount(band.tokens)}</span>;
   }
   return (
     <span className="flex items-baseline justify-end gap-1.5">
-      <span className="text-muted-foreground">{formatTokenCount(row.tokens)}</span>
+      <span className="text-muted-foreground">{formatTokenCount(band.tokens)}</span>
       <span className="text-muted-foreground/70 w-14 shrink-0 text-right text-[10px]">
-        {row.unitUsdPerMtok === null
+        {band.unitPrice === null
           ? "mixed rates"
-          : row.priced
-            ? `@ ${formatUnitPrice(row.unitUsdPerMtok)}`
+          : band.priced
+            ? `@ ${formatUnitPrice(band.unitPrice)}`
             : ""}
       </span>
       <span className="w-14 shrink-0 text-right">
-        {row.priced || row.cost > 0 ? formatUsd(row.cost) : "—"}
+        {band.priced || band.costUsd > 0 ? formatUsd(band.costUsd) : "—"}
       </span>
     </span>
   );
 }
 
-/** One model's row group: the model name over its four token bands. */
+/** One model's row group: the model name over its token bands. */
 function ModelRows({
   model,
   showSubagents,
   subagent,
-  hideZeroCacheWrite,
 }: {
-  model: ModelUsage;
+  model: UsageRow;
   showSubagents: boolean;
-  subagent?: ModelUsage;
-  hideZeroCacheWrite: boolean;
+  subagent?: UsageRow;
 }) {
-  const bands = TOKEN_BANDS.map((band, i) => ({
-    band,
-    row: model.rows[i],
-    sub: subagent?.rows[i],
-  })).filter(
-    ({ band, row, sub }) =>
-      !(hideZeroCacheWrite && band.costKey === "cache_write" && !row.tokens && !sub?.tokens),
-  );
+  const bands = model.bands
+    .map((band, i) => ({ band, sub: subagent?.bands[i] }))
+    // A zero cache-write band is noise for providers that never write it.
+    .filter(({ band, sub }) => !(band.label === "Cache write" && !band.tokens && !sub?.tokens));
   return (
     <TableBody className="border-border/60">
       <TableRow className="border-border/60 border-t hover:bg-transparent">
         <th colSpan={showSubagents ? 2 : 1} scope="rowgroup" className="pt-2.5 pb-1 text-left">
-          <span className="text-foreground truncate font-medium">{model.model}</span>
+          <span className="text-foreground truncate font-medium">{model.label}</span>
         </th>
         <TableCell className="pt-2.5 pb-1 text-right align-top">
-          {model.priced || model.totalCost > 0 ? (
-            <span>{formatUsd(model.totalCost)}</span>
+          {model.priced || model.costUsd > 0 ? (
+            <span>{formatUsd(model.costUsd)}</span>
           ) : (
             <span className="text-muted-foreground">no pricing</span>
           )}
         </TableCell>
       </TableRow>
-      {bands.map(({ band, row, sub }) => (
-        <TableRow key={band.key} className="text-muted-foreground hover:bg-transparent">
+      {bands.map(({ band, sub }) => (
+        <TableRow key={band.label} className="text-muted-foreground hover:bg-transparent">
           <th scope="row" className="pb-0.5 pl-0 text-left font-normal">
             <span className="flex items-center gap-1.5">
               <span
@@ -107,10 +79,10 @@ function ModelRows({
             </span>
           </th>
           <TableCell className="pb-0.5 pr-0">
-            {showSubagents && sub ? <TokenBandCell row={sub} /> : null}
+            {showSubagents && sub ? <TokenBandCell band={sub} /> : null}
           </TableCell>
           <TableCell className="pb-0.5 pr-0">
-            <TokenBandCell row={row} />
+            <TokenBandCell band={band} />
           </TableCell>
         </TableRow>
       ))}
@@ -121,79 +93,47 @@ function ModelRows({
 export interface UsagePopoverProps {
   used: number;
   max?: number;
-  conversationId?: string;
-  messages: ShelleyMessage[];
-  /** Subagents of this conversation (the column appears when non-empty). */
+  threadId: string;
+  /** Subagents of this thread (the column appears when non-empty). */
   hasSubagents: boolean;
   /** Children: the ring trigger itself. */
   children: React.ReactNode;
   /** Runs /compact; the popup shows it as "Compact in place". */
-  onCompact(): void;
-  compacting?: boolean;
+  onCompact?: () => void;
 }
 
 export function UsagePopover({
   used,
   max,
-  conversationId,
-  messages,
+  threadId,
   hasSubagents,
   children,
   onCompact,
-  compacting,
 }: UsagePopoverProps) {
   const [open, setOpen] = useState(false);
+  const [report, setReport] = useState<UsageReport | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
 
-  const entries = useMemo(() => usageEntries(messages), [messages]);
-  const others = useMemo(() => otherUsageEntries(messages), [messages]);
-  const models = useMemo(() => distinctModels(entries, others), [entries, others]);
-
-  const [costs, setCosts] = useState<Record<string, ModelCost | null>>({});
-  const [costsState, setCostsState] = useState<"idle" | "loading" | "error">("idle");
   useEffect(() => {
-    if (!open || models.length === 0) return;
+    if (!open) return;
     let live = true;
-    setCostsState("loading");
-    shelleyApi
-      .modelCosts(models)
+    setState("loading");
+    codeApi
+      .usage(threadId)
       .then((r) => {
         if (!live) return;
-        setCosts(r.costs ?? {});
-        setCostsState("idle");
+        setReport(r);
+        setState("idle");
       })
-      .catch(() => live && setCostsState("error"));
+      .catch(() => live && setState("error"));
     return () => {
       live = false;
     };
-  }, [open, models]);
+  }, [open, threadId]);
 
-  const [subagents, setSubagents] = useState<SubagentModelUsage[] | null>(null);
-  useEffect(() => {
-    if (!open || !conversationId || !hasSubagents) return;
-    let live = true;
-    shelleyApi
-      .subagentUsage(conversationId)
-      .then((u) => live && setSubagents(u.per_model ?? []))
-      .catch(() => live && setSubagents(null));
-    return () => {
-      live = false;
-    };
-  }, [open, conversationId, hasSubagents]);
-
-  const main = useMemo(() => perModelUsage(entries, costs), [entries, costs]);
-  const otherRows = useMemo(() => otherUsageBreakdown(others, costs), [others, costs]);
-  const subRows = useMemo(() => subagentModelUsage(subagents ?? undefined), [subagents]);
-
-  const subagentUsd = subRows.reduce((sum, m) => sum + m.totalCost, 0);
-  const otherUsd = otherRows.reduce(
-    (sum, p) => sum + (p.priced ? p.estimatedUsd : p.reportedUsd),
-    0,
-  );
-  const mainUsd = main.reduce((sum, m) => sum + m.totalCost, 0);
-  const totalUsd = mainUsd + otherUsd + subagentUsd;
-  const anyUnpriced = main.some((m) => !m.priced) || otherRows.some((p) => !p.priced);
-
+  const showSubagents = hasSubagents && (report?.subagents.length ?? 0) > 0;
   const pct = max && used ? Math.min(100, Math.round((used / max) * 100)) : null;
+  const empty = report && report.models.length === 0 && report.other.length === 0;
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -205,7 +145,7 @@ export function UsagePopover({
           sideOffset={6}
           collisionPadding={8}
           aria-label="Context usage"
-          data-has-subagents={hasSubagents ? "" : undefined}
+          data-has-subagents={showSubagents ? "" : undefined}
           className={cn(
             "z-50 w-[min(34rem,calc(100vw-1rem))] data-[has-subagents]:w-[min(40rem,calc(100vw-1rem))] origin-(--radix-popover-content-transform-origin) rounded-xl bg-popover text-popover-foreground text-xs shadow-md ring-1 ring-foreground/10 duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:duration-100 data-[state=closed]:ease-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.97] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.97]",
           )}
@@ -218,13 +158,21 @@ export function UsagePopover({
               </span>
             </div>
 
-            {entries.length === 0 && others.length === 0 ? (
+            {!report ? (
+              state === "error" ? (
+                <p className="text-muted-foreground py-3">Usage is not available right now.</p>
+              ) : (
+                <p className="text-muted-foreground flex items-center gap-1.5 py-3">
+                  <Spinner className="size-3" /> Loading usage…
+                </p>
+              )
+            ) : empty ? (
               <p className="text-muted-foreground py-3">No usage data yet.</p>
             ) : (
               <Table className="table-fixed text-xs tabular-nums">
                 <colgroup>
                   <col className="w-[38%]" />
-                  {hasSubagents && <col />}
+                  {showSubagents && <col />}
                   <col />
                 </colgroup>
                 <TableHeader>
@@ -232,7 +180,7 @@ export function UsagePopover({
                     <TableHead scope="col" className="px-0 pt-0 pb-1.5 text-left">
                       Model / tokens
                     </TableHead>
-                    {hasSubagents && (
+                    {showSubagents && (
                       <TableHead scope="col" className="px-0 pt-0 pb-1.5 text-right">
                         Sub-agents
                       </TableHead>
@@ -246,40 +194,43 @@ export function UsagePopover({
                   <TableRow className="border-border/60 border-t hover:bg-transparent">
                     <th
                       scope="row"
-                      colSpan={hasSubagents ? 2 : 1}
+                      colSpan={showSubagents ? 2 : 1}
                       className="pl-0 pt-1.5 text-left"
                     >
                       Total
                     </th>
-                    <TableCell className="pr-0 pt-1.5 text-right">≈{formatUsd(totalUsd)}</TableCell>
+                    <TableCell className="pr-0 pt-1.5 text-right">
+                      ≈{formatUsd(report.totalUsd)}
+                    </TableCell>
                   </TableRow>
                   <TableRow className="hover:bg-transparent">
                     <th scope="row" className="pl-0 pb-1.5 text-left font-normal">
                       Subtotal
                     </th>
-                    <TableCell className="pr-0 pb-1.5 text-right">{formatUsd(mainUsd)}</TableCell>
-                    {hasSubagents && (
+                    <TableCell className="pr-0 pb-1.5 text-right">
+                      {formatUsd(report.mainUsd)}
+                    </TableCell>
+                    {showSubagents && (
                       <TableCell className="pr-0 pb-1.5 text-right">
-                        {formatUsd(subagentUsd)}
+                        {formatUsd(report.subagentUsd)}
                       </TableCell>
                     )}
                   </TableRow>
                 </TableBody>
-                {main.map((m) => (
+                {report.models.map((m) => (
                   <ModelRows
-                    key={m.model}
+                    key={m.label}
                     model={m}
-                    showSubagents={hasSubagents}
-                    subagent={subRows.find((s) => s.model === m.model)}
-                    hideZeroCacheWrite
+                    showSubagents={showSubagents}
+                    subagent={report.subagents.find((s) => s.label === m.label)}
                   />
                 ))}
-                {otherRows.length > 0 && (
+                {report.other.length > 0 && (
                   <TableBody className="border-border/60">
                     <TableRow className="border-border/60 border-t hover:bg-transparent">
                       <th
                         scope="row"
-                        colSpan={hasSubagents ? 2 : 1}
+                        colSpan={showSubagents ? 2 : 1}
                         className="pl-0 pt-2.5 pb-1 text-left"
                       >
                         <span className="text-foreground truncate font-medium">
@@ -287,27 +238,25 @@ export function UsagePopover({
                         </span>
                       </th>
                       <TableCell className="pr-0 pt-2.5 pb-1 text-right align-top">
-                        {formatUsd(otherUsd)}
+                        {formatUsd(report.otherUsd)}
                       </TableCell>
                     </TableRow>
-                    {otherRows.map((p) => (
+                    {report.other.map((p) => (
                       <TableRow
-                        key={p.purpose}
+                        key={p.label}
                         className="text-muted-foreground hover:bg-transparent"
                       >
                         <th scope="row" className="pl-0 pb-0.5 text-left font-normal">
-                          {p.purpose}
+                          {p.label}
                         </th>
-                        <TableCell className="pb-0.5 pr-0" colSpan={hasSubagents ? 2 : 1}>
+                        <TableCell className="pb-0.5 pr-0" colSpan={showSubagents ? 2 : 1}>
                           <span className="flex items-baseline justify-end gap-1.5">
-                            <span>{formatTokenCount(p.tokens)}</span>
+                            <span>{formatTokenCount(p.tokens ?? 0)}</span>
                             <span className="text-muted-foreground/70">
-                              {p.llmCalls} {p.llmCalls === 1 ? "call" : "calls"}
+                              {p.calls ?? 0} {p.calls === 1 ? "call" : "calls"}
                             </span>
                             <span className="w-14 shrink-0 text-right">
-                              {p.priced || p.reportedUsd > 0
-                                ? formatUsd(p.estimatedUsd || p.reportedUsd)
-                                : "—"}
+                              {p.priced || p.costUsd > 0 ? formatUsd(p.costUsd) : "—"}
                             </span>
                           </span>
                         </TableCell>
@@ -318,33 +267,26 @@ export function UsagePopover({
               </Table>
             )}
 
-            {costsState === "loading" && entries.length > 0 && (
-              <p className="text-muted-foreground mt-2 flex items-center gap-1.5">
-                <Spinner className="size-3" /> Loading pricing…
+            {report?.notes.map((note) => (
+              <p key={note} className="text-muted-foreground mt-2">
+                {note}
               </p>
-            )}
-            {costsState === "error" && (
-              <p className="text-muted-foreground mt-2">Pricing lookup failed; showing tokens.</p>
-            )}
-            {costsState === "idle" && anyUnpriced && (
-              <p className="text-muted-foreground mt-2">
-                Some models have no pricing; their totals may be incomplete.
-              </p>
-            )}
+            ))}
           </div>
-          <div className="border-border/60 border-t p-2">
-            <button
-              type="button"
-              onClick={() => {
-                onCompact();
-                setOpen(false);
-              }}
-              disabled={compacting}
-              className="border-primary/60 text-primary hover:bg-primary/10 w-full rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
-            >
-              Compact in Place
-            </button>
-          </div>
+          {onCompact && (
+            <div className="border-border/60 border-t p-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onCompact();
+                  setOpen(false);
+                }}
+                className="border-primary/60 text-primary hover:bg-primary/10 w-full rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
+              >
+                Compact in Place
+              </button>
+            </div>
+          )}
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

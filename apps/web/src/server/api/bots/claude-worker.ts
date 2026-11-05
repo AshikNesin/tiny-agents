@@ -53,3 +53,18 @@ export function claudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator
   if (!endpoint) return undefined;
   return createSandboxClaudeWorker({ endpoint, script: claudeWorkerScript });
 }
+
+let shared: { key: string; locator: ClaudeWorkerLocator } | undefined;
+
+/**
+ * The process's one worker locator: bot chats (the Claude plan engine) and
+ * the Code page's Claude Code harness share the worker on the sandbox and
+ * its tunnel (ADR 0012), so it is set up once.
+ */
+export function sharedClaudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
+  const endpoint = sandboxEndpoint(env);
+  if (!endpoint) return undefined;
+  const key = JSON.stringify(endpoint);
+  if (shared?.key !== key) shared = { key, locator: claudeWorkerLocator(env)! };
+  return shared.locator;
+}

@@ -1,7 +1,9 @@
 /**
- * The Code page transcript (issue #143): one renderer per Shelley tool, so a
- * developer reads a turn the way they would in Shelley — the command and its
- * live output, the diff a patch made, the subagent it started.
+ * The Code page transcript (issue #143, ADR 0011): one renderer per row
+ * kind and tool kind of the harness contract, so a developer reads a turn
+ * the same way whichever harness ran it — the command and its live output,
+ * the diff an edit made, the subagent it started, the plan it keeps, and
+ * the approvals it waits on.
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -9,7 +11,9 @@ import { Streamdown } from "streamdown";
 import {
   ArrowUpRight,
   Bot,
+  Check,
   CircleCheck,
+  CircleDashed,
   CircleX,
   Copy,
   GitFork,
@@ -17,8 +21,10 @@ import {
   ListChecks,
   MessageCircle,
   RotateCcw,
+  ShieldQuestion,
   SquareTerminal,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
@@ -43,21 +49,33 @@ import {
   CodeBlockTitle,
 } from "../../components/ui/code-block";
 import { Spinner } from "../../components/ui/spinner";
-import { shelleyApi, type ShelleyConversation } from "../../lib/shelley/api";
 import {
-  describeTools,
-  type DisplayItem,
-  type ToolGroup,
+  codeApi,
+  threadPath,
+  type AssetRef,
+  type RecoveryAction,
+  type RequestAnswer,
+  type ThreadSummary,
   type ToolItem,
   type TranscriptItem,
-} from "../../lib/shelley/transcript";
+} from "../../lib/code/api";
+import { describeTools, type DisplayItem, type ToolGroup } from "../../lib/code/transcript";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
 export interface TranscriptActions {
-  retry(): void;
-  resume(): void;
-  continueWith(): void;
-  fork(messageId: string): void;
+  /** The harness's ways back from an error (capability `turns.recovery`). */
+  recovery: RecoveryAction[];
+  recover(action: RecoveryAction): void;
+  /** Absent when the harness cannot fork. */
+  fork?: (at: string) => void;
+  respond(requestId: string, answer: RequestAnswer): Promise<void>;
+}
+
+/** What rows need to know about where they are. */
+export interface TranscriptContext {
+  instanceId: string;
+  /** Every thread in the list (subagent links show their state). */
+  rows: ThreadSummary[];
 }
 
 export function formatDuration(ms: number): string {
@@ -73,7 +91,9 @@ export function formatCost(usd: number): string {
 }
 
 const failedTool = (call: ToolItem) =>
-  call.status === "error" || (call.exitCode !== undefined && call.exitCode !== 0);
+  call.status === "error" ||
+  call.status === "denied" ||
+  (call.exitCode !== undefined && call.exitCode !== 0);
 
 function copy(text: string) {
   void navigator.clipboard
@@ -115,39 +135,39 @@ function Output({
   );
 }
 
-function Images({ urls }: { urls: string[] }) {
-  const resolved = urls.map((u) => shelleyApi.imageUrl(u)).filter((u): u is string => Boolean(u));
-  if (resolved.length === 0) return null;
+function Images({ assets, instanceId }: { assets: AssetRef[]; instanceId: string }) {
+  if (assets.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-2">
-      {resolved.map((src) => (
-        <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
-          <img
-            src={src}
-            alt="Tool output"
-            loading="lazy"
-            className="border-border max-h-64 max-w-full rounded-lg border object-contain"
-          />
-        </a>
-      ))}
+      {assets.map((asset) => {
+        const src = codeApi.assetUrl(instanceId, asset.ref);
+        return (
+          <a key={asset.ref} href={src} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={src}
+              alt={asset.name || "Tool output"}
+              loading="lazy"
+              className="border-border max-h-64 max-w-full rounded-lg border object-contain"
+            />
+          </a>
+        );
+      })}
     </div>
   );
 }
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif)$/i;
-
 /** Uploaded files referenced in a message: images inline, others as links. */
-function Attachments({ paths }: { paths: string[] }) {
-  if (paths.length === 0) return null;
-  const images = paths.filter((p) => IMAGE_FILE.test(p));
-  const files = paths.filter((p) => !IMAGE_FILE.test(p));
+function Attachments({ assets, instanceId }: { assets: AssetRef[]; instanceId: string }) {
+  if (assets.length === 0) return null;
+  const images = assets.filter((a) => a.image);
+  const files = assets.filter((a) => !a.image);
   return (
     <div className="flex max-w-[85%] flex-col items-end gap-1">
-      <Images urls={images.map((p) => `/api/read?path=${encodeURIComponent(p)}`)} />
-      {files.map((p) => (
+      <Images assets={images} instanceId={instanceId} />
+      {files.map((a) => (
         <a
-          key={p}
-          href={shelleyApi.fileUrl(p)}
+          key={a.ref}
+          href={codeApi.assetUrl(instanceId, a.ref)}
           target="_blank"
           rel="noreferrer"
           className={cn(
@@ -155,31 +175,30 @@ function Attachments({ paths }: { paths: string[] }) {
             monoClass,
           )}
         >
-          {p.split("/").pop()}
+          {a.name}
         </a>
       ))}
     </div>
   );
 }
 
-function SubagentRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }) {
-  const child = call.subagent;
-  const row = child ? rows.find((r) => r.conversation_id === child.conversationId) : undefined;
-  const slug = child?.slug ?? call.summary;
+function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
+  const child = call.child;
+  const row = child ? ctx.rows.find((r) => r.id === child.threadId) : undefined;
+  const title = child?.title ?? call.summary;
+  const input = call.input && typeof call.input === "object" ? call.input : undefined;
   const prompt =
-    call.input && typeof call.input === "object" && "prompt" in call.input
-      ? String((call.input as { prompt?: unknown }).prompt ?? "")
-      : "";
+    input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
   return (
     <div className="border-border flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2">
       <Bot className="text-muted-foreground size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">Subagent</span>
-          <span className={cn("truncate", monoClass)}>{slug}</span>
-          {row?.working ? (
+          <span className={cn("truncate", monoClass)}>{title}</span>
+          {row?.working || call.status === "running" ? (
             <Spinner className="size-3.5" aria-label="Working" />
-          ) : call.status === "running" ? null : (
+          ) : (
             <CircleCheck className="text-muted-foreground size-3.5" aria-label="Idle" />
           )}
         </div>
@@ -187,7 +206,7 @@ function SubagentRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation
       </div>
       {child && (
         <Button asChild size="sm" variant="outline">
-          <Link to={`/code/${child.conversationId}`}>
+          <Link to={threadPath(child.threadId)}>
             Open
             <ArrowUpRight />
           </Link>
@@ -197,13 +216,48 @@ function SubagentRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation
   );
 }
 
-function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }) {
-  if (call.toolKind === "subagent") return <SubagentRow call={call} rows={rows} />;
+/** A plan the agent keeps (Claude Code's TodoWrite). */
+function TodoRow({ call }: { call: ToolItem }) {
+  const input = call.input && typeof call.input === "object" ? call.input : undefined;
+  const todos = Array.isArray((input as { todos?: unknown } | undefined)?.todos)
+    ? ((input as { todos: Array<{ content?: unknown; status?: unknown }> }).todos ?? [])
+    : [];
+  if (todos.length === 0) return null;
+  return (
+    <ul
+      className="border-border space-y-1 rounded-xl border px-3 py-2 text-sm"
+      data-testid="code-todos"
+    >
+      {todos.map((todo, i) => {
+        const done = todo.status === "completed";
+        const active = todo.status === "in_progress";
+        return (
+          <li key={`${i}:${String(todo.content ?? "")}`} className="flex items-start gap-2">
+            {done ? (
+              <CircleCheck className="text-success mt-0.5 size-4 shrink-0" aria-label="Done" />
+            ) : active ? (
+              <Spinner className="mt-0.5 size-4 shrink-0" aria-label="In progress" />
+            ) : (
+              <CircleDashed className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+            )}
+            <span className={cn(done && "text-muted-foreground line-through")}>
+              {String(todo.content ?? "")}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ToolRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
+  if (call.tool === "subagent") return <SubagentRow call={call} ctx={ctx} />;
+  if (call.tool === "todo") return <TodoRow call={call} />;
   const input =
     call.input && typeof call.input === "object"
       ? (call.input as Record<string, unknown>)
       : undefined;
-  if (call.toolKind === "message_user" && typeof input?.text === "string") {
+  if (call.tool === "message_user" && typeof input?.text === "string") {
     return (
       <div className="bg-muted/60 flex gap-2 rounded-xl px-3 py-2 text-sm">
         <MessageCircle className="text-muted-foreground mt-0.5 size-4 shrink-0" />
@@ -211,7 +265,7 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
       </div>
     );
   }
-  if (call.toolKind === "message_parent" && typeof input?.text === "string") {
+  if (call.tool === "message_parent" && typeof input?.text === "string") {
     return (
       <div className="bg-muted/60 flex gap-2 rounded-xl px-3 py-2 text-sm">
         <ArrowUpRight className="text-muted-foreground mt-0.5 size-4 shrink-0" />
@@ -225,11 +279,10 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
 
   const stats = call.diff ? diffStats(call.diff.diff) : undefined;
   const argsJson =
-    call.toolKind === "bash" || call.toolKind === "patch" || input === undefined
+    call.tool === "bash" || (call.tool === "edit" && call.diff) || input === undefined
       ? ""
       : JSON.stringify(call.input, null, 2);
-  const command =
-    call.toolKind === "bash" && typeof input?.command === "string" ? input.command : "";
+  const command = call.tool === "bash" && typeof input?.command === "string" ? input.command : "";
   const failed = failedTool(call);
   const hasDetail = Boolean(command || argsJson || call.output || call.diff || call.images.length);
 
@@ -240,7 +293,7 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
           <Spinner className="size-3.5" />
         ) : failed ? (
           <CircleX />
-        ) : call.toolKind === "bash" ? (
+        ) : call.tool === "bash" ? (
           <SquareTerminal />
         ) : (
           <CircleCheck />
@@ -257,6 +310,7 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
         </TraceDescription>
       )}
       {call.background && <TraceDescription>background</TraceDescription>}
+      {call.status === "denied" && <TraceDescription>denied</TraceDescription>}
       {call.exitCode !== undefined && call.exitCode !== 0 && (
         <TraceDescription>exit {call.exitCode}</TraceDescription>
       )}
@@ -271,7 +325,7 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
       <Trace className="gap-1">
         {hasDetail ? (
           // Running commands open by default so their output streams in view.
-          <TraceCollapsible defaultOpen={call.status === "running" && call.toolKind === "bash"}>
+          <TraceCollapsible defaultOpen={call.status === "running" && call.tool === "bash"}>
             <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
             <TraceCollapsibleContent className="space-y-2">
               {command && <Output title="Command" value={command} />}
@@ -298,13 +352,13 @@ function ToolRow({ call, rows }: { call: ToolItem; rows: ShelleyConversation[] }
         )}
       </Trace>
       {/* Screenshots stay visible: they are the point of a browser step. */}
-      <Images urls={call.images} />
+      <Images assets={call.images} instanceId={ctx.instanceId} />
     </div>
   );
 }
 
 /** Finished tool calls folded into one line ("Ran 3 commands, edited 2 files"). */
-function ToolGroupRow({ group, rows }: { group: ToolGroup; rows: ShelleyConversation[] }) {
+function ToolGroupRow({ group, ctx }: { group: ToolGroup; ctx: TranscriptContext }) {
   const failed = group.tools.filter(failedTool).length;
   const duration = group.tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
   return (
@@ -325,12 +379,9 @@ function ToolGroupRow({ group, rows }: { group: ToolGroup; rows: ShelleyConversa
         <TraceCollapsibleContent className="space-y-2">
           {group.items.map((item) =>
             item.kind === "tool" ? (
-              <ToolRow key={item.key} call={item} rows={rows} />
+              <ToolRow key={item.id} call={item} ctx={ctx} />
             ) : (
-              <p
-                key={item.key}
-                className="text-muted-foreground text-sm whitespace-pre-wrap italic"
-              >
+              <p key={item.id} className="text-muted-foreground text-sm whitespace-pre-wrap italic">
                 {item.text}
               </p>
             ),
@@ -352,6 +403,7 @@ function Notice({
 }) {
   const Icon =
     item.level === "error" ? TriangleAlert : item.level === "warning" ? TriangleAlert : Info;
+  const can = (action: RecoveryAction) => isLast && actions.recovery.includes(action);
   return (
     <div
       className={cn(
@@ -362,15 +414,22 @@ function Notice({
       )}
     >
       <Icon className="mt-0.5 size-4 shrink-0" />
-      <span className="min-w-0 flex-1 whitespace-pre-wrap">{item.text}</span>
-      {isLast && item.retryable && (
-        <Button size="xs" variant="outline" onClick={actions.retry}>
+      <span className="min-w-0 flex-1 whitespace-pre-wrap">
+        {item.text}
+        {item.code === "usage_limit" && item.resetsAt && (
+          <span className="text-muted-foreground block text-xs">
+            Resets {new Date(item.resetsAt).toLocaleString()}
+          </span>
+        )}
+      </span>
+      {item.retryable && can("retry") && (
+        <Button size="xs" variant="outline" onClick={() => actions.recover("retry")}>
           <RotateCcw />
           Retry
         </Button>
       )}
-      {isLast && item.refusal && (
-        <Button size="xs" variant="outline" onClick={actions.continueWith}>
+      {item.refusal && can("continue") && (
+        <Button size="xs" variant="outline" onClick={() => actions.recover("continue")}>
           Try another model
         </Button>
       )}
@@ -378,14 +437,126 @@ function Notice({
   );
 }
 
+/** An approval or a question the harness waits on (capability `approvals`). */
+function RequestRow({
+  item,
+  actions,
+}: {
+  item: Extract<TranscriptItem, { kind: "request" }>;
+  actions: TranscriptActions;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const open = item.status === "open";
+  const answer = (value: RequestAnswer) => {
+    setBusy(true);
+    actions
+      .respond(item.id, value)
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : "Could not answer."),
+      )
+      .finally(() => setBusy(false));
+  };
+  const { request } = item;
+  const outcome =
+    item.status === "allowed"
+      ? "Allowed"
+      : item.status === "denied"
+        ? "Denied"
+        : item.status === "answered"
+          ? "Answered"
+          : item.status === "expired"
+            ? "No longer waiting"
+            : undefined;
+  return (
+    <div
+      className={cn(
+        "border-border flex flex-col gap-2 rounded-xl border px-3 py-2 text-sm",
+        open && "border-primary/50 bg-primary/5",
+      )}
+      data-testid="code-request"
+    >
+      <div className="flex items-start gap-2">
+        <ShieldQuestion className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          {request.kind === "tool" ? (
+            <>
+              <p className="font-medium">
+                Allow <span className={monoClass}>{request.name}</span>?
+              </p>
+              {request.summary && (
+                <p className={cn("text-muted-foreground truncate text-xs", monoClass)}>
+                  {request.summary}
+                </p>
+              )}
+              {request.reason && <p className="text-muted-foreground text-xs">{request.reason}</p>}
+            </>
+          ) : (
+            request.questions.map((q) => (
+              <div key={q.question} className="space-y-1.5">
+                <p className="font-medium">{q.question}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {q.options.map((option) => (
+                    <Button
+                      key={option.label}
+                      size="xs"
+                      variant={picked[q.question] === option.label ? "default" : "outline"}
+                      disabled={!open || busy}
+                      title={option.description}
+                      onClick={() => setPicked((p) => ({ ...p, [q.question]: option.label }))}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {outcome && <span className="text-muted-foreground shrink-0 text-xs">{outcome}</span>}
+      </div>
+      {open && (
+        <div className="flex justify-end gap-1.5">
+          {request.kind === "tool" ? (
+            <>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={busy}
+                onClick={() => answer({ decision: "deny" })}
+              >
+                <X />
+                Deny
+              </Button>
+              <Button size="xs" disabled={busy} onClick={() => answer({ decision: "allow" })}>
+                <Check />
+                Allow
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="xs"
+              disabled={busy || request.questions.some((q) => picked[q.question] === undefined)}
+              onClick={() => answer({ answers: picked })}
+            >
+              <Check />
+              Answer
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TranscriptRow({
   item,
-  rows,
+  ctx,
   actions,
   isLastNotice,
 }: {
   item: DisplayItem;
-  rows: ShelleyConversation[];
+  ctx: TranscriptContext;
   actions: TranscriptActions;
   isLastNotice: boolean;
 }) {
@@ -401,7 +572,7 @@ export function TranscriptRow({
           {item.text && (
             <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{item.text}</div>
           )}
-          <Attachments paths={item.attachments} />
+          <Attachments assets={item.attachments} instanceId={ctx.instanceId} />
           <div className={cn("flex gap-1", !hover && "md:invisible")}>
             <Button
               size="icon-xs"
@@ -411,15 +582,17 @@ export function TranscriptRow({
             >
               <Copy />
             </Button>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              onClick={() => actions.fork(item.messageId)}
-              aria-label="Fork from here"
-              title="Fork from here"
-            >
-              <GitFork />
-            </Button>
+            {actions.fork && item.forkAt && (
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => actions.fork?.(item.forkAt!)}
+                aria-label="Fork from here"
+                title="Fork from here"
+              >
+                <GitFork />
+              </Button>
+            )}
           </div>
         </div>
       );
@@ -487,10 +660,12 @@ export function TranscriptRow({
         </p>
       );
     }
+    case "request":
+      return <RequestRow item={item} actions={actions} />;
     case "tool":
-      return <ToolRow call={item} rows={rows} />;
+      return <ToolRow call={item} ctx={ctx} />;
     case "tool-group":
-      return <ToolGroupRow group={item} rows={rows} />;
+      return <ToolGroupRow group={item} ctx={ctx} />;
   }
 }
 

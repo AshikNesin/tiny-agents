@@ -25,6 +25,9 @@ export default defineConfig({
       "@groot/ai": path.resolve(rootDir, "packages/ai/src"),
       "@groot/core": path.resolve(rootDir, "packages/core/src"),
       "@groot/jobs/server": path.resolve(rootDir, "packages/jobs/src/server"),
+      "@tiny-agents/code/contracts": path.resolve(rootDir, "packages/code/src/contracts/index.ts"),
+      "@tiny-agents/code/server": path.resolve(rootDir, "packages/code/src/server/index.ts"),
+      "@tiny-agents/code/testing": path.resolve(rootDir, "packages/code/src/testing.ts"),
     },
   },
 });

@@ -1,6 +1,8 @@
 # ADR 0009: Coding goes to Shelley; tiny-agents is a client of its API
 
-- Status: **accepted**
+- Status: **accepted**, generalized by [0011](0011-code-harness-adapters.md):
+  Shelley is now one harness behind the Code page's adapter contract; the
+  Shelley-only proxy routes and tables are replaced by harness-generic ones.
 - Date: 2026-11-03
 
 ## Context

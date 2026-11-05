@@ -42,8 +42,17 @@ export interface ChatToolCall {
   /** `yolo`: the chat's YOLO mode ran it without asking (issue #151). */
   approval?: "approved" | "denied" | "auto" | "yolo" | "refused";
   sources?: { url: string; title: string }[];
-  /** `shelley_start` calls (issue #143): the Shelley conversation it started. */
-  shelley?: { conversationId: string; slug: string | null; cwd: string | null; url: string };
+  /**
+   * `code_start` / `shelley_start` calls (issue #143, ADR 0011): the thread
+   * it started. Calls from before the harness layer carry Shelley's bare id.
+   */
+  code?: {
+    threadId: string;
+    harness: string;
+    title: string | null;
+    cwd: string | null;
+    url: string;
+  };
   /** ask_owner calls: the questions the bot asked. */
   questions?: OwnerQuestion[];
   /** ask_owner calls: the owner's answers; absent while waiting and once dismissed. */

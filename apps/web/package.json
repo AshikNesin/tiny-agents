@@ -14,6 +14,7 @@
     "@shadcn/react": "^0.3.1",
     "@tanstack/react-query": "^5.104.5",
     "@tiny-agents/agent": "workspace:*",
+    "@tiny-agents/code": "workspace:*",
     "@xterm/addon-clipboard": "0.2.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-unicode11": "0.9.0",

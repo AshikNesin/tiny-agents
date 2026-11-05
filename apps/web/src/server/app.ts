@@ -20,7 +20,7 @@ import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
-import shelleyRoutes from "./api/shelley/shelley.routes";
+import codeRoutes from "./api/code/code.routes";
 import peopleRoutes from "./api/people/people.routes";
 import { guestGuard } from "./api/people/guest.guard";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
@@ -34,7 +34,7 @@ export function registerJobHandlers(): void {
  * Upload routes take multipart bodies far larger than the JSON limit; they
  * enforce their own size caps.
  */
-const UPLOAD_PATHS = ["/api/v1/uploads*", "/api/v1/shelley/uploads"];
+const UPLOAD_PATHS = ["/api/v1/uploads*", "/api/v1/code/uploads/*"];
 
 /** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
 export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
@@ -65,7 +65,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", routinesRoutes);
       api.route("/", skillsRoutes);
       api.route("/", connectionsRoutes);
-      api.route("/", shelleyRoutes);
+      api.route("/", codeRoutes);
       api.use("/vault/*", vaultNoStore);
       api.route("/", vaultRoutes);
       api.route("/jobs", jobRoutes);

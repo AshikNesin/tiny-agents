@@ -308,6 +308,9 @@ importers:
       '@tiny-agents/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@tiny-agents/code':
+        specifier: workspace:*
+        version: link:../../packages/code
       '@xterm/addon-clipboard':
         specifier: 0.2.0
         version: 0.2.0
@@ -440,6 +443,25 @@ importers:
 
   packages/claude-worker:
     dependencies:
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
+
+  packages/code:
+    dependencies:
+      '@tiny-agents/claude-worker':
+        specifier: workspace:*
+        version: link:../claude-worker
       ws:
         specifier: 8.22.0
         version: 8.22.0

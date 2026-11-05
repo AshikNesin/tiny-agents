@@ -45,7 +45,7 @@ import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
-import { startShelley } from "./api/shelley/shelley.boot";
+import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
 
 /**
@@ -261,16 +261,16 @@ async function main(): Promise<void> {
   // is in place (above), whatever order the boot awaits in.
   add({ name: "delivery sweep", start: () => void deliveries.sweep().catch(() => undefined) });
 
-  // Shelley (issue #143): one live stream to the coding agent; hand-off
-  // finishes go into bots' chats and followed conversations push. Off
-  // without SHELLEY_URL.
-  let stopShelley = () => {};
+  // Code (issue #143, ADR 0011): one live connection per coding agent
+  // (Shelley, Claude Code); hand-off finishes go into bots' chats and
+  // followed threads push. Empty without a configured harness.
+  let stopCode = () => {};
   add({
-    name: "shelley",
+    name: "code",
     start: () => {
-      stopShelley = startShelley(runtime);
+      stopCode = startCode(runtime);
     },
-    stop: () => stopShelley(),
+    stop: () => stopCode(),
   });
 
   // Past-chat titles (issue #101): one lightweight side-call per "New chat"

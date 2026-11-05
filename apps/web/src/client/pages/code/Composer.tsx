@@ -1,14 +1,15 @@
 /**
- * The Code page composer (issue #143), Shelley's composer features through
- * its API: `@` file and folder completion in the working directory
- * (`/find-files`), `/` command hints (Shelley interprets the commands),
- * pasted or dropped attachments (`/upload/raw`, referenced as `[path]`),
- * skills, and a draft kept per conversation.
+ * The Code page composer (issue #143, ADR 0011), the harness's composer
+ * features through its API, each shown only when the harness has it: `@`
+ * file and folder completion in the working directory, `/` command hints
+ * (the harness interprets the commands), pasted or dropped attachments,
+ * skills, and a draft kept per thread.
  *
- * Enter sends; while Shelley works, Enter steers the running turn and
- * "Queue" (or Alt+Enter) holds the message for when the turn ends; with an
- * empty draft the send button becomes Stop. The toolbar holds a "+" menu
- * (files, skills) and the caller's chips (model, reasoning, context).
+ * Enter sends; while the agent works, Enter steers the running turn (when
+ * the harness steers) and "Queue" (or Alt+Enter) holds the message for when
+ * the turn ends; with an empty draft the send button becomes Stop. The
+ * toolbar holds a "+" menu (files, skills) and the caller's chips (model,
+ * reasoning, permissions, context).
  */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
@@ -37,19 +38,9 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { shelleyApi, type FindFilesMatch, type Skill } from "../../lib/shelley/api";
+import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
 
-const SLASH_COMMANDS: Array<{ command: string; hint: string }> = [
-  { command: "/model", hint: "Show or switch the model and reasoning (e.g. /model sonnet high)" },
-  { command: "/compact", hint: "Compact the context to free room" },
-  { command: "/btw", hint: "Ask a side question without disturbing the turn" },
-  { command: "/fork", hint: "Continue in a copy of this conversation" },
-  { command: "/cwd", hint: "Change the working directory" },
-  { command: "/new", hint: "Start a new conversation" },
-  { command: "/help", hint: "List Shelley's commands" },
-];
-
-const DRAFT_PREFIX = "tiny-agents:shelley-draft:";
+const DRAFT_PREFIX = "tiny-agents:code-draft:";
 
 function readDraft(key: string): string {
   try {
@@ -72,7 +63,8 @@ interface Attachment {
   id: string;
   name: string;
   status: "uploading" | "ready" | "error";
-  path?: string;
+  /** The harness's ref for the uploaded file. */
+  ref?: string;
 }
 
 /** The `@token` (or `/command` at the start) around the cursor, if any. */
@@ -98,29 +90,35 @@ function quoteRef(path: string): string {
 }
 
 export interface ComposerProps {
-  /** Draft key: the conversation id, or "new". */
+  /** Draft key: the thread id, or "new:<harness>". */
   draftKey: string;
+  /** The harness the message goes to: its capabilities pick the features. */
+  harness: HarnessInfo;
   cwd?: string | null;
-  conversationId?: string;
+  threadId?: string;
   working?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
   /** Text to add to the draft (a diff comment); consumed once. */
   insert?: { text: string; nonce: number } | null;
-  /** Chips in the toolbar: model, reasoning, context (or the new-conversation options). */
+  /** Chips in the toolbar: model, reasoning, context (or the new-thread options). */
   controls?: React.ReactNode;
-  /** Shown when Shelley works and the draft is empty: the send button becomes Stop. */
+  /** Shown when the agent works and the draft is empty: the send button becomes Stop. */
   onStop?(): void;
   /** A quiet line under the composer when idle (keyboard hints while working). */
   hint?: string;
   submitLabel?: string;
-  onSend(message: string, options: { queue: boolean; skills: string[] }): Promise<void>;
+  onSend(
+    message: string,
+    options: { queue: boolean; skills: string[]; attachments: string[] },
+  ): Promise<void>;
 }
 
 export function Composer({
   draftKey,
+  harness,
   cwd,
-  conversationId,
+  threadId,
   working = false,
   placeholder,
   autoFocus,
@@ -132,6 +130,14 @@ export function Composer({
   onSend,
 }: ComposerProps) {
   const reduceMotion = useReducedMotion() ?? false;
+  const caps = harness.capabilities;
+  const canUpload = caps.workspace.uploads;
+  const canFind = caps.workspace.findFiles;
+  const canSkills = caps.workspace.skills;
+  const canQueue = caps.turns.queue;
+  const steers = caps.turns.steer;
+  const commands = harness.commands;
+  const name = harness.label;
   const [text, setText] = useState(() => readDraft(draftKey));
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -172,39 +178,30 @@ export function Composer({
     }
     if (token.kind === "/") {
       setSuggestions(
-        SLASH_COMMANDS.filter((c) => c.command.slice(1).startsWith(token.query)).map((c) => ({
-          value: c.command,
-          label: c.command,
-          detail: c.hint,
-        })),
+        commands
+          .filter((c) => c.command.slice(1).startsWith(token.query))
+          .map((c) => ({
+            value: c.command,
+            label: c.command,
+            detail: c.hint,
+          })),
       );
       setActive(0);
       return;
     }
-    if (!cwd) {
+    if (!cwd || !canFind) {
       setSuggestions([]);
       return;
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      shelleyApi
-        .findFiles(cwd, token.query)
-        .then((result) => {
+      codeApi
+        .findFiles(harness.id, cwd, token.query)
+        .then((matches) => {
           if (cancelled) return;
-          const dir = result.search_dir.replace(/\/$/, "");
-          const base = cwd.replace(/\/$/, "");
-          const prefix =
-            dir === base
-              ? ""
-              : dir.startsWith(`${base}/`)
-                ? `${dir.slice(base.length + 1)}/`
-                : `${dir}/`;
+          // Paths are relative to the working directory.
           setSuggestions(
-            result.matches.slice(0, 12).map((m: FindFilesMatch) => ({
-              value: `${prefix}${m.path}`,
-              label: `${prefix}${m.path}`,
-              dir: m.is_dir,
-            })),
+            matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
           );
           setActive(0);
         })
@@ -214,48 +211,58 @@ export function Composer({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [token, cwd]);
+  }, [token, cwd, canFind, commands, harness.id]);
 
   const loadSkills = useCallback(() => {
-    if (skills || !cwd) return;
-    shelleyApi
-      .skills(cwd, conversationId)
-      .then((r) => setSkills(r.skills ?? []))
+    if (skills || !cwd || !canSkills) return;
+    codeApi
+      .skills(harness.id, cwd, threadId)
+      .then((r) => setSkills(Array.isArray(r) ? r : []))
       .catch(() => setSkills([]));
-  }, [skills, cwd, conversationId]);
+  }, [skills, cwd, canSkills, harness.id, threadId]);
 
-  const upload = useCallback((files: FileList | File[]) => {
-    for (const file of Array.from(files)) {
-      const id = `${file.name}-${Date.now()}-${Math.random()}`;
-      setAttachments((prev) => [
-        ...prev,
-        { id, name: file.name || "pasted image", status: "uploading" },
-      ]);
-      shelleyApi
-        .upload(file)
-        .then((path) =>
-          setAttachments((prev) =>
-            prev.map((a) => (a.id === id ? { ...a, status: "ready", path } : a)),
-          ),
-        )
-        .catch((error: unknown) => {
-          toast.error(errorMessage(error, "Upload failed."));
-          setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "error" } : a)));
-        });
-    }
-  }, []);
+  const upload = useCallback(
+    (files: FileList | File[]) => {
+      if (!canUpload) return;
+      for (const file of Array.from(files)) {
+        const id = `${file.name}-${Date.now()}-${Math.random()}`;
+        setAttachments((prev) => [
+          ...prev,
+          { id, name: file.name || "pasted image", status: "uploading" },
+        ]);
+        codeApi
+          .upload(harness.id, file)
+          .then((ref) =>
+            setAttachments((prev) =>
+              prev.map((a) => (a.id === id ? { ...a, status: "ready", ref } : a)),
+            ),
+          )
+          .catch((error: unknown) => {
+            toast.error(errorMessage(error, "Upload failed."));
+            setAttachments((prev) =>
+              prev.map((a) => (a.id === id ? { ...a, status: "error" } : a)),
+            );
+          });
+      }
+    },
+    [canUpload, harness.id],
+  );
 
   const uploading = attachments.some((a) => a.status === "uploading");
-  const ready = attachments.filter((a) => a.status === "ready" && a.path);
+  const ready = attachments.filter((a) => a.status === "ready" && a.ref);
   const canSend = (text.trim().length > 0 || ready.length > 0) && !sending && !uploading;
 
   const send = async (queue: boolean) => {
     if (!canSend) return;
-    const tokens = ready.map((a) => `[${a.path}]`).join(" ");
-    const message = [text.trim(), tokens].filter(Boolean).join("\n\n");
+    const message = text.trim() || "(see the attached files)";
     setSending(true);
     try {
-      await onSend(message, { queue, skills: selectedSkills });
+      await onSend(message, {
+        // A harness that cannot steer holds a mid-turn message instead.
+        queue: queue || (working && !steers && canQueue),
+        skills: selectedSkills,
+        attachments: ready.map((a) => a.ref!),
+      });
       setText("");
       setAttachments([]);
       setSelectedSkills([]);
@@ -309,7 +316,7 @@ export function Composer({
     }
     if (event.key === "Enter" && !event.shiftKey && !coarsePointer()) {
       event.preventDefault();
-      void send(event.altKey && working);
+      void send(event.altKey && working && canQueue);
     }
   };
 
@@ -321,7 +328,7 @@ export function Composer({
     <div
       className="relative"
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("Files")) {
+        if (canUpload && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
           setDragging(true);
         }
@@ -431,8 +438,10 @@ export function Composer({
               ? "Drop files to attach them"
               : (placeholder ??
                 (working
-                  ? "Steer Shelley — goes into the running turn"
-                  : "Message Shelley — @ for files, / for commands"))
+                  ? steers
+                    ? `Steer ${name} — goes into the running turn`
+                    : `Message ${name} — sent when this turn ends`
+                  : `Message ${name}${canFind ? " — @ for files" : ""}${commands.length ? `${canFind ? "," : " —"} / for commands` : ""}`))
           }
           onChange={(e) => {
             setText(e.target.value);
@@ -443,14 +452,14 @@ export function Composer({
           onKeyDown={onKeyDown}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);
-            if (files.length) {
+            if (files.length && canUpload) {
               e.preventDefault();
               upload(files);
             }
           }}
           className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none md:text-sm md:leading-6"
           data-testid="code-composer"
-          aria-label="Message Shelley"
+          aria-label={`Message ${name}`}
         />
         <input
           ref={fileInput}
@@ -463,74 +472,80 @@ export function Composer({
           }}
         />
         <div className="flex min-w-0 items-center gap-1">
-          <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Add files or skills"
-                title="Add files or skills"
-                className={cn(
-                  "text-muted-foreground shrink-0 rounded-full",
-                  selectedSkills.length > 0 && "text-foreground",
-                )}
-                data-testid="code-composer-add"
-              >
-                <Plus />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="max-h-96 w-72">
-              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-                <Paperclip />
-                Add files or images
-                <span className="text-muted-foreground ml-auto text-xs">paste · drop</span>
-              </DropdownMenuItem>
-              {cwd && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                    Skills for this message
-                  </DropdownMenuLabel>
-                  {skills === null ? (
-                    <div className="flex justify-center p-2">
-                      <Spinner />
-                    </div>
-                  ) : skills.length === 0 ? (
-                    <p className="text-muted-foreground px-2 pb-2 text-xs">
-                      No skills in this directory.
-                    </p>
-                  ) : (
-                    skills.map((skill) => (
-                      <DropdownMenuCheckboxItem
-                        key={skill.name}
-                        checked={selectedSkills.includes(skill.name)}
-                        onSelect={(e) => e.preventDefault()}
-                        onCheckedChange={(checked) =>
-                          setSelectedSkills((prev) =>
-                            checked ? [...prev, skill.name] : prev.filter((n) => n !== skill.name),
-                          )
-                        }
-                      >
-                        <Sparkles className="text-muted-foreground" />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate">{skill.name}</span>
-                          {skill.description && (
-                            <span className="text-muted-foreground line-clamp-2 text-xs">
-                              {skill.description}
-                            </span>
-                          )}
-                        </span>
-                      </DropdownMenuCheckboxItem>
-                    ))
+          {(canUpload || canSkills) && (
+            <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Add files or skills"
+                  title="Add files or skills"
+                  className={cn(
+                    "text-muted-foreground shrink-0 rounded-full",
+                    selectedSkills.length > 0 && "text-foreground",
                   )}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  data-testid="code-composer-add"
+                >
+                  <Plus />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="max-h-96 w-72">
+                {canUpload && (
+                  <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                    <Paperclip />
+                    Add files or images
+                    <span className="text-muted-foreground ml-auto text-xs">paste · drop</span>
+                  </DropdownMenuItem>
+                )}
+                {cwd && canSkills && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+                      Skills for this message
+                    </DropdownMenuLabel>
+                    {skills === null ? (
+                      <div className="flex justify-center p-2">
+                        <Spinner />
+                      </div>
+                    ) : skills.length === 0 ? (
+                      <p className="text-muted-foreground px-2 pb-2 text-xs">
+                        No skills in this directory.
+                      </p>
+                    ) : (
+                      skills.map((skill) => (
+                        <DropdownMenuCheckboxItem
+                          key={skill.name}
+                          checked={selectedSkills.includes(skill.name)}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={(checked) =>
+                            setSelectedSkills((prev) =>
+                              checked
+                                ? [...prev, skill.name]
+                                : prev.filter((n) => n !== skill.name),
+                            )
+                          }
+                        >
+                          <Sparkles className="text-muted-foreground" />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="truncate">{skill.name}</span>
+                            {skill.description && (
+                              <span className="text-muted-foreground line-clamp-2 text-xs">
+                                {skill.description}
+                              </span>
+                            )}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
             {controls}
           </div>
-          {working && !showStop && (
+          {working && !showStop && canQueue && steers && (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -551,11 +566,13 @@ export function Composer({
             onClick={() => (showStop ? onStop?.() : void send(false))}
             disabled={showStop ? false : !canSend}
             data-testid={showStop ? "code-stop" : "code-send"}
-            aria-label={showStop ? "Stop Shelley" : (submitLabel ?? (working ? "Steer" : "Send"))}
+            aria-label={
+              showStop ? `Stop ${name}` : (submitLabel ?? (working && steers ? "Steer" : "Send"))
+            }
             title={
               showStop
                 ? "Stop (⌘.)"
-                : working
+                : working && steers
                   ? "Steer the running turn (Enter)"
                   : `${submitLabel ?? "Send"} (Enter)`
             }
@@ -591,7 +608,11 @@ export function Composer({
           className="text-muted-foreground mt-1.5 truncate text-center text-[11px] leading-4 pointer-coarse:hidden"
           data-testid="code-composer-hint"
         >
-          {working ? "Enter steers · Alt+Enter queues · ⌘. stops" : hint}
+          {working
+            ? steers
+              ? `Enter steers${canQueue ? " · Alt+Enter queues" : ""} · ⌘. stops`
+              : "Enter queues for the end of this turn · ⌘. stops"
+            : hint}
         </p>
       )}
     </div>

@@ -237,7 +237,7 @@ describe("matchGuestRoute", () => {
     expect(matchGuestRoute("DELETE", "/bots/b1/messages/req-1")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/bots/b1/approvals/12")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/bots/b1/browser/vnc-ticket")).toEqual({ botId: "b1" });
-    expect(matchGuestRoute("POST", "/shelley/conversations")).toEqual({});
+    expect(matchGuestRoute("POST", "/code/threads")).toEqual({});
     expect(matchGuestRoute("POST", "/uploads")).toEqual({});
 
     expect(matchGuestRoute("PATCH", "/bots/b1")).toBeUndefined();

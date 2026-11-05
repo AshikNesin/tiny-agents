@@ -1,10 +1,11 @@
 /**
- * The Changes panel (issue #143): what Shelley changed in the conversation's
+ * The Changes panel (issue #143, ADR 0011): what the agent changed in the thread's
  * working directory — uncommitted changes or a recent commit (searchable),
  * every changed file as a card with its +/− and its diff, stacked in one
  * scroll (generated files folded). Selecting lines and pressing Comment puts
  * "`path:lines` " in the composer, so review feedback goes straight back to
- * Shelley as a steer.
+ * the agent as a steer. Diffs come from the thread's harness (capability
+ * `workspace.diffs`).
  */
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, FileDiff as FileDiffIcon, RefreshCw, X } from "lucide-react";
@@ -14,7 +15,7 @@ import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { shelleyApi, type GitDiff, type GitFile, type GitFileDiff } from "../../lib/shelley/api";
+import { codeApi, type GitDiff, type GitFile, type GitFileDiff } from "../../lib/code/api";
 import { FileDiff, type LineSelection } from "./UnifiedDiff";
 
 const STATUS_LETTER: Record<GitFile["status"], string> = {
@@ -29,13 +30,15 @@ const STATUS_TONE: Record<GitFile["status"], string> = {
 };
 
 export function ChangesPanel({
+  instanceId,
   cwd,
   refreshKey,
   onComment,
   onClose,
 }: {
+  instanceId: string;
   cwd: string;
-  /** Changes when Shelley's turn ends, to re-read the diff. */
+  /** Changes when the agent's turn ends, to re-read the diff. */
   refreshKey: unknown;
   onComment(text: string): void;
   onClose(): void;
@@ -45,7 +48,7 @@ export function ChangesPanel({
   const [files, setFiles] = useState<GitFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  // Re-read at most every 1.5 s while Shelley works (each message bumps the key).
+  // Re-read at most every 1.5 s while the agent works (each message bumps the key).
   const [settledKey, setSettledKey] = useState(refreshKey);
   useEffect(() => {
     const timer = setTimeout(() => setSettledKey(refreshKey), 1500);
@@ -55,8 +58,8 @@ export function ChangesPanel({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    shelleyApi
-      .diffs(cwd)
+    codeApi
+      .diffs(instanceId, cwd)
       .then((r) => {
         if (cancelled) return;
         const list = r.diffs ?? [];
@@ -74,14 +77,14 @@ export function ChangesPanel({
     return () => {
       cancelled = true;
     };
-  }, [cwd, settledKey, reload]);
+  }, [instanceId, cwd, settledKey, reload]);
 
   useEffect(() => {
     if (!diffs) return;
     let cancelled = false;
     setFiles(null);
-    shelleyApi
-      .diffFiles(diffId, cwd)
+    codeApi
+      .diffFiles(instanceId, diffId, cwd)
       .then((list) => {
         if (cancelled) return;
         const rows = Array.isArray(list) ? list : [];
@@ -93,7 +96,7 @@ export function ChangesPanel({
     return () => {
       cancelled = true;
     };
-  }, [diffs, diffId, cwd]);
+  }, [instanceId, diffs, diffId, cwd]);
 
   const selected = diffs?.find((d) => d.id === diffId);
   const totals = useMemo(
@@ -211,6 +214,7 @@ export function ChangesPanel({
                 key={`${diffId}:${file.path}`}
                 file={file}
                 diffId={diffId}
+                instanceId={instanceId}
                 cwd={cwd}
                 defaultOpen={openByDefault.has(file.path)}
                 reload={`${settledKey}:${reload}`}
@@ -234,6 +238,7 @@ export function ChangesPanel({
 function FileCard({
   file,
   diffId,
+  instanceId,
   cwd,
   defaultOpen,
   reload,
@@ -241,6 +246,7 @@ function FileCard({
 }: {
   file: GitFile;
   diffId: string;
+  instanceId: string;
   cwd: string;
   defaultOpen: boolean;
   reload: string;
@@ -254,8 +260,8 @@ function FileCard({
     if (!open) return;
     let cancelled = false;
     setError(null);
-    shelleyApi
-      .fileDiff(diffId, cwd, file.path)
+    codeApi
+      .fileDiff(instanceId, diffId, cwd, file.path)
       .then((d) => !cancelled && setDiff(d))
       .catch(
         (err: unknown) => !cancelled && setError(errorMessage(err, "Could not read the diff.")),
@@ -263,7 +269,7 @@ function FileCard({
     return () => {
       cancelled = true;
     };
-  }, [open, diffId, cwd, file.path, file.additions, file.deletions, reload]);
+  }, [open, instanceId, diffId, cwd, file.path, file.additions, file.deletions, reload]);
 
   const slash = file.path.lastIndexOf("/");
   const dir = slash >= 0 ? file.path.slice(0, slash + 1) : "";

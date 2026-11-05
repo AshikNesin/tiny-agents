@@ -19,7 +19,8 @@
       "@groot/ui": ["../../packages/ui/src/index.ts"],
       "@groot/shell/*": ["../../packages/shell/src/*"],
       "@groot/jobs/client": ["../../packages/jobs/src/client/index.ts"],
-      "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"]
+      "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"],
+      "@tiny-agents/code/contracts": ["../../packages/code/src/contracts/index.ts"]
     },
     "types": ["vite/client"]
   },

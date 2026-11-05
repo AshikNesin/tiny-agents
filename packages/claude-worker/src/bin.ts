@@ -8,11 +8,15 @@ import { requireSubscriptionLogin } from "./auth";
 import { createClaudeWorkerServer } from "./server";
 import { createSdkQueryFactory, type ClaudeSdkModule } from "./sdk";
 import { timingsFromEnv } from "./protocol";
+import { codingLimitsFromEnv } from "./coding-protocol";
+import type { CodingSdk } from "./coding-sdk";
 
 const token = process.env.CLAUDE_WORKER_TOKEN?.trim() ?? "";
 const port = Number(process.env.CLAUDE_WORKER_PORT ?? "8765");
 
-async function loadSdk(): Promise<ClaudeSdkModule> {
+type LoadedSdk = ClaudeSdkModule & Partial<Pick<CodingSdk, "getSessionMessages" | "forkSession">>;
+
+async function loadSdk(): Promise<LoadedSdk> {
   try {
     // Optional: installed on the worker VM, not in CI. A missing package throws here.
     const sdk = await import("@anthropic-ai/claude-agent-sdk");
@@ -37,6 +41,18 @@ async function main(): Promise<void> {
     console.warn(error instanceof Error ? error.message : error);
   });
   const sdk = await loadSdk();
+  const { getSessionMessages, forkSession } = sdk;
+  // Coding mode (the Code page) also needs the session helpers.
+  const coding: CodingSdk | undefined =
+    typeof getSessionMessages === "function" && typeof forkSession === "function"
+      ? {
+          // The same `query()`, called with Claude Code's own tools and streaming input.
+          query: sdk.query as unknown as CodingSdk["query"],
+          getSessionMessages,
+          forkSession,
+        }
+      : undefined;
+  if (!coding) console.warn("This Agent SDK has no getSessionMessages/forkSession: coding is off.");
   const server = await createClaudeWorkerServer({
     token,
     query: createSdkQueryFactory(sdk, process.env),
@@ -51,6 +67,7 @@ async function main(): Promise<void> {
     env: process.env,
     timings: timingsFromEnv(process.env),
     port: Number.isFinite(port) && port > 0 ? port : 8765,
+    ...(coding ? { coding: { sdk: coding, limits: codingLimitsFromEnv(process.env) } } : {}),
   });
   console.log(`claude-worker listening on ${server.url} (loopback only)`);
 }

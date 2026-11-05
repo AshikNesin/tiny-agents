@@ -43,6 +43,13 @@
       "when": 1793735704820,
       "tag": "0005_strange_iron_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793878112811,
+      "tag": "0006_eminent_hellion",
+      "breakpoints": true
     }
   ]
 }
