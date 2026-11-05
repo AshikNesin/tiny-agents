@@ -66,7 +66,7 @@ async function connect(url: string): Promise<Socket> {
       send({ ...body, requestId });
       return vi.waitFor(() => {
         const reply = messages.find(
-          (message) => message.type === "coding.reply" && message.requestId === requestId,
+          (message) => message.type === "reply" && message.requestId === requestId,
         );
         if (!reply) throw new Error("no reply yet");
         return reply;

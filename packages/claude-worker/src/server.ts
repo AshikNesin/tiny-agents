@@ -21,10 +21,10 @@ import {
   type CodingClientMessage,
   type CodingHelloResult,
   type CodingLimits,
-  type CodingResumeResult,
   type CodingWorkerMessage,
 } from "./coding-protocol";
 import type { CodingSdk } from "./coding-sdk";
+import { resumeResultOf, type EnvelopeFrame } from "./envelope";
 
 export interface ClaudeWorkerServerOptions {
   token: string;
@@ -54,7 +54,7 @@ export interface ClaudeWorkerServerOptions {
   };
 }
 
-type OutboundMessage = WorkerMessage | CodingWorkerMessage;
+type OutboundMessage = EnvelopeFrame | WorkerMessage | CodingWorkerMessage;
 
 export interface ClaudeWorkerServer {
   port: number;
@@ -163,7 +163,7 @@ export async function createClaudeWorkerServer(
     const send = (message: OutboundMessage) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
     };
-    send({ type: "welcome" });
+    send({ type: "welcome", bootId });
     const timer = setInterval(() => {
       if (now() - lastRx >= options.timings.silenceCloseMs) {
         ws.close(4408, "silence");
@@ -219,7 +219,7 @@ export async function createClaudeWorkerServer(
     const requestId = typeof rawId === "string" ? rawId : "";
     if (!message) {
       send({
-        type: "coding.reply",
+        type: "reply",
         requestId,
         ok: false,
         error: { code: "bad_message", message: "Message does not match the coding protocol." },
@@ -232,7 +232,7 @@ export async function createClaudeWorkerServer(
       }
       const result = await codingRequest(coding, message, send, ws);
       send({
-        type: "coding.reply",
+        type: "reply",
         requestId,
         ok: true,
         ...(result === undefined ? {} : { result }),
@@ -249,7 +249,7 @@ export async function createClaudeWorkerServer(
       }
     } catch (error) {
       send({
-        type: "coding.reply",
+        type: "reply",
         requestId,
         ok: false,
         error: {
@@ -324,16 +324,8 @@ export async function createClaudeWorkerServer(
         });
       case "coding.resume": {
         const session = sessions.get(message.sessionId);
-        if (!session) {
-          return { known: false, gap: false, firstSeq: 1, lastSeq: 0 } satisfies CodingResumeResult;
-        }
-        wire(session);
-        return {
-          known: true,
-          gap: message.afterSeq < session.firstSeq - 1,
-          firstSeq: session.firstSeq,
-          lastSeq: session.lastSeq,
-        } satisfies CodingResumeResult;
+        if (session) wire(session);
+        return resumeResultOf(session, message.afterSeq);
       }
       case "coding.close":
         sessions.get(message.sessionId)?.close();
@@ -373,6 +365,14 @@ export async function createClaudeWorkerServer(
     }
     if (message.type === "pong") return;
     if (message.type === "resume") {
+      if (message.requestId) {
+        send({
+          type: "reply",
+          requestId: message.requestId,
+          ok: true,
+          result: resumeResultOf(sessions.get(message.sessionId), message.afterSeq),
+        });
+      }
       for (const event of sessions.replay(message.sessionId, message.afterSeq)) {
         send({ type: "event", sessionId: event.sessionId, seq: event.seq, event: event.event });
       }

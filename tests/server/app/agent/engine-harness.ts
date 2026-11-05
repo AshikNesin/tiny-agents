@@ -201,6 +201,8 @@ export interface FakeClaudeWorker {
   /** Hold the next turns until `release()`: the conversation stays busy. */
   hold(): void;
   release(): void;
+  /** The worker process restarts: its sessions and running turns are gone, the socket drops. */
+  restart(): void;
 }
 
 /** The Claude worker on the same script, behind a fake socket. */
@@ -212,6 +214,7 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
   let held: (() => void)[] | undefined;
   let socket: FakeSocket | undefined;
   let nextTool = 0;
+  let boot = 1;
 
   const publish = (sessionId: string, event: Record<string, unknown>) => {
     const next = (seq.get(sessionId) ?? 0) + 1;
@@ -226,8 +229,11 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
     tools?: { name: string }[];
   }) => {
     const { sessionId, turnId } = message;
+    const started = boot;
     turns.push({ sessionId, text: message.text, tools: (message.tools ?? []).map((t) => t.name) });
     if (held) await new Promise<void>((resolve) => held?.push(resolve));
+    // A restart while the turn was held: it is gone with the old worker.
+    if (boot !== started) return;
     publish(sessionId, { type: "session", claudeSessionId: `claude-${sessionId}` });
     const request = toolRequest(message.text);
     if (!request) {
@@ -260,6 +266,17 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
       send(data) {
         const message = JSON.parse(data) as Record<string, unknown> & { type: string };
         if (message.type === "turn") void runTurn(message as never);
+        if (message.type === "resume" && typeof message.requestId === "string") {
+          const lastSeq = seq.get(String(message.sessionId));
+          const result =
+            lastSeq === undefined
+              ? { known: false, gap: false, firstSeq: 1, lastSeq: 0 }
+              : { known: true, gap: false, firstSeq: 1, lastSeq };
+          created.emit(
+            "message",
+            JSON.stringify({ type: "reply", requestId: message.requestId, ok: true, result }),
+          );
+        }
         if (message.type === "tool_result") {
           results.push({
             toolUseId: String(message.toolUseId),
@@ -271,7 +288,9 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
         }
       },
       close() {
+        if (created.readyState === 3) return;
         created.readyState = 3;
+        if (socket === created) socket = undefined;
         created.emit("close");
       },
     };
@@ -279,7 +298,7 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
     setTimeout(() => {
       created.readyState = 1;
       created.emit("open");
-      created.emit("message", JSON.stringify({ type: "welcome" }));
+      created.emit("message", JSON.stringify({ type: "welcome", bootId: `boot-${boot}` }));
     }, 0);
     return created;
   };
@@ -305,6 +324,15 @@ export function fakeClaudeWorker(): FakeClaudeWorker {
       const queued = held ?? [];
       held = undefined;
       for (const resume of queued) resume();
+    },
+    restart: () => {
+      boot += 1;
+      seq.clear();
+      waiting.clear();
+      const queued = held ?? [];
+      held = undefined;
+      for (const resume of queued) resume();
+      socket?.close();
     },
   };
 }
