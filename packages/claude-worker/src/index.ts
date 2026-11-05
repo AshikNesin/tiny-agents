@@ -64,3 +64,16 @@ export {
   type ClaudeWorkerServer,
   type ClaudeWorkerServerOptions,
 } from "./server";
+export * from "./coding-protocol";
+export {
+  buildCodingSdkOptions,
+  type CodingCanUseTool,
+  type CodingPermissionResult,
+  type CodingQuery,
+  type CodingQueryOptions,
+  type CodingSdk,
+  type CodingSdkMessage,
+  type CodingSdkUserMessage,
+} from "./coding-sdk";
+export { CodingBook, CodingError, CodingSession, questionAnswers } from "./coding";
+export { isGenerated, repoRelative, runCodingOp, safeFilename } from "./coding-ops";

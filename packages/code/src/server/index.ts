@@ -15,3 +15,4 @@ export {
 } from "./errors";
 export * as shelley from "../drivers/shelley";
 export { createShelleyHarness, type ShelleyHarness } from "../drivers/shelley";
+export { createClaudeCodeHarness } from "../drivers/claude-code";
