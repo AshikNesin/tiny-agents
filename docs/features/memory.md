@@ -44,16 +44,19 @@ change, so provider prompt caching survives between captures.
 
 ## Capture
 
-`memories.capture.ts` + `memories.runner.ts`. An `onActivity` listener arms a
-per-conversation debounce; 2 minutes quiet or 6 idle transitions (any reply
-completing, including peer deliveries — extraction still filters to
-owner-authored turns) fires one gateway side-call (`MEMORY_CAPTURE_MODEL`
-when set and known to the registry, else the bot's own `modelId`, including
-custom providers). The override is read at boot, not lazily from `process.env`.
+`memories.capture.ts` + `memories.runner.ts`. Memory capture is the last step
+of the settled pipeline (`bots.settled.ts`): each settled Turn of a bot's own
+chat with memory on arms a per-conversation debounce; 2 minutes quiet or 6
+settled Turns (any reply completing, including peer deliveries — extraction
+still filters to owner-authored turns) fires one side-call through the
+side-caller (`side-call.ts`: `MEMORY_CAPTURE_MODEL` when set and known to the
+registry, else the bot's own `modelId`, including custom providers; aborted
+after 60 seconds). The override is read at boot, not lazily from `process.env`.
 Captures never overlap per conversation. Skip rules run
-before any model call: memory off, no resolvable model (faux mode disables capture),
-trivial window (advances the watermark without a call), no owner turns since
-the watermark. Peer deliveries are not memory sources — only owner-authored
+before any model call: no side-caller (faux mode disables capture), memory
+off, no owner turns since the watermark, trivial window (advances the
+watermark without a call). A bot with no resolvable model gets no call; the
+side-caller logs it and the window retries. Peer deliveries are not memory sources — only owner-authored
 turns count — and a routine's own conversation is never captured (its runs
 never enter the chat, see [routines](./routines.md)). One capture reads at most the newest
 24 000 characters of whole lines; when the cap applies (a long backlog, or a
@@ -66,11 +69,12 @@ toward the trivial threshold.
 The extraction prompt carries the anti-junk contract (owner's words only,
 third-person single sentences, no secrets or quoted text, `until` dates,
 `supersedesIds` for contradictions), includes today's date for computing
-temporary expiries, and returns JSON. `applyExtraction`
-applies it in code: trimmed, case-insensitive text dedupe against all rows
-including tombstones (a deleted fact is never re-added), supersession
-validated to same-bot rows, watermark bump — one transaction, with budget
-archival of the oldest active rows inside the same commit. Unparseable output
+temporary expiries, and returns JSON. The memory ledger
+(`memories.ledger.ts`, see Memory ledger in GLOSSARY.md) applies it in code:
+trimmed, case-insensitive text dedupe against all rows including tombstones
+(a deleted fact is never re-added), supersession of the same bot's active
+rows only, expiry, budget archival of the oldest active rows and the
+watermark bump — one transaction. Unparseable output
 returns null and leaves the watermark unchanged, so the next capture retries.
 The prompt also lists the 30 most recently deleted memories as "never add
 these again, reworded or not": exact-text dedupe only blocks a literal
@@ -87,8 +91,8 @@ waiting for background capture. It uses the existing approval card (default
 **Ask**); **Always allow** permits future saves for that bot without a prompt.
 The tool must succeed before the bot can claim the fact was saved.
 
-Saves use the same transaction, tombstone dedupe, and active-row budget as
-background capture, with `source: capture` (“From chat”). They do not move
+Saves go through the same memory ledger as background capture (tombstone
+dedupe, the active-row budget, one transaction), with `source: capture` (“From chat”). They do not move
 the capture watermark. Disabling memory refuses tool writes as well as
 capture and injection. Existing read-only `MemoryStore` adapters remain
 supported; they do not expose the tool.
@@ -117,8 +121,14 @@ the API retains `until` support for compatibility.
 
 - `GET /api/v1/bots/:id/memories?includeArchived=` — list (default hides
   archived and expired)
-- `POST /api/v1/bots/:id/memories` — manual add (`source: manual`)
-- `PATCH /api/v1/memories/:id` — edit, or `restore: true` to un-supersede
+- `POST /api/v1/bots/:id/memories` — manual add (`source: manual`). It goes
+  through the memory ledger too: text the bot already has active returns that
+  memory; text of a deleted, archived, expired or superseded one brings that
+  row back as a new active memory (the owner may undo their own delete, which
+  capture and chat never do). Never a second row with the same text.
+- `PATCH /api/v1/memories/:id` — edit, or `restore: true` to un-supersede;
+  a restored memory is kept even when the budget is full (the oldest other
+  active memory is archived instead)
 - `DELETE /api/v1/memories/:id` — tombstone, not a row removal
 - `PATCH /api/v1/bots/:id` — `memoryEnabled`
 
