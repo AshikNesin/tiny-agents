@@ -19,7 +19,7 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import type { ComputerSessions } from "@tiny-agents/agent";
+import type { ComputerSessions } from "@tiny-agents/agent/computer";
 import { knownProfile, listProfiles } from "./profiles";
 import { computerSetupHint, getComputerSessions } from "./computer.sessions";
 import { issueDesktopVncTicket } from "./computer.vnc";

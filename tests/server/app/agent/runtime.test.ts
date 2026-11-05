@@ -9,17 +9,19 @@ import {
   chatState,
   deriveChat,
   diffChat,
+  queuedOf,
+  CHAT_USER_ENTRY,
+  type RawChat,
+} from "../../../../packages/agent/src/transcript";
+import {
   finishedReplyTo,
   pageBefore,
-  queuedOf,
   windowChat,
-  CHAT_USER_ENTRY,
-  StoreLockedError,
   type ChatEvent,
   type ChatMessage,
   type ChatState,
-  type RawChat,
 } from "../../../../packages/agent/src/index";
+import { StoreLockedError } from "../../../../packages/agent/src/lock";
 import {
   fauxAssistantMessage,
   openTestRuntime,

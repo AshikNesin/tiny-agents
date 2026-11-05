@@ -14,7 +14,7 @@ import {
   type HostKeyStore,
   type SandboxConnection,
   type SshEndpoint,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/agent/sandbox";
 
 type Env = Readonly<Record<string, string | undefined>>;
 

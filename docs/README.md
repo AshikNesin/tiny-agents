@@ -72,6 +72,32 @@ Lookup material.
 | [`adr/`](./adr/README.md)                                  | Architecture decision records (the _why_)            |
 | [`../scripts/demo/README.md`](../scripts/demo/README.md)   | tiny-agents: the demo video and how to re-record it  |
 
+## `@tiny-agents/agent` entry points
+
+`packages/agent` is the only module that touches pi-durable. Its root is that
+boundary; the areas that do not use pi-durable have their own subpaths, so a
+change to the terminal or a transport does not churn the root. Each subpath
+is an entry file under `packages/agent/src/subpaths/`, listed in the
+package's `exports` and in the root `tsconfig.json` `paths` (which the server
+build also resolves through). `/sandbox`, `/terminal` and `/computer` load no
+pi-durable code. `/browser` and `/claude-worker` still reach it indirectly:
+the browser's URL guard imports `checkPublicUrl` from the web toolkit.
+
+| Import                             | What it holds                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `@tiny-agents/agent`               | `AgentRuntime`, the conversation and chat types, the toolkits and capabilities, vault and MCP types, the gateway catalog |
+| `@tiny-agents/agent/sandbox`       | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint                                          |
+| `@tiny-agents/agent/terminal`      | `createTerminalService`, its errors, tmux session names                                                                  |
+| `@tiny-agents/agent/browser`       | Browser sessions, the Chromium and remote CDP transports (the browser toolkit stays on the root)                         |
+| `@tiny-agents/agent/computer`      | Desktop sessions, the X11 transport, desktop settings parsers (the computer toolkit stays on the root)                   |
+| `@tiny-agents/agent/claude-worker` | `createSandboxClaudeWorker` and its locator types (ADR 0010), the Claude sign-in shell line                              |
+| `@tiny-agents/agent/peer-envelope` | Peer envelope parser; client-safe, imported by the client and the server                                                 |
+| `@tiny-agents/agent/testing`       | The faux-provider test runtime                                                                                           |
+
+The root exports only what something outside the package imports. Tests of
+the package's internals import the source module directly
+(`tests/server/app/agent/*`).
+
 ## API surface
 
 | Prefix                                                                        | Purpose                                                | Auth                                   |
