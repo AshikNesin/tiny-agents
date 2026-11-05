@@ -89,13 +89,20 @@ A model id `claude-code/<model>` (the picker labels these "uses your
 Claude plan") selects `ClaudeCodeEngine`. Every other bot stays on the
 pi-durable harness.
 
-The app opens one WebSocket to the worker. The worker keeps one Claude
-Code `query()` per conversation and feeds later turns with
-`streamInput()`. After a restart it passes `resume: sessionId`. The
-socket pings every 20 seconds and closes after 60 seconds of silence.
-Reconnect waits from 1 second up to 30. Events carry a per-session
-sequence number; the worker keeps about 1000 of them so a reconnect
-continues. Tool calls are idempotent on `tool_use_id`. A tool result that
+The app opens one WebSocket to the worker, through the same Worker
+connection (`@tiny-agents/claude-worker/client`) the Claude Code harness
+uses. The worker keeps one Claude Code `query()` per conversation and
+feeds later turns with `streamInput()`. After a restart it passes
+`resume: sessionId`. The socket pings every 20 seconds and closes after 60
+seconds of silence. Reconnect waits from 1 second up to 30 and finds the
+worker again each time (the tunnel's local port can change, and a worker
+that is gone is started again). Events carry a per-session sequence
+number; the worker keeps about 1000 of them so a reconnect continues.
+The worker's `welcome` carries a boot id: when it changes, the worker
+restarted, and a turn it was running ends with "The Claude worker
+restarted" instead of waiting forever. Send the message again; the
+conversation resumes the same Claude session. A turn still waiting to be
+sent goes to the new worker. Tool calls are idempotent on `tool_use_id`. A tool result that
 does not arrive in 120 seconds becomes an error result. An idle Claude
 process is evicted after 15 minutes. A process older than 6 hours is
 recycled and resumed. At most two Claude processes are live, and one turn
