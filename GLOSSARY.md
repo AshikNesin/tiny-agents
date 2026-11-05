@@ -33,16 +33,28 @@ _Avoid_: exchange, round (a turn has several tool rounds)
 One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` owns every state change and the card and push that follow.
 _Avoid_: job, execution
 
+**Harness**:
+A coding agent tiny-agents drives but does not implement — Shelley, Claude Code — plugged into the Code page through one adapter contract (`HarnessInstance`, `packages/code`). An instance is one configured harness (`shelley`, `claude-code`); a thread is addressed `<instance>:<native id>`. The harness owns the transcript; tiny-agents keeps only the thread index (ADR 0011).
+_Avoid_: provider (model providers), backend, engine (bot engines)
+
+**Capability**:
+What a harness really does (steer, approvals, diffs, …), declared by its driver. The Code page shows a control only when the thread's harness has its capability; it never fakes one.
+_Avoid_: feature flag
+
 **Shelley**:
-The owner's coding agent on another machine ([boldsoftware/shelley](https://github.com/boldsoftware/shelley)). tiny-agents is a client of its official API (Code page, `shelley_*` tools); it never runs or stores coding-agent state (ADR 0009).
+The owner's coding agent on another machine ([boldsoftware/shelley](https://github.com/boldsoftware/shelley)), one harness of the Code page and the default for bot hand-offs. tiny-agents is a client of its official API (ADR 0009, ADR 0011).
 _Avoid_: coder, coding bot
 
+**Claude Code harness**:
+Claude Code on the sandbox, driven through the Claude worker's coding mode (ADR 0012): built-in tools on, a plain working directory, `acceptEdits` by default. Not the Claude plan bot engine, which keeps Claude Code's tools off (ADR 0008).
+_Avoid_: Claude engine (that is the bot engine)
+
 **Hand-off**:
-A bot giving coding work to Shelley with `shelley_start`: a `shelley_handoffs` row whose finish is delivered once into the bot's chat as a reply from Shelley.
+A bot giving coding work to a harness with `code_start` (or `shelley_start`): a `code_handoffs` row whose finish is delivered once into the bot's chat as a reply from that harness.
 _Avoid_: job, delegation
 
 **Steer**:
-A message sent to Shelley while its turn runs: Shelley injects it into that turn. Queue holds a message for when the turn ends instead.
+A message sent to a harness while its turn runs: it goes into that turn. Queue holds a message for when the turn ends instead.
 _Avoid_: interrupt (Stop interrupts)
 
 **Vault use**:
