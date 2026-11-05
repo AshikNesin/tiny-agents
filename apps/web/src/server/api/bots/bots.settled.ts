@@ -17,6 +17,7 @@
  */
 import { logger } from "@groot/core/logger";
 import type { AgentRuntime, ChatState } from "@tiny-agents/agent";
+import { conversationOwner, type ConversationOwner } from "./bots.owner";
 
 /** The conversation's chat state, read once by whoever reacts to it settling. */
 export type ChatRead = () => Promise<ChatState>;
@@ -25,6 +26,8 @@ export interface SettledConversation {
   conversationId: number;
   /** Its chat state, read on first call and shared by every later step. */
   chat: ChatRead;
+  /** Who is behind it (a bot's chat, a routine's), looked up on first call and shared. */
+  owner: () => Promise<ConversationOwner | undefined>;
   /** Epoch ms when the reply started (the busy flip); unknown for one that was running at boot. */
   startedAt?: number;
 }
@@ -43,9 +46,11 @@ export async function settle(
   startedAt?: number,
 ): Promise<void> {
   let read: Promise<ChatState> | undefined;
+  let owner: Promise<ConversationOwner | undefined> | undefined;
   const settled: SettledConversation = {
     conversationId,
     chat: () => (read ??= rt.readChat(conversationId)),
+    owner: () => (owner ??= conversationOwner(conversationId)),
     ...(startedAt !== undefined ? { startedAt } : {}),
   };
   for (const step of steps) {

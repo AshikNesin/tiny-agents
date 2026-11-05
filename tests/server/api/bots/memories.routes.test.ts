@@ -121,6 +121,55 @@ describe("Memories API routes", () => {
     expect(rows.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
   });
 
+  it("follows the ledger's rules: one row per text, and the owner may add a deleted one back", async () => {
+    const botId = await seedBot(app);
+    const first = await addMemory(app, botId, { text: "Works at exe.dev", category: "fact" });
+    const id = first.body.data!.memory.id;
+    const again = await addMemory(app, botId, { text: " works at EXE.dev ", category: "fact" });
+    expect(again.status).toBe(201);
+    expect(again.body.data!.memory).toMatchObject({ id, text: "Works at exe.dev" });
+
+    await api(app, `/api/v1/memories/${id}`, { method: "DELETE", token });
+    const back = await addMemory(app, botId, { text: "Works at exe.dev", category: "fact" });
+    expect(back.body.data!.memory).toMatchObject({ id, status: "active", source: "manual" });
+    expect(await db.$count(memories, eq(memories.botId, botId))).toBe(1);
+    expect((await listMemories(app, botId)).body.data!.memories).toHaveLength(1);
+  });
+
+  it("restores an archived memory and keeps it past a full budget", async () => {
+    const botId = await seedBot(app);
+    await db.insert(memories).values({
+      botId,
+      text: "Archived long ago",
+      category: "fact",
+      status: "archived",
+      source: "manual",
+      createdAt: new Date(10),
+    });
+    await db.insert(memories).values(
+      Array.from({ length: 100 }, (_, i) => ({
+        botId,
+        text: `Fact number ${i}`,
+        category: "fact",
+        source: "manual",
+        createdAt: new Date(1_000 + i),
+      })),
+    );
+    const archived = await db.query.memories.findFirst({
+      where: eq(memories.text, "Archived long ago"),
+    });
+    const restored = await api<{ memory: { status: string } }>(
+      app,
+      `/api/v1/memories/${archived!.id}`,
+      { method: "PATCH", json: { restore: true }, token },
+    );
+    expect(restored.status).toBe(200);
+    expect(restored.body.data!.memory.status).toBe("active");
+    const rows = (await listMemories(app, botId, "?includeArchived=true")).body.data!.memories;
+    expect(rows.filter((m) => m.status === "active")).toHaveLength(100);
+    expect(rows.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
+  });
+
   it("flips expired rows out of the active list", async () => {
     const botId = await seedBot(app);
     await db.insert(memories).values({

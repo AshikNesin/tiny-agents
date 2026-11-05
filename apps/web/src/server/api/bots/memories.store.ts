@@ -12,15 +12,8 @@
  * owner set the tool to Always allow, since a planted memory would reach
  * every later prompt.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
-import { db, memories } from "../../db";
-import {
-  CATEGORY_ORDER,
-  extractedMemorySchema,
-  isExpired,
-  type MemoryCategory,
-} from "./memories.domain";
-import { applyExtraction } from "./memories.capture";
+import { CATEGORY_ORDER, extractedMemorySchema, type MemoryCategory } from "./memories.domain";
+import { memoryLedger } from "./memories.ledger";
 import { getAgentRuntime } from "./bots.runtime";
 import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
 import type { MemoryLine, MemoryStore } from "@tiny-agents/agent";
@@ -59,7 +52,8 @@ export function createMemoryStore(
       const bot = await writable(conversationId);
       if (typeof bot === "string") return { status: bot };
       const item = extractedMemorySchema.parse({ ...input, confidence: 1 });
-      const result = await applyExtraction(bot.id, [item]);
+      // No watermark: background capture still reads this turn.
+      const result = await memoryLedger(bot.id).add([item], { source: "capture" });
       return { status: result.created > 0 ? "saved" : "duplicate" };
     },
 
@@ -68,29 +62,14 @@ export function createMemoryStore(
       if (typeof bot === "string") return { status: bot, removed: [] };
       const wanted = [...new Set(wordsOf(input.text))].filter((w) => !GENERIC_WORDS.has(w));
       if (wanted.length === 0) return { status: "vague", removed: [] };
-      const active = await db
-        .select({ id: memories.id, text: memories.text })
-        .from(memories)
-        .where(and(eq(memories.botId, bot.id), eq(memories.status, "active")))
-        .orderBy(asc(memories.createdAt));
-      const matches = active.filter((m) => {
+      const ledger = memoryLedger(bot.id);
+      const matches = (await ledger.active()).filter((m) => {
         const own = new Set(wordsOf(m.text));
         return wanted.every((w) => own.has(w));
       });
       if (matches.length === 0) return { status: "none", removed: [] };
       // A tombstone, as the Memory page's delete: never re-added by capture.
-      await db
-        .update(memories)
-        .set({ status: "deleted" })
-        .where(
-          and(
-            inArray(
-              memories.id,
-              matches.map((m) => m.id),
-            ),
-            eq(memories.status, "active"),
-          ),
-        );
+      await ledger.tombstone(matches.map((m) => m.id));
       return { status: "forgotten", removed: matches.map((m) => m.text) };
     },
 
@@ -98,16 +77,7 @@ export function createMemoryStore(
       // A routine's turns read its bot's memories too; only writes are refused.
       const owner = await conversationOwner(conversationId);
       if (!owner?.bot.memoryEnabled) return [];
-      const rows = await db.query.memories.findMany({
-        where: eq(memories.botId, owner.bot.id),
-        orderBy: (m, { asc }) => [asc(m.createdAt)],
-      });
-      const now = new Date();
-      return rows
-        .filter(
-          (m) =>
-            m.status === "active" && !isExpired({ until: m.until?.toISOString() ?? null }, now),
-        )
+      return (await memoryLedger(owner.bot.id).active())
         .map((m) => ({
           text: m.text,
           category: m.category,

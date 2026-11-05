@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { api, createTestApp } from "../helpers";
 import { db, botChats } from "../../../apps/web/src/server/db";
 import { setChatTitler } from "../../../apps/web/src/server/api/bots/chats.title";
+import type { SideCaller } from "../../../apps/web/src/server/api/bots/side-call";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
 import type { AgentRuntime } from "../../../packages/agent/src/index";
 import {
@@ -250,14 +251,10 @@ describe("Past chats", () => {
   });
 
   it("replaces the provisional title with the title model's", async () => {
-    const completeSimple = vi.fn().mockResolvedValue({
-      stopReason: "stop",
-      content: [{ type: "text", text: '"Goa trip: December flights."' }],
-    });
-    setChatTitler({
-      models: { getModel: vi.fn(() => ({ id: "title-model" })), completeSimple } as never,
-      hasModel: () => true,
-    });
+    const complete = vi
+      .fn<SideCaller["complete"]>()
+      .mockResolvedValue('"Goa trip: December flights."');
+    setChatTitler({ sideCaller: { complete } });
     const bot = await createBot();
     await converse(bot.id, "Find flights to Goa");
 
@@ -266,8 +263,7 @@ describe("Past chats", () => {
     await vi.waitFor(async () => {
       expect((await listChats(bot.id))[0]).toMatchObject({ title: "Goa trip: December flights" });
     });
-    expect(completeSimple).toHaveBeenCalledOnce();
-    // The call carries an abort signal, so an overrun is stopped, not left running.
-    expect(completeSimple.mock.calls[0]?.[2]).toMatchObject({ signal: expect.any(AbortSignal) });
+    expect(complete).toHaveBeenCalledOnce();
+    expect(complete.mock.calls[0]?.[0].user).toContain("Find flights to Goa");
   });
 });

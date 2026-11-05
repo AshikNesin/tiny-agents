@@ -42,6 +42,7 @@ import { startRoutinesWatcher } from "./api/routines/routines.watcher";
 import { createMemoryCapture } from "./api/bots/memories.capture";
 import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
+import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
@@ -154,10 +155,14 @@ async function main(): Promise<void> {
   const add = lifecycle.add;
 
   let runtime!: AgentRuntime;
+  // Side-calls (memory capture, chat titles) run on the opened runtime's
+  // models. Faux mode makes none: no capture, first-message titles.
+  let sideCaller: SideCaller | undefined;
   add({
     name: "agent runtime",
     start: async () => {
       runtime = await openRuntime();
+      sideCaller = fauxMode() ? undefined : createSideCaller(runtime);
     },
     stop: () => closeAgentRuntime(),
   });
@@ -226,20 +231,16 @@ async function main(): Promise<void> {
     start: async () => {
       const deliveries = createDeliveries(runtime);
       const routineRuns = startRoutinesWatcher(runtime);
-      memoryCapture = fauxMode()
-        ? undefined
-        : createMemoryCapture({
+      memoryCapture = sideCaller
+        ? createMemoryCapture({
             captureNow: (conversationId) =>
               captureConversation(conversationId, {
-                sideCall: {
-                  models: runtime.models,
-                  hasModel: (id) => runtime.hasModel(id),
-                  modelId: appEnv().MEMORY_CAPTURE_MODEL,
-                  provider: runtime.provider,
-                },
+                sideCaller,
+                model: appEnv().MEMORY_CAPTURE_MODEL,
                 readTranscript: async (id) => (await runtime.readChat(id)).messages,
               }),
-          });
+          })
+        : undefined;
       unsubscribeSettled = onConversationSettled(runtime, [
         { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
         {
@@ -281,13 +282,7 @@ async function main(): Promise<void> {
   add({
     name: "chat titles",
     start: () => {
-      if (fauxMode()) return;
-      setChatTitler({
-        models: runtime.models,
-        hasModel: (id) => runtime.hasModel(id),
-        modelId: appEnv().CHAT_TITLE_MODEL,
-        provider: runtime.provider,
-      });
+      setChatTitler(sideCaller && { sideCaller, model: appEnv().CHAT_TITLE_MODEL });
     },
   });
 
