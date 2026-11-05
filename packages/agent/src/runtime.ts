@@ -52,6 +52,7 @@ import {
 import { PiEngine } from "./engines/pi";
 import { claudeCodeBareModel, engineKindForConfig } from "./engine";
 import { claudePlanModels } from "./engines/claude-code/catalog";
+import type { WebSocketLike } from "./engines/claude-code/client";
 import { ClaudeCodeEngine, type ClaudeSessionSync } from "./engines/claude-code/engine";
 import type {
   ClaudeAccountStatus,
@@ -172,6 +173,8 @@ export interface AgentRuntimeOptions {
    * Where Claude plan turns run: the sandbox worker the app sets up over SSH.
    */
   claudeWorker?: ClaudeWorkerLocator;
+  /** Tests: open a fake worker socket instead of a WebSocket to the sandbox worker. */
+  claudeConnect?: (url: string, token: string) => WebSocketLike;
 }
 
 /**
@@ -237,12 +240,14 @@ export class AgentRuntime {
     envSource: Readonly<Record<string, string | undefined>> = process.env,
     persistPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
+    claudeConnect?: (url: string, token: string) => WebSocketLike,
   ) {
     this.#pi = new PiEngine(harness);
     this.#claude = new ClaudeCodeEngine({
       env: () => process.env,
       persistPath,
       worker: claudeWorker,
+      ...(claudeConnect ? { connect: claudeConnect } : {}),
       onBusy: (ref, busy) => this.#setClaudeBusy(ref, busy),
       execute: (ref, call) => this.#executeClaudeTool(ref, call),
     });
@@ -332,6 +337,7 @@ export class AgentRuntime {
         envSource,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
+        options.claudeConnect,
       );
       opened.#review = review;
       opened.#yoloGate = yolo;
