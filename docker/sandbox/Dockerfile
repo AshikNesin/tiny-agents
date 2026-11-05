@@ -152,6 +152,20 @@ RUN if [ "$INSTALL_SHELLEY" = 1 ]; then \
       || echo "Shelley was not installed at build time; the entrypoint will install it on start." >&2; \
     fi
 
+# The prerequisite CLIs: gh (GitHub's CLI, from its signed apt repository)
+# and codex (OpenAI's Codex CLI, from its GitHub release). Like Shelley, a
+# failed download doesn't fail the build: the entrypoint checks for both on
+# every start and installs whichever is missing. CODEX_VERSION is a release
+# tag or `latest`; build with INSTALL_CLIS=0 to leave both to the first start
+# (unless SANDBOX_CLIS=0).
+ARG INSTALL_CLIS=1
+ARG CODEX_VERSION=latest
+COPY --chmod=755 install-clis.sh /usr/local/lib/tiny-agents/install-clis
+RUN if [ "$INSTALL_CLIS" = 1 ]; then \
+      /usr/local/lib/tiny-agents/install-clis "$CODEX_VERSION" \
+      || echo "gh or codex was not installed at build time; the entrypoint will install it on start." >&2; \
+    fi
+
 COPY sshd_config /etc/ssh/sshd_config
 COPY --chmod=755 entrypoint.sh /usr/local/bin/sandbox-entrypoint
 

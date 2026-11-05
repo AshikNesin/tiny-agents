@@ -67,7 +67,7 @@ function probe(): Promise<string> {
     client
       .on("ready", () => {
         client.exec(
-          "echo \"$(whoami) on $(. /etc/os-release && echo $PRETTY_NAME)\"; tmux -V; google-chrome-stable --version; sudo -n true && echo 'sudo ok'",
+          'echo "$(whoami) on $(. /etc/os-release && echo $PRETTY_NAME)"; tmux -V; google-chrome-stable --version; for t in gh codex; do if command -v $t >/dev/null; then $t --version | head -n 1; else echo "$t: installing (see ~/.tiny-agents/install-clis.log)"; fi; done; sudo -n true && echo \'sudo ok\'',
           (error, channel) => {
             if (error) return reject(error);
             let out = "";

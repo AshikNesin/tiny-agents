@@ -20,6 +20,7 @@ tiny-agents-sandbox container (Debian 13, user exedev, passwordless sudo)
   ├─ Browser: Google Chrome (Chromium on arm64) on an Xtigervnc display (CDP + VNC via SSH tunnels)
   ├─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
   ├─ Claude Code: Node, the Agent SDK and the CLI, preinstalled for the Claude plan engine
+  ├─ CLIs: gh and codex, installed at build time or on the first start
   └─ Shelley: a web-based coding agent, started with the container on 127.0.0.1:9000
 ```
 
@@ -108,6 +109,23 @@ the container starts it on every start, as `exedev`, at
 
 Shelley has no login of its own, so like SSH it is published on `127.0.0.1`
 only. Anyone who can reach that port can run commands as `exedev`.
+
+## gh and codex
+
+The image also installs two command-line tools, for bots' commands and your
+own shell (`pnpm sandbox:shell`):
+
+- **gh**, [GitHub's CLI](https://cli.github.com), from GitHub's signed apt
+  repository (`gh auth login` once; the login lives on the `home` volume).
+- **codex**, [OpenAI's Codex CLI](https://github.com/openai/codex), the
+  latest release's binary at `/usr/local/bin/codex` (`codex login` once).
+
+As with Shelley, a failed download doesn't fail the build: on every start the
+container checks for both and installs whichever is missing, in the
+background, logging to `~/.tiny-agents/install-clis.log`. A copy you put in
+`~/.local/bin` counts as installed. `SANDBOX_CODEX_VERSION` pins the Codex
+release tag (default `latest`); `--build-arg INSTALL_CLIS=0` leaves both to
+the first start; `SANDBOX_CLIS=0` turns off the start-up check.
 
 ## Mounting host files
 
