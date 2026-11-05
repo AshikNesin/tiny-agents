@@ -66,10 +66,11 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
+    // The key predates the harness layer (ADR 0011); kept so saved preferences still apply.
     event: "shelley.update",
-    label: "Shelley updates",
+    label: "Code updates",
     description:
-      "A Shelley conversation you follow finished, failed or messaged you while you were away.",
+      "A coding agent's conversation you follow (Shelley, Claude Code) finished, failed or asked for you while you were away.",
     category: "notify",
     defaultEnabled: true,
   },
@@ -321,30 +322,30 @@ export function runLongDone(
   };
 }
 
-/** What a followed Shelley conversation did while nobody watched it (issue #143). */
-export type ShelleyUpdateKind = "finished" | "failed" | "message";
+/** What a followed Code thread did while nobody watched it (issue #143, ADR 0011). */
+export type CodeUpdateKind = "finished" | "failed" | "message";
 
-export function shelleyUpdate(
-  conversation: { id: string; title: string },
-  kind: ShelleyUpdateKind,
+export function codeUpdate(
+  thread: { id: string; title: string; harness: string },
+  kind: CodeUpdateKind,
   text: string | undefined,
-  at: number,
+  at: number | string,
 ): Notification {
   const title =
     kind === "finished"
-      ? `✅ Shelley finished ${conversation.title}`
+      ? `✅ ${thread.harness} finished ${thread.title}`
       : kind === "failed"
-        ? `⚠️ Shelley hit an error in ${conversation.title}`
-        : `💬 Shelley: ${conversation.title}`;
+        ? `⚠️ ${thread.harness} hit an error in ${thread.title}`
+        : `💬 ${thread.harness}: ${thread.title}`;
   return {
     event: "shelley.update",
     category: "notify",
     title,
     message: scrubText(text) ?? (kind === "finished" ? "The turn ended." : "Open it to see why."),
-    path: `/code/${conversation.id}`,
+    path: `/code/${encodeURIComponent(thread.id)}`,
     urlTitle: "Open in Code",
     priority: kind === "message" ? 0 : -1,
-    dedupeKey: `shelley:${conversation.id}:${kind}:${at}`,
+    dedupeKey: `code:${thread.id}:${kind}:${at}`,
   };
 }
 

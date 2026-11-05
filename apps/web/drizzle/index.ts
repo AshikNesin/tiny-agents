@@ -6,6 +6,7 @@ import m2 from "./0002_lumpy_gargoyle.sql";
 import m3 from "./0003_melodic_oracle.sql";
 import m4 from "./0004_dapper_prima.sql";
 import m5 from "./0005_strange_iron_patriot.sql";
+import m6 from "./0006_eminent_hellion.sql";
 
 export const migrations = [
   { name: "0000_init.sql", sql: m0 },
@@ -14,4 +15,5 @@ export const migrations = [
   { name: "0003_melodic_oracle.sql", sql: m3 },
   { name: "0004_dapper_prima.sql", sql: m4 },
   { name: "0005_strange_iron_patriot.sql", sql: m5 },
+  { name: "0006_eminent_hellion.sql", sql: m6 },
 ];

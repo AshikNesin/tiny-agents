@@ -210,16 +210,32 @@ function sourcesOf(details: unknown): ChatToolCall["sources"] {
   return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
 }
 
-/** A `shelley_start` result's hand-off (issue #143): the Code page card. */
-function shelleyOf(details: unknown): ChatToolCall["shelley"] {
-  const raw = record(record(details)?.shelley ?? record(record(details)?.result)?.shelley);
-  if (!raw || typeof raw.conversationId !== "string" || typeof raw.url !== "string")
+/**
+ * A hand-off's thread (issue #143, ADR 0011): the Code page card. Results
+ * from before the harness layer carry `shelley: { conversationId, slug }`.
+ */
+function codeOf(details: unknown): ChatToolCall["code"] {
+  const outer = record(details);
+  const result = record(outer?.result);
+  const code = record(outer?.code ?? result?.code);
+  if (code && typeof code.threadId === "string" && typeof code.url === "string") {
+    return {
+      threadId: code.threadId,
+      harness: typeof code.harness === "string" ? code.harness : "Shelley",
+      title: typeof code.title === "string" ? code.title : null,
+      cwd: typeof code.cwd === "string" ? code.cwd : null,
+      url: code.url,
+    };
+  }
+  const legacy = record(outer?.shelley ?? result?.shelley);
+  if (!legacy || typeof legacy.conversationId !== "string" || typeof legacy.url !== "string")
     return undefined;
   return {
-    conversationId: raw.conversationId,
-    slug: typeof raw.slug === "string" ? raw.slug : null,
-    cwd: typeof raw.cwd === "string" ? raw.cwd : null,
-    url: raw.url,
+    threadId: `shelley:${legacy.conversationId}`,
+    harness: "Shelley",
+    title: typeof legacy.slug === "string" ? legacy.slug : null,
+    cwd: typeof legacy.cwd === "string" ? legacy.cwd : null,
+    url: legacy.url,
   };
 }
 
@@ -256,7 +272,7 @@ function toolCallView(
     const approved = approvalOf(message.details);
     const approval = approved?.state;
     const sources = sourcesOf(message.details);
-    const shelley = shelleyOf(message.details);
+    const code = codeOf(message.details);
     const { questions, answers } = questionsOf(message.details);
     const credentials = credentialsOf(message.details);
     const takeover = takeoverOf(approved?.result ?? message.details);
@@ -279,7 +295,7 @@ function toolCallView(
         ? { approval }
         : {}),
       ...(sources ? { sources } : {}),
-      ...(shelley ? { shelley } : {}),
+      ...(code ? { code } : {}),
       ...(questions ? { questions } : {}),
       ...(answers ? { answers } : {}),
       ...(credentials ? { credentials } : {}),

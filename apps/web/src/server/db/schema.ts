@@ -207,6 +207,72 @@ export const shelleySeen = sqliteTable("shelley_seen", {
     .$defaultFn(() => new Date()),
 });
 
+/**
+ * The Code page's thread index (ADR 0011): one row per harness thread
+ * tiny-agents tracks. Every harness keeps its own transcript; this row holds
+ * pointers and metadata only — what the owner follows and has read
+ * (unread, pushes), and, for harnesses that keep no list of their own
+ * (Claude Code), the thread itself (title, cwd, settings, driver `data`).
+ */
+export const codeThreads = sqliteTable(
+  "code_threads",
+  {
+    /** `<instanceId>:<nativeId>`. */
+    id: text("id").primaryKey(),
+    instanceId: text("instance_id").notNull(),
+    nativeId: text("native_id").notNull(),
+    title: text("title").notNull().default(""),
+    cwd: text("cwd"),
+    parentNativeId: text("parent_native_id"),
+    model: text("model"),
+    effort: text("effort"),
+    permissionMode: text("permission_mode"),
+    archived: bool("archived").notNull().default(false),
+    /** Started, opened or handed off here: unread markers and finish pushes. */
+    followed: bool("followed").notNull().default(false),
+    /** How far into the transcript the owner has read (harness cursor). */
+    seenCursor: integer("seen_cursor").notNull().default(0),
+    /** Driver-private JSON (e.g. Claude Code's session id). */
+    data: text("data").notNull().default("{}"),
+    createdAt: createdAt(),
+    updatedAt: ms("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("code_threads_instance_idx").on(t.instanceId, t.updatedAt)],
+);
+
+/**
+ * Coding work a bot handed to a harness (`code_start`, or `shelley_start`).
+ * When that thread's turn ends, the finish is delivered once into the bot's
+ * chat (running → finished, compare-and-set).
+ */
+export const codeHandoffs = sqliteTable(
+  "code_handoffs",
+  {
+    id: id(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    /** `<instanceId>:<nativeId>`. */
+    threadId: text("thread_id").notNull(),
+    title: text("title"),
+    /** What the bot asked for (first message), for the card and list. */
+    task: text("task").notNull(),
+    cwd: text("cwd"),
+    /** Durable tool task identity: a replayed start returns this row. */
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    /** "running" | "finished". */
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    finishedAt: ms("finished_at"),
+  },
+  (t) => [
+    index("code_handoffs_thread_idx").on(t.threadId),
+    index("code_handoffs_bot_idx").on(t.botId, t.createdAt),
+  ],
+);
+
 export const botSkills = sqliteTable(
   "bot_skills",
   {
@@ -610,6 +676,8 @@ export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
 export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
+export type CodeThreadRow = typeof codeThreads.$inferSelect;
+export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type BotGuest = typeof botGuests.$inferSelect;
 
 export * from "@groot/core/database/schema";

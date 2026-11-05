@@ -19,7 +19,7 @@ import {
   createSelfImproveCapability,
   createSandboxToolkit,
   createSkillsCapability,
-  createShelleyToolkit,
+  createCodeToolkit,
   createTasksToolkit,
   createTodayCapability,
   createTranscriber,
@@ -31,6 +31,7 @@ import {
   type BotMessagingStore,
   type Capability,
   type Reviewer,
+  claudeCodeEngineEnabled,
 } from "@tiny-agents/agent";
 import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
 import {
@@ -41,7 +42,7 @@ import {
 } from "@tiny-agents/agent/testing";
 import { logger, setScrubber } from "@groot/core/logger";
 import { taskStore } from "../tasks/task.store";
-import { shelleyStore } from "../shelley/shelley.store";
+import { codeStore } from "../code/code.bots";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
@@ -114,12 +115,16 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
       vault,
       ownerWaits,
     }),
-    // Shelley (issue #143): hand coding work to the owner's Shelley coding
-    // agent; finishes come back into the chat. No tools without SHELLEY_URL.
-    createShelleyToolkit(
-      env.SHELLEY_URL?.trim()
-        ? { store: shelleyStore }
-        : { setupHint: "Set SHELLEY_URL to hand coding work to Shelley." },
+    // Code (issue #143, ADR 0011): hand coding work to the owner's coding
+    // agents (Shelley by default, Claude Code by name); finishes come back
+    // into the chat. No tools without a configured harness.
+    createCodeToolkit(
+      env.SHELLEY_URL?.trim() || claudeCodeEngineEnabled(env)
+        ? { store: codeStore }
+        : {
+            setupHint:
+              "Set SHELLEY_URL, or turn on the Claude plan on the sandbox, to hand coding work to a coding agent.",
+          },
     ),
     // Computer (issue #108): an XFCE desktop per browser profile on the
     // sandbox VM, seen with scrot and driven with xdotool. Without a VM it
@@ -311,12 +316,12 @@ export async function openFauxAgentRuntime(
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };
     }
-    // "/code [cwd=PATH] task" hands the task to Shelley (issue #143), one
-    // tool round, so e2e can drive a hand-off and its finish.
+    // "/code [cwd=PATH] task" hands the task to the default coding agent
+    // (issue #143), one tool round, so e2e can drive a hand-off and its finish.
     const code = /^\/code\s+(?:cwd=(\S+)\s+)?([\s\S]+)/.exec(text);
     if (code && toolResults === 0) {
       const call = fauxAssistantMessage(
-        fauxToolCall("shelley_start", { task: code[2], ...(code[1] ? { cwd: code[1] } : {}) }),
+        fauxToolCall("code_start", { task: code[2], ...(code[1] ? { cwd: code[1] } : {}) }),
       );
       return { ...call, stopReason: "toolUse" as const };
     }
