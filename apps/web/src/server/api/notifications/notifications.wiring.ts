@@ -9,6 +9,7 @@
  * - Runs: a reply that ends in a model error, or one that ran for at least
  *   `longRunMinutes`, pushes when nobody has that chat open. Routine runs
  *   (their own conversations, issue #63) are left to the routine events.
+ *   This is a step of the settled pipeline (`runNotificationsStep`).
  * - Routines: `notifyRoutineRun` (watcher and fire job). A blocked run
  *   (issue #87) stays quiet; the run that pauses the routine pushes once.
  */
@@ -24,7 +25,7 @@ import {
 } from "@tiny-agents/agent";
 import { isBotWatched } from "../bots/bots.viewers";
 import { chatOwner } from "../bots/bots.owner";
-import type { SettledConversation, SettledStep } from "../bots/bots.settled";
+import type { SettledStep } from "../bots/bots.settled";
 import {
   approvalRequested,
   credentialRequested,
@@ -54,8 +55,6 @@ export type Notifier = Pick<
 export type NotificationsRuntime = Pick<AgentRuntime, "onWait">;
 
 export interface NotificationsWiring {
-  /** The settled step: a failed or long reply reaches the owner's phone. */
-  onSettled: SettledStep;
   stop(): void;
 }
 
@@ -125,36 +124,45 @@ export function startNotifications(
     );
   });
 
-  /**
-   * The reply that just finished: the Turn's last finished message. A reply
-   * from before this run (the conversation settled without a new Turn) is
-   * not news.
-   */
-  async function onSettled({ conversationId, chat, startedAt }: SettledConversation) {
-    // A run that was already going at boot has no start: nothing to measure against.
-    if (startedAt === undefined) return;
-    const bot = await botFor(conversationId);
-    if (!bot || isBotWatched(bot.id)) return;
-    const state = await chat();
-    const last = state.messages.findLast((message) => message.role === "assistant");
-    const reply = last ? finishedReplyOf(last) : undefined;
-    if (!reply || reply.createdAt < startedAt) return;
-    if (reply.error !== undefined) {
-      send(runFailed(bot, reply.createdAt, reply.error));
-      return;
-    }
-    const { longRunMinutes } = await notifier.getSettings();
-    const minutes = Math.floor((Date.now() - startedAt) / 60_000);
-    if (minutes >= longRunMinutes) send(runLongDone(bot, reply.createdAt, minutes, reply.text));
-  }
-
   return {
-    onSettled: { name: "run notifications", run: onSettled },
     stop() {
       offRedactor();
       offWait();
       for (const timer of reminders.values()) clearTimeout(timer);
       reminders.clear();
+    },
+  };
+}
+
+/**
+ * The settled step: a failed or long reply reaches the owner's phone. The
+ * reply is the Turn's last finished message; one from before this run (the
+ * conversation settled without a new Turn) is not news. Only a bot's own
+ * chat pushes here: a routine's conversation pushes through its routine
+ * events, and a Past chat's is nobody's.
+ */
+export function runNotificationsStep(notifier: Notifier = notificationService): SettledStep {
+  return {
+    name: "run notifications",
+    async run({ conversationId, chat, owner, startedAt }) {
+      // A run that was already going at boot has no start: nothing to measure against.
+      if (startedAt === undefined) return;
+      const behind = await owner();
+      if (behind?.kind !== "chat" || isBotWatched(behind.bot.id)) return;
+      const bot: BotRef = { id: behind.bot.id, name: behind.bot.name, conversationId };
+      const state = await chat();
+      const last = state.messages.findLast((message) => message.role === "assistant");
+      const reply = last ? finishedReplyOf(last) : undefined;
+      if (!reply || reply.createdAt < startedAt) return;
+      if (reply.error !== undefined) {
+        notifier.notify(runFailed(bot, reply.createdAt, reply.error));
+        return;
+      }
+      const { longRunMinutes } = await notifier.getSettings();
+      const minutes = Math.floor((Date.now() - startedAt) / 60_000);
+      if (minutes >= longRunMinutes) {
+        notifier.notify(runLongDone(bot, reply.createdAt, minutes, reply.text));
+      }
     },
   };
 }

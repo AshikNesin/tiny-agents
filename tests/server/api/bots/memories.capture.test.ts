@@ -1,20 +1,22 @@
+/**
+ * Memory capture: the prompt, the window, the parse and the debounce. What
+ * lands is the ledger's (memories.ledger.test.ts) and how the model is
+ * picked and called is the side-caller's (side-call.test.ts); here the
+ * side-caller is one faked `complete`.
+ */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { and, eq } from "drizzle-orm";
-import { logger } from "@groot/core/logger";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
 import {
   buildCapturePrompt,
   parseExtraction,
-  applyExtraction,
   createMemoryCapture,
-  type CaptureModels,
 } from "../../../../apps/web/src/server/api/bots/memories.capture";
 import {
   captureWindow,
   captureConversation,
-  resolveCaptureModelId,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
+import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
+import type { ConversationOwner } from "../../../../apps/web/src/server/api/bots/bots.owner";
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
@@ -41,31 +43,12 @@ function findBot(id: string) {
   return db.query.bots.findFirst({ where: eq(bots.id, id) });
 }
 
-function sideCall(reply = fauxAssistantMessage([fauxText("[]")])) {
-  const getModel = vi.fn((_provider: string, id: string) => ({ id }) as Model<Api>);
-  const completeSimple = vi.fn<CaptureModels["completeSimple"]>().mockResolvedValue(reply);
-  return {
-    models: { getModel, completeSimple },
-    hasModel: vi.fn((id: string) => id === "m" || id === "custom:test/chat"),
-  };
+/** The side-caller port, faked: one `complete` answering with `reply`. */
+function sideCaller(reply = "[]") {
+  return { complete: vi.fn<SideCaller["complete"]>().mockResolvedValue(reply) };
 }
 
-describe("buildCapturePrompt removed memories", () => {
-  it("lists what the owner removed as never-re-add, and nothing when there is none", () => {
-    const input = {
-      botName: "Scout",
-      transcript: "Owner: hi",
-      currentMemories: null,
-      today: "2026-10-29",
-    };
-    const prompt = buildCapturePrompt({ ...input, removedMemories: "- The owner prefers tea." });
-    expect(prompt).toContain(
-      "The owner removed these memories. Never add them again, reworded or not:",
-    );
-    expect(prompt).toContain("- The owner prefers tea.");
-    expect(buildCapturePrompt(input)).not.toContain("removed these memories");
-  });
-});
+const ownerSays = (text: string) => async () => [{ role: "user", text, createdAt: Date.now() }];
 
 describe("buildCapturePrompt", () => {
   it("carries the anti-junk rules and JSON contract", () => {
@@ -82,136 +65,40 @@ describe("buildCapturePrompt", () => {
     expect(prompt).toContain("Today is 2026-10-21");
     expect(prompt).toContain("even if reworded");
   });
+
+  it("lists what the owner removed as never-re-add, and nothing when there is none", () => {
+    const input = {
+      botName: "Scout",
+      transcript: "Owner: hi",
+      currentMemories: null,
+      today: "2026-10-29",
+    };
+    const prompt = buildCapturePrompt({ ...input, removedMemories: "- The owner prefers tea." });
+    expect(prompt).toContain(
+      "The owner removed these memories. Never add them again, reworded or not:",
+    );
+    expect(prompt).toContain("- The owner prefers tea.");
+    expect(buildCapturePrompt(input)).not.toContain("removed these memories");
+  });
 });
 
 describe("parseExtraction", () => {
-  it("parses a JSON array from a text reply", () => {
-    const reply = {
-      content: [
-        { type: "text", text: '[{"text":"Likes tea","category":"preference","confidence":0.9}]' },
-      ],
-    };
-    const parsed = parseExtraction(reply);
+  it("parses a JSON array out of the reply text", () => {
+    const parsed = parseExtraction(
+      'Here: [{"text":"Likes tea","category":"preference","confidence":0.9}]',
+    );
     expect(parsed).toHaveLength(1);
-    expect(parsed[0].text).toBe("Likes tea");
+    expect(parsed?.[0]?.text).toBe("Likes tea");
   });
 
   it("returns null for malformed output so the watermark stays put", () => {
-    expect(parseExtraction({ content: [{ type: "text", text: "not json" }] })).toBeNull();
-    expect(
-      parseExtraction({
-        content: [{ type: "text", text: '[{"text":"x","category":"vibe","confidence":0.5}]' }],
-      }),
-    ).toBeNull();
+    expect(parseExtraction("not json")).toBeNull();
+    expect(parseExtraction('[{"text":"x","category":"vibe","confidence":0.5}]')).toBeNull();
   });
 
   it("returns null for a model that says nothing", () => {
     expect(parseExtraction(undefined)).toBeNull();
-  });
-});
-
-describe("applyExtraction", () => {
-  it("creates rows and advances the watermark in the same transaction", async () => {
-    const { botId } = await seedBot();
-    const through = new Date();
-    const result = await applyExtraction(
-      botId,
-      [{ text: "Prefers pnpm", category: "preference", confidence: 0.9 }],
-      through,
-    );
-    expect(result).toEqual({ created: 1, superseded: 0, skipped: 0 });
-    const bot = await findBot(botId);
-    expect(bot?.memoryCapturedThrough?.toISOString()).toBe(through.toISOString());
-  });
-
-  it("skips exact-text duplicates, including tombstones (never re-add)", async () => {
-    const { botId } = await seedBot();
-    await applyExtraction(
-      botId,
-      [{ text: "Prefers pnpm", category: "preference", confidence: 0.9 }],
-      new Date(),
-    );
-    const again = await applyExtraction(
-      botId,
-      [{ text: "prefers pnpm", category: "preference", confidence: 0.95 }],
-      new Date(),
-    );
-    expect(again.created).toBe(0);
-    expect(again.skipped).toBe(1);
-
-    const row = await db.query.memories.findFirst({ where: eq(memories.botId, botId) });
-    await db.update(memories).set({ status: "deleted" }).where(eq(memories.id, row!.id));
-    const afterTombstone = await applyExtraction(
-      botId,
-      [{ text: "Prefers pnpm", category: "preference", confidence: 0.9 }],
-      new Date(),
-    );
-    expect(afterTombstone.created).toBe(0);
-  });
-
-  it("supersedes only rows of the same bot", async () => {
-    const { botId: botA } = await seedBot();
-    const { botId: botB } = await seedBot();
-    const first = await applyExtraction(
-      botA,
-      [{ text: "Lives in Bangalore", category: "fact", confidence: 0.8 }],
-      new Date(),
-    );
-    const rowA = await db.query.memories.findFirst({ where: eq(memories.botId, botA) });
-    const [rowB] = await db
-      .insert(memories)
-      .values({
-        botId: botB,
-        text: "Other bot fact",
-        category: "fact",
-        status: "active",
-        source: "manual",
-      })
-      .returning();
-    expect(first.created).toBe(1);
-
-    const result = await applyExtraction(
-      botA,
-      [
-        {
-          text: "Lives in Chennai now",
-          category: "fact",
-          confidence: 0.9,
-          supersedesIds: [rowA!.id, rowB!.id],
-        },
-      ],
-      new Date(),
-    );
-    expect(result.superseded).toBe(1);
-    const supersededRow = await db.query.memories.findFirst({ where: eq(memories.id, rowA!.id) });
-    expect(supersededRow?.status).toBe("superseded");
-    expect(supersededRow?.supersededById).toBeTruthy();
-    const untouched = await db.query.memories.findFirst({ where: eq(memories.id, rowB!.id) });
-    expect(untouched?.status).toBe("active");
-  });
-
-  it("archives the oldest active rows past the budget", async () => {
-    const { botId } = await seedBot();
-    const extraction = Array.from({ length: 105 }, (_, i) => ({
-      text: `Fact ${i}`,
-      category: "fact" as const,
-      confidence: 0.9,
-    }));
-    await applyExtraction(botId, extraction, new Date());
-    const active = await db.$count(
-      memories,
-      and(eq(memories.botId, botId), eq(memories.status, "active")),
-    );
-    const archived = await db.$count(
-      memories,
-      and(eq(memories.botId, botId), eq(memories.status, "archived")),
-    );
-    expect(active).toBe(100);
-    expect(archived).toBe(5);
-    const oldest = await db.query.memories.findFirst({
-      where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
-    });
-    expect(oldest?.text).toBe("Fact 0");
+    expect(parseExtraction("")).toBeNull();
   });
 });
 
@@ -285,127 +172,90 @@ describe("captureWindow", () => {
   });
 });
 
-describe("resolveCaptureModelId", () => {
-  it("uses the bot's model instead of a hardcoded gateway model", () => {
-    expect(resolveCaptureModelId(sideCall(), "m")).toBe("m");
-    expect(resolveCaptureModelId(sideCall(), "custom:test/chat")).toBe("custom:test/chat");
-  });
-
-  it("honors known overrides and falls back for unknown overrides", () => {
-    expect(resolveCaptureModelId(sideCall(), "m", '"custom:test/chat"')).toBe("custom:test/chat");
-    expect(resolveCaptureModelId(sideCall(), "m", "unknown")).toBe("m");
-    expect(resolveCaptureModelId(sideCall(), "missing")).toBeUndefined();
-  });
-});
-
-describe("captureConversation skip rules", () => {
-  it("captures a short durable preference instead of discarding it", async () => {
+describe("captureConversation", () => {
+  it("asks the side-caller on the bot's model and lands what it extracts", async () => {
     const { botId, conversationId } = await seedBot();
-    const call = sideCall(
-      fauxAssistantMessage([
-        fauxText(
-          '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
-        ),
-      ]),
+    const caller = sideCaller(
+      '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
     );
+    const messages = [
+      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+    ];
     await captureConversation(conversationId, {
-      sideCall: call,
-      readTranscript: async () => [
-        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
-      ],
+      sideCaller: caller,
+      model: "custom:test/light",
+      readTranscript: async () => messages,
     });
-    expect(call.models.completeSimple).toHaveBeenCalledOnce();
-    expect(call.models.getModel).toHaveBeenCalledWith("cloudflare-ai-gateway", "m");
+    expect(caller.complete).toHaveBeenCalledOnce();
+    expect(caller.complete.mock.calls[0]![0]).toMatchObject({
+      botModelId: "m",
+      override: "custom:test/light",
+      user: "Extract now.",
+      label: "Memory capture",
+      system: expect.stringContaining("Owner: I prefer TypeScript, never JavaScript"),
+    });
     expect(await db.query.memories.findFirst({ where: eq(memories.botId, botId) })).toMatchObject({
       text: "The owner prefers TypeScript, never JavaScript.",
       source: "capture",
       status: "active",
     });
+    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0]!.createdAt);
   });
 
-  it("makes no model call when memory is disabled", async () => {
+  it("makes no call without a side-caller (faux mode) or with memory off", async () => {
     const { botId, conversationId } = await seedBot();
+    const readTranscript = vi.fn(ownerSays("x".repeat(300)));
+    await captureConversation(conversationId, { sideCaller: undefined, readTranscript });
+    expect(readTranscript).not.toHaveBeenCalled();
+
     await db.update(bots).set({ memoryEnabled: false }).where(eq(bots.id, botId));
-    const call = sideCall();
-    await captureConversation(conversationId, {
-      sideCall: call,
-      readTranscript: async () => [{ role: "user", text: "x".repeat(300), createdAt: Date.now() }],
-    });
-    expect(call.models.completeSimple).not.toHaveBeenCalled();
-    const bot = await findBot(botId);
-    expect(bot?.memoryCapturedThrough).toBeNull();
+    const caller = sideCaller();
+    await captureConversation(conversationId, { sideCaller: caller, readTranscript });
+    expect(caller.complete).not.toHaveBeenCalled();
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
   });
 
   it("advances the watermark without a call for a trivial window", async () => {
-    const { conversationId } = await seedBot();
-    const call = sideCall();
+    const { botId, conversationId } = await seedBot();
+    const caller = sideCaller();
     await captureConversation(conversationId, {
-      sideCall: call,
-      readTranscript: async () => [{ role: "user", text: "hi", createdAt: Date.now() }],
+      sideCaller: caller,
+      readTranscript: ownerSays("hi"),
     });
-    expect(call.models.completeSimple).not.toHaveBeenCalled();
-    const bot = await db.query.bots.findFirst({
-      where: eq(bots.conversationId, String(conversationId)),
-    });
-    expect(bot?.memoryCapturedThrough).not.toBeNull();
+    expect(caller.complete).not.toHaveBeenCalled();
+    expect((await findBot(botId))?.memoryCapturedThrough).not.toBeNull();
   });
 
-  it("resolves a custom bot model even with an invalid capture override", async () => {
+  it("retries the unchanged window after no answer or an unparseable one", async () => {
     const { botId, conversationId } = await seedBot();
-    await db.update(bots).set({ modelId: "custom:test/chat" }).where(eq(bots.id, botId));
-    const call = sideCall();
-    await captureConversation(conversationId, {
-      sideCall: { ...call, modelId: "unknown" },
-      readTranscript: async () => [
-        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
-      ],
-    });
-    expect(call.models.getModel).toHaveBeenCalledWith("test", "chat");
-    expect(call.models.completeSimple).toHaveBeenCalledOnce();
-  });
-
-  it("logs returned model errors and retries the unchanged window later", async () => {
-    const { botId, conversationId } = await seedBot();
-    const call = sideCall({
-      ...fauxAssistantMessage([fauxText("[]")]),
-      stopReason: "error",
-      errorMessage: "Provider unavailable",
-    });
     const messages = [
       { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
     ];
-    const deps = { sideCall: call, readTranscript: async () => messages };
+    const caller = sideCaller();
+    caller.complete.mockResolvedValue(undefined);
+    const deps = { sideCaller: caller, readTranscript: async () => messages };
     await captureConversation(conversationId, deps);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ errorMessage: "Provider unavailable", modelId: "m" }),
-      expect.stringContaining("model failed"),
-    );
     expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
-    call.models.completeSimple.mockResolvedValue(fauxAssistantMessage([fauxText("[]")]));
+    caller.complete.mockResolvedValue("not json");
     await captureConversation(conversationId, deps);
-    expect(call.models.completeSimple).toHaveBeenCalledTimes(2);
-    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0].createdAt);
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
+    caller.complete.mockResolvedValue("[]");
+    await captureConversation(conversationId, deps);
+    expect(caller.complete).toHaveBeenCalledTimes(3);
+    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0]!.createdAt);
   });
 
-  it("leaves malformed extractions uncommitted and skips peer-only windows", async () => {
-    const { botId, conversationId } = await seedBot();
-    const call = sideCall(fauxAssistantMessage([fauxText("not json")]));
+  it("skips peer-only windows", async () => {
+    const { conversationId } = await seedBot();
+    const caller = sideCaller();
     await captureConversation(conversationId, {
-      sideCall: call,
-      readTranscript: async () => [
-        { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
-      ],
-    });
-    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
-    call.models.completeSimple.mockClear();
-    await captureConversation(conversationId, {
-      sideCall: call,
+      sideCaller: caller,
       readTranscript: async () => [
         { role: "user", text: "Peer ".repeat(60), peer: { kind: "request" }, createdAt: 1 },
         { role: "assistant", text: "Peer reply", createdAt: 2 },
       ],
     });
-    expect(call.models.completeSimple).not.toHaveBeenCalled();
+    expect(caller.complete).not.toHaveBeenCalled();
   });
 
   it("never captures a routine's conversation (issue #63): only the chat is a source", async () => {
@@ -418,99 +268,13 @@ describe("captureConversation skip rules", () => {
       schedule: { kind: "interval", minutes: 60 },
       conversationId: String(routineConversation),
     });
-    const call = sideCall();
-    const readTranscript = vi.fn(async () => [
-      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
-    ]);
-    await captureConversation(routineConversation, { sideCall: call, readTranscript });
+    const caller = sideCaller();
+    const readTranscript = vi.fn(ownerSays("I prefer TypeScript, never JavaScript"));
+    await captureConversation(routineConversation, { sideCaller: caller, readTranscript });
     expect(readTranscript).not.toHaveBeenCalled();
-    expect(call.models.completeSimple).not.toHaveBeenCalled();
-  });
-});
-
-const settledChat = async () => ({ messages: [], busy: false, queued: [] });
-
-describe("memory capture debounce (a settled step)", () => {
-  it("fires on the quiet window and pushes back on new turns", async () => {
-    vi.useFakeTimers();
-    const captureNow = vi.fn().mockResolvedValue(undefined);
-    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
-    const emit = (_busy: boolean) =>
-      void capture.onSettled.run({ conversationId: 7, chat: settledChat });
-    emit(false); // turn 1
-    vi.advanceTimersByTime(50);
-    emit(false); // turn 2 pushes the window back
-    vi.advanceTimersByTime(60);
-    expect(captureNow).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(50);
-    expect(captureNow).toHaveBeenCalledWith(7);
-    capture.stop();
-    vi.useRealTimers();
+    expect(caller.complete).not.toHaveBeenCalled();
   });
 
-  it("does not run a second capture while one is inflight", async () => {
-    vi.useFakeTimers();
-    const gates: Array<() => void> = [];
-    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
-    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
-    const emit = () => void capture.onSettled.run({ conversationId: 9, chat: settledChat });
-    emit();
-    emit();
-    emit();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(1);
-    emit();
-    emit();
-    emit();
-    emit();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(1); // still inflight
-    gates[0]!();
-    await vi.advanceTimersByTimeAsync(0);
-    emit();
-    emit();
-    emit();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(2);
-    capture.stop();
-    vi.useRealTimers();
-  });
-
-  it("re-arms the quiet window for turns that settled during a capture", async () => {
-    vi.useFakeTimers();
-    const gates: Array<() => void> = [];
-    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
-    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 10 });
-    const emit = () => void capture.onSettled.run({ conversationId: 11, chat: settledChat });
-    emit();
-    await vi.advanceTimersByTimeAsync(100);
-    expect(captureNow).toHaveBeenCalledTimes(1);
-    emit(); // settles while the capture runs: not lost
-    gates[0]!();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(100);
-    expect(captureNow).toHaveBeenCalledTimes(2);
-    capture.stop();
-    vi.useRealTimers();
-  });
-
-  it("forces a capture at the turn limit", async () => {
-    vi.useFakeTimers();
-    const captureNow = vi.fn().mockResolvedValue(undefined);
-    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
-    const emit = () => void capture.onSettled.run({ conversationId: 9, chat: settledChat });
-    emit();
-    emit();
-    expect(captureNow).not.toHaveBeenCalled();
-    emit();
-    expect(captureNow).toHaveBeenCalledWith(9);
-    capture.stop();
-    vi.useRealTimers();
-  });
-});
-
-describe("captureConversation and removed memories", () => {
   it("shows the newest 30 deleted memories to the extractor, which then leaves them out", async () => {
     const { botId, conversationId } = await seedBot();
     await db.insert(memories).values(
@@ -531,23 +295,20 @@ describe("captureConversation and removed memories", () => {
     });
     // A scripted extractor that, like a model following the prompt, drops a
     // reworded fact the prompt lists as removed.
-    const call = sideCall();
-    call.models.completeSimple.mockImplementation(async (_model, context) => {
-      const proposed = [
-        { text: "The owner likes tea.", category: "preference", confidence: 0.9 },
-        { text: "The owner lives in Chennai.", category: "fact", confidence: 0.9 },
-      ].filter(
-        (m) => !(m.text.includes("tea") && context.systemPrompt?.includes("Owner prefers tea")),
-      );
-      return fauxAssistantMessage([fauxText(JSON.stringify(proposed))]);
-    });
+    const caller = sideCaller();
+    caller.complete.mockImplementation(async ({ system }) =>
+      JSON.stringify(
+        [
+          { text: "The owner likes tea.", category: "preference", confidence: 0.9 },
+          { text: "The owner lives in Chennai.", category: "fact", confidence: 0.9 },
+        ].filter((m) => !(m.text.includes("tea") && system.includes("Owner prefers tea"))),
+      ),
+    );
     await captureConversation(conversationId, {
-      sideCall: call,
-      readTranscript: async () => [
-        { role: "user", text: "I like tea and I live in Chennai.", createdAt: Date.now() },
-      ],
+      sideCaller: caller,
+      readTranscript: ownerSays("I like tea and I live in Chennai."),
     });
-    const prompt = call.models.completeSimple.mock.calls[0][1].systemPrompt ?? "";
+    const prompt = caller.complete.mock.calls[0]![0].system;
     expect(prompt).toContain("- Owner prefers tea");
     expect(prompt).toContain("Removed fact 34.");
     expect(prompt).toContain("Removed fact 06.");
@@ -556,5 +317,117 @@ describe("captureConversation and removed memories", () => {
       where: and(eq(memories.botId, botId), eq(memories.status, "active")),
     });
     expect(active.map((m) => m.text)).toEqual(["The owner lives in Chennai."]);
+  });
+});
+
+const settledChat = async () => ({ messages: [], busy: false, queued: [] });
+
+/** A settled conversation of a bot's own chat, memory on unless said otherwise. */
+const settled = (conversationId: number, owner?: ConversationOwner) => ({
+  conversationId,
+  chat: settledChat,
+  owner: async () =>
+    owner ??
+    ({
+      kind: "chat",
+      bot: {
+        id: "b",
+        name: "B",
+        modelId: "m",
+        browserProfile: "shared",
+        memoryEnabled: true,
+        shared: false,
+      },
+    } satisfies ConversationOwner),
+});
+
+describe("memory capture debounce (a settled step)", () => {
+  it("fires on the quiet window and pushes back on new turns", async () => {
+    vi.useFakeTimers();
+    const captureNow = vi.fn().mockResolvedValue(undefined);
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
+    await capture.onSettled.run(settled(7)); // turn 1
+    vi.advanceTimersByTime(50);
+    await capture.onSettled.run(settled(7)); // turn 2 pushes the window back
+    vi.advanceTimersByTime(60);
+    expect(captureNow).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(50);
+    expect(captureNow).toHaveBeenCalledWith(7);
+    capture.stop();
+  });
+
+  it("arms only for a bot's own chat with memory on", async () => {
+    vi.useFakeTimers();
+    const captureNow = vi.fn().mockResolvedValue(undefined);
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
+    const bot = {
+      id: "b",
+      name: "B",
+      modelId: "m",
+      browserProfile: "shared",
+      memoryEnabled: true,
+      shared: false,
+    };
+    await capture.onSettled.run(settled(1, { kind: "routine", bot, routineId: "r" }));
+    await capture.onSettled.run(
+      settled(2, { kind: "chat", bot: { ...bot, memoryEnabled: false } }),
+    );
+    await capture.onSettled.run({ ...settled(3), owner: async () => undefined });
+    vi.advanceTimersByTime(500);
+    expect(captureNow).not.toHaveBeenCalled();
+    capture.stop();
+  });
+
+  it("does not run a second capture while one is inflight", async () => {
+    vi.useFakeTimers();
+    const gates: Array<() => void> = [];
+    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    const emit = (times: number) =>
+      Array.from({ length: times }).reduce<Promise<unknown>>(
+        (previous) => previous.then(() => capture.onSettled.run(settled(9))),
+        Promise.resolve(),
+      );
+    await emit(3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    await emit(4);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1); // still inflight
+    gates[0]!();
+    await vi.advanceTimersByTimeAsync(0);
+    await emit(3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(2);
+    capture.stop();
+  });
+
+  it("re-arms the quiet window for turns that settled during a capture", async () => {
+    vi.useFakeTimers();
+    const gates: Array<() => void> = [];
+    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 10 });
+    await capture.onSettled.run(settled(11));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    await capture.onSettled.run(settled(11)); // settles while the capture runs: not lost
+    gates[0]!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(captureNow).toHaveBeenCalledTimes(2);
+    capture.stop();
+  });
+
+  it("forces a capture at the turn limit", async () => {
+    vi.useFakeTimers();
+    const captureNow = vi.fn().mockResolvedValue(undefined);
+    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    await capture.onSettled.run(settled(9));
+    await capture.onSettled.run(settled(9));
+    expect(captureNow).not.toHaveBeenCalled();
+    await capture.onSettled.run(settled(9));
+    expect(captureNow).toHaveBeenCalledWith(9);
+    capture.stop();
   });
 });

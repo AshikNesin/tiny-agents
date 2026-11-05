@@ -1,8 +1,12 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
-import { db, bots, routineRuns, routines } from "../../../apps/web/src/server/db";
+import { db, bots } from "../../../apps/web/src/server/db";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
+import {
+  onBotChatEvent,
+  type BotChatEvent,
+} from "../../../apps/web/src/server/api/bots/bots.events";
 import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { InvalidAnswersError } from "../../../packages/agent/src/toolkits/questions";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
@@ -655,23 +659,24 @@ describe("Bots API routes", () => {
     expect(agentRuntime.configure).not.toHaveBeenCalled();
   });
 
-  it("switches YOLO mode for the bot's current chat and streams its state (issue #151)", async () => {
+  it("switches YOLO mode for the bot's current chat and tells its followers (issue #151)", async () => {
     const bot = await createBot();
-    const off = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"yolo"');
-    expect(off.text).toContain('{"type":"yolo","on":false}');
+    const heard: BotChatEvent[] = [];
+    const off = onBotChatEvent(bot.id, (event) => heard.push(event));
 
     const on = await call(`/api/v1/bots/${bot.id}/yolo`, { method: "PUT", json: { on: true } });
     expect(on.status).toBe(200);
     expect(on.body.data).toEqual({ on: true, approved: [] });
     expect(agentRuntime.setYolo).toHaveBeenCalledWith(conv(bot), true, expect.any(Number));
     expect(await rt.yolo(conv(bot))).toBe(true);
-    const streamed = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"yolo"');
-    expect(streamed.text).toContain('{"type":"yolo","on":true}');
+    expect(heard).toEqual([{ type: "yolo", on: true }]);
 
-    // A new chat starts with it off.
+    // A new chat starts with it off; the bot's open streams end and reopen there.
     await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" });
     const fresh = await findBot(bot.id);
     expect(await rt.yolo(Number(fresh!.conversationId))).toBe(false);
+    expect(heard.at(-1)).toEqual({ type: "chat-changed" });
+    off();
 
     const invalid = await call(`/api/v1/bots/${bot.id}/yolo`, {
       method: "PUT",
@@ -811,90 +816,6 @@ describe("Bots API routes", () => {
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({ success: false });
     expect(agentRuntime.readChatPage).toHaveBeenCalledTimes(1);
-  });
-
-  it("streams the bot's finished routine runs as cards beside the transcript (issue #63)", async () => {
-    const bot = await createBot();
-    const [routine] = await db
-      .insert(routines)
-      .values({
-        botId: bot.id,
-        name: "digest",
-        prompt: "p",
-        schedule: { kind: "interval", minutes: 60 },
-        conversationId: "900",
-      })
-      .returning();
-    await db.insert(routineRuns).values([
-      {
-        routineId: routine!.id,
-        scheduledFor: new Date(),
-        status: "succeeded",
-        requestId: "routine:card:1",
-        // In the bot's current thread (it started when the bot was created).
-        finishedAt: new Date(Date.now() + 1000),
-        output: "Digest ready.",
-      },
-      {
-        routineId: routine!.id,
-        scheduledFor: new Date("2026-10-21T03:30:00Z"),
-        status: "awaiting",
-        requestId: "routine:card:2",
-      },
-    ]);
-
-    const response = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"routine-runs"');
-    const event = response.text
-      .split("\n")
-      .filter((line) => line.startsWith("data: "))
-      .map((line) => JSON.parse(line.slice(6)) as { type: string; runs?: unknown[] })
-      .find((parsed) => parsed.type === "routine-runs");
-    // Only finished runs get a card; the awaiting one is still working.
-    expect(event?.runs).toEqual([
-      expect.objectContaining({
-        routineName: "digest",
-        status: "succeeded",
-        output: "Digest ready.",
-      }),
-    ]);
-    // The transcript itself is the chat's alone.
-    expect(agentRuntime.watchChat).toHaveBeenCalledWith(conv(bot), expect.any(Function), {
-      window: CHAT_WINDOW,
-    });
-  });
-
-  it("leaves routine runs from before a new chat out of the new thread", async () => {
-    const bot = await createBot();
-    const [routine] = await db
-      .insert(routines)
-      .values({
-        botId: bot.id,
-        name: "digest",
-        prompt: "p",
-        schedule: { kind: "interval", minutes: 60 },
-        conversationId: "901",
-      })
-      .returning();
-    await db.insert(routineRuns).values({
-      routineId: routine!.id,
-      scheduledFor: new Date(),
-      status: "succeeded",
-      requestId: "routine:old-thread:1",
-      finishedAt: new Date(),
-      output: "From the old thread.",
-    });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    expect((await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" })).status).toBe(200);
-    const after = (await findBot(bot.id))!;
-    expect(after.chatStartedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
-
-    const response = await readFirstSse(`/api/v1/bots/${bot.id}/stream`, '"type":"routine-runs"');
-    const event = response.text
-      .split("\n")
-      .filter((line) => line.startsWith("data: "))
-      .map((line) => JSON.parse(line.slice(6)) as { type: string; runs?: unknown[] })
-      .find((parsed) => parsed.type === "routine-runs");
-    expect(event?.runs).toEqual([]);
   });
 
   it("streams app-wide activity over SSE", async () => {

@@ -1,17 +1,32 @@
 /**
- * Claude plan engine. Turns go to the worker over the WebSocket client.
- * The kill switch is read here, on each turn, from the environment: turning
- * it off does not redeploy or stop the worker. Transcripts for these
- * conversations live here, beside the pi-durable harness.
+ * Claude plan engine (ADR 0008, ADR 0014). Turns go to the worker over the
+ * Worker connection (`client.ts` puts the bot protocol on it). The kill switch is read here, on each turn, from the
+ * environment: turning it off does not redeploy or stop the worker.
+ * Transcripts for these conversations live here, beside the pi-durable
+ * harness; tool calls go through the runtime's Tool gate.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { Context } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type {
+  DocumentReader,
+  ToolExecutionResult,
+  ToolRegistration,
+} from "@earendil-works/pi-durable";
 import type { ToolResultPayload, ToolSpec, WorkerMessage } from "@tiny-agents/claude-worker";
+import { approvalOf, gateHooksOf } from "../../approvals";
+import type { ToolPermission } from "../../capabilities";
 import {
   claudeCodeEngineEnabled,
   claudeCodeFallback,
+  type AgentEngine,
   type ClaudeEngineFallback,
+  type CompiledConversation,
+  type EngineSubmission,
 } from "../../engine";
+import { ToolGate } from "../../gate";
+import type { GateUserMessage } from "../../policy";
 import { pageBefore } from "../../transcript";
 import type {
   ChatEvent,
@@ -21,12 +36,9 @@ import type {
   ChatSubscription,
   ChatToolCall,
   ConversationRef,
+  LastMessage,
 } from "../../types";
-import {
-  createClaudeApprovalGate,
-  type ClaudeApprovalGate,
-  type ToolPermissionChoice,
-} from "./approvals";
+import { WaitTracker } from "../../waiting";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
 import {
@@ -35,33 +47,25 @@ import {
   type ClaudeWorkerLocator,
   type ClaudeWorkerMode,
 } from "./sandbox-worker";
+import { claudeToolApi } from "./tools";
 
+const ctx: Context = BACKGROUND_CONTEXT;
+
+/** How a turn the worker was running when it restarted ends. */
+export const WORKER_RESTARTED =
+  "The Claude worker restarted and this reply was cut off. Send your message again to continue.";
+
+/** Claude plan calls are numbered from here per conversation, apart from pi's task ids. */
 const TASK_ID_BASE = 2_000_000_000;
 
 export interface ClaudeSessionSync {
   model: string;
   system: string;
   tools: ToolSpec[];
-  permissions: Record<string, ToolPermissionChoice>;
-  /** Tools that can use a vault item (`ToolInfo.vault`): YOLO never runs them unasked. */
-  vaultTools?: string[];
-}
-
-export interface ClaudeSubmitInput {
-  requestId: string;
-  text: string;
-  images?: { data: string; mimeType: string }[];
-  /** Trusted attribution for a cross-bot delivery: YOLO does not trust its turn. */
-  peer?: ChatMessage["peer"];
-  /** Who sent it, in a shared chat. */
-  author?: ChatMessage["author"];
-}
-
-/** A conversation's YOLO mode as the engine applies it (issue #151). */
-export interface ClaudeYolo {
-  on: boolean;
-  /** The owner's user id: in a shared chat only their turns are trusted. */
-  by?: number;
+  /** Every enabled tool's permission; the gate reads the stored ones, this says which are off. */
+  permissions: Record<string, ToolPermission>;
+  /** What runs once the Tool gate lets a call through, by tool name. */
+  runners?: ReadonlyMap<string, ToolRegistration>;
 }
 
 export interface ClaudeCodeEngineOptions {
@@ -69,7 +73,10 @@ export interface ClaudeCodeEngineOptions {
   /** JSON file for session ids and transcripts. Omitted for `:memory:` stores. */
   persistPath?: string;
   onBusy?: (ref: ConversationRef, busy: boolean) => void;
-  execute: (ref: ConversationRef, call: ToolUseCall) => Promise<ToolResultPayload>;
+  /** Every tool call Claude asks for goes through it. Default: a gate of its own (tests). */
+  gate?: ToolGate;
+  /** The shared store's conversation documents (permissions, YOLO, grants) the gate and tools read. */
+  docs?: Pick<DocumentReader, "snapshot">;
   /** When set, tests skip the real socket. */
   connect?: (url: string, token: string) => WebSocketLike;
   /** The worker on the sandbox, set up over SSH on first use. */
@@ -85,6 +92,8 @@ interface Listener {
 interface LiveTurn {
   turnId: string;
   assistantId: string;
+  /** The turn went out on an open socket (false: it waits in the connection's queue). */
+  dispatched: boolean;
   resolve: () => void;
   reject: (error: Error) => void;
 }
@@ -93,68 +102,80 @@ interface ClaudeSession {
   model: string;
   system: string;
   tools: ToolSpec[];
-  permissions: Record<string, ToolPermissionChoice>;
-  vaultTools: Set<string>;
-  yolo: ClaudeYolo;
+  permissions: Record<string, ToolPermission>;
+  runners: ReadonlyMap<string, ToolRegistration>;
   claudeSessionId?: string;
-  /** `pi` after a gateway fallback latches the conversation onto the harness. */
+  /** `pi` once the conversation left the Claude plan (`leave()`): later turns run on pi. */
   surface: "claude" | "pi";
   messages: ChatMessage[];
   nextTask: number;
   busy: boolean;
   live?: LiveTurn;
-  gate: ClaudeApprovalGate;
 }
 
-export class ClaudeCodeEngine {
+export class ClaudeCodeEngine implements AgentEngine {
+  readonly kind = "claude-code" as const;
   private readonly sessions = new Map<ConversationRef, ClaudeSession>();
   private readonly listeners = new Set<Listener>();
   private client: ClaudeWorkerClient | undefined;
   private readonly env: () => Readonly<Record<string, string | undefined>>;
   private loaded = false;
+  private readonly gate: ToolGate;
 
   constructor(private readonly options: ClaudeCodeEngineOptions) {
     this.env = options.env ?? (() => process.env);
+    this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 
-  handles(ref: ConversationRef): boolean {
+  runs(ref: ConversationRef): boolean {
     return this.sessions.get(ref)?.surface === "claude";
   }
 
-  ownsTask(taskId: number): boolean {
-    if (taskId < TASK_ID_BASE) return false;
-    for (const session of this.sessions.values()) {
-      if (session.gate.owns(taskId)) return true;
+  /**
+   * Take the Claude plan part of the conversation's config. Without one the
+   * bot left the Claude plan model, and later turns run on pi. A
+   * conversation that left (or fell back to the gateway) stays left.
+   */
+  async configure(
+    ref: ConversationRef,
+    compiled: Pick<CompiledConversation, "claude">,
+  ): Promise<void> {
+    const info = compiled.claude;
+    if (!info) {
+      this.leave(ref);
+      return;
     }
-    return false;
-  }
-
-  sync(ref: ConversationRef, info: ClaudeSessionSync): void {
     const session = this.ensure(ref);
     session.model = info.model;
     session.system = info.system;
     session.tools = info.tools;
     session.permissions = info.permissions;
-    session.vaultTools = new Set(info.vaultTools ?? []);
+    session.runners = info.runners ?? new Map();
     if (session.surface !== "pi") session.surface = "claude";
   }
 
-  /** The bot left the Claude plan model. Later turns use pi. */
-  detach(ref: ConversationRef): void {
+  /** The conversation leaves the Claude plan for good: its turns run on pi from now on. */
+  leave(ref: ConversationRef): void {
     const session = this.sessions.get(ref);
-    if (!session) return;
+    if (!session || session.surface === "pi") return;
     session.surface = "pi";
+    void this.persist();
+  }
+
+  busy(ref: ConversationRef): boolean {
+    return this.sessions.get(ref)?.busy === true;
   }
 
   /**
-   * Send one turn. `gateway` means the caller should submit the same input
-   * through the pi harness. `ran` means this engine owns the transcript,
-   * including a pause error when the kill switch or the worker refused.
+   * Run one turn; resolves when it ends. `unavailable`: the kill switch is
+   * off or the worker is unreachable and the fallback is the gateway, so
+   * the runtime hands the turn to pi. With the `pause` fallback the turn is
+   * this engine's, ending in a pause error.
    */
-  async submit(ref: ConversationRef, input: ClaudeSubmitInput): Promise<"ran" | "gateway"> {
+  async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted" | "unavailable"> {
     await this.restore();
     const session = this.sessions.get(ref);
-    if (!session || session.surface !== "claude") return "gateway";
+    if (!session || session.surface !== "claude") return "unavailable";
     const env = this.env();
     const fallback = claudeCodeFallback(env);
     if (!claudeCodeEngineEnabled(env)) {
@@ -165,9 +186,9 @@ export class ClaudeCodeEngine {
         "Claude subscription engine is off (CLAUDE_CODE_ENGINE_ENABLED).",
       );
     }
-    let target: { url: string; token: string };
     try {
-      target = await this.locator().resolve();
+      // Sets the worker up when needed; the connection resolves it again on every reconnect.
+      await this.locator().resolve();
     } catch (error) {
       return this.unavailable(
         ref,
@@ -200,10 +221,21 @@ export class ClaudeCodeEngine {
     session.busy = true;
     this.options.onBusy?.(ref, true);
     this.emit(ref);
+    const live: LiveTurn = {
+      turnId,
+      assistantId,
+      dispatched: false,
+      resolve: () => undefined,
+      reject: () => undefined,
+    };
     const done = new Promise<void>((resolve, reject) => {
-      session.live = { turnId, assistantId, resolve, reject };
+      live.resolve = resolve;
+      live.reject = reject;
     });
-    this.socket(target.url, target.token).send({
+    session.live = live;
+    const worker = this.worker();
+    worker.track(String(ref));
+    live.dispatched = worker.send({
       type: "turn",
       sessionId: String(ref),
       turnId,
@@ -216,59 +248,44 @@ export class ClaudeCodeEngine {
     });
     await done;
     await this.persist();
-    return "ran";
+    return "accepted";
   }
 
-  abort(ref: ConversationRef): void {
+  async abort(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session?.live) return;
     this.client?.send({ type: "abort", sessionId: String(ref) });
     this.finish(session, session.live.turnId, "aborted");
   }
 
-  /**
-   * Apply the conversation's YOLO mode. Switching it on also runs the calls
-   * already waiting that it would have run (never a vault tool's, and only
-   * in the owner's turn). Returns their task ids.
-   */
-  setYolo(ref: ConversationRef, yolo: ClaudeYolo): number[] {
-    // Only a Claude plan conversation has a session; never create one here.
-    const session = this.sessions.get(ref);
-    if (!session) return [];
-    session.yolo = yolo;
-    if (!yolo.on) return [];
-    const approved: number[] = [];
-    for (const call of session.gate.waiting()) {
-      if (!this.yoloRuns(session, call.name)) continue;
-      session.gate.decide(call.taskId, "approved");
-      approved.push(call.taskId);
+  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
+    const state = await this.read(ref);
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const message = state.messages[i];
+      if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+      const text = message.error ? `⚠ ${message.error}` : message.text;
+      if (!text) continue;
+      return { role: message.role, text, createdAt: message.createdAt };
     }
-    return approved;
+    return undefined;
   }
 
-  /** Whether YOLO runs an `ask` call of this tool now: on, not a vault tool, the owner's turn. */
-  private yoloRuns(session: ClaudeSession, name: string): boolean {
-    if (!session.yolo.on || session.vaultTools.has(name)) return false;
-    const last = session.messages.findLast((message) => message.role === "user");
-    if (!last || last.peer) return false;
-    return last.author === undefined || last.author.id === session.yolo.by;
-  }
-
-  decide(taskId: number, decision: "approved" | "denied"): void {
-    for (const session of this.sessions.values()) {
-      if (!session.gate.owns(taskId)) continue;
-      session.gate.decide(taskId, decision);
-      return;
-    }
-    throw new Error(`Tool call ${taskId} is not waiting for approval`);
-  }
-
-  async read(ref: ConversationRef, window?: number): Promise<ChatState> {
+  /** The conversation's user messages, newest first, as the Tool gate reads them. */
+  async userMessages(ref: ConversationRef): Promise<GateUserMessage[]> {
     await this.restore();
-    return this.state(this.require(ref), window);
+    const session = this.sessions.get(ref);
+    return session ? userMessagesOf(session.messages) : [];
   }
 
-  async page(ref: ConversationRef, before: string, limit: number): Promise<ChatPage | undefined> {
+  async read(ref: ConversationRef): Promise<ChatState> {
+    await this.restore();
+    return this.state(this.require(ref));
+  }
+
+  async page(
+    ref: ConversationRef,
+    { before, limit }: { before: string; limit: number },
+  ): Promise<ChatPage | undefined> {
     await this.restore();
     return pageBefore(this.require(ref).messages, before, limit);
   }
@@ -276,7 +293,7 @@ export class ClaudeCodeEngine {
   async watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
-    window?: number,
+    { window }: { window?: number } = {},
   ): Promise<ChatSubscription> {
     await this.restore();
     const session = this.require(ref);
@@ -336,11 +353,8 @@ export class ClaudeCodeEngine {
     session: ClaudeSession,
     fallback: ClaudeEngineFallback,
     detail: string,
-  ): "ran" | "gateway" {
-    if (fallback === "gateway") {
-      session.surface = "pi";
-      return "gateway";
-    }
+  ): "accepted" | "unavailable" {
+    if (fallback === "gateway") return "unavailable";
     session.messages.push({
       id: `a-pause-${Date.now()}`,
       role: "assistant",
@@ -351,102 +365,111 @@ export class ClaudeCodeEngine {
     });
     this.emit(ref);
     void this.persist();
-    return "ran";
+    return "accepted";
   }
 
-  private socket(url: string, token: string): ClaudeWorkerClient {
-    if (this.client) return this.client;
-    this.client = new ClaudeWorkerClient({
-      url,
-      token,
-      connect: this.options.connect,
+  /** One connection for the engine's life; it finds the worker again on every reconnect. */
+  private worker(): ClaudeWorkerClient {
+    this.client ??= new ClaudeWorkerClient({
+      resolveTarget: () => this.locator().resolve(),
+      ...(this.options.connect ? { connect: this.options.connect } : {}),
       onEvent: (message) => this.onWorker(message),
       onTool: (call) => this.onTool(call),
+      onConnected: (rebooted) => this.onConnected(rebooted),
     });
     return this.client;
   }
 
+  /**
+   * After every (re)connect, before queued turns go out. A worker that
+   * restarted lost the turns it was running: they end now, with an error the
+   * owner can see, instead of waiting forever. The conversation keeps its
+   * Claude session id, so the next turn resumes it. Turns still queued go to
+   * the new worker.
+   */
+  private onConnected(rebooted: boolean): void {
+    for (const session of this.sessions.values()) {
+      const live = session.live;
+      if (!live) continue;
+      if (rebooted && live.dispatched) {
+        this.finish(session, live.turnId, "error", WORKER_RESTARTED);
+        continue;
+      }
+      live.dispatched = true;
+    }
+  }
+
+  /**
+   * Claude asks for a tool: the call goes through the Tool gate like a pi
+   * call, with its answer held by the gate (a Claude call does not survive
+   * a restart), and its row in the chat follows the gate's card details.
+   */
   private async onTool(call: ToolUseCall): Promise<ToolResultPayload> {
     const ref = Number(call.sessionId);
     const session = this.sessions.get(ref);
     if (!session) return { content: "Unknown conversation.", isError: true };
-    const tool: ChatToolCall = {
-      id: call.toolUseId,
-      name: call.name,
-      args: asRecord(call.input),
-      status: "running",
+    const args = asRecord(call.input);
+    const row = (patch: Omit<ChatToolCall, "id" | "name" | "args">) => {
+      this.upsertTool(session, call.turnId, {
+        id: call.toolUseId,
+        name: call.name,
+        args,
+        ...patch,
+      });
+      this.emit(ref);
     };
-    this.upsertTool(session, call.turnId, tool);
-    this.emit(ref);
-    return session.gate.run({
-      toolUseId: call.toolUseId,
+    row({ status: "running" });
+    if (session.permissions[call.name] === "off") {
+      const content = `${call.name} is off for this bot.`;
+      row({ status: "error", output: content });
+      return { content, isError: true };
+    }
+    session.nextTask += 1;
+    const taskId = session.nextTask;
+    const api = claudeToolApi({
       name: call.name,
-      input: call.input,
-      turnId: call.turnId,
-    });
-  }
-
-  private bindGate(ref: ConversationRef, session: ClaudeSession): ClaudeApprovalGate {
-    return createClaudeApprovalGate({
-      permission: (name) => session.permissions[name] ?? "ask",
-      yolo: (name) => this.yoloRuns(session, name),
-      nextTaskId: () => {
-        session.nextTask += 1;
-        return session.nextTask;
-      },
-      onAsk: (call) => {
-        this.upsertTool(session, call.turnId, {
-          id: call.toolUseId,
-          name: call.name,
-          args: asRecord(call.input),
+      conversation: ref,
+      task: taskId,
+      ...(this.options.docs ? { docs: this.options.docs } : {}),
+      details: (value) => {
+        const card = approvalOf(value);
+        if (card?.state !== "pending") return;
+        row({
           status: "awaiting_approval",
-          taskId: call.taskId,
+          taskId,
+          ...(card.vault ? { vault: card.vault } : {}),
+          ...(card.expiresAt !== undefined ? { expiresAt: card.expiresAt } : {}),
         });
-        this.emit(ref);
-      },
-      execute: async (call, approval) => {
-        const approved = approval ? { approval } : {};
-        this.upsertTool(session, call.turnId, {
-          id: call.toolUseId,
-          name: call.name,
-          args: asRecord(call.input),
-          status: "running",
-          ...approved,
-        });
-        this.emit(ref);
-        try {
-          const result = await this.options.execute(ref, {
-            sessionId: String(ref),
-            turnId: call.turnId,
-            toolUseId: call.toolUseId,
-            name: call.name,
-            input: call.input,
-          });
-          this.upsertTool(session, call.turnId, {
-            id: call.toolUseId,
-            name: call.name,
-            args: asRecord(call.input),
-            status: result.isError ? "error" : "done",
-            output: result.content,
-            ...approved,
-          });
-          this.emit(ref);
-          return result;
-        } catch (error) {
-          const content = error instanceof Error ? error.message : String(error);
-          this.upsertTool(session, call.turnId, {
-            id: call.toolUseId,
-            name: call.name,
-            args: asRecord(call.input),
-            status: "error",
-            output: content,
-            ...approved,
-          });
-          this.emit(ref);
-          return { content, isError: true };
-        }
       },
     });
+    const runner = session.runners.get(call.name);
+    try {
+      const result = await this.gate.run(
+        {
+          name: call.name,
+          args,
+          replaySafe: runner?.replay === "safe",
+          hooks: runner ? gateHooksOf(runner) : undefined,
+          api,
+          context: ctx,
+          answers: "memory",
+          userMessages: async () => userMessagesOf(session.messages),
+          instructions: async () => session.system || undefined,
+        },
+        async () => {
+          row({ status: "running", taskId });
+          if (!runner) return unavailable(call.name);
+          return runner.execute(args as never, api, ctx);
+        },
+      );
+      const content = resultText(result);
+      row(toolRowOf(result, content));
+      return { content, ...(result.isError ? { isError: true } : {}) };
+    } catch (error) {
+      const content = error instanceof Error ? error.message : String(error);
+      row({ status: "error", output: content });
+      return { content, isError: true };
+    }
   }
 
   private refOf(session: ClaudeSession): ConversationRef {
@@ -513,6 +536,8 @@ export class ClaudeCodeEngine {
     const live = session.live;
     session.live = undefined;
     const ref = this.refOf(session);
+    // A call still waiting on the owner belongs to the turn that ended.
+    this.gate.abandon(ref);
     this.options.onBusy?.(ref, false);
     this.emit(ref);
     if (live?.turnId === turnId) live.resolve();
@@ -562,18 +587,15 @@ export class ClaudeCodeEngine {
       model: "",
       system: "",
       tools: [] as ToolSpec[],
-      permissions: {} as Record<string, ToolPermissionChoice>,
-      vaultTools: new Set<string>(),
-      yolo: { on: false } as ClaudeYolo,
+      permissions: {} as Record<string, ToolPermission>,
+      runners: new Map<string, ToolRegistration>(),
       surface: "claude" as const,
       messages: [] as ChatMessage[],
       nextTask: TASK_ID_BASE,
       busy: false,
     };
-    const withGate = session as ClaudeSession;
-    withGate.gate = this.bindGate(ref, withGate);
-    this.sessions.set(ref, withGate);
-    return withGate;
+    this.sessions.set(ref, session);
+    return session;
   }
 
   private require(ref: ConversationRef): ClaudeSession {
@@ -605,15 +627,13 @@ export class ClaudeCodeEngine {
           }
           continue;
         }
-        // YOLO and the vault tools come from the runtime's sync, never the file.
+        // What runs a tool comes from the runtime's sync, never the file.
         const restored = {
           ...value,
           busy: false,
           live: undefined,
-          vaultTools: new Set<string>(),
-          yolo: { on: false },
+          runners: new Map<string, ToolRegistration>(),
         } as ClaudeSession;
-        restored.gate = this.bindGate(ref, restored);
         this.sessions.set(ref, restored);
       }
     } catch {
@@ -627,12 +647,69 @@ export class ClaudeCodeEngine {
     await this.restore();
     const sessions: Record<string, ClaudeSession> = {};
     for (const [ref, session] of this.sessions) {
-      const { vaultTools: _vaultTools, yolo: _yolo, ...rest } = session;
+      const { runners: _runners, ...rest } = session;
       sessions[String(ref)] = { ...rest, live: undefined, busy: false } as ClaudeSession;
     }
     await mkdir(dirname(this.options.persistPath), { recursive: true });
     await writeFile(this.options.persistPath, JSON.stringify({ sessions }), "utf8");
   }
+}
+
+/** The conversation's user messages, newest first, as the Tool gate reads them. */
+function userMessagesOf(messages: readonly ChatMessage[]): GateUserMessage[] {
+  return messages
+    .filter((message) => message.role === "user")
+    .reverse()
+    .map((message) => ({
+      text: message.text,
+      peer: message.peer !== undefined,
+      ...(message.author ? { author: message.author.id } : {}),
+    }));
+}
+
+function unavailable(name: string): ToolExecutionResult {
+  return {
+    output: [{ type: "text", text: `${name} is not available on the Claude plan engine.` }],
+    isError: true,
+  };
+}
+
+/** The text Claude reads back from a tool's result. */
+function resultText(result: ToolExecutionResult): string {
+  return (result.output ?? [])
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** A finished call's row, from the gate's result: the same labels a pi call gets. */
+function toolRowOf(
+  result: ToolExecutionResult,
+  output: string,
+): Omit<ChatToolCall, "id" | "name" | "args"> {
+  const card = approvalOf(result.details);
+  const approval = card?.state;
+  return {
+    status:
+      approval === "denied"
+        ? "denied"
+        : approval === "expired"
+          ? "expired"
+          : card?.interrupted
+            ? "interrupted"
+            : result.isError
+              ? "error"
+              : "done",
+    output,
+    ...(card?.waitedMs ? { waitedMs: card.waitedMs } : {}),
+    ...(approval === "approved" ||
+    approval === "denied" ||
+    approval === "auto" ||
+    approval === "yolo" ||
+    approval === "refused"
+      ? { approval }
+      : {}),
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

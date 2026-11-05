@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { markdownComponents } from "../../lib/markdown";
-import { TypingIndicator, USER_PILL } from "../../components/ChatMessageView";
+import { TypingIndicator, USER_PILL } from "../../components/ui/transcript-parts";
 import {
   Trace,
   TraceCollapsible,

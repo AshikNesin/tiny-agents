@@ -7,10 +7,10 @@
  * is "ask the owner". It sees the owner's own messages and the pending call,
  * never tool results or fetched content, where injected instructions arrive.
  */
-import type { EntryRecord, JsonObject } from "@earendil-works/pi-durable";
+import type { JsonObject } from "@earendil-works/pi-durable";
 import type { Classifier, ClassifierAnswer, ClassifierQuestion } from "./classifier";
+import type { GateUserMessage } from "./policy";
 import { secretRedactor } from "./redact";
-import { CHAT_USER_ENTRY, peerOf } from "./transcript";
 
 /** What the reviewer judges: the pending call and what the owner asked for. */
 export interface ReviewInput {
@@ -67,15 +67,6 @@ export const REVIEW_QUESTIONS = {
     ],
   },
 } satisfies Record<string, ClassifierQuestion>;
-
-/**
- * What the approval gate needs to auto-review: the reviewer, and the
- * conversation's newest entries (newest first) to find the owner's messages in.
- */
-export interface GateReview {
-  reviewer: Reviewer;
-  recentEntries(conversationId: number): Promise<readonly EntryRecord[]>;
-}
 
 /** Approve only when the owner clearly asked and the worst case is minor. */
 export const REVIEW_THRESHOLDS = {
@@ -156,31 +147,20 @@ export function createReviewer(
   };
 }
 
-function textOf(entry: EntryRecord): string {
-  const content = entry.model?.[0]?.content;
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((block): block is { type: "text"; text: string } => block?.type === "text")
-    .map((block) => block.text)
-    .join("");
-}
-
 /**
- * The owner's latest messages (oldest first) from a conversation's newest
- * entries (newest first). `undefined` when the turn was started by another
+ * The owner's latest messages (oldest first) from a conversation's user
+ * messages (newest first). `undefined` when the turn was started by another
  * bot (a peer delivery) or no owner message is in reach: nothing to judge
  * the call against.
  */
-export function ownerMessages(newestFirst: readonly EntryRecord[]): string[] | undefined {
+export function ownerMessages(newestFirst: readonly GateUserMessage[]): string[] | undefined {
   const messages: string[] = [];
-  for (const entry of newestFirst) {
-    if (entry.kind !== "pi.user" && entry.kind !== CHAT_USER_ENTRY) continue;
-    if (peerOf(entry)) {
+  for (const message of newestFirst) {
+    if (message.peer) {
       if (messages.length === 0) return undefined;
       continue;
     }
-    const text = textOf(entry).trim();
+    const text = message.text.trim();
     if (text) messages.unshift(text);
     if (messages.length === OWNER_MESSAGES) break;
   }

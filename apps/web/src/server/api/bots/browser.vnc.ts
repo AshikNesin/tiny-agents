@@ -10,7 +10,7 @@
  * minted for.
  */
 import type { IncomingMessage, Server } from "node:http";
-import type { BrowserTarget } from "@tiny-agents/agent";
+import type { BrowserTarget } from "@tiny-agents/agent/browser";
 import { getBrowserSessions } from "./browser.sessions";
 import { attachVncBridge, type VncTarget } from "./desktop.vnc";
 import { createTicketStore } from "../ws/upgrade";

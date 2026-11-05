@@ -12,9 +12,9 @@ import {
   parseDesktopSize,
   parseExtraPackages,
   type ComputerSessions,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/agent/computer";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
-import { sandboxEndpoint, unquoteEnv } from "./sandbox-host";
+import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -37,13 +37,13 @@ let instance: ComputerSessions | null | undefined;
 /** The process's manager, created on first use; null when no sandbox VM is configured. */
 export function getComputerSessions(env: Env = process.env): ComputerSessions | null {
   if (instance !== undefined) return instance;
-  const endpoint = sandboxEndpoint(env);
-  if (!endpoint || computerSetupHint(env)) return (instance = null);
+  const connection = sandboxConnection(env);
+  if (!connection || computerSetupHint(env)) return (instance = null);
   const size = parseDesktopSize(unquoteEnv(env.COMPUTER_DESKTOP_SIZE));
   const idle = Number(unquoteEnv(env.COMPUTER_IDLE_MINUTES));
   instance = createComputerSessions({
     transport: createX11ComputerTransport({
-      ...endpoint,
+      connection,
       extraPackages: parseExtraPackages(unquoteEnv(env.COMPUTER_EXTRA_PACKAGES)).packages,
     }),
     width: size.width,

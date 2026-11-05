@@ -7,6 +7,7 @@ import {
   titleExcerpt,
   titlePastChat,
 } from "../../../../apps/web/src/server/api/bots/chats.title";
+import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
 
 describe("past-chat titles (issue #101)", () => {
   it("takes the first owner message, on one line and capped", () => {
@@ -45,42 +46,38 @@ describe("past-chat titles (issue #101)", () => {
     expect(excerpt).toBe("Owner: Find flights\nTravel: Here are three.");
   });
 
-  it("asks the default lightweight model, falling back to the bot's own", async () => {
-    const getModel = vi.fn((_provider: string, id: string) => ({ id }));
-    const completeSimple = vi.fn().mockResolvedValue({ stopReason: "stop", content: [] });
-    const input = {
-      botName: "Travel",
-      botModelId: "bot-model",
-      messages: [{ role: "user", text: "Hi" }],
-    };
+  const input = {
+    botName: "Travel",
+    botModelId: "bot-model",
+    messages: [
+      { role: "user", text: "Find flights to Goa" },
+      { role: "assistant", text: "Here are three." },
+    ],
+  };
 
-    await titlePastChat("chat-1", input, {
-      models: { getModel, completeSimple } as never,
-      hasModel: () => true,
-    });
+  it("asks the side-caller for the title model, falling back to the bot's own", async () => {
+    const complete = vi.fn<SideCaller["complete"]>().mockResolvedValue(undefined);
+    await titlePastChat("chat-1", input, { sideCaller: { complete } });
     expect(DEFAULT_CHAT_TITLE_MODEL).toBe("custom:custom-zai-coding-plan/glm-5.3-flash");
-    expect(getModel).toHaveBeenLastCalledWith("custom-zai-coding-plan", "glm-5.3-flash");
+    expect(complete).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        botModelId: "bot-model",
+        override: DEFAULT_CHAT_TITLE_MODEL,
+        user: "Conversation:\nOwner: Find flights to Goa\nTravel: Here are three.\n\nTitle:",
+        label: "Chat title",
+      }),
+    );
 
-    await titlePastChat("chat-1", input, {
-      models: { getModel, completeSimple } as never,
-      hasModel: (id) => id === "bot-model",
-    });
-    expect(getModel).toHaveBeenLastCalledWith(expect.any(String), "bot-model");
+    await titlePastChat("chat-1", input, { sideCaller: { complete }, model: " custom:x/y " });
+    expect(complete).toHaveBeenLastCalledWith(expect.objectContaining({ override: "custom:x/y" }));
   });
 
-  it("never throws when the side-call fails", async () => {
+  it("makes no call for a chat with nothing said, and never throws", async () => {
+    const complete = vi.fn<SideCaller["complete"]>().mockRejectedValue(new Error("boom"));
+    await titlePastChat("chat-1", { ...input, messages: [] }, { sideCaller: { complete } });
+    expect(complete).not.toHaveBeenCalled();
     await expect(
-      titlePastChat(
-        "chat-1",
-        { botName: "Travel", botModelId: "m", messages: [{ role: "user", text: "Hi" }] },
-        {
-          models: {
-            getModel: () => ({ id: "m" }),
-            completeSimple: vi.fn().mockRejectedValue(new Error("gateway down")),
-          } as never,
-          hasModel: () => true,
-        },
-      ),
+      titlePastChat("chat-1", input, { sideCaller: { complete } }),
     ).resolves.toBeUndefined();
   });
 });

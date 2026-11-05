@@ -1,20 +1,19 @@
 /**
  * The computer's production transport (issue #108): a desktop on the
  * sandbox VM, seen with `scrot` and driven with `xdotool`, `wmctrl` and
- * `xclip`, exactly Anthropic's reference stack. Every tool call is one SSH
- * exec on a fresh connection (the terminal and browser rule for tailscaled:
- * no pooling), sourcing the desktop's env file so it reaches the right
- * display and session bus.
+ * `xclip`, exactly Anthropic's reference stack. Every tool call is one exec
+ * on the app's sandbox connection, sourcing the desktop's env file so it
+ * reaches the right display and session bus; the live view is a forward on
+ * the same connection.
  *
  * Text the bot types, clipboard text and vault values travel on the exec's
  * stdin, never on its command line: `ps` on the VM shows argv.
  *
  * The command builders are pure and exported for tests; the transport is the
- * only part that touches ssh2.
+ * only part that reaches the sandbox.
  */
-import type { Duplex } from "node:stream";
-import type { Client } from "ssh2";
-import { dialSsh, type HostKeyStore } from "../ssh/connection";
+import { SandboxTimeoutError } from "../ssh/connection";
+import type { SandboxConnection } from "../ssh/sandbox-connection";
 import { shQuote } from "./browser-vm-setup";
 import {
   DesktopGoneError,
@@ -283,14 +282,8 @@ export function parseCursor(output: string): { x: number; y: number } {
 }
 
 export interface X11ComputerTransportOptions {
-  /** SSH host of the sandbox VM. */
-  host: string;
-  port?: number;
-  user?: string;
-  hostKeys?: HostKeyStore;
-  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
-  privateKey?: string;
-  connectTimeoutMs?: number;
+  /** The app's connection to the sandbox VM. */
+  connection: SandboxConnection;
   /** `COMPUTER_EXTRA_PACKAGES`, already validated. */
   extraPackages?: string[];
 }
@@ -311,62 +304,28 @@ export function createX11ComputerTransport(
   options: X11ComputerTransportOptions,
 ): ComputerTransport {
   const extra = options.extraPackages ?? [];
-  const dial = (): Promise<Client> =>
-    dialSsh({
-      host: options.host,
-      port: options.port,
-      user: options.user,
-      hostKeys: options.hostKeys,
-      privateKey: options.privateKey,
-      connectTimeoutMs: options.connectTimeoutMs,
-    });
+  const { connection } = options;
 
-  /** One command on a fresh connection; stdin (if any) is written and closed. */
+  /** One command; stdin (if any) is written and closed. */
   const run = async (
     command: string,
     { stdin, timeoutMs = TOOL_TIMEOUT_MS }: { stdin?: string; timeoutMs?: number } = {},
   ): Promise<ExecResult> => {
-    // Tailscale SSH handshakes occasionally stall; one retry hides it.
-    const client = await dial().catch(() => dial());
     try {
-      return await new Promise<ExecResult>((resolve, reject) => {
-        const timer = setTimeout(
-          () => reject(new Error(`The computer did not answer within ${timeoutMs / 1000}s`)),
-          timeoutMs,
-        );
-        client.exec(command, (error, channel) => {
-          if (error) {
-            clearTimeout(timer);
-            reject(error);
-            return;
-          }
-          const out: Buffer[] = [];
-          let size = 0;
-          let err = "";
-          let settled = false;
-          const finish = (code: number) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            resolve({ stdout: Buffer.concat(out), stderr: err, code });
-          };
-          channel.on("data", (chunk: Buffer) => {
-            size += chunk.length;
-            if (size <= MAX_OUTPUT_BYTES) out.push(chunk);
-          });
-          channel.stderr.on("data", (chunk: Buffer) => {
-            if (err.length < 4000) err += chunk.toString("utf8");
-          });
-          // A command that leaves a child behind (xclip, a launched app)
-          // may never close the channel: settle shortly after exit.
-          channel.on("exit", (code: number | null) => setTimeout(() => finish(code ?? 255), 50));
-          channel.on("close", (code: number | null) => finish(code ?? 255));
-          if (stdin !== undefined) channel.end(stdin);
-          else channel.end();
-        });
+      const result = await connection.exec(command, {
+        stdin,
+        timeoutMs,
+        maxBytes: MAX_OUTPUT_BYTES,
+        // A command that leaves a child behind (xclip, a launched app) may
+        // never close its channel: settle shortly after it exits.
+        settleOnExit: true,
       });
-    } finally {
-      client.end();
+      return { stdout: result.stdout, stderr: result.stderr.slice(0, 4000), code: result.exitCode };
+    } catch (error) {
+      if (error instanceof SandboxTimeoutError) {
+        throw new Error(`The computer did not answer within ${timeoutMs / 1000}s`);
+      }
+      throw error;
     }
   };
 
@@ -377,22 +336,6 @@ export function createX11ComputerTransport(
     throw new Error(
       `Could not ${what} on the VM (exit ${result.code})${detail ? `: ${detail}` : ""}`,
     );
-  };
-
-  /** A forwarded channel to a VM-local port, on its own connection. */
-  const forward = async (port: number): Promise<Duplex> => {
-    const client = await dial().catch(() => dial());
-    return new Promise<Duplex>((resolve, reject) => {
-      client.forwardOut("127.0.0.1", 0, "127.0.0.1", port, (error, channel) => {
-        if (error) {
-          client.end();
-          reject(error);
-          return;
-        }
-        channel.once("close", () => client.end());
-        resolve(channel);
-      });
-    });
   };
 
   return {
@@ -456,7 +399,7 @@ export function createX11ComputerTransport(
       const desktop: ComputerDesktop = {
         width: open.width,
         height: open.height,
-        vnc: { openStream: () => forward(launched.vncPort) },
+        vnc: { openStream: () => connection.forward(launched.vncPort) },
         async screenshot(region) {
           const shot = (await tool(screenshotBody(region), "take a screenshot")).stdout;
           if (shot.length < 4 || shot[0] !== 0xff || shot[1] !== 0xd8) {

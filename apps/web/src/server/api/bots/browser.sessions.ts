@@ -11,8 +11,8 @@ import {
   createRemoteCdpTransport,
   type BrowserSessions,
   type BrowserTransport,
-} from "@tiny-agents/agent";
-import { sandboxEndpoint, unquoteEnv } from "./sandbox-host";
+} from "@tiny-agents/agent/browser";
+import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -25,8 +25,8 @@ type Env = Readonly<Record<string, string | undefined>>;
 export function browserTransport(env: Env = process.env): BrowserTransport {
   const executable = unquoteEnv(env.BROWSER_EXECUTABLE_PATH);
   if (executable) return createChromiumTransport({ executablePath: executable });
-  const endpoint = sandboxEndpoint(env);
-  if (endpoint) return createRemoteCdpTransport(endpoint);
+  const connection = sandboxConnection(env);
+  if (connection) return createRemoteCdpTransport({ connection });
   return createChromiumTransport();
 }
 

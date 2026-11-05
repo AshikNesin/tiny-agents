@@ -4,15 +4,13 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
-import { CHAT_WINDOW } from "@tiny-agents/agent";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
 import * as pastChats from "./chats.history";
-import { onBotChatChanged } from "./chats.history";
 import { openSse } from "./bots.sse";
-import { watchBot } from "./bots.viewers";
-import { chatCards, onRoutineCard } from "../routines/routines.cards";
+import { followBotChat } from "./bots.stream";
+import type { BotStreamEvent, EventsFeedEvent } from "../../../shared/bot-stream";
 import {
   answerQuestionsSchema,
   approvalSchema,
@@ -72,7 +70,7 @@ router.get("/capabilities", (c) => {
 // ── Chat + activity streams (SSE) ─────────────────────────────────────
 
 router.get("/events", (c) =>
-  openSse(c, (sse) => {
+  openSse<EventsFeedEvent>(c, (sse) => {
     const runtime = getAgentRuntime();
     // Snapshot of current busy conversations first, then live changes.
     sse.write({
@@ -104,44 +102,8 @@ router.get("/bots/:id/stream", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   // Before the stream opens (unknown bot) this is a normal API error.
   const bot = await botsService.getBot(id);
-  return openSse(c, async (sse) => {
-    sse.onClose(watchBot(bot.id));
-    // "New chat" or continuing a Past chat moves the bot onto another
-    // conversation: this stream watched the old one, so it ends and the
-    // client reconnects onto the new one.
-    sse.onClose(
-      onBotChatChanged((botId) => {
-        if (botId === bot.id) sse.end();
-      }),
-    );
-    // Only the newest messages (issue #92): older ones load on scroll from
-    // GET /bots/:id/messages, so an open or reconnect stays the same size
-    // however long the conversation gets.
-    const subscription = await getAgentRuntime().watchChat(
-      Number(bot.conversationId),
-      (events) => {
-        for (const event of events) sse.write(event);
-      },
-      { window: CHAT_WINDOW },
-    );
-    sse.onClose(() => void subscription.stop());
-    // Routine results (issue #63): cards beside the transcript, not in it.
-    // Follow first, then list, so a run finishing in between still arrives
-    // (the client dedupes by id).
-    sse.onClose(
-      onRoutineCard((botId, run) => {
-        if (botId === bot.id) sse.write({ type: "routine-run", run });
-      }),
-    );
-    sse.write({ type: "routine-runs", runs: await chatCards(bot.id, bot.chatStartedAt) });
-    // YOLO mode of this chat (issue #151): now, and whenever the owner switches it.
-    sse.onClose(
-      botsService.onYoloChanged((botId, on) => {
-        if (botId === bot.id) sse.write({ type: "yolo", on });
-      }),
-    );
-    sse.write({ type: "yolo", on: await botsService.getYolo(bot.id) });
-  });
+  // The stream ends when the bot moves to another chat; the client reconnects onto it.
+  return openSse<BotStreamEvent>(c, async (sse) => sse.onClose(await followBotChat(bot, sse)));
 });
 
 // ── Bots CRUD ─────────────────────────────────────────────────────────

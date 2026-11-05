@@ -1,17 +1,25 @@
 /**
- * WebSocket client from tiny-agents to the Claude Code worker.
- * Ping every 20s, reconnect after silence, resume from the last sequence
- * number. Tool calls are idempotent on tool_use_id.
+ * The Claude plan engine's protocol on the Worker connection
+ * (`@tiny-agents/claude-worker/client`): turns go out, session events come
+ * in, and each `tool_use` runs here once. Tool calls are idempotent on
+ * tool_use_id. Heartbeats, reconnects, resume and reboot detection are the
+ * connection's.
  */
-import { WebSocket } from "ws";
 import {
-  DEFAULT_TIMINGS,
   parseWorkerMessage,
-  reconnectDelayMs,
-  type Timings,
   type ToolResultPayload,
   type WorkerMessage,
 } from "@tiny-agents/claude-worker";
+import {
+  connectWorker,
+  type ConnectionTimings,
+  type WebSocketLike,
+  type WorkerClock,
+  type WorkerConnection,
+  type WorkerTarget,
+} from "@tiny-agents/claude-worker/client";
+
+export type { WebSocketLike } from "@tiny-agents/claude-worker/client";
 
 export interface ToolUseCall {
   sessionId: string;
@@ -22,165 +30,62 @@ export interface ToolUseCall {
 }
 
 export interface ClaudeWorkerClientOptions {
-  url: string;
-  token: string;
-  timings?: Partial<Timings>;
+  /** Where the worker is; asked again on every reconnect. */
+  resolveTarget: () => Promise<WorkerTarget>;
+  /** Session events (once each, in order) and the worker's errors. */
   onEvent: (message: WorkerMessage) => void;
   onTool: (call: ToolUseCall) => Promise<ToolResultPayload>;
+  /**
+   * After every (re)connect, before queued turns go out. `rebooted`: the
+   * worker restarted, and turns it was running are gone.
+   */
+  onConnected?: (rebooted: boolean) => void;
+  timings?: Partial<ConnectionTimings>;
   /** Test hook. Defaults to the `ws` client. */
   connect?: (url: string, token: string) => WebSocketLike;
-  now?: () => number;
-  schedule?: (fn: () => void, ms: number) => () => void;
+  clock?: WorkerClock;
 }
-
-export interface WebSocketLike {
-  readyState: number;
-  send: (data: string) => void;
-  close: () => void;
-  on: (event: string, listener: (...args: unknown[]) => void) => void;
-  ping?: () => void;
-}
-
-const OPEN = 1;
 
 export class ClaudeWorkerClient {
-  private socket: WebSocketLike | undefined;
-  private attempt = 0;
-  private stopped = false;
-  private lastRx = 0;
-  private readonly lastSeq = new Map<string, number>();
+  private readonly connection: WorkerConnection;
   private readonly inflight = new Set<string>();
   private readonly results = new Map<string, ToolResultPayload>();
-  private readonly queued: string[] = [];
-  private reconnectTimer: (() => void) | undefined;
-  private heartbeatTimer: (() => void) | undefined;
-  private readonly timings: Timings;
-  private readonly now: () => number;
-  private readonly schedule: (fn: () => void, ms: number) => () => void;
 
   constructor(private readonly options: ClaudeWorkerClientOptions) {
-    this.timings = { ...DEFAULT_TIMINGS, ...options.timings };
-    this.now = options.now ?? Date.now;
-    this.schedule =
-      options.schedule ??
-      ((fn, ms) => {
-        const id = setTimeout(fn, ms);
-        return () => clearTimeout(id);
-      });
-    this.lastRx = this.now();
-    this.open();
+    const { connect } = options;
+    this.connection = connectWorker(options.resolveTarget, {
+      // A bot session's events belong to the turn the engine just sent:
+      // joining at the live edge never replays (and re-runs) an old turn.
+      sessions: { event: "event", resume: "resume", join: "now" },
+      onMessage: (frame) => this.onMessage(frame),
+      ...(options.onConnected ? { onConnected: options.onConnected } : {}),
+      ...(options.timings ? { timings: options.timings } : {}),
+      ...(connect ? { socket: (target) => connect(target.url, target.token) } : {}),
+      ...(options.clock ? { clock: options.clock } : {}),
+    });
   }
 
-  /** Close the socket but keep reconnecting. Tests use this for a mid-turn drop. */
-  drop(): void {
-    this.socket?.close();
+  /** Follow a session's events (call before its first turn is sent). */
+  track(sessionId: string): void {
+    this.connection.track(sessionId);
+  }
+
+  /** True when it went out now; false when it waits for the next connection. */
+  send(message: unknown): boolean {
+    return this.connection.send(message as object);
   }
 
   close(): void {
-    this.stopped = true;
-    this.reconnectTimer?.();
-    this.heartbeatTimer?.();
-    this.socket?.close();
-    this.socket = undefined;
+    this.connection.close();
   }
 
-  send(message: unknown): void {
-    const data = JSON.stringify(message);
-    if (this.socket && this.socket.readyState === OPEN) this.socket.send(data);
-    else this.queued.push(data);
-  }
-
-  private open(): void {
-    if (this.stopped) return;
-    const connect =
-      this.options.connect ??
-      ((url: string, token: string) =>
-        new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } }));
-    const socket = connect(this.options.url, this.options.token);
-    this.socket = socket;
-    this.lastRx = this.now();
-    const mark = () => {
-      this.lastRx = this.now();
-    };
-    socket.on("open", () => {
-      this.attempt = 0;
-      mark();
-      this.flush();
-      this.resumeAll();
-      this.armHeartbeat();
-    });
-    socket.on("message", (data: unknown) => {
-      mark();
-      this.onMessage(typeof data === "string" ? data : String(data));
-    });
-    socket.on("pong", mark);
-    socket.on("ping", mark);
-    socket.on("close", () => {
-      if (this.socket !== socket) return;
-      this.socket = undefined;
-      this.heartbeatTimer?.();
-      this.scheduleReconnect();
-    });
-    socket.on("error", () => {
-      socket.close();
-    });
-    this.armHeartbeat();
-  }
-
-  private armHeartbeat(): void {
-    this.heartbeatTimer?.();
-    const tick = () => {
-      if (this.stopped) return;
-      if (this.now() - this.lastRx >= this.timings.silenceCloseMs) {
-        this.socket?.close();
-        return;
-      }
-      this.socket?.ping?.();
-      this.send({ type: "ping" });
-      this.heartbeatTimer = this.schedule(tick, this.timings.pingIntervalMs);
-    };
-    this.heartbeatTimer = this.schedule(tick, this.timings.pingIntervalMs);
-  }
-
-  private scheduleReconnect(): void {
-    if (this.stopped) return;
-    this.reconnectTimer?.();
-    const delay = reconnectDelayMs(this.attempt, this.timings);
-    this.attempt += 1;
-    this.reconnectTimer = this.schedule(() => this.open(), delay);
-  }
-
-  private flush(): void {
-    if (!this.socket || this.socket.readyState !== OPEN) return;
-    for (const data of this.queued.splice(0)) this.socket.send(data);
-  }
-
-  private resumeAll(): void {
-    for (const [sessionId, seq] of this.lastSeq) {
-      this.send({ type: "resume", sessionId, afterSeq: seq });
-    }
-  }
-
-  private onMessage(raw: string): void {
-    let value: unknown;
-    try {
-      value = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    const message = parseWorkerMessage(value);
+  private onMessage(frame: unknown): void {
+    const message = parseWorkerMessage(frame);
     if (!message) return;
-    if (message.type === "ping") {
-      this.send({ type: "pong" });
-      return;
-    }
-    if (message.type === "pong") return;
     this.options.onEvent(message);
-    if (message.type !== "event") return;
-    const previous = this.lastSeq.get(message.sessionId) ?? 0;
-    if (message.seq <= previous) return;
-    this.lastSeq.set(message.sessionId, message.seq);
-    if (message.event.type === "tool_use") void this.onToolUse(message.sessionId, message.event);
+    if (message.type === "event" && message.event.type === "tool_use") {
+      void this.onToolUse(message.sessionId, message.event);
+    }
   }
 
   private async onToolUse(

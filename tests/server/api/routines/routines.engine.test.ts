@@ -22,9 +22,9 @@ import {
 } from "../../../../apps/web/src/server/api/routines/routines.runs";
 import {
   chatCards,
-  onRoutineCard,
   type RoutineRunCard,
 } from "../../../../apps/web/src/server/api/routines/routines.cards";
+import { onBotChatEvent } from "../../../../apps/web/src/server/api/bots/bots.events";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 import {
   createFakeRuntime,
@@ -403,6 +403,24 @@ describe("completion watcher", () => {
     expect(after?.finishedAt).toBeTruthy();
   });
 
+  it("resolves a run fired before routines had conversations from the bot's chat", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    const [run] = await db
+      .insert(routineRuns)
+      .values({
+        routineId: routine.id,
+        scheduledFor: SLOT,
+        status: "awaiting",
+        requestId: runRequestId(routine.id, SLOT),
+      })
+      .returning();
+    runtime.script.answer(run!.requestId, { text: "Old answer" }, CHAT);
+    const watcher = createRoutinesCompletionWatcher(runtime);
+    expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(0);
+    expect(await watcher.resolveConversation(CHAT)).toBe(1);
+    expect(await runById(run!.id)).toMatchObject({ status: "succeeded", output: "Old answer" });
+  });
+
   it("the owner chatting meanwhile never answers the run: only its own conversation does", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
@@ -501,7 +519,9 @@ describe("completion watcher", () => {
     expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([]);
 
     const seen: { botId: string; card: RoutineRunCard }[] = [];
-    const stop = onRoutineCard((botId, card) => seen.push({ botId, card }));
+    const stop = onBotChatEvent(bot.id, (event) => {
+      if (event.type === "routine-run") seen.push({ botId: bot.id, card: event.run });
+    });
     answer(run!, { text: "**All** good" });
     await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
     await vi.waitFor(() => expect(seen).toHaveLength(1));

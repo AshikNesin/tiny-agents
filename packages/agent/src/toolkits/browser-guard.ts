@@ -4,7 +4,7 @@
  * private exemptions). Kept apart from the toolkit so a transport can check
  * a redirect hop without importing the toolkit that imports it.
  */
-import { checkPublicUrl } from "./web";
+import { checkPublicUrl } from "./public-url";
 
 /** Ref from the last snapshot: `e12`, or `f1e12` for an element inside a frame. */
 export function assertRefShape(ref: string): void {

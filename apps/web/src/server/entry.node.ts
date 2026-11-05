@@ -13,11 +13,9 @@ import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startWorkers, stopWorkers } from "@groot/jobs/server/worker";
-import {
-  AgentRuntime,
-  closeAllBrowserSessions,
-  closeAllComputerSessions,
-} from "@tiny-agents/agent";
+import { AgentRuntime } from "@tiny-agents/agent";
+import { closeAllBrowserSessions } from "@tiny-agents/agent/browser";
+import { closeAllComputerSessions } from "@tiny-agents/agent/computer";
 import { appConfig } from "./config";
 import { agentDbPath, appEnv, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
@@ -34,16 +32,13 @@ import {
 } from "./api/bots/bots.runtime";
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
-import { createDeliveries } from "./api/bots/bots.delivery";
-import { onConversationSettled } from "./api/bots/bots.settled";
-import { botListStep } from "./api/bots/bots.list";
+import { startSettledPipeline } from "./api/bots/bots.settled";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
-import { startRoutinesWatcher } from "./api/routines/routines.watcher";
-import { createMemoryCapture } from "./api/bots/memories.capture";
-import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
+import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
+import { closeSandboxConnections } from "./api/bots/sandbox-host";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
 import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
@@ -153,11 +148,19 @@ async function main(): Promise<void> {
   });
   const add = lifecycle.add;
 
+  // The one SSH connection to the sandbox: first in, so it stops last, after
+  // the runtime, the browsers and the desktops ran their teardown over it.
+  add({ name: "sandbox connection", stop: () => closeSandboxConnections() });
+
   let runtime!: AgentRuntime;
+  // Side-calls (memory capture, chat titles) run on the opened runtime's
+  // models. Faux mode makes none: no capture, first-message titles.
+  let sideCaller: SideCaller | undefined;
   add({
     name: "agent runtime",
     start: async () => {
       runtime = await openRuntime();
+      sideCaller = fauxMode() ? undefined : createSideCaller(runtime);
     },
     stop: () => closeAgentRuntime(),
   });
@@ -213,53 +216,20 @@ async function main(): Promise<void> {
 
   // A conversation that settles (its reply finished) answers its Deliveries
   // (issue #12), resolves its awaiting routine runs (issue #63), updates the
-  // bot list, pushes and arms memory capture, in that order (bots.settled.ts).
-  // Memory capture (issue #22 phase B): settled Turns arm a debounce; the
-  // quiet window or 6 turns later one side-call extracts durable facts off
-  // the reply path. Faux mode never makes capture calls.
-  const deliveries = createDeliveries(runtime);
-  let memoryCapture: ReturnType<typeof createMemoryCapture> | undefined;
-  let unsubscribeSettled = () => {};
+  // bot list, pushes and arms memory capture (issue #22), in that order, and
+  // the steps' boot sweeps run once it listens (bots.settled.ts). Faux mode
+  // has no side-caller, so it never makes capture calls.
+  let stopSettled = () => {};
   add({
     name: "settled conversations",
-    start: async () => {
-      const routineRuns = startRoutinesWatcher(runtime);
-      memoryCapture = fauxMode()
-        ? undefined
-        : createMemoryCapture({
-            captureNow: (conversationId) =>
-              captureConversation(conversationId, {
-                sideCall: {
-                  models: runtime.models,
-                  hasModel: (id) => runtime.hasModel(id),
-                  modelId: appEnv().MEMORY_CAPTURE_MODEL,
-                  provider: runtime.provider,
-                },
-                readTranscript: async (id) => (await runtime.readChat(id)).messages,
-              }),
-          });
-      unsubscribeSettled = onConversationSettled(runtime, [
-        { name: "deliveries", run: (c) => deliveries.answer(c.conversationId, c.chat) },
-        {
-          name: "routine runs",
-          run: (c) => routineRuns.resolveConversation(c.conversationId, c.chat),
-        },
-        botListStep(),
-        notifications.onSettled,
-        ...(memoryCapture ? [memoryCapture.onSettled] : []),
-      ]);
+    start: () => {
+      stopSettled = startSettledPipeline(
+        runtime,
+        sideCaller ? { memoryCapture: { sideCaller, model: appEnv().MEMORY_CAPTURE_MODEL } } : {},
+      );
     },
-    // Unsubscribe first, then disarm capture timers: nothing may call into
-    // the runtime once it closes.
-    stop: () => {
-      unsubscribeSettled();
-      memoryCapture?.stop();
-    },
+    stop: () => stopSettled(),
   });
-
-  // Deliveries a restart interrupted are answered once the settled listener
-  // is in place (above), whatever order the boot awaits in.
-  add({ name: "delivery sweep", start: () => void deliveries.sweep().catch(() => undefined) });
 
   // Code (issue #143, ADR 0011): one live connection per coding agent
   // (Shelley, Claude Code); hand-off finishes go into bots' chats and
@@ -278,13 +248,7 @@ async function main(): Promise<void> {
   add({
     name: "chat titles",
     start: () => {
-      if (fauxMode()) return;
-      setChatTitler({
-        models: runtime.models,
-        hasModel: (id) => runtime.hasModel(id),
-        modelId: appEnv().CHAT_TITLE_MODEL,
-        provider: runtime.provider,
-      });
+      setChatTitler(sideCaller && { sideCaller, model: appEnv().CHAT_TITLE_MODEL });
     },
   });
 

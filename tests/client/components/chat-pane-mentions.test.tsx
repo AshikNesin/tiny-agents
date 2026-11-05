@@ -63,20 +63,13 @@ function seedStore(bots: Array<{ id: string; name: string; description: string }
   useBotsStore.setState({
     bots: bots.map((bot) => ({ ...bot, conversationId: "c", unread: false, replying: false })),
     gatewayConfigured: true,
-    chats: {},
   });
 }
 
 function renderPane() {
   render(
     <BrowserRouter>
-      <ChatPane
-        bot={HOST}
-        models={[model]}
-        gatewayConfigured
-        onEditBot={() => {}}
-        onBotReset={() => {}}
-      />
+      <ChatPane bot={HOST} models={[model]} gatewayConfigured onEditBot={() => {}} />
     </BrowserRouter>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;

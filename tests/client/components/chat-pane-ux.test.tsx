@@ -1,42 +1,47 @@
 /**
  * @vitest-environment jsdom
  *
- * Chat composer/UX fixes: mobile Enter inserts a newline instead of sending
- * (issue #1), sending scrolls the transcript to the end (issue #2a), and the
- * transcript shows a WhatsApp-style "New messages" divider above the first
- * unread reply (issue #3). Also: one Stop/Send action button, Escape stops,
- * per-bot drafts, no empty-state or "Reconnecting…" flash before the first
- * snapshot, the typing indicator, and no "New messages" flag on live replies.
- * The SSE store is mocked so no server is involved.
+ * Chat composer/UX: mobile Enter inserts a newline instead of sending
+ * (issue #1), one Stop/Send action button, Escape stops, per-bot drafts,
+ * and the header's New chat. The transcript renders the chat view: the
+ * "New messages" divider (issue #3), the empty state, the typing dots,
+ * Echoes and held messages; what the view says when is tested on the pure
+ * session (chat-session.test.ts). The bot stream is a fake (fakes/sse.ts),
+ * so no server is involved.
  */
 import React from "react";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
+import { chatSessions } from "@/store/chats";
 import type { Bot, ModelInfo } from "@/lib/bots-api";
+import type { ChatMessage } from "@/lib/chat-types";
+import { botStream, openedPaths } from "../fakes/sse";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 const readMock = vi.fn().mockResolvedValue(undefined);
 const abortMock = vi.fn().mockResolvedValue(undefined);
+const resetMock = vi.fn();
+const withdrawMock = vi.fn().mockResolvedValue(undefined);
 const pastChatsMock = vi.fn().mockResolvedValue([]);
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
     send: (...args: unknown[]) => sendMock(...args),
     abort: (...args: unknown[]) => abortMock(...args),
-    reset: vi.fn(),
+    reset: (...args: unknown[]) => resetMock(...args),
+    withdraw: (...args: unknown[]) => withdrawMock(...args),
+    list: vi.fn().mockResolvedValue([]),
     read: () => readMock(),
     capabilities: vi.fn().mockResolvedValue([]),
     pastChats: (...args: unknown[]) => pastChatsMock(...args),
   },
 }));
 
-vi.mock("@/lib/sse", () => ({
-  subscribeSse: vi.fn(() => ({ close: () => undefined })),
-}));
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
 const model: ModelInfo = {
   id: "test-model",
@@ -44,6 +49,7 @@ const model: ModelInfo = {
   family: "other",
   reasoning: false,
   contextWindow: 128000,
+  vision: false,
 };
 
 const HOST: Bot = {
@@ -60,7 +66,10 @@ const HOST: Bot = {
   skillIds: [],
   connectionIds: [],
   memoryEnabled: true,
+  autoReview: false,
+  browserProfile: "shared",
   pinnedAt: null,
+  guestIds: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -79,20 +88,23 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
       },
     ],
     gatewayConfigured: true,
-    chats: {},
+    fullBots: {},
   });
+  chatSessions.store.setState({ sessions: {} });
+}
+
+const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
+  ({ id, role, text, status: "done", createdAt }) satisfies ChatMessage;
+
+/** The bot's stream opens with this transcript. */
+function snapshot(messages: ChatMessage[], busy = false) {
+  botStream("host").send({ type: "snapshot", state: { messages, busy, queued: [] } });
 }
 
 function renderPane(bot: Bot = HOST) {
   render(
     <BrowserRouter>
-      <ChatPane
-        bot={bot}
-        models={[model]}
-        gatewayConfigured
-        onEditBot={() => {}}
-        onBotReset={() => {}}
-      />
+      <ChatPane bot={bot} models={[model]} gatewayConfigured onEditBot={() => {}} />
     </BrowserRouter>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -105,6 +117,8 @@ beforeEach(() => {
   pastChatsMock.mockResolvedValue([]);
   readMock.mockClear();
   abortMock.mockClear();
+  resetMock.mockReset();
+  withdrawMock.mockClear();
   localStorage.clear();
 });
 
@@ -154,67 +168,74 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
   });
 });
 
-describe("ChatPane transcript — unread divider", () => {
-  function seedTranscript(lastReadAt: string) {
-    seedStore({ lastReadAt });
-    useBotsStore.setState({ chats: {} });
-    useBotsStore.getState().connectChat("host");
-    useBotsStore.getState().applyChatEvent("host", {
-      type: "snapshot",
-      state: {
-        messages: [
-          { id: "u1", role: "user", text: "read question", status: "done", createdAt: 1_000 },
-          {
-            id: "a1",
-            role: "assistant",
-            text: "read answer",
-            status: "done",
-            createdAt: 2_000,
-          },
-          {
-            id: "a2",
-            role: "assistant",
-            text: "unread reply",
-            status: "done",
-            createdAt: 3_000,
-          },
-        ],
-        busy: false,
-      },
-    } as never);
-  }
-
-  it("shows the divider above the first message newer than the read marker", () => {
-    seedTranscript(new Date(1_500).toISOString()); // u1 read; a1 + a2 unread
+describe("ChatPane transcript", () => {
+  it("draws the New messages divider above the first reply that arrived while away", () => {
+    seedStore({ lastReadAt: new Date(1_500).toISOString() });
     renderPane();
+    snapshot([
+      done("u1", "user", "read question", 1_000),
+      done("a1", "assistant", "first unread reply", 2_000),
+      done("a2", "assistant", "second unread reply", 3_000),
+    ]);
     const divider = screen.getByTestId("unread-divider");
     expect(divider).toHaveTextContent("New messages");
     expect(divider.nextElementSibling).toHaveAttribute("data-message-id", "a1");
   });
 
-  it("shows no divider when everything is read", () => {
-    seedTranscript(new Date(4_000).toISOString());
+  it("waits for the first snapshot before showing the empty state", async () => {
+    seedStore();
     renderPane();
-    expect(screen.queryByTestId("unread-divider")).not.toBeInTheDocument();
+    expect(screen.queryByText(/say hi/i)).toBeNull();
+    expect(screen.queryByText(/reconnecting/i)).toBeNull();
+    snapshot([]);
+    expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
+  });
+
+  it("shows typing dots until the reply's first token arrives", () => {
+    seedStore();
+    renderPane();
+    snapshot([done("u1", "user", "hi", 1_000)], true);
+    expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
+    botStream("host").send({
+      type: "upsert",
+      message: { id: "a1", role: "assistant", text: "Hel", status: "streaming", createdAt: 2_000 },
+    });
+    expect(screen.queryByTestId("typing-indicator")).toBeNull();
+  });
+
+  it("draws an Echo in the transcript and a held message over the composer, with its cancel", async () => {
+    seedStore();
+    sendMock.mockReturnValueOnce(new Promise(() => undefined));
+    const composer = renderPane();
+    snapshot([done("u1", "user", "hi", 1_000)], true);
+    await user.type(composer, "also this{Enter}");
+    expect(await screen.findByText("also this")).toBeInTheDocument();
+    expect(screen.queryByTestId("queued-bubble")).toBeNull();
+
+    // The server holds it to steer the running reply: a row, not a bubble.
+    const requestId = sendMock.mock.calls[0]![1] as string;
+    botStream("host").send({
+      type: "queued",
+      items: [{ requestId, mode: "steer", text: "also this" }],
+    });
+    const row = screen.getByTestId("queued-bubble");
+    expect(row).toHaveAttribute("data-mode", "steer");
+    expect(row).toHaveTextContent("Steeringalso this");
+    await user.click(screen.getByRole("button", { name: "Cancel this message" }));
+    expect(withdrawMock).toHaveBeenCalledWith("host", requestId);
   });
 });
 
 describe("ChatPane composer — one action button", () => {
-  function seedBusy(busy: boolean) {
+  function renderBusy(busy: boolean) {
     seedStore();
-    useBotsStore.getState().connectChat("host");
-    useBotsStore.getState().applyChatEvent("host", {
-      type: "snapshot",
-      state: {
-        messages: [{ id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 }],
-        busy,
-      },
-    } as never);
+    const composer = renderPane();
+    snapshot([done("u1", "user", "hi", 1_000)], busy);
+    return composer;
   }
 
   it("shows only Stop while replying with nothing typed, and Steer once text is typed", async () => {
-    seedBusy(true);
-    const composer = renderPane();
+    const composer = renderBusy(true);
     expect(screen.getByRole("button", { name: "Stop generating" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /send message|steer the reply/i })).toBeNull();
 
@@ -224,15 +245,13 @@ describe("ChatPane composer — one action button", () => {
   });
 
   it("shows only Send when idle", () => {
-    seedBusy(false);
-    renderPane();
+    renderBusy(false);
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Stop generating" })).toBeNull();
   });
 
   it("stops the reply on Escape and shows the stop as pending until the run ends", async () => {
-    seedBusy(true);
-    const composer = renderPane();
+    const composer = renderBusy(true);
     composer.focus();
     await user.keyboard("{Escape}");
     expect(abortMock).toHaveBeenCalledOnce();
@@ -268,85 +287,6 @@ describe("ChatPane composer — one action button", () => {
   });
 });
 
-describe("ChatPane transcript — loading and activity", () => {
-  it("shows neither the empty state nor a reconnecting notice before the first snapshot", () => {
-    seedStore();
-    renderPane();
-    expect(screen.queryByText(/say hi/i)).toBeNull();
-    expect(screen.queryByText(/reconnecting/i)).toBeNull();
-  });
-
-  it("shows the empty state once an empty snapshot arrives", async () => {
-    seedStore();
-    renderPane();
-    act(() =>
-      useBotsStore.getState().applyChatEvent("host", {
-        type: "snapshot",
-        state: { messages: [], busy: false },
-      } as never),
-    );
-    expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
-  });
-
-  it("shows a typing indicator while the bot works on a reply with no output yet", () => {
-    seedStore();
-    useBotsStore.getState().connectChat("host");
-    useBotsStore.getState().applyChatEvent("host", {
-      type: "snapshot",
-      state: {
-        messages: [{ id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 }],
-        busy: true,
-      },
-    } as never);
-    renderPane();
-    expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
-
-    // The first token arrives: the streaming reply replaces the dots.
-    act(() =>
-      useBotsStore.getState().applyChatEvent("host", {
-        type: "upsert",
-        message: {
-          id: "a1",
-          role: "assistant",
-          text: "Hel",
-          status: "streaming",
-          createdAt: 2_000,
-        },
-      }),
-    );
-    expect(screen.queryByTestId("typing-indicator")).toBeNull();
-  });
-
-  it("does not flag a reply that arrives while the chat is open as a new message", () => {
-    seedStore({ lastReadAt: new Date(1_500).toISOString() });
-    useBotsStore.getState().connectChat("host");
-    useBotsStore.getState().applyChatEvent("host", {
-      type: "snapshot",
-      state: {
-        messages: [
-          { id: "u1", role: "user", text: "old", status: "done", createdAt: 1_000 },
-          { id: "a1", role: "assistant", text: "old reply", status: "done", createdAt: 1_200 },
-        ],
-        busy: false,
-      },
-    } as never);
-    renderPane();
-    act(() => {
-      const { applyChatEvent } = useBotsStore.getState();
-      applyChatEvent("host", {
-        type: "upsert",
-        message: { id: "u2", role: "user", text: "new", status: "done", createdAt: 5_000 },
-      });
-      applyChatEvent("host", {
-        type: "upsert",
-        message: { id: "a2", role: "assistant", text: "live", status: "done", createdAt: 6_000 },
-      });
-    });
-    expect(screen.getByText("live")).toBeInTheDocument();
-    expect(screen.queryByTestId("unread-divider")).toBeNull();
-  });
-});
-
 describe("ChatPane header", () => {
   it("keeps the header to the name and two quiet icons, no overflow menu", () => {
     seedStore();
@@ -358,24 +298,42 @@ describe("ChatPane header", () => {
 
   it("disables new chat on an empty conversation and confirms it otherwise", async () => {
     seedStore();
-    useBotsStore.getState().connectChat("host");
-    useBotsStore.getState().applyChatEvent("host", {
-      type: "snapshot",
-      state: { messages: [], busy: false },
-    } as never);
     renderPane();
+    snapshot([]);
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
     expect(newChat).toBeDisabled();
 
-    act(() =>
-      useBotsStore.getState().applyChatEvent("host", {
-        type: "upsert",
-        message: { id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 },
-      }),
-    );
+    botStream("host").send({ type: "upsert", message: done("u1", "user", "hi", 1_000) });
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
     expect(await screen.findByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
+  });
+
+  it("New chat reopens the chat on the bot's fresh conversation, the old transcript gone", async () => {
+    seedStore();
+    const fresh = { ...HOST, conversationId: "c2" };
+    resetMock.mockResolvedValueOnce(fresh);
+    // As the chats page does: the pane renders the store's full row.
+    useBotsStore.setState({ fullBots: { host: HOST } });
+    function Live() {
+      const bot = useBotsStore((s) => s.fullBots.host) ?? HOST;
+      return <ChatPane bot={bot} models={[model]} gatewayConfigured onEditBot={() => {}} />;
+    }
+    render(
+      <BrowserRouter>
+        <Live />
+      </BrowserRouter>,
+    );
+    snapshot([done("u1", "user", "the old conversation", 1_000)]);
+    const opens = openedPaths.length;
+
+    await user.click(screen.getByRole("button", { name: "Start a new chat" }));
+    await user.click(await screen.findByRole("button", { name: "New chat" }));
+    await waitFor(() => expect(openedPaths.length).toBe(opens + 1));
+    expect(resetMock).toHaveBeenCalledWith("host");
+    expect(screen.queryByText("the old conversation")).toBeNull();
+    snapshot([]);
+    expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
   });
 
   it("shows Chat history only once the bot has a past chat, and lists it", async () => {

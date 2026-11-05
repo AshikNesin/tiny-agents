@@ -26,6 +26,7 @@ import {
   type CodingLimits,
   type QueryFactory,
 } from "../../../../packages/claude-worker/src/index";
+import { mimeTypeOf } from "../../../../packages/claude-worker/src/coding-ops";
 import { FakeSdk, echo, manual, type Brain } from "../../code/claude-code/fake-sdk";
 
 const TOKEN = Buffer.alloc(32, 5).toString("base64");
@@ -65,7 +66,7 @@ async function connect(url: string): Promise<Socket> {
       send({ ...body, requestId });
       return vi.waitFor(() => {
         const reply = messages.find(
-          (message) => message.type === "coding.reply" && message.requestId === requestId,
+          (message) => message.type === "reply" && message.requestId === requestId,
         );
         if (!reply) throw new Error("no reply yet");
         return reply;
@@ -233,6 +234,12 @@ describe("coding protocol", () => {
     expect(safeFilename("../../etc/passwd")).toBe("passwd");
     expect(safeFilename(".bashrc")).toBe("_bashrc");
     expect(safeFilename("my file (1).png")).toBe("my file _1_.png");
+  });
+
+  it("serves the image types the Code page shows inline", () => {
+    expect(mimeTypeOf("/tmp/shot.avif")).toBe("image/avif");
+    expect(mimeTypeOf("/tmp/shot.WEBP")).toBe("image/webp");
+    expect(mimeTypeOf("/tmp/notes.bin")).toBe("application/octet-stream");
   });
 });
 

@@ -1,15 +1,18 @@
 /**
- * Claude plan engine and worker. No network except a localhost WebSocket
- * with an injected SDK. Nothing here calls Anthropic.
+ * Claude plan engine and worker: the bot protocol. No network except a
+ * localhost WebSocket with an injected SDK. Nothing here calls Anthropic.
+ * The socket policy under it (heartbeat, reconnect, resume, reboot) is
+ * tested once, in claude-worker-connection.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { WebSocket } from "ws";
-import { ClaudeCodeEngine } from "../../../../packages/agent/src/engines/claude-code/engine";
 import {
   ClaudeWorkerClient,
   type WebSocketLike,
 } from "../../../../packages/agent/src/engines/claude-code/client";
-import { createClaudeApprovalGate } from "../../../../packages/agent/src/engines/claude-code/approvals";
+import { WORKER_RESTARTED } from "../../../../packages/agent/src/engines/claude-code/engine";
+import type { ChatMessage } from "../../../../packages/agent/src/types";
+import { mailCapability, openEngine, until } from "./engine-harness";
 import {
   DEFAULT_TIMINGS,
   OverrideRefusal,
@@ -57,6 +60,30 @@ function subscribed() {
     authMethod: "claude.ai",
     subscriptionType: "max",
   });
+}
+
+/** The bot protocol on a real socket to `url`, keeping each socket so a test can drop one. */
+function botClient(
+  url: string,
+  handlers: Pick<ConstructorParameters<typeof ClaudeWorkerClient>[0], "onTool">,
+) {
+  const events: WorkerMessage[] = [];
+  const sockets: WebSocket[] = [];
+  const connects: boolean[] = [];
+  const client = new ClaudeWorkerClient({
+    resolveTarget: async () => ({ url, token: TOKEN }),
+    timings: fastTimings,
+    connect: (target, token) => {
+      const socket = new WebSocket(target, { headers: { Authorization: `Bearer ${token}` } });
+      sockets.push(socket);
+      return socket as unknown as WebSocketLike;
+    },
+    onEvent: (message) => events.push(message),
+    onConnected: (rebooted) => connects.push(rebooted),
+    ...handlers,
+  });
+  clients.push(client);
+  return { client, events, sockets, connects };
 }
 
 describe("protocol and guards", () => {
@@ -287,7 +314,7 @@ describe("localhost worker", () => {
     });
   });
 
-  it("streams a turn, gates a tool, and resumes a dropped socket without running the tool twice", async () => {
+  it("streams a turn, proxies a tool, and resumes a dropped socket without running the tool twice", async () => {
     const release: { go?: (result: { content: string }) => void } = {};
     const executions: string[] = [];
     const query: QueryFactory = async (ctx) => {
@@ -314,32 +341,15 @@ describe("localhost worker", () => {
     });
     servers.push(server);
 
-    const events: WorkerMessage[] = [];
-    const asked: number[] = [];
-    const gate = createClaudeApprovalGate({
-      permission: () => "ask",
-      nextTaskId: () => 2_000_000_001,
-      onAsk: (call) => {
-        asked.push(call.taskId);
-        gate.decide(call.taskId, "approved");
-      },
-      execute: async (call) => {
-        executions.push(call.toolUseId);
-        return new Promise((resolve) => {
-          release.go = resolve;
-        });
-      },
-    });
-    const client = new ClaudeWorkerClient({
-      url: server.url,
-      token: TOKEN,
-      timings: fastTimings,
-      onEvent: (message) => events.push(message),
-      onTool: (call) => gate.run(call),
-    });
-    clients.push(client);
+    const run = (call: { toolUseId: string }) => {
+      executions.push(call.toolUseId);
+      return new Promise<{ content: string }>((resolve) => {
+        release.go = resolve;
+      });
+    };
+    const { client, events, sockets, connects } = botClient(server.url, { onTool: run });
 
-    await vi.waitFor(() => expect(events.some((message) => message.type === "welcome")).toBe(true));
+    client.track("9");
     client.send({
       type: "turn",
       sessionId: "9",
@@ -349,11 +359,8 @@ describe("localhost worker", () => {
       tools: [{ name: "web_search", description: "Search", inputSchema: { type: "object" } }],
     });
     await vi.waitFor(() => expect(executions).toEqual(["toolu_once"]));
-    expect(asked).toEqual([2_000_000_001]);
-    client.drop();
-    await vi.waitFor(() =>
-      expect(events.filter((message) => message.type === "welcome").length).toBeGreaterThan(1),
-    );
+    sockets[0]?.terminate();
+    await vi.waitFor(() => expect(connects).toEqual([false, false]));
     expect(executions).toEqual(["toolu_once"]);
     release.go?.({ content: "searched" });
     await vi.waitFor(() =>
@@ -401,16 +408,10 @@ describe("localhost worker", () => {
       port: 0,
     });
     servers.push(server);
-    const events: WorkerMessage[] = [];
-    const client = new ClaudeWorkerClient({
-      url: server.url,
-      token: TOKEN,
-      timings: fastTimings,
-      onEvent: (message) => events.push(message),
+    const { client, events } = botClient(server.url, {
       onTool: () => new Promise(() => undefined),
     });
-    clients.push(client);
-    await vi.waitFor(() => expect(events.some((message) => message.type === "welcome")).toBe(true));
+    client.track("3");
     client.send({
       type: "turn",
       sessionId: "3",
@@ -433,108 +434,104 @@ describe("localhost worker", () => {
   });
 });
 
-describe("engine kill switch", () => {
-  it("pauses a turn without opening a socket when the engine is off", async () => {
-    let connected = false;
-    const engine = new ClaudeCodeEngine({
-      env: () => ({ CLAUDE_CODE_ENGINE_ENABLED: "0", CLAUDE_CODE_ENGINE_FALLBACK: "pause" }),
-      execute: async () => ({ content: "" }),
-      connect: () => {
-        connected = true;
-        return fakeSocket();
-      },
-    });
-    engine.sync(1, { model: "claude-sonnet-4-6", system: "", tools: [], permissions: {} });
-    await expect(engine.submit(1, { requestId: "r", text: "hi" })).resolves.toBe("ran");
-    expect(connected).toBe(false);
-    const state = await engine.read(1);
-    expect(state.messages.at(-1)?.error).toMatch(/CLAUDE_CODE_ENGINE_ENABLED/);
-  });
-
-  it("hands the turn to the gateway fallback without contacting the worker", async () => {
-    const engine = new ClaudeCodeEngine({
-      env: () => ({
-        CLAUDE_CODE_ENGINE_ENABLED: "0",
-        CLAUDE_CODE_ENGINE_FALLBACK: "gateway",
-      }),
-      execute: async () => ({ content: "" }),
-    });
-    engine.sync(4, { model: "claude-sonnet-4-6", system: "", tools: [], permissions: {} });
-    await expect(engine.submit(4, { requestId: "r", text: "hi" })).resolves.toBe("gateway");
-    expect(engine.handles(4)).toBe(false);
-  });
-});
-
-describe("idle socket heartbeats", () => {
-  it("survives an hour when pongs keep arriving and closes after 60s of silence", () => {
-    let now = 0;
-    const timers: { at: number; fn: () => void; dead: boolean }[] = [];
-    const schedule = (fn: () => void, ms: number) => {
-      const item = { at: now + ms, fn, dead: false };
-      timers.push(item);
-      return () => {
-        item.dead = true;
-      };
-    };
-    const advance = (ms: number) => {
-      now += ms;
-      for (const item of timers) {
-        if (!item.dead && item.at <= now) {
-          item.dead = true;
-          item.fn();
-        }
+describe("the worker's side of the envelope", () => {
+  it("greets with its boot id, and answers a bot resume before replaying", async () => {
+    const query: QueryFactory = async (ctx) => {
+      for await (const turn of ctx.turns) {
+        ctx.publish({ type: "text", turnId: turn.turnId, text: "one" });
+        ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
       }
     };
-    const socket = fakeSocket();
-    const client = new ClaudeWorkerClient({
-      url: "ws://127.0.0.1:9",
+    const server = await createClaudeWorkerServer({
       token: TOKEN,
-      timings: { ...DEFAULT_TIMINGS, pingIntervalMs: 20_000, silenceCloseMs: 60_000 },
-      now: () => now,
-      schedule,
-      connect: () => socket,
-      onEvent: () => undefined,
-      onTool: async () => ({ content: "" }),
+      query,
+      authStatus: subscribed,
+      env: {},
+      timings: fastTimings,
+      port: 0,
     });
-    clients.push(client);
-    socket.readyState = 1;
-    socket.emit("open");
-    for (let step = 0; step < 180; step++) advance(20_000);
-    expect(socket.closed).toBe(false);
-    socket.ping = () => undefined;
-    advance(60_000);
-    expect(socket.closed).toBe(true);
+    servers.push(server);
+    const frames: Array<Record<string, unknown>> = [];
+    const ws = new WebSocket(server.url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    ws.on("message", (data) => frames.push(JSON.parse(String(data)) as Record<string, unknown>));
+    await new Promise<void>((resolve) => ws.once("open", () => resolve()));
+    clients.push({ close: () => ws.close() });
+    await vi.waitFor(() => expect(frames[0]).toMatchObject({ type: "welcome" }));
+    expect(frames[0]?.bootId).toEqual(expect.any(String));
+
+    const send = (frame: Record<string, unknown>) => ws.send(JSON.stringify(frame));
+    send({ type: "resume", requestId: "q1", sessionId: "5", afterSeq: 0 });
+    await vi.waitFor(() =>
+      expect(frames.find((frame) => frame.requestId === "q1")).toMatchObject({
+        type: "reply",
+        ok: true,
+        result: { known: false, gap: false, firstSeq: 1, lastSeq: 0 },
+      }),
+    );
+    send({ type: "turn", sessionId: "5", turnId: "t1", text: "hi", model: "claude-sonnet-4-6" });
+    await vi.waitFor(() =>
+      expect(frames.filter((frame) => frame.type === "event")).toHaveLength(2),
+    );
+    frames.length = 0;
+    send({ type: "resume", requestId: "q2", sessionId: "5", afterSeq: 1 });
+    await vi.waitFor(() => expect(frames).toHaveLength(2));
+    expect(frames[0]).toMatchObject({
+      type: "reply",
+      requestId: "q2",
+      result: { known: true, gap: false, firstSeq: 1, lastSeq: 2 },
+    });
+    expect(frames[1]).toMatchObject({ type: "event", sessionId: "5", seq: 2 });
   });
 });
 
-function fakeSocket(): WebSocketLike & {
-  emit: (event: string, ...args: unknown[]) => void;
-  closed: boolean;
-} {
-  const handlers = new Map<string, ((...args: unknown[]) => void)[]>();
-  const socket = {
-    readyState: 0,
-    closed: false,
-    sent: [] as string[],
-    on(event: string, listener: (...args: unknown[]) => void) {
-      const list = handlers.get(event) ?? [];
-      list.push(listener);
-      handlers.set(event, list);
-    },
-    emit(event: string, ...args: unknown[]) {
-      for (const listener of handlers.get(event) ?? []) listener(...args);
-    },
-    send(data: string) {
-      socket.sent.push(data);
-    },
-    close() {
-      socket.closed = true;
-      socket.readyState = 3;
-      socket.emit("close");
-    },
-    ping() {
-      socket.emit("pong");
-    },
-  };
-  return socket;
-}
+describe("bot engine on a worker restart", () => {
+  const runtimes: { close: () => Promise<void> }[] = [];
+  afterEach(async () => {
+    await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
+    vi.unstubAllEnvs();
+  });
+
+  it("ends the turn the old worker was running, and sends a waiting one to the new worker", async () => {
+    const engine = await openEngine("claude-code", { capabilities: [mailCapability([])] });
+    runtimes.push(engine.runtime);
+    const config = {
+      modelId: engine.modelId,
+      systemPrompt: "Be brief.",
+      capabilities: { enabled: ["mail"], permissions: {} },
+    };
+    const running = await engine.runtime.createConversation(config);
+    const waiting = await engine.runtime.createConversation(config);
+    const last = async (ref: number): Promise<ChatMessage | undefined> =>
+      (await engine.runtime.readChat(ref)).messages.at(-1);
+
+    engine.worker.hold();
+    await engine.send(running, { requestId: "r1", text: "hello" });
+    await until(() => engine.worker.turns.length === 1, "the worker to get the turn");
+    expect(engine.runtime.isBusy(running)).toBe(true);
+
+    engine.worker.restart();
+    // Sent while the socket is down: it waits for the next worker.
+    await engine.send(waiting, { requestId: "r2", text: "still there?" });
+
+    const cut = await until(async () => {
+      const message = await last(running);
+      return message?.status === "error" ? message : undefined;
+    }, "the cut-off turn to end");
+    expect(cut.error).toBe(WORKER_RESTARTED);
+    expect(engine.runtime.isBusy(running)).toBe(false);
+    const answered = await until(async () => {
+      const message = await last(waiting);
+      return message?.status === "done" ? message : undefined;
+    }, "the waiting turn's reply");
+    expect(answered.text).toBe("Echo: still there?");
+    expect(answered.error).toBeUndefined();
+
+    // The conversation that was cut off carries on with the new worker.
+    await engine.send(running, { requestId: "r3", text: "again" });
+    const again = await until(async () => {
+      const message = await last(running);
+      return message?.status === "done" ? message : undefined;
+    }, "the next reply");
+    expect(again.text).toBe("Echo: again");
+  }, 15_000);
+});

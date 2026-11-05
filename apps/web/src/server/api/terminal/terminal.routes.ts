@@ -10,20 +10,18 @@ import { Boom } from "@groot/core/errors";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
+import { claudeLoginShellLine } from "@tiny-agents/agent/claude-worker";
 import {
-  claudeLoginShellLine,
   parseSessionName,
-  type SessionName,
-  type TerminalSessionRow,
-  type TerminalStatus,
-} from "@tiny-agents/agent";
-import {
   SessionBusyError,
   SessionLimitError,
   SessionNotFoundError,
   TmuxMissingError,
   TerminalUnreachableError,
-} from "@tiny-agents/agent";
+  type SessionName,
+  type TerminalSessionRow,
+  type TerminalStatus,
+} from "@tiny-agents/agent/terminal";
 import { issueTerminalTicket } from "./terminal.ws";
 import { getTerminalService } from "./terminal.instance";
 

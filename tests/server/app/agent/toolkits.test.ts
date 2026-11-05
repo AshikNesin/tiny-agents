@@ -4,7 +4,8 @@ import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-d
 import { describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { createTodayCapability } from "../../../../packages/agent/src/toolkits/today";
-import { checkPublicUrl, createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
+import { checkPublicUrl } from "../../../../packages/agent/src/toolkits/public-url";
+import { createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
 
 async function run(capability: Capability, name: string, args: Record<string, unknown>) {
   const tool = capability.extension.tools!.find((t) => t.name === name)!;

@@ -5,25 +5,18 @@
  * was), and the cards acting through the `OwnerActions` given (none in a
  * Past chat, whose cards then render without actions).
  *
- * The transcript is fed by a page source: the messages loaded so far,
- * whether older ones exist, and how to load the page above. The live chat
- * feeds it from the chat store; a Past chat from its own pages.
+ * The transcript is fed a timeline (lib/chat-timeline.ts: the messages
+ * loaded so far and the routine cards, plus the live chat's Echoes) and a
+ * page source: whether older messages exist and how to load the page
+ * above. The live chat feeds both from its session (`useChat`); a Past chat
+ * from its own pages.
  *
  * It must render inside a `MessageScrollerProvider` (the pane drives the
  * scroller too: send → scroll to the end).
  */
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { botsApi } from "../lib/bots-api";
-import { chatTimeline } from "../lib/chat-timeline";
-import type { ChatMessage, PendingMessage, RoutineRunCard } from "../lib/chat-types";
+import type { TimelineItem } from "../lib/chat-timeline";
 import { formatDayDivider } from "../lib/day-divider";
 import { OwnerActionsProvider, type OwnerActions } from "../lib/owner-actions";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
@@ -36,10 +29,9 @@ import {
   MessageScrollerViewport,
 } from "./ui/message-scroller";
 
-/** A transcript's pages: what is loaded, and how to load the page above it. */
+/** A transcript's pages: whether older ones exist, and how to load the page above. */
 export interface TranscriptPages {
-  messages: ChatMessage[];
-  /** Older messages exist above `messages[0]`. */
+  /** Older messages exist above the oldest loaded one. */
   hasMore: boolean;
   /** The page above is being fetched. */
   loadingOlder: boolean;
@@ -49,19 +41,18 @@ export interface TranscriptPages {
 
 export interface TranscriptProps {
   botName: string;
+  /** What to show, in order: messages, routine cards and Echoes. */
+  timeline: TimelineItem[];
   pages: TranscriptPages;
-  routineRuns: RoutineRunCard[];
   /** What the cards act through; leave out for a read-only transcript (a Past chat). */
   actions?: OwnerActions;
-  /** Echoes of owner sends not yet confirmed, after everything else. */
-  echoes?: PendingMessage[];
   /** The message the "New messages" divider goes above. */
   unreadDividerId?: string | null;
   /** Whether message `index` is a scroll anchor (the live chat opens on the newest read one). */
   scrollAnchor?: (index: number) => boolean;
   /** Rendered instead of the timeline when there is nothing to show. */
   empty?: ReactNode;
-  /** Rows between the timeline and the Echoes (typing indicator, queued messages). */
+  /** Rows after the timeline (the typing indicator). */
   tail?: ReactNode;
   contentTestId?: string;
 }
@@ -102,14 +93,14 @@ function useToolLabels(): { done: ToolLabels; ask: ToolLabels } {
  * message on open must not fetch a page nobody asked for. What was on
  * screen stays where it was once the page lands.
  */
-function useOlderPages(pages: TranscriptPages) {
+function useOlderPages(pages: TranscriptPages, timeline: TimelineItem[]) {
   const sentinel = useRef<HTMLDivElement>(null);
   const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
   // Set at the call, before the source's own flag re-renders: one fetch at a time.
   const requested = useRef(false);
   const latest = useRef(pages);
   latest.current = pages;
-  const { hasMore, loadingOlder, messages } = pages;
+  const { hasMore, loadingOlder } = pages;
 
   useEffect(() => {
     const viewport = sentinel.current?.closest<HTMLElement>(
@@ -145,14 +136,14 @@ function useOlderPages(pages: TranscriptPages) {
       viewport.removeEventListener("keydown", arm);
       viewport.removeEventListener("scroll", check);
     };
-  }, [hasMore, messages.length]);
+  }, [hasMore, timeline.length]);
 
   useLayoutEffect(() => {
     const kept = keepFromBottom.current;
     if (!kept || loadingOlder) return;
     keepFromBottom.current = null;
     kept.el.scrollTop = kept.el.scrollHeight - kept.distance;
-  }, [messages, loadingOlder]);
+  }, [timeline, loadingOlder]);
 
   return sentinel;
 }
@@ -169,10 +160,9 @@ const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Dat
 
 export function Transcript({
   botName,
+  timeline,
   pages,
-  routineRuns,
   actions,
-  echoes = [],
   unreadDividerId,
   scrollAnchor,
   empty,
@@ -180,11 +170,8 @@ export function Transcript({
   contentTestId,
 }: TranscriptProps) {
   const toolLabels = useToolLabels();
-  const sentinel = useOlderPages(pages);
-  const { messages, hasMore, loadingOlder } = pages;
-  // Routine results (issue #63): quiet lines between messages, by finish time.
-  const timeline = useMemo(() => chatTimeline(messages, routineRuns), [messages, routineRuns]);
-  const last = timeline[timeline.length - 1];
+  const sentinel = useOlderPages(pages, timeline);
+  const { hasMore, loadingOlder } = pages;
 
   return (
     <OwnerActionsProvider actions={actions}>
@@ -201,12 +188,34 @@ export function Transcript({
                 {loadingOlder ? "Loading earlier messages…" : "Earlier messages"}
               </div>
             )}
-            {timeline.length === 0 && echoes.length === 0 && empty}
+            {timeline.length === 0 && empty}
             {timeline.map((item, t) => {
               const prev = timeline[t - 1];
               const dayDivider = (!prev || !sameDay(prev.at, item.at)) && (
                 <DayDivider at={item.at} />
               );
+              if (item.kind === "echo") {
+                // An owner send not yet confirmed: drawn as the bubble it will become.
+                const { echo } = item;
+                return (
+                  <Fragment key={echo.requestId}>
+                    {dayDivider}
+                    <MessageScrollerItem messageId={echo.requestId}>
+                      <ChatMessageView
+                        message={{
+                          id: echo.requestId,
+                          role: "user",
+                          text: echo.text,
+                          ...(echo.attachments?.length ? { attachments: echo.attachments } : {}),
+                          status: "streaming",
+                          createdAt: item.at,
+                        }}
+                        botName={botName}
+                      />
+                    </MessageScrollerItem>
+                  </Fragment>
+                );
+              }
               if (item.kind === "routine-runs") {
                 const key = `runs-${item.runs[0].id}`;
                 return (
@@ -249,28 +258,6 @@ export function Transcript({
               );
             })}
             {tail}
-            {echoes.length > 0 && (
-              <>
-                {(!last || !sameDay(last.at, echoes[0].createdAt)) && (
-                  <DayDivider at={echoes[0].createdAt} />
-                )}
-                {echoes.map((echo) => (
-                  <MessageScrollerItem key={echo.id} messageId={echo.id}>
-                    <ChatMessageView
-                      message={{
-                        id: echo.id,
-                        role: "user",
-                        text: echo.text,
-                        ...(echo.attachments?.length ? { attachments: echo.attachments } : {}),
-                        status: "streaming",
-                        createdAt: echo.createdAt,
-                      }}
-                      botName={botName}
-                    />
-                  </MessageScrollerItem>
-                ))}
-              </>
-            )}
           </MessageScrollerContent>
         </MessageScrollerViewport>
         <MessageScrollerButton

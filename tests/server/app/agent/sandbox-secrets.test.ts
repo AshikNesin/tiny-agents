@@ -20,12 +20,7 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
-import {
-  createSandboxToolkit,
-  type ExecOptions,
-  type ExecResult,
-  type SandboxTransport,
-} from "../../../../packages/agent/src/toolkits/sandbox";
+import { createSandboxToolkit } from "../../../../packages/agent/src/toolkits/sandbox";
 import {
   checkEnvName,
   commandHosts,
@@ -42,6 +37,7 @@ import {
   type VaultOutcome,
   type VaultUse,
 } from "../../../../packages/agent/src/vault";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 const CANARY = "canary-ghp-7f3Kq91x";
 
@@ -236,18 +232,15 @@ function fakeBroker() {
   return { broker, recorded };
 }
 
-function fakeVm(reply: (command: string, stdin?: string) => ExecResult) {
-  const execs: { command: string; options?: ExecOptions }[] = [];
-  const transport: SandboxTransport = async () => ({
-    exec: async (command, options) => {
-      execs.push({ command, options });
-      return reply(command, options?.stdin);
+/** The sandbox VM as an in-memory connection: what each command prints and exits with. */
+function fakeVm(reply: (command: string, stdin?: string) => { output: string; exitCode: number }) {
+  const connection = fakeSandboxConnection({
+    exec: (command, options) => {
+      const { output, exitCode } = reply(command, options.stdin?.toString());
+      return { stdout: output, exitCode };
     },
-    readFile: async () => ({ text: "", truncated: false }),
-    writeFile: async () => {},
-    close: () => {},
   });
-  return { transport, execs };
+  return { connection, execs: connection.execs };
 }
 
 function callThenReport(args: Record<string, unknown>) {
@@ -311,8 +304,7 @@ async function open(
   options: { egressAllowlist?: string; broker?: VaultBroker } = {},
 ) {
   const sandbox = createSandboxToolkit({
-    host: "tiny-agents-vm",
-    transport: vm.transport,
+    connection: vm.connection,
     vault: options.broker ?? fakeBroker().broker,
     egressAllowlist: options.egressAllowlist,
   });
@@ -362,7 +354,7 @@ describe("run_command with vault secrets", () => {
     const text = await until(() => result(events), "result");
     expect(vm.execs).toHaveLength(1);
     const [exec] = vm.execs;
-    expect(exec.options?.stdin).toBe(`${CANARY}\n`);
+    expect(exec.options.stdin).toBe(`${CANARY}\n`);
     expect(exec.command).toContain("systemd-run");
     expect(exec.command).toContain("api.github.com");
     expect(exec.command).not.toContain(CANARY);
@@ -444,7 +436,7 @@ describe("the egress allowlist", () => {
     expect(vm.execs[0].command).toContain("IPAddressDeny=any");
     expect(vm.execs[0].command).toContain("registry.npmjs.org");
     expect(vm.execs[0].command).toContain("10.0.0.0/8");
-    expect(vm.execs[0].options?.stdin).toBeUndefined();
+    expect(vm.execs[0].options.stdin).toBeUndefined();
   }, 20_000);
 
   it("leaves commands alone when unset", async () => {

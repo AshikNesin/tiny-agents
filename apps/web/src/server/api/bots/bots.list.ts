@@ -10,16 +10,16 @@
  * shared transcript read.
  */
 import { desc, eq } from "drizzle-orm";
-import {
-  isSkipReply,
-  stripPeerEnvelope,
-  type AgentRuntime,
-  type AttachmentRef,
-} from "@tiny-agents/agent";
+import { isSkipReply, type AgentRuntime, type AttachmentRef } from "@tiny-agents/agent";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, bots } from "../../db";
 import { guestReadMarkers, type Viewer } from "../people/people.service";
 import type { BotRow } from "./bots.conversation";
 import type { SettledStep } from "./bots.settled";
+import type { BotListEntry } from "../../../shared/bot-list";
+
+/** Shape returned by the bots list (the wire contract the client reads, `shared/bot-list.ts`). */
+export type { BotListEntry };
 
 export type BotListRuntime = Pick<
   AgentRuntime,
@@ -28,26 +28,6 @@ export type BotListRuntime = Pick<
 
 /** Longest preview stored on the row. */
 export const PREVIEW_CHARS = 120;
-
-/** Shape returned by the bots list: denormalised preview fields + unread. */
-export interface BotListEntry {
-  id: string;
-  conversationId: string;
-  name: string;
-  description: string;
-  modelId: string;
-  lastMessagePreview: string | null;
-  lastActivityAt: Date;
-  /** Pre-open read marker; the client opens at the first message after it. */
-  lastReadAt: Date | null;
-  unread: boolean;
-  replying: boolean;
-  /** Tool calls waiting for the owner's approval. */
-  approvals: number;
-  /** Questions (ask_owner calls) waiting for the owner's answers. */
-  questions: number;
-  pinnedAt: Date | null;
-}
 
 /** Unread = an assistant reply newer than the user's last read marker. */
 export function isUnread(

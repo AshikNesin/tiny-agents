@@ -1,31 +1,8 @@
 /**
- * Helpers drivers share for live transcripts: rows are re-derived from the
- * harness's messages and only the rows that changed are sent on.
+ * Small helpers every driver's normalizer and live feed share. What goes
+ * out to watchers, and when, is `feed.ts`.
  */
 import type { TranscriptItem } from "../contracts";
-
-/** Remembers what a watcher was last sent and answers what changed since. */
-export class ItemTracker {
-  private readonly sent = new Map<string, string>();
-
-  /** Rows that are new or differ from the last call (in transcript order). */
-  changed(items: readonly TranscriptItem[]): TranscriptItem[] {
-    const out: TranscriptItem[] = [];
-    for (const item of items) {
-      const json = JSON.stringify(item);
-      if (this.sent.get(item.id) === json) continue;
-      this.sent.set(item.id, json);
-      out.push(item);
-    }
-    return out;
-  }
-
-  /** Forget everything (a new snapshot was sent). */
-  reset(items: readonly TranscriptItem[] = []): void {
-    this.sent.clear();
-    for (const item of items) this.sent.set(item.id, JSON.stringify(item));
-  }
-}
 
 /** Listener sets that never let one failing listener stop the others. */
 export class Emitter<T> {
@@ -69,4 +46,34 @@ export function record(value: unknown): Record<string, unknown> | undefined {
 export function excerpt(text: string, max = 1500): string {
   const clean = text.trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+/** The first of `keys` whose value in `args` is a non-empty string. */
+export function pick(args: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = args[key];
+    if (typeof value === "string" && value) return value;
+  }
+  return undefined;
+}
+
+/** File names the Code page shows inline as images. */
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+
+export function isImageFile(path: string): boolean {
+  return IMAGE_FILE.test(path);
+}
+
+/**
+ * The answer of the last turn: its last assistant row, or its last error
+ * notice (`failed`). Empty when the newest user message has neither yet.
+ */
+export function lastAnswer(items: readonly TranscriptItem[]): { text: string; failed: boolean } {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    if (item.kind === "assistant") return { text: item.text, failed: false };
+    if (item.kind === "notice" && item.level === "error") return { text: item.text, failed: true };
+    if (item.kind === "user") break;
+  }
+  return { text: "", failed: false };
 }

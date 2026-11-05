@@ -63,15 +63,18 @@ export interface BotMessagingStore {
 - Fire-and-forget: the tool returns immediately; the reply arrives later as a
   new user turn in the sender's conversation (relayed by the app's relay).
 
-### 2. Relay (apps/web/src/server/api/bots/bots.relay.ts)
+### 2. Relay (apps/web/src/server/api/bots/bots.delivery.ts)
 
-On `runtime.onActivity` idle transitions (a conversation stopped replying):
+The first step of the settled pipeline (`startSettledPipeline`,
+`bots.settled.ts`; see Settled and Delivery in GLOSSARY.md) answers a
+conversation's Deliveries when it settles; its boot sweep answers those a
+restart left behind. Both use the Delivery answerer built from the opened
+runtime.
 
-1. Find `deliveredAt != null AND answeredAt = null` rows where `toBotId` just
-   finished a reply.
-2. Read the target's `finishedReplies` (none while it is still busy) and
-   match each row to the first reply with text created after its delivery.
-   If none, leave pending.
+1. Find `deliveredAt != null AND answeredAt = null` rows pinned to the
+   conversation that settled.
+2. Read the Finished reply to each row's request id (`finishedReplyTo`). If
+   it has not finished, or is not in the transcript yet, leave it pending.
 3. Submit `**Reply from {targetName}:** {text}` into `replyToBotId`'s
    conversation through `submitToBot` (`bots.conversation.ts`, which
    reconciles the host first) with requestId `botmsg-reply-{rowId}`; then

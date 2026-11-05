@@ -143,8 +143,14 @@ waits for the owner on the Code page.
 - **Drivers:** `packages/code/src/drivers/<kind>/`:
   - `shelley`: one `stream2` connection, the snapshot list, Shelley's wire
     format normalized, and the usage maths.
-  - `claude-code`: the worker's coding mode over WebSocket, SDK messages and
-    session history normalized.
+  - `claude-code`: the worker's coding mode (`coding.*`) on its own Worker
+    connection (`@tiny-agents/claude-worker/client`, shared with the bot
+    engine: heartbeat, reconnect, resume, restart detection), SDK messages
+    and session history normalized.
+- **Thread feed:** `packages/code/src/server/feed.ts`. Drivers hand their
+  `ThreadFeed` the whole thread (a snapshot, the full row list, the streaming
+  text, state); the feed keeps the event order for every watcher, so no
+  driver writes it again.
 - **App:** `apps/web/src/server/api/code/`:
   - `code.registry.ts`: which harnesses run, from env.
   - `code.hub.ts`: starts every instance, caches the decorated lists, counts
@@ -166,18 +172,24 @@ waits for the owner on the Code page.
 
 A thread's stream (`GET /code/threads/:id/events`) starts with a snapshot.
 After that it upserts rows by id and sends partial text and state, so a
-reload or reconnect never loses or duplicates a row.
+reload or reconnect never loses or duplicates a row. When a driver may have
+missed events (Shelley's stream reconnects, the Claude worker restarts or
+skips ahead), its watchers start over from a fresh snapshot, followed by the
+streaming text if a turn is still running.
 
 ## Adding a harness
 
 1. Add a driver folder `packages/code/src/drivers/<kind>/`:
    - a factory returning a `HarnessInstance`;
    - a normalizer to `TranscriptItem`s;
+   - a `ThreadFeed` per watched thread for `watchThread`, fed the full row
+     list and state (not diffs);
    - honest capabilities.
 2. Add one entry in `code.registry.ts`, with its config.
-3. Make the tests pass: `capabilityProblems(instance)` must be empty, plus
-   the shared scenarios (a simple turn, multi-turn, queued turn, interrupt,
-   stop before start, steer, approvals, resume after reconnect).
+3. Make the tests pass: `capabilityProblems(instance)` and
+   `threadEventProblems(events)` (on what a watcher received) must be empty,
+   plus the shared scenarios (a simple turn, multi-turn, queued turn,
+   interrupt, stop before start, steer, approvals, resume after reconnect).
 4. Add a row to the table above and a short section here.
 
 ## Testing

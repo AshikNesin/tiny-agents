@@ -6,9 +6,10 @@
  */
 import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
-import { stripAttachmentNotes, stripPeerEnvelope, type AgentRuntime } from "@tiny-agents/agent";
+import { stripAttachmentNotes } from "@tiny-agents/agent";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, botChats } from "../../db";
-import { resolveSideCallModel, resolveSideCallModelId, type SideCallModels } from "./side-call";
+import type { SideCaller } from "./side-call";
 
 /**
  * Lightweight custom gateway model (GATEWAY_CUSTOM_PROVIDERS), in the
@@ -30,18 +31,19 @@ export interface TitleMessage {
   status?: string;
 }
 
+/** What naming a chat needs: the side-caller, and the title model setting. */
 export interface ChatTitler {
-  models: SideCallModels;
-  hasModel: AgentRuntime["hasModel"];
+  sideCaller: SideCaller;
   /** CHAT_TITLE_MODEL; the default lightweight model when unset. */
-  modelId?: string;
-  /** The runtime's primary provider (bare model ids). Default: the gateway. */
-  provider?: string;
+  model?: string;
 }
 
 let titler: ChatTitler | undefined;
 
-/** Boot wiring (entry.node.ts). Unset (tests, faux mode) means no title calls. */
+/**
+ * Boot wiring (entry.node.ts), so the Past-chat recorder can name chats
+ * without carrying the port. Unset (tests, faux mode) means no title calls.
+ */
 export function setChatTitler(next: ChatTitler | undefined): void {
   titler = next;
 }
@@ -97,24 +99,6 @@ export function cleanTitle(raw: string): string | null {
 }
 
 /**
- * Run a model call with a deadline. The signal reaches the call, so a call
- * that overruns is aborted rather than left running after the timeout.
- */
-async function withTimeout<T>(
-  call: (signal: AbortSignal) => Promise<T>,
-  ms: number,
-  what: string,
-): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error(`${what} timed out`)), ms);
-  try {
-    return await call(controller.signal);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
  * Name a past chat with the title model and store it. Best effort: never
  * throws, and leaves the provisional title in place on any failure.
  */
@@ -127,47 +111,19 @@ export async function titlePastChat(
   try {
     const excerpt = titleExcerpt(input.messages, input.botName);
     if (!excerpt) return;
-    const modelId = resolveSideCallModelId(
-      deps,
-      input.botModelId,
-      deps.modelId?.trim() || DEFAULT_CHAT_TITLE_MODEL,
-    );
-    const model = modelId ? resolveSideCallModel(deps.models, modelId, deps.provider) : undefined;
-    if (!model) {
-      logger.warn({ chatId, modelId }, "Chat title model unavailable; keeping the first message");
-      return;
-    }
-    const reply = await withTimeout(
-      (signal) =>
-        deps.models.completeSimple(
-          model,
-          {
-            systemPrompt:
-              "You name chat conversations. Reply with a title of at most 6 words that says what " +
-              "the conversation is about. Plain text only: no quotes, no trailing period, no preamble.",
-            messages: [
-              {
-                role: "user",
-                content: [{ type: "text", text: `Conversation:\n${excerpt}\n\nTitle:` }],
-                timestamp: Date.now(),
-              },
-            ],
-          },
-          { signal },
-        ),
-      TITLE_TIMEOUT_MS,
-      "Chat title",
-    );
-    if (reply.stopReason === "error" || reply.stopReason === "aborted") {
-      logger.warn(
-        { chatId, modelId, stopReason: reply.stopReason, errorMessage: reply.errorMessage },
-        "Chat title call failed; keeping the first message",
-      );
-      return;
-    }
-    const text = (reply.content ?? [])
-      .map((block) => (block.type === "text" ? block.text : ""))
-      .join("\n");
+    const text = await deps.sideCaller.complete({
+      botModelId: input.botModelId,
+      override: deps.model?.trim() || DEFAULT_CHAT_TITLE_MODEL,
+      system:
+        "You name chat conversations. Reply with a title of at most 6 words that says what " +
+        "the conversation is about. Plain text only: no quotes, no trailing period, no preamble.",
+      user: `Conversation:\n${excerpt}\n\nTitle:`,
+      timeoutMs: TITLE_TIMEOUT_MS,
+      label: "Chat title",
+      context: { chatId },
+    });
+    // No title (no model, a failed call): the first message stays.
+    if (text === undefined) return;
     const title = cleanTitle(text);
     if (!title) return;
     // The chat may have been continued or deleted meanwhile: then nothing to name.

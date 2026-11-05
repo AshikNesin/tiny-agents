@@ -1,5 +1,5 @@
 /**
- * Bot list + chat state store.
+ * Bot list store.
  *
  * - `bots` is the list the sidebar shows. The app's one `/events` feed keeps
  *   it live: a bot's replying state and its waiting counts (approvals,
@@ -9,8 +9,10 @@
  *   badge never flickers off because an older list landed late.
  * - `fullBots` holds the full rows the chat and the edit dialog need, by id.
  * - `connections` is the live MCP connection status from the same feed.
- * - `chats` holds per-bot ChatState fed by the SSE stream: snapshot first,
- *   then minimal diffs applied in order. Reconnects receive a fresh snapshot.
+ *
+ * Each bot's chat is its own session (store/chats.ts, read through
+ * `useChat`); this store only drops one when the bot's row moves it to
+ * another conversation (`adoptBot`) or the bot is gone (`forgetBot`).
  */
 import { create } from "zustand";
 import { toast } from "sonner";
@@ -22,9 +24,9 @@ import {
   type ProviderStatus,
 } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
-import type { ChatEvent, ChatState } from "../lib/chat-types";
+import type { EventsFeedEvent } from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";
-import { mergeSnapshot, oldestEntryId, prependOlder } from "../lib/chat-history";
+import { chatSessions } from "./chats";
 
 /** An MCP connection's live state, as the events feed last reported it. */
 export interface ConnectionLive {
@@ -64,25 +66,15 @@ interface BotsState {
    * loaded (gone, offline); the cached row, if any, stays.
    */
   loadBot: (botId: string, options?: { fresh?: boolean }) => Promise<Bot>;
-  /** A full row the app just received (a save, New chat, a continued Past chat). */
-  setFullBot: (bot: Bot) => void;
-  /** The bot is gone: drop its rows and its chat. */
-  forgetBot: (botId: string) => void;
-
-  // Per-bot chat
-  chats: Record<string, ChatState>;
-  connectChat: (botId: string) => void;
-  disconnectChat: (botId: string) => void;
   /**
-   * New chat: the server moved the bot to a fresh conversation. Drop the
-   * cached ChatState — the SSE connection still streams the retired
-   * conversation, so until it is reopened the transcript would keep showing
-   * (and growing) the old messages.
+   * A full row the app just received (a save, New chat, a continued Past
+   * chat): store it, and refresh the list. When it names another
+   * conversation, the cached chat is dropped first, so the chat reopens on
+   * the new conversation instead of showing (and growing) the old one.
    */
-  resetChat: (botId: string) => void;
-  applyChatEvent: (botId: string, event: ChatEvent) => void;
-  /** Fetch the page of messages above the oldest loaded one (issue #92). */
-  loadOlder: (botId: string) => Promise<void>;
+  adoptBot: (bot: Bot) => void;
+  /** The bot is gone: drop its rows and its chat, and refresh the list. */
+  forgetBot: (botId: string) => void;
 
   // App-wide activity feed
   connectActivity: () => void;
@@ -90,7 +82,6 @@ interface BotsState {
 }
 
 let activityConnection: { close(): void } | null = null;
-const chatConnections = new Map<string, { close(): void }>();
 /** Sequence of `loadBots` calls; a response from an older call is dropped. */
 let botsRequest = 0;
 /**
@@ -187,7 +178,7 @@ function applyPatches(bots: BotListEntry[], list: readonly ListPatch[]): BotList
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const REFRESH_COALESCE_MS = 300;
 
-export type ConnectionChange = { type: "connection"; id: string; status: string; error?: string };
+export type ConnectionChange = Extract<EventsFeedEvent, { type: "connection" }>;
 const connectionListeners = new Set<(change: ConnectionChange) => void>();
 
 /**
@@ -199,145 +190,6 @@ export function onConnectionChange(listener: (change: ConnectionChange) => void)
   return () => connectionListeners.delete(listener);
 }
 
-/** Attachment ids of a message, for echo matching (empty texts collide). */
-function attachmentIds(message: { attachments?: { uploadId: string }[] }): string[] {
-  return (message.attachments ?? []).map((a) => a.uploadId).sort();
-}
-
-/**
- * How far a legacy confirmation's server clock may run behind the Echo's
- * browser clock and still count as that Echo's.
- */
-const LEGACY_ECHO_SKEW_MS = 5_000;
-
-/**
- * Whether a confirmed user message is the Echo `pending`: by request id,
- * which every owner send records. A message without one (written before
- * request ids were recorded on every send) falls back to its text and
- * attachments, and only when it is not older than the Echo: an earlier
- * message with the same text ("ok") is never mistaken for a new Echo.
- */
-export function echoMatches(
-  pending: { id: string; text: string; createdAt: number; attachments?: { uploadId: string }[] },
-  message: {
-    text: string;
-    requestId?: string;
-    createdAt: number;
-    attachments?: { uploadId: string }[];
-  },
-): boolean {
-  if (message.requestId) return message.requestId === pending.id;
-  return (
-    message.createdAt >= pending.createdAt - LEGACY_ECHO_SKEW_MS &&
-    pending.text.trim() === message.text.trim() &&
-    attachmentIds(pending).join(",") === attachmentIds(message).join(",")
-  );
-}
-
-/** A chat with nothing known yet: before its first snapshot. */
-function emptyChat(unreadFrom: number | null = null): ChatState {
-  return {
-    messages: [],
-    routineRuns: [],
-    busy: false,
-    queued: [],
-    pending: [],
-    connected: false,
-    loaded: false,
-    unreadFrom,
-  };
-}
-
-/** The per-chat reducer: every stream, Echo and connection event lands here. */
-export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
-  switch (event.type) {
-    case "snapshot":
-      // A fresh snapshot is authoritative: drop every Echo now confirmed by
-      // a real user message (`echoMatches`), keep the rest
-      // (still in flight). Echoes whose request id is queued server-side
-      // are covered by the queued items instead. `unreadFrom` is session
-      // state, not stream state, so it survives the replacement.
-      return {
-        ...event.state,
-        // A reconnect's snapshot is the newest window again: keep the older
-        // pages already loaded above it (issue #92).
-        ...mergeSnapshot(state, event.state),
-        loadingOlder: false,
-        // Routine cards and YOLO ride their own events; a transcript snapshot keeps them.
-        routineRuns: state.routineRuns,
-        ...(state.yolo !== undefined ? { yolo: state.yolo } : {}),
-        queued: event.state.queued ?? [],
-        connected: true,
-        loaded: true,
-        pending: state.pending.filter(
-          (p) =>
-            !event.state.messages.some((m) => m.role === "user" && echoMatches(p, m)) &&
-            !(event.state.queued ?? []).some((q) => q.requestId === p.id),
-        ),
-        unreadFrom: state.unreadFrom,
-      };
-    case "busy":
-      return { ...state, busy: event.busy };
-    case "routine-runs":
-      return { ...state, routineRuns: event.runs };
-    case "yolo":
-      return state.yolo === event.on ? state : { ...state, yolo: event.on };
-    case "routine-run":
-      // Listed and followed at connect, a run can arrive twice: keep one.
-      return state.routineRuns.some((run) => run.id === event.run.id)
-        ? state
-        : { ...state, routineRuns: [...state.routineRuns, event.run] };
-    case "upsert": {
-      // The confirmed user message replaces the matching optimistic echo.
-      const pending =
-        event.message.role === "user"
-          ? state.pending.filter((p) => !echoMatches(p, event.message))
-          : state.pending;
-      return {
-        ...state,
-        pending,
-        messages: state.messages.some((m) => m.id === event.message.id)
-          ? state.messages.map((m) => (m.id === event.message.id ? event.message : m))
-          : [...state.messages, event.message],
-      };
-    }
-    case "remove":
-      return { ...state, messages: state.messages.filter((m) => m.id !== event.id) };
-    case "pending-add":
-      return { ...state, pending: [...state.pending, event.message] };
-    case "pending-remove":
-      return { ...state, pending: state.pending.filter((p) => p.id !== event.id) };
-    case "queued":
-      // The server holds these behind (or steering into) the reply; the
-      // matching optimistic echoes are superseded by the queued items.
-      return {
-        ...state,
-        queued: event.items,
-        pending: state.pending.filter((p) => !event.items.some((q) => q.requestId === p.id)),
-      };
-    case "connected":
-      return { ...state, connected: event.connected };
-    case "error":
-      // The stream gave up on this connection; it reconnects with a fresh snapshot.
-      return { ...state, connected: false };
-    case "delta":
-      return {
-        ...state,
-        messages: state.messages.map((m) =>
-          m.id === event.id
-            ? {
-                ...m,
-                text: m.text + (event.text ?? ""),
-                reasoning: (m.reasoning ?? "") + (event.reasoning ?? ""),
-              }
-            : m,
-        ),
-      };
-    default:
-      return state;
-  }
-}
-
 export const useBotsStore = create<BotsState>((set, get) => {
   /** Change list entries now, and keep the change over any list request already in flight. */
   const patchBots = (apply: (bot: BotListEntry) => BotListEntry) => {
@@ -347,6 +199,20 @@ export const useBotsStore = create<BotsState>((set, get) => {
   };
   const patchBot = (botId: string, fields: Partial<BotListEntry>) =>
     patchBots((bot) => (bot.id === botId ? { ...bot, ...fields } : bot));
+
+  /**
+   * Store a full row. A row on another conversation than the one cached
+   * drops the bot's chat first: the order matters, or the pane reconnects
+   * while the old transcript stays on screen.
+   */
+  const storeRow = (bot: Bot) => {
+    const state = get();
+    const known =
+      state.fullBots[bot.id]?.conversationId ??
+      state.bots.find((entry) => entry.id === bot.id)?.conversationId;
+    if (known !== undefined && known !== bot.conversationId) chatSessions.drop(bot.id);
+    set((current) => ({ fullBots: { ...current.fullBots, [bot.id]: bot } }));
+  };
 
   const scheduleRefresh = () => {
     if (refreshTimer) return;
@@ -459,108 +325,30 @@ export const useBotsStore = create<BotsState>((set, get) => {
       const cached = get().fullBots[botId];
       if (cached && !fresh) return cached;
       const bot = await botsApi.get(botId);
-      get().setFullBot(bot);
+      storeRow(bot);
       return bot;
     },
 
-    setFullBot: (bot) => {
-      set((state) => ({ fullBots: { ...state.fullBots, [bot.id]: bot } }));
+    adoptBot: (bot) => {
+      storeRow(bot);
+      // The row's list entry changed too (name, model, preview after New chat).
+      get().refreshBotsInBackground();
     },
 
     forgetBot: (botId) => {
-      get().resetChat(botId);
+      chatSessions.drop(botId);
       set((state) => {
         const fullBots = { ...state.fullBots };
         delete fullBots[botId];
         return { fullBots, bots: state.bots.filter((bot) => bot.id !== botId) };
       });
-    },
-
-    chats: {},
-
-    connectChat: (botId) => {
-      if (chatConnections.has(botId)) return;
-      // Freeze the pre-open read marker: everything newer arrived while the
-      // owner was away and renders below the "new messages" divider. The
-      // live marker advances via markRead; this one stays put for the open
-      // session (WhatsApp-style unread divider).
-      // The Bot (full) and BotListEntry (list) rows both carry lastReadAt.
-      const bot = get().bots.find((b) => b.id === botId);
-      const marker = bot?.lastReadAt;
-      const unreadFrom = marker ? Date.parse(marker) : null;
-      set((s) => ({
-        chats: {
-          ...s.chats,
-          [botId]: s.chats[botId] ?? emptyChat(Number.isNaN(unreadFrom) ? null : unreadFrom),
-        },
-      }));
-      const connection = subscribeSse(
-        `/api/v1/bots/${botId}/stream`,
-        (event) => get().applyChatEvent(botId, event as ChatEvent),
-        {
-          onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
-          onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
-        },
-      );
-      chatConnections.set(botId, connection);
-    },
-
-    disconnectChat: (botId) => {
-      chatConnections.get(botId)?.close();
-      chatConnections.delete(botId);
-      // The cached transcript keeps rendering on the next visit, but it is
-      // stale until that visit's first snapshot arrives.
-      set((s) => {
-        const chat = s.chats[botId];
-        return chat
-          ? { chats: { ...s.chats, [botId]: { ...chat, connected: false, loaded: false } } }
-          : {};
-      });
-    },
-
-    resetChat: (botId) => {
-      get().disconnectChat(botId);
-      set((s) => {
-        const chats = { ...s.chats };
-        delete chats[botId];
-        return { chats };
-      });
-    },
-
-    loadOlder: async (botId) => {
-      const chat = get().chats[botId];
-      const before = chat ? oldestEntryId(chat.messages) : undefined;
-      if (!chat || !chat.hasMore || chat.loadingOlder || !before) return;
-      const patch = (next: Partial<ChatState>) =>
-        set((s) => {
-          const current = s.chats[botId];
-          return current ? { chats: { ...s.chats, [botId]: { ...current, ...next } } } : s;
-        });
-      patch({ loadingOlder: true });
-      try {
-        const page = await botsApi.history(botId, before);
-        const current = get().chats[botId];
-        // A new chat or a fresh snapshot meanwhile: this page no longer fits.
-        if (!current || oldestEntryId(current.messages) !== before)
-          return patch({ loadingOlder: false });
-        patch({ ...prependOlder(current.messages, page), loadingOlder: false });
-      } catch {
-        // Stay loadable: the next scroll to the top tries again.
-        patch({ loadingOlder: false });
-      }
-    },
-
-    applyChatEvent: (botId, event) => {
-      if (event.type === "ping") return;
-      set((s) => ({
-        chats: { ...s.chats, [botId]: applyEvent(s.chats[botId] ?? emptyChat(), event) },
-      }));
+      get().refreshBotsInBackground();
     },
 
     connectActivity: () => {
       if (activityConnection) return;
       activityConnection = subscribeSse("/api/v1/events", (event) => {
-        const typed = event as ChatEvent;
+        const typed = event as EventsFeedEvent;
         if (typed.type === "connection") {
           const { id, status, error } = typed;
           set((state) => ({
@@ -584,15 +372,13 @@ export const useBotsStore = create<BotsState>((set, get) => {
         const { conversation, approvals, questions } = typed;
         // A routine's or a retired chat's conversation is nobody's row.
         if (!get().bots.some((bot) => bot.conversationId === conversation)) return;
-        const counts = {
-          ...(approvals !== undefined ? { approvals } : {}),
-          ...(questions !== undefined ? { questions } : {}),
-        };
         // A tool waiting for approval or answers pauses a busy run: the
         // counts arrive here, mid-run, and the badge must not wait for the
         // reply to end.
         patchBots((bot) =>
-          bot.conversationId === conversation ? { ...bot, replying: typed.busy, ...counts } : bot,
+          bot.conversationId === conversation
+            ? { ...bot, replying: typed.busy, approvals, questions }
+            : bot,
         );
         // The reply that ended changed the preview and unread flag.
         if (!typed.busy) scheduleRefresh();

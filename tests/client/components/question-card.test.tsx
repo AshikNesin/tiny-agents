@@ -173,12 +173,4 @@ describe("asked questions row", () => {
     expect(screen.getByText("Auth, Other: CSV")).toBeInTheDocument();
     expect(screen.getByText("Skipped")).toBeInTheDocument();
   });
-
-  it("marks dismissed and stopped questions", () => {
-    const { unmount } = view({ status: "done", taskId: undefined });
-    expect(screen.getByText("dismissed by you")).toBeInTheDocument();
-    unmount();
-    view({ status: "aborted", taskId: undefined });
-    expect(screen.getByText("stopped")).toBeInTheDocument();
-  });
 });

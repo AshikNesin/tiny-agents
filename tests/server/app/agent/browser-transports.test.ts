@@ -1,7 +1,8 @@
 /**
  * The parts of the browser transports that need neither a browser nor a VM:
- * the local forwarder that carries CDP over SSH, how a page session reports
- * its browser dying, and how the remote window is fitted to the viewer.
+ * the local forwarder that carries CDP over SSH, the remote transport's setup
+ * over an in-memory sandbox connection, how a page session reports its
+ * browser dying, and how the remote window is fitted to the viewer.
  */
 import { Server as HttpServer } from "node:http";
 import net from "node:net";
@@ -10,8 +11,16 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { pageSession } from "../../../../packages/agent/src/toolkits/browser-chromium";
 import {
   createForwardingServer,
+  createRemoteCdpTransport,
   createWindowResizer,
 } from "../../../../packages/agent/src/toolkits/browser-remote-cdp";
+import {
+  installStackCommand,
+  stackReadyCommand,
+  teardownStackCommand,
+} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 describe("CDP forwarder", () => {
   const cleanups: (() => void)[] = [];
@@ -109,6 +118,43 @@ describe("CDP forwarder", () => {
     });
     expect(forwarder).toBeInstanceOf(net.Server);
     expect(forwarder).not.toBeInstanceOf(HttpServer);
+  });
+});
+
+describe("remote CDP transport setup", () => {
+  const open = { viewportWidth: 1280, viewportHeight: 800 };
+
+  it("installs on first use, and tears down a launch that failed with the VM's reason", async () => {
+    const connection = fakeSandboxConnection({
+      exec: (command) => {
+        if (command === stackReadyCommand()) return { stdout: "missing\n" };
+        if (command === installStackCommand()) return {};
+        if (command === teardownStackCommand("profiles/bot-1")) return {};
+        return { stderr: "Xtigervnc did not start\n", exitCode: 1 }; // the launch
+      },
+    });
+    const phases: string[] = [];
+    await expect(
+      createRemoteCdpTransport({ connection })("profiles/bot-1", {
+        ...open,
+        onPhase: (phase) => phases.push(phase),
+      }),
+    ).rejects.toThrow("VM exec failed (1): start the browser\nXtigervnc did not start");
+    expect(phases).toEqual(["installing", "starting"]);
+    expect(connection.execs.at(-1)!.command).toBe(teardownStackCommand("profiles/bot-1"));
+    // Launch scripts background Chrome and Xtigervnc: every exec settles on exit.
+    expect(connection.execs.every((e) => e.options.settleOnExit)).toBe(true);
+  });
+
+  it("names what timed out", async () => {
+    const connection = fakeSandboxConnection({
+      exec: () => {
+        throw new SandboxTimeoutError(15_000);
+      },
+    });
+    await expect(createRemoteCdpTransport({ connection })("profiles/bot-1", open)).rejects.toThrow(
+      "VM exec timed out: check the browser stack",
+    );
   });
 });
 

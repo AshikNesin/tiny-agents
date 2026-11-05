@@ -41,6 +41,10 @@ _Avoid_: provider (model providers), backend, engine (bot engines)
 What a harness really does (steer, approvals, diffs, …), declared by its driver. The Code page shows a control only when the thread's harness has its capability; it never fakes one.
 _Avoid_: feature flag
 
+**Thread feed**:
+What one harness thread's watchers are sent, and when (`ThreadFeed`, `@tiny-agents/code/server`). A driver tells it the thread as it is now (a snapshot, the full row list, the streaming text, a state change); the feed sends each watcher its snapshot first, then only rows that changed for it, re-sends the streaming text after a snapshot, and keeps one failing watcher from stopping the others. `threadEventProblems` in `@tiny-agents/code/testing` checks any driver's watch against the same rules.
+_Avoid_: watcher (the app's hand-off `code.watcher.ts`), tracker, stream (Shelley's `stream2`)
+
 **Shelley**:
 The owner's coding agent on another machine ([boldsoftware/shelley](https://github.com/boldsoftware/shelley)), one harness of the Code page and the default for bot hand-offs. tiny-agents is a client of its official API (ADR 0009, ADR 0011).
 _Avoid_: coder, coding bot
@@ -66,15 +70,27 @@ The tool that receives a vault value: a browser field, a request header, a confi
 _Avoid_: consumer, client
 
 **Settled**:
-A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript and one record of when the reply started (`bots.settled.ts`). Nothing else listens for idle.
+A conversation whose reply finished and went idle. Settling resets the sender's per-turn budget, then answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript, one lookup of who is behind the conversation and one record of when the reply started. `startSettledPipeline` (`bots.settled.ts`) builds every step from the opened runtime, subscribes once, then runs each step's boot sweep. Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
 
+**Side-call**:
+A one-shot model call the app makes off the reply path: memory capture, Past chat titles. `createSideCaller(runtime).complete` (`side-call.ts`) picks the model (an override the runtime knows, else the bot's own), aborts it at its deadline, and turns any failure into no answer, logged. Callers take it as a port; faux mode has none, so it makes no side-calls.
+_Avoid_: background call, LLM call
+
+**Memory ledger**:
+One bot's memories and the rules every write follows, whether a memory comes from capture, the `remember` tool or the Memory page: one row per text (a tombstone is never re-added, except by the owner on the Memory page), supersession of the same bot's active memories only, expiry, the active budget, and the capture watermark, each write one transaction (`memoryLedger(botId)`, `memories.ledger.ts`).
+_Avoid_: memory store (that is the agent's port), memory service
+
+**Tool gate**:
+The one place a bot's tool call is let through, on either engine (`gate.ts`, ADR 0014): the tool's gate plan, its permission, the unattended refusal, YOLO mode, auto-review, the approval Owner wait and result redaction, decided once per call. Each engine hands it the call and the tool's run; answering a waiting call goes through it too.
+_Avoid_: approval gate (approvals are one thing it does), pi gate, Claude gate
+
 **YOLO mode**:
-A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The gate records such calls as `approval: "yolo"`.
+A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The Tool gate reads it on each call, whichever engine runs the chat, and records such calls as `approval: "yolo"`.
 _Avoid_: auto-approve (that is auto-review's), trust mode
 
 **Owner wait**:
-A tool call paused until the owner answers: an approval (`approvals.ts`), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
+A tool call paused until the owner answers: an approval (`approvals.ts`, asked by the Tool gate), a Question (`toolkits/questions.ts`) or a credential request (`credentials.ts`). Each kind owns its durable document, the card details it writes and the parser the transcript reads them with, the host-side "is this task really waiting on me" check, and the one unattended refusal that marks the call `refused`. The runtime and transcript call in; they never re-derive the shapes.
 _Avoid_: pending approval (for the family), interrupt, prompt
 
 **Browser session**:
@@ -93,17 +109,33 @@ _Avoid_: screen (a screenshot is of a desktop), display (the X display number)
 The owner's noVNC view of a bot's browser or desktop in the chat (`BrowserPanel`, `ComputerPanel`), view-only until the owner takes control. Reached through a one-time ticket and an SSH channel; never a screenshot stream.
 _Avoid_: screencast, preview
 
+**Sandbox connection**:
+The app's one SSH connection to the sandbox VM or the local sandbox container (`SandboxConnection`, `ssh/sandbox-connection.ts`), built once from the endpoint and handed to every user: the sandbox toolkit, attachments, the terminal, the computer, the browser and the Claude worker. It runs execs, ptys, file transfers and forwards as channels on one pooled connection, and owns the host-key pinning, the retry rule, the idle close and the "Cannot reach the sandbox" wording (ADR 0013).
+_Avoid_: endpoint (that is only the address), SSH session, transport (a computer or browser transport sits on top of it)
+
+**Worker connection**:
+The app's side of one WebSocket to the Claude worker (`WorkerConnection`, `@tiny-agents/claude-worker/client`). The Claude plan bot engine and the Claude Code harness each put their protocol on one (turns and tool results; `coding.*` requests) and never see a socket. It owns the heartbeat and silence close, reconnecting with backoff while finding the worker again on every attempt, the handshake and the `welcome` boot id that tells a worker restart from a dropped socket, a resume cursor per session, requests and their replies, the queue while disconnected, and the wording of a refused token or an HTTP status.
+_Avoid_: worker client (that is a protocol layer on it), tunnel (that is the Sandbox connection's forward under it), socket
+
 **Question**:
 A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply waits until the owner answers or dismisses it; writing in the chat instead dismisses it.
 _Avoid_: prompt, form, survey
 
 **Echo**:
-The optimistic copy of an owner's send shown until the server confirms it. Its request id is minted once and reused by every retry (an offline send keeps its Echo and goes again once the browser is back), and it is confirmed by that request id. Only an older entry without one is matched by text, and never one created before the Echo.
+The optimistic copy of an owner's send shown until the server confirms it. Its request id is minted once and reused by every retry (an offline send keeps its Echo and goes again once the browser is back), and it is confirmed by that request id. Only an older entry without one is matched by text, and never one created before the Echo. Once the server holds the message while the bot replies, the held item replaces the Echo. The chat session (`lib/chat-session.ts`, `store/chats.ts`) owns its whole life.
 _Avoid_: pending message, ghost bubble
 
+**Outbox**:
+A chat's owner messages that its transcript does not hold yet, each addressed by its send's request id: Echoes (`sending`, or `offline` until the browser is back), drawn as bubbles at the end of the transcript, and the messages the server holds while the bot replies (`steering` into the running reply, or `queued` for the next one), drawn as rows over the composer that the owner can withdraw. `useChat` returns it with the rest of the chat's view.
+_Avoid_: queue (only the held part), pending messages
+
 **Bot list**:
-What the sidebar shows for each bot: the row's last-message preview, last activity and read marker, plus what is live (replying, approvals and Questions waiting). `bots.list.ts` owns the entry shape, the one preview function and the settled step that folds a Finished reply into the row.
+What the sidebar shows for each bot: the row's last-message preview, last activity and read marker, plus what is live (replying, approvals and Questions waiting). `bots.list.ts` builds the entry (its shape is shared with the client, `apps/web/src/shared/bot-list.ts`) and owns the one preview function and the settled step that folds a Finished reply into the row.
 _Avoid_: roster (that is the bots toolkit's name for the other bots), sidebar state
+
+**Bot stream**:
+One bot's chat, live (`GET /bots/:id/stream`): the newest transcript window as a snapshot and then its changes, the chat's routine cards, and its YOLO mode. Each part is followed before it is read, and the stream ends when the bot moves to another chat, so the client reconnects onto the new one. `followBotChat` (`bots.stream.ts`) owns every source and their order; `BotStreamEvent` (`apps/web/src/shared/bot-stream.ts`) is the wire contract the server writes and the client reads.
+_Avoid_: chat SSE, chat feed (the app-wide `/events` feed is another stream)
 
 **Past chat**:
 A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only until the owner continues it, which moves the bot back onto it; nothing is submitted or reconciled there before that.

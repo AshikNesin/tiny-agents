@@ -15,6 +15,7 @@ import { Transcript, type TranscriptPages } from "@/components/Transcript";
 import { PastChatPane } from "@/components/PastChatPane";
 import { MessageScrollerProvider } from "@/components/ui/message-scroller";
 import type { Bot } from "@/lib/bots-api";
+import { chatTimeline } from "@/lib/chat-timeline";
 import type { ChatMessage } from "@/lib/chat-types";
 
 const pastChatMock = vi.fn();
@@ -46,7 +47,7 @@ function PagedTranscript({ loadOlder }: { loadOlder: (before: string) => Promise
   const [pages, setPages] = useState({ messages: [msg(3), msg(4)], hasMore: true });
   const [loadingOlder, setLoadingOlder] = useState(false);
   const source: TranscriptPages = {
-    ...pages,
+    hasMore: pages.hasMore,
     loadingOlder,
     loadOlder: async () => {
       setLoadingOlder(true);
@@ -57,7 +58,7 @@ function PagedTranscript({ loadOlder }: { loadOlder: (before: string) => Promise
   };
   return (
     <MessageScrollerProvider>
-      <Transcript botName="Chief" pages={source} routineRuns={[]} />
+      <Transcript botName="Chief" timeline={chatTimeline(pages.messages, [])} pages={source} />
     </MessageScrollerProvider>
   );
 }
@@ -101,14 +102,13 @@ describe("Transcript paging", () => {
 
   it("shows the empty slot only when there is nothing to show", () => {
     const pages: TranscriptPages = {
-      messages: [],
       hasMore: false,
       loadingOlder: false,
       loadOlder: () => undefined,
     };
     render(
       <MessageScrollerProvider>
-        <Transcript botName="Chief" pages={pages} routineRuns={[]} empty={<p>Say hi</p>} />
+        <Transcript botName="Chief" timeline={[]} pages={pages} empty={<p>Say hi</p>} />
       </MessageScrollerProvider>,
     );
     expect(screen.getByText("Say hi")).toBeInTheDocument();
@@ -124,16 +124,19 @@ describe("Past chat transcript", () => {
     systemPrompt: "",
     modelId: "m",
     lastReadAt: null,
-    lastActivityAt: null,
+    lastActivityAt: "2026-10-30T01:00:00.000Z",
     lastMessagePreview: null,
     toolPermissions: {},
     skillIds: [],
     connectionIds: [],
     memoryEnabled: true,
+    autoReview: false,
+    browserProfile: "shared",
     pinnedAt: null,
+    guestIds: [],
     createdAt: "2026-10-30T00:00:00.000Z",
     updatedAt: "2026-10-30T00:00:00.000Z",
-  } as Bot;
+  };
 
   it("renders a waiting approval and Question without actions", async () => {
     pastChatMock.mockResolvedValue({
@@ -178,7 +181,7 @@ describe("Past chat transcript", () => {
           <Routes>
             <Route
               path="/chats/b1/past/chat-1"
-              element={<PastChatPane bot={bot} chatId="chat-1" onContinued={() => undefined} />}
+              element={<PastChatPane bot={bot} chatId="chat-1" />}
             />
           </Routes>
         </MemoryRouter>

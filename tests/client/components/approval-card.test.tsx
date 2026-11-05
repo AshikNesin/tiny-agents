@@ -171,17 +171,4 @@ describe("approval cards act through the owner actions", () => {
     await user.click(screen.getByRole("button", { name: "For this chat" }));
     expect(decideApproval).toHaveBeenCalledWith(7, "approved", { grant: true });
   });
-
-  it("renders no card without owner actions (a past chat)", () => {
-    render(
-      <ChatMessageView
-        message={awaiting("delete_task")}
-        botName="E2E Test"
-        toolLabels={toolLabels}
-      />,
-    );
-    expect(document.querySelector('[data-waiting="approval:7"]')).toBeNull();
-    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
-    expect(screen.getByText(/not answered/)).toBeInTheDocument();
-  });
 });

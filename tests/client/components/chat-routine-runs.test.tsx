@@ -3,8 +3,8 @@
  *
  * Routine results in the bot's chat (issue #63) stay quiet: back-to-back runs
  * show as one line between the messages around them, and clicking it shows
- * each run's output and error. The SSE store is mocked so no server is
- * involved.
+ * each run's output and error. The bot stream is a fake (fakes/sse.ts), so
+ * no server is involved.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,8 +12,10 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
+import { chatSessions } from "@/store/chats";
 import type { Bot, ModelInfo } from "@/lib/bots-api";
 import type { RoutineRunCard } from "@/lib/chat-types";
+import { botStream } from "../fakes/sse";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -26,9 +28,7 @@ vi.mock("@/lib/bots-api", () => ({
   },
 }));
 
-vi.mock("@/lib/sse", () => ({
-  subscribeSse: vi.fn(() => ({ close: () => undefined })),
-}));
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
 const model: ModelInfo = {
   id: "test-model",
@@ -56,6 +56,7 @@ const BOT = {
   autoReview: false,
   browserProfile: "shared",
   pinnedAt: null,
+  guestIds: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 } as Bot;
@@ -82,31 +83,26 @@ function renderWith(runs: RoutineRunCard[]) {
   useBotsStore.setState({
     bots: [{ ...BOT, unread: false, replying: false, approvals: 0, questions: 0 }],
     gatewayConfigured: true,
-    chats: {},
   });
-  useBotsStore.getState().connectChat("host");
-  useBotsStore.getState().applyChatEvent("host", {
-    type: "snapshot",
-    state: {
-      messages: [
-        { id: "u1", role: "user", text: "before the runs", status: "done", createdAt: at(10) },
-        { id: "u2", role: "user", text: "after the runs", status: "done", createdAt: at(50) },
-      ],
-      busy: false,
-      queued: [],
-    } as never,
-  });
-  useBotsStore.getState().applyChatEvent("host", { type: "routine-runs", runs });
+  chatSessions.store.setState({ sessions: {} });
   render(
     <BrowserRouter>
-      <ChatPane
-        bot={BOT}
-        models={[model]}
-        gatewayConfigured
-        onEditBot={() => {}}
-        onBotReset={() => {}}
-      />
+      <ChatPane bot={BOT} models={[model]} gatewayConfigured onEditBot={() => {}} />
     </BrowserRouter>,
+  );
+  botStream("host").send(
+    {
+      type: "snapshot",
+      state: {
+        messages: [
+          { id: "u1", role: "user", text: "before the runs", status: "done", createdAt: at(10) },
+          { id: "u2", role: "user", text: "after the runs", status: "done", createdAt: at(50) },
+        ],
+        busy: false,
+        queued: [],
+      },
+    },
+    { type: "routine-runs", runs },
   );
 }
 

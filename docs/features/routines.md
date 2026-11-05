@@ -54,8 +54,11 @@ document). In it:
 
 ## Results show as quiet lines in the chat
 
-The watcher (`routines.watcher.ts`) resolves an awaiting run when its
-routine's conversation goes idle. Only routine prompts go into that
+The routine runs step of the settled pipeline (`routineRunsStep`,
+`routines.watcher.ts`; see Settled in GLOSSARY.md) resolves an awaiting run
+when its routine's conversation settles, reading only that conversation's
+awaiting runs. Its boot sweep resolves or marks interrupted the runs a
+restart left awaiting, and re-arms routines whose fire job is gone. Only routine prompts go into that
 conversation, so the run's output is always the routine's own reply, even if
 the owner chats during the run.
 
@@ -71,7 +74,7 @@ it.
 - **Per thread.** Lines belong to the chat thread they finished in.
   `Bot.chatStartedAt` is set when the bot is created and on "New chat"; only
   runs that finished after it show. Earlier results stay on the Routines page.
-- The chat stream (`GET /bots/:id/stream`) sends `{ type: "routine-runs" }`
+- The chat stream (`GET /bots/:id/stream`, `followBotChat` in `bots.stream.ts`) sends `{ type: "routine-runs" }`
   with the thread's 50 newest finished runs on connect, then
   `{ type: "routine-run" }` as each one finishes.
 - The client merges them into the timeline by finish time

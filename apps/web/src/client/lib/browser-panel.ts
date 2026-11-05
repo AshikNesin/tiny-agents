@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "./chat-types";
+import { viewOf } from "./tool-call-view";
 
 export const BROWSER_DISMISSED_KEY = "tiny-agents:browser-dismissed";
 export const COMPUTER_DISMISSED_KEY = "tiny-agents:computer-dismissed";
@@ -80,7 +81,7 @@ export function browserInUse(messages: ChatMessage[]): boolean {
   return messages.some(
     (m) =>
       m.role === "assistant" &&
-      m.toolCalls?.some((c) => c.name.startsWith("browser_") && c.status === "running"),
+      m.toolCalls?.some((c) => c.name.startsWith("browser_") && viewOf(c).phase === "running"),
   );
 }
 
@@ -89,11 +90,11 @@ export function computerInUse(messages: ChatMessage[]): boolean {
   return messages.some(
     (m) =>
       m.role === "assistant" &&
-      m.toolCalls?.some(
-        (c) =>
-          c.name.startsWith("computer_") &&
-          (c.status === "running" || c.status === "awaiting_takeover"),
-      ),
+      m.toolCalls?.some((c) => {
+        if (!c.name.startsWith("computer_")) return false;
+        const view = viewOf(c);
+        return view.phase === "running" || view.waitingOn === "takeover";
+      }),
   );
 }
 

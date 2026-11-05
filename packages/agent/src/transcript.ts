@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { approvalOf } from "./approvals";
 import { credentialsOf } from "./credentials";
+import type { GateUserMessage } from "./policy";
 import { secretRedactor } from "./redact";
 import { takeoverOf } from "./toolkits/computer-sessions";
 import { questionsOf } from "./toolkits/questions";
@@ -67,6 +68,23 @@ export function textOf(content: unknown): string {
 
 /** Entry kind a chat send is placed as (pi-durable InputEntry; not "pi."-prefixed). */
 export const CHAT_USER_ENTRY = "chat.user";
+
+/**
+ * The user messages among a conversation's entries, in the entries' order,
+ * as the Tool gate reads them (who sent each, and what it said).
+ */
+export function userMessagesOf(entries: readonly EntryRecord[]): GateUserMessage[] {
+  return entries
+    .filter((entry) => entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY)
+    .map((entry) => {
+      const author = authorOf(entry);
+      return {
+        text: textOf(entry.model?.[0]?.content),
+        peer: peerOf(entry) !== undefined,
+        ...(author ? { author: author.id } : {}),
+      };
+    });
+}
 
 /** Trusted peer attribution stored in a `chat.user` entry's data. */
 export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {

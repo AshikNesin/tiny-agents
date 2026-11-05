@@ -1,24 +1,16 @@
 /**
- * Typed client for the bots API (PRD §9). Mirrors the server's shapes;
- * `apiClient` unwraps the { success, data } envelope.
+ * Typed client for the bots API (PRD §9). Shapes the server declares are
+ * imported, not copied: the agent package's chat types, and its rows
+ * through `Jsonified` (dates arrive as ISO strings). `apiClient` unwraps the
+ * { success, data } envelope.
  */
 import { apiClient } from "@groot/shell/lib/api";
-import type { OwnerAnswer } from "./chat-types";
-import type { ChatMessage, RoutineRunCard } from "./chat-types";
+import type { ModelInfo } from "@tiny-agents/agent";
+import type { BotListEntry as BotListRow } from "../../shared/bot-list";
+import type { Jsonified } from "../../shared/json";
+import type { AttachmentRef, ChatPage, OwnerAnswer, RoutineRunCard } from "./chat-types";
 
-export interface ModelInfo {
-  id: string;
-  name: string;
-  family: "anthropic" | "openai" | "workers-ai" | "claude-plan" | "other";
-  /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
-  provider?: string;
-  reasoning: boolean;
-  contextWindow: number;
-  /** The model accepts image content natively (issue #17). */
-  vision: boolean;
-  /** Short picker note, e.g. "uses your Claude plan". */
-  note?: string;
-}
+export type { AttachmentRef, ModelInfo };
 
 /** One inference provider (AI_PROVIDERS) and whether it has credentials. */
 export interface ProviderStatus {
@@ -60,25 +52,8 @@ export const claudeCodeApi = {
 
 export type ToolPermission = "allow" | "ask" | "off";
 
-export interface BotListEntry {
-  id: string;
-  conversationId: string;
-  name: string;
-  description: string;
-  modelId: string;
-  lastMessagePreview: string | null;
-  lastActivityAt: string;
-  /** Pre-open read marker (epoch ms) — the open-at-unread scroll uses it. */
-  lastReadAt: string | null;
-  unread: boolean;
-  replying: boolean;
-  /** Tool calls waiting for the owner's approval. */
-  approvals: number;
-  /** Questions (ask_owner calls) waiting for the owner's answers. */
-  questions: number;
-  /** ISO time the owner pinned the bot; null when not pinned. */
-  pinnedAt: string | null;
-}
+/** One bot as the sidebar lists it (GLOSSARY: Bot list). */
+export type BotListEntry = Jsonified<BotListRow>;
 
 export interface Bot {
   id: string;
@@ -106,19 +81,8 @@ export interface Bot {
   updatedAt: string;
 }
 
-export interface AttachmentRef {
-  uploadId: string;
-  kind: "image" | "file";
-  name: string;
-  mimeType: string;
-  size: number;
-  width?: number;
-  height?: number;
-  /** Files: extraction state when the ref was made (issue #58). */
-  status?: UploadExtractStatus;
-}
-
-export type UploadExtractStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
+/** A file upload's text extraction state (issue #58). */
+export type UploadExtractStatus = NonNullable<AttachmentRef["status"]>;
 
 /** An upload's live extraction state (GET /uploads/:id). */
 export interface UploadStatus {
@@ -269,7 +233,7 @@ export interface PastChat {
 /** A past chat to read: its newest messages (older ones page in) and its routine cards. */
 export interface PastChatView {
   chat: PastChat;
-  state: { messages: ChatMessage[]; hasMore?: boolean };
+  state: { messages: ChatPage["messages"]; hasMore?: boolean };
   runs: RoutineRunCard[];
 }
 
@@ -279,7 +243,7 @@ export const botsApi = {
   get: (id: string) => apiClient.get<Bot>(`/bots/${id}`),
   /** Older messages, just before message `before` (issue #92). */
   history: (id: string, before: string, limit = 50) =>
-    apiClient.get<{ messages: ChatMessage[]; hasMore: boolean }>(`/bots/${id}/messages`, {
+    apiClient.get<ChatPage>(`/bots/${id}/messages`, {
       before,
       limit,
     }),
@@ -322,10 +286,7 @@ export const botsApi = {
     apiClient.get<PastChatView>(`/bots/${id}/chats/${chatId}`),
   /** Older messages of a past chat, just before message `before`. */
   pastChatHistory: (id: string, chatId: string, before: string, limit = 50) =>
-    apiClient.get<{ messages: ChatMessage[]; hasMore: boolean }>(
-      `/bots/${id}/chats/${chatId}/messages`,
-      { before, limit },
-    ),
+    apiClient.get<ChatPage>(`/bots/${id}/chats/${chatId}/messages`, { before, limit }),
   /** Move the bot back onto a past chat; the chat it was on becomes a past chat. */
   continuePastChat: (id: string, chatId: string) =>
     apiClient.post<Bot>(`/bots/${id}/chats/${chatId}/continue`),

@@ -6,7 +6,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { InstanceEvent, ThreadEvent } from "@tiny-agents/code/contracts";
 import { createShelleyHarness, type ShelleyHarness } from "@tiny-agents/code/server";
-import { capabilityProblems, collect, testHost } from "@tiny-agents/code/testing";
+import {
+  capabilityProblems,
+  collect,
+  testHost,
+  threadEventProblems,
+} from "@tiny-agents/code/testing";
 import { eventually, startFakeShelley, type FakeShelley } from "./fake-shelley";
 
 let shelley: FakeShelley;
@@ -127,7 +132,7 @@ describe("Shelley harness", () => {
     });
   });
 
-  it("watches a thread: snapshot first, then rows, partial text and state", async () => {
+  it("watches a thread: Shelley's frames become rows, partial text and state", async () => {
     shelley.conversations.set("cA", {
       messages: [user(1, "Fix the tests"), agent(2, [{ Type: 2, Text: "On it." }])],
       conversation: row("cA", { agent_working: true }),
@@ -137,8 +142,7 @@ describe("Shelley harness", () => {
     const watcher = collect();
     const stop = harness.watchThread("cA", watcher.listener);
 
-    const first = await watcher.next();
-    expect(first.type).toBe("snapshot");
+    const first = await watcher.next((e) => e.type === "snapshot");
     const snapshot = (first as Extract<ThreadEvent, { type: "snapshot" }>).snapshot;
     expect(snapshot.items.map((i) => i.kind)).toEqual(["user", "assistant"]);
     expect(snapshot.thread).toMatchObject({ id: "shelley:cA", working: true, cursor: 2 });
@@ -163,7 +167,7 @@ describe("Shelley harness", () => {
     expect(added.items).toEqual([expect.objectContaining({ id: "tool1", status: "running" })]);
     expect(added.cursor).toBe(3);
 
-    // Live output updates the same row; only the changed row is sent.
+    // Live output updates the same row.
     shelley.push({
       conversation_id: "cA",
       tool_progress: { tool_use_id: "tool1", tool_name: "bash", output: "PASS 1" },
@@ -172,16 +176,17 @@ describe("Shelley harness", () => {
       ThreadEvent,
       { type: "items" }
     >;
-    expect(live.items).toEqual([
+    expect(live.items).toContainEqual(
       expect.objectContaining({ id: "tool1", output: "PASS 1", live: true }),
-    ]);
+    );
 
     shelley.push({ conversation_id: "cA", conversation_state: { working: false } });
     expect(await watcher.next((e) => e.type === "state")).toMatchObject({ working: false });
+    expect(threadEventProblems(watcher.events)).toEqual([]);
     stop();
   });
 
-  it("re-reads a watched thread after the stream reconnects", async () => {
+  it("starts a watched thread over from a fresh read after the stream reconnects", async () => {
     shelley.conversations.set("cA", { messages: [user(1, "hi")], conversation: row("cA") });
     harness.start();
     await shelley.waitForStreams(1);
@@ -192,11 +197,12 @@ describe("Shelley harness", () => {
     // A message lands while the stream is down.
     shelley.conversations.get("cA")!.messages.push(agent(2, [{ Type: 2, Text: "missed?" }]));
     shelley.dropStreams();
-    const caught = (await watcher.next((e) => e.type === "items", 4000)) as Extract<
+    const caught = (await watcher.next((e) => e.type === "snapshot", 4000)) as Extract<
       ThreadEvent,
-      { type: "items" }
+      { type: "snapshot" }
     >;
-    expect(caught.items).toEqual([expect.objectContaining({ kind: "assistant", text: "missed?" })]);
+    expect(caught.snapshot.items.at(-1)).toMatchObject({ kind: "assistant", text: "missed?" });
+    expect(threadEventProblems(watcher.events)).toEqual([]);
   });
 
   it("starts, sends (steer or queue, with attachments) and stops through Shelley's API", async () => {

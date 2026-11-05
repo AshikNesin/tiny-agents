@@ -4,7 +4,7 @@
  * them; a bot set to its own profile gets a separate browser. Either way the
  * bot drives a tab of its own, keyed by its id, so "New chat" keeps it.
  */
-import type { BrowserTarget } from "@tiny-agents/agent";
+import type { BrowserTarget } from "@tiny-agents/agent/browser";
 import { conversationOwner } from "./bots.owner";
 
 export const SHARED_BROWSER_PROFILE = "shared";

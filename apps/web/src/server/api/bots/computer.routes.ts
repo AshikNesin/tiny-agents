@@ -14,7 +14,7 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import type { ComputerSessions } from "@tiny-agents/agent";
+import type { ComputerSessions } from "@tiny-agents/agent/computer";
 import * as botsService from "./bots.service";
 import { SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { computerProfileForBot, computerSetupHint, getComputerSessions } from "./computer.sessions";
