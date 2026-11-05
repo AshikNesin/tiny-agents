@@ -62,6 +62,31 @@ describe("BotDialog", () => {
     spy.mockRestore();
   });
 
+  it("keeps the bot draft after an accidental outside click", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <BotDialog
+        open
+        onOpenChange={onOpenChange}
+        models={models}
+        bot={null}
+        onSaved={() => {}}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Name"), "Ada");
+    await user.type(screen.getByLabelText("System prompt"), "Help me research.");
+    const overlay = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]');
+    await user.click(overlay!);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Name")).toHaveValue("Ada");
+    expect(screen.getByLabelText("System prompt")).toHaveValue("Help me research.");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("deletes an edited bot after an inline confirmation", async () => {
     const bot = {
       id: "b1",
