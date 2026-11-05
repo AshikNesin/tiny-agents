@@ -184,7 +184,7 @@ export function agentRuntimeReady(): boolean {
 }
 
 /**
- * Auto-review's reviewer (issue #65): Clef on Workers AI through the AI
+ * Auto-review's reviewer (issue #65): TypeSafe's Jev on Workers AI through the AI
  * Gateway unless CLASSIFIER_MODEL names another classifier. Without the
  * gateway settings bots that turn auto-review on keep every approval card.
  */
@@ -193,8 +193,11 @@ function autoReviewer(env: Env = process.env): Reviewer | undefined {
   if (!classifier) return undefined;
   return createReviewer(classifier, {
     // Scores and outcome only: never the call's arguments.
+    // A failed review is a card the owner did not need: warn so it is noticed.
     onReview: ({ tool, verdict, durationMs }) =>
-      logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
+      verdict.error
+        ? logger.warn({ tool, ...verdict, durationMs }, "Auto-review failed; asking the owner")
+        : logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
   });
 }
 

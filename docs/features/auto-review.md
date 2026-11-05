@@ -11,7 +11,8 @@ Turn it on per bot in **Edit bot → Tools → Auto-review**. It is off by defau
 
 - It only **removes** cards. It never denies a call and never touches tools set
   to **Allow** or **Off**. When it does not approve, or fails (an error, a
-  timeout, a malformed reply), you get the card exactly as before.
+  timeout after 10 seconds, a malformed reply), you get the card exactly as
+  before.
 - These always ask, whatever the classifier says:
   - vault uses (logins, cards, API keys: their own policy decides),
   - **Ask (always)** tools (`askOnly`, e.g. saving a skill),
@@ -43,33 +44,38 @@ a restart never reviews the same call twice.
 
 ## Setup
 
-The classifier is Cloudflare's [Clef](https://developers.cloudflare.com/workers-ai/models/clef/)
-on Workers AI, called through your Cloudflare AI Gateway (its `workers-ai`
-route) with the same settings as chat models: `CLOUDFLARE_API_KEY` (sent as
-`cf-aig-authorization`), `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_GATEWAY_ID`.
-Every review shows up in the gateway's logs.
+The classifier is TypeSafe's [Jev](https://developers.cloudflare.com/ai/models/typesafe/jev/)
+on Workers AI, called through your Cloudflare AI Gateway with the same settings
+as chat models: `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_GATEWAY_ID`. Calls go to Workers AI's
+`/accounts/{account}/ai/run` with the `cf-aig-gateway-id` header (Cloudflare's
+recommended gateway route), so every review shows up in the gateway's logs.
+`CLOUDFLARE_API_KEY` is sent as `Authorization` and as `cf-aig-authorization`.
+A failed review logs `Auto-review failed; asking the owner` with the error.
 
-| Var                | Default               | What it is                                                             |
-| ------------------ | --------------------- | ---------------------------------------------------------------------- |
-| `CLASSIFIER_MODEL` | `@cf/cloudflare/clef` | Any Workers AI classifier: `@cf/cloudflare/clef-flash`, `typesafe/jev` |
+| Var                | Default        | What it is                                                                         |
+| ------------------ | -------------- | ---------------------------------------------------------------------------------- |
+| `CLASSIFIER_MODEL` | `typesafe/jev` | Any Workers AI classifier: `typesafe/jev-1.14.0`, `@cf/cloudflare/clef`, `…-flash` |
+
+Through the gateway, Cloudflare's own `@cf/cloudflare/clef*` models bill
+against the gateway's **Unified Billing** credits. Without credits every call
+answers `402 Insufficient unified billing credits` and every call gets a card,
+so use them only on a gateway with credits.
 
 Without the gateway settings, bots with auto-review on keep every card. An
 unknown `CLASSIFIER_MODEL` logs a warning at boot and turns it off.
 
 ## Cost
 
-Clef costs $0.24 per million input tokens, and output is free. A review is
-roughly 1–2k tokens, so the Workers AI free allocation (10,000 Neurons a day,
-about 458k Clef input tokens) covers about 230–450 reviews a day. On Workers
-Paid, more costs about $0.0005 per review. On Workers Free, calls fail after
-the daily allocation until 00:00 UTC, and you just get cards again.
-[Pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+Jev costs $0.042 per million input tokens, and output is free. A review is
+roughly 300–2k tokens, so about $0.0001 per review, charged to the gateway.
+[Pricing](https://developers.cloudflare.com/ai/models/typesafe/jev/).
 
 ## Another classifier
 
 Callers depend on the `Classifier` interface in
-`packages/agent/src/classifier.ts`, not on Clef. pi-ai already speaks the
-System One formats of every Workers AI classifier, so switching to TypeSafe's
-Jev is `CLASSIFIER_MODEL=typesafe/jev`. Its probabilities may sit differently
-from Clef's, so check the thresholds before relying on it. A classifier on
+`packages/agent/src/classifier.ts`, not on Jev. pi-ai already speaks the
+System One formats of every Workers AI classifier, so switching to Clef is
+`CLASSIFIER_MODEL=@cf/cloudflare/clef`. Its probabilities may sit differently
+from Jev's, so check the thresholds before relying on it. A classifier on
 another provider is a new `Classifier` built with `classifierFromModels`.
