@@ -23,7 +23,8 @@ import {
 } from "react";
 import { botsApi } from "../lib/bots-api";
 import { chatTimeline } from "../lib/chat-timeline";
-import type { ChatMessage, PendingMessage, RoutineRunCard } from "../lib/chat-types";
+import type { ChatMessage, RoutineRunCard } from "../lib/chat-types";
+import type { PendingMessage } from "../store/bots";
 import { formatDayDivider } from "../lib/day-divider";
 import { OwnerActionsProvider, type OwnerActions } from "../lib/owner-actions";
 import { ChatMessageView, type ToolLabels } from "./ChatMessageView";

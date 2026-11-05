@@ -180,8 +180,9 @@ describe("ChatPane transcript — unread divider", () => {
           },
         ],
         busy: false,
+        queued: [],
       },
-    } as never);
+    });
   }
 
   it("shows the divider above the first message newer than the read marker", () => {
@@ -208,8 +209,9 @@ describe("ChatPane composer — one action button", () => {
       state: {
         messages: [{ id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 }],
         busy,
+        queued: [],
       },
-    } as never);
+    });
   }
 
   it("shows only Stop while replying with nothing typed, and Steer once text is typed", async () => {
@@ -282,8 +284,8 @@ describe("ChatPane transcript — loading and activity", () => {
     act(() =>
       useBotsStore.getState().applyChatEvent("host", {
         type: "snapshot",
-        state: { messages: [], busy: false },
-      } as never),
+        state: { messages: [], busy: false, queued: [] },
+      }),
     );
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
   });
@@ -296,8 +298,9 @@ describe("ChatPane transcript — loading and activity", () => {
       state: {
         messages: [{ id: "u1", role: "user", text: "hi", status: "done", createdAt: 1_000 }],
         busy: true,
+        queued: [],
       },
-    } as never);
+    });
     renderPane();
     expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
 
@@ -328,8 +331,9 @@ describe("ChatPane transcript — loading and activity", () => {
           { id: "a1", role: "assistant", text: "old reply", status: "done", createdAt: 1_200 },
         ],
         busy: false,
+        queued: [],
       },
-    } as never);
+    });
     renderPane();
     act(() => {
       const { applyChatEvent } = useBotsStore.getState();
@@ -361,8 +365,8 @@ describe("ChatPane header", () => {
     useBotsStore.getState().connectChat("host");
     useBotsStore.getState().applyChatEvent("host", {
       type: "snapshot",
-      state: { messages: [], busy: false },
-    } as never);
+      state: { messages: [], busy: false, queued: [] },
+    });
     renderPane();
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
     expect(newChat).toBeDisabled();

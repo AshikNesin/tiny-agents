@@ -15,22 +15,12 @@ import { logger } from "@groot/core/logger";
 import { db, routineRuns, routines } from "../../db";
 import { notifyRoutineRun, type RoutineOutcome } from "../notifications/notifications.wiring";
 import type { RoutineRunRef } from "../notifications/notifications.events";
+import type { RoutineRunCard } from "../../../shared/bot-stream";
+
+export type { RoutineRunCard };
 
 /** Cards one chat shows: the newest finished runs across the bot's routines. */
 export const CHAT_CARDS = 50;
-
-/** A finished routine run as the chat renders it. */
-export interface RoutineRunCard {
-  id: string;
-  routineId: string;
-  routineName: string;
-  status: string;
-  trigger: string;
-  scheduledFor: string;
-  finishedAt: string;
-  output: string | null;
-  error: string | null;
-}
 
 type CardRow = {
   id: string;
@@ -49,8 +39,9 @@ function toCard(row: CardRow & { finishedAt: Date }): RoutineRunCard {
     id: row.id,
     routineId: row.routineId,
     routineName: row.routineName,
-    status: row.status,
-    trigger: row.trigger,
+    // Cards are only built for finished runs (never `awaiting`).
+    status: row.status as RoutineRunCard["status"],
+    trigger: row.trigger as RoutineRunCard["trigger"],
     scheduledFor: row.scheduledFor.toISOString(),
     finishedAt: row.finishedAt.toISOString(),
     output: row.output,

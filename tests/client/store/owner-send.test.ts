@@ -13,7 +13,7 @@ import {
   type OwnerSendPorts,
   type OwnerSubmission,
 } from "../../../apps/web/src/client/store/owner-send";
-import type { ChatEvent } from "../../../apps/web/src/client/lib/chat-types";
+import type { ChatEvent } from "../../../apps/web/src/client/store/bots";
 
 const SUBMISSION: OwnerSubmission = {
   body: "ok",

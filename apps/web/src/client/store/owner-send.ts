@@ -20,7 +20,7 @@
 import { toast } from "sonner";
 import { ApiError } from "@groot/shell/lib/api";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
-import type { ChatEvent, PendingMessage } from "../lib/chat-types";
+import type { ChatEvent, PendingMessage } from "./bots";
 import { errorMessage } from "../lib/errors";
 import { useBotsStore } from "./bots";
 

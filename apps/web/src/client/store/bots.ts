@@ -22,9 +22,61 @@ import {
   type ProviderStatus,
 } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
-import type { ChatEvent, ChatState } from "../lib/chat-types";
+import type {
+  AttachmentRef,
+  BotStreamEvent,
+  ChatMessage,
+  EventsFeedEvent,
+  QueuedMessage,
+  RoutineRunCard,
+} from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";
 import { mergeSnapshot, oldestEntryId, prependOlder } from "../lib/chat-history";
+
+/** An Echo: the optimistic copy of an owner send, shown until the server confirms it. */
+export interface PendingMessage {
+  /** The send's request id, minted once (store/owner-send.ts) and reused by every retry. */
+  id: string;
+  text: string;
+  createdAt: number;
+  /** Attachment refs echoed optimistically (issue #17). */
+  attachments?: AttachmentRef[];
+}
+
+/**
+ * A bot's chat as the browser holds it: what the bot stream said (the
+ * transcript window, busy, the queue, routine cards, YOLO mode) plus what
+ * only the browser knows (Echoes, stream health, paging, the read marker).
+ */
+export interface ChatState {
+  messages: ChatMessage[];
+  /** Finished routine runs of this bot, oldest first: merged into the timeline by time. */
+  routineRuns: RoutineRunCard[];
+  busy: boolean;
+  /** Owner inputs the server holds behind (or steering into) the reply. */
+  queued: readonly QueuedMessage[];
+  /** Locally echoed messages not yet confirmed by the server snapshot. */
+  pending: PendingMessage[];
+  /** False while the SSE stream is down (backend restart, network drop). */
+  connected: boolean;
+  /** True once the first snapshot arrived: until then the transcript is unknown, not empty. */
+  loaded: boolean;
+  /** Older messages exist above `messages[0]`; they load on scroll (issue #92). */
+  hasMore?: boolean;
+  /** YOLO mode (issue #151); unknown until its stream event arrives. */
+  yolo?: boolean;
+  /** A page of older messages is being fetched. */
+  loadingOlder?: boolean;
+  /** Pre-open read marker (epoch ms), seeded once when the chat connects (issue #3). */
+  unreadFrom: number | null;
+}
+
+/** What changes a chat: a bot stream event, or the browser's own (Echoes, stream health). */
+export type ChatEvent =
+  | BotStreamEvent
+  | { type: "pending-add"; message: PendingMessage }
+  | { type: "pending-remove"; id: string }
+  | { type: "connected"; connected: boolean };
 
 /** An MCP connection's live state, as the events feed last reported it. */
 export interface ConnectionLive {
@@ -187,7 +239,7 @@ function applyPatches(bots: BotListEntry[], list: readonly ListPatch[]): BotList
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const REFRESH_COALESCE_MS = 300;
 
-export type ConnectionChange = { type: "connection"; id: string; status: string; error?: string };
+export type ConnectionChange = Extract<EventsFeedEvent, { type: "connection" }>;
 const connectionListeners = new Set<(change: ConnectionChange) => void>();
 
 /**
@@ -496,7 +548,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
       }));
       const connection = subscribeSse(
         `/api/v1/bots/${botId}/stream`,
-        (event) => get().applyChatEvent(botId, event as ChatEvent),
+        (event) => get().applyChatEvent(botId, event as BotStreamEvent),
         {
           onOpen: () => get().applyChatEvent(botId, { type: "connected", connected: true }),
           onDrop: () => get().applyChatEvent(botId, { type: "connected", connected: false }),
@@ -560,7 +612,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
     connectActivity: () => {
       if (activityConnection) return;
       activityConnection = subscribeSse("/api/v1/events", (event) => {
-        const typed = event as ChatEvent;
+        const typed = event as EventsFeedEvent;
         if (typed.type === "connection") {
           const { id, status, error } = typed;
           set((state) => ({

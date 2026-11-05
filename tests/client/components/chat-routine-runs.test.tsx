@@ -94,7 +94,7 @@ function renderWith(runs: RoutineRunCard[]) {
       ],
       busy: false,
       queued: [],
-    } as never,
+    },
   });
   useBotsStore.getState().applyChatEvent("host", { type: "routine-runs", runs });
   render(

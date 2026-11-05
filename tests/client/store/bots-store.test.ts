@@ -30,11 +30,15 @@ vi.mock("../../../apps/web/src/client/lib/sse", () => ({
   ),
 }));
 
-import { onConnectionChange, useBotsStore } from "../../../apps/web/src/client/store/bots";
+import {
+  onConnectionChange,
+  useBotsStore,
+  type ChatEvent,
+} from "../../../apps/web/src/client/store/bots";
 import { botsApi, type Bot, type BotListEntry } from "../../../apps/web/src/client/lib/bots-api";
 
-const emit = (botId: string, event: unknown) =>
-  useBotsStore.getState().applyChatEvent(botId, event as never);
+const emit = (botId: string, event: ChatEvent) =>
+  useBotsStore.getState().applyChatEvent(botId, event);
 
 describe("bots store — optimistic send", () => {
   beforeEach(() => {

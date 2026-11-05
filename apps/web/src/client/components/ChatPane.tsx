@@ -45,7 +45,8 @@ import { SHOW_COMPUTER_EVENT } from "../lib/owner-actions";
 import { useHttpOwnerActions } from "../lib/owner-actions";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage, PendingMessage, QueuedMessage, RoutineRunCard } from "../lib/chat-types";
+import type { ChatMessage, QueuedMessage, RoutineRunCard } from "../lib/chat-types";
+import type { PendingMessage } from "../store/bots";
 import {
   MessageScrollerItem,
   MessageScrollerProvider,

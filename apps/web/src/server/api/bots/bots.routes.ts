@@ -13,6 +13,7 @@ import { onBotChatChanged } from "./chats.history";
 import { openSse } from "./bots.sse";
 import { watchBot } from "./bots.viewers";
 import { chatCards, onRoutineCard } from "../routines/routines.cards";
+import type { BotStreamEvent, EventsFeedEvent } from "../../../shared/bot-stream";
 import {
   answerQuestionsSchema,
   approvalSchema,
@@ -72,7 +73,7 @@ router.get("/capabilities", (c) => {
 // ── Chat + activity streams (SSE) ─────────────────────────────────────
 
 router.get("/events", (c) =>
-  openSse(c, (sse) => {
+  openSse<EventsFeedEvent>(c, (sse) => {
     const runtime = getAgentRuntime();
     // Snapshot of current busy conversations first, then live changes.
     sse.write({
@@ -104,7 +105,7 @@ router.get("/bots/:id/stream", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   // Before the stream opens (unknown bot) this is a normal API error.
   const bot = await botsService.getBot(id);
-  return openSse(c, async (sse) => {
+  return openSse<BotStreamEvent>(c, async (sse) => {
     sse.onClose(watchBot(bot.id));
     // "New chat" or continuing a Past chat moves the bot onto another
     // conversation: this stream watched the old one, so it ends and the

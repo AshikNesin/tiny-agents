@@ -9,6 +9,7 @@
  * stream and runs its close listeners, so watches never outlive their viewer.
  */
 import type { AppContext } from "@groot/core/types";
+import type { PingEvent, StreamErrorEvent } from "../../../shared/bot-stream";
 
 const HEARTBEAT_MS = 25_000;
 
@@ -19,10 +20,13 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 } as const;
 
-/** One open SSE response. */
-export interface SseStream {
+/**
+ * One open SSE response, carrying events of type `E` (a wire contract from
+ * shared/bot-stream.ts). Pings and the closing error event are its own.
+ */
+export interface SseStream<E> {
   /** Send one event (`data: <json>`); a no-op once the stream has ended. */
-  write(event: unknown): void;
+  write(event: E): void;
   /**
    * Run `listener` when the stream ends: the client went away, `end()`, or
    * shutdown. Runs at once when the stream has already ended.
@@ -34,7 +38,7 @@ export interface SseStream {
 }
 
 /** Every SSE response still open, so shutdown can end them. */
-const openStreams = new Set<SseStream>();
+const openStreams = new Set<SseStream<never>>();
 
 const encoder = new TextEncoder();
 
@@ -46,7 +50,10 @@ const encoder = new TextEncoder();
  * become an API error. Do anything that should fail as an API error (an
  * unknown bot's 404) before calling this.
  */
-export function openSse(c: AppContext, start: (sse: SseStream) => void | Promise<void>): Response {
+export function openSse<E>(
+  c: AppContext,
+  start: (sse: SseStream<E>) => void | Promise<void>,
+): Response {
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const listeners: (() => void)[] = [];
   let closed = false;
@@ -68,7 +75,7 @@ export function openSse(c: AppContext, start: (sse: SseStream) => void | Promise
     }
   };
 
-  const sse: SseStream = {
+  const sse: SseStream<E | PingEvent | StreamErrorEvent> = {
     get closed() {
       return closed;
     },
@@ -118,7 +125,7 @@ export function openSse(c: AppContext, start: (sse: SseStream) => void | Promise
 }
 
 /** Errors after the stream opened end it, with an error event first. */
-export function endSseOnError(sse: SseStream, error: unknown): void {
+export function endSseOnError(sse: SseStream<StreamErrorEvent>, error: unknown): void {
   sse.write({ type: "error", message: error instanceof Error ? error.message : "error" });
   sse.end();
 }
