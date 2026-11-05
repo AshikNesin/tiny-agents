@@ -217,12 +217,14 @@ async function main(): Promise<void> {
   // Memory capture (issue #22 phase B): settled Turns arm a debounce; the
   // quiet window or 6 turns later one side-call extracts durable facts off
   // the reply path. Faux mode never makes capture calls.
-  const deliveries = createDeliveries(runtime);
+  // Everything here is built from the opened runtime, so inside start: the
+  // runtime only exists once the "agent runtime" part has started.
   let memoryCapture: ReturnType<typeof createMemoryCapture> | undefined;
   let unsubscribeSettled = () => {};
   add({
     name: "settled conversations",
     start: async () => {
+      const deliveries = createDeliveries(runtime);
       const routineRuns = startRoutinesWatcher(runtime);
       memoryCapture = fauxMode()
         ? undefined
@@ -248,6 +250,11 @@ async function main(): Promise<void> {
         notifications.onSettled,
         ...(memoryCapture ? [memoryCapture.onSettled] : []),
       ]);
+      // Deliveries a restart interrupted are answered once the settled
+      // listener is in place.
+      void deliveries
+        .sweep()
+        .catch((error: unknown) => logger.warn({ error }, "Delivery sweep failed"));
     },
     // Unsubscribe first, then disarm capture timers: nothing may call into
     // the runtime once it closes.
@@ -256,10 +263,6 @@ async function main(): Promise<void> {
       memoryCapture?.stop();
     },
   });
-
-  // Deliveries a restart interrupted are answered once the settled listener
-  // is in place (above), whatever order the boot awaits in.
-  add({ name: "delivery sweep", start: () => void deliveries.sweep().catch(() => undefined) });
 
   // Code (issue #143, ADR 0011): one live connection per coding agent
   // (Shelley, Claude Code); hand-off finishes go into bots' chats and
