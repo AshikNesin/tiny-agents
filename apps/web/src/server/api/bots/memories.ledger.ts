@@ -116,11 +116,13 @@ export function memoryLedger(botId: string): MemoryLedger {
     const active = tx
       .select({ id: memories.id })
       .from(memories)
-      .where(and(ofBot, eq(memories.status, "active"), keep ? ne(memories.id, keep) : undefined))
+      .where(and(ofBot, eq(memories.status, "active")))
       .orderBy(asc(memories.createdAt))
       .all();
-    const room = MEMORY_MAX_ACTIVE - (keep ? 1 : 0);
-    const overflow = active.slice(0, Math.max(0, active.length - room)).map((row) => row.id);
+    const overflow = active
+      .filter((row) => row.id !== keep)
+      .slice(0, Math.max(0, active.length - MEMORY_MAX_ACTIVE))
+      .map((row) => row.id);
     if (overflow.length === 0) return;
     tx.update(memories).set({ status: "archived" }).where(inArray(memories.id, overflow)).run();
   }
