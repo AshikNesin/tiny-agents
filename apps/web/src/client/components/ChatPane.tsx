@@ -33,7 +33,7 @@ import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import { TypingIndicator } from "./ChatMessageView";
+import { TypingIndicator } from "./ui/transcript-parts";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { Transcript, type TranscriptPages } from "./Transcript";
 import {

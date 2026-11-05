@@ -18,6 +18,7 @@ import { markdownComponents } from "../lib/markdown";
 import { Button } from "@groot/ui/button";
 import { toast } from "sonner";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
+import { isActive, viewOf } from "../lib/tool-call-view";
 import {
   type OwnerActions,
   showComputerPanel,
@@ -48,7 +49,7 @@ import {
 import { MessageAttachments } from "./Attachments";
 import { ownerText } from "../lib/attachment-notes";
 import { AskedQuestions, QuestionCard } from "./QuestionCard";
-import { ThinkingIndicator } from "./fluid/thinking-indicator";
+import { OTHER_PILL, TypingIndicator, USER_PILL } from "./ui/transcript-parts";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item";
 import { Message } from "./ui/message";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
@@ -186,34 +187,6 @@ function CopyAction({ text }: { text: string }) {
   );
 }
 
-/** The owner's bubble: Fluid ChatMessage's soft accent tint (tokens in app.css). */
-export const USER_PILL =
-  "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";
-
-/** Someone else's message in a shared chat: the reply bubble's surface, on the left. */
-const OTHER_PILL =
-  "bg-bubble min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";
-
-const WORKING_WORDS = ["Thinking", "Working", "Planning", "Refining"] as const;
-const REPLYING_WORDS = ["Replying"] as const;
-
-/**
- * The bot is working but has nothing to show yet (waiting on the first token,
- * or between tool rounds): Fluid Functionalism's ThinkingIndicator, a glyph
- * morphing circle ⇄ infinity beside a shimmering status word.
- */
-export function TypingIndicator({ label = "thinking" }: { label?: string }) {
-  return (
-    <ThinkingIndicator
-      aria-label={`${label}…`}
-      label={`${label}…`}
-      words={label === "replying" ? REPLYING_WORDS : WORKING_WORDS}
-      data-testid="typing-indicator"
-      className="h-9 px-1 py-0"
-    />
-  );
-}
-
 /**
  * Thinking block: an AI Elements Reasoning step. Open (and shimmering)
  * while the model reasons, folded away once it finishes so the reply is
@@ -267,17 +240,6 @@ function summarizeArgs(call: ChatToolCall): string {
   return typeof first === "string" ? first.slice(0, 60) : "";
 }
 
-const STATUS_TEXT: Partial<Record<ChatToolCall["status"], string>> = {
-  awaiting_approval: "waiting for your approval",
-  awaiting_answer: "waiting for your answers",
-  awaiting_credentials: "waiting for you to sign in",
-  awaiting_takeover: "waiting for you on the computer",
-  expired: "nobody answered in time",
-  interrupted: "interrupted by a restart",
-  aborted: "stopped",
-  denied: "denied by you",
-};
-
 function formatDuration(ms: number): string {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
@@ -291,54 +253,10 @@ function formatWait(ms: number): string {
   return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
 }
 
-/** Tool states whose row already shows the bot at work (or waiting on you). */
-export const ACTIVE_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
-  "pending",
-  "running",
-  "awaiting_approval",
-  "awaiting_answer",
-  "awaiting_credentials",
-  "awaiting_takeover",
-]);
-
-/** Map our tool status onto the trace step status. */
-function traceStatus(status: ChatToolCall["status"]): "running" | "error" | "pending" | undefined {
-  switch (status) {
-    case "running":
-    case "pending":
-      return "running";
-    case "error":
-    case "denied":
-    case "expired":
-    case "aborted":
-    case "interrupted":
-      return "error";
-    case "awaiting_approval":
-    case "awaiting_answer":
-    case "awaiting_credentials":
-    case "awaiting_takeover":
-      return "pending";
-    case "done":
-      return undefined;
-  }
-}
-
-function statusIcon(call: ChatToolCall) {
-  switch (call.status) {
-    case "awaiting_approval":
-    case "awaiting_answer":
-    case "awaiting_credentials":
-    case "awaiting_takeover":
-      return <Clock className="text-primary size-3.5" />;
-    case "denied":
-    case "expired":
-    case "aborted":
-    case "interrupted":
-      return <Ban className="size-3.5" />;
-    default:
-      return undefined;
-  }
-}
+const STATUS_ICONS = {
+  clock: <Clock className="text-primary size-3.5" />,
+  ban: <Ban className="size-3.5" />,
+};
 
 /**
  * The approval card: an AI Elements Confirmation built on Item. `ask` is the
@@ -597,10 +515,10 @@ function ToolDetailBlock({
 }
 
 /**
- * One tool call as an AI Elements Tool step: a TraceLine with the call's
- * status, expanding to its arguments and result. Awaiting calls show the
- * approval card instead (issue #1 D3/D4), and a bot's questions for the
- * owner their questionnaire.
+ * One tool call: the card `viewOf` picks for it (an approval card while it
+ * waits, issue #1 D3/D4; a bot's questions for the owner; a hand-off), else
+ * an AI Elements Tool step: a TraceLine with the call's status, expanding to
+ * its arguments and result.
  */
 function ToolRow({
   call,
@@ -616,11 +534,10 @@ function ToolRow({
   // No owner actions: a Past chat (issue #101), where what still waits can
   // no longer be answered.
   const actions = useOwnerActions();
-  const readOnly = !actions;
+  const view = viewOf(call, { readOnly: !actions });
+  const extra = view.note;
   const summary = summarizeArgs(call);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const waiting = call.status.startsWith("awaiting_");
-  const extra = readOnly && waiting ? "not answered" : STATUS_TEXT[call.status];
   const argsJson = JSON.stringify(call.args, null, 2);
   const detail =
     call.output || argsJson !== "{}" ? (
@@ -630,13 +547,7 @@ function ToolRow({
           <ToolDetailBlock
             title="Output"
             value={call.output}
-            destructive={
-              call.status === "error" ||
-              call.status === "denied" ||
-              call.status === "expired" ||
-              call.status === "aborted" ||
-              call.status === "interrupted"
-            }
+            destructive={view.phase === "failed"}
           />
         )}
         {call.sources && call.sources.length > 0 && (
@@ -656,84 +567,72 @@ function ToolRow({
       </div>
     ) : null;
 
-  // data-waiting: what a notification's ?focus= link scrolls to (focus-param.ts).
-  if (actions && call.status === "awaiting_approval" && call.taskId !== undefined) {
-    if (call.vault) {
+  // A card is picked only with what it needs (owner actions, a task id, the
+  // call's details), so the assertions below hold. data-waiting: what a
+  // notification's ?focus= link scrolls to (focus-param.ts).
+  switch (view.card) {
+    case "vault-approval":
       return (
-        <div data-waiting={`approval:${call.taskId}`}>
+        <div data-waiting={view.anchor}>
           <VaultApprovalCard
-            call={{ ...call, taskId: call.taskId, vault: call.vault }}
-            actions={actions}
+            call={{ ...call, taskId: call.taskId!, vault: call.vault! }}
+            actions={actions!}
             botName={botName}
           />
         </div>
       );
-    }
-    return (
-      <div data-waiting={`approval:${call.taskId}`}>
-        <ApprovalCard
-          call={{ ...call, taskId: call.taskId }}
-          ask={ask}
-          actions={actions}
-          botName={botName}
-        />
-      </div>
-    );
-  }
-
-  if (
-    actions &&
-    call.status === "awaiting_credentials" &&
-    call.taskId !== undefined &&
-    call.credentials
-  ) {
-    return (
-      <CredentialRequestCard call={{ ...call, credentials: call.credentials }} botName={botName} />
-    );
-  }
-
-  if (actions && call.status === "awaiting_takeover" && call.takeover) {
-    return (
-      <div data-waiting={call.taskId !== undefined ? `takeover:${call.taskId}` : undefined}>
-        <TakeoverCard
-          call={{ ...call, takeover: call.takeover }}
-          actions={actions}
-          botName={botName}
-        />
-      </div>
-    );
-  }
-
-  // ask_owner: the questionnaire while it waits, then the questions and answers.
-  if (call.questions) {
-    if (actions && call.status === "awaiting_answer" && call.taskId !== undefined) {
+    case "approval":
       return (
-        <div data-waiting={`question:${call.taskId}`}>
-          <QuestionCard
-            call={{ ...call, taskId: call.taskId, questions: call.questions }}
-            actions={actions}
+        <div data-waiting={view.anchor}>
+          <ApprovalCard
+            call={{ ...call, taskId: call.taskId! }}
+            ask={ask}
+            actions={actions!}
             botName={botName}
           />
         </div>
       );
-    }
-    const note = extra ?? (call.answers ? undefined : "dismissed by you");
-    return <AskedQuestions call={call} note={note} />;
-  }
-
-  // message_bot row: Grok's centered handoff line that opens the thread.
-  if (call.name === "message_bot") {
-    return <BotHandoff call={call} botName={botName} />;
-  }
-
-  // code_start / shelley_start (issue #143): the coding hand-off, linking to the Code page.
-  if (call.code) {
-    return <CodeHandoffCard handoff={call.code} />;
+    case "credentials":
+      return (
+        <CredentialRequestCard
+          call={{ ...call, credentials: call.credentials! }}
+          botName={botName}
+        />
+      );
+    case "takeover":
+      return (
+        <div data-waiting={view.anchor}>
+          <TakeoverCard
+            call={{ ...call, takeover: call.takeover! }}
+            actions={actions!}
+            botName={botName}
+          />
+        </div>
+      );
+    // ask_owner: the questionnaire while it waits, then the questions and answers.
+    case "question":
+      return (
+        <div data-waiting={view.anchor}>
+          <QuestionCard
+            call={{ ...call, taskId: call.taskId!, questions: call.questions! }}
+            actions={actions!}
+            botName={botName}
+          />
+        </div>
+      );
+    case "asked-questions":
+      return <AskedQuestions call={call} note={extra} />;
+    // message_bot row: Grok's centered handoff line that opens the thread.
+    case "bot-handoff":
+      return <BotHandoff call={call} botName={botName} />;
+    // code_start / shelley_start (issue #143): the coding hand-off, linking to the Code page.
+    case "code-handoff":
+      return <CodeHandoffCard handoff={call.code!} />;
   }
 
   const line = (
-    <TraceLine status={traceStatus(call.status)}>
-      {statusIcon(call) ? <TraceIcon>{statusIcon(call)}</TraceIcon> : null}
+    <TraceLine status={view.trace}>
+      {view.icon ? <TraceIcon>{STATUS_ICONS[view.icon]}</TraceIcon> : null}
       <TraceTitle>
         {call.name === "load_skill" ? (
           <span className="inline-flex items-center gap-1">
@@ -791,34 +690,11 @@ function ToolRow({
   );
 }
 
-/** Finished tool states: the call is over, whatever its outcome. */
-const FINISHED_TOOL_STATUSES: ReadonlySet<ChatToolCall["status"]> = new Set([
-  "done",
-  "error",
-  "denied",
-  "expired",
-  "aborted",
-  "interrupted",
-]);
-
-/**
- * A finished call that renders as a plain trace line (no card of its own):
- * the calls a turn's tool steps fold together.
- */
-function foldable(call: ChatToolCall): boolean {
-  return (
-    FINISHED_TOOL_STATUSES.has(call.status) &&
-    !call.questions &&
-    !call.code &&
-    call.name !== "message_bot"
-  );
-}
-
 type ToolStep =
   | { kind: "call"; call: ChatToolCall; i: number }
   | { kind: "group"; calls: ChatToolCall[]; i: number };
 
-/** Runs of two or more foldable calls become one group; the rest stay rows. */
+/** Runs of two or more foldable calls (`viewOf`) become one group; the rest stay rows. */
 function toolSteps(calls: ChatToolCall[]): ToolStep[] {
   const steps: ToolStep[] = [];
   let run: ChatToolCall[] = [];
@@ -829,7 +705,7 @@ function toolSteps(calls: ChatToolCall[]): ToolStep[] {
     run = [];
   };
   calls.forEach((call, i) => {
-    if (!foldable(call)) {
+    if (!viewOf(call).foldable) {
       flush();
       steps.push({ kind: "call", call, i });
       return;
@@ -840,8 +716,6 @@ function toolSteps(calls: ChatToolCall[]): ToolStep[] {
   flush();
   return steps;
 }
-
-const failedCall = (call: ChatToolCall) => call.status !== "done";
 
 /** "Read the page ×3, searched the web": what a run of calls did, by label. */
 export function describeCalls(calls: ChatToolCall[], labels: ToolLabels): string {
@@ -868,7 +742,7 @@ function ToolGroupRow({
   askLabels: ToolLabels;
   botName: string;
 }) {
-  const failed = calls.filter(failedCall).length;
+  const failed = calls.filter((call) => viewOf(call).phase === "failed").length;
   const duration = calls.reduce((sum, call) => sum + (call.durationMs ?? 0), 0);
   return (
     <Trace data-testid="tool-group">
@@ -1218,12 +1092,9 @@ function assistantView(
         )}
         {/* Nothing visible yet: dots, unless a running tool row or the
             reasoning block already shows the bot at work. */}
-        {streaming &&
-          !message.text &&
-          !message.reasoning &&
-          !message.toolCalls?.some((c) => ACTIVE_TOOL_STATUSES.has(c.status)) && (
-            <TypingIndicator />
-          )}
+        {streaming && !message.text && !message.reasoning && !message.toolCalls?.some(isActive) && (
+          <TypingIndicator />
+        )}
       </div>
     </Message>
   );

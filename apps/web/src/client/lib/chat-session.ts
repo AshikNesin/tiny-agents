@@ -14,6 +14,7 @@
  */
 import { mergeSnapshot, oldestEntryId, prependOlder } from "./chat-history";
 import { chatTimeline, type TimelineItem } from "./chat-timeline";
+import { isActive } from "./tool-call-view";
 import type {
   AttachmentRef,
   BotStreamEvent,
@@ -307,16 +308,6 @@ export function isEcho(entry: OutboxEntry): boolean {
   return entry.state === "sending" || entry.state === "offline";
 }
 
-/** Tool statuses that show the bot at work on screen (a running row, a card). */
-const ACTIVE_TOOL_STATUSES = new Set([
-  "pending",
-  "running",
-  "awaiting_approval",
-  "awaiting_answer",
-  "awaiting_credentials",
-  "awaiting_takeover",
-]);
-
 /**
  * The bot is working with nothing on screen to show it: waiting on the
  * first token, or between tool rounds. A streaming reply, a running tool
@@ -326,7 +317,7 @@ function awaitingFirstOutput(messages: ChatMessage[]): boolean {
   const last = messages[messages.length - 1];
   if (!last || last.role !== "assistant") return true;
   if (last.status === "streaming") return false;
-  return !last.toolCalls?.some((call) => ACTIVE_TOOL_STATUSES.has(call.status));
+  return !last.toolCalls?.some(isActive);
 }
 
 /** The chat, ready to render. */

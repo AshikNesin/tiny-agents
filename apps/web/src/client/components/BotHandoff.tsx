@@ -3,23 +3,21 @@ import { ArrowLeftRight, ChevronRight, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@groot/ui/dialog";
 import { cn } from "@groot/ui/lib/utils";
 import type { ChatToolCall } from "../lib/chat-types";
+import { viewOf, type ToolPhase } from "../lib/tool-call-view";
 import { BotAvatar } from "./BotAvatar";
 
-function handoffLabel(status: ChatToolCall["status"]): string {
-  if (status === "running" || status === "pending") return "Messaging";
-  if (status === "done") return "Messaged";
-  if (status === "denied") return "Blocked message to";
-  if (status === "aborted") return "Stopped messaging";
-  if (status === "interrupted") return "Interrupted message to";
-  return "Failed to message";
-}
+/** How a hand-off that did not go through ended, where it says more than "Failed". */
+const ENDED: Partial<Record<ChatToolCall["status"], string>> = {
+  denied: "Blocked message to",
+  aborted: "Stopped messaging",
+  interrupted: "Interrupted message to",
+};
 
-const FAILED: ReadonlySet<ChatToolCall["status"]> = new Set([
-  "error",
-  "denied",
-  "aborted",
-  "interrupted",
-]);
+function handoffLabel(phase: ToolPhase, status: ChatToolCall["status"]): string {
+  if (phase === "pending" || phase === "running") return "Messaging";
+  if (phase === "done") return "Messaged";
+  return ENDED[status] ?? "Failed to message";
+}
 
 function formatDuration(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
@@ -51,8 +49,10 @@ export function BotHandoff({ call, botName }: { call: ChatToolCall; botName: str
   const to = typeof call.args?.to === "string" ? call.args.to : "";
   const text = typeof call.args?.text === "string" ? call.args.text : "";
   const snippet = text.replace(/\s+/g, " ").trim().slice(0, 60);
-  const failed = FAILED.has(call.status) || call.status === "error";
-  const running = call.status === "running" || call.status === "pending";
+  const { phase } = viewOf(call);
+  // An expired hand-off (nobody approved it in time) was never sent: muted, not red.
+  const failed = phase === "failed" && call.status !== "expired";
+  const running = phase === "pending" || phase === "running";
 
   return (
     <>
@@ -69,7 +69,7 @@ export function BotHandoff({ call, botName }: { call: ChatToolCall; botName: str
         >
           <BotAvatar name={to} className="size-4 shrink-0" />
           <span className={cn("shrink-0 font-medium", running && "animate-pulse")}>
-            {handoffLabel(call.status)} {to || "bot"}
+            {handoffLabel(phase, call.status)} {to || "bot"}
           </span>
           {snippet && <span className="min-w-0 truncate opacity-70">“{snippet}”</span>}
           {call.durationMs !== undefined && (
