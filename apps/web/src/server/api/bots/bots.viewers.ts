@@ -1,7 +1,8 @@
 /**
- * Which bots' chats are open right now: one count per bot of live
- * `/bots/:id/stream` connections. Notifications about a run ending skip a bot
- * whose chat the owner is watching.
+ * Which bots' chats are open right now: one count per bot of live follows of
+ * its chat (`followBotChat`, bots.stream.ts, behind `/bots/:id/stream`).
+ * Notifications about a run ending skip a bot whose chat the owner is
+ * watching.
  */
 const viewers = new Map<string, number>();
 
