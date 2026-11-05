@@ -6,6 +6,13 @@
 export * from "../contracts";
 export { Emitter, ItemTracker, excerpt, firstLine, record } from "./items";
 export {
+  NO_PARTIAL,
+  ThreadFeed,
+  type PartialText,
+  type StatePatch,
+  type ThreadListener,
+} from "./feed";
+export {
   HarnessError,
   badGateway,
   badRequest,
