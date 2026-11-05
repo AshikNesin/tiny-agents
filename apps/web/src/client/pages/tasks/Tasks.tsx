@@ -101,6 +101,7 @@ export function Tasks() {
   const [tab, setTab] = useState<Tab>("today");
   const [editing, setEditing] = useState<Task | null>(null);
   const [quick, setQuick] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -147,6 +148,8 @@ export function Tasks() {
   }, [quick]);
 
   const create = async (text: string, dueToday: boolean) => {
+    if (creating) return;
+    setCreating(true);
     // "Call mom tomorrow 5pm !high": a day, time or priority typed in the
     // box wins over the tab's default due date (#97).
     const parsed = parseQuickTask(text);
@@ -163,6 +166,8 @@ export function Tasks() {
       await refresh();
     } catch (error) {
       toast.error(errorMessage(error, "Failed to add task"));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -236,6 +241,7 @@ export function Tasks() {
 
       {tab !== "completed" && (
         <form
+          aria-busy={creating}
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
@@ -245,6 +251,7 @@ export function Tasks() {
         >
           <Input
             value={quick}
+            readOnly={creating}
             onChange={(e) => setQuick(e.target.value)}
             placeholder={
               tab === "today"
@@ -254,9 +261,16 @@ export function Tasks() {
             maxLength={300}
             aria-label="New task title"
           />
-          <Button type="submit" size="lg" disabled={!quick.trim()} aria-label="Add task">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={creating || !quick.trim()}
+            aria-label="Add task"
+          >
             <Plus className="size-4" />
-            <span className="hidden sm:inline">Add</span>
+            <span className={creating ? undefined : "hidden sm:inline"}>
+              {creating ? "Adding…" : "Add"}
+            </span>
           </Button>
         </form>
       )}
