@@ -53,11 +53,10 @@ import {
   type UsageReport,
 } from "../../contracts";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
-import { Emitter, excerpt, firstLine, record } from "../../server/items";
+import { Emitter, excerpt, firstLine, lastAnswer, record } from "../../server/items";
 import { CodingWorkerClient, type ClientState, type CodingClientTimings } from "./client";
 import {
   approvalRequestOf,
-  lastAnswer,
   normalizeEntries,
   toolSummary,
   type ApprovalRecord,

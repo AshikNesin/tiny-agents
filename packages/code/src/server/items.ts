@@ -47,3 +47,33 @@ export function excerpt(text: string, max = 1500): string {
   const clean = text.trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
+
+/** The first of `keys` whose value in `args` is a non-empty string. */
+export function pick(args: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = args[key];
+    if (typeof value === "string" && value) return value;
+  }
+  return undefined;
+}
+
+/** File names the Code page shows inline as images. */
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+
+export function isImageFile(path: string): boolean {
+  return IMAGE_FILE.test(path);
+}
+
+/**
+ * The answer of the last turn: its last assistant row, or its last error
+ * notice (`failed`). Empty when the newest user message has neither yet.
+ */
+export function lastAnswer(items: readonly TranscriptItem[]): { text: string; failed: boolean } {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    if (item.kind === "assistant") return { text: item.text, failed: false };
+    if (item.kind === "notice" && item.level === "error") return { text: item.text, failed: true };
+    if (item.kind === "user") break;
+  }
+  return { text: "", failed: false };
+}
