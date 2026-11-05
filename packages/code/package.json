@@ -1,0 +1,21 @@
+{
+  "name": "@tiny-agents/code",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Code page's harness adapters: one contract every coding agent (Shelley, Claude Code, …) plugs into, plus the built-in drivers.",
+  "type": "module",
+  "exports": {
+    "./contracts": "./src/contracts/index.ts",
+    "./server": "./src/server/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "@tiny-agents/claude-worker": "workspace:*",
+    "ws": "8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/ws": "8.18.2"
+  }
+}
