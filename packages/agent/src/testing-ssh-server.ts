@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { connect } from "node:net";
 import ssh2 from "ssh2";
 // default-interop: a plain-node child (durability tests) can't resolve ssh2's
 // named exports through cjs-module-lexer, but the default export works everywhere
@@ -43,15 +44,33 @@ export interface FakeSandboxServer {
   execCalls: string[];
   /** Completed SSH handshakes: makes fresh-connection invariants observable. */
   connections: number;
+  /** Connections open right now: makes the pool's reuse and idle close observable. */
+  readonly open: number;
+  /** Direct-tcpip channels opened (forwards), by destination port. */
+  forwards: number[];
+  /** Drop every connection from the server side, like a lost link. */
+  dropConnections(): void;
   close(): void;
 }
 
-/** What the test wants each command to answer. */
-export type ExecHandler = (command: string) => {
-  stdout?: string;
-  stderr?: string;
-  exitCode?: number;
-};
+/**
+ * What the test wants each command to answer: output and a status, `null` to
+ * refuse the exec request, or `"stall"` to never answer it.
+ */
+export type ExecHandler = (command: string) =>
+  | {
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+      /** Answer with what the client wrote to stdin, once it closes stdin. */
+      echoStdin?: boolean;
+      /** Run forever: never exit (the client's timeout ends it). */
+      hang?: boolean;
+      /** Exit, but keep the channel open, like a command that left a child holding it. */
+      keepOpen?: boolean;
+    }
+  | null
+  | "stall";
 
 /** Attach metadata the server sees when a pty is requested on exec. */
 export interface PtyRequestInfo {
@@ -136,6 +155,7 @@ export function startFakeSandboxServer(
     type: "sec1",
   }) as unknown as string;
   const execCalls: string[] = [];
+  const forwards: number[] = [];
   let connections = 0;
   let closed = false;
   const clients = new Set<Connection>();
@@ -144,6 +164,7 @@ export function startFakeSandboxServer(
     clients.add(client);
     connections++;
     client.on("close", () => clients.delete(client));
+    client.on("error", () => {}); // a dropped link is the point of some tests
     // Tailscale-style: only `none` auth. A client that starts sending
     // credentials is not the shape this fixture simulates — reject it.
     client.on("authentication", (ctx) =>
@@ -199,14 +220,41 @@ export function startFakeSandboxServer(
           reply = { stderr: String(error), exitCode: 1 };
         }
         if (reply === null) return reject();
+        if (reply === "stall") return; // never answered: the client's open times out
         const stream = acceptExec();
+        if (reply.hang) return;
+        if (reply.echoStdin) {
+          const input: Buffer[] = [];
+          stream.on("data", (data: Buffer) => input.push(data));
+          stream.once("end", () => {
+            stream.write(Buffer.concat(input));
+            stream.exit(0);
+            stream.end();
+          });
+          return;
+        }
         if (reply.stderr) stream.stderr.write(reply.stderr);
         if (reply.stdout) stream.write(reply.stdout);
         stream.exit(reply.exitCode ?? 0);
-        stream.end();
+        if (!reply.keepOpen) stream.end();
       });
       session.on("sftp", (acceptSftp) => {
         handleSftp(acceptSftp() as unknown as SftpServerStream, root);
+      });
+    });
+    // Direct-tcpip (a port forward) to this machine's loopback, standing in
+    // for the sandbox's: a closed port is refused as CONNECT_FAILED, as sshd
+    // and tailscaled refuse it.
+    client.on("tcpip", (accept, reject, info) => {
+      forwards.push(info.destPort);
+      const socket = connect(info.destPort, "127.0.0.1");
+      socket.once("error", () => reject());
+      socket.once("connect", () => {
+        const channel = accept();
+        socket.removeAllListeners("error");
+        socket.on("error", () => channel.destroy());
+        channel.on("error", () => socket.destroy());
+        channel.pipe(socket).pipe(channel);
       });
     });
   });
@@ -221,6 +269,13 @@ export function startFakeSandboxServer(
         execCalls,
         get connections() {
           return connections;
+        },
+        get open() {
+          return clients.size;
+        },
+        forwards,
+        dropConnections: () => {
+          for (const c of clients) c.end();
         },
         close: () => {
           if (closed) return;
