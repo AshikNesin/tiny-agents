@@ -57,7 +57,7 @@ import {
   computerSetupHint,
   getComputerSessions,
 } from "./computer.sessions";
-import { sandboxEndpoint, unquoteEnv as unquote } from "./sandbox-host";
+import { sandboxConnection, unquoteEnv as unquote } from "./sandbox-host";
 import { sharedClaudeWorkerLocator } from "./claude-worker";
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -89,8 +89,8 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     createVaultToolkit({ broker: vault }),
     createTodayCapability({ timeZone: unquote(env.TZ) }),
     createSandboxToolkit({
-      // The one endpoint (host, port, user, pinned key) every SSH user shares.
-      ...sandboxEndpoint(env),
+      // The one sandbox connection every SSH user shares.
+      connection: sandboxConnection(env),
       // Vault secrets as env vars for one command, confined to their hosts;
       // with an allowlist, every command is confined to it (issue #56).
       vault,
@@ -101,7 +101,7 @@ export function builtinCapabilities(env: Env = process.env): Capability[] {
     // the asking conversation.
     createAttachmentsToolkit(
       createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
-      { sandbox: sandboxEndpoint(env) },
+      { sandbox: sandboxConnection(env) },
     ),
     // Browser (issue #24): one Chrome per profile (shared by default, or the
     // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the

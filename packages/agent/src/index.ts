@@ -132,15 +132,17 @@ export {
   type CodeToolkitOptions,
 } from "./toolkits/code";
 export { createTodayCapability, type TodayOptions } from "./toolkits/today";
+export { createSandboxToolkit, type SandboxToolkitOptions } from "./toolkits/sandbox";
 export {
-  createSandboxToolkit,
-  createMemoryHostKeyStore,
-  createSsh2Transport,
-  type SandboxToolkitOptions,
-  type SandboxTransport,
-  type SandboxSession,
-  type HostKeyStore,
-} from "./toolkits/sandbox";
+  createSandboxConnection,
+  SANDBOX_IDLE_TIMEOUT_MS,
+  type SandboxConnection,
+  type SandboxConnectionOptions,
+  type SandboxExecOptions,
+  type SandboxExecResult,
+  type SandboxFile,
+} from "./ssh/sandbox-connection";
+export type { PtySize } from "./ssh/pty-stream";
 export {
   createTerminalService,
   SessionLimitError,
@@ -153,15 +155,10 @@ export {
   type TerminalServiceOptions,
   type TerminalSessionRow,
   type TerminalStatus,
-  type TerminalTransport,
+  type TerminalConnection,
   type TerminalExecResult,
   type PtyStream,
 } from "./terminal/terminal";
-export {
-  createSsh2TerminalTransport,
-  type Ssh2TerminalTransport,
-  type Ssh2TerminalTransportOptions,
-} from "./terminal/terminal-ssh2";
 export {
   MAX_SESSIONS,
   SCROLLBACK,
@@ -239,11 +236,17 @@ export {
 export { parseDesktopSize, parseExtraPackages } from "./toolkits/computer-vm-setup";
 
 export {
-  dialSsh,
+  createMemoryHostKeyStore,
+  describeSandboxError,
   hostKeyHash,
   verifyHostKey,
   DEFAULT_SSH_PORT,
   DEFAULT_SSH_USER,
+  ForwardRefusedError,
+  HostKeyChangedError,
+  PreDispatchError,
+  SandboxTimeoutError,
+  type HostKeyStore,
   type SshEndpoint,
 } from "./ssh/connection";
 export {

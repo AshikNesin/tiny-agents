@@ -24,7 +24,7 @@ const stub = {} as never;
 const capabilities = [
   createToolSearchCapability(),
   createSkillsCapability(stub),
-  createAttachmentsToolkit(stub, { sandbox: { host: "vm", transport: stub } }),
+  createAttachmentsToolkit(stub, { sandbox: stub }),
   createBotsToolkit(stub),
   createBrowserToolkit({
     vault: stub,
@@ -35,7 +35,7 @@ const capabilities = [
   createMemoryCapability({ remember: async () => stub, forget: async () => stub } as never),
   createQuestionsCapability(stub),
   createRoutinesToolkit(stub),
-  createSandboxToolkit({ host: "vm", transport: stub }),
+  createSandboxToolkit({ connection: stub }),
   createTasksToolkit(stub),
   createVaultToolkit({ broker: stub }),
   createVisionToolkit(stub, stub),

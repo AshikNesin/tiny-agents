@@ -1,6 +1,6 @@
 # ADR 0010: The Claude worker runs on the sandbox, set up by the app
 
-- Status: **accepted** (supersedes the worker setup in [0008](0008-claude-code-engine.md))
+- Status: **accepted** (supersedes the worker setup in [0008](0008-claude-code-engine.md); tunnel amended by [0013](0013-one-sandbox-connection.md))
 - Date: 2026-11-04
 
 ## Context
@@ -35,7 +35,9 @@ agent.
      it creates there once (0600), restarting it when the bundle changes or
      the process is gone;
   4. connects through an SSH direct-tcpip tunnel, one SSH connection per
-     WebSocket, the same pattern as the browser's CDP tunnel.
+     WebSocket, the same pattern as the browser's CDP tunnel. (Amended by
+     ADR 0013: each WebSocket is a forward on the app's one sandbox
+     connection.)
 - The local sandbox image preinstalls step 1 in `/opt/tiny-agents/claude-worker`
   so a container never waits on npm. A test keeps its pins equal to the app's.
 - The owner's only step is the login. **Settings → Claude plan → Sign in**

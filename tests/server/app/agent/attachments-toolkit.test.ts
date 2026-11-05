@@ -5,7 +5,7 @@
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import {
   createAttachmentsToolkit,
@@ -15,7 +15,7 @@ import {
   type AttachmentStore,
   type AttachmentSummary,
 } from "../../../../packages/agent/src/toolkits/attachments";
-import type { SandboxSession } from "../../../../packages/agent/src/toolkits/sandbox";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 const CONVERSATION = 42;
 
@@ -236,59 +236,37 @@ describe("attachments toolkit", () => {
 });
 
 describe("copy_attachment_to_sandbox", () => {
-  function sandbox() {
-    const writes: { path: string; content: string | Uint8Array }[] = [];
-    const commands: string[] = [];
-    const session: SandboxSession = {
-      exec: vi.fn(async (command: string) => {
-        commands.push(command);
-        return { output: "", exitCode: 0 };
-      }),
-      readFile: vi.fn(),
-      writeFile: vi.fn(async (path: string, content: string | Uint8Array) => {
-        writes.push({ path, content });
-      }),
-      close: vi.fn(),
-    };
-    return { session, writes, commands, transport: vi.fn(async () => session) };
-  }
-
-  it("is offered only with a sandbox host, and asks by default", () => {
+  it("is offered only with a sandbox connection, and asks by default", () => {
     expect(createAttachmentsToolkit(store()).tools.map((t) => t.name)).not.toContain(
       "copy_attachment_to_sandbox",
     );
-    const withSandbox = createAttachmentsToolkit(store(), {
-      sandbox: { host: "vm", transport: sandbox().transport },
-    });
+    const withSandbox = createAttachmentsToolkit(store(), { sandbox: fakeSandboxConnection() });
     expect(withSandbox.tools.find((t) => t.name === "copy_attachment_to_sandbox")).toMatchObject({
       readOnly: false,
     });
   });
 
   it("writes the original bytes under attachments/<id>/ and reports the hash", async () => {
-    const vm = sandbox();
-    const capability = createAttachmentsToolkit(store(), {
-      sandbox: { host: "vm", transport: vm.transport },
-    });
+    const vm = fakeSandboxConnection();
+    const capability = createAttachmentsToolkit(store(), { sandbox: vm });
     const result = await run(capability, "copy_attachment_to_sandbox", { uploadId: "u-pdf" });
     expect(result.isError).toBe(false);
-    expect(vm.commands).toEqual(["mkdir -p 'attachments/u-pdf'"]);
+    expect(vm.execs.map((e) => e.command)).toEqual(["mkdir -p 'attachments/u-pdf'"]);
     expect(vm.writes).toEqual([
-      { path: "attachments/u-pdf/Q3_report_final_.pdf", content: new Uint8Array([1, 2, 3]) },
+      { path: "attachments/u-pdf/Q3_report_final_.pdf", content: Buffer.from([1, 2, 3]) },
     ]);
     expect(result.details).toMatchObject({
       path: "attachments/u-pdf/Q3_report_final_.pdf",
       bytes: 3,
       sha256: "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
     });
-    expect(vm.session.close).toHaveBeenCalled();
+    // The shared connection stays up for the next caller.
+    expect(vm.closed).toBe(false);
   });
 
   it("expands ~/ in a destination and refuses ids from other chats", async () => {
-    const vm = sandbox();
-    const capability = createAttachmentsToolkit(store(), {
-      sandbox: { host: "vm", transport: vm.transport },
-    });
+    const vm = fakeSandboxConnection();
+    const capability = createAttachmentsToolkit(store(), { sandbox: vm });
     await run(capability, "copy_attachment_to_sandbox", {
       uploadId: "u-pdf",
       dest: "~/work/c.pdf",
@@ -297,6 +275,23 @@ describe("copy_attachment_to_sandbox", () => {
     const other = await run(capability, "copy_attachment_to_sandbox", { uploadId: "u-pdf" }, 7);
     expect(other.isError).toBe(true);
     expect(vm.writes).toHaveLength(1);
+  });
+
+  it("reports a failed copy in one line", async () => {
+    const vm = fakeSandboxConnection({
+      exec: () => {
+        throw new Error(
+          "Cannot reach the sandbox (connect ETIMEDOUT). Is it online and on the tailnet?",
+        );
+      },
+    });
+    const capability = createAttachmentsToolkit(store(), { sandbox: vm });
+    const result = await run(capability, "copy_attachment_to_sandbox", { uploadId: "u-pdf" });
+    expect(result).toMatchObject({
+      isError: true,
+      text: "Could not copy to the sandbox: Cannot reach the sandbox (connect ETIMEDOUT). Is it online and on the tailnet?",
+    });
+    expect(vm.writes).toEqual([]);
   });
 });
 

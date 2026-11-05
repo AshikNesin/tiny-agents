@@ -29,6 +29,7 @@ that the code alone cannot show.
 | 0010 | [The Claude worker runs on the sandbox, set up by the app](0010-claude-worker-runs-on-the-sandbox.md) | accepted (amends 0008)         |
 | 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)        | accepted (generalizes 0009)    |
 | 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                    | accepted (amends 0008)         |
+| 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                              | accepted (amends 0010)         |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)      | accepted (groot)               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

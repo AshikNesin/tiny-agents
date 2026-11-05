@@ -1,12 +1,20 @@
 /**
  * The sandbox VM as the server reaches it: host, port, user, the optional
- * SSH key and the one host-key store, read from the SANDBOX_* env. One answer for the sandbox
- * toolkit, attachments, the browser's SSH tunnel and the terminal, so the
- * VM's key is pinned once, under one name, for every SSH user.
+ * SSH key and the one host-key store, read from the SANDBOX_* env, and the
+ * one `SandboxConnection` built from them. The sandbox toolkit, attachments,
+ * the terminal, the browser, the computer and the Claude worker all take
+ * that connection, so the VM's key is pinned once, under one name, and they
+ * share one pooled SSH connection.
  */
 import { readFileSync } from "node:fs";
 import { createNamespaceKv } from "@groot/core/kv";
-import { createMemoryHostKeyStore, type HostKeyStore, type SshEndpoint } from "@tiny-agents/agent";
+import {
+  createMemoryHostKeyStore,
+  createSandboxConnection,
+  type HostKeyStore,
+  type SandboxConnection,
+  type SshEndpoint,
+} from "@tiny-agents/agent";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -98,8 +106,34 @@ export function sandboxEndpoint(env: Env = process.env): SshEndpoint | undefined
   };
 }
 
+const connections = new Map<string, SandboxConnection>();
+
+/**
+ * The process's connection to the sandbox, or undefined when none is
+ * configured: built once per endpoint and shared by every SSH user.
+ */
+export function sandboxConnection(env: Env = process.env): SandboxConnection | undefined {
+  const endpoint = sandboxEndpoint(env);
+  if (!endpoint) return undefined;
+  const { host, port, user, privateKey } = endpoint;
+  const key = JSON.stringify([host, port, user, privateKey]);
+  let connection = connections.get(key);
+  if (!connection) {
+    connection = createSandboxConnection(endpoint);
+    connections.set(key, connection);
+  }
+  return connection;
+}
+
+/** Shutdown: end the sandbox connections, after everything that uses them stopped. */
+export function closeSandboxConnections(): void {
+  for (const connection of connections.values()) connection.close();
+  connections.clear();
+}
+
 /** Tests: forget the pinned-key store so the next call rebuilds it. */
 export function resetSandboxHostKeysForTests(): void {
   hostKeys = undefined;
   keyFiles.clear();
+  closeSandboxConnections();
 }

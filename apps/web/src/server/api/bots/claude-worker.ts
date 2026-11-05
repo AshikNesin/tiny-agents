@@ -1,7 +1,7 @@
 /**
  * The Claude plan worker for this server: on the sandbox VM (or the local
- * sandbox container), set up over the same SSH endpoint the browser, the
- * computer and the terminal use. The app installs Node, the Agent SDK and
+ * sandbox container), set up over the same sandbox connection the browser,
+ * the computer and the terminal use. The app installs Node, the Agent SDK and
  * Claude Code there on first use, uploads the worker and reaches it through
  * an SSH tunnel; the owner only signs Claude Code in (Settings → Claude plan).
  *
@@ -11,8 +11,12 @@
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { createSandboxClaudeWorker, type ClaudeWorkerLocator } from "@tiny-agents/agent";
-import { sandboxEndpoint } from "./sandbox-host";
+import {
+  createSandboxClaudeWorker,
+  type ClaudeWorkerLocator,
+  type SandboxConnection,
+} from "@tiny-agents/agent";
+import { sandboxConnection } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -49,12 +53,12 @@ export async function claudeWorkerScript(): Promise<string> {
 
 /** The sandbox worker, or undefined when no sandbox is configured. */
 export function claudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
-  const endpoint = sandboxEndpoint(env);
-  if (!endpoint) return undefined;
-  return createSandboxClaudeWorker({ endpoint, script: claudeWorkerScript });
+  const connection = sandboxConnection(env);
+  if (!connection) return undefined;
+  return createSandboxClaudeWorker({ connection, script: claudeWorkerScript });
 }
 
-let shared: { key: string; locator: ClaudeWorkerLocator } | undefined;
+let shared: { connection: SandboxConnection; locator: ClaudeWorkerLocator } | undefined;
 
 /**
  * The process's one worker locator: bot chats (the Claude plan engine) and
@@ -62,9 +66,13 @@ let shared: { key: string; locator: ClaudeWorkerLocator } | undefined;
  * its tunnel (ADR 0012), so it is set up once.
  */
 export function sharedClaudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
-  const endpoint = sandboxEndpoint(env);
-  if (!endpoint) return undefined;
-  const key = JSON.stringify(endpoint);
-  if (shared?.key !== key) shared = { key, locator: claudeWorkerLocator(env)! };
+  const connection = sandboxConnection(env);
+  if (!connection) return undefined;
+  if (shared?.connection !== connection) {
+    shared = {
+      connection,
+      locator: createSandboxClaudeWorker({ connection, script: claudeWorkerScript }),
+    };
+  }
   return shared.locator;
 }

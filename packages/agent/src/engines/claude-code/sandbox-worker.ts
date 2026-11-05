@@ -4,17 +4,17 @@
  * The default is the sandbox: the same VM (or local sandbox container) the
  * browser, computer and terminal already use. The app installs Node, the
  * Agent SDK and Claude Code there over SSH on first use, uploads the worker,
- * starts it on the sandbox's loopback, and connects through an SSH
- * direct-tcpip tunnel. Nothing is published: no `tailscale serve`, no
+ * starts it on the sandbox's loopback, and connects through a forward on
+ * the app's sandbox connection. Nothing is published: no `tailscale serve`, no
  * token to copy. The owner signs Claude Code in once, in a terminal tab,
  * and Claude Code keeps that login on the sandbox.
  */
 import { createHash } from "node:crypto";
 import type { Server } from "node:net";
 import type { Duplex } from "node:stream";
-import type { Client } from "ssh2";
 import { isSubscriptionLogin, parseAuthStatus, LOGIN_HINT } from "@tiny-agents/claude-worker";
-import { dialSsh, type SshEndpoint } from "../../ssh/connection";
+import { SandboxTimeoutError } from "../../ssh/connection";
+import type { SandboxConnection } from "../../ssh/sandbox-connection";
 import { createForwardingServer } from "../../toolkits/browser-remote-cdp";
 import {
   authStatusCommand,
@@ -75,79 +75,58 @@ export const noWorkerLocator: ClaudeWorkerLocator = {
 };
 
 export interface SandboxWorkerOptions {
-  endpoint: SshEndpoint;
+  /** The app's connection to the sandbox. */
+  connection: SandboxConnection;
   /** The bundled worker (`dist/server/claude-worker.mjs`); read once and uploaded when it changes. */
   script: () => Promise<string>;
   /** Port inside the sandbox. Default 8765. */
   port?: number;
-  /** Test hook: dial a fake SSH server. */
-  dial?: (endpoint: SshEndpoint) => Promise<Client>;
 }
 
 /** First-run budget: a Node download plus `npm install` of the SDK and Claude Code. */
 const INSTALL_TIMEOUT_MS = 10 * 60_000;
 const EXEC_TIMEOUT_MS = 45_000;
 
-/** Run one command on a fresh connection; `stdin` is written then closed. */
+/** Run one command; `stdin` is written then closed. Resolves with trimmed stdout. */
 async function execOn(
-  dial: () => Promise<Client>,
+  connection: SandboxConnection,
   command: string,
   timeoutMs: number,
   label: string,
   stdin?: string,
 ): Promise<string> {
-  const client = await dial();
+  let result;
   try {
-    return await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Sandbox timed out: ${label}`)), timeoutMs);
-      client.exec(command, (error, channel) => {
-        if (error) {
-          clearTimeout(timer);
-          reject(error);
-          return;
-        }
-        let out = "";
-        let err = "";
-        channel.on("data", (d: Buffer) => (out += d.toString("utf8")));
-        channel.stderr.on("data", (d: Buffer) => (err += d.toString("utf8")));
-        channel.on("exit", (code: number | null) => {
-          clearTimeout(timer);
-          // Backgrounded children can keep the channel from closing; settle
-          // shortly after exit with what arrived.
-          setTimeout(() => {
-            if (code === 0) resolve(out.trim());
-            else {
-              const detail = (err || out).trim().slice(-800);
-              reject(new Error(`Could not ${label} on the sandbox${detail ? `: ${detail}` : ""}`));
-            }
-          }, 50);
-        });
-        if (stdin !== undefined) channel.end(stdin);
-        else channel.end();
-      });
-    });
-  } finally {
-    client.end();
+    // Backgrounded children (the worker itself) can keep the channel from
+    // closing; settle shortly after exit with what arrived.
+    result = await connection.exec(command, { stdin, timeoutMs, settleOnExit: true });
+  } catch (error) {
+    if (error instanceof SandboxTimeoutError) throw new Error(`Sandbox timed out: ${label}`);
+    throw error;
   }
+  const out = result.stdout.toString("utf8");
+  if (result.exitCode === 0) return out.trim();
+  const detail = (result.stderr || out).trim().slice(-800);
+  throw new Error(`Could not ${label} on the sandbox${detail ? `: ${detail}` : ""}`);
 }
 
 /**
  * The worker on the sandbox, set up on demand. `resolve()` returns a
- * loopback URL on this machine; each WebSocket to it is carried by its own
- * SSH connection to the worker's port on the sandbox (the same pattern as
- * the browser's CDP tunnel), and a refused channel re-runs the start check,
- * so a sandbox that rebooted gets its worker back on the next reconnect.
+ * loopback URL on this machine; each WebSocket to it is carried by a forward
+ * to the worker's port on the sandbox (the same pattern as the browser's CDP
+ * tunnel), and a refused forward re-runs the start check, so a sandbox that
+ * rebooted gets its worker back on the next reconnect.
  */
 export function createSandboxClaudeWorker(options: SandboxWorkerOptions): ClaudeWorkerLocator {
   const port = options.port ?? DEFAULT_SANDBOX_WORKER_PORT;
-  const dial = () => (options.dial ?? dialSsh)(options.endpoint);
+  const { connection } = options;
   let script: Promise<{ body: string; sha: string }> | undefined;
   let ensured: Promise<string> | undefined;
   let installing = false;
   let lastError: string | undefined;
   let server: Server | undefined;
   let local: Promise<number> | undefined;
-  const live = new Set<Client>();
+  const live = new Set<Duplex>();
 
   const bundle = () =>
     (script ??= options.script().then((body) => ({
@@ -161,7 +140,7 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
     for (let step = 0; step < 4; step++) {
       const result = parseEnsureOutput(
         await execOn(
-          dial,
+          connection,
           ensureWorkerCommand(sha, port),
           EXEC_TIMEOUT_MS,
           "start the Claude worker",
@@ -171,13 +150,18 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       if (result.state === "missing") {
         installing = true;
         try {
-          await execOn(dial, installWorkerCommand(), INSTALL_TIMEOUT_MS, "install Claude Code");
+          await execOn(
+            connection,
+            installWorkerCommand(),
+            INSTALL_TIMEOUT_MS,
+            "install Claude Code",
+          );
         } finally {
           installing = false;
         }
       } else {
         await execOn(
-          dial,
+          connection,
           uploadWorkerCommand(sha),
           EXEC_TIMEOUT_MS,
           "upload the Claude worker",
@@ -205,23 +189,10 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
   };
 
   const forward = async (): Promise<Duplex> => {
-    const client = await dial();
-    live.add(client);
-    return new Promise<Duplex>((resolve, reject) => {
-      client.forwardOut("127.0.0.1", 0, "127.0.0.1", port, (error, channel) => {
-        if (error) {
-          live.delete(client);
-          client.end();
-          reject(error);
-          return;
-        }
-        channel.once("close", () => {
-          live.delete(client);
-          client.end();
-        });
-        resolve(channel);
-      });
-    });
+    const tunnel = await connection.forward(port);
+    live.add(tunnel);
+    tunnel.once("close", () => live.delete(tunnel));
+    return tunnel;
   };
 
   /** One tunnelled socket. A refusal means the worker is gone: start it and retry once. */
@@ -250,7 +221,7 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
 
   return {
     mode: "sandbox",
-    host: options.endpoint.host,
+    host: connection.host,
     async resolve() {
       const token = await ensure();
       return { url: `ws://127.0.0.1:${await localPort()}`, token };
@@ -270,7 +241,12 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       if (installing) return { state: "installing" };
       let output: string;
       try {
-        output = await execOn(dial, authStatusCommand(), EXEC_TIMEOUT_MS, "read the Claude login");
+        output = await execOn(
+          connection,
+          authStatusCommand(),
+          EXEC_TIMEOUT_MS,
+          "read the Claude login",
+        );
       } catch (error) {
         return { state: "error", detail: error instanceof Error ? error.message : String(error) };
       }
@@ -288,7 +264,7 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       };
     },
     close() {
-      for (const client of live) client.end();
+      for (const tunnel of live) tunnel.destroy();
       live.clear();
       server?.close();
       server = undefined;

@@ -1,9 +1,12 @@
 /**
  * The computer's command builders and parsers (issue #108): what xdotool,
  * wmctrl and the desktop entries print, and what never reaches a command
- * line.
+ * line; and the X11 transport over an in-memory sandbox connection.
  */
+import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vite-plus/test";
+import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
+import { DesktopGoneError } from "../../../../packages/agent/src/toolkits/computer-sessions";
 import {
   computerStackReadyCommand,
   installComputerStackCommand,
@@ -14,6 +17,8 @@ import {
 import {
   checkWindowId,
   clickBody,
+  createX11ComputerTransport,
+  DESKTOP_GONE_EXIT,
   desktopProfileDir,
   keyBody,
   openAppBody,
@@ -23,6 +28,7 @@ import {
   screenshotBody,
   scrollBody,
 } from "../../../../packages/agent/src/toolkits/computer-x11";
+import { fakeSandboxConnection, type FakeExecReply } from "./sandbox-connection-fake";
 
 describe("computer x11 commands", () => {
   it("parses wmctrl's window list, skipping the panel and desktop", () => {
@@ -110,5 +116,78 @@ describe("computer x11 commands", () => {
     expect(install).toContain("browser-stack.lock");
     expect(computerStackReadyCommand(["gimp"])).toContain("gimp");
     expect(() => installComputerStackCommand(["x; reboot"])).toThrow();
+  });
+});
+
+describe("the x11 transport over the sandbox connection", () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+
+  /** A sandbox whose stack needs installing once, then answers every desktop tool. */
+  function sandbox(tool: (command: string) => FakeExecReply = () => ({ stdout: JPEG })) {
+    return fakeSandboxConnection({
+      exec: (command) => {
+        if (command.includes("The desktop is not running")) return tool(command);
+        if (command === computerStackReadyCommand([])) return { stdout: "missing\n" };
+        if (command === installComputerStackCommand([])) return {};
+        return { stdout: "ok display=91 vnc=40123\n" }; // the launch
+      },
+      forward: async () => new PassThrough(),
+    });
+  }
+
+  it("installs on first use, launches, and reaches the live view through a forward", async () => {
+    const connection = sandbox();
+    const phases: string[] = [];
+    const desktop = await createX11ComputerTransport({ connection }).open("bot-1", {
+      width: 1280,
+      height: 800,
+      onPhase: (phase) => phases.push(phase),
+    });
+    expect(phases).toEqual(["installing", "starting"]);
+    expect(await desktop.screenshot()).toEqual(JPEG);
+    await desktop.vnc!.openStream();
+    expect(connection.forwards).toEqual([40123]);
+    // Every exec settles on exit: launched apps and xclip keep their channel open.
+    expect(connection.execs.every((e) => e.options.settleOnExit)).toBe(true);
+  });
+
+  it("types through stdin, never on the command line", async () => {
+    const connection = sandbox(() => ({}));
+    const desktop = await createX11ComputerTransport({ connection }).open("bot-1", {
+      width: 1280,
+      height: 800,
+    });
+    await desktop.type("hunter2 is the password");
+    const typed = connection.execs.at(-1)!;
+    expect(typed.options.stdin).toBe("hunter2 is the password");
+    expect(typed.command).not.toContain("hunter2");
+  });
+
+  it("reports a desktop that stopped, once, to its listeners", async () => {
+    const connection = sandbox(() => ({ exitCode: DESKTOP_GONE_EXIT }));
+    const desktop = await createX11ComputerTransport({ connection }).open("bot-1", {
+      width: 1280,
+      height: 800,
+    });
+    let gone = 0;
+    desktop.onDisconnect!(() => gone++);
+    await expect(
+      desktop.click(1, 2, { button: "left", count: 1, modifiers: [] }),
+    ).rejects.toBeInstanceOf(DesktopGoneError);
+    await expect(desktop.move(1, 2)).rejects.toBeInstanceOf(DesktopGoneError);
+    expect(gone).toBe(1);
+  });
+
+  it("says the computer did not answer when a tool times out", async () => {
+    const connection = sandbox(() => {
+      throw new SandboxTimeoutError(30_000);
+    });
+    const desktop = await createX11ComputerTransport({ connection }).open("bot-1", {
+      width: 1280,
+      height: 800,
+    });
+    await expect(desktop.cursorPosition()).rejects.toThrow(
+      "The computer did not answer within 30s",
+    );
   });
 });

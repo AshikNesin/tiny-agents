@@ -1,12 +1,12 @@
 /**
  * The terminal service port (issue #28): tabs on the sandbox VM are tmux
  * sessions, and this service owns their lifecycle. Pure orchestration over
- * the tmux command builders (`tmux.ts`) — all I/O goes through the
- * `TerminalTransport` port, so tests and the app can substitute the
- * binding (`terminal-ssh2.ts`).
+ * the tmux command builders (`tmux.ts`) — all I/O goes through the app's
+ * `SandboxConnection` (execs and pty attaches share its pooled connection,
+ * issue #84), which tests substitute.
  */
-import type { Duplex } from "node:stream";
-import type { HostKeyStore } from "../ssh/connection";
+import type { PtyStream } from "../ssh/pty-stream";
+import type { SandboxConnection } from "../ssh/sandbox-connection";
 import {
   MAX_SESSIONS,
   TERM,
@@ -31,22 +31,10 @@ export interface TerminalExecResult {
   exitCode: number;
 }
 
-/**
- * A live attach: a duplex of raw pty bytes. `setWindow` follows a client
- * resize through to the pty; `done` settles when the remote side ends
- * (tmux exited or detached this client) carrying its exit code, so a
- * bridge can tell a failed attach (nonzero, no bytes) from a detach.
- */
-export interface PtyStream extends Duplex {
-  setWindow(rows: number, cols: number): void;
-  done: Promise<{ exitCode: number | null }>;
-}
+export type { PtyStream } from "../ssh/pty-stream";
 
-/** The transport port: production is ssh2 (`terminal-ssh2.ts`), tests fake it. */
-export interface TerminalTransport {
-  exec(command: string): Promise<TerminalExecResult>;
-  pty(command: string, init: { term: string; cols: number; rows: number }): Promise<PtyStream>;
-}
+/** What the service needs of the sandbox connection. */
+export type TerminalConnection = Pick<SandboxConnection, "exec" | "pty">;
 
 export type TerminalStatus =
   | { kind: "ready" }
@@ -106,53 +94,32 @@ export interface TerminalService {
 }
 
 export interface TerminalServiceOptions {
-  host?: string;
-  port?: number;
-  user?: string;
-  hostKeys?: HostKeyStore;
-  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
-  privateKey?: string;
-  /** Substitutable transport; default is the ssh2 binding. */
-  transport?: TerminalTransport;
+  /** The app's sandbox connection; unset = no sandbox configured. */
+  connection?: TerminalConnection;
 }
 
-/** One readable line for a connection failure, never a stack trace. */
-function describeUnreachable(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  // Errors can pass through more than one layer that describes them; wrap
-  // once, or the UI reads "Cannot reach the sandbox (Cannot reach …)".
-  if (message.startsWith("Cannot reach the sandbox")) return message;
-  return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH/.test(message)
-    ? `Cannot reach the sandbox (${message}). Is it online and on the tailnet?`
-    : message;
-}
+/** The connection already words "Cannot reach the sandbox"; keep its message. */
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createTerminalService(
   options: TerminalServiceOptions = {},
 ): TerminalService & { readonly configured: boolean } {
-  // The transport import stays dynamic-shaped so the app layer can inject a
-  // fake without ssh2 ever loading; production wires the real binding lazily.
-  const transport =
-    options.transport ??
-    (options.host
-      ? lazySsh2Transport(() => ({
-          host: options.host!,
-          port: options.port ?? 22,
-          user: options.user ?? "exedev",
-          hostKeys: options.hostKeys,
-          privateKey: options.privateKey,
-        }))
-      : undefined);
-  const configured = Boolean(transport);
+  const connection = options.connection;
+  const configured = Boolean(connection);
 
   const exec = async (command: string): Promise<TerminalExecResult> => {
-    if (!transport) {
+    if (!connection) {
       throw new TerminalUnreachableError("Sandbox is not configured: set SANDBOX_HOST.");
     }
     try {
-      return await transport.exec(command);
+      const result = await connection.exec(command);
+      return {
+        stdout: result.stdout.toString("utf8"),
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+      };
     } catch (error) {
-      throw new TerminalUnreachableError(describeUnreachable(error));
+      throw new TerminalUnreachableError(messageOf(error));
     }
   };
 
@@ -165,7 +132,7 @@ export function createTerminalService(
       // The poll path reports reachability as status, not as a throw: the
       // tab strip still renders an empty list beside an error chip.
       return {
-        status: { kind: "unreachable", message: describeUnreachable(error) },
+        status: { kind: "unreachable", message: messageOf(error) },
         sessions: [],
       };
     }
@@ -252,67 +219,18 @@ export function createTerminalService(
       return (await exec(hasSessionCommand(name))).exitCode === 0;
     },
     async attach(name, init) {
-      if (!transport) {
+      if (!connection) {
         throw new TerminalUnreachableError("Sandbox is not configured: set SANDBOX_HOST.");
       }
       try {
-        return await transport.pty(attachCommand(name), {
+        return await connection.pty(attachCommand(name), {
           term: TERM,
           cols: init.cols,
           rows: init.rows,
         });
       } catch (error) {
-        throw new TerminalUnreachableError(describeUnreachable(error));
+        throw new TerminalUnreachableError(messageOf(error));
       }
     },
   };
-}
-
-type ConnectShape = {
-  host: string;
-  port: number;
-  user: string;
-  hostKeys?: HostKeyStore;
-  privateKey?: string;
-};
-
-/**
- * The ssh2 binding is imported lazily so a substitutable transport in tests
- * (or an unconfigured app) never pulls ssh2 into the module graph.
- */
-function lazySsh2Transport(connect: () => ConnectShape): TerminalTransport {
-  // The promise is cached, not the result: concurrent first calls must bind
-  // one transport, or each would pool its own connection. The binding is
-  // keyed by the endpoint, so a changed host, port or user rebinds (and
-  // closes the pool dialed for the old one) instead of dialing it forever.
-  let bound: { key: string; transport: Promise<Ssh2Bound> } | undefined;
-  const load = (): Promise<TerminalTransport> => {
-    const shape = connect();
-    const key = `${shape.host}:${shape.port}:${shape.user}`;
-    if (bound?.key === key) return bound.transport;
-    const stale = bound;
-    void stale?.transport.then((t) => t.close()).catch(() => {});
-    const loading = loadTransport(shape);
-    const next = { key, transport: loading };
-    loading.catch(() => {
-      if (bound === next) bound = undefined; // a failed import is retried
-    });
-    bound = next;
-    return loading;
-  };
-  return {
-    async exec(command) {
-      return (await load()).exec(command);
-    },
-    async pty(command, init) {
-      return (await load()).pty(command, init);
-    },
-  };
-}
-
-type Ssh2Bound = TerminalTransport & { close(): void };
-
-async function loadTransport(shape: ConnectShape): Promise<Ssh2Bound> {
-  const { createSsh2TerminalTransport } = await import("./terminal-ssh2");
-  return createSsh2TerminalTransport(shape);
 }
