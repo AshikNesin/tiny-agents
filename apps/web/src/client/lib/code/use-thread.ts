@@ -136,7 +136,9 @@ export function useCodeThread(id: string): ThreadState {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const current = useRef(id);
-  current.current = id;
+  useEffect(() => {
+    current.current = id;
+  }, [id]);
 
   const reload = useCallback(async () => {
     const forId = id;

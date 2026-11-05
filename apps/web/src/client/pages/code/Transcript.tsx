@@ -232,7 +232,7 @@ function TodoRow({ call }: { call: ToolItem }) {
         const done = todo.status === "completed";
         const active = todo.status === "in_progress";
         return (
-          <li key={i} className="flex items-start gap-2">
+          <li key={`${i}:${String(todo.content ?? "")}`} className="flex items-start gap-2">
             {done ? (
               <CircleCheck className="text-success mt-0.5 size-4 shrink-0" aria-label="Done" />
             ) : active ? (

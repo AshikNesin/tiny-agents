@@ -306,13 +306,11 @@ router.post("/code/threads/:id/jobs/:job/kill", async (c) => {
   return ok(c, { ok: true });
 });
 
-const settingsSchema = z
-  .object({
-    model: z.string().max(200).nullable().optional(),
-    effort: z.string().max(20).nullable().optional(),
-    permissionMode: permissionMode.nullable().optional(),
-  })
-  .strict();
+const settingsSchema = z.strictObject({
+  model: z.string().max(200).nullable().optional(),
+  effort: z.string().max(20).nullable().optional(),
+  permissionMode: permissionMode.nullable().optional(),
+});
 
 router.post("/code/threads/:id/settings", async (c) => {
   const { instance, nativeId } = thread(c);
