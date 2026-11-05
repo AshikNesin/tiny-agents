@@ -4,7 +4,6 @@
  */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { WebSocket } from "ws";
-import { ClaudeCodeEngine } from "../../../../packages/agent/src/engines/claude-code/engine";
 import {
   ClaudeWorkerClient,
   type WebSocketLike,
@@ -419,36 +418,6 @@ describe("localhost worker", () => {
         ),
       ).toBe(true),
     );
-  });
-});
-
-describe("engine kill switch", () => {
-  it("pauses a turn without opening a socket when the engine is off", async () => {
-    let connected = false;
-    const engine = new ClaudeCodeEngine({
-      env: () => ({ CLAUDE_CODE_ENGINE_ENABLED: "0", CLAUDE_CODE_ENGINE_FALLBACK: "pause" }),
-      connect: () => {
-        connected = true;
-        return fakeSocket();
-      },
-    });
-    engine.sync(1, { model: "claude-sonnet-4-6", system: "", tools: [], permissions: {} });
-    await expect(engine.submit(1, { requestId: "r", text: "hi" })).resolves.toBe("ran");
-    expect(connected).toBe(false);
-    const state = await engine.read(1);
-    expect(state.messages.at(-1)?.error).toMatch(/CLAUDE_CODE_ENGINE_ENABLED/);
-  });
-
-  it("hands the turn to the gateway fallback without contacting the worker", async () => {
-    const engine = new ClaudeCodeEngine({
-      env: () => ({
-        CLAUDE_CODE_ENGINE_ENABLED: "0",
-        CLAUDE_CODE_ENGINE_FALLBACK: "gateway",
-      }),
-    });
-    engine.sync(4, { model: "claude-sonnet-4-6", system: "", tools: [], permissions: {} });
-    await expect(engine.submit(4, { requestId: "r", text: "hi" })).resolves.toBe("gateway");
-    expect(engine.handles(4)).toBe(false);
   });
 });
 

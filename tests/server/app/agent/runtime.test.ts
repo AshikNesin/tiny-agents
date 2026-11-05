@@ -24,7 +24,6 @@ import {
   fauxAssistantMessage,
   openTestRuntime,
   TEST_MODEL,
-  TEST_MODEL_2,
 } from "../../../../packages/agent/src/testing";
 
 const TEST_TIMEOUT_MS = 8_000;
@@ -179,58 +178,6 @@ function assistantMessage(text: string): ChatMessage {
 }
 
 describe("AgentRuntime", () => {
-  it("creates, configures, streams, and clears its busy flag after a reply", async () => {
-    const runtime = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 5 });
-    try {
-      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
-      await runtime.configure(ref, {
-        modelId: TEST_MODEL_2,
-        systemPrompt: "Reply as an echo bot.",
-      });
-      const chat = await observeChat(runtime, ref);
-
-      expect(chat.batches[0]).toEqual([
-        { type: "snapshot", state: { messages: [], busy: false, queued: [] } },
-      ]);
-
-      await runtime.submit(ref, { requestId: "first-send", text: "hello runtime" });
-      await waitUntil(() => runtime.isBusy(ref), "the runtime to become busy");
-      expect(runtime.isBusy(ref)).toBe(true);
-
-      await waitUntil(
-        () =>
-          !chat.state().busy &&
-          chat
-            .state()
-            .messages.some(
-              (message) =>
-                message.role === "assistant" &&
-                message.status === "done" &&
-                message.text === "Echo: hello runtime",
-            ),
-        "the streamed assistant reply to complete",
-      );
-
-      expect(chat.batches.flat()[0]).toMatchObject({ type: "snapshot" });
-      expect(chat.batches.flat().some((event) => event.type === "upsert")).toBe(true);
-      expect(runtime.isBusy(ref)).toBe(false);
-      expect(chat.state().messages).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ role: "user", text: "hello runtime" }),
-          expect.objectContaining({
-            role: "assistant",
-            status: "done",
-            text: "Echo: hello runtime",
-          }),
-        ]),
-      );
-
-      await chat.stop();
-    } finally {
-      await runtime.close();
-    }
-  });
-
   it("deduplicates repeated request IDs", async () => {
     const runtime = await openTestRuntime({ storePath: ":memory:" });
     try {

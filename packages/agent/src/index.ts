@@ -354,7 +354,11 @@ export {
   engineKindForModel,
   type AgentEngine,
   type ClaudeEngineFallback,
+  type CompiledConversation,
+  type EngineSubmission,
 } from "./engine";
+export { ToolGate, type GateCall, type GateStore, type ToolGateOptions } from "./gate";
+export type { GateUserMessage } from "./policy";
 export {
   deriveChat,
   diffChat,

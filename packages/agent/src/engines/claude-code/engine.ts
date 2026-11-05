@@ -1,8 +1,9 @@
 /**
- * Claude plan engine. Turns go to the worker over the WebSocket client.
- * The kill switch is read here, on each turn, from the environment: turning
- * it off does not redeploy or stop the worker. Transcripts for these
- * conversations live here, beside the pi-durable harness.
+ * Claude plan engine (ADR 0008, ADR 0013). Turns go to the worker over the
+ * WebSocket client. The kill switch is read here, on each turn, from the
+ * environment: turning it off does not redeploy or stop the worker.
+ * Transcripts for these conversations live here, beside the pi-durable
+ * harness; tool calls go through the runtime's Tool gate.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -19,7 +20,10 @@ import type { ToolPermission } from "../../capabilities";
 import {
   claudeCodeEngineEnabled,
   claudeCodeFallback,
+  type AgentEngine,
   type ClaudeEngineFallback,
+  type CompiledConversation,
+  type EngineSubmission,
 } from "../../engine";
 import { ToolGate } from "../../gate";
 import type { GateUserMessage } from "../../policy";
@@ -32,6 +36,7 @@ import type {
   ChatSubscription,
   ChatToolCall,
   ConversationRef,
+  LastMessage,
 } from "../../types";
 import { WaitTracker } from "../../waiting";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
@@ -57,16 +62,6 @@ export interface ClaudeSessionSync {
   permissions: Record<string, ToolPermission>;
   /** What runs once the Tool gate lets a call through, by tool name. */
   runners?: ReadonlyMap<string, ToolRegistration>;
-}
-
-export interface ClaudeSubmitInput {
-  requestId: string;
-  text: string;
-  images?: { data: string; mimeType: string }[];
-  /** Trusted attribution for a cross-bot delivery: YOLO does not trust its turn. */
-  peer?: ChatMessage["peer"];
-  /** Who sent it, in a shared chat. */
-  author?: ChatMessage["author"];
 }
 
 export interface ClaudeCodeEngineOptions {
@@ -104,7 +99,7 @@ interface ClaudeSession {
   permissions: Record<string, ToolPermission>;
   runners: ReadonlyMap<string, ToolRegistration>;
   claudeSessionId?: string;
-  /** `pi` after a gateway fallback latches the conversation onto the harness. */
+  /** `pi` once the conversation left the Claude plan (`leave()`): later turns run on pi. */
   surface: "claude" | "pi";
   messages: ChatMessage[];
   nextTask: number;
@@ -112,7 +107,8 @@ interface ClaudeSession {
   live?: LiveTurn;
 }
 
-export class ClaudeCodeEngine {
+export class ClaudeCodeEngine implements AgentEngine {
+  readonly kind = "claude-code" as const;
   private readonly sessions = new Map<ConversationRef, ClaudeSession>();
   private readonly listeners = new Set<Listener>();
   private client: ClaudeWorkerClient | undefined;
@@ -125,11 +121,24 @@ export class ClaudeCodeEngine {
     this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 
-  handles(ref: ConversationRef): boolean {
+  runs(ref: ConversationRef): boolean {
     return this.sessions.get(ref)?.surface === "claude";
   }
 
-  sync(ref: ConversationRef, info: ClaudeSessionSync): void {
+  /**
+   * Take the Claude plan part of the conversation's config. Without one the
+   * bot left the Claude plan model, and later turns run on pi. A
+   * conversation that left (or fell back to the gateway) stays left.
+   */
+  async configure(
+    ref: ConversationRef,
+    compiled: Pick<CompiledConversation, "claude">,
+  ): Promise<void> {
+    const info = compiled.claude;
+    if (!info) {
+      this.leave(ref);
+      return;
+    }
     const session = this.ensure(ref);
     session.model = info.model;
     session.system = info.system;
@@ -139,22 +148,28 @@ export class ClaudeCodeEngine {
     if (session.surface !== "pi") session.surface = "claude";
   }
 
-  /** The bot left the Claude plan model. Later turns use pi. */
-  detach(ref: ConversationRef): void {
+  /** The conversation leaves the Claude plan for good: its turns run on pi from now on. */
+  leave(ref: ConversationRef): void {
     const session = this.sessions.get(ref);
-    if (!session) return;
+    if (!session || session.surface === "pi") return;
     session.surface = "pi";
+    void this.persist();
+  }
+
+  busy(ref: ConversationRef): boolean {
+    return this.sessions.get(ref)?.busy === true;
   }
 
   /**
-   * Send one turn. `gateway` means the caller should submit the same input
-   * through the pi harness. `ran` means this engine owns the transcript,
-   * including a pause error when the kill switch or the worker refused.
+   * Run one turn; resolves when it ends. `unavailable`: the kill switch is
+   * off or the worker is unreachable and the fallback is the gateway, so
+   * the runtime hands the turn to pi. With the `pause` fallback the turn is
+   * this engine's, ending in a pause error.
    */
-  async submit(ref: ConversationRef, input: ClaudeSubmitInput): Promise<"ran" | "gateway"> {
+  async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted" | "unavailable"> {
     await this.restore();
     const session = this.sessions.get(ref);
-    if (!session || session.surface !== "claude") return "gateway";
+    if (!session || session.surface !== "claude") return "unavailable";
     const env = this.env();
     const fallback = claudeCodeFallback(env);
     if (!claudeCodeEngineEnabled(env)) {
@@ -216,14 +231,26 @@ export class ClaudeCodeEngine {
     });
     await done;
     await this.persist();
-    return "ran";
+    return "accepted";
   }
 
-  abort(ref: ConversationRef): void {
+  async abort(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session?.live) return;
     this.client?.send({ type: "abort", sessionId: String(ref) });
     this.finish(session, session.live.turnId, "aborted");
+  }
+
+  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
+    const state = await this.read(ref);
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const message = state.messages[i];
+      if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+      const text = message.error ? `⚠ ${message.error}` : message.text;
+      if (!text) continue;
+      return { role: message.role, text, createdAt: message.createdAt };
+    }
+    return undefined;
   }
 
   /** The conversation's user messages, newest first, as the Tool gate reads them. */
@@ -233,12 +260,15 @@ export class ClaudeCodeEngine {
     return session ? userMessagesOf(session.messages) : [];
   }
 
-  async read(ref: ConversationRef, window?: number): Promise<ChatState> {
+  async read(ref: ConversationRef): Promise<ChatState> {
     await this.restore();
-    return this.state(this.require(ref), window);
+    return this.state(this.require(ref));
   }
 
-  async page(ref: ConversationRef, before: string, limit: number): Promise<ChatPage | undefined> {
+  async page(
+    ref: ConversationRef,
+    { before, limit }: { before: string; limit: number },
+  ): Promise<ChatPage | undefined> {
     await this.restore();
     return pageBefore(this.require(ref).messages, before, limit);
   }
@@ -246,7 +276,7 @@ export class ClaudeCodeEngine {
   async watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
-    window?: number,
+    { window }: { window?: number } = {},
   ): Promise<ChatSubscription> {
     await this.restore();
     const session = this.require(ref);
@@ -306,11 +336,8 @@ export class ClaudeCodeEngine {
     session: ClaudeSession,
     fallback: ClaudeEngineFallback,
     detail: string,
-  ): "ran" | "gateway" {
-    if (fallback === "gateway") {
-      session.surface = "pi";
-      return "gateway";
-    }
+  ): "accepted" | "unavailable" {
+    if (fallback === "gateway") return "unavailable";
     session.messages.push({
       id: `a-pause-${Date.now()}`,
       role: "assistant",
@@ -321,7 +348,7 @@ export class ClaudeCodeEngine {
     });
     this.emit(ref);
     void this.persist();
-    return "ran";
+    return "accepted";
   }
 
   private socket(url: string, token: string): ClaudeWorkerClient {

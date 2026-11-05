@@ -173,7 +173,12 @@ function piScript(context: PiContext) {
   if (last?.role === "toolResult") {
     return fauxAssistantMessage([fauxText(`RESULT:${contentText(last.content)}`)]);
   }
-  const said = last?.role === "user" ? contentText(last.content) : "";
+  // The newest user message with text (a reconfigure adds context of its own).
+  const said =
+    context.messages
+      .filter((message) => message.role === "user")
+      .map((message) => contentText(message.content))
+      .findLast(Boolean) ?? "";
   const request = toolRequest(said);
   if (!request) return fauxAssistantMessage([fauxText(`Echo: ${said}`)]);
   return {
@@ -404,13 +409,13 @@ export async function watch(runtime: AgentRuntime, ref: ConversationRef): Promis
 }
 
 export async function until<T>(
-  read: () => T | undefined | false,
+  read: () => T | undefined | false | Promise<T | undefined | false>,
   what: string,
   ms = 10_000,
 ): Promise<T> {
   const deadline = Date.now() + ms;
   for (;;) {
-    const value = read();
+    const value = await read();
     if (value !== undefined && value !== false) return value;
     if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 20));
