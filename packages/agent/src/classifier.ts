@@ -31,8 +31,12 @@ export type {
 /** The provider id classifier calls are registered under (and logged with). */
 export const CLASSIFIER_PROVIDER = "cloudflare-ai-gateway";
 
-/** Default classifier model: Cloudflare's Clef. */
-export const DEFAULT_CLASSIFIER_MODEL = "@cf/cloudflare/clef";
+/**
+ * Default classifier model: TypeSafe's Jev, which runs through the gateway's
+ * own balance. `@cf/…` models such as Clef bill through the gateway's Unified
+ * Billing credits instead, and fail with 402 when the gateway has none.
+ */
+export const DEFAULT_CLASSIFIER_MODEL = "typesafe/jev";
 
 const API_HOST = "https://api.cloudflare.com/client/v4";
 const LABEL = "Cloudflare AI Gateway (Workers AI)";
@@ -82,10 +86,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * System One on Workers AI's REST API, routed through the gateway:
  * `POST /accounts/{account}/ai/run` with `{ model, input }` and the
  * `cf-aig-gateway-id` header (Cloudflare's recommended gateway route; it serves
- * `@cf/…` and third-party models such as `typesafe/jev` alike). Workers AI
- * authenticates with `Authorization: Bearer`, so the token needs Workers AI
- * permission; the gateway's provider-native `/workers-ai/{model}` route with
- * only `cf-aig-authorization` leaves Workers AI without credentials. The answer
+ * `@cf/…` and third-party models such as `typesafe/jev` alike, where the
+ * gateway's provider-native `/workers-ai/{model}` route answered 402 for
+ * `typesafe/jev`). Workers AI authenticates with `Authorization: Bearer`. The answer
  * comes in Workers AI's envelope: `{ success, result }`, where `result` is the
  * output (Clef) or a completed run wrapping it (Jev).
  */

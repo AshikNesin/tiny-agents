@@ -84,12 +84,7 @@ export const REVIEW_THRESHOLDS = {
   minRiskConfidence: 0.6,
 };
 
-/**
- * A third-party classifier (e.g. Jev) through the gateway can take several
- * seconds, and a timeout is a card, so this leaves room; the owner would wait
- * longer on the card itself.
- */
-const REVIEW_TIMEOUT_MS = 10_000;
+const REVIEW_TIMEOUT_MS = 3_000;
 const MAX_INSTRUCTIONS = 4_000;
 const MAX_OWNER_MESSAGE = 2_000;
 const MAX_ARGS = 8_000;

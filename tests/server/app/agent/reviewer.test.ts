@@ -189,10 +189,10 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
     expect(createClassifier({ ...env, CLOUDFLARE_GATEWAY_ID: " " })).toBeUndefined();
   });
 
-  it("defaults to Clef and turns off for a model Workers AI does not classify with", () => {
-    expect(createClassifier(env)?.id).toBe("cloudflare-ai-gateway/@cf/cloudflare/clef");
-    expect(createClassifier({ ...env, CLASSIFIER_MODEL: "typesafe/jev" })?.id).toBe(
-      "cloudflare-ai-gateway/typesafe/jev",
+  it("defaults to Jev and turns off for a model Workers AI does not classify with", () => {
+    expect(createClassifier(env)?.id).toBe("cloudflare-ai-gateway/typesafe/jev");
+    expect(createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/cloudflare/clef" })?.id).toBe(
+      "cloudflare-ai-gateway/@cf/cloudflare/clef",
     );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/meta/llama" })).toBeUndefined();
@@ -228,7 +228,9 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
         });
       }),
     );
-    const verdict = await createReviewer(createClassifier(env)!)(input);
+    const verdict = await createReviewer(
+      createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/cloudflare/clef" })!,
+    )(input);
 
     expect(verdict).toEqual({
       approve: true,
@@ -261,7 +263,7 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
     });
   });
 
-  it("reads Jev's completed-run envelope", async () => {
+  it("defaults to Jev and reads its completed-run envelope", async () => {
     const requests: { url: string; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -289,9 +291,7 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
         });
       }),
     );
-    const verdict = await createReviewer(
-      createClassifier({ ...env, CLASSIFIER_MODEL: "typesafe/jev" })!,
-    )(input);
+    const verdict = await createReviewer(createClassifier(env)!)(input);
 
     expect(verdict).toEqual({
       approve: true,

@@ -184,7 +184,7 @@ export function agentRuntimeReady(): boolean {
 }
 
 /**
- * Auto-review's reviewer (issue #65): Clef on Workers AI through the AI
+ * Auto-review's reviewer (issue #65): TypeSafe's Jev on Workers AI through the AI
  * Gateway unless CLASSIFIER_MODEL names another classifier. Without the
  * gateway settings bots that turn auto-review on keep every approval card.
  */
