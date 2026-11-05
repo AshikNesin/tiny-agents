@@ -1,11 +1,10 @@
 /**
  * The `sandbox` toolkit (issue #19): a keyless shell on the shared sandbox
  * VM over Tailscale SSH. The tailnet is the authentication (no keys, no
- * passwords — the tagged node identity is what the ACL accepts), so the
- * toolkit only needs a host, a port and a unix user.
- *
- * Transport is a narrow port (`sandbox-ssh2`) so tests and the app can
- * substitute it; ssh2 is the production default.
+ * passwords — the tagged node identity is what the ACL accepts). The
+ * toolkit takes the app's one `SandboxConnection` (`ssh/sandbox-connection`),
+ * which owns the dial, the pool, the retry rule and host keys; tests
+ * substitute an in-memory one.
  *
  * Replay: `read_file` is pure (`safe`); `run_command` and `write_file`
  * have side effects and stay `unsafe` — the approval gate's start-marked
@@ -45,61 +44,19 @@ import {
   SECRETS_MISSING,
   type EgressEntry,
 } from "./sandbox-egress";
-import { createSsh2Transport, PreDispatchError, type HostKeyStore } from "./sandbox-ssh2";
+import { SandboxTimeoutError } from "../ssh/connection";
+import type { SandboxConnection, SandboxExecResult } from "../ssh/sandbox-connection";
 import { safeMessage, VAULT_APPROVAL_TTL_MS } from "./vault";
 
-export { createMemoryHostKeyStore, createSsh2Transport, PreDispatchError } from "./sandbox-ssh2";
-export type { HostKeyStore } from "./sandbox-ssh2";
-
-/** One command's outcome: combined output plus exit status. */
-export interface ExecResult {
+/** One command's outcome as the tool reports it: combined output plus exit status. */
+interface CommandResult {
   output: string;
   exitCode: number;
 }
 
-export interface ExecOptions {
-  timeoutMs?: number;
-  /** Written to the command's stdin, which is then closed. */
-  stdin?: string;
-}
-
-/** What the tools need from a live connection — the whole SSH surface they see. */
-export interface SandboxSession {
-  exec(command: string, options?: ExecOptions): Promise<ExecResult>;
-  readFile(
-    path: string,
-    options?: { maxBytes?: number },
-  ): Promise<{ text: string; truncated: boolean }>;
-  /** A string is written as UTF-8; bytes as they are. */
-  writeFile(path: string, content: string | Uint8Array): Promise<void>;
-  close(): void;
-}
-
-export interface ConnectOptions {
-  host: string;
-  port: number;
-  user: string;
-  hostKeys?: HostKeyStore;
-  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
-  privateKey?: string;
-  connectTimeoutMs?: number;
-}
-
-/** The transport port: production is ssh2, tests substitute fakes. */
-export type SandboxTransport = (options: ConnectOptions) => Promise<SandboxSession>;
-
 export interface SandboxToolkitOptions {
-  /** MagicDNS name or Tailscale IP of the sandbox VM. */
-  host?: string;
-  port?: number;
-  /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
-  user?: string;
-  /** TOFU host-key pinning; unset trusts every connection (WireGuard still authenticates the endpoint). */
-  hostKeys?: HostKeyStore;
-  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
-  privateKey?: string;
-  /** Override for tests or alternate transports. Default: ssh2. */
-  transport?: SandboxTransport;
+  /** The app's connection to the sandbox VM; unset = no sandbox configured. */
+  connection?: SandboxConnection;
   /** Command timeout in seconds (default 120). */
   defaultTimeoutSecs?: number;
   /** The vault broker: enables `secrets` on `run_command` (issue #56). */
@@ -117,76 +74,48 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
-/** One readable line per error: connection failures must not be stack traces. */
-function describe(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  // Errors can pass through more than one layer that describes them; wrap
-  // once, or the UI reads "Cannot reach the sandbox (Cannot reach …)".
-  if (message.startsWith("Cannot reach the sandbox")) return message;
-  return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH/.test(message)
-    ? `Cannot reach the sandbox (${message}). Is it online and on the tailnet?`
-    : message;
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Bytes of each stream kept before the character cap trims; the rest is dropped live. */
+const OUTPUT_BYTES = 60_000;
+const OUTPUT_CHARS = 30_000;
+
+/** stdout, then stderr on its own line, capped for the model. */
+function combined(result: SandboxExecResult): CommandResult {
+  const text = (
+    result.stdout.toString("utf8") + (result.stderr ? `\n${result.stderr}` : "")
+  ).trimEnd();
+  return {
+    output: text.length > OUTPUT_CHARS ? text.slice(0, OUTPUT_CHARS) + "\n… (truncated)" : text,
+    exitCode: result.exitCode,
+  };
 }
 
 export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capability {
-  const configured = Boolean(options.host);
-  const transport = options.transport ?? createSsh2Transport();
+  const connection = options.connection;
 
-  // One pooled connection per toolkit instance (one per server process when
-  // wired in bots.runtime.ts), opened lazily on first tool use. Concurrent
-  // tools share it — ssh2 multiplexes exec/SFTP channels over one connection.
-  let session: Promise<SandboxSession> | undefined;
-  const dial = (): Promise<SandboxSession> => {
-    // Never fall through to ssh2's defaults: an unset host would dial
-    // localhost — the app server itself — so refuse to dial at all.
-    if (!options.host) {
-      return Promise.reject(
-        new Error("Sandbox is not configured: set SANDBOX_HOST on the server."),
-      );
-    }
-    const attempt = transport({
-      host: options.host!,
-      port: options.port ?? 22,
-      user: options.user ?? "exedev",
-      hostKeys: options.hostKeys,
-      privateKey: options.privateKey,
-    });
-    attempt.catch(() => {
-      if (session === attempt) session = undefined; // don't cache a failed dial
-    });
-    return attempt;
+  /**
+   * The connection, or why there is none. Never fall through to a default
+   * host: an unset one would dial localhost — the app server itself.
+   */
+  const sandbox = (): SandboxConnection => {
+    if (!connection) throw new Error("Sandbox is not configured: set SANDBOX_HOST on the server.");
+    return connection;
   };
 
-  const withSession = async <T>(fn: (s: SandboxSession) => Promise<T>): Promise<T> => {
-    const acquire = async (): Promise<SandboxSession> => {
-      try {
-        return await (session ??= dial());
-      } catch {
-        session = undefined; // a failed dial must not be cached
-        return await (session = dial());
-      }
-    };
-    const s = await acquire();
+  const exec = async (
+    command: string,
+    execOptions: { timeoutMs: number; stdin?: string },
+  ): Promise<CommandResult> => {
     try {
-      return await fn(s);
+      return combined(await sandbox().exec(command, { ...execOptions, maxBytes: OUTPUT_BYTES }));
     } catch (error) {
-      // A session that just failed is not reused, and not left open either:
-      // its client would keep its keepalive timer running until the process
-      // exits.
-      if (session !== undefined) {
-        session = undefined;
-        try {
-          s.close();
-        } catch {
-          // already gone
-        }
+      if (error instanceof SandboxTimeoutError) {
+        throw new Error(
+          `Command timed out after ${Math.round(execOptions.timeoutMs / 1000)}s. Rerun with detached:true if it must keep running.`,
+        );
       }
-      // Retry only when nothing was dispatched: a pre-dispatch failure
-      // (channel open refused on a dead pooled connection) never started the
-      // command, so re-running it cannot double a side effect. Anything after
-      // dispatch is surfaced, honoring the tools' `unsafe` replay contract.
-      if (!isPreDispatch(error)) throw error;
-      return fn(await acquire());
+      throw error;
     }
   };
 
@@ -349,14 +278,12 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           `setsid nohup sh -c ${shellQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
         const shaped = args.detached ? detach(args.command) : args.command;
         const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) =>
-          withSession((s) =>
-            s.exec(
-              allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped,
-              { timeoutMs, ...(stdin !== undefined ? { stdin } : {}) },
-            ),
+          exec(
+            allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped,
+            { timeoutMs, ...(stdin !== undefined ? { stdin } : {}) },
           );
         try {
-          let result: ExecResult;
+          let result: CommandResult;
           if (args.secrets?.length) {
             const found = await secretItems(args, Number(api.conversationId));
             if ("refuse" in found) return fail(found.refuse);
@@ -367,7 +294,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
             const withSecrets = async (
               index: number,
               values: SecretValue[],
-            ): Promise<ExecResult> => {
+            ): Promise<CommandResult> => {
               if (index === secrets.length) {
                 const lines = values.map((value) => value.reveal());
                 if (lines.some((line) => /[\r\n\0]/.test(line))) {
@@ -417,7 +344,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
             details: { exitCode: result.exitCode },
           };
         } catch (error) {
-          return fail(error instanceof VaultError ? safeMessage(error) : describe(error));
+          return fail(error instanceof VaultError ? safeMessage(error) : message(error));
         }
       },
     }),
@@ -453,15 +380,20 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     replay: "safe",
     execute: async (args) => {
       try {
-        const file = await withSession((s) =>
-          s.readFile(args.path, { maxBytes: args.max_bytes ?? 200_000 }),
-        );
+        const file = await sandbox().readFile(args.path, { maxBytes: args.max_bytes ?? 200_000 });
         return {
-          output: [{ type: "text", text: file.text }],
+          output: [
+            {
+              type: "text",
+              text: looksUtf8(trimPartialRune(file.bytes))
+                ? file.bytes.toString("utf8")
+                : `[binary file, ${file.size} bytes] — inspect with run_command (file, hexdump -C | head)`,
+            },
+          ],
           details: { truncated: file.truncated },
         };
       } catch (error) {
-        return fail(describe(error));
+        return fail(message(error));
       }
     },
   });
@@ -478,10 +410,10 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     replay: "unsafe",
     execute: async (args) => {
       try {
-        await withSession((s) => s.writeFile(args.path, args.content));
+        await sandbox().writeFile(args.path, args.content);
         return { output: [{ type: "text", text: `Wrote ${args.path}` }] };
       } catch (error) {
-        return fail(describe(error));
+        return fail(message(error));
       }
     },
   });
@@ -514,7 +446,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         description: "Write a file on the sandbox VM",
       },
     ],
-    ...(configured ? {} : { setupHint: "Set SANDBOX_HOST to enable the sandbox." }),
+    ...(connection ? {} : { setupHint: "Set SANDBOX_HOST to enable the sandbox." }),
     ...(egress.invalid.length > 0
       ? {
           setupHint: `SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: ${egress.invalid.join(", ")}`,
@@ -528,6 +460,22 @@ function shellQuote(value: string): string {
   return `'` + value.replace(/'/g, `'\\''`) + `'`;
 }
 
-const isPreDispatch = (error: unknown): boolean => error instanceof PreDispatchError;
+/** Drop a trailing partial UTF-8 rune so a capped slice still validates as text. */
+function trimPartialRune(buffer: Buffer): Buffer {
+  for (let drop = 0; drop < 4 && buffer.length - drop > 0; drop++) {
+    const last = buffer[buffer.length - 1 - drop];
+    const need = last < 0x80 ? 0 : last < 0xe0 ? 1 : last < 0xf0 ? 2 : 3;
+    if (need === 0) return buffer.subarray(0, buffer.length - drop);
+    const start = buffer.length - 1 - drop - (need - 1);
+    if (start >= 0 && buffer[start] >= 0xc0) return buffer.subarray(0, start);
+  }
+  return buffer;
+}
+
+function looksUtf8(buffer: Buffer): boolean {
+  // Buffer.toString("utf8") replaces invalid sequences with U+FFFD; a clean
+  // round-trip means the bytes are valid UTF-8.
+  return !buffer.toString("utf8").includes("\uFFFD");
+}
 
 type GatePlanFn = Parameters<typeof withGatePlan>[1]["plan"];

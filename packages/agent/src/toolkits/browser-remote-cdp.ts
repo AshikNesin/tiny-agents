@@ -2,26 +2,20 @@
  * Remote-chromium transport: the browser runs on the sandbox VM
  * (tiny-agents-vm over Tailscale SSH), not in the app's container.
  *
- * Per bot profile: SSH in (no credentials — the tailnet authenticates,
- * exactly like the sandbox toolkit), make sure the browser stack is
- * installed (first run only), then start a headful Chrome on a private X
- * display served by Xtigervnc. Both the DevTools port (driven by
+ * Per bot profile, over the app's sandbox connection: make sure the browser
+ * stack is installed (first run only), then start a headful Chrome on a
+ * private X display served by Xtigervnc. Both the DevTools port (driven by
  * playwright-core) and the VNC port (watched and driven by the owner's
- * noVNC viewer) bind to 127.0.0.1 on the VM and are reached through SSH
- * channels. No ports are exposed beyond the tailnet; closing a session kills
- * the remote processes.
- *
- * One SSH connection per stream: Tailscale's SSH server (tailscaled)
- * multiplexes channels less robustly than openssh — after a direct-tcpip
- * channel closes, later channels on the same connection can stall. Fresh
- * connections (~50ms) sidestep it; sessions are long-lived.
+ * noVNC viewer) bind to 127.0.0.1 on the VM and are reached through forwards
+ * on that connection. No ports are exposed beyond the tailnet; closing a
+ * session kills the remote processes.
  */
 import { createServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
 import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { chromium } from "playwright-core";
-import type { Client } from "ssh2";
-import { dialSsh, type HostKeyStore } from "../ssh/connection";
+import { SandboxTimeoutError } from "../ssh/connection";
+import type { SandboxConnection } from "../ssh/sandbox-connection";
 import { pageSession } from "./browser-chromium";
 import {
   installStackCommand,
@@ -41,23 +35,15 @@ import type {
 } from "./browser-sessions";
 
 export interface RemoteCdpTransportOptions {
-  /** SSH host of the VM running the browser (MagicDNS name). */
-  host: string;
-  port?: number;
-  /** Unix user for the session; must match the ACL rule's `users`. Default `exedev`. */
-  user?: string;
-  /** TOFU host-key pinning, shared with the sandbox toolkit and the terminal. */
-  hostKeys?: HostKeyStore;
-  /** OpenSSH private key for public-key auth (a local sandbox container); unset = keyless Tailscale SSH. */
-  privateKey?: string;
-  connectTimeoutMs?: number;
+  /** The app's connection to the sandbox VM, which runs the browser. */
+  connection: SandboxConnection;
 }
 
 /** First-run install budget: apt update + TigerVNC + the Chrome .deb. */
 const INSTALL_TIMEOUT_MS = 10 * 60_000;
 /**
  * The launch script ends by itself within its budget and says why it failed;
- * the margin covers the SSH dial. Giving up sooner would leave the script
+ * the margin covers a fresh SSH dial. Giving up sooner would leave the script
  * running on the VM, and a bare timeout would hide its message.
  */
 const LAUNCH_TIMEOUT_MS = LAUNCH_BUDGET_MS + 20_000;
@@ -78,13 +64,10 @@ async function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promi
 
 /**
  * A local TCP listener that pipes each connection through its own channel to
- * the VM (used for CDP). Two tailscaled (Tailscale SSH) realities shape it:
- * 1. after a direct-tcpip channel closes, later channels on the same
- *    connection stall, so each incoming socket dials its OWN connection;
- * 2. the ~50ms dial must not lose the socket's first bytes (CDP clients
- *    write their HTTP request immediately), so they are buffered until the
- *    channel exists and replayed. CDP uses few long-lived connections; the
- *    dial cost per connection is fine.
+ * the sandbox (CDP, the Claude worker). Opening the channel can take a dial
+ * (~50ms, more over the tailnet), and it must not lose the socket's first
+ * bytes (CDP clients write their HTTP request immediately), so they are
+ * buffered until the channel exists and replayed.
  *
  * A raw TCP server on purpose: `node:http`'s server cuts any connection that
  * has not sent a full request header within 60 s (headersTimeout), which
@@ -185,61 +168,26 @@ async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerU
 }
 
 export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): BrowserTransport {
-  const dial = (): Promise<Client> =>
-    dialSsh({
-      host: options.host,
-      port: options.port,
-      user: options.user,
-      hostKeys: options.hostKeys,
-      privateKey: options.privateKey,
-      connectTimeoutMs: options.connectTimeoutMs,
-      // The tailnet is the auth (tag:codevm -> tag:tiny-agents-vm accept
-      // rules), same trust model as the sandbox toolkit: no credentials
-      // unless a local container's key is configured.
-    });
+  const { connection } = options;
 
-  /** Run one command on a fresh connection and close it. */
+  /** Run one command; resolves with its trimmed stdout, rejects on a nonzero exit. */
   const exec = async (
     command: string,
     timeoutMs = 15_000,
     label = command.slice(0, 80),
   ): Promise<string> => {
-    const client = await dial();
+    let result;
     try {
-      return await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(`VM exec timed out: ${label}`)), timeoutMs);
-        client.exec(command, (error, channel) => {
-          if (error) {
-            clearTimeout(timer);
-            reject(error);
-            return;
-          }
-          let text = "";
-          let errText = "";
-          let exitCode = -1;
-          channel.on("data", (d: Buffer) => (text += d.toString("utf8")));
-          channel.stderr.on("data", (d: Buffer) => (errText += d.toString("utf8")));
-          channel.on("exit", (code: number) => {
-            exitCode = code;
-            clearTimeout(timer);
-            // Backgrounded commands never send 'close' on the channel; settle
-            // shortly after exit with whatever output arrived.
-            setTimeout(() => {
-              if (exitCode === 0) {
-                resolve(text.trim());
-                return;
-              }
-              const detail = (errText || text).trim().slice(-600);
-              reject(
-                new Error(`VM exec failed (${exitCode}): ${label}${detail ? `\n${detail}` : ""}`),
-              );
-            }, 50);
-          });
-        });
-      });
-    } finally {
-      client.end();
+      // Backgrounded commands never close the channel; settle after exit.
+      result = await connection.exec(command, { timeoutMs, settleOnExit: true });
+    } catch (error) {
+      if (error instanceof SandboxTimeoutError) throw new Error(`VM exec timed out: ${label}`);
+      throw error;
     }
+    const text = result.stdout.toString("utf8");
+    if (result.exitCode === 0) return text.trim();
+    const detail = (result.stderr || text).trim().slice(-600);
+    throw new Error(`VM exec failed (${result.exitCode}): ${label}${detail ? `\n${detail}` : ""}`);
   };
 
   return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
@@ -276,38 +224,23 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     };
     const launched = await launchStack();
 
-    const live = new Set<Client>();
+    const live = new Set<Duplex>();
     let server: Server | undefined;
-    // Kill the remote processes (pids recorded at launch) and drop the tunnel
-    // connections; used both by session close and by failed setup.
+    // Kill the remote processes (pids recorded at launch) and close the
+    // tunnels; used both by session close and by failed setup.
     const cleanup = async () => {
-      for (const c of live) c.end();
+      for (const tunnel of live) tunnel.destroy();
       live.clear();
       server?.close();
       await exec(teardownStackCommand(profileDir), 15_000, "stop the browser").catch(() => {});
     };
 
-    /** A fresh SSH connection with one direct-tcpip channel to a VM-local port. */
+    /** A forward to a VM-local port, closed with the session. */
     const openChannel = async (targetPort: number): Promise<Duplex> => {
-      // Tailscale SSH handshakes occasionally stall; one retry hides it from
-      // the viewer, who would otherwise sit on "Connecting" until the backoff.
-      const client = await dial().catch(() => dial());
-      live.add(client);
-      return new Promise<Duplex>((resolve, reject) => {
-        client.forwardOut("127.0.0.1", 0, "127.0.0.1", targetPort, (error, channel) => {
-          if (error) {
-            live.delete(client);
-            client.end();
-            reject(error);
-            return;
-          }
-          channel.once("close", () => {
-            live.delete(client);
-            client.end();
-          });
-          resolve(channel);
-        });
-      });
+      const tunnel = await connection.forward(targetPort);
+      live.add(tunnel);
+      tunnel.once("close", () => live.delete(tunnel));
+      return tunnel;
     };
 
     try {

@@ -44,6 +44,7 @@ import { captureConversation } from "./api/bots/memories.runner";
 import { setChatTitler } from "./api/bots/chats.title";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
+import { closeSandboxConnections } from "./api/bots/sandbox-host";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
 import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
@@ -152,6 +153,10 @@ async function main(): Promise<void> {
     },
   });
   const add = lifecycle.add;
+
+  // The one SSH connection to the sandbox: first in, so it stops last, after
+  // the runtime, the browsers and the desktops ran their teardown over it.
+  add({ name: "sandbox connection", stop: () => closeSandboxConnections() });
 
   let runtime!: AgentRuntime;
   add({

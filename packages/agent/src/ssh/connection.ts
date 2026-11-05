@@ -1,8 +1,8 @@
 /**
- * One SSH connection module for everything that reaches the sandbox VM: the
- * sandbox toolkit's exec/SFTP session, the terminal's tmux channels and the
- * browser's CDP/VNC tunnels. Each is an adapter over the same dial, so the
- * rules hold in one place:
+ * The dial layer under the sandbox connection (`sandbox-connection.ts`): the
+ * endpoint, the defaults, TOFU host keys, the handshake and the bounded
+ * channel opens. Nothing outside `ssh/` uses it; toolkits, transports and the
+ * Claude worker take a `SandboxConnection`.
  *
  * - Auth is absent by default: Tailscale SSH terminates at the node and the
  *   tailnet's `accept` rules are the identity check, so ssh2 connects with no
@@ -17,11 +17,11 @@
  *   handshake timeout ssh2 emits a second, fatal "Connection lost" error,
  *   and an unhandled `error` event would take the whole server down.
  * - `PreDispatchError` marks a failure raised before a command was dispatched
- *   on the wire, which a caller may retry on a fresh connection without
- *   doubling a side effect.
+ *   on the wire, which may be retried on a fresh connection without doubling
+ *   a side effect.
  */
 import { createHash } from "node:crypto";
-import ssh2, { type ClientChannel, type ConnectConfig, type ExecOptions } from "ssh2";
+import ssh2, { type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
 
 const { Client } = ssh2;
 export type SshClientClass = typeof Client;
@@ -47,6 +47,26 @@ export function createMemoryHostKeyStore(): HostKeyStore {
  * must surface, honoring the tools' `unsafe` replay contract.
  */
 export class PreDispatchError extends Error {}
+
+/** The pinned key and the one the host presented differ: never retried. */
+export class HostKeyChangedError extends Error {}
+
+/** A channel that did not open in time; its connection is retired. */
+export class ChannelStallError extends Error {
+  constructor() {
+    super("Timed out opening an SSH channel to the sandbox");
+  }
+}
+
+/** A command ran past its `timeoutMs`; its channel was closed. */
+export class SandboxTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
+  }
+}
+
+/** A forward to a port nothing listens on: the connection itself is fine. */
+export class ForwardRefusedError extends Error {}
 
 /** Where to dial: the sandbox VM as the app configures it. */
 export interface SshEndpoint {
@@ -79,11 +99,24 @@ export async function verifyHostKey(store: HostKeyStore, host: string, raw: Buff
     return;
   }
   if (known !== hash) {
-    throw new Error(
+    throw new HostKeyChangedError(
       `Sandbox host key changed for ${host} (pinned ${known}, now ${hash}). ` +
         "Either the VM was reinstalled — clear the pinned key — or the endpoint is being intercepted.",
     );
   }
+}
+
+/**
+ * The one wording for a sandbox that can't be reached. Network failures read
+ * "Cannot reach the sandbox (…)"; anything else keeps its own message. Errors
+ * can pass through more than one layer, so it never wraps twice.
+ */
+export function describeSandboxError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith("Cannot reach the sandbox")) return message;
+  return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH/.test(message)
+    ? `Cannot reach the sandbox (${message}). Is it online and on the tailnet?`
+    : message;
 }
 
 /**
@@ -143,165 +176,103 @@ export function dialSsh(
 /** A channel that has not opened by now is stalled; the connection is retired. */
 export const CHANNEL_OPEN_TIMEOUT_MS = 10_000;
 
-/** Open a session channel, bounded so a stalled open cannot hang the caller. */
-export function openSshChannel(
-  client: ssh2.Client,
-  command: string,
-  execOptions?: ExecOptions,
-  timeoutMs = CHANNEL_OPEN_TIMEOUT_MS,
-): Promise<ClientChannel> {
+/** SSH_OPEN_CONNECT_FAILED: the far side could not reach the forward's port. */
+const OPEN_CONNECT_FAILED = 2;
+
+/** How a channel open is bounded and handed over. */
+export interface OpenOptions<T> {
+  timeoutMs?: number;
+  /**
+   * Called synchronously with the open channel, before the promise settles:
+   * ssh2 can emit a fast command's `exit` in the same parse loop as the open
+   * callback, so listeners attached after an `await` would miss it.
+   */
+  onOpen?: (channel: T) => void;
+}
+
+/**
+ * Open one channel, bounded so a stalled open cannot hang the caller. A
+ * refusal (dead connection, channel or exec request denied) happens before
+ * anything runs, so it rejects as `PreDispatchError`; a stall rejects as
+ * `ChannelStallError`.
+ */
+function boundedOpen<T>(
+  start: (done: (error: Error | undefined, value?: T) => void) => void,
+  discard: (value: T) => void,
+  { timeoutMs = CHANNEL_OPEN_TIMEOUT_MS, onOpen }: OpenOptions<T>,
+  refusal: (error: Error) => Error = (error) =>
+    new PreDispatchError(error.message, { cause: error }),
+): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
       settled = true;
-      reject(new Error("Timed out opening an SSH channel to the sandbox"));
+      reject(new ChannelStallError());
     }, timeoutMs);
-    const done = (error: Error | undefined, channel?: ClientChannel) => {
+    const done = (error: Error | undefined, value?: T) => {
       if (settled) {
-        channel?.close(); // a late open after the timeout: nobody wants it
+        // A late open after the timeout: nobody wants it.
+        if (value) discard(value);
         return;
       }
       settled = true;
       clearTimeout(timer);
-      // A refusal (dead connection, channel or exec request denied) happens
-      // before the command runs, so retrying it elsewhere is safe.
-      if (error) reject(new PreDispatchError(error.message, { cause: error }));
-      else resolve(channel!);
+      if (error) {
+        reject(refusal(error));
+        return;
+      }
+      onOpen?.(value!);
+      resolve(value!);
     };
     try {
-      if (execOptions) client.exec(command, execOptions, done);
-      else client.exec(command, done);
+      start(done);
     } catch (error) {
       done(error as Error); // "Not connected": the socket is already gone
     }
   });
 }
 
-/** One shared connection: its open channels gate the idle close. */
-interface Pooled {
-  client: ssh2.Client;
-  channels: number;
-  /** No new channels; ends once the last open one closes. */
-  retired: boolean;
-  idle?: ReturnType<typeof setTimeout>;
-  /** The dial this came from, so dropping it can clear the cached one. */
-  source: Promise<Pooled>;
+/** A session channel running `command`, with a pty when `pty` is given. */
+export function openExecChannel(
+  client: ssh2.Client,
+  command: string,
+  options: OpenOptions<ClientChannel> & { pty?: { term: string; cols: number; rows: number } } = {},
+): Promise<ClientChannel> {
+  const { pty } = options;
+  return boundedOpen<ClientChannel>(
+    (done) => (pty ? client.exec(command, { pty }, done) : client.exec(command, done)),
+    (channel) => channel.close(),
+    options,
+  );
 }
 
-export interface SshChannelPool {
-  /** A channel running `command`, plus its release (call once, on close). */
-  open(
-    command: string,
-    execOptions?: ExecOptions,
-  ): Promise<{ channel: ClientChannel; release: () => void }>;
-  /** End every pooled connection. */
-  close(): void;
+/** An SFTP subsystem channel. */
+export function openSftpChannel(
+  client: ssh2.Client,
+  options: OpenOptions<SFTPWrapper> = {},
+): Promise<SFTPWrapper> {
+  return boundedOpen<SFTPWrapper>(
+    (done) => client.sftp(done),
+    (sftp) => sftp.end(),
+    options,
+  );
 }
 
-/**
- * One pooled connection shared by many channels. A fresh handshake over the
- * tailnet costs about 2s, so exec and pty channels share one lazily dialed
- * client: concurrent first callers share the in-flight dial; a client that
- * closes or errors is dropped and the next call redials; the client ends
- * after `idleTimeoutMs` with no open channel. A channel that is refused or
- * does not open in time retires the connection: new channels go to a fresh
- * one, and the retired one ends once its last channel closes.
- */
-export function createSshChannelPool(
-  dial: () => Promise<ssh2.Client>,
-  idleTimeoutMs: number,
-): SshChannelPool {
-  let current: Promise<Pooled> | undefined;
-  const live = new Set<Pooled>();
-
-  /** Stop handing out the connection; it may still carry open channels. */
-  const forget = (pooled: Pooled) => {
-    pooled.retired = true;
-    clearTimeout(pooled.idle);
-    if (current === pooled.source) current = undefined;
-  };
-
-  const retire = (pooled: Pooled) => {
-    forget(pooled);
-    if (pooled.channels === 0) pooled.client.end();
-  };
-
-  const dialPooled = (): Promise<Pooled> => {
-    const source = dial().then((client) => {
-      const pooled: Pooled = { client, channels: 0, retired: false, source };
-      live.add(pooled);
-      // ssh2 emits error then close; either way the connection is unusable,
-      // and its channels close with it (dialSsh keeps the error handled).
-      client.on("error", () => forget(pooled));
-      client.on("close", () => {
-        forget(pooled);
-        live.delete(pooled);
-      });
-      return pooled;
-    });
-    source.catch(() => {
-      if (current === source) current = undefined; // never cache a failed dial
-    });
-    return source;
-  };
-
-  /** A channel slot on the live connection; release it exactly once. */
-  const lease = async (): Promise<Pooled> => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const source = (current ??= dialPooled());
-      const pooled = await source;
-      if (!pooled.retired) {
-        pooled.channels++;
-        clearTimeout(pooled.idle);
-        return pooled;
-      }
-      // Closed between the dial and now: redial once.
-      if (current === source) current = undefined;
-    }
-    throw new Error("SSH connection to the sandbox closed");
-  };
-
-  const release = (pooled: Pooled) => {
-    pooled.channels--;
-    if (pooled.channels > 0) return;
-    if (pooled.retired) {
-      pooled.client.end();
-      return;
-    }
-    pooled.idle = setTimeout(() => retire(pooled), idleTimeoutMs);
-    pooled.idle.unref?.();
-  };
-
-  return {
-    async open(command, execOptions) {
-      for (let attempt = 0; ; attempt++) {
-        const pooled = await lease();
-        let released = false;
-        const releaseOnce = () => {
-          if (released) return;
-          released = true;
-          release(pooled);
-        };
-        try {
-          return {
-            channel: await openSshChannel(pooled.client, command, execOptions),
-            release: releaseOnce,
-          };
-        } catch (error) {
-          retire(pooled);
-          releaseOnce();
-          // A refusal never ran the command: retry once on a fresh
-          // connection. A stalled open might have, so it surfaces.
-          if (!(error instanceof PreDispatchError) || attempt > 0) throw error;
-        }
-      }
-    },
-    close() {
-      for (const pooled of live) {
-        forget(pooled);
-        pooled.client.end();
-      }
-      live.clear();
-    },
-  };
+/** A direct-tcpip channel to `port` on the sandbox's loopback. */
+export function openForwardChannel(
+  client: ssh2.Client,
+  port: number,
+  options: OpenOptions<ClientChannel> = {},
+): Promise<ClientChannel> {
+  return boundedOpen<ClientChannel>(
+    (done) => client.forwardOut("127.0.0.1", 0, "127.0.0.1", port, done),
+    (channel) => channel.close(),
+    options,
+    (error) =>
+      (error as { reason?: number }).reason === OPEN_CONNECT_FAILED
+        ? new ForwardRefusedError(`Nothing is listening on port ${port} on the sandbox`, {
+            cause: error,
+          })
+        : new PreDispatchError(error.message, { cause: error }),
+  );
 }

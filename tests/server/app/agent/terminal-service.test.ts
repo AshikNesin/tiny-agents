@@ -1,11 +1,16 @@
 /**
  * Terminal service (issue #28), integration: the real ssh2 client against
  * the in-process fake SSH server. Asserts the exact tmux command lines the
- * VM sees (the strings are the frozen contract with tmux 3.4), byte flow
- * through fake ptys, and the one-pooled-connection invariant (issue #84).
+ * VM sees (the strings are the frozen contract with tmux 3.4) and byte flow
+ * through fake ptys. Sharing the pooled connection (issue #84) is the sandbox
+ * connection's, tested in `sandbox-connection.test.ts`.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import { createMemoryHostKeyStore } from "../../../../packages/agent/src/toolkits/sandbox";
+import { createMemoryHostKeyStore } from "../../../../packages/agent/src/ssh/connection";
+import {
+  createSandboxConnection,
+  type SandboxConnection,
+} from "../../../../packages/agent/src/ssh/sandbox-connection";
 import {
   fakePty,
   startFakeSandboxServer,
@@ -20,7 +25,7 @@ import {
   TerminalUnreachableError,
   TmuxMissingError,
 } from "../../../../packages/agent/src/terminal/terminal";
-import { createSsh2TerminalTransport } from "../../../../packages/agent/src/terminal/terminal-ssh2";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 import {
   attachCommand,
   listCommand,
@@ -95,7 +100,7 @@ function fakeTmuxVm() {
 }
 
 describe("terminal service (unit)", () => {
-  it("reports unconfigured when no host and no transport are given", async () => {
+  it("reports unconfigured without a sandbox connection", async () => {
     const service = createTerminalService({});
     expect(await service.status()).toEqual({ kind: "unconfigured" });
     const listed = await service.list();
@@ -103,38 +108,23 @@ describe("terminal service (unit)", () => {
     expect(listed.sessions).toEqual([]);
   });
 
-  it("maps a dead sandbox to the unreachable status", async () => {
-    const service = createTerminalService({
-      transport: {
-        exec: async () => {
-          throw new Error("connect ECONNREFUSED 100.77.69.117:22");
-        },
-        pty: async () => {
-          throw new Error("connect ECONNREFUSED");
-        },
+  it("maps a dead sandbox to the unreachable status, in the connection's words", async () => {
+    const unreachable =
+      "Cannot reach the sandbox (getaddrinfo ENOTFOUND tiny-agents-vm). Is it online and on the tailnet?";
+    const connection = fakeSandboxConnection({
+      exec: () => {
+        throw new Error(unreachable);
+      },
+      pty: async () => {
+        throw new Error(unreachable);
       },
     });
-    expect(await service.status()).toMatchObject({ kind: "unreachable" });
+    const service = createTerminalService({ connection });
+    expect(await service.status()).toEqual({ kind: "unreachable", message: unreachable });
     await expect(service.create(80, 24)).rejects.toBeInstanceOf(TerminalUnreachableError);
-  });
-
-  it("describes an unreachable sandbox once, not nested", async () => {
-    const service = createTerminalService({
-      transport: {
-        exec: async () => {
-          throw new Error("getaddrinfo ENOTFOUND tiny-agents-vm");
-        },
-        pty: async () => {
-          throw new Error("getaddrinfo ENOTFOUND tiny-agents-vm");
-        },
-      },
-    });
-    const { status } = await service.list();
-    expect(status).toEqual({
-      kind: "unreachable",
-      message:
-        "Cannot reach the sandbox (getaddrinfo ENOTFOUND tiny-agents-vm). Is it online and on the tailnet?",
-    });
+    await expect(
+      service.attach("ta-term-1" as SessionName, { cols: 80, rows: 24 }),
+    ).rejects.toThrow(unreachable);
   });
 });
 
@@ -142,7 +132,7 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
   let server: FakeSandboxServer;
   let vm: ReturnType<typeof fakeTmuxVm>;
   let service: ReturnType<typeof createTerminalService>;
-  let transport: ReturnType<typeof createSsh2TerminalTransport>;
+  let connection: SandboxConnection;
   const attached: FakePty[] = [];
 
   beforeAll(async () => {
@@ -158,24 +148,17 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
         return fake;
       },
     );
-    const keys = createMemoryHostKeyStore();
-    transport = createSsh2TerminalTransport({
+    connection = createSandboxConnection({
       host: "127.0.0.1",
       port: server.port,
       user: "exedev",
-      hostKeys: keys,
+      hostKeys: createMemoryHostKeyStore(),
     });
-    service = createTerminalService({
-      host: "127.0.0.1",
-      port: server.port,
-      user: "exedev",
-      hostKeys: keys,
-      transport,
-    });
+    service = createTerminalService({ connection });
   });
 
   afterAll(() => {
-    transport?.close();
+    connection?.close();
     server?.close();
   });
 
@@ -274,22 +257,6 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     vm.clear();
   });
 
-  it("shares one connection across execs and attaches", async () => {
-    vm.clear();
-    await service.create(80, 24);
-    const before = server.connections;
-    const streams = [];
-    for (let i = 0; i < 3; i++) {
-      streams.push(await service.attach(name(1), { cols: 80, rows: 24 }));
-    }
-    await Promise.all([service.list(), service.has(name(1)), service.list()]);
-    streams[0]!.destroy(); // closes its channel, not the shared connection
-    expect(await service.has(name(1))).toBe(true);
-    expect(server.connections).toBe(before);
-    for (const s of streams) s.destroy();
-    vm.clear();
-  });
-
   it("maps a missing tmux (exit 127) to the tmux-missing status", async () => {
     const missing = await startFakeSandboxServer((command) => {
       if (command.includes("tmux -V")) {
@@ -297,17 +264,14 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
       }
       return { stderr: "unexpected", exitCode: 1 };
     });
-    const transport127 = createSsh2TerminalTransport({
-      host: "127.0.0.1",
-      port: missing.port,
-    });
-    const service127 = createTerminalService({ transport: transport127 });
+    const connection127 = createSandboxConnection({ host: "127.0.0.1", port: missing.port });
+    const service127 = createTerminalService({ connection: connection127 });
     expect(await service127.status()).toEqual({
       kind: "tmux-missing",
       installCommand: "sudo apt-get install -y tmux",
     });
     await expect(service127.create(80, 24)).rejects.toBeInstanceOf(TmuxMissingError);
-    transport127.close();
+    connection127.close();
     missing.close();
   });
 });

@@ -13,8 +13,7 @@ import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
-import type { SandboxSession, SandboxTransport } from "./sandbox";
-import { createSsh2Transport, type HostKeyStore } from "./sandbox-ssh2";
+import type { SandboxConnection } from "../ssh/sandbox-connection";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
 
@@ -81,15 +80,8 @@ export interface AttachmentStore {
 }
 
 export interface AttachmentsToolkitOptions {
-  /** With a sandbox host, `copy_attachment_to_sandbox` is offered. */
-  sandbox?: {
-    host?: string;
-    port?: number;
-    user?: string;
-    hostKeys?: HostKeyStore;
-    privateKey?: string;
-    transport?: SandboxTransport;
-  };
+  /** With the app's sandbox connection, `copy_attachment_to_sandbox` is offered. */
+  sandbox?: SandboxConnection;
 }
 
 /** ≈16k tokens per read. */
@@ -445,8 +437,7 @@ export function createAttachmentsToolkit(
   ];
 
   const sandbox = options.sandbox;
-  if (sandbox?.host) {
-    const transport = sandbox.transport ?? createSsh2Transport();
+  if (sandbox) {
     const copy = defineTool({
       name: "copy_attachment_to_sandbox",
       description:
@@ -468,24 +459,14 @@ export function createAttachmentsToolkit(
           args.dest ?? `attachments/${args.uploadId.replace(/[^\w-]/g, "")}/${safeName}`
         ).replace(/^~\//, "");
         const dir = dest.includes("/") ? dest.slice(0, dest.lastIndexOf("/")) : "";
-        let session: SandboxSession | undefined;
         try {
-          session = await transport({
-            host: sandbox.host!,
-            port: sandbox.port ?? 22,
-            user: sandbox.user ?? "exedev",
-            hostKeys: sandbox.hostKeys,
-            privateKey: sandbox.privateKey,
-          });
           if (dir)
-            await session.exec(`mkdir -p '${dir.replace(/'/g, `'\\''`)}'`, { timeoutMs: 30_000 });
-          await session.writeFile(dest, original.bytes);
+            await sandbox.exec(`mkdir -p '${dir.replace(/'/g, `'\\''`)}'`, { timeoutMs: 30_000 });
+          await sandbox.writeFile(dest, original.bytes);
         } catch (error) {
           return fail(
             `Could not copy to the sandbox: ${error instanceof Error ? error.message : String(error)}`,
           );
-        } finally {
-          session?.close();
         }
         const sha256 = createHash("sha256").update(original.bytes).digest("hex");
         return {

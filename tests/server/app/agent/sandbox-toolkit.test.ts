@@ -1,21 +1,22 @@
 /**
- * The sandbox toolkit (issue #19): unit tests against a fake transport and
- * integration tests through the in-process SSH server (real ssh2 client,
- * real wire protocol, none-auth — the shape Tailscale SSH presents).
+ * The sandbox toolkit (issue #19): unit tests against an in-memory sandbox
+ * connection and integration tests through the in-process SSH server (real
+ * ssh2 client, real wire protocol, none-auth — the shape Tailscale SSH
+ * presents). Pooling, retry and host keys belong to the connection and are
+ * tested once in `sandbox-connection.test.ts`.
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { createSandboxToolkit } from "../../../../packages/agent/src/toolkits/sandbox";
+import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
 import {
-  createMemoryHostKeyStore,
-  createSandboxToolkit,
-  PreDispatchError,
-  type ExecResult,
-  type SandboxSession,
-  type SandboxTransport,
-} from "../../../../packages/agent/src/toolkits/sandbox";
+  createSandboxConnection,
+  type SandboxConnection,
+} from "../../../../packages/agent/src/ssh/sandbox-connection";
 import { startFakeSandboxServer } from "../../../../packages/agent/src/testing-ssh-server";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 async function run(capability: Capability, name: string, args: Record<string, unknown>) {
   const tool = capability.extension.tools!.find((t) => t.name === name)!;
@@ -28,50 +29,15 @@ async function run(capability: Capability, name: string, args: Record<string, un
   return { ...result, text };
 }
 
-/** Records dial()s; optionally fails the first n sessions with a given error. */
-function fakeTransport(execReply: (command: string) => ExecResult, opts: { kills?: number } = {}) {
-  const calls: string[] = [];
-  let dials = 0;
-  let killed = 0;
-  const transport: SandboxTransport = async () => {
-    dials++;
-    const dead = () => killed++ < (opts.kills ?? 0);
-    const session: SandboxSession = {
-      exec: async (command) => {
-        if (dead()) throw new PreDispatchError("channel open refused: connection dead");
-        calls.push(command);
-        return execReply(command);
-      },
-      readFile: async () => {
-        if (dead()) throw new Error("Keepalive timeout");
-        throw new Error("unused");
-      },
-      writeFile: async () => {
-        if (dead()) throw new Error("Keepalive timeout");
-        throw new Error("unused");
-      },
-      close: () => {},
-    };
-    return session;
-  };
-  return {
-    transport,
-    calls,
-    get dials() {
-      return dials;
-    },
-  };
-}
-
-describe("sandbox toolkit (unit, fake transport)", () => {
-  it("shows a setup hint when SANDBOX_HOST is unset", () => {
+describe("sandbox toolkit (unit, in-memory connection)", () => {
+  it("shows a setup hint without a sandbox connection", () => {
     const sandbox = createSandboxToolkit({});
     expect(sandbox.setupHint).toContain("SANDBOX_HOST");
     expect(sandbox.id).toBe("sandbox");
   });
 
   it("declares tool metadata: read_file read-only, side-effecting tools not", () => {
-    const sandbox = createSandboxToolkit({ host: "x" });
+    const sandbox = createSandboxToolkit({ connection: fakeSandboxConnection() });
     const byName = Object.fromEntries(sandbox.tools.map((t) => [t.name, t]));
     expect(byName.read_file.readOnly).toBe(true);
     expect(byName.run_command.readOnly).toBeUndefined();
@@ -79,120 +45,111 @@ describe("sandbox toolkit (unit, fake transport)", () => {
   });
 
   it("returns output and exit code for a successful command", async () => {
-    const fake = fakeTransport((c) => ({ output: `ran: ${c}`, exitCode: 0 }));
-    const sandbox = createSandboxToolkit({ host: "vm", transport: fake.transport });
+    const connection = fakeSandboxConnection({ exec: (c) => ({ stdout: `ran: ${c}` }) });
+    const sandbox = createSandboxToolkit({ connection });
     const result = await run(sandbox, "run_command", { command: "ls" });
     expect(result.text).toBe("ran: ls");
     expect(result.isError).toBeUndefined();
     expect(result.details).toEqual({ exitCode: 0 });
+    // The default timeout, and a byte cap before the character cap trims.
+    expect(connection.execs[0]!.options).toEqual({ timeoutMs: 120_000, maxBytes: 60_000 });
+  });
+
+  it("puts stderr after stdout and caps what reaches the model", async () => {
+    const connection = fakeSandboxConnection({
+      exec: (c) =>
+        c === "noisy" ? { stdout: "out\n", stderr: "warn\n" } : { stdout: "y".repeat(40_000) },
+    });
+    const sandbox = createSandboxToolkit({ connection });
+    expect((await run(sandbox, "run_command", { command: "noisy" })).text).toBe("out\n\nwarn");
+    const big = await run(sandbox, "run_command", { command: "big" });
+    expect(big.text).toHaveLength(30_000 + "\n… (truncated)".length);
+    expect(big.text.endsWith("… (truncated)")).toBe(true);
   });
 
   it("wraps nonzero exit codes as tool errors with the code and output", async () => {
-    const fake = fakeTransport(() => ({ output: "boom", exitCode: 127 }));
-    const sandbox = createSandboxToolkit({ host: "vm", transport: fake.transport });
+    const connection = fakeSandboxConnection({ exec: () => ({ stdout: "boom", exitCode: 127 }) });
+    const sandbox = createSandboxToolkit({ connection });
     const result = await run(sandbox, "run_command", { command: "nope" });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("exit 127");
     expect(result.text).toContain("boom");
   });
 
-  it("wraps unreachable-host errors as one readable line", async () => {
-    const dead: SandboxTransport = async () => {
-      throw new Error("connect ECONNREFUSED 100.77.69.117:22");
-    };
-    const sandbox = createSandboxToolkit({ host: "vm", transport: dead });
-    const result = await run(sandbox, "run_command", { command: "ls" });
+  it("reports a connection failure as the connection words it", async () => {
+    const connection = fakeSandboxConnection({
+      exec: () => {
+        throw new Error(
+          "Cannot reach the sandbox (connect ECONNREFUSED 100.77.69.117:22). Is it online and on the tailnet?",
+        );
+      },
+    });
+    const result = await run(createSandboxToolkit({ connection }), "run_command", {
+      command: "ls",
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      text: "Cannot reach the sandbox (connect ECONNREFUSED 100.77.69.117:22). Is it online and on the tailnet?",
+    });
+  });
+
+  it("explains a timeout with the way out", async () => {
+    const connection = fakeSandboxConnection({
+      exec: (_c, options) => {
+        throw new SandboxTimeoutError(options.timeoutMs!);
+      },
+    });
+    const sandbox = createSandboxToolkit({ connection });
+    const result = await run(sandbox, "run_command", { command: "cargo build", timeout_secs: 5 });
     expect(result.isError).toBe(true);
-    expect(result.text).toContain("Cannot reach the sandbox");
+    expect(result.text).toBe(
+      "Command timed out after 5s. Rerun with detached:true if it must keep running.",
+    );
+    expect(connection.execs).toHaveLength(1); // exactly once
   });
 
   it("marks replay policy: read_file safe, side effects unsafe", () => {
-    const sandbox = createSandboxToolkit({ host: "x" });
+    const sandbox = createSandboxToolkit({});
     const policy = Object.fromEntries(sandbox.extension.tools!.map((t) => [t.name, t.replay]));
     expect(policy).toEqual({ run_command: "unsafe", read_file: "safe", write_file: "unsafe" });
   });
 
-  it("pools one connection and redials once when the pooled one dies", async () => {
-    const fake = fakeTransport((c) => ({ output: c, exitCode: 0 }), { kills: 1 });
-    const sandbox = createSandboxToolkit({ host: "vm", transport: fake.transport });
-    const first = await run(sandbox, "run_command", { command: "one" });
-    const second = await run(sandbox, "run_command", { command: "two" });
-    expect(first.isError).toBeUndefined();
-    expect(second.isError).toBeUndefined();
-    expect(fake.calls).toEqual(["one", "two"]);
-    expect(fake.dials).toBe(2); // died once, redialed once, then reused
-    await run(sandbox, "run_command", { command: "three" });
-    expect(fake.dials).toBe(2);
-    expect(fake.calls).toEqual(["one", "two", "three"]);
-  });
-
-  it("closes a pooled session that failed instead of leaving its client running", async () => {
-    const closed: number[] = [];
-    let dials = 0;
-    const transport: SandboxTransport = async () => {
-      const id = ++dials;
-      const session: SandboxSession = {
-        exec: async () => {
-          if (id === 1) throw new Error("Keepalive timeout");
-          return { output: "ok", exitCode: 0 };
-        },
-        readFile: async () => ({ text: "", truncated: false }),
-        writeFile: async () => {},
-        close: () => closed.push(id),
-      };
-      return session;
-    };
-    const sandbox = createSandboxToolkit({ host: "vm", transport });
-    const failed = await run(sandbox, "run_command", { command: "one" });
-    expect(failed.isError).toBe(true);
-    // The dead client is ended (its keepalive would otherwise run forever)…
-    expect(closed).toEqual([1]);
-    // …and the next call dials fresh.
-    const ok = await run(sandbox, "run_command", { command: "two" });
-    expect(ok.isError).toBeUndefined();
-    expect(dials).toBe(2);
-  });
-
-  it("surfaces post-dispatch failures instead of re-running the command", async () => {
-    const calls: string[] = [];
-    const transport: SandboxTransport = async () => ({
-      exec: async (command) => {
-        calls.push(command);
-        throw new Error("Command timed out after 5s"); // dispatched, then died
-      },
-      readFile: async () => ({ text: "", truncated: false }),
-      writeFile: async () => {},
-      close: () => {},
-    });
-    const sandbox = createSandboxToolkit({ host: "vm", transport });
-    const result = await run(sandbox, "run_command", { command: "cargo build" });
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain("timed out");
-    expect(calls).toEqual(["cargo build"]); // exactly once
-  });
-
-  it("refuses to dial when unconfigured, even if the capability is enabled", async () => {
-    const sandbox = createSandboxToolkit({ host: undefined });
+  it("refuses to run without a connection, even if the capability is enabled", async () => {
+    const sandbox = createSandboxToolkit({});
     const result = await run(sandbox, "run_command", { command: "ls" });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("SANDBOX_HOST");
   });
 
   it("wraps detached commands in setsid/nohup and returns the pid line", async () => {
-    const fake = fakeTransport((c) => ({
-      output: c.includes("setsid") ? "4242" : "no",
-      exitCode: 0,
-    }));
-    const sandbox = createSandboxToolkit({ host: "vm", transport: fake.transport });
+    const connection = fakeSandboxConnection({
+      exec: (c) => ({ stdout: c.includes("setsid") ? "4242" : "no" }),
+    });
+    const sandbox = createSandboxToolkit({ connection });
     const result = await run(sandbox, "run_command", { command: "npm run build", detached: true });
     expect(result.isError).toBeUndefined();
-    expect(fake.calls[0]).toMatch(/^setsid nohup sh -c 'npm run build' >/);
+    expect(connection.execs[0]!.command).toMatch(/^setsid nohup sh -c 'npm run build' >/);
     expect(result.text).toContain("4242");
+  });
+
+  it("describes a binary file instead of corrupting it", async () => {
+    const files = new Map([
+      ["/blob.bin", Buffer.from([0xff, 0xfe, 0x00, 0x81])],
+      ["/cut.txt", Buffer.from("añb")],
+    ]);
+    const sandbox = createSandboxToolkit({ connection: fakeSandboxConnection({ files }) });
+    const binary = await run(sandbox, "read_file", { path: "/blob.bin" });
+    expect(binary.text).toMatch(/^\[binary file, 4 bytes\]/);
+    // A cap that splits a rune still reads as text.
+    const cut = await run(sandbox, "read_file", { path: "/cut.txt", max_bytes: 2 });
+    expect(cut.text).toBe("a�");
+    expect(cut.details).toEqual({ truncated: true });
   });
 });
 
 describe("sandbox toolkit (integration, in-process SSH server)", () => {
   let server: Awaited<ReturnType<typeof startFakeSandboxServer>>;
+  let connection: SandboxConnection;
 
   beforeAll(async () => {
     server = await startFakeSandboxServer((command) => {
@@ -200,37 +157,20 @@ describe("sandbox toolkit (integration, in-process SSH server)", () => {
       if (command === "false") return { stdout: "", exitCode: 1 };
       return { stdout: "" };
     });
+    connection = createSandboxConnection({ host: "127.0.0.1", port: server.port });
   });
 
-  afterAll(() => server?.close());
+  afterAll(() => {
+    connection?.close();
+    server?.close();
+  });
 
-  const toolkit = () =>
-    createSandboxToolkit({
-      host: "127.0.0.1",
-      port: server.port,
-      user: "exedev",
-      hostKeys: createMemoryHostKeyStore(),
-    });
+  const toolkit = () => createSandboxToolkit({ connection });
 
   it("runs commands over the real ssh2 client with none-auth", async () => {
-    const sandbox = toolkit();
-    const result = await run(sandbox, "run_command", { command: "echo hello from the wire" });
+    const result = await run(toolkit(), "run_command", { command: "echo hello from the wire" });
     expect(result.text).toContain("hello from the wire");
     expect(server.execCalls).toContain("echo hello from the wire");
-  });
-
-  it("pins the host key on first connect (TOFU) and reuses the connection", async () => {
-    const keys = createMemoryHostKeyStore();
-    const sandbox = createSandboxToolkit({
-      host: "127.0.0.1",
-      port: server.port,
-      hostKeys: keys,
-    });
-    await run(sandbox, "run_command", { command: "echo one" });
-    const pinned = await keys.get("127.0.0.1");
-    expect(pinned).toMatch(/^sha256:/);
-    await run(sandbox, "run_command", { command: "echo two" });
-    expect(await keys.get("127.0.0.1")).toBe(pinned);
   });
 
   it("writes then reads a file through real SFTP, round-trip intact", async () => {
@@ -251,15 +191,13 @@ describe("sandbox toolkit (integration, in-process SSH server)", () => {
   });
 
   it("reads a missing file as a readable error", async () => {
-    const sandbox = toolkit();
-    const result = await run(sandbox, "read_file", { path: "/nope.txt" });
+    const result = await run(toolkit(), "read_file", { path: "/nope.txt" });
     expect(result.isError).toBe(true);
     expect(result.text).toMatch(/no such file/i);
   });
 
   it("reports nonzero exits from the real server", async () => {
-    const sandbox = toolkit();
-    const result = await run(sandbox, "run_command", { command: "false" });
+    const result = await run(toolkit(), "run_command", { command: "false" });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("exit 1");
   });

@@ -7,13 +7,11 @@
  * leave behind. Nothing here installs Claude Code or calls Anthropic.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { EventEmitter } from "node:events";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import type { Client } from "ssh2";
 import {
   CLAUDE_WORKER_PACKAGES,
   CLAUDE_WORKER_STACK_VERSION,
@@ -31,6 +29,7 @@ import {
   FORBIDDEN_BACKEND_FLAGS,
   FORBIDDEN_OVERRIDE_KEYS,
 } from "../../../../packages/claude-worker/src/index";
+import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 /** A fake worker: a TCP echo server that records the env it was started with. */
 const FAKE_WORKER = `
@@ -63,33 +62,33 @@ function fakeInstall(
   chmodSync(cli, 0o755);
 }
 
-/** A fake ssh2 client: exec runs locally in bash, forwardOut dials loopback. */
-function fakeDial(env: Record<string, string> = {}): () => Promise<Client> {
-  return async () =>
-    ({
-      exec(command: string, callback: (error: Error | undefined, channel: unknown) => void) {
+/**
+ * The sandbox as an in-memory connection: exec runs locally in sh as the
+ * sandbox user in `home`, and a forward dials this machine's loopback.
+ */
+function fakeSandbox(env: Record<string, string> = {}) {
+  return fakeSandboxConnection({
+    exec: (command, options) =>
+      new Promise((resolve) => {
         const child = spawn("sh", ["-c", command], { env: { ...process.env, HOME: home, ...env } });
-        const channel = Object.assign(new EventEmitter(), {
-          stderr: child.stderr,
-          end: (data?: string) => child.stdin.end(data),
-        });
-        child.stdout.on("data", (d: Buffer) => channel.emit("data", d));
-        child.on("exit", (code) => channel.emit("exit", code));
-        callback(undefined, channel);
-      },
-      forwardOut(
-        _srcIp: string,
-        _srcPort: number,
-        _dstIp: string,
-        dstPort: number,
-        callback: (error: Error | undefined, channel: unknown) => void,
-      ) {
-        const socket = connect(dstPort, "127.0.0.1");
-        socket.once("connect", () => callback(undefined, socket));
-        socket.once("error", (error) => callback(error, undefined));
-      },
-      end() {},
-    }) as unknown as Client;
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
+        child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
+        // The worker keeps the pipes open; settle shortly after exit, as the
+        // real connection does for these commands.
+        child.on("exit", (code) =>
+          setTimeout(() => resolve({ stdout, stderr, exitCode: code ?? 255 }), 50),
+        );
+        child.stdin.end(options.stdin);
+      }),
+    forward: (port) =>
+      new Promise((resolve, reject) => {
+        const socket = connect(port, "127.0.0.1");
+        socket.once("connect", () => resolve(socket));
+        socket.once("error", reject);
+      }),
+  });
 }
 
 function freePort(): Promise<number> {
@@ -185,12 +184,12 @@ describe("the sandbox worker locator", () => {
     fakeInstall();
     const port = await freePort();
     const locator = createSandboxClaudeWorker({
-      endpoint: { host: "sandbox.test" },
+      connection: fakeSandbox(),
       script: async () => FAKE_WORKER,
       port,
-      dial: fakeDial(),
     });
     try {
+      expect(locator.host).toBe("sandbox.test");
       const target = await locator.resolve();
       expect(target.url).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/);
       expect(Buffer.from(target.token, "base64")).toHaveLength(32);
@@ -211,10 +210,9 @@ describe("the sandbox worker locator", () => {
     fakeInstall('{"loggedIn":false}');
     const port = await freePort();
     const locator = createSandboxClaudeWorker({
-      endpoint: { host: "sandbox.test" },
+      connection: fakeSandbox(),
       script: async () => FAKE_WORKER,
       port,
-      dial: fakeDial(),
     });
     try {
       await locator.resolve();
