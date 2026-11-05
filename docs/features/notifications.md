@@ -89,7 +89,7 @@ One `notifications` app setting (zod-validated, defaults filled in):
 ## Delivery
 
 ```
-emit points (apps/web: runtime.onWait, onActivity, routines watcher/jobs, boot)
+emit points (apps/web: runtime.onWait, the settled pipeline, routine runs/jobs, boot)
   → notificationService.notify(n)                  [packages/core/src/notification]
       switch → dedupe → channel state → quiet hours → coalesce → throttle
   → delivery queue (≤ 2 concurrent) → PushoverChannel → NotificationLog

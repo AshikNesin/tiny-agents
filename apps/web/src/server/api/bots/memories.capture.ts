@@ -1,28 +1,19 @@
 /**
- * Memory capture (issue #22 §5.3): the post-turn background pipeline. An
- * onActivity listener arms a per-conversation debounce (quiet window or turn
- * count); when it fires, one extraction side-call reads the owner turns since
- * the watermark, proposes facts, and code (not the model) decides what lands:
- * dedupe against every row including tombstones, validated supersession,
- * budget archive, watermark bump — one transaction. A malformed extraction is
- * dropped whole. Nothing here runs on the reply path.
+ * Memory capture (issue #22 §5.3): the post-turn background pipeline. Each
+ * settled Turn of a bot's own chat arms a per-conversation debounce (quiet
+ * window or turn count); when it fires, one extraction side-call reads the
+ * owner turns since the watermark and proposes facts, and the memory ledger
+ * (memories.ledger.ts), not the model, decides what lands. A malformed
+ * extraction is dropped whole. Nothing here runs on the reply path.
  */
-import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import type { SettledStep } from "./bots.settled";
-import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import type { MutableModels } from "@earendil-works/pi-ai/models";
 import {
   extractionResultSchema,
-  MEMORY_MAX_ACTIVE,
   MEMORY_QUIET_MS,
   MEMORY_TURN_LIMIT,
   type ExtractedMemory,
 } from "./memories.domain";
-import { bots, db, memories, type AppDatabase } from "../../db";
-
-/** The minimum the capture side-call needs from the runtime's model registry. */
-export type CaptureModels = Pick<MutableModels, "getModel" | "completeSimple">;
 
 export function buildCapturePrompt(input: {
   botName: string;
@@ -63,21 +54,12 @@ export function buildCapturePrompt(input: {
 }
 
 /**
- * Parse the side-call reply: first text block, JSON array, validated whole.
- * Null means unparseable — distinct from a valid empty extraction, so the
- * caller leaves the watermark alone and the window retries later.
+ * Parse the side-call's text: a JSON array, validated whole. Null means
+ * unparseable — distinct from a valid empty extraction, so the caller leaves
+ * the watermark alone and the window retries later.
  */
-export function parseExtraction(
-  reply: { content?: unknown[] } | undefined,
-): ExtractedMemory[] | null {
-  const text = (reply?.content ?? [])
-    .filter(
-      (b): b is { type: string; text?: string } =>
-        typeof b === "object" && b !== null && "type" in (b as object),
-    )
-    .map((b) => (b.type === "text" ? (b.text ?? "") : ""))
-    .join("\n")
-    .trim();
+export function parseExtraction(reply: string | undefined): ExtractedMemory[] | null {
+  const text = (reply ?? "").trim();
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
   if (start === -1 || end === -1 || end < start) return null;
@@ -88,109 +70,6 @@ export function parseExtraction(
   } catch {
     return null;
   }
-}
-
-/**
- * Apply an extraction in code. Returns the writes made. The model proposes;
- * these rails decide: exact-text dedupe against ALL rows (tombstones
- * included), supersession validated to same-bot rows, budget archive, and
- * the optional capture watermark bump — one transaction, all or nothing.
- * Chat-side saves omit the watermark so background capture still sees the turn.
- */
-export async function applyExtraction(
-  botId: string,
-  extraction: ExtractedMemory[],
-  watermark?: Date,
-): Promise<{ created: number; superseded: number; skipped: number }> {
-  if (extraction.length === 0) {
-    if (watermark) setWatermark(db, botId, watermark);
-    return { created: 0, superseded: 0, skipped: 0 };
-  }
-  let created = 0;
-  let superseded = 0;
-  let skipped = 0;
-  // better-sqlite3 transactions are synchronous: every query runs inside it.
-  const result = db.transaction((tx) => {
-    const existing = tx
-      .select({ id: memories.id, text: memories.text })
-      .from(memories)
-      .where(eq(memories.botId, botId))
-      .all();
-    const byText = new Map(existing.map((m) => [m.text.trim().toLowerCase(), m]));
-    const now = new Date();
-    const seen = new Set<string>();
-    for (const item of extraction) {
-      const key = item.text.trim().toLowerCase();
-      if (byText.has(key) || seen.has(key)) {
-        skipped++;
-        continue;
-      }
-      seen.add(key);
-      const validSupersedes = (item.supersedesIds ?? []).filter((sid) =>
-        existing.some((m) => m.id === sid),
-      );
-      const row = tx
-        .insert(memories)
-        .values({
-          botId,
-          text: item.text.trim(),
-          category: item.category,
-          status: "active",
-          source: "capture",
-          confidence: item.confidence,
-          until: item.until ? new Date(item.until) : null,
-        })
-        .returning({ id: memories.id })
-        .get();
-      created++;
-      if (validSupersedes.length > 0) {
-        tx.update(memories)
-          .set({ status: "superseded", supersededById: row.id, supersededAt: new Date() })
-          .where(inArray(memories.id, validSupersedes))
-          .run();
-        superseded += validSupersedes.length;
-      }
-    }
-    // Budget inside the same commit: if archival fails, the window retries.
-    // Expired rows never count toward the active budget.
-    const activeRows = tx
-      .select({ id: memories.id })
-      .from(memories)
-      .where(
-        and(
-          eq(memories.botId, botId),
-          eq(memories.status, "active"),
-          or(isNull(memories.until), gt(memories.until, now)),
-        ),
-      )
-      .orderBy(asc(memories.createdAt))
-      .all();
-    const overflow = activeRows.slice(0, Math.max(0, activeRows.length - MEMORY_MAX_ACTIVE));
-    if (overflow.length > 0) {
-      tx.update(memories)
-        .set({ status: "archived" })
-        .where(
-          inArray(
-            memories.id,
-            overflow.map((m) => m.id),
-          ),
-        )
-        .run();
-    }
-    if (watermark) setWatermark(tx, botId, watermark);
-    return { created, superseded, skipped };
-  });
-  return result;
-}
-
-/** Bump the capture watermark; a missing bot throws (and rolls back a surrounding transaction). */
-function setWatermark(handle: Pick<AppDatabase, "update">, botId: string, watermark: Date): void {
-  const { changes } = handle
-    .update(bots)
-    .set({ memoryCapturedThrough: watermark })
-    .where(eq(bots.id, botId))
-    .run();
-  if (changes === 0) throw Boom.notFound("Bot not found");
 }
 
 interface PendingCapture {
@@ -262,9 +141,12 @@ export function createMemoryCapture(deps: {
   return {
     onSettled: {
       name: "memory capture",
-      run: ({ conversationId }) => {
+      async run({ conversationId, owner }) {
+        // Only a bot's own chat, with memory on, is a source (the capture
+        // re-checks when it runs: the switch may flip meanwhile).
+        const behind = await owner();
+        if (behind?.kind !== "chat" || !behind.bot.memoryEnabled) return;
         arm(conversationId, (pending.get(conversationId)?.turns ?? 0) + 1);
-        return Promise.resolve();
       },
     },
     stop() {

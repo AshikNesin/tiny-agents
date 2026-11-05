@@ -2,24 +2,15 @@
  * The capture runner: turn an idle conversation into an extraction side-call.
  * Only owner turns are memory sources; assistant replies supply context.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes } from "@tiny-agents/agent";
-import type { AgentRuntime } from "@tiny-agents/agent";
-import {
-  buildCapturePrompt,
-  parseExtraction,
-  applyExtraction,
-  type CaptureModels,
-} from "./memories.capture";
-import {
-  MEMORY_CAPTURE_CHAR_CAP,
-  MEMORY_REMOVED_IN_PROMPT,
-  MEMORY_TRIVIAL_BYTES,
-} from "./memories.domain";
-import { bots, db, memories } from "../../db";
+import { buildCapturePrompt, parseExtraction } from "./memories.capture";
+import { MEMORY_CAPTURE_CHAR_CAP, MEMORY_TRIVIAL_BYTES } from "./memories.domain";
+import { memoryLedger } from "./memories.ledger";
+import { bots, db } from "../../db";
 import { chatOwner } from "./bots.owner";
-import { resolveSideCallModel, resolveSideCallModelId } from "./side-call";
+import type { SideCaller } from "./side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 
@@ -87,78 +78,32 @@ export function captureWindow(
   };
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Memory capture timed out")), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
-/** The side-call helpers under the names this module exported first (see side-call.ts). */
-export const resolveCaptureModel = resolveSideCallModel;
-export const resolveCaptureModelId = resolveSideCallModelId;
-
-export interface CaptureSideCall {
-  models: CaptureModels;
-  hasModel: AgentRuntime["hasModel"];
-  /** Optional override; otherwise capture uses the bot's own model. */
-  modelId?: string;
-  /** The runtime's primary provider (bare model ids). Default: the gateway. */
-  provider?: string;
+export interface CaptureDeps {
+  /** The side-caller; undefined (faux mode) means no capture. */
+  sideCaller: SideCaller | undefined;
+  /** MEMORY_CAPTURE_MODEL; otherwise capture uses the bot's own model. */
+  model?: string;
+  readTranscript: (conversationId: number) => Promise<ReadonlyArray<CaptureMessage>>;
 }
 
 /** Run one capture for a conversation. Every failure is logged and swallowed. */
 export async function captureConversation(
   conversationId: number,
-  deps: {
-    sideCall: CaptureSideCall | undefined;
-    readTranscript: (conversationId: number) => Promise<ReadonlyArray<CaptureMessage>>;
-  },
+  deps: CaptureDeps,
 ): Promise<void> {
   try {
+    if (!deps.sideCaller) return;
     // Only a bot's own chat is captured: a routine's conversation holds the
-    // routine's work, not the owner's facts (issue #63).
+    // routine's work, not the owner's facts (issue #63). A shared chat
+    // (issue #145) holds other people's words too: its bot reads as memory off.
     const owner = await chatOwner(conversationId);
-    if (!owner) return;
+    if (!owner?.memoryEnabled) return;
     const bot = await db.query.bots.findFirst({
       where: eq(bots.id, owner.id),
-      columns: {
-        id: true,
-        name: true,
-        modelId: true,
-        memoryEnabled: true,
-        memoryCapturedThrough: true,
-      },
-      with: {
-        memories: {
-          where: (m, { eq }) => eq(m.status, "active"),
-          orderBy: (m, { asc }) => [asc(m.createdAt)],
-        },
-      },
+      columns: { id: true, name: true, modelId: true, memoryCapturedThrough: true },
     });
-    // A shared chat (issue #145) holds other people's words too: never captured.
-    if (!bot || !bot.memoryEnabled || owner.shared) return;
-    if (!deps.sideCall) return;
-    const modelId = resolveCaptureModelId(deps.sideCall, bot.modelId, deps.sideCall.modelId);
-    const model = modelId
-      ? resolveCaptureModel(deps.sideCall.models, modelId, deps.sideCall.provider)
-      : undefined;
-    if (!model) {
-      logger.warn(
-        { conversationId, modelId },
-        "Memory capture model unavailable; window will retry",
-      );
-      return;
-    }
+    if (!bot) return;
+    const ledger = memoryLedger(bot.id);
 
     const messages = await deps.readTranscript(conversationId);
     const window = captureWindow(messages, bot.memoryCapturedThrough, bot.name);
@@ -166,61 +111,43 @@ export async function captureConversation(
     if (window.ownerBytes < MEMORY_TRIVIAL_BYTES) {
       // Advance the watermark anyway: sub-trivial chatter must not pile up
       // into a later capture window it no longer relates to.
-      await db
-        .update(bots)
-        .set({ memoryCapturedThrough: window.through })
-        .where(eq(bots.id, bot.id));
+      await ledger.advanceWatermark(window.through);
       return;
     }
 
-    const current = bot.memories
-      .map(
-        (m) =>
-          `- ${m.id} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
-      )
-      .join("\n");
-    // The owner removed these: capture must not bring them back reworded
-    // (exact-text dedupe in applyExtraction stays the hard rail).
-    const removed = await db
-      .select({ text: memories.text })
-      .from(memories)
-      .where(and(eq(memories.botId, bot.id), eq(memories.status, "deleted")))
-      .orderBy(desc(memories.updatedAt))
-      .limit(MEMORY_REMOVED_IN_PROMPT);
-    const prompt = buildCapturePrompt({
-      botName: bot.name,
-      transcript: window.lines.join("\n"),
-      currentMemories: current,
-      removedMemories: removed.map((m) => `- ${m.text}`).join("\n") || null,
-      today: new Date().toISOString().slice(0, 10),
-    });
-    const reply = await withTimeout(
-      deps.sideCall.models.completeSimple(model, {
-        systemPrompt: prompt,
-        messages: [
-          {
-            role: "user",
-            content: [{ type: "text", text: "Extract now." }],
-            timestamp: Date.now(),
-          },
-        ],
+    // The prompt lists what the owner removed, so capture does not bring it
+    // back reworded; the ledger's exact-text dedupe stays the hard rail.
+    const context = await ledger.promptContext();
+    const reply = await deps.sideCaller.complete({
+      botModelId: bot.modelId,
+      override: deps.model,
+      system: buildCapturePrompt({
+        botName: bot.name,
+        transcript: window.lines.join("\n"),
+        currentMemories: context.current,
+        removedMemories: context.removed,
+        today: new Date().toISOString().slice(0, 10),
       }),
-      CAPTURE_TIMEOUT_MS,
-    );
-    if (reply.stopReason === "error" || reply.stopReason === "aborted") {
-      logger.warn(
-        { conversationId, modelId, stopReason: reply.stopReason, errorMessage: reply.errorMessage },
-        "Memory capture model failed; window will retry",
-      );
-      return;
-    }
+      user: "Extract now.",
+      timeoutMs: CAPTURE_TIMEOUT_MS,
+      label: "Memory capture",
+      context: { conversationId },
+    });
+    // No model, or the call failed (logged): a later settle retries the window.
+    if (reply === undefined) return;
     const extraction = parseExtraction(reply);
     if (extraction === null) {
       logger.warn({ conversationId }, "Memory capture output unparseable; window will retry");
       return;
     }
-    const result = await applyExtraction(bot.id, extraction, window.through);
-    logger.info({ conversationId, ...result }, "Memory capture complete");
+    const { created, revived, superseded, skipped } = await ledger.add(extraction, {
+      source: "capture",
+      watermark: window.through,
+    });
+    logger.info(
+      { conversationId, created, revived, superseded, skipped },
+      "Memory capture complete",
+    );
   } catch (error) {
     logger.warn({ error, conversationId }, "Memory capture skipped after error");
   }

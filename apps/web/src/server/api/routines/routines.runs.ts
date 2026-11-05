@@ -18,7 +18,7 @@ import { and, asc, desc, eq, gt, notInArray, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
 import type { ChatRead } from "../bots/bots.settled";
-import { db, routineRuns, routines, type RoutineRun } from "../../db";
+import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
 import { disarmRoutine } from "./routines.chain";
@@ -252,25 +252,38 @@ async function updateRun(
   if (updated.length === 0) throw new Error(`Routine run ${id} not found`);
 }
 
-async function awaitingRuns() {
-  const rows = await db.query.routineRuns.findMany({
-    where: eq(routineRuns.status, "awaiting"),
-    orderBy: asc(routineRuns.scheduledFor),
-    with: {
-      routine: {
-        columns: { name: true, conversationId: true },
-        with: { bot: { columns: { id: true, name: true, conversationId: true } } },
-      },
-    },
-  });
+/** The conversation a run awaits (runs fired before routines had their own awaited the chat). */
+const awaitedConversation = sql<string>`coalesce(${routines.conversationId}, ${bots.conversationId})`;
+
+/** Awaiting runs, oldest slot first: every one, or only those awaiting one conversation. */
+async function awaitingRuns(conversationId?: number) {
+  const rows = await db
+    .select({
+      id: routineRuns.id,
+      routineId: routineRuns.routineId,
+      requestId: routineRuns.requestId,
+      routineName: routines.name,
+      botId: bots.id,
+      botName: bots.name,
+      conversationId: awaitedConversation,
+    })
+    .from(routineRuns)
+    .innerJoin(routines, eq(routines.id, routineRuns.routineId))
+    .innerJoin(bots, eq(bots.id, routines.botId))
+    .where(
+      and(
+        eq(routineRuns.status, "awaiting"),
+        conversationId === undefined ? undefined : eq(awaitedConversation, String(conversationId)),
+      ),
+    )
+    .orderBy(asc(routineRuns.scheduledFor));
   return rows.map((row) => ({
-    run: row,
-    // Runs fired before routines had conversations of their own awaited the chat.
-    conversationId: Number(row.routine.conversationId ?? row.routine.bot.conversationId),
+    run: { id: row.id, routineId: row.routineId, requestId: row.requestId },
+    conversationId: Number(row.conversationId),
     ref: {
       runId: row.id,
-      routineName: row.routine.name,
-      bot: { id: row.routine.bot.id, name: row.routine.bot.name },
+      routineName: row.routineName,
+      bot: { id: row.botId, name: row.botName },
     } satisfies RoutineRunRef,
   }));
 }
@@ -340,7 +353,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     conversationId: number,
     chat: ChatRead = () => rt.readChat(conversationId),
   ): Promise<number> {
-    const runs = (await awaitingRuns()).filter((row) => row.conversationId === conversationId);
+    const runs = await awaitingRuns(conversationId);
     if (runs.length === 0) return 0;
     const state = await chat();
     let resolved = 0;

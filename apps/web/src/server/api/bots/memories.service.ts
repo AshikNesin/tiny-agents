@@ -1,35 +1,20 @@
 /**
- * Memory CRUD over app.db (issue #22). The page owns every write the capture
- * pipeline doesn't: manual add, edit, delete-as-tombstone, restore. Deleting
- * is a status flip, never a row removal — the tombstone is what stops an
- * exact-text re-capture, so it must survive.
+ * The Memory page's API over the memory ledger (issue #22): list, add,
+ * edit, delete-as-tombstone, restore. Every rule (dedupe, tombstones,
+ * expiry, the budget) is the ledger's (memories.ledger.ts); this module
+ * finds the bot or the row and shapes records for the page.
  */
-import { and, asc, eq, inArray, isNotNull, lte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories } from "../../db";
 import {
   isExpired,
-  MEMORY_MAX_ACTIVE,
   type MemoryCategory,
   type MemoryRecord,
   type MemoryStatus,
 } from "./memories.domain";
+import { memoryLedger, type MemoryRow } from "./memories.ledger";
 import type { CreateMemoryDTO, UpdateMemoryDTO } from "./memories.schema";
-
-type MemoryRow = {
-  id: string;
-  botId: string;
-  text: string;
-  category: string;
-  status: string;
-  source: string;
-  confidence: number | null;
-  until: Date | null;
-  supersededById: string | null;
-  supersededAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 function toRecord(row: MemoryRow): MemoryRecord {
   return {
@@ -60,63 +45,25 @@ async function findMemory(id: string): Promise<MemoryRow> {
   return row;
 }
 
-/** Flip expired active rows to `expired` so the status column reflects reality (lazy, best-effort). */
-async function sweepExpired(botId: string): Promise<void> {
-  const now = new Date();
-  const expired = await db
-    .select({ id: memories.id })
-    .from(memories)
-    .where(
-      and(
-        eq(memories.botId, botId),
-        eq(memories.status, "active"),
-        isNotNull(memories.until),
-        lte(memories.until, now),
-      ),
-    );
-  if (expired.length > 0) {
-    await db
-      .update(memories)
-      .set({ status: "expired" })
-      .where(
-        inArray(
-          memories.id,
-          expired.map((m) => m.id),
-        ),
-      );
-  }
-}
-
 export async function list(id: string, includeArchived = false): Promise<MemoryRecord[]> {
   const botId = await findBotId(id);
-  await sweepExpired(botId);
   const statuses = includeArchived
     ? ["active", "superseded", "archived", "expired"]
     : ["active", "superseded"];
-  const rows = await db
-    .select()
-    .from(memories)
-    .where(and(eq(memories.botId, botId), inArray(memories.status, statuses)))
-    .orderBy(asc(memories.createdAt));
-  return rows.map(toRecord);
+  return (await memoryLedger(botId).history(statuses)).map(toRecord);
 }
 
+/**
+ * The owner adds a memory. Text the bot already has active returns that
+ * memory; text of a removed, archived or replaced one brings it back as new.
+ */
 export async function create(id: string, data: CreateMemoryDTO): Promise<MemoryRecord> {
   const botId = await findBotId(id);
-  const [row] = await db
-    .insert(memories)
-    .values({
-      botId,
-      text: data.text,
-      category: data.category,
-      status: "active",
-      source: "manual",
-      confidence: null,
-      until: data.until ? new Date(data.until) : null,
-    })
-    .returning();
-  await enforceBudget(botId);
-  return toRecord(row!);
+  const { rows } = await memoryLedger(botId).add(
+    [{ text: data.text, category: data.category, until: data.until ?? null }],
+    { source: "manual" },
+  );
+  return toRecord(rows[0]!);
 }
 
 export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryRecord> {
@@ -125,51 +72,20 @@ export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryR
   if (data.text !== undefined) next.text = data.text;
   if (data.category !== undefined) next.category = data.category;
   if (data.until !== undefined) next.until = data.until ? new Date(data.until) : null;
-  if (data.restore && row.status !== "deleted") {
-    next.status = "active";
-    next.supersededById = null;
-    next.supersededAt = null;
-  }
-  // Nothing to write (e.g. restoring a tombstone): the row as it is, updatedAt untouched.
-  const [updated] =
+  // Nothing to write: the row as it is, updatedAt untouched.
+  let [updated] =
     Object.keys(next).length > 0
       ? await db.update(memories).set(next).where(eq(memories.id, id)).returning()
       : [row];
   if (!updated) throw Boom.notFound("Memory not found");
-  if (data.restore) await enforceBudget(row.botId);
+  if (data.restore) updated = (await memoryLedger(row.botId).restore(id)) ?? updated;
   return toRecord(updated);
 }
 
 export async function remove(id: string): Promise<{ deleted: true }> {
-  await findMemory(id);
-  await db.update(memories).set({ status: "deleted" }).where(eq(memories.id, id));
+  const row = await findMemory(id);
+  await memoryLedger(row.botId).tombstone([id]);
   return { deleted: true };
-}
-
-/**
- * Budget: at most MEMORY_MAX_ACTIVE active rows. Overflow archives the oldest
- * active rows first — never silent truncation of new facts.
- */
-export async function enforceBudget(botId: string): Promise<number> {
-  await sweepExpired(botId);
-  const active = await db
-    .select({ id: memories.id })
-    .from(memories)
-    .where(and(eq(memories.botId, botId), eq(memories.status, "active")))
-    .orderBy(asc(memories.createdAt));
-  const overflow = active.slice(0, Math.max(0, active.length - MEMORY_MAX_ACTIVE));
-  if (overflow.length > 0) {
-    await db
-      .update(memories)
-      .set({ status: "archived" })
-      .where(
-        inArray(
-          memories.id,
-          overflow.map((m) => m.id),
-        ),
-      );
-  }
-  return active.length - overflow.length;
 }
 
 export { isExpired };

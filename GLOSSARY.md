@@ -70,8 +70,16 @@ The tool that receives a vault value: a browser field, a request header, a confi
 _Avoid_: consumer, client
 
 **Settled**:
-A conversation whose reply finished and went idle. Settling answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript and one record of when the reply started (`bots.settled.ts`). Nothing else listens for idle.
+A conversation whose reply finished and went idle. Settling resets the sender's per-turn budget, then answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript, one lookup of who is behind the conversation and one record of when the reply started. `startSettledPipeline` (`bots.settled.ts`) builds every step from the opened runtime, subscribes once, then runs each step's boot sweep. Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
+
+**Side-call**:
+A one-shot model call the app makes off the reply path: memory capture, Past chat titles. `createSideCaller(runtime).complete` (`side-call.ts`) picks the model (an override the runtime knows, else the bot's own), aborts it at its deadline, and turns any failure into no answer, logged. Callers take it as a port; faux mode has none, so it makes no side-calls.
+_Avoid_: background call, LLM call
+
+**Memory ledger**:
+One bot's memories and the rules every write follows, whether a memory comes from capture, the `remember` tool or the Memory page: one row per text (a tombstone is never re-added, except by the owner on the Memory page), supersession of the same bot's active memories only, expiry, the active budget, and the capture watermark, each write one transaction (`memoryLedger(botId)`, `memories.ledger.ts`).
+_Avoid_: memory store (that is the agent's port), memory service
 
 **YOLO mode**:
 A chat's switch (issue #151) under which every tool call that would ask the owner runs without a card, except vault uses and turns another bot or a guest started. Stored as the conversation's `tiny.yolo` document, not on the bot: a New chat starts with it off. The gate records such calls as `approval: "yolo"`.

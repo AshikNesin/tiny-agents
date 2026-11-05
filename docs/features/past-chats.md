@@ -39,8 +39,10 @@ Chats retired before this feature shipped have no link back to their bot
   by `GATEWAY_MODEL_ALLOWLIST`) falls back to the bot's own model.
 - The input is an excerpt (≤ 4,000 characters) from the start of the chat.
   The output is cleaned to one line of at most 80 characters.
-- Any failure keeps the first owner message as the title. Faux mode makes no
-  title calls.
+- The call goes through the side-caller (`side-call.ts`, see Side-call in
+  GLOSSARY.md), which picks the model, aborts it after 30 seconds and logs
+  any failure. Any failure keeps the first owner message as the title. Faux
+  mode has no side-caller, so it makes no title calls.
 
 ## Reading
 

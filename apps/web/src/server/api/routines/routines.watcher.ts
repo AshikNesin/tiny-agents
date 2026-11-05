@@ -1,23 +1,27 @@
 /**
- * Routine run completion. A run resolves when the conversation it awaits
- * settles (bots.settled.ts runs `resolveConversation` as one of its steps).
- * At boot, runs left awaiting on idle conversations resolve or are marked
- * interrupted, and armed routines whose fire job is gone are re-armed
- * (routines.chain.ts).
+ * Routine run completion, as a step of the settled pipeline (bots.settled.ts):
+ * a run resolves when the conversation it awaits settles. Its boot sweep,
+ * which the pipeline runs once it is subscribed, resolves or marks
+ * interrupted the runs left awaiting on idle conversations, and re-arms
+ * armed routines whose fire job is gone (routines.chain.ts).
  */
 import { logger } from "@groot/core/logger";
+import type { SettledStep } from "../bots/bots.settled";
 import { rearmRoutines } from "./routines.chain";
-import {
-  createRoutineRunResolver,
-  type RoutineRunResolver,
-  type RoutineRunsRuntime,
-} from "./routines.runs";
+import { createRoutineRunResolver, type RoutineRunsRuntime } from "./routines.runs";
 
-export function startRoutinesWatcher(rt: RoutineRunsRuntime): RoutineRunResolver {
+export function routineRunsStep(rt: RoutineRunsRuntime): SettledStep {
   const runs = createRoutineRunResolver(rt);
-  void runs.bootSweep().catch(() => undefined);
-  void rearmRoutines().catch((error: unknown) =>
-    logger.warn({ error }, "Failed to re-arm routines on boot"),
-  );
-  return runs;
+  return {
+    name: "routine runs",
+    run: ({ conversationId, chat }) => runs.resolveConversation(conversationId, chat),
+    async sweep() {
+      await Promise.all([
+        runs.bootSweep(),
+        rearmRoutines().catch((error: unknown) =>
+          logger.warn({ error }, "Failed to re-arm routines on boot"),
+        ),
+      ]);
+    },
+  };
 }

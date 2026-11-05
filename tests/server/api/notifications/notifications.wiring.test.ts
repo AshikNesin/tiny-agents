@@ -15,11 +15,14 @@ import { registerRedactor } from "@groot/core/notification/scrub";
 import type { ChatMessage, FinishedReply, WaitEvent } from "@tiny-agents/agent";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import { watchBot } from "../../../../apps/web/src/server/api/bots/bots.viewers";
+import { conversationOwner } from "../../../../apps/web/src/server/api/bots/bots.owner";
 import { db, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import {
   notifyRoutineRun,
   notifyVaultAlert,
+  runNotificationsStep,
   startNotifications,
+  type Notifier,
   type NotificationsWiring,
 } from "../../../../apps/web/src/server/api/notifications/notifications.wiring";
 import { createFakeRuntime, resetAppTables, seedBot, until } from "../../fixtures";
@@ -36,11 +39,6 @@ const asMessage = (reply: FinishedReply, index: number): ChatMessage => ({
   createdAt: reply.createdAt,
 });
 
-/**
- * The wait feed, plus `activity`: busy records the run's start and idle runs
- * the wiring's settled step the way bots.settled.ts would, with the replies
- * set so far as the transcript.
- */
 /**
  * The shared fake for the wait feed, plus `activity`: busy records the run's
  * start and idle runs the wiring's settled step the way bots.settled.ts
@@ -63,26 +61,30 @@ function fakeRuntime() {
       const startedAt = starts.get(conversation);
       starts.delete(conversation);
       const messages = replies.map(asMessage);
-      void wiring!.onSettled.run({
+      void runNotificationsStep(lastNotifier!).run({
         conversationId: conversation,
         chat: async () => ({ messages, busy: false, queued: [] }),
+        owner: () => conversationOwner(conversation),
         ...(startedAt !== undefined ? { startedAt } : {}),
       });
     },
   });
 }
 
+/** The notifier the test made last: the run step pushes through it. */
+let lastNotifier: Notifier | undefined;
+
 function fakeNotifier(settings: Partial<NotificationSettings> = {}) {
   const sent: Notification[] = [];
   const cancelled: string[] = [];
-  return {
+  return (lastNotifier = {
     sent,
     cancelled,
     notify: vi.fn((n: Notification) => sent.push(n)),
     cancel: vi.fn((key: string) => cancelled.push(key)),
     getSettings: async () => ({ ...DEFAULT_NOTIFICATION_SETTINGS, ...settings }),
     defineEvents: vi.fn(),
-  };
+  });
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 50));
