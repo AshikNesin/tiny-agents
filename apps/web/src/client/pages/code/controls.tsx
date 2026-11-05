@@ -1,11 +1,12 @@
 /**
- * Shared pieces of the Code page (issue #143): the composer's model and
- * reasoning pickers (searchable), the context ring, and archiving a
- * conversation with its subagents (with Undo).
+ * Shared pieces of the Code page (issue #143, ADR 0011): the composer's
+ * model, effort and permission pickers (searchable; their options come from
+ * the harness), the context ring, and archiving a thread with its subagents
+ * (with Undo).
  */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, ChevronDown, Cpu } from "lucide-react";
+import { Brain, ChevronDown, Cpu, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@groot/ui/lib/utils";
 import {
@@ -15,30 +16,32 @@ import {
 } from "../../components/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import {
-  THINKING_LEVELS,
-  conversationTitle,
-  shelleyApi,
-  type ShelleyConversation,
-  type ShelleyMessage,
-  type ShelleyModel,
-  type ThinkingLevel,
-} from "../../lib/shelley/api";
+  codeApi,
+  threadPath,
+  type ModelOption,
+  type PermissionMode,
+  type ThreadSummary,
+} from "../../lib/code/api";
 import { UsagePopover } from "./UsagePopover";
 
-let modelsPromise: Promise<ShelleyModel[]> | undefined;
-/** Shelley's models, read once per page load. */
-export function loadModels(): Promise<ShelleyModel[]> {
-  modelsPromise ??= shelleyApi.models().catch((error: unknown) => {
-    modelsPromise = undefined;
-    throw error;
-  });
-  return modelsPromise;
+const modelsByHarness = new Map<string, Promise<ModelOption[]>>();
+/** A harness's models, read once per page load. */
+export function loadModels(instanceId: string): Promise<ModelOption[]> {
+  let promise = modelsByHarness.get(instanceId);
+  if (!promise) {
+    promise = codeApi.models(instanceId).catch((error: unknown) => {
+      modelsByHarness.delete(instanceId);
+      throw error;
+    });
+    modelsByHarness.set(instanceId, promise);
+  }
+  return promise;
 }
 
 export const DEFAULT = "default";
 
-export function modelLabel(model: ShelleyModel | undefined, fallback = ""): string {
-  return model?.display_name || model?.id || fallback;
+export function modelLabel(model: ModelOption | undefined, fallback = ""): string {
+  return model?.label || model?.id || fallback;
 }
 
 function formatTokens(n: number): string {
@@ -46,49 +49,51 @@ function formatTokens(n: number): string {
   return `${Math.round(n / 1000)}k`;
 }
 
-/** Searchable model picker; `withDefault` adds "Default" (Shelley's choice). */
+/** Searchable model picker; `withDefault` adds "Default" (the harness's choice). */
 export function ModelPicker({
   models,
   value,
   onChange,
   withDefault,
 }: {
-  models: ShelleyModel[];
+  models: ModelOption[];
   value: string;
   onChange(value: string): void;
   withDefault?: boolean;
 }) {
-  const ready = models.filter((m) => m.ready || m.id === value);
-  const shelleyDefault = models.find((m) => m.is_default);
+  const ready = models.filter((m) => m.ready !== false || m.id === value);
+  const harnessDefault = models.find((m) => m.isDefault);
   const options: SearchSelectOption[] = [
     ...(withDefault
       ? [
           {
             value: DEFAULT,
             label: "Default",
-            description: shelleyDefault ? modelLabel(shelleyDefault) : "Shelley's default model",
+            description: harnessDefault ? modelLabel(harnessDefault) : "The harness's default",
             keywords: ["default"],
           },
         ]
       : []),
-    ...ready.map((m) => ({
-      value: m.id,
-      label: modelLabel(m),
-      description: [
-        m.display_name && m.display_name !== m.id ? m.id : undefined,
-        m.max_context_tokens ? `${formatTokens(m.max_context_tokens)} context` : undefined,
-        m.is_default ? "default" : undefined,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      keywords: [m.id],
-    })),
+    ...ready
+      .filter((m) => !(withDefault && m.id === DEFAULT))
+      .map((m) => ({
+        value: m.id,
+        label: modelLabel(m),
+        description: [
+          m.label && m.label !== m.id ? m.id : undefined,
+          m.contextWindow ? `${formatTokens(m.contextWindow)} context` : undefined,
+          m.isDefault ? "default" : undefined,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        keywords: [m.id],
+      })),
   ];
   const current =
     value === DEFAULT
       ? withDefault
-        ? shelleyDefault
-          ? modelLabel(shelleyDefault)
+        ? harnessDefault
+          ? modelLabel(harnessDefault)
           : "Default model"
         : "Model"
       : modelLabel(
@@ -114,7 +119,7 @@ export function ModelPicker({
   );
 }
 
-const LEVEL_LABEL: Record<ThinkingLevel, string> = {
+const LEVEL_LABEL: Record<string, string> = {
   off: "Off",
   minimal: "Minimal",
   low: "Low",
@@ -124,7 +129,7 @@ const LEVEL_LABEL: Record<ThinkingLevel, string> = {
   max: "Max",
 };
 
-const LEVEL_HINT: Partial<Record<ThinkingLevel, string>> = {
+const LEVEL_HINT: Record<string, string> = {
   off: "No extended thinking",
   low: "Quick",
   medium: "Balanced",
@@ -132,24 +137,27 @@ const LEVEL_HINT: Partial<Record<ThinkingLevel, string>> = {
   max: "As much as the model allows",
 };
 
-/** Searchable reasoning picker ("" or "default" = the model's default). */
+/** Searchable reasoning picker over the harness's levels ("default" = the model's default). */
 export function ReasoningPicker({
+  levels,
   value,
   onChange,
 }: {
+  levels: string[];
   value: string;
   onChange(value: string): void;
 }) {
+  if (levels.length === 0) return null;
   const options: SearchSelectOption[] = [
     { value: DEFAULT, label: "Auto", description: "The model's default reasoning" },
-    ...THINKING_LEVELS.map((level) => ({
+    ...levels.map((level) => ({
       value: level,
-      label: LEVEL_LABEL[level],
+      label: LEVEL_LABEL[level] ?? level,
       description: LEVEL_HINT[level],
       keywords: [level],
     })),
   ];
-  const current = value && value !== DEFAULT ? LEVEL_LABEL[value as ThinkingLevel] : undefined;
+  const current = value && value !== DEFAULT ? (LEVEL_LABEL[value] ?? value) : undefined;
   return (
     <SearchSelect
       label="Reasoning"
@@ -168,21 +176,69 @@ export function ReasoningPicker({
   );
 }
 
+const MODE_LABEL: Record<PermissionMode, string> = {
+  default: "Ask",
+  acceptEdits: "Accept edits",
+  plan: "Plan",
+  bypassPermissions: "Bypass",
+};
+
+const MODE_HINT: Record<PermissionMode, string> = {
+  default: "Ask before edits and commands",
+  acceptEdits: "Edit files without asking; ask before commands",
+  plan: "Read and plan only; no edits",
+  bypassPermissions: "Never ask (YOLO)",
+};
+
+/** Permission mode, for harnesses that enforce one (never offered otherwise). */
+export function PermissionPicker({
+  modes,
+  value,
+  onChange,
+}: {
+  modes: PermissionMode[];
+  value: PermissionMode;
+  onChange(value: PermissionMode): void;
+}) {
+  if (modes.length === 0) return null;
+  return (
+    <SearchSelect
+      label="Permissions"
+      value={value}
+      onValueChange={(v) => onChange(v as PermissionMode)}
+      options={modes.map((mode) => ({
+        value: mode,
+        label: MODE_LABEL[mode],
+        description: MODE_HINT[mode],
+        keywords: [mode],
+      }))}
+      side="top"
+      contentClassName="w-72"
+      data-testid="code-permission"
+    >
+      <ShieldCheck className="opacity-70" />
+      <span className="hidden truncate @[16rem]:inline">{MODE_LABEL[value]}</span>
+      <ChevronDown className="opacity-50" />
+    </SearchSelect>
+  );
+}
+
 /** How full the context window is; click for the usage popup (compaction
  *  lives there, as in Shelley's own UI). */
 export function ContextRing({
   used,
   max,
   onCompact,
-  conversationId,
-  messages,
+  threadId,
+  usage,
   hasSubagents,
 }: {
   used: number;
   max?: number;
-  onCompact(): void;
-  conversationId?: string;
-  messages: ShelleyMessage[];
+  onCompact?: () => void;
+  threadId?: string;
+  /** The harness can report usage in detail (the popup). */
+  usage: boolean;
   hasSubagents?: boolean;
 }) {
   if (!max || !used) return null;
@@ -190,77 +246,75 @@ export function ContextRing({
   const pct = Math.round(ratio * 100);
   const r = 6;
   const circumference = 2 * Math.PI * r;
+  const ring = (
+    <button
+      type="button"
+      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%).${usage ? " Click for usage." : ""}`}
+      aria-label={`Context ${pct}% full${usage ? ". Usage" : ""}`}
+      aria-haspopup={usage ? "dialog" : undefined}
+      className={cn(searchSelectTriggerClass, "tabular-nums")}
+      data-testid="code-context"
+    >
+      <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
+        <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
+        <circle
+          cx="8"
+          cy="8"
+          r={r}
+          fill="none"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - ratio)}
+          className={cn(
+            pct > 85 ? "stroke-destructive" : pct > 65 ? "stroke-warning" : "stroke-foreground/70",
+          )}
+        />
+      </svg>
+      <span className="hidden @[20rem]:inline">{pct}%</span>
+    </button>
+  );
+  if (!usage || !threadId) return ring;
   return (
     <UsagePopover
       used={used}
       max={max}
-      conversationId={conversationId}
-      messages={messages}
+      threadId={threadId}
       hasSubagents={Boolean(hasSubagents)}
       onCompact={onCompact}
     >
-      <button
-        type="button"
-        title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%). Click for usage.`}
-        aria-label={`Context ${pct}% full. Usage`}
-        aria-haspopup="dialog"
-        className={cn(searchSelectTriggerClass, "tabular-nums")}
-        data-testid="code-context"
-      >
-        <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>
-          <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
-          <circle
-            cx="8"
-            cy="8"
-            r={r}
-            fill="none"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - ratio)}
-            className={cn(
-              pct > 85
-                ? "stroke-destructive"
-                : pct > 65
-                  ? "stroke-warning"
-                  : "stroke-foreground/70",
-            )}
-          />
-        </svg>
-        <span className="hidden @[20rem]:inline">{pct}%</span>
-      </button>
+      {ring}
     </UsagePopover>
   );
 }
 
 /**
- * Archive (or restore) a conversation with its subagents, with Undo.
- * `onArchived` runs after an archive (the view leaves the conversation).
+ * Archive (or restore) a thread with its subagents, with Undo. `leave`
+ * navigates away from it after an archive.
  */
 export function useArchive() {
   const navigate = useNavigate();
   return useCallback(
     async (
-      row: Pick<ShelleyConversation, "conversation_id" | "slug">,
+      row: Pick<ThreadSummary, "id" | "title">,
       archive: boolean,
       options: { leave?: boolean } = {},
     ) => {
-      const id = row.conversation_id;
-      const title = conversationTitle(row);
+      const { id, title } = row;
       try {
-        const result = await shelleyApi.action(id, archive ? "archive" : "unarchive");
-        const moved = result?.subagents?.length ?? 0;
+        const result = await codeApi.archive(id, archive);
+        const moved = result?.moved?.length ?? 0;
         const what = `“${title}”${moved ? ` and ${moved} ${moved === 1 ? "subagent" : "subagents"}` : ""}`;
         if (archive && options.leave) navigate("/code");
         toast.success(archive ? `Archived ${what}` : `Restored ${what}`, {
           action: {
             label: "Undo",
             onClick: () =>
-              void shelleyApi
-                .action(id, archive ? "unarchive" : "archive")
+              void codeApi
+                .archive(id, !archive)
                 .catch((error: unknown) => toast.error(errorMessage(error, "Could not undo.")))
                 .then(() => {
-                  if (archive && options.leave) navigate(`/code/${id}`);
+                  if (archive && options.leave) navigate(threadPath(id));
                 }),
           },
         });

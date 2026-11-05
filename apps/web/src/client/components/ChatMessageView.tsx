@@ -26,7 +26,7 @@ import {
 } from "../lib/owner-actions";
 import { BotAvatar } from "./BotAvatar";
 import { BotHandoff } from "./BotHandoff";
-import { ShelleyHandoffCard } from "./ShelleyHandoffCard";
+import { CodeHandoffCard } from "./CodeHandoffCard";
 import {
   CodeBlock,
   CodeBlockContent,
@@ -726,9 +726,9 @@ function ToolRow({
     return <BotHandoff call={call} botName={botName} />;
   }
 
-  // shelley_start (issue #143): the coding hand-off, linking to the Code page.
-  if (call.shelley) {
-    return <ShelleyHandoffCard handoff={call.shelley} />;
+  // code_start / shelley_start (issue #143): the coding hand-off, linking to the Code page.
+  if (call.code) {
+    return <CodeHandoffCard handoff={call.code} />;
   }
 
   const line = (
@@ -809,7 +809,7 @@ function foldable(call: ChatToolCall): boolean {
   return (
     FINISHED_TOOL_STATUSES.has(call.status) &&
     !call.questions &&
-    !call.shelley &&
+    !call.code &&
     call.name !== "message_bot"
   );
 }

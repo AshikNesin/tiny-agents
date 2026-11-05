@@ -128,6 +128,8 @@ export function collect(): {
     events,
     listener(event) {
       events.push(event);
+      // A copy: matching waiters are removed while iterating.
+      // eslint-disable-next-line unicorn/no-useless-spread
       for (const waiter of [...waiters]) {
         if (waiter.predicate(event)) {
           waiters.splice(waiters.indexOf(waiter), 1);

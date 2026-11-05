@@ -242,6 +242,8 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     repoRoot: row.git_repo_root ?? null,
     gitCommit: row.git_commit ?? null,
     gitSubject: row.git_subject ?? null,
+    // Shelley's UI addresses conversations by slug.
+    ...(row.slug ? { externalUrl: `${url}/c/${encodeURIComponent(row.slug)}` } : {}),
   });
 
   const rowsOf = (list: unknown): ShelleyRow[] => (Array.isArray(list) ? list : []);
@@ -578,11 +580,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       return { nativeId: forked.conversation_id };
     },
 
-    externalUrl(thread) {
-      // Shelley's UI addresses conversations by slug.
-      if (!thread.title || thread.title === thread.nativeId) return undefined;
-      return `${url}/c/${encodeURIComponent(thread.title)}`;
-    },
+    externalUrl: (thread) => thread.externalUrl,
 
     async send(nativeId, input: SendInput) {
       // While a turn runs Shelley injects the message into it (steering);
@@ -676,6 +674,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
     async findFiles(dir, query, content) {
       const result = await json<{
+        search_dir?: string;
         matches?: Array<{ path: string; is_dir?: boolean; line?: number; text?: string }>;
       }>(
         `/find-files${qs({
@@ -685,8 +684,18 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
           include_dirs: content ? undefined : "true",
         })}`,
       );
+      // Shelley answers relative to the directory it searched (a typed
+      // `src/` narrows it); the contract answers relative to `dir`.
+      const searched = (result.search_dir ?? dir).replace(/\/$/, "");
+      const base = dir.replace(/\/$/, "");
+      const prefix =
+        searched === base
+          ? ""
+          : searched.startsWith(`${base}/`)
+            ? `${searched.slice(base.length + 1)}/`
+            : `${searched}/`;
       return (result.matches ?? []).map((m) => ({
-        path: m.path,
+        path: `${prefix}${m.path}`,
         ...(m.is_dir ? { isDir: true } : {}),
         ...(m.line !== undefined ? { line: m.line } : {}),
         ...(m.text !== undefined ? { text: m.text } : {}),

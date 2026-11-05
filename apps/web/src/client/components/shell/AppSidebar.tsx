@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { unreadCount, useShelleyStore } from "../../store/shelley";
+import { unreadCount, useCodeStore } from "../../store/code";
 import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
 import { useIsGuest } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
@@ -144,9 +144,9 @@ export function AppSidebar() {
   const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
   const pointerOnFeedback = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
-  // Code (issue #143) shows only with Shelley configured, with its unread count.
-  const shelleyConfigured = useShelleyStore((s) => s.configured === true);
-  const codeUnread = useShelleyStore((s) => unreadCount(s.conversations));
+  // Code (issue #143) shows only with a coding agent configured, with its unread count.
+  const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
+  const codeUnread = useCodeStore((s) => unreadCount(s.threads));
   // A page that lives in the account menu still shows where you are: the
   // account row reads as selected while one of them is open.
   const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
@@ -224,7 +224,7 @@ export function AppSidebar() {
           className={cn("space-y-0.5 px-2.5 pb-2", rail && "md:flex md:flex-col md:items-center")}
         >
           {primaryNav
-            .filter((item) => item.to !== "/code" || shelleyConfigured)
+            .filter((item) => item.to !== "/code" || codeConfigured)
             .map((item) => (
               <NavRow
                 key={item.to}

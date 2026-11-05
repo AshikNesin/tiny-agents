@@ -1,14 +1,15 @@
 /**
- * Code (issue #143): a first-class workspace for Shelley, the owner's coding
- * agent. tiny-agents runs no agent loop for it; everything here is Shelley's
- * own API through the app's curated proxy — every conversation and subagent,
- * live transcripts, steering, and the diff of what changed.
+ * Code (issue #143, ADR 0011): one workspace for the owner's coding agents
+ * ("harnesses": Shelley, Claude Code). tiny-agents runs no agent loop; each
+ * harness is driven through its adapter on the server — every thread and
+ * subagent, live transcripts, steering, approvals and the diff of what
+ * changed — and the page shows only what a thread's harness can do.
  *
- * Layout: list | conversation | changes on wide screens (the list steps
- * aside for Changes until 2xl); one column at a time on phones (`/code` →
+ * Layout: list | thread | changes on wide screens (the list steps aside for
+ * Changes until 2xl); one column at a time on phones (`/code` →
  * `/code/new` or `/code/:id` → `/code/:id/changes`).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Code2, Menu, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -17,8 +18,8 @@ import { cn } from "@groot/ui/lib/utils";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { shelleyApi } from "../../lib/shelley/api";
-import { useShelleyStore } from "../../store/shelley";
+import { codeApi, instanceOf, normalizeThreadId, threadPath } from "../../lib/code/api";
+import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
@@ -27,11 +28,11 @@ import { NewConversation } from "./NewConversation";
 function SlugRedirect({ slug }: { slug: string }) {
   const navigate = useNavigate();
   useEffect(() => {
-    shelleyApi
-      .bySlug(slug)
-      .then((c) => navigate(`/code/${c.conversation_id}`, { replace: true }))
+    codeApi
+      .byTitle(slug)
+      .then((t) => navigate(threadPath(t.id), { replace: true }))
       .catch(() => {
-        toast.error(`No Shelley conversation “${slug}”.`);
+        toast.error(`No thread “${slug}”.`);
         navigate("/code", { replace: true });
       });
   }, [slug, navigate]);
@@ -43,39 +44,54 @@ function SlugRedirect({ slug }: { slug: string }) {
 }
 
 export function CodePage() {
-  const { conversationId, slug } = useParams();
+  const { conversationId: rawId, slug } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { openNav } = useShellConfig();
-  const configured = useShelleyStore((s) => s.configured);
-  const connection = useShelleyStore((s) => s.connection);
-  const conversations = useShelleyStore((s) => s.conversations);
-  const publicUrl = useShelleyStore((s) => s.publicUrl);
+  const harnessList = useCodeStore((s) => s.harnesses);
+  const statuses = useCodeStore((s) => s.statuses);
+  const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
-  // The open conversation's directory, for Changes even when it is not in the
-  // active list (archived, or not in the snapshot yet).
+  // The open thread's directory, for Changes even when it is not in the
+  // active list (archived, or not in the list yet).
   const [viewCwd, setViewCwd] = useState<string | null>(null);
-  const changesOpen = Boolean(conversationId) && pathname.endsWith("/changes");
-  // `/code/new` is the new-conversation screen on phones (`/code` is the list there).
+  const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
+  const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
+  // `/code/new` is the new-thread screen on phones (`/code` is the list there).
   const composing = pathname === "/code/new";
-  const rows = conversations ?? [];
-  const row = rows.find((r) => r.conversation_id === conversationId);
+  const rows = useMemo(() => threads ?? [], [threads]);
+  const row = rows.find((r) => r.id === threadId);
   const cwd = row?.cwd ?? viewCwd;
+  // Live connection state over the static description.
+  const harnesses = useMemo(
+    () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
+    [harnessList, statuses],
+  );
+  const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
+
+  // Links from before the harness layer (`/code/<shelley id>`) move to the new id.
+  useEffect(() => {
+    if (rawId && !decodeURIComponent(rawId).includes(":")) {
+      navigate(threadPath(normalizeThreadId(rawId), changesOpen ? "/changes" : ""), {
+        replace: true,
+      });
+    }
+  }, [rawId, changesOpen, navigate]);
 
   const toggleChanges = useCallback(() => {
-    if (!conversationId) return;
-    navigate(changesOpen ? `/code/${conversationId}` : `/code/${conversationId}/changes`);
-  }, [conversationId, changesOpen, navigate]);
+    if (!threadId) return;
+    navigate(changesOpen ? threadPath(threadId) : threadPath(threadId, "/changes"));
+  }, [threadId, changesOpen, navigate]);
 
-  // ⌘. stops Shelley, ⌘⇧D toggles Changes.
+  // ⌘. stops the agent, ⌘⇧D toggles Changes.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || !conversationId) return;
+      if (!(event.metaKey || event.ctrlKey) || !threadId) return;
       if (event.key === ".") {
         event.preventDefault();
-        shelleyApi
-          .action(conversationId, "cancel")
-          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop Shelley.")));
+        codeApi
+          .interrupt(threadId)
+          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop it.")));
       } else if (event.shiftKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
         toggleChanges();
@@ -83,10 +99,10 @@ export function CodePage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [conversationId, toggleChanges]);
+  }, [threadId, toggleChanges]);
 
   if (slug) return <SlugRedirect slug={slug} />;
-  if (configured === false) {
+  if (harnessList !== null && harnessList.length === 0) {
     return (
       <div className="mx-auto max-w-xl p-6">
         <div className="mb-6 flex items-center gap-2 md:hidden">
@@ -98,55 +114,62 @@ export function CodePage() {
         </div>
         <EmptyState
           icon={Code2}
-          title="Shelley is not connected"
+          title="No coding agent is connected"
           description={
             <>
               Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for example{" "}
-              <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and restart. See
-              docs/features/code.md.
+              <code className={monoClass}>http://my-vm:9000</code> over Tailscale), or turn on the
+              Claude plan on the sandbox (
+              <code className={monoClass}>CLAUDE_CODE_ENGINE_ENABLED</code>
+              ), and restart. See docs/features/code.md.
             </>
           }
         />
       </div>
     );
   }
-  if (configured === null) {
+  if (harnessList === null) {
     return (
       <div className="flex h-dvh items-center justify-center">
         <Spinner />
       </div>
     );
   }
-  if (pathname.endsWith("/changes") && !conversationId) return <Navigate to="/code" replace />;
+  if (pathname.endsWith("/changes") && !threadId) return <Navigate to="/code" replace />;
 
-  const offline = connection.state !== "connected";
+  const offline = harnesses.filter((h) => h.status.state !== "connected");
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      {offline && (
+      {offline.map((h) => (
         <div
+          key={h.id}
           className={cn(
             "border-border flex items-center gap-2 border-b px-4 py-1.5 text-xs",
-            connection.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
+            h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
           )}
           role="status"
           data-testid="code-connection"
         >
-          {connection.state === "reconnecting" ? (
+          {h.status.state === "reconnecting" ? (
             <TriangleAlert className="size-3.5" />
-          ) : (
+          ) : h.status.state === "connecting" ? (
             <Spinner className="size-3.5" />
+          ) : (
+            <TriangleAlert className="size-3.5" />
           )}
-          {connection.state === "reconnecting"
-            ? `Shelley unreachable${connection.error ? `: ${connection.error}` : ""} — retrying…`
-            : "Connecting to Shelley…"}
+          {h.status.state === "reconnecting"
+            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""} — retrying…`
+            : h.status.state === "connecting"
+              ? `Connecting to ${h.label}…`
+              : `${h.label}: ${h.status.detail ?? "not ready"}`}
         </div>
-      )}
+      ))}
       <div className="flex min-h-0 flex-1">
         <aside
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
-            conversationId || composing ? "hidden" : "flex",
+            threadId || composing ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
             changesOpen ? "2xl:flex" : "md:flex",
           )}
@@ -159,13 +182,13 @@ export function CodePage() {
             )}
             <span className="font-medium">Code</span>
           </div>
-          <ConversationList conversations={conversations} activeId={conversationId} />
+          <ConversationList threads={threads} harnesses={harnesses} activeId={threadId} />
         </aside>
 
         <main
           className={cn(
             "min-w-0 flex-1 flex-col",
-            conversationId
+            threadId
               ? changesOpen
                 ? "hidden lg:flex"
                 : "flex"
@@ -174,36 +197,44 @@ export function CodePage() {
                 : "hidden md:flex",
           )}
         >
-          {conversationId ? (
+          {threadId && harness ? (
             <ConversationView
-              key={conversationId}
-              id={conversationId}
+              key={threadId}
+              id={threadId}
+              harness={harness}
               rows={rows}
-              publicUrl={publicUrl}
+              externalUrl={row?.externalUrl}
               changesOpen={changesOpen}
               onToggleChanges={toggleChanges}
               insert={insert}
               onCwd={setViewCwd}
             />
+          ) : threadId ? (
+            <EmptyState
+              icon={Code2}
+              title="This coding agent is not connected"
+              description="The thread belongs to a harness this server no longer runs."
+            />
           ) : (
-            <NewConversation rows={rows} />
+            <NewConversation rows={rows} harnesses={harnesses} />
           )}
         </main>
 
-        {conversationId && changesOpen && cwd && (
+        {threadId && harness && changesOpen && cwd && harness.capabilities.workspace.diffs && (
           <section
             className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
             aria-label="Changes"
           >
             <ChangesPanel
+              instanceId={harness.id}
               cwd={cwd}
-              refreshKey={`${row?.working}:${row?.max_sequence_id}`}
+              refreshKey={`${row?.working}:${row?.cursor}`}
               onClose={toggleChanges}
               onComment={(text) => {
                 setInsert({ text, nonce: Date.now() });
-                // On phones the composer is on the conversation screen.
+                // On phones the composer is on the thread screen.
                 if (window.matchMedia("(max-width: 1023px)").matches)
-                  navigate(`/code/${conversationId}`);
+                  navigate(threadPath(threadId));
               }}
             />
           </section>

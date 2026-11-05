@@ -33,6 +33,8 @@ export interface ThreadSummary {
   gitCommit?: string | null;
   gitSubject?: string | null;
   permissionMode?: PermissionMode | null;
+  /** The thread in the harness's own UI ("Open in Shelley"), when it has one. */
+  externalUrl?: string;
   /** App-decorated: started, opened or handed off here. */
   followed?: boolean;
   /** App-decorated: its turn ended after the owner last looked. */

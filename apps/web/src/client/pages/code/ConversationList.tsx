@@ -1,9 +1,10 @@
 /**
- * Left column of the Code page (issue #143): every Shelley conversation —
- * working now on top, then recent, archived on a toggle — with subagents
- * nested under their parent, unread dots, a repository filter and search.
- * Hovering a row offers Archive (Restore in the archived view), which moves
- * the conversation together with its subagents, with Undo.
+ * Left column of the Code page (issue #143, ADR 0011): every thread of every
+ * harness — working now on top, then recent, archived on a toggle — with
+ * subagents nested under their parent, unread dots, a harness and a
+ * repository filter, and search. Hovering a row offers Archive (Restore in
+ * the archived view) when its harness archives, which moves the thread
+ * together with its subagents, with Undo.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -14,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderGit2,
+  Layers,
   Search,
   SquarePen,
 } from "lucide-react";
@@ -24,19 +26,21 @@ import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
 import {
-  conversationTitle,
-  shelleyApi,
+  codeApi,
   shortPath,
-  type ShelleyConversation,
-} from "../../lib/shelley/api";
-import { buildSections, buildTree, repositories, type ListNode } from "../../lib/shelley/list";
+  threadPath,
+  type HarnessInfo,
+  type ThreadSummary,
+} from "../../lib/code/api";
+import { buildSections, buildTree, repositories, type ListNode } from "../../lib/code/list";
 import { useArchive } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const ALL_REPOS = "__all__";
+const ALL_HARNESSES = "__all__";
 
 function contains(node: ListNode, id: string): boolean {
-  return node.row.conversation_id === id || node.children.some((child) => contains(child, id));
+  return node.row.id === id || node.children.some((child) => contains(child, id));
 }
 
 function countDescendants(node: ListNode): number {
@@ -49,16 +53,22 @@ function Row({
   depth,
   archivedView,
   onArchive,
+  canArchive,
+  labelOf,
 }: {
   node: ListNode;
   activeId?: string;
   depth: number;
   archivedView: boolean;
   onArchive(node: ListNode): void;
+  canArchive(row: ThreadSummary): boolean;
+  /** The harness label, when several harnesses share the list. */
+  labelOf(row: ThreadSummary): string | undefined;
 }) {
   const [open, setOpen] = useState(true);
   const { row } = node;
-  const isActive = row.conversation_id === activeId;
+  const isActive = row.id === activeId;
+  const label = depth === 0 ? labelOf(row) : undefined;
   const nested = countDescendants(node);
   return (
     <li>
@@ -83,7 +93,7 @@ function Row({
           <span className="w-5 shrink-0" />
         )}
         <Link
-          to={`/code/${row.conversation_id}`}
+          to={threadPath(row.id)}
           aria-current={isActive ? "page" : undefined}
           title={row.preview || row.cwd || undefined}
           className="flex h-8 min-w-0 flex-1 items-center rounded-lg pr-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -98,8 +108,9 @@ function Row({
                 (node.unread || isActive) && "text-foreground font-medium",
               )}
             >
-              {conversationTitle(row)}
+              {row.title}
             </span>
+            {label && <span className={cn(metaLabelClass, "shrink-0")}>{label}</span>}
             {/* The status / time slot makes room for the archive button on hover. */}
             <span className="flex shrink-0 items-center gap-1.5 pointer-fine:group-focus-within/row:invisible pointer-fine:group-hover/row:invisible">
               {row.working ? (
@@ -108,38 +119,40 @@ function Row({
                 <span className="bg-primary size-2 shrink-0 rounded-full" aria-label="Unread" />
               ) : null}
               <span className="text-muted-foreground text-xs tabular-nums">
-                {shortAgo(row.updated_at)}
+                {shortAgo(row.updatedAt)}
               </span>
             </span>
           </span>
         </Link>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => onArchive(node)}
-          aria-label={
-            archivedView ? `Restore ${conversationTitle(row)}` : `Archive ${conversationTitle(row)}`
-          }
-          title={
-            (archivedView ? "Restore" : "Archive") +
-            (nested ? ` with ${nested} ${nested === 1 ? "subagent" : "subagents"}` : "")
-          }
-          className="text-muted-foreground hover:text-foreground hover:bg-background absolute top-1 right-1 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:hidden"
-          data-testid="code-row-archive"
-        >
-          {archivedView ? <ArchiveRestore /> : <Archive />}
-        </Button>
+        {canArchive(row) && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onArchive(node)}
+            aria-label={archivedView ? `Restore ${row.title}` : `Archive ${row.title}`}
+            title={
+              (archivedView ? "Restore" : "Archive") +
+              (nested ? ` with ${nested} ${nested === 1 ? "subagent" : "subagents"}` : "")
+            }
+            className="text-muted-foreground hover:text-foreground hover:bg-background absolute top-1 right-1 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:hidden"
+            data-testid="code-row-archive"
+          >
+            {archivedView ? <ArchiveRestore /> : <Archive />}
+          </Button>
+        )}
       </div>
       {open && node.children.length > 0 && (
         <ul className="mt-px space-y-px">
           {node.children.map((child) => (
             <Row
-              key={child.row.conversation_id}
+              key={child.row.id}
               node={child}
               activeId={activeId}
               depth={depth + 1}
               archivedView={archivedView}
               onArchive={onArchive}
+              canArchive={canArchive}
+              labelOf={labelOf}
             />
           ))}
         </ul>
@@ -158,6 +171,8 @@ function Section({
   activeId?: string;
   archivedView: boolean;
   onArchive(node: ListNode): void;
+  canArchive(row: ThreadSummary): boolean;
+  labelOf(row: ThreadSummary): string | undefined;
 }) {
   if (nodes.length === 0) return null;
   return (
@@ -165,7 +180,7 @@ function Section({
       <h2 className={cn(metaLabelClass, "px-3 pt-2 pb-1")}>{title}</h2>
       <ul className="space-y-px">
         {nodes.map((node) => (
-          <Row key={node.row.conversation_id} node={node} depth={0} {...rest} />
+          <Row key={node.row.id} node={node} depth={0} {...rest} />
         ))}
       </ul>
     </section>
@@ -173,22 +188,38 @@ function Section({
 }
 
 export function ConversationList({
-  conversations,
+  threads,
+  harnesses,
   activeId,
 }: {
-  conversations: ShelleyConversation[] | null;
+  threads: ThreadSummary[] | null;
+  harnesses: HarnessInfo[];
   activeId?: string;
 }) {
   const [view, setView] = useState<"active" | "archived">("active");
-  const [archived, setArchived] = useState<ShelleyConversation[] | null>(null);
+  const [archived, setArchived] = useState<ThreadSummary[] | null>(null);
   const [repo, setRepo] = useState<string>(ALL_REPOS);
+  const [harnessFilter, setHarnessFilter] = useState<string>(ALL_HARNESSES);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ShelleyConversation[] | null>(null);
+  const [results, setResults] = useState<ThreadSummary[] | null>(null);
+  const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
+  const canArchive = useCallback(
+    (row: ThreadSummary) => Boolean(caps.get(row.instanceId)?.threads.archive),
+    [caps],
+  );
+  const labelOf = useCallback(
+    (row: ThreadSummary) =>
+      harnesses.length > 1 && harnessFilter === ALL_HARNESSES
+        ? harnesses.find((h) => h.id === row.instanceId)?.label
+        : undefined,
+    [harnesses, harnessFilter],
+  );
+  const canSearch = harnesses.some((h) => h.capabilities.threads.search);
 
   useEffect(() => {
     if (view !== "archived") return;
     let cancelled = false;
-    shelleyApi
+    codeApi
       .list("archived")
       .then((rows) => !cancelled && setArchived(rows))
       .catch(() => !cancelled && setArchived([]));
@@ -203,9 +234,16 @@ export function ConversationList({
       setResults(null);
       return;
     }
+    if (!canSearch) {
+      // No harness searches: filter the list by title.
+      const needle = q.toLowerCase();
+      const source = view === "archived" ? archived : threads;
+      setResults((source ?? []).filter((t) => t.title.toLowerCase().includes(needle)));
+      return;
+    }
     let cancelled = false;
     const timer = setTimeout(() => {
-      shelleyApi
+      codeApi
         .search(q, view === "archived")
         .then((rows) => !cancelled && setResults(Array.isArray(rows) ? rows : []))
         .catch(() => !cancelled && setResults([]));
@@ -214,7 +252,7 @@ export function ConversationList({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, view]);
+  }, [query, view, canSearch, threads, archived]);
 
   const archive = useArchive();
   const onArchive = useCallback(
@@ -227,25 +265,35 @@ export function ConversationList({
         // The archived list is read on demand: drop what was restored.
         const gone = new Set<string>();
         const collect = (n: ListNode) => {
-          gone.add(n.row.conversation_id);
+          gone.add(n.row.id);
           n.children.forEach(collect);
         };
         collect(node);
-        setArchived((prev) => prev?.filter((r) => !gone.has(r.conversation_id)) ?? prev);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
       });
     },
     [archive, view, activeId],
   );
 
-  const rows = view === "archived" ? archived : conversations;
+  const rows = view === "archived" ? archived : threads;
   const repos = useMemo(() => repositories(rows ?? []), [rows]);
   const sections = useMemo(
-    () => buildSections(rows ?? [], { repo: repo === ALL_REPOS ? null : repo }),
-    [rows, repo],
+    () =>
+      buildSections(rows ?? [], {
+        repo: repo === ALL_REPOS ? null : repo,
+        instanceId: harnessFilter === ALL_HARNESSES ? null : harnessFilter,
+      }),
+    [rows, repo, harnessFilter],
   );
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
 
-  const listProps = { activeId, archivedView: view === "archived", onArchive };
+  const listProps = {
+    activeId,
+    archivedView: view === "archived",
+    onArchive,
+    canArchive,
+    labelOf,
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -258,17 +306,11 @@ export function ConversationList({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Search conversations"
-            aria-label="Search conversations"
+            placeholder="Search threads"
+            aria-label="Search threads"
           />
         </InputGroup>
-        <Button
-          asChild
-          size="icon"
-          variant="ghost"
-          aria-label="New conversation"
-          title="New conversation"
-        >
+        <Button asChild size="icon" variant="ghost" aria-label="New thread" title="New thread">
           <Link to="/code/new" data-testid="code-new">
             <SquarePen />
           </Link>
@@ -286,6 +328,28 @@ export function ConversationList({
           <ToggleGroupItem value="archived">Archived</ToggleGroupItem>
         </ToggleGroup>
         <span className="flex-1" />
+        {harnesses.length > 1 && (
+          <SearchSelect
+            label="Coding agent"
+            value={harnessFilter}
+            onValueChange={setHarnessFilter}
+            align="end"
+            triggerClassName="max-w-32"
+            options={[
+              { value: ALL_HARNESSES, label: "All agents" },
+              ...harnesses.map((h) => ({ value: h.id, label: h.label })),
+            ]}
+            data-testid="code-harness-filter"
+          >
+            <Layers className="opacity-70" />
+            <span className="truncate">
+              {harnessFilter === ALL_HARNESSES
+                ? "All"
+                : (harnesses.find((h) => h.id === harnessFilter)?.label ?? harnessFilter)}
+            </span>
+            <ChevronDown className="opacity-50" />
+          </SearchSelect>
+        )}
         {repos.length > 1 && (
           <SearchSelect
             label="Repository"
@@ -311,7 +375,7 @@ export function ConversationList({
           </SearchSelect>
         )}
       </div>
-      <nav aria-label="Shelley conversations" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav aria-label="Code threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {searchTree ? (
           searchTree.length ? (
             <Section title="Search results" nodes={searchTree} {...listProps} />
@@ -324,9 +388,7 @@ export function ConversationList({
           </div>
         ) : rows.length === 0 ? (
           <p className="text-muted-foreground p-3 text-sm">
-            {view === "archived"
-              ? "No archived conversations."
-              : "No conversations yet. Start one."}
+            {view === "archived" ? "No archived threads." : "No threads yet. Start one."}
           </p>
         ) : (
           <>

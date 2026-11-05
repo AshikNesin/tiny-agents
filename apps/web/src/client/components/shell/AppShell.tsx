@@ -18,8 +18,8 @@ import { useTheme } from "@groot/shell/lib/theme";
 import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { useShelleyStore } from "../../store/shelley";
-import { conversationTitle } from "../../lib/shelley/api";
+import { useCodeStore } from "../../store/code";
+import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../lib/bots-api";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
@@ -51,15 +51,15 @@ export function AppShell() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
 
-  // Shelley (issue #143): one app-wide list stream (sidebar badge, ⌘K, Code page).
-  const connectShelley = useShelleyStore((s) => s.connect);
-  const disconnectShelley = useShelleyStore((s) => s.disconnect);
-  const shelleyConversations = useShelleyStore((s) => s.conversations);
-  const shelleyConfigured = useShelleyStore((s) => s.configured === true);
+  // Code (issue #143, ADR 0011): one app-wide list stream (sidebar badge, ⌘K, Code page).
+  const connectCode = useCodeStore((s) => s.connect);
+  const disconnectCode = useCodeStore((s) => s.disconnect);
+  const codeThreads = useCodeStore((s) => s.threads);
+  const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
   useEffect(() => {
-    connectShelley();
-    return () => disconnectShelley();
-  }, [connectShelley, disconnectShelley]);
+    connectCode();
+    return () => disconnectCode();
+  }, [connectCode, disconnectCode]);
 
   const loadPeople = usePeopleStore((s) => s.load);
   const guest = useIsGuest();
@@ -102,37 +102,37 @@ export function AppShell() {
               })),
             },
           ];
-    // Top-level Shelley conversations, newest first (subagents open from their parent).
+    // Top-level Code threads, newest first (subagents open from their parent).
     const codeGroup: CommandGroupEntry[] =
-      shelleyConversations && shelleyConversations.length > 0
+      codeThreads && codeThreads.length > 0
         ? [
             {
               heading: "Code",
-              items: shelleyConversations
-                .filter((c) => !c.parent_conversation_id)
-                .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+              items: codeThreads
+                .filter((c) => !c.parentId)
+                .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
                 .slice(0, 30)
                 .map((c) => ({
-                  id: `code-${c.conversation_id}`,
-                  label: conversationTitle(c),
+                  id: `code-${c.id}`,
+                  label: c.title,
                   icon: Code2,
-                  onSelect: () => navigate(`/code/${c.conversation_id}`),
+                  onSelect: () => navigate(threadPath(c.id)),
                 })),
             },
           ]
         : [];
     const navItems = (guest ? guestNav(APP_NAV) : APP_NAV).filter(
-      (item) => item.to !== "/code" || shelleyConfigured,
+      (item) => item.to !== "/code" || codeConfigured,
     );
     return [
       {
         heading: "Actions",
         items: [
           ...(guest ? [] : [{ label: "New bot", icon: Plus, onSelect: openCreateBot }]),
-          ...(shelleyConfigured
+          ...(codeConfigured
             ? [
                 {
-                  label: "New Shelley conversation",
+                  label: "New coding thread",
                   icon: Code2,
                   onSelect: () => navigate("/code"),
                 },
@@ -190,17 +190,7 @@ export function AppShell() {
         ],
       },
     ];
-  }, [
-    bots,
-    navigate,
-    openCreateBot,
-    theme,
-    setTheme,
-    logout,
-    shelleyConversations,
-    shelleyConfigured,
-    guest,
-  ]);
+  }, [bots, navigate, openCreateBot, theme, setTheme, logout, codeThreads, codeConfigured, guest]);
 
   const onSaved = (bot: BotRow) => {
     // The saved row is the full bot: the open chat and the next edit read it.
