@@ -78,6 +78,11 @@ The owner decided (issue #157):
   the sandbox user, the same user that holds `~/.claude` and the bots'
   files (ADR 0010 already notes this). Accept-edits never covers commands:
   those still ask unless the owner switches the thread to bypass.
+- **Settings files apply.** Coding sessions load Claude Code's setting
+  sources (`user`, `project`, `local`) so a repo's `CLAUDE.md` and settings
+  work. That includes any `env` those files set, which the worker's own
+  environment checks do not see. A repo you point a thread at is trusted the
+  way Claude Code trusts it in a terminal.
 - **Shared directories.** Two threads in one working directory edit the
   same files. The new-thread screen warns when another thread is working
   there.

@@ -219,7 +219,7 @@ describe("Claude Code harness", () => {
     const list = await harness.listThreads("active");
     expect(list.map((thread) => thread.nativeId)).toEqual([nativeId]);
     const usage = await harness.usage!(nativeId);
-    expect(usage.models[0]).toMatchObject({ label: "claude-opus-4-7", reported: true });
+    expect(usage.models[0]).toMatchObject({ label: "claude-opus-4-7", priced: true });
     expect(usage.totalUsd).toBeCloseTo(0.01);
     // supportedCommands / supportedModels were cached from the first session.
     await vi.waitFor(() =>
