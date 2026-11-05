@@ -283,13 +283,15 @@ the VM's address; the machine needs keyless SSH to it, as for the sandbox. Off
 the tailnet, run the local sandbox container instead
 ([`guides/local-sandbox.md`](../guides/local-sandbox.md)).
 
-Tailscale-SSH realities the remote transport encodes (verified live): after
-a direct-tcpip channel closes, later channels on the same connection stall —
-each incoming socket (CDP or VNC) dials a fresh SSH connection; the ~50ms
-dial must buffer the socket's first bytes or CDP's opening HTTP request is
-lost; and handshakes occasionally stall, so a channel dial retries once. SSH
-connection errors are always handled: an unhandled `error` event on an ssh2
-client would crash the server.
+The remote transport's setup commands and its CDP and VNC sockets go
+through the app's one sandbox connection (ADR 0013), which encodes the
+Tailscale-SSH realities (verified live): after a direct-tcpip channel closes,
+later channels on the same connection stall, so a closed forward retires its
+connection and the next channel goes to a fresh one; handshakes occasionally
+stall, so a failed dial is retried once. Opening a socket's channel can take a
+dial, so the forwarder buffers the socket's first bytes or CDP's opening HTTP
+request would be lost. SSH connection errors are always handled: an unhandled
+`error` event on an ssh2 client would crash the server.
 
 The local CDP forwarder (`createForwardingServer`) must be a raw `node:net`
 server. Playwright reaches it with one HTTP request and then upgrades to a

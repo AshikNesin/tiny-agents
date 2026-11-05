@@ -6,9 +6,10 @@ that can't join the tailnet (an office laptop, a locked-down network) can run
 a **local sandbox** instead: a Docker container with the same user, tools and
 desktop stack, reached over plain SSH with a key on `127.0.0.1`.
 
-Nothing else changes. The browser, computer, terminal and sandbox toolkits use
-the same SSH code against the container that they use against the VM, so bots
-get every capability, live views and takeover included.
+Nothing else changes. The browser, computer, terminal, sandbox toolkits and
+the Claude worker share the same sandbox connection against the container
+that they use against the VM, so bots get every capability, live views and
+takeover included.
 
 ```
 App (pnpm dev, on this machine)

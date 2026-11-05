@@ -22,7 +22,7 @@ Sandbox VM (SANDBOX_HOST, Tailscale SSH, passwordless sudo)
    tool calls: one SSH exec each, sourcing the profile's env file
       scrot (see) · xdotool (act) · wmctrl (windows) · xclip (clipboard) · gtk-launch (apps)
           ▲                                   ▲
-          │ VNC channel (SSH direct-tcpip)    │ ssh exec (fresh connection per call)
+          │ VNC channel (SSH direct-tcpip)    │ ssh exec (one per call)
 App ──────┴───────────────────────────────────┘
    packages/agent/src/toolkits/computer.ts           computer_* tools, key rules, vault sink
    packages/agent/src/toolkits/computer-sessions.ts  ComputerDesktop port, session manager, driver flag
@@ -63,8 +63,9 @@ App ──────┴──────────────────�
   outlives the script closes the lock's fd (`8>&-`). Fresh profiles are
   seeded with a single bottom panel and no compositor, screen saver, lock or
   power manager, so no first-run dialog covers the bot's first screenshot.
-- **Tool execs** are fresh SSH connections, one per call (the terminal's
-  no-pooling rule for tailscaled), each sourcing the profile's env file
+- **Tool execs** are one exec channel per call on the app's sandbox
+  connection (ADR 0013), which the live view's forward shares, each
+  sourcing the profile's env file
   (`DISPLAY`, XDG dirs, session bus). A missing desktop exits 97 and the
   transport reports it gone.
 

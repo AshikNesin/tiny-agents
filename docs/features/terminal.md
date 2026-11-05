@@ -26,7 +26,7 @@ WebSocket bridge on the Node server (apps/web/src/server/api/terminal/terminal.w
    ▼
 terminal service (packages/agent/src/terminal) — stateless, port-shaped
    list/create/kill run one tmux command per exec;
-   attach opens a pty shell channel on a FRESH ssh2 connection per tab
+   attach opens a pty channel on the app's one sandbox connection
    ▼
 sandbox VM
    tmux -L ta-terminal: one session (ta-term-<n>) per tab, history-limit
@@ -36,7 +36,8 @@ sandbox VM
 Server code: `apps/web/src/server/api/terminal/` (routes, ticket WS bridge,
 memoized service from `SANDBOX_*`). Domain code: `packages/agent/src/terminal/`
 (`tmux.ts` pure command builders and parsing, `terminal.ts` the
-service port + typed errors, `terminal-ssh2.ts` the ssh2 binding). Client
+service port + typed errors); the SSH side is the app's `SandboxConnection`
+(`packages/agent/src/ssh/`). Client
 code: `apps/web/src/client/pages/terminal/` (`Terminal.tsx` the page and tab
 strip, `TerminalView.tsx` one terminal) and `apps/web/src/client/lib/`
 (`terminal-api.ts` typed client, `terminal-ws.ts` the socket lifecycle,
@@ -51,16 +52,17 @@ strip, `TerminalView.tsx` one terminal) and `apps/web/src/client/lib/`
 | Scrollback            | tmux history (`history-limit 50000`) with `mouse on` — the wheel scrolls into history on the VM; the attach redraw repaints the visible pane. The buffer living on the VM is the design, not an accident.                                                                                                                                                             |
 | Modern terminal       | xterm.js 6 renders (WebGL, DOM fallback) with unicode11 widths so emoji/CJK agree with tmux; tmux gets `RGB`/`clipboard`/`hyperlinks` features, so truecolor, OSC 52 copy and OSC 8 links pass through; resize propagates as a control frame through `setWindow` and tmux follows the SIGWINCH.                                                                       |
 
-## Transport: a fresh SSH connection per exec and per attach
+## Transport: the sandbox connection
 
-The ssh2 binding (`terminal-ssh2.ts`) does **no pooling**. Every tmux exec
-dials a fresh connection and closes it; every pty attach gets a dedicated
-connection that lives exactly as long as the stream. This mirrors the
-lesson `browser-remote-cdp.ts` already encodes: tailscaled's SSH
-multiplexing stalls later channels on a connection after a streaming
-channel closes, and an attach is long-lived streaming — sharing its
-connection would starve the execs around it (the same precedent as the
-browser feature's CDP dials, which also dial fresh per socket).
+The service takes the app's one `SandboxConnection` (ADR 0013): every tmux
+exec and every pty attach is a channel on its pooled SSH connection, shared
+with the sandbox toolkit, the browser, the computer and the Claude worker
+(issue #84 pooled the terminal first). Closing a tab's stream closes only its
+channel. The connection ends after 5 minutes with no open channel (the page
+polls every 5 s, so that is a connection nobody is using), and one that drops
+is retired and redialed by the next call; an attach on it closes, and the view
+reconnects. A channel that is refused or does not open within 10 s retires the
+connection, and new channels go to a fresh one.
 
 ## The WebSocket protocol
 

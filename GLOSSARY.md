@@ -93,6 +93,10 @@ _Avoid_: screen (a screenshot is of a desktop), display (the X display number)
 The owner's noVNC view of a bot's browser or desktop in the chat (`BrowserPanel`, `ComputerPanel`), view-only until the owner takes control. Reached through a one-time ticket and an SSH channel; never a screenshot stream.
 _Avoid_: screencast, preview
 
+**Sandbox connection**:
+The app's one SSH connection to the sandbox VM or the local sandbox container (`SandboxConnection`, `ssh/sandbox-connection.ts`), built once from the endpoint and handed to every user: the sandbox toolkit, attachments, the terminal, the computer, the browser and the Claude worker. It runs execs, ptys, file transfers and forwards as channels on one pooled connection, and owns the host-key pinning, the retry rule, the idle close and the "Cannot reach the sandbox" wording (ADR 0013).
+_Avoid_: endpoint (that is only the address), SSH session, transport (a computer or browser transport sits on top of it)
+
 **Question**:
 A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply waits until the owner answers or dismisses it; writing in the chat instead dismisses it.
 _Avoid_: prompt, form, survey
