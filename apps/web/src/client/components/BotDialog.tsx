@@ -639,7 +639,10 @@ export function BotDialog({
       }}
     >
       {/* Editing has a fixed height, so switching tabs never moves the tab bar. */}
-      <DialogContent className={bot ? "h-[min(85dvh,760px)] sm:max-w-xl" : "sm:max-w-xl"}>
+      <DialogContent
+        dismissOnOutsideClick={false}
+        className={bot ? "h-[min(85dvh,760px)] sm:max-w-xl" : "sm:max-w-xl"}
+      >
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>
           <DialogDescription>
