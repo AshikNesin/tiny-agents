@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Menu, MessageSquareReply, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -17,6 +17,7 @@ import { BotAvatar } from "./BotAvatar";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
 import { Transcript, type TranscriptPages } from "./Transcript";
 import { oldestEntryId, prependOlder } from "../lib/chat-history";
+import { chatTimeline } from "../lib/chat-timeline";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { Spinner } from "./ui/spinner";
 import type { ChatMessage, RoutineRunCard } from "../lib/chat-types";
@@ -28,8 +29,6 @@ import { errorMessage } from "../lib/errors";
 interface PastChatPaneProps {
   bot: Bot;
   chatId: string;
-  /** The bot moved back onto this chat ("Continue this chat"). */
-  onContinued: (bot: Bot) => void;
 }
 
 /**
@@ -46,12 +45,11 @@ export function PastChatPane(props: PastChatPaneProps) {
   );
 }
 
-function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
+function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const resetChat = useBotsStore((s) => s.resetChat);
-  const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
+  const adoptBot = useBotsStore((s) => s.adoptBot);
   const [view, setView] = useState<PastChatView | null>(null);
   const [loaded, setLoaded] = useState<{ messages: ChatMessage[]; hasMore: boolean }>({
     messages: [],
@@ -83,7 +81,7 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
   // The transcript's pages: the first came with the view, older ones load on
   // scroll. A page that no longer fits (another chat opened meanwhile) is dropped.
   const pages: TranscriptPages = {
-    ...loaded,
+    hasMore: loaded.hasMore,
     loadingOlder,
     loadOlder: async () => {
       const before = oldestEntryId(loaded.messages);
@@ -105,6 +103,7 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
   };
 
   const runs = view?.runs ?? NO_RUNS;
+  const timeline = useMemo(() => chatTimeline(loaded.messages, runs), [loaded.messages, runs]);
   const chat = view?.chat;
   const title = chat ? pastChatTitle(chat) : "";
 
@@ -113,11 +112,8 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
   const continueChat = async () => {
     setBusy(true);
     try {
-      const fresh = await botsApi.continuePastChat(bot.id, chatId);
-      // The bot is on another conversation now: the live chat reconnects to it.
-      resetChat(bot.id);
-      refreshBotsInBackground();
-      onContinued(fresh);
+      // The bot is on another conversation now: the live chat reopens on it.
+      adoptBot(await botsApi.continuePastChat(bot.id, chatId));
       navigate(`/chats/${bot.id}`, { replace: true });
       toast.success("Chat continued. The one you left is in Chat history.");
     } catch (error) {
@@ -223,8 +219,8 @@ function PastChatPaneBody({ bot, chatId, onContinued }: PastChatPaneProps) {
         {/* No owner actions: what still waits in a past chat can no longer be answered. */}
         <Transcript
           botName={bot.name}
+          timeline={timeline}
           pages={pages}
-          routineRuns={runs}
           contentTestId="past-chat-transcript"
         />
       </div>

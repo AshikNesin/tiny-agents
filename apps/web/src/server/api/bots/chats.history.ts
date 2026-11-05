@@ -16,6 +16,7 @@ import { CHAT_WINDOW, pageBefore, windowChat, type AgentRuntime } from "@tiny-ag
 import { db, botChats } from "../../db";
 import { chatCards } from "../routines/routines.cards";
 import { firstMessageTitle, titlePastChat } from "./chats.title";
+import { publishBotChatEvent } from "./bots.events";
 import type { ChatHistoryDTO } from "./bots.schema";
 import type { BotRow } from "./bots.conversation";
 
@@ -96,23 +97,12 @@ export async function retireConversation(
   }
 }
 
-type ChatChangeListener = (botId: string) => void;
-const chatChangeListeners = new Set<ChatChangeListener>();
-
-/**
- * Follow bots moving between chats: a listener runs with the bot's id once
- * its row names another conversation. The chat stream ends itself on it, so
- * the client reconnects onto the new chat. Returns the unsubscribe.
- */
-export function onBotChatChanged(listener: ChatChangeListener): () => void {
-  chatChangeListeners.add(listener);
-  return () => chatChangeListeners.delete(listener);
-}
-
 /**
  * Move a bot off the chat it is on: `moveRow` points the row at the next
- * conversation (a fresh one, or a Past chat's), then the chat it left is
- * stopped, recorded as a Past chat, and the bot's followers are told.
+ * conversation (a fresh one, or a Past chat's), then the bot's followers
+ * are told (`chat-changed`: its open streams end, and the client reconnects
+ * onto the new chat), and the chat it left is stopped and recorded as a
+ * Past chat.
  */
 export async function leaveChat(
   old: ChatRow,
@@ -120,13 +110,7 @@ export async function leaveChat(
   rt: LeaveChatRuntime,
 ): Promise<void> {
   await moveRow();
-  for (const listener of chatChangeListeners) {
-    try {
-      listener(old.id);
-    } catch (error) {
-      logger.warn({ error, botId: old.id }, "A chat-change listener failed");
-    }
-  }
+  publishBotChatEvent(old.id, { type: "chat-changed" });
   await retireConversation(rt, old.conversationId);
   await recordPastChat(endingChat(old), rt);
 }

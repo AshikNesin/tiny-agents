@@ -28,7 +28,7 @@ import {
   type PickedMention,
 } from "../lib/mentions";
 import { useBotsStore } from "../store/bots";
-import type { OwnerSendOutcome, OwnerSubmission } from "../store/owner-send";
+import type { OwnerSendOutcome, OwnerSubmission } from "../store/chats";
 import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
 import {
   MentionAutocomplete,
@@ -102,7 +102,7 @@ interface ChatComposerProps {
   gatewayConfigured: boolean;
   busy: boolean;
   /**
-   * Send one owner message (store/owner-send.ts). "restored": it was refused
+   * Send one owner message (store/chats.ts). "restored": it was refused
    * and its Echo withdrawn, so the composer puts the draft back.
    */
   onSend: (submission: OwnerSubmission) => Promise<OwnerSendOutcome>;
@@ -336,7 +336,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     // An offline send stays an Echo and goes again by itself once the
-    // browser is back (store/owner-send.ts); only a refusal comes back here.
+    // browser is back (store/chats.ts); only a refusal comes back here.
     const outcome = await onSend({
       body,
       attachments,

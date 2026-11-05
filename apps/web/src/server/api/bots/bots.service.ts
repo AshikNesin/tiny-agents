@@ -42,6 +42,7 @@ import {
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 import { findPastChat, leaveChat, retireConversation } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
+import { publishBotChatEvent } from "./bots.events";
 import { listBots as listBotEntries, previewText } from "./bots.list";
 import { authorOf, markGuestRead, setBotGuests, type Viewer } from "../people/people.service";
 
@@ -474,21 +475,6 @@ export async function decideApproval(
 
 // ── YOLO mode (issue #151) ──────────────────────────────────────────────
 
-type YoloListener = (botId: string, on: boolean) => void;
-const yoloListeners = new Set<YoloListener>();
-
-/** Follow YOLO switching on and off, for the chat streams. Returns the unsubscribe. */
-export function onYoloChanged(listener: YoloListener): () => void {
-  yoloListeners.add(listener);
-  return () => yoloListeners.delete(listener);
-}
-
-/** Whether YOLO mode is on in the bot's current chat. */
-export async function getYolo(id: string, rt: BotAgentRuntime = runtime()): Promise<boolean> {
-  const bot = await findBotRow(id);
-  return rt.yolo(Number(bot.conversationId));
-}
-
 /**
  * Switch YOLO mode for the bot's current chat: every tool call that would
  * ask runs without a card, except vault uses and turns another bot or a
@@ -503,13 +489,7 @@ export async function setYolo(
 ): Promise<{ on: boolean; approved: number[] }> {
   const bot = await findBotRow(id);
   const result = await rt.setYolo(Number(bot.conversationId), on, ownerId);
-  for (const listener of yoloListeners) {
-    try {
-      listener(bot.id, on);
-    } catch (error) {
-      logger.warn({ error, botId: bot.id }, "YOLO listener failed");
-    }
-  }
+  publishBotChatEvent(bot.id, { type: "yolo", on });
   return result;
 }
 

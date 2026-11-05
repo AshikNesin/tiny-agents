@@ -3,6 +3,7 @@ import { MessageCircleQuestion } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../lib/chat-types";
+import { viewOf } from "../lib/tool-call-view";
 import { type OwnerActions, useOwnerDecision } from "../lib/owner-actions";
 import {
   AskUserQuestions,
@@ -167,7 +168,7 @@ export function AskedQuestions({ call, note }: { call: ChatToolCall; note?: stri
     <Trace className="gap-1">
       <TraceCollapsible>
         <TraceCollapsibleTrigger>
-          <TraceLine status={call.status === "done" ? undefined : "error"}>
+          <TraceLine status={viewOf(call).phase === "done" ? undefined : "error"}>
             <TraceIcon>
               <MessageCircleQuestion />
             </TraceIcon>

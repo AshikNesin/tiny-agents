@@ -8,29 +8,20 @@
  * Cards belong to the chat thread they finished in: "New chat" starts a
  * clean thread (`Bot.chatStartedAt`), and older results stay on the Routines
  * page. The bot's chat stream sends the thread's cards on connect and each
- * newly finished run as it lands (`onRoutineCard`).
+ * newly finished run as it lands (a `routine-run` bot chat event).
  */
 import { and, desc, eq, gte, lt, ne } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { db, routineRuns, routines } from "../../db";
 import { notifyRoutineRun, type RoutineOutcome } from "../notifications/notifications.wiring";
 import type { RoutineRunRef } from "../notifications/notifications.events";
+import type { RoutineRunCard } from "../../../shared/bot-stream";
+import { publishBotChatEvent } from "../bots/bots.events";
+
+export type { RoutineRunCard };
 
 /** Cards one chat shows: the newest finished runs across the bot's routines. */
 export const CHAT_CARDS = 50;
-
-/** A finished routine run as the chat renders it. */
-export interface RoutineRunCard {
-  id: string;
-  routineId: string;
-  routineName: string;
-  status: string;
-  trigger: string;
-  scheduledFor: string;
-  finishedAt: string;
-  output: string | null;
-  error: string | null;
-}
 
 type CardRow = {
   id: string;
@@ -49,8 +40,9 @@ function toCard(row: CardRow & { finishedAt: Date }): RoutineRunCard {
     id: row.id,
     routineId: row.routineId,
     routineName: row.routineName,
-    status: row.status,
-    trigger: row.trigger,
+    // Cards are only built for finished runs (never `awaiting`).
+    status: row.status as RoutineRunCard["status"],
+    trigger: row.trigger as RoutineRunCard["trigger"],
     scheduledFor: row.scheduledFor.toISOString(),
     finishedAt: row.finishedAt.toISOString(),
     output: row.output,
@@ -100,15 +92,6 @@ export async function chatCards(
   return rows.reverse().map((row) => toCard({ ...row, finishedAt: row.finishedAt! }));
 }
 
-type CardListener = (botId: string, card: RoutineRunCard) => void;
-const listeners = new Set<CardListener>();
-
-/** Follow finished runs (the chat stream filters by bot). Returns the unsubscribe. */
-export function onRoutineCard(listener: CardListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
 /** Send a run that just finished to the open chats of its bot. Best-effort. */
 export async function publishRunCard(runId: string): Promise<void> {
   try {
@@ -120,7 +103,7 @@ export async function publishRunCard(runId: string): Promise<void> {
       .limit(1);
     if (!row || row.status === "awaiting" || !row.finishedAt) return;
     const card = toCard({ ...row, finishedAt: row.finishedAt });
-    for (const listener of listeners) listener(row.botId, card);
+    publishBotChatEvent(row.botId, { type: "routine-run", run: card });
   } catch (error) {
     logger.warn({ error, runId }, "Failed to publish a routine run card");
   }

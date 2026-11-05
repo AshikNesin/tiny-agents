@@ -22,9 +22,9 @@ import {
 } from "../../../../apps/web/src/server/api/routines/routines.runs";
 import {
   chatCards,
-  onRoutineCard,
   type RoutineRunCard,
 } from "../../../../apps/web/src/server/api/routines/routines.cards";
+import { onBotChatEvent } from "../../../../apps/web/src/server/api/bots/bots.events";
 import type { AgentRuntime, FinishedReply } from "@tiny-agents/agent";
 import {
   createFakeRuntime,
@@ -519,7 +519,9 @@ describe("completion watcher", () => {
     expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([]);
 
     const seen: { botId: string; card: RoutineRunCard }[] = [];
-    const stop = onRoutineCard((botId, card) => seen.push({ botId, card }));
+    const stop = onBotChatEvent(bot.id, (event) => {
+      if (event.type === "routine-run") seen.push({ botId: bot.id, card: event.run });
+    });
     answer(run!, { text: "**All** good" });
     await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
     await vi.waitFor(() => expect(seen).toHaveLength(1));

@@ -194,15 +194,13 @@ export function AppShell() {
 
   const onSaved = (bot: BotRow) => {
     // The saved row is the full bot: the open chat and the next edit read it.
-    useBotsStore.getState().setFullBot(bot);
-    void loadBots();
+    useBotsStore.getState().adoptBot(bot);
     // Creating a bot drops you straight into its chat (messenger model).
     if (!editingBot) navigate(`/chats/${bot.id}`);
   };
 
   const onDeleted = (bot: BotRow) => {
     useBotsStore.getState().forgetBot(bot.id);
-    void loadBots();
     if (matchPath("/chats/:botId", pathname)?.params.botId === bot.id) {
       navigate("/chats", { replace: true });
     }

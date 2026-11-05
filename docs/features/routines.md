@@ -74,7 +74,7 @@ it.
 - **Per thread.** Lines belong to the chat thread they finished in.
   `Bot.chatStartedAt` is set when the bot is created and on "New chat"; only
   runs that finished after it show. Earlier results stay on the Routines page.
-- The chat stream (`GET /bots/:id/stream`) sends `{ type: "routine-runs" }`
+- The chat stream (`GET /bots/:id/stream`, `followBotChat` in `bots.stream.ts`) sends `{ type: "routine-runs" }`
   with the thread's 50 newest finished runs on connect, then
   `{ type: "routine-run" }` as each one finishes.
 - The client merges them into the timeline by finish time

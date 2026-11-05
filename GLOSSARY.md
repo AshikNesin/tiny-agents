@@ -118,12 +118,20 @@ A clarifying question a bot asks the owner mid-reply (`ask_owner`). The reply wa
 _Avoid_: prompt, form, survey
 
 **Echo**:
-The optimistic copy of an owner's send shown until the server confirms it. Its request id is minted once and reused by every retry (an offline send keeps its Echo and goes again once the browser is back), and it is confirmed by that request id. Only an older entry without one is matched by text, and never one created before the Echo.
+The optimistic copy of an owner's send shown until the server confirms it. Its request id is minted once and reused by every retry (an offline send keeps its Echo and goes again once the browser is back), and it is confirmed by that request id. Only an older entry without one is matched by text, and never one created before the Echo. Once the server holds the message while the bot replies, the held item replaces the Echo. The chat session (`lib/chat-session.ts`, `store/chats.ts`) owns its whole life.
 _Avoid_: pending message, ghost bubble
 
+**Outbox**:
+A chat's owner messages that its transcript does not hold yet, each addressed by its send's request id: Echoes (`sending`, or `offline` until the browser is back), drawn as bubbles at the end of the transcript, and the messages the server holds while the bot replies (`steering` into the running reply, or `queued` for the next one), drawn as rows over the composer that the owner can withdraw. `useChat` returns it with the rest of the chat's view.
+_Avoid_: queue (only the held part), pending messages
+
 **Bot list**:
-What the sidebar shows for each bot: the row's last-message preview, last activity and read marker, plus what is live (replying, approvals and Questions waiting). `bots.list.ts` owns the entry shape, the one preview function and the settled step that folds a Finished reply into the row.
+What the sidebar shows for each bot: the row's last-message preview, last activity and read marker, plus what is live (replying, approvals and Questions waiting). `bots.list.ts` builds the entry (its shape is shared with the client, `apps/web/src/shared/bot-list.ts`) and owns the one preview function and the settled step that folds a Finished reply into the row.
 _Avoid_: roster (that is the bots toolkit's name for the other bots), sidebar state
+
+**Bot stream**:
+One bot's chat, live (`GET /bots/:id/stream`): the newest transcript window as a snapshot and then its changes, the chat's routine cards, and its YOLO mode. Each part is followed before it is read, and the stream ends when the bot moves to another chat, so the client reconnects onto the new one. `followBotChat` (`bots.stream.ts`) owns every source and their order; `BotStreamEvent` (`apps/web/src/shared/bot-stream.ts`) is the wire contract the server writes and the client reads.
+_Avoid_: chat SSE, chat feed (the app-wide `/events` feed is another stream)
 
 **Past chat**:
 A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only until the owner continues it, which moves the bot back onto it; nothing is submitted or reconciled there before that.
