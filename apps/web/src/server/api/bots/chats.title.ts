@@ -6,7 +6,8 @@
  */
 import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
-import { stripAttachmentNotes, stripPeerEnvelope } from "@tiny-agents/agent";
+import { stripAttachmentNotes } from "@tiny-agents/agent";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, botChats } from "../../db";
 import type { SideCaller } from "./side-call";
 

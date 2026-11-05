@@ -4,7 +4,8 @@
  */
 import type { AgentEvent, EntryRecord } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
-import { ChatProjection, unansweredOf, type ChatEvent } from "../../../../packages/agent/src/index";
+import { ChatProjection, unansweredOf } from "../../../../packages/agent/src/projection";
+import type { ChatEvent } from "../../../../packages/agent/src/index";
 
 const user = (id: number, text: string): EntryRecord =>
   ({

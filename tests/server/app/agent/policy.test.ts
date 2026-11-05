@@ -5,9 +5,8 @@ import {
   applyPermissions,
   compilePolicy,
   resolveModelId,
-  type Capability,
-  type CapabilitySelection,
-} from "../../../../packages/agent/src/index";
+} from "../../../../packages/agent/src/policy";
+import type { Capability, CapabilitySelection } from "../../../../packages/agent/src/capabilities";
 import { toModelInfo } from "../../../../packages/agent/src/models";
 
 const tool = (name: string) =>

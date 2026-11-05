@@ -12,7 +12,7 @@ import {
   parseDesktopSize,
   parseExtraPackages,
   type ComputerSessions,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/agent/computer";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 

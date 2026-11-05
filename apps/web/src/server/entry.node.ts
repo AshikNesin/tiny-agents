@@ -13,11 +13,9 @@ import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startWorkers, stopWorkers } from "@groot/jobs/server/worker";
-import {
-  AgentRuntime,
-  closeAllBrowserSessions,
-  closeAllComputerSessions,
-} from "@tiny-agents/agent";
+import { AgentRuntime } from "@tiny-agents/agent";
+import { closeAllBrowserSessions } from "@tiny-agents/agent/browser";
+import { closeAllComputerSessions } from "@tiny-agents/agent/computer";
 import { appConfig } from "./config";
 import { agentDbPath, appEnv, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";

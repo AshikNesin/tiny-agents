@@ -10,12 +10,8 @@
  * shared transcript read.
  */
 import { desc, eq } from "drizzle-orm";
-import {
-  isSkipReply,
-  stripPeerEnvelope,
-  type AgentRuntime,
-  type AttachmentRef,
-} from "@tiny-agents/agent";
+import { isSkipReply, type AgentRuntime, type AttachmentRef } from "@tiny-agents/agent";
+import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, bots } from "../../db";
 import { guestReadMarkers, type Viewer } from "../people/people.service";
 import type { BotRow } from "./bots.conversation";

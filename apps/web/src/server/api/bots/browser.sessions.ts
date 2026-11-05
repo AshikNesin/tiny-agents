@@ -11,7 +11,7 @@ import {
   createRemoteCdpTransport,
   type BrowserSessions,
   type BrowserTransport,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/agent/browser";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;

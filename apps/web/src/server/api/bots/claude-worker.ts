@@ -14,8 +14,8 @@ import { fileURLToPath } from "node:url";
 import {
   createSandboxClaudeWorker,
   type ClaudeWorkerLocator,
-  type SandboxConnection,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/agent/claude-worker";
+import type { SandboxConnection } from "@tiny-agents/agent/sandbox";
 import { sandboxConnection } from "./sandbox-host";
 
 type Env = Readonly<Record<string, string | undefined>>;
