@@ -25,14 +25,15 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
-import { ownerSend, type OwnerSubmission } from "../store/owner-send";
+import type { OwnerSubmission } from "../store/chats";
+import { useChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
 import { useIsGuest } from "../store/people";
 import { BotAvatar } from "./BotAvatar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import { ACTIVE_TOOL_STATUSES, TypingIndicator } from "./ChatMessageView";
+import { TypingIndicator } from "./ChatMessageView";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { Transcript, type TranscriptPages } from "./Transcript";
 import {
@@ -45,8 +46,7 @@ import { SHOW_COMPUTER_EVENT } from "../lib/owner-actions";
 import { useHttpOwnerActions } from "../lib/owner-actions";
 import { Message } from "./ui/message";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage, QueuedMessage, RoutineRunCard } from "../lib/chat-types";
-import type { PendingMessage } from "../store/bots";
+import { isEcho, type OutboxEntry } from "../lib/chat-session";
 import {
   MessageScrollerItem,
   MessageScrollerProvider,
@@ -54,13 +54,6 @@ import {
 } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
 import { useOnline } from "../lib/online";
-
-// Stable empties for a chat that has not connected yet: a fresh `[]` per
-// render would re-run every effect that depends on the transcript.
-const NO_MESSAGES: ChatMessage[] = [];
-const NO_PENDING: PendingMessage[] = [];
-const NO_QUEUED: QueuedMessage[] = [];
-const NO_RUNS: RoutineRunCard[] = [];
 
 /** True once `active` has held for `ms`: hides sub-second flickers. */
 function useSettled(active: boolean, ms: number): boolean {
@@ -82,24 +75,11 @@ const NEW_CHAT_SHORTCUT =
     ? "⇧⌘O"
     : "Ctrl+Shift+O";
 
-/**
- * The bot is working with nothing on screen to show it: waiting on the
- * first token, or between tool rounds. A streaming reply, a running tool
- * row or an approval card already says so on its own.
- */
-function awaitingFirstOutput(messages: ChatMessage[]): boolean {
-  const last = messages[messages.length - 1];
-  if (!last || last.role !== "assistant") return true;
-  if (last.status === "streaming") return false;
-  return !last.toolCalls?.some((call) => ACTIVE_TOOL_STATUSES.has(call.status));
-}
-
 interface ChatPaneProps {
   bot: Bot;
   models: ModelInfo[];
   gatewayConfigured: boolean;
   onEditBot: () => void;
-  onBotReset: (bot: Bot) => void;
 }
 
 /**
@@ -119,14 +99,13 @@ export function ChatPane(props: ChatPaneProps) {
   );
 }
 
-function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }: ChatPaneProps) {
+function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPaneProps) {
   const providers = useBotsStore((s) => s.providers);
-  const chat = useBotsStore((s) => s.chats[bot.id]);
-  const connectChat = useBotsStore((s) => s.connectChat);
-  const disconnectChat = useBotsStore((s) => s.disconnectChat);
-  const resetChat = useBotsStore((s) => s.resetChat);
-  const refreshBotsInBackground = useBotsStore((s) => s.refreshBotsInBackground);
-  const markRead = useBotsStore((s) => s.markRead);
+  const adoptBot = useBotsStore((s) => s.adoptBot);
+  // The chat, ready to render: the stream, Echoes and held messages,
+  // typing, stream health and the unread divider live behind it.
+  const chat = useChat(bot.id);
+  const { messages, busy, yolo } = chat;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const ownerActions = useHttpOwnerActions(bot.id);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -148,56 +127,27 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
 
-  // (Re)connect whenever the bot's conversation changes: a new chat
-  // (resetChat dropped the cached state) moves the bot to a fresh
-  // conversation, and the stream must follow it. `resetChat` closes the
-  // old SSE connection, so the effect reopens a new one that gets a fresh
-  // snapshot — the empty transcript of the new conversation.
-  useEffect(() => {
-    connectChat(bot.id);
-    return () => disconnectChat(bot.id);
-  }, [bot.id, bot.conversationId, connectChat, disconnectChat]);
-
-  // Mark read when opening a bot with unread replies.
-  const unread = useBotsStore((s) => s.bots.find((b) => b.id === bot.id)?.unread);
-  useEffect(() => {
-    if (unread) markRead(bot.id);
-  }, [markRead, unread, bot.id]);
-
-  const messages = chat?.messages ?? NO_MESSAGES;
-  // The transcript's pages come from the chat store (issue #92).
-  const loadOlder = useBotsStore((s) => s.loadOlder);
+  // The transcript's pages: older ones load on scroll (issue #92).
   const pages: TranscriptPages = {
-    messages,
-    hasMore: Boolean(chat?.hasMore),
-    loadingOlder: Boolean(chat?.loadingOlder),
-    loadOlder: () => loadOlder(bot.id),
+    hasMore: chat.hasMore,
+    loadingOlder: chat.loadingOlder,
+    loadOlder: chat.loadOlder,
   };
-  const pending = chat?.pending ?? NO_PENDING;
-  const queued = chat?.queued ?? NO_QUEUED;
-  const routineRuns = chat?.routineRuns ?? NO_RUNS;
-  const busy = chat?.busy ?? false;
-  const loaded = chat?.loaded ?? false;
+  // Held by the server behind (or steering into) the reply; Echoes are in the timeline.
+  const held = chat.outbox.filter((entry) => !isEcho(entry));
   // YOLO mode (issue #151): the owner's per-chat switch; the stream says its state.
-  const yolo = chat?.yolo === true;
-  const applyChatEvent = useBotsStore((s) => s.applyChatEvent);
   const setYolo = async (on: boolean) => {
     setConfirmYolo(false);
-    try {
-      const result = await botsApi.setYolo(bot.id, on);
-      applyChatEvent(bot.id, { type: "yolo", on: result.on });
-    } catch (error) {
-      toast.error(errorMessage(error, "Could not change YOLO mode"));
-    }
+    await chat.setYolo(on);
   };
   // Brief stream hiccups reconnect on their own; only a drop that lasts
   // gets the notice. The first connection is "loading", not "reconnecting".
-  const reconnecting = useSettled(loaded && chat?.connected === false, 1000);
+  const reconnecting = useSettled(chat.health === "reconnecting", 1000);
   const online = useOnline();
-  const showLoading = useSettled(!loaded && messages.length === 0, 300);
-  const showTyping = busy && pending.length === 0 && awaitingFirstOutput(messages);
+  // A cached transcript shows while it reconnects; only an empty one waits on a spinner.
+  const showLoading = useSettled(chat.health === "loading" && messages.length === 0, 300);
   // A fresh conversation has nothing to start over from.
-  const canReset = !guest && (messages.length > 0 || pending.length > 0 || queued.length > 0);
+  const canReset = !guest && (messages.length > 0 || chat.outbox.length > 0);
 
   // ⇧⌘O / Ctrl+Shift+O asks for a new chat from anywhere in the pane.
   useEffect(() => {
@@ -249,27 +199,10 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     return () => window.removeEventListener(SHOW_COMPUTER_EVENT, onShow);
   }, [showComputerPanel]);
 
-  // Read/unread split (issue #3): messages older than the frozen pre-open
-  // marker are read; the rest arrived while the owner was away. The first
-  // unread gets the "New messages" divider above it, and read items are the
-  // scroller's anchors — `last-anchor` opens on the newest read message
-  // (WhatsApp-style), with the unread block peeking in below it.
-  const unreadFrom = chat?.unreadFrom ?? null;
-  // Only bot replies count as unread (friction #32): your own sent messages
-  // land below the marker too, but a "New messages" flag above something
-  // you wrote yourself reads as a glitch. The divider goes above the first
-  // unread assistant message; read anchors keep including user messages.
-  // The target is fixed by the first fresh snapshot of this visit: replies
-  // that stream in while the chat is open are read as they arrive, so a
-  // reply to what you just sent never gets flagged as "new".
-  const [dividerId, setDividerId] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (!loaded || dividerId !== undefined) return;
-    const first = messages.find((m) => m.role === "assistant" && m.createdAt > (unreadFrom ?? 0));
-    setDividerId(first?.id ?? null);
-  }, [loaded, dividerId, messages, unreadFrom]);
-  const firstUnreadIndex = messages.findIndex((m) => m.createdAt > (unreadFrom ?? 0));
-  const isRead = (i: number) => firstUnreadIndex === -1 || i < firstUnreadIndex;
+  // Read/unread split (issue #3): the chat's "New messages" divider sits
+  // above the first reply that arrived while the owner was away, and read
+  // messages are the scroller's anchors — `last-anchor` opens on the newest
+  // read message (WhatsApp-style), with the unread block peeking in below.
   // Read anchors only place the chat as it opens. The scroller treats
   // anchors as user turns and re-targets them whenever the transcript's
   // children are swapped (an echo replaced by its confirmed row), which
@@ -298,10 +231,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
     // Keep the just-sent message visible: the reader may be scrolled up in
     // the history, and sending is an explicit jump-to-now (issue #2a).
     scroller.scrollToEnd({ behavior: "auto" });
-    return ownerSend.submit(bot.id, submission);
+    return chat.send(submission);
   };
-
-  const stop = () => ownerSend.stop(bot.id);
 
   // Drop files anywhere on the conversation to attach them. dragenter and
   // dragleave fire for every child crossed, so a depth counter tells when
@@ -340,9 +271,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const changeModel = async (modelId: string) => {
     if (modelId === bot.modelId) return;
     try {
-      const saved = await botsApi.update(bot.id, { modelId });
-      onBotReset(saved);
-      refreshBotsInBackground();
+      adoptBot(await botsApi.update(bot.id, { modelId }));
     } catch (error) {
       toast.error(errorMessage(error, "Could not switch the model"));
     }
@@ -351,13 +280,8 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
   const doReset = async () => {
     setConfirmReset(false);
     try {
-      const fresh = await botsApi.reset(bot.id);
-      // Drop the cached chat so the effect below reconnects the SSE to the
-      // bot's new conversation and a fresh (empty) snapshot arrives. The
-      // list row (preview, unread) resets server-side; refresh it too.
-      resetChat(bot.id);
-      refreshBotsInBackground();
-      onBotReset(fresh);
+      // The bot is on a fresh conversation: the chat reopens there, empty.
+      adoptBot(await botsApi.reset(bot.id));
     } catch (error) {
       toast.error(errorMessage(error, "Failed to start a new chat"));
     }
@@ -585,13 +509,12 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           <Transcript
             botName={bot.name}
             pages={pages}
-            routineRuns={routineRuns}
+            timeline={chat.timeline}
             actions={ownerActions}
-            echoes={pending}
-            unreadDividerId={dividerId}
-            scrollAnchor={(i) => anchoring && isRead(i)}
+            unreadDividerId={chat.unreadDividerId}
+            scrollAnchor={(i) => anchoring && chat.isRead(i)}
             empty={
-              loaded && (
+              chat.health !== "loading" && (
                 <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
                   <BotAvatar name={bot.name} className="size-20" />
                   <div className="max-w-sm">
@@ -607,7 +530,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
             }
             tail={
               <>
-                {showTyping && (
+                {chat.typing && (
                   <MessageScrollerItem messageId="typing">
                     <Message>
                       <TypingIndicator label={`${bot.name} is typing`} />
@@ -622,16 +545,16 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
         {/* Messages the server holds behind (or steering into) the running
             reply (issue #9), as compact rows over the composer like the Code
             page's queue; placement turns them into real bubbles. */}
-        {queued.length > 0 && (
+        {held.length > 0 && (
           <ul
             className="mx-auto flex w-full max-w-[784px] flex-col items-end gap-1 px-4 pt-2 md:px-5"
             aria-label="Waiting to send"
           >
-            {queued.map((item) => (
+            {held.map((item) => (
               <QueuedMessageView
                 key={`queued-${item.requestId}`}
                 item={item}
-                onCancel={() => void ownerSend.cancelQueued(bot.id, item.requestId)}
+                onCancel={() => void chat.withdraw(item.requestId)}
               />
             ))}
           </ul>
@@ -666,7 +589,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
           gatewayConfigured={gatewayConfigured}
           busy={busy}
           onSend={send}
-          onStop={stop}
+          onStop={chat.stop}
           onEditBot={onEditBot}
         />
       </div>
@@ -722,16 +645,17 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot, onBotReset }:
  * answered by the next run. One compact row over the composer (the Code
  * page's queue) with its state and a cancel (x) that withdraws it.
  */
-function QueuedMessageView({ item, onCancel }: { item: QueuedMessage; onCancel: () => void }) {
+function QueuedMessageView({ item, onCancel }: { item: OutboxEntry; onCancel: () => void }) {
   const files = item.attachments?.length ?? 0;
+  const steering = item.state === "steering";
   return (
     <li
       data-testid="queued-bubble"
-      data-mode={item.mode}
+      data-mode={steering ? "steer" : "followUp"}
       className="bg-muted/60 flex max-w-[85%] min-w-0 items-center gap-2 rounded-2xl py-1 pr-1 pl-3 text-sm"
     >
       <span className="text-muted-foreground shrink-0 text-xs">
-        {item.mode === "steer" ? "Steering" : "Queued"}
+        {steering ? "Steering" : "Queued"}
       </span>
       <span className="min-w-0 flex-1 truncate" title={item.text}>
         {item.text}
@@ -747,11 +671,7 @@ function QueuedMessageView({ item, onCancel }: { item: QueuedMessage; onCancel: 
         variant="ghost"
         onClick={onCancel}
         aria-label="Cancel this message"
-        title={
-          item.mode === "steer"
-            ? "Joins the running reply · cancel"
-            : "Sent after this reply · cancel"
-        }
+        title={steering ? "Joins the running reply · cancel" : "Sent after this reply · cancel"}
       >
         <X />
       </Button>

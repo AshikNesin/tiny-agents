@@ -41,7 +41,6 @@ export function ChatWorkspace() {
   const openEditBot = useUiStore((s) => s.openEditBot);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const loadBot = useBotsStore((s) => s.loadBot);
-  const setFullBot = useBotsStore((s) => s.setFullBot);
   useFocusParam();
 
   // `/chats?new=1` (older links, the command palette) opens the create dialog.
@@ -88,12 +87,7 @@ export function ChatWorkspace() {
     <div className="h-full min-h-0">
       {fullBot && currentListBot && chatId ? (
         // A past chat (issue #101), read-only until continued.
-        <PastChatPane
-          key={`${fullBot.id}-${chatId}`}
-          bot={fullBot}
-          chatId={chatId}
-          onContinued={setFullBot}
-        />
+        <PastChatPane key={`${fullBot.id}-${chatId}`} bot={fullBot} chatId={chatId} />
       ) : fullBot && currentListBot ? (
         <ChatPane
           key={fullBot.id}
@@ -101,7 +95,6 @@ export function ChatWorkspace() {
           models={models}
           gatewayConfigured={gatewayConfigured}
           onEditBot={() => void openEditBot(fullBot.id)}
-          onBotReset={setFullBot}
         />
       ) : (
         <>

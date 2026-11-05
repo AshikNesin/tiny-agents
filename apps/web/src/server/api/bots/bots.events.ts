@@ -34,7 +34,8 @@ export function onBotChatEvent(botId: string, listener: Listener): () => void {
 
 /** Tell the bot's followers. A failing listener is logged; the others still hear it. */
 export function publishBotChatEvent(botId: string, event: BotChatEvent): void {
-  for (const listener of [...(listeners.get(botId) ?? [])]) {
+  // A copy: a listener may unsubscribe (or subscribe another) while it runs.
+  for (const listener of Array.from(listeners.get(botId) ?? [])) {
     try {
       listener(event);
     } catch (error) {
