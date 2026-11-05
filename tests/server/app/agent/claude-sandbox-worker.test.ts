@@ -246,7 +246,6 @@ describe("the engine's worker choice", () => {
   it("uses the sandbox worker with nothing but the kill switch set", async () => {
     const engine = new ClaudeCodeEngine({
       env: () => ({ CLAUDE_CODE_ENGINE_ENABLED: "1" }),
-      execute: async () => ({ content: "" }),
       worker: sandbox,
     });
     expect(engine.status()).toEqual({
@@ -262,7 +261,6 @@ describe("the engine's worker choice", () => {
   it("is unconfigured without a sandbox", () => {
     const engine = new ClaudeCodeEngine({
       env: () => ({}),
-      execute: async () => ({ content: "" }),
     });
     expect(engine.status()).toMatchObject({ configured: false, mode: "none" });
   });

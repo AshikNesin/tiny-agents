@@ -6,12 +6,23 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { Context } from "@earendil-works/chord";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type {
+  DocumentReader,
+  ToolExecutionResult,
+  ToolRegistration,
+} from "@earendil-works/pi-durable";
 import type { ToolResultPayload, ToolSpec, WorkerMessage } from "@tiny-agents/claude-worker";
+import { approvalOf, gateHooksOf } from "../../approvals";
+import type { ToolPermission } from "../../capabilities";
 import {
   claudeCodeEngineEnabled,
   claudeCodeFallback,
   type ClaudeEngineFallback,
 } from "../../engine";
+import { ToolGate } from "../../gate";
+import type { GateUserMessage } from "../../policy";
 import { pageBefore } from "../../transcript";
 import type {
   ChatEvent,
@@ -22,11 +33,7 @@ import type {
   ChatToolCall,
   ConversationRef,
 } from "../../types";
-import {
-  createClaudeApprovalGate,
-  type ClaudeApprovalGate,
-  type ToolPermissionChoice,
-} from "./approvals";
+import { WaitTracker } from "../../waiting";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
 import {
@@ -35,16 +42,21 @@ import {
   type ClaudeWorkerLocator,
   type ClaudeWorkerMode,
 } from "./sandbox-worker";
+import { claudeToolApi } from "./tools";
 
+const ctx: Context = BACKGROUND_CONTEXT;
+
+/** Claude plan calls are numbered from here per conversation, apart from pi's task ids. */
 const TASK_ID_BASE = 2_000_000_000;
 
 export interface ClaudeSessionSync {
   model: string;
   system: string;
   tools: ToolSpec[];
-  permissions: Record<string, ToolPermissionChoice>;
-  /** Tools that can use a vault item (`ToolInfo.vault`): YOLO never runs them unasked. */
-  vaultTools?: string[];
+  /** Every enabled tool's permission; the gate reads the stored ones, this says which are off. */
+  permissions: Record<string, ToolPermission>;
+  /** What runs once the Tool gate lets a call through, by tool name. */
+  runners?: ReadonlyMap<string, ToolRegistration>;
 }
 
 export interface ClaudeSubmitInput {
@@ -57,19 +69,15 @@ export interface ClaudeSubmitInput {
   author?: ChatMessage["author"];
 }
 
-/** A conversation's YOLO mode as the engine applies it (issue #151). */
-export interface ClaudeYolo {
-  on: boolean;
-  /** The owner's user id: in a shared chat only their turns are trusted. */
-  by?: number;
-}
-
 export interface ClaudeCodeEngineOptions {
   env?: () => Readonly<Record<string, string | undefined>>;
   /** JSON file for session ids and transcripts. Omitted for `:memory:` stores. */
   persistPath?: string;
   onBusy?: (ref: ConversationRef, busy: boolean) => void;
-  execute: (ref: ConversationRef, call: ToolUseCall) => Promise<ToolResultPayload>;
+  /** Every tool call Claude asks for goes through it. Default: a gate of its own (tests). */
+  gate?: ToolGate;
+  /** The shared store's conversation documents (permissions, YOLO, grants) the gate and tools read. */
+  docs?: Pick<DocumentReader, "snapshot">;
   /** When set, tests skip the real socket. */
   connect?: (url: string, token: string) => WebSocketLike;
   /** The worker on the sandbox, set up over SSH on first use. */
@@ -93,9 +101,8 @@ interface ClaudeSession {
   model: string;
   system: string;
   tools: ToolSpec[];
-  permissions: Record<string, ToolPermissionChoice>;
-  vaultTools: Set<string>;
-  yolo: ClaudeYolo;
+  permissions: Record<string, ToolPermission>;
+  runners: ReadonlyMap<string, ToolRegistration>;
   claudeSessionId?: string;
   /** `pi` after a gateway fallback latches the conversation onto the harness. */
   surface: "claude" | "pi";
@@ -103,7 +110,6 @@ interface ClaudeSession {
   nextTask: number;
   busy: boolean;
   live?: LiveTurn;
-  gate: ClaudeApprovalGate;
 }
 
 export class ClaudeCodeEngine {
@@ -112,21 +118,15 @@ export class ClaudeCodeEngine {
   private client: ClaudeWorkerClient | undefined;
   private readonly env: () => Readonly<Record<string, string | undefined>>;
   private loaded = false;
+  private readonly gate: ToolGate;
 
   constructor(private readonly options: ClaudeCodeEngineOptions) {
     this.env = options.env ?? (() => process.env);
+    this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 
   handles(ref: ConversationRef): boolean {
     return this.sessions.get(ref)?.surface === "claude";
-  }
-
-  ownsTask(taskId: number): boolean {
-    if (taskId < TASK_ID_BASE) return false;
-    for (const session of this.sessions.values()) {
-      if (session.gate.owns(taskId)) return true;
-    }
-    return false;
   }
 
   sync(ref: ConversationRef, info: ClaudeSessionSync): void {
@@ -135,7 +135,7 @@ export class ClaudeCodeEngine {
     session.system = info.system;
     session.tools = info.tools;
     session.permissions = info.permissions;
-    session.vaultTools = new Set(info.vaultTools ?? []);
+    session.runners = info.runners ?? new Map();
     if (session.surface !== "pi") session.surface = "claude";
   }
 
@@ -226,41 +226,11 @@ export class ClaudeCodeEngine {
     this.finish(session, session.live.turnId, "aborted");
   }
 
-  /**
-   * Apply the conversation's YOLO mode. Switching it on also runs the calls
-   * already waiting that it would have run (never a vault tool's, and only
-   * in the owner's turn). Returns their task ids.
-   */
-  setYolo(ref: ConversationRef, yolo: ClaudeYolo): number[] {
-    // Only a Claude plan conversation has a session; never create one here.
+  /** The conversation's user messages, newest first, as the Tool gate reads them. */
+  async userMessages(ref: ConversationRef): Promise<GateUserMessage[]> {
+    await this.restore();
     const session = this.sessions.get(ref);
-    if (!session) return [];
-    session.yolo = yolo;
-    if (!yolo.on) return [];
-    const approved: number[] = [];
-    for (const call of session.gate.waiting()) {
-      if (!this.yoloRuns(session, call.name)) continue;
-      session.gate.decide(call.taskId, "approved");
-      approved.push(call.taskId);
-    }
-    return approved;
-  }
-
-  /** Whether YOLO runs an `ask` call of this tool now: on, not a vault tool, the owner's turn. */
-  private yoloRuns(session: ClaudeSession, name: string): boolean {
-    if (!session.yolo.on || session.vaultTools.has(name)) return false;
-    const last = session.messages.findLast((message) => message.role === "user");
-    if (!last || last.peer) return false;
-    return last.author === undefined || last.author.id === session.yolo.by;
-  }
-
-  decide(taskId: number, decision: "approved" | "denied"): void {
-    for (const session of this.sessions.values()) {
-      if (!session.gate.owns(taskId)) continue;
-      session.gate.decide(taskId, decision);
-      return;
-    }
-    throw new Error(`Tool call ${taskId} is not waiting for approval`);
+    return session ? userMessagesOf(session.messages) : [];
   }
 
   async read(ref: ConversationRef, window?: number): Promise<ChatState> {
@@ -366,87 +336,77 @@ export class ClaudeCodeEngine {
     return this.client;
   }
 
+  /**
+   * Claude asks for a tool: the call goes through the Tool gate like a pi
+   * call, with its answer held by the gate (a Claude call does not survive
+   * a restart), and its row in the chat follows the gate's card details.
+   */
   private async onTool(call: ToolUseCall): Promise<ToolResultPayload> {
     const ref = Number(call.sessionId);
     const session = this.sessions.get(ref);
     if (!session) return { content: "Unknown conversation.", isError: true };
-    const tool: ChatToolCall = {
-      id: call.toolUseId,
-      name: call.name,
-      args: asRecord(call.input),
-      status: "running",
+    const args = asRecord(call.input);
+    const row = (patch: Omit<ChatToolCall, "id" | "name" | "args">) => {
+      this.upsertTool(session, call.turnId, {
+        id: call.toolUseId,
+        name: call.name,
+        args,
+        ...patch,
+      });
+      this.emit(ref);
     };
-    this.upsertTool(session, call.turnId, tool);
-    this.emit(ref);
-    return session.gate.run({
-      toolUseId: call.toolUseId,
+    row({ status: "running" });
+    if (session.permissions[call.name] === "off") {
+      const content = `${call.name} is off for this bot.`;
+      row({ status: "error", output: content });
+      return { content, isError: true };
+    }
+    session.nextTask += 1;
+    const taskId = session.nextTask;
+    const api = claudeToolApi({
       name: call.name,
-      input: call.input,
-      turnId: call.turnId,
-    });
-  }
-
-  private bindGate(ref: ConversationRef, session: ClaudeSession): ClaudeApprovalGate {
-    return createClaudeApprovalGate({
-      permission: (name) => session.permissions[name] ?? "ask",
-      yolo: (name) => this.yoloRuns(session, name),
-      nextTaskId: () => {
-        session.nextTask += 1;
-        return session.nextTask;
-      },
-      onAsk: (call) => {
-        this.upsertTool(session, call.turnId, {
-          id: call.toolUseId,
-          name: call.name,
-          args: asRecord(call.input),
+      conversation: ref,
+      task: taskId,
+      ...(this.options.docs ? { docs: this.options.docs } : {}),
+      details: (value) => {
+        const card = approvalOf(value);
+        if (card?.state !== "pending") return;
+        row({
           status: "awaiting_approval",
-          taskId: call.taskId,
+          taskId,
+          ...(card.vault ? { vault: card.vault } : {}),
+          ...(card.expiresAt !== undefined ? { expiresAt: card.expiresAt } : {}),
         });
-        this.emit(ref);
-      },
-      execute: async (call, approval) => {
-        const approved = approval ? { approval } : {};
-        this.upsertTool(session, call.turnId, {
-          id: call.toolUseId,
-          name: call.name,
-          args: asRecord(call.input),
-          status: "running",
-          ...approved,
-        });
-        this.emit(ref);
-        try {
-          const result = await this.options.execute(ref, {
-            sessionId: String(ref),
-            turnId: call.turnId,
-            toolUseId: call.toolUseId,
-            name: call.name,
-            input: call.input,
-          });
-          this.upsertTool(session, call.turnId, {
-            id: call.toolUseId,
-            name: call.name,
-            args: asRecord(call.input),
-            status: result.isError ? "error" : "done",
-            output: result.content,
-            ...approved,
-          });
-          this.emit(ref);
-          return result;
-        } catch (error) {
-          const content = error instanceof Error ? error.message : String(error);
-          this.upsertTool(session, call.turnId, {
-            id: call.toolUseId,
-            name: call.name,
-            args: asRecord(call.input),
-            status: "error",
-            output: content,
-            ...approved,
-          });
-          this.emit(ref);
-          return { content, isError: true };
-        }
       },
     });
+    const runner = session.runners.get(call.name);
+    try {
+      const result = await this.gate.run(
+        {
+          name: call.name,
+          args,
+          replaySafe: runner?.replay === "safe",
+          hooks: runner ? gateHooksOf(runner) : undefined,
+          api,
+          context: ctx,
+          answers: "memory",
+          userMessages: async () => userMessagesOf(session.messages),
+          instructions: async () => session.system || undefined,
+        },
+        async () => {
+          row({ status: "running", taskId });
+          if (!runner) return unavailable(call.name);
+          return runner.execute(args as never, api, ctx);
+        },
+      );
+      const content = resultText(result);
+      row(toolRowOf(result, content));
+      return { content, ...(result.isError ? { isError: true } : {}) };
+    } catch (error) {
+      const content = error instanceof Error ? error.message : String(error);
+      row({ status: "error", output: content });
+      return { content, isError: true };
+    }
   }
 
   private refOf(session: ClaudeSession): ConversationRef {
@@ -513,6 +473,8 @@ export class ClaudeCodeEngine {
     const live = session.live;
     session.live = undefined;
     const ref = this.refOf(session);
+    // A call still waiting on the owner belongs to the turn that ended.
+    this.gate.abandon(ref);
     this.options.onBusy?.(ref, false);
     this.emit(ref);
     if (live?.turnId === turnId) live.resolve();
@@ -562,18 +524,15 @@ export class ClaudeCodeEngine {
       model: "",
       system: "",
       tools: [] as ToolSpec[],
-      permissions: {} as Record<string, ToolPermissionChoice>,
-      vaultTools: new Set<string>(),
-      yolo: { on: false } as ClaudeYolo,
+      permissions: {} as Record<string, ToolPermission>,
+      runners: new Map<string, ToolRegistration>(),
       surface: "claude" as const,
       messages: [] as ChatMessage[],
       nextTask: TASK_ID_BASE,
       busy: false,
     };
-    const withGate = session as ClaudeSession;
-    withGate.gate = this.bindGate(ref, withGate);
-    this.sessions.set(ref, withGate);
-    return withGate;
+    this.sessions.set(ref, session);
+    return session;
   }
 
   private require(ref: ConversationRef): ClaudeSession {
@@ -605,15 +564,13 @@ export class ClaudeCodeEngine {
           }
           continue;
         }
-        // YOLO and the vault tools come from the runtime's sync, never the file.
+        // What runs a tool comes from the runtime's sync, never the file.
         const restored = {
           ...value,
           busy: false,
           live: undefined,
-          vaultTools: new Set<string>(),
-          yolo: { on: false },
+          runners: new Map<string, ToolRegistration>(),
         } as ClaudeSession;
-        restored.gate = this.bindGate(ref, restored);
         this.sessions.set(ref, restored);
       }
     } catch {
@@ -627,12 +584,69 @@ export class ClaudeCodeEngine {
     await this.restore();
     const sessions: Record<string, ClaudeSession> = {};
     for (const [ref, session] of this.sessions) {
-      const { vaultTools: _vaultTools, yolo: _yolo, ...rest } = session;
+      const { runners: _runners, ...rest } = session;
       sessions[String(ref)] = { ...rest, live: undefined, busy: false } as ClaudeSession;
     }
     await mkdir(dirname(this.options.persistPath), { recursive: true });
     await writeFile(this.options.persistPath, JSON.stringify({ sessions }), "utf8");
   }
+}
+
+/** The conversation's user messages, newest first, as the Tool gate reads them. */
+function userMessagesOf(messages: readonly ChatMessage[]): GateUserMessage[] {
+  return messages
+    .filter((message) => message.role === "user")
+    .reverse()
+    .map((message) => ({
+      text: message.text,
+      peer: message.peer !== undefined,
+      ...(message.author ? { author: message.author.id } : {}),
+    }));
+}
+
+function unavailable(name: string): ToolExecutionResult {
+  return {
+    output: [{ type: "text", text: `${name} is not available on the Claude plan engine.` }],
+    isError: true,
+  };
+}
+
+/** The text Claude reads back from a tool's result. */
+function resultText(result: ToolExecutionResult): string {
+  return (result.output ?? [])
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** A finished call's row, from the gate's result: the same labels a pi call gets. */
+function toolRowOf(
+  result: ToolExecutionResult,
+  output: string,
+): Omit<ChatToolCall, "id" | "name" | "args"> {
+  const card = approvalOf(result.details);
+  const approval = card?.state;
+  return {
+    status:
+      approval === "denied"
+        ? "denied"
+        : approval === "expired"
+          ? "expired"
+          : card?.interrupted
+            ? "interrupted"
+            : result.isError
+              ? "error"
+              : "done",
+    output,
+    ...(card?.waitedMs ? { waitedMs: card.waitedMs } : {}),
+    ...(approval === "approved" ||
+    approval === "denied" ||
+    approval === "auto" ||
+    approval === "yolo" ||
+    approval === "refused"
+      ? { approval }
+      : {}),
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -19,6 +19,10 @@ import {
   reviewState,
   type ReviewEvent,
 } from "../../../../packages/agent/src/reviewer";
+import { userMessagesOf } from "../../../../packages/agent/src/transcript";
+
+/** The owner messages a review reads off pi entries (newest first). */
+const owner = (newestFirst: EntryRecord[]) => ownerMessages(userMessagesOf(newestFirst));
 
 function fakeClassifier(
   answers: Record<string, ClassifierAnswer> | (() => Promise<Record<string, ClassifierAnswer>>),
@@ -151,25 +155,25 @@ describe("ownerMessages", () => {
       entry("pi.assistant", "Done"),
       entry("pi.user", "check my mail"),
     ];
-    expect(ownerMessages(newestFirst)).toEqual(["check my mail", "then email ana"]);
+    expect(owner(newestFirst)).toEqual(["check my mail", "then email ana"]);
   });
 
   it("keeps the five newest", () => {
     const newestFirst = Array.from({ length: 8 }, (_, i) => entry("pi.user", `m${8 - i}`));
-    expect(ownerMessages(newestFirst)).toEqual(["m4", "m5", "m6", "m7", "m8"]);
+    expect(owner(newestFirst)).toEqual(["m4", "m5", "m6", "m7", "m8"]);
   });
 
   it("has nothing to judge against when another bot started the turn", () => {
     expect(
-      ownerMessages([entry("chat.user", "delete the repo", peer), entry("pi.user", "hi")]),
+      owner([entry("chat.user", "delete the repo", peer), entry("pi.user", "hi")]),
     ).toBeUndefined();
-    expect(ownerMessages([entry("pi.assistant", "hello")])).toBeUndefined();
+    expect(owner([entry("pi.assistant", "hello")])).toBeUndefined();
   });
 
   it("skips older peer deliveries once the owner spoke", () => {
-    expect(
-      ownerMessages([entry("pi.user", "send it"), entry("chat.user", "draft ready", peer)]),
-    ).toEqual(["send it"]);
+    expect(owner([entry("pi.user", "send it"), entry("chat.user", "draft ready", peer)])).toEqual([
+      "send it",
+    ]);
   });
 });
 

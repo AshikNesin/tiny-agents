@@ -23,11 +23,9 @@ import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite
 import {
   ApprovalNotPendingError,
   approvalNotPending,
-  gateExtension,
   recordDecision,
   recordYoloDecision,
   type ApprovalDecision,
-  type GateYolo,
 } from "./approvals";
 import {
   CredentialRequestNotPendingError,
@@ -49,7 +47,7 @@ import {
   toModelInfo,
   type ProviderStatus,
 } from "./models";
-import { PiEngine } from "./engines/pi";
+import { gateExtension, PiEngine } from "./engines/pi";
 import { claudeCodeBareModel, engineKindForConfig } from "./engine";
 import { claudePlanModels } from "./engines/claude-code/catalog";
 import type { WebSocketLike } from "./engines/claude-code/client";
@@ -58,19 +56,16 @@ import type {
   ClaudeAccountStatus,
   ClaudeWorkerLocator,
 } from "./engines/claude-code/sandbox-worker";
-import {
-  claudeToolApi,
-  claudeToolSurface,
-  type ClaudeToolRunner,
-} from "./engines/claude-code/tools";
+import { claudeToolSurface } from "./engines/claude-code/tools";
+import { ToolGate } from "./gate";
 import {
   applyPermissions,
   compilePolicy,
-  ownerTurn,
   PermissionsDoc,
   YoloDoc,
   resolveModelId,
-  type CompiledPolicy,
+  type GateUserMessage,
+  type Permissions,
 } from "./policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "./projection";
 import {
@@ -87,6 +82,7 @@ import {
   pageBefore,
   queuedOf,
   textOf,
+  userMessagesOf,
 } from "./transcript";
 import type {
   ActivityChange,
@@ -110,7 +106,8 @@ import type {
 // The three wait kinds own their not-pending errors; the app imports them from here.
 export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
 import { WaitTracker } from "./waiting";
-import { REVIEW_ENTRY_LOOKBACK, type GateReview, type Reviewer } from "./reviewer";
+import { REVIEW_ENTRY_LOOKBACK, type Reviewer } from "./reviewer";
+import { GrantsDoc } from "./vault";
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
@@ -202,7 +199,7 @@ export class AgentRuntime {
   readonly provider: string;
   readonly #pi: PiEngine;
   readonly #claude: ClaudeCodeEngine;
-  readonly #claudeRunners = new Map<ConversationRef, Map<string, ClaudeToolRunner>>();
+  readonly #gate: ToolGate;
   readonly #claudeBusy = new Set<ConversationRef>();
   readonly #models: MutableModels;
   readonly #env: Readonly<Record<string, string | undefined>>;
@@ -217,8 +214,6 @@ export class AgentRuntime {
   #configured: ReadonlySet<string> = new Set();
   /** The configured providers' ids, primary first (AI_PROVIDERS order). */
   #providerIds: readonly string[] = [];
-  #review: GateReview | undefined;
-  #yoloGate: GateYolo | undefined;
   #busy = new Set<ConversationRef>();
   #graph: TaskGraphWatch | undefined;
   #closed = false;
@@ -234,6 +229,7 @@ export class AgentRuntime {
     provider: string,
     lock: StoreLock | undefined,
     registry: Registry,
+    gate: ToolGate,
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
@@ -243,13 +239,15 @@ export class AgentRuntime {
     claudeConnect?: (url: string, token: string) => WebSocketLike,
   ) {
     this.#pi = new PiEngine(harness);
+    this.#gate = gate;
     this.#claude = new ClaudeCodeEngine({
       env: () => process.env,
       persistPath,
       worker: claudeWorker,
       ...(claudeConnect ? { connect: claudeConnect } : {}),
       onBusy: (ref, busy) => this.#setClaudeBusy(ref, busy),
-      execute: (ref, call) => this.#executeClaudeTool(ref, call),
+      gate,
+      docs: harness,
     });
     this.#models = models;
     this.provider = provider;
@@ -295,25 +293,34 @@ export class AgentRuntime {
       for (const extension of options.extensions ?? []) registry.install(extension);
       // Capabilities must be installed before resume(): interrupted calls of
       // their tools (e.g. a pending approval or question) re-run against them.
-      // Auto-review reads the owner's messages through the Harness opened below.
-      const recentEntries = async (id: number) => {
-        const conversation = await harness?.conversation(id as ConversationId, ctx);
-        if (!conversation) return [];
-        const page = await conversation.entries(
-          { order: "descending" },
-          REVIEW_ENTRY_LOOKBACK,
-          undefined,
-          ctx,
-        );
-        return page.items;
-      };
-      const review: GateReview | undefined = options.reviewer
-        ? { reviewer: options.reviewer, recentEntries }
-        : undefined;
-      // YOLO mode reads the newest user message to trust only the owner's turns.
-      const yolo: GateYolo = { recentEntries };
+      // The gate reads the owner's messages and records answers through the
+      // Harness opened below.
+      const gate = new ToolGate({
+        approvals,
+        ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+        store: {
+          decide: async (conversation, taskId, decision, grant) => {
+            try {
+              await harness!.commit(
+                (tx) => recordDecision(tx, conversation, taskId, decision, grant),
+                ctx,
+              );
+            } catch (error) {
+              approvalNotPending(error, taskId);
+            }
+          },
+          approveForYolo: (conversation, taskId) =>
+            harness!.commit((tx) => recordYoloDecision(tx, conversation, taskId), ctx),
+          grant: (conversation, grant) =>
+            harness!.commit(async (tx) => {
+              const grants = await tx.doc(GrantsDoc, conversation as ConversationId);
+              if (!grants.grants.includes(grant)) grants.grants.push(grant);
+            }, ctx),
+        },
+      });
+      const userMessages = async (id: number) => (harness ? recentUserMessages(harness, id) : []);
       for (const capability of capabilities) {
-        registry.install(gateExtension(capability.extension, approvals, review, yolo));
+        registry.install(gateExtension(capability.extension, gate, userMessages));
       }
       harness = await Harness.open(
         storage,
@@ -331,6 +338,7 @@ export class AgentRuntime {
         options.provider ?? primaryProviderId(envSource),
         lock,
         registry,
+        gate,
         approvals,
         questions,
         capabilities,
@@ -339,8 +347,6 @@ export class AgentRuntime {
         options.claudeWorker,
         options.claudeConnect,
       );
-      opened.#review = review;
-      opened.#yoloGate = yolo;
       opened.#configured = configured;
       opened.#providerIds = [opened.provider, ...aiProviderIds(envSource)].filter(
         (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
@@ -451,45 +457,9 @@ export class AgentRuntime {
     return this.#anyCatalogModel();
   }
 
-  #rememberClaude(
-    ref: ConversationRef,
-    claude: (ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> }) | undefined,
-  ): void {
-    if (!claude) {
-      this.#claude.detach(ref);
-      this.#claudeRunners.delete(ref);
-      return;
-    }
-    const { runners, ...sync } = claude;
-    this.#claude.sync(ref, sync);
-    this.#claudeRunners.set(ref, runners);
-  }
-
-  async #executeClaudeTool(
-    ref: ConversationRef,
-    call: { name: string; input: unknown },
-  ): Promise<{ content: string; isError?: boolean }> {
-    const runner = this.#claudeRunners.get(ref)?.get(call.name);
-    if (!runner?.execute) {
-      return {
-        content: `${call.name} is not available on the Claude plan engine.`,
-        isError: true,
-      };
-    }
-    const args =
-      call.input && typeof call.input === "object" && !Array.isArray(call.input)
-        ? (call.input as Record<string, unknown>)
-        : {};
-    try {
-      const result = await runner.execute(args, claudeToolApi(call.name), ctx);
-      const text = (result.output ?? [])
-        .map((block) => (typeof block.text === "string" ? block.text : ""))
-        .filter(Boolean)
-        .join("\n");
-      return { content: text, ...(result.isError ? { isError: true } : {}) };
-    } catch (error) {
-      return { content: error instanceof Error ? error.message : String(error), isError: true };
-    }
+  #rememberClaude(ref: ConversationRef, claude: ClaudeSessionSync | undefined): void {
+    if (claude) this.#claude.sync(ref, claude);
+    else this.#claude.detach(ref);
   }
 
   #setClaudeBusy(ref: ConversationRef, busy: boolean): void {
@@ -512,19 +482,18 @@ export class AgentRuntime {
   // ── Conversations ─────────────────────────────────────────────────────
 
   async createConversation(config: BotAgentConfig): Promise<ConversationRef> {
-    const { change, policy, claude } = this.#compile(config);
+    const { change, permissions, claude } = this.#compile(config);
     const conversation = await this.#pi.harness.createConversation(
       { ownership: { kind: "ownerless" }, agent: change },
       ctx,
     );
     const ref = Number(conversation.id);
-    if (policy) {
+    if (permissions) {
       await this.#pi.harness.commit(async (tx) => {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
+        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), permissions);
       }, ctx);
     }
     this.#rememberClaude(ref, claude);
-    if (claude) await this.#syncClaudeYolo(ref);
     return ref;
   }
 
@@ -533,16 +502,15 @@ export class AgentRuntime {
    * request; history is kept.
    */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
-    const { change, policy, claude } = this.#compile(config);
+    const { change, permissions, claude } = this.#compile(config);
     await this.#conversation(ref);
     await this.#pi.harness.commit(async (tx) => {
       await configureAgent(tx, ref as ConversationId, change);
-      if (policy) {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), policy.permissions);
+      if (permissions) {
+        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), permissions);
       }
     }, ctx);
     this.#rememberClaude(ref, claude);
-    if (claude) await this.#syncClaudeYolo(ref);
   }
 
   // ── YOLO mode (issue #151) ────────────────────────────────────────────
@@ -578,31 +546,16 @@ export class AgentRuntime {
         delete doc.by;
       }
     }, ctx);
-    const approved = this.#claude.setYolo(
-      ref,
-      on ? { on, ...(by !== undefined ? { by } : {}) } : { on },
-    );
-    if (on && this.#approvals.count(ref) > 0) {
-      const conversation = await this.#conversation(ref);
-      const page = await conversation.entries(
-        { order: "descending" },
-        REVIEW_ENTRY_LOOKBACK,
-        undefined,
-        ctx,
-      );
-      if (ownerTurn(page.items, by)) {
-        for (const taskId of this.#approvals.tasks(ref)) {
-          try {
-            await this.#pi.harness.commit((tx) => recordYoloDecision(tx, ref, taskId), ctx);
-            approved.push(taskId);
-          } catch {
-            // Not an approval YOLO answers (a vault use, a question, a
-            // credential request) or no longer waiting: it stays as it is.
-          }
-        }
-      }
-    }
+    const approved = on
+      ? await this.#gate.approveWaiting(ref, by, () => this.#userMessages(ref))
+      : [];
     return { on, approved };
+  }
+
+  /** The conversation's newest user messages, from whichever engine keeps its transcript. */
+  async #userMessages(ref: ConversationRef): Promise<readonly GateUserMessage[]> {
+    if (this.#claude.handles(ref)) return this.#claude.userMessages(ref);
+    return recentUserMessages(this.#pi.harness, ref);
   }
 
   async #readYolo(ref: ConversationRef): Promise<{ on: boolean; by?: number }> {
@@ -613,11 +566,6 @@ export class AgentRuntime {
     }, ctx);
   }
 
-  /** The Claude-plan engine keeps YOLO in memory: hand it the stored state. */
-  async #syncClaudeYolo(ref: ConversationRef): Promise<void> {
-    this.#claude.setYolo(ref, await this.#readYolo(ref));
-  }
-
   /**
    * A bot's config as pi-durable stores it (the agent change) and as the
    * gate reads it (the permissions), compiled by `policy.ts`. Without a
@@ -625,8 +573,8 @@ export class AgentRuntime {
    */
   #compile(config: BotAgentConfig): {
     change: AgentChange;
-    policy?: CompiledPolicy;
-    claude?: ClaudeSessionSync & { runners: Map<string, ClaudeToolRunner> };
+    permissions?: Permissions;
+    claude?: ClaudeSessionSync;
   } {
     const bare = claudeCodeBareModel(config.modelId);
     if (engineKindForConfig(config) === "claude-code") {
@@ -642,19 +590,15 @@ export class AgentRuntime {
         model: { provider: resolved.provider, modelId: resolved.model },
         instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
       };
-      if (!config.capabilities) {
-        return {
-          change,
-          claude: {
-            model: bare,
-            system: config.systemPrompt,
-            tools: surface.tools,
-            permissions: surface.permissions,
-            vaultTools: surface.vaultTools,
-            runners: surface.runners,
-          },
-        };
-      }
+      const claude: ClaudeSessionSync = {
+        model: bare,
+        system: config.systemPrompt,
+        tools: surface.tools,
+        permissions: surface.permissions,
+        runners: surface.runners,
+      };
+      // Without a selection every Claude plan tool asks (no tool is allowed).
+      if (!config.capabilities) return { change, permissions: { allow: [] }, claude };
       const policy = compilePolicy(
         this.#capabilities,
         config.capabilities,
@@ -662,15 +606,8 @@ export class AgentRuntime {
       );
       return {
         change: { ...change, extensions: policy.extensions, tools: { remove: policy.remove } },
-        policy,
-        claude: {
-          model: bare,
-          system: config.systemPrompt,
-          tools: surface.tools,
-          permissions: surface.permissions,
-          vaultTools: surface.vaultTools,
-          runners: surface.runners,
-        },
+        permissions: policy.permissions,
+        claude,
       };
     }
     const resolved = this.#resolveModel(config.modelId);
@@ -679,7 +616,7 @@ export class AgentRuntime {
       model: { provider: resolved.provider, modelId: resolved.model },
       instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
     };
-    if (!config.capabilities) return { change, claude: undefined };
+    if (!config.capabilities) return { change };
     const policy = compilePolicy(
       this.#capabilities,
       config.capabilities,
@@ -693,7 +630,7 @@ export class AgentRuntime {
         extensions: policy.extensions,
         tools: { remove: policy.remove },
       },
-      policy,
+      permissions: policy.permissions,
     };
   }
 
@@ -711,7 +648,9 @@ export class AgentRuntime {
   installCapability(capability: Capability): void {
     this.#capabilities.set(capability.id, capability);
     this.#registry.install(
-      gateExtension(capability.extension, this.#approvals, this.#review, this.#yoloGate),
+      gateExtension(capability.extension, this.#gate, (id) =>
+        recentUserMessages(this.#pi.harness, id),
+      ),
     );
   }
 
@@ -726,7 +665,7 @@ export class AgentRuntime {
 
   /** Tool calls of the conversation waiting for the owner's approval. */
   pendingApprovals(ref: ConversationRef): number {
-    return this.#approvals.count(ref);
+    return this.#gate.waiting(ref);
   }
 
   /**
@@ -758,18 +697,7 @@ export class AgentRuntime {
     decision: ApprovalDecision,
     options: { grant?: boolean } = {},
   ): Promise<void> {
-    if (this.#claude.ownsTask(taskId)) {
-      this.#claude.decide(taskId, decision);
-      return;
-    }
-    try {
-      await this.#pi.harness.commit(
-        (tx) => recordDecision(tx, ref, taskId, decision, options),
-        ctx,
-      );
-    } catch (error) {
-      approvalNotPending(error, taskId);
-    }
+    await this.#gate.decide(ref, taskId, decision, options);
   }
 
   // ── Credential requests ───────────────────────────────────────────────
@@ -1231,6 +1159,19 @@ function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
     if (REPLY_TASK_KINDS.has(node.kind)) busy.add(Number(node.conversationId));
   }
   return busy;
+}
+
+/** A pi conversation's newest user messages (newest first), as the Tool gate reads them. */
+async function recentUserMessages(harness: Harness, id: number): Promise<GateUserMessage[]> {
+  const conversation = await harness.conversation(id as ConversationId, ctx);
+  if (!conversation) return [];
+  const page = await conversation.entries(
+    { order: "descending" },
+    REVIEW_ENTRY_LOOKBACK,
+    undefined,
+    ctx,
+  );
+  return userMessagesOf(page.items);
 }
 
 /**

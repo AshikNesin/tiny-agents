@@ -8,17 +8,11 @@
  * change pi-durable stores (extensions, hidden tools) and the conversation's
  * `tiny.permissions` document the approval gate reads.
  */
-import type {
-  EntryRecord,
-  Extension,
-  Registry,
-  ToolRegistration,
-} from "@earendil-works/pi-durable";
+import type { Extension, Registry, ToolRegistration } from "@earendil-works/pi-durable";
 import { defineDoc } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { effectivePermission, type Capability, type CapabilitySelection } from "./capabilities";
-import { authorOf, CHAT_USER_ENTRY, peerOf } from "./transcript";
 
 /**
  * Which tools of the conversation run without asking (`allow`), which of the
@@ -182,17 +176,30 @@ export async function yoloOf(
 }
 
 /**
+ * A user message as the Tool gate reads it, whichever engine keeps the
+ * transcript: what it said, whether another bot put it there, and who sent
+ * it in a shared chat.
+ */
+export interface GateUserMessage {
+  text: string;
+  /** A peer delivery: another bot's message, a relayed reply or a mention. */
+  peer: boolean;
+  /** The sender's user id in a shared chat; undefined in the owner's own chat. */
+  author?: number;
+}
+
+/**
  * Whether the turn is the owner's: the newest user message (newest first)
  * is not a peer delivery (another bot, a relayed reply or a mention) and,
  * in a shared chat, was sent by the owner (`by`). YOLO trusts only that.
  */
-export function ownerTurn(newestFirst: readonly EntryRecord[], by: number | undefined): boolean {
-  const last = newestFirst.find(
-    (entry) => entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY,
-  );
-  if (!last || peerOf(last)) return false;
-  const author = authorOf(last);
-  return author === undefined || author.id === by;
+export function ownerTurn(
+  newestFirst: readonly GateUserMessage[],
+  by: number | undefined,
+): boolean {
+  const last = newestFirst[0];
+  if (!last || last.peer) return false;
+  return last.author === undefined || last.author === by;
 }
 
 /** Whether auto-review may approve this tool's calls in the conversation. */

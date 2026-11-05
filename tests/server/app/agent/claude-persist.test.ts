@@ -49,7 +49,6 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
     engine.sync(7, sync);
     const state = await engine.read(7);
@@ -63,7 +62,6 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
     engine.sync(7, sync);
     const subscription = await engine.watch(7, () => undefined);
@@ -74,7 +72,6 @@ describe("Claude Code transcript after a restart", () => {
     const path = await savedFile();
     const engine = new ClaudeCodeEngine({
       persistPath: path,
-      execute: async () => ({ content: "" }),
     });
     engine.sync(7, sync);
     await engine.close();

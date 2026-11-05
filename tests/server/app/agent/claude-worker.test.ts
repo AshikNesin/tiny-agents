@@ -9,7 +9,6 @@ import {
   ClaudeWorkerClient,
   type WebSocketLike,
 } from "../../../../packages/agent/src/engines/claude-code/client";
-import { createClaudeApprovalGate } from "../../../../packages/agent/src/engines/claude-code/approvals";
 import {
   DEFAULT_TIMINGS,
   OverrideRefusal,
@@ -287,7 +286,7 @@ describe("localhost worker", () => {
     });
   });
 
-  it("streams a turn, gates a tool, and resumes a dropped socket without running the tool twice", async () => {
+  it("streams a turn, proxies a tool, and resumes a dropped socket without running the tool twice", async () => {
     const release: { go?: (result: { content: string }) => void } = {};
     const executions: string[] = [];
     const query: QueryFactory = async (ctx) => {
@@ -315,27 +314,18 @@ describe("localhost worker", () => {
     servers.push(server);
 
     const events: WorkerMessage[] = [];
-    const asked: number[] = [];
-    const gate = createClaudeApprovalGate({
-      permission: () => "ask",
-      nextTaskId: () => 2_000_000_001,
-      onAsk: (call) => {
-        asked.push(call.taskId);
-        gate.decide(call.taskId, "approved");
-      },
-      execute: async (call) => {
-        executions.push(call.toolUseId);
-        return new Promise((resolve) => {
-          release.go = resolve;
-        });
-      },
-    });
+    const run = (call: { toolUseId: string }) => {
+      executions.push(call.toolUseId);
+      return new Promise<{ content: string }>((resolve) => {
+        release.go = resolve;
+      });
+    };
     const client = new ClaudeWorkerClient({
       url: server.url,
       token: TOKEN,
       timings: fastTimings,
       onEvent: (message) => events.push(message),
-      onTool: (call) => gate.run(call),
+      onTool: (call) => run(call),
     });
     clients.push(client);
 
@@ -349,7 +339,6 @@ describe("localhost worker", () => {
       tools: [{ name: "web_search", description: "Search", inputSchema: { type: "object" } }],
     });
     await vi.waitFor(() => expect(executions).toEqual(["toolu_once"]));
-    expect(asked).toEqual([2_000_000_001]);
     client.drop();
     await vi.waitFor(() =>
       expect(events.filter((message) => message.type === "welcome").length).toBeGreaterThan(1),
@@ -438,7 +427,6 @@ describe("engine kill switch", () => {
     let connected = false;
     const engine = new ClaudeCodeEngine({
       env: () => ({ CLAUDE_CODE_ENGINE_ENABLED: "0", CLAUDE_CODE_ENGINE_FALLBACK: "pause" }),
-      execute: async () => ({ content: "" }),
       connect: () => {
         connected = true;
         return fakeSocket();
@@ -457,7 +445,6 @@ describe("engine kill switch", () => {
         CLAUDE_CODE_ENGINE_ENABLED: "0",
         CLAUDE_CODE_ENGINE_FALLBACK: "gateway",
       }),
-      execute: async () => ({ content: "" }),
     });
     engine.sync(4, { model: "claude-sonnet-4-6", system: "", tools: [], permissions: {} });
     await expect(engine.submit(4, { requestId: "r", text: "hi" })).resolves.toBe("gateway");
