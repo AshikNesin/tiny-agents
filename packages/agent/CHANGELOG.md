@@ -1,5 +1,363 @@
 # @tiny-agents/agent
 
+## 0.3.0
+
+### Minor Changes
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`89350a0`](https://github.com/AshikNesin/tiny-agents/commit/89350a09bf8ecc5949e381b5a9c27eed3315ab80) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Subpath exports for `@tiny-agents/agent`. The package root is now only the
+  pi-durable boundary (the runtime, the conversation and chat types, the
+  toolkits and capabilities, the gateway catalog), and exports only what
+  something outside the package imports: 328 named root exports become 105
+  (plus `export type * from "./types"`, unchanged). The areas that never touch
+  pi-durable get their own entry points, and the app imports them from there.
+  No behaviour changes; this is module layout only.
+  
+  New subpaths:
+  
+  - `@tiny-agents/agent/sandbox`: `createSandboxConnection`,
+    `createMemoryHostKeyStore`, and the types `SandboxConnection`,
+    `SandboxConnectionOptions`, `SandboxExecOptions`, `SandboxExecResult`,
+    `SandboxFile`, `PtyStream`, `PtySize`, `HostKeyStore`, `SshEndpoint`.
+  - `@tiny-agents/agent/terminal`: `createTerminalService`, `parseSessionName`,
+    `SessionBusyError`, `SessionLimitError`, `SessionNotFoundError`,
+    `TerminalUnreachableError`, `TmuxMissingError`, and the types
+    `TerminalService`, `TerminalServiceOptions`, `TerminalConnection`,
+    `TerminalSessionRow`, `TerminalStatus`, `SessionName`, `PtyStream`.
+  - `@tiny-agents/agent/browser`: `createBrowserSessions`,
+    `closeAllBrowserSessions`, `createChromiumTransport`,
+    `createRemoteCdpTransport`, and the types `BrowserSessions`,
+    `BrowserSessionsOptions`, `BrowserTarget`, `BrowserTransport`,
+    `ChromiumTransportOptions` (new), `RemoteCdpTransportOptions`.
+  - `@tiny-agents/agent/computer`: `createComputerSessions`,
+    `closeAllComputerSessions`, `createX11ComputerTransport`,
+    `parseDesktopSize`, `parseExtraPackages`, and the types
+    `ComputerSessions`, `ComputerSessionsOptions`, `ComputerTransport`,
+    `X11ComputerTransportOptions`.
+  - `@tiny-agents/agent/claude-worker`: `createSandboxClaudeWorker`,
+    `claudeLoginShellLine`, and the types `ClaudeWorkerLocator`,
+    `ClaudeWorkerTarget`, `ClaudeAccountStatus`, `ClaudeWorkerMode`,
+    `SandboxWorkerOptions`.
+  
+  `createSandboxToolkit`, `createBrowserToolkit` and `createComputerToolkit`
+  need pi-durable and stay on the root. `./testing` and `./peer-envelope` are
+  unchanged; the server now imports `stripPeerEnvelope` from `./peer-envelope`
+  like the client does.
+  
+  **Breaking** (`@tiny-agents/agent`): every name above is no longer exported
+  from the root; import it from its subpath. `parsePeerEnvelope`,
+  `stripPeerEnvelope` and `PeerEnvelope` are only on `./peer-envelope`.
+  
+  Removed from the package's public surface (nothing outside the package
+  imported them; they stay exported from their source modules inside it):
+  
+  - Runtime and store: `ConversationNotFoundError`, `ModelNotFoundError`,
+    `AgentRuntimeOptions`, `TurnOutcome`, `StoreLockedError`,
+    `acquireStoreLock`, `StoreLock`.
+  - Capabilities and policy: `defaultPermission`, `effectivePermission`,
+    `CapabilityInfo`, `CapabilityKind`, `CapabilitySelection`, `ToolInfo`,
+    `applyPermissions`, `compilePolicy`, `PermissionsDoc`, `resolveModelId`,
+    `CompiledPolicy`, `Permissions`.
+  - Approvals, the Tool gate and the engine seam: `approvalOf`,
+    `recordDecision`, `ApprovalDecision`, `ApprovalState`, `ApprovalView`,
+    `GateHooks`, `GatePlan`, `ToolGate`, `GateCall`, `GateStore`,
+    `ToolGateOptions`, `GateUserMessage`, `refuseUnattended`, `AgentEngine`,
+    `CompiledConversation`, `EngineSubmission`, `ClaudeEngineFallback`,
+    `CLAUDE_CODE_MODEL_PREFIX`, `CLAUDE_PLAN_NOTE`, `claudeCodeBareModel`,
+    `claudeCodeFallback`, `engineKindForConfig`, `engineKindForModel`.
+  - Projection and transcript: `ChatProjection`, `unansweredOf`,
+    `FoldOutcome`, `ProjectionSnapshot`, `deriveChat`, `diffChat`,
+    `chatState`, `CHAT_USER_ENTRY`, `peerOf`, `attachmentsOf`, `queuedOf`,
+    `RawChat`.
+  - Classifier and reviewer: `classifierFromModels`,
+    `DEFAULT_CLASSIFIER_MODEL`, `Classifier`, `REVIEW_QUESTIONS`,
+    `REVIEW_THRESHOLDS`, `ReviewEvent`, `ReviewInput`, `ReviewVerdict`.
+  - Vault, redaction and credentials: `GrantsDoc`, `VAULT_RULE`, `vaultGrant`,
+    `VaultRefusal`, `REDACTED`, `SecretRedactor`,
+    `CREDENTIAL_REQUEST_TTL_MS`, `credentialResultDetails`, `credentialsOf`,
+    `pendingCredentialDetails`, `SECRET_FIELD_TYPES`, `CredentialFieldType`,
+    `CredentialRequestOutcome`, `describeItem`, `VAULT_APPROVAL_TTL_MS`,
+    `VaultToolkitOptions`, `OriginMismatchError`, `SecretFill`.
+  - Toolkits: `ASK_OWNER`, `questionsOf`, `createTasksExtension`,
+    `TaskStatus`, `TaskPriority`, `CodeChangedFile`, `CodeHarnessRecord`,
+    `CodeModelRecord`, `CodeThreadStatus`, `CodeToolkitOptions`,
+    `TodayOptions`, `SandboxToolkitOptions`, `AttachmentsToolkitOptions`,
+    `createRoutinesExtension`, `confirmationCard`, `MAX_BLOCKED_REASON`,
+    `RoutineCreateInput`, `VISION_SYSTEM`, `DEFAULT_QUESTION`, `Transcriber`,
+    `CUSTODY_RULE`, `SkillContent`, `SkillSummary`, `isPrivateAddress`,
+    `WebToolkitOptions`, `UnauthorizedError`.
+  - Browser and computer internals: `conversationBrowserTarget`,
+    `isBlockedPrivateUrl`, `normalizeCredentialRequest`, `BrowserClock`,
+    `BrowserDriver`, `BrowserOpenState`, `BrowserPhase`, `BrowserSession`,
+    `BrowserToolkitOptions`, `BrowserVnc`, `LiveBrowserSession`,
+    `LiveBrowserTab`, `DesktopGoneError`, `normalizeKeys`, `OWNER_DRIVING`,
+    `OwnerDrivingError`, `SHARED_COMPUTER_PROFILE`, `WindowMismatchError`,
+    `windowTarget`, `ComputerApp`, `ComputerDesktop`, `ComputerDriver`,
+    `ComputerOpenState`, `ComputerPhase`, `ComputerToolkitOptions`,
+    `ComputerWindow`, `LiveComputer`, `OpenDesktopOptions`, `WindowBinding`.
+  - SSH, terminal and Claude worker internals: `SANDBOX_IDLE_TIMEOUT_MS`,
+    `describeSandboxError`, `hostKeyHash`, `verifyHostKey`,
+    `DEFAULT_SSH_PORT`, `DEFAULT_SSH_USER`, `ForwardRefusedError`,
+    `HostKeyChangedError`, `PreDispatchError`, `SandboxTimeoutError`,
+    `TMUX_INSTALL_COMMAND`, `TerminalExecResult`, `MAX_SESSIONS`,
+    `SCROLLBACK`, `SESSION_PREFIX`, `TERM`, `TMUX_SOCKET`, `noWorkerLocator`,
+    `CLAUDE_WORKER_NODE_VERSION`, `CLAUDE_WORKER_PACKAGES`,
+    `CLAUDE_WORKER_STACK_VERSION`.
+  - Models: `CLAUDE_OAUTH_TOKEN_MARKER`, `ClaudeOauthTokenError`,
+    `GATEWAY_ENV_KEYS`, `aiProviderIds`, `assertNoClaudeOauthToken`,
+    `builtinProviderIds`, `configuredProviderIds`, `createGatewayModels`,
+    `createProviderModels`, `findClaudeOauthToken`, `isGatewayConfigured`,
+    `primaryProviderId`, `providerSetupHint`, `ProviderStatus`.
+  - pi-durable image re-exports: `ImageLimits`.
+  
+  The package's own tests that used the root for internals
+  (`policy`, `projection`, `runtime` and `attachments` tests) import them from
+  their source modules, as the rest of `tests/server/app/agent` already does.
+  
+  `checkPublicUrl` and `isPrivateAddress` move to `toolkits/public-url.ts`, so
+  no subpath loads pi-durable (`/browser` and `/claude-worker` reached it
+  through the web toolkit).
+
+- [#150](https://github.com/AshikNesin/tiny-agents/pull/150) [`e14a12f`](https://github.com/AshikNesin/tiny-agents/commit/e14a12f917572c757f115e31402748e080bad20c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: set `CLAUDE_CODE_ENGINE_ENABLED=1`, sign in once, and use it.
+  The app now installs and runs the Claude Code worker on the sandbox itself
+  (the VM or the local container) over the same SSH endpoint as the browser and
+  terminal: Node when needed, the pinned Agent SDK and Claude Code, the bundled
+  worker (`dist/server/claude-worker.mjs`), started on the sandbox's loopback and
+  reached through an SSH tunnel — no `tailscale serve`, token or unit file.
+  Settings → Claude plan shows the setup and login state and opens a terminal tab
+  running `claude auth login` to sign in (`POST /terminal/sessions` takes
+  `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
+  preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+  `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
+  systemd/launchd files are removed; the sandbox is the only path. The worker now
+  starts without a login (each session checks it), and the launcher unsets
+  API-key and backend overrides. See ADR 0010.
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`ff9c364`](https://github.com/AshikNesin/tiny-agents/commit/ff9c3643377ed3a0bc379f0b8690a6cd846f9ab7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One Worker connection for both Claude worker clients. `@tiny-agents/claude-worker/client`
+  exports `connectWorker(resolveTarget, options)`, which owns the heartbeat and
+  silence close, reconnecting with backoff (finding the worker again on every
+  attempt), the handshake, worker restart detection by the `welcome` boot id, a
+  resume cursor per session, requests and their replies (sent again on the next
+  socket while unanswered), the queue while disconnected, and the wording of a
+  refused token or an HTTP status. The Claude plan bot engine and the Claude Code
+  harness are thin protocol layers on it.
+  
+  The worker's socket envelope is shared: `welcome` carries `bootId`, every
+  request is answered with `reply` (was `coding.reply`), and the bot protocol's
+  `resume` takes a `requestId` and answers where the session is before it
+  replays.
+  
+  The Claude plan engine gains what only the harness had: it finds the worker
+  again on every reconnect instead of caching its first address, and a worker
+  restart ends the turn it was running with a visible error ("The Claude worker
+  restarted…") instead of leaving the chat busy forever. A turn still waiting to
+  be sent goes to the new worker. Its tool calls stay idempotent, and replaying
+  an old turn never runs its tools again (bot sessions join at the worker's
+  latest event).
+  
+  The worker labels `.avif` assets `image/avif`, matching the Code page.
+
+- [#159](https://github.com/AshikNesin/tiny-agents/pull/159) [`1fc7691`](https://github.com/AshikNesin/tiny-agents/commit/1fc769128276b1c25b1e78f751d33de68fa10904) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code page harness adapters (issue [#157](https://github.com/AshikNesin/tiny-agents/issues/157), ADR 0011, ADR 0012): the Code page
+  drives any coding agent through one adapter contract, starting with Shelley
+  and Claude Code.
+  
+  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `TranscriptItem` rows upserted by id, thread and instance events, honest
+  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  stream2, snapshot list, normalizer and usage report moved off the client;
+  `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
+  mode), and a test kit (`capabilityProblems`, an in-memory thread index).
+  
+  `@groot/web` replaces the Shelley-only server code with a harness-generic
+  layer: `code_threads` (followed/unread, and the index for harnesses without
+  their own list) and `code_handoffs` (migration 0006, old Shelley rows copied
+  at boot), one hub over every instance, a watcher that delivers hand-off
+  finishes and pushes for any harness, and `/api/v1/code/*` routes
+  (`/api/v1/shelley/*` is removed). The Code page renders the contract: a
+  merged list with a harness filter, a harness picker for new threads, and
+  controls that follow each harness's capabilities (approval and question
+  cards, permission modes, steer/queue, recovery, Changes, usage).
+  
+  `@tiny-agents/agent` replaces the `shelley` toolkit with `code`:
+  `code_start`/`code_send`/`code_status`/`code_list`/`code_models` (Shelley by
+  default, any harness by name), keeping `shelley_start` and `shelley_send` as
+  aliases; `ChatToolCall.shelley` becomes `ChatToolCall.code` (older results
+  still parse).
+  
+  `@tiny-agents/claude-worker` adds the coding mode: Claude Code's built-in
+  tools in a plain working directory, `acceptEdits` by default, approvals and
+  questions through `canUseTool`, steer/queue/interrupt, history, fork and a
+  fixed set of workspace operations, with its own concurrency budget.
+
+- [#176](https://github.com/AshikNesin/tiny-agents/pull/176) [`bb9fec6`](https://github.com/AshikNesin/tiny-agents/commit/bb9fec6089651c66d975c919884be5690d0d4833) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One Model catalog owns model ids. `AgentRuntime.catalog` (`ModelCatalog`) lists
+  the picker's models, says which ids a bot can run on (`has`), resolves an id to
+  its registry model (`resolve`, `model`), gives one model's entry (`info`) and
+  the providers' status (`providers`, `canAnswer`). It replaces
+  `listModels()`, `hasModel()`, `providerStatus()` and `hasConfiguredProvider()`
+  on the runtime, and `resolveModelId` in the policy module. The `custom:` and
+  `claude-code/` grammar now lives only in `parseModelId`/`formatModelId`; the
+  vision transcriber and Side-calls use it instead of their own parsers.
+  
+  A Claude plan bot's Side-calls (memory capture) run on the same model when a
+  registry provider serves it, instead of always being skipped. Whether a bot's
+  model sees images no longer depends on the picker's allowlist.
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`5563dcd`](https://github.com/AshikNesin/tiny-agents/commit/5563dcd9d3f3fde3f338d0150a426dba854866de) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One sandbox connection. Everything that reaches the sandbox VM (or the local
+  sandbox container) now goes through one `SandboxConnection`
+  (`createSandboxConnection(endpoint)`), built once in the app's composition
+  root (`sandboxConnection()` in `sandbox-host.ts`) and handed to the sandbox
+  toolkit, attachments, the terminal, the computer, the browser and the Claude
+  worker. Its interface is `exec(cmd, { stdin, timeoutMs, maxBytes,
+  settleOnExit })`, `pty(cmd, size)`, `readFile`, `writeFile`, `forward(port)`
+  and `close()`. Behind it: one channel pool with a lazy shared dial, the
+  defaults, TOFU host keys (unchanged), the pre-dispatch-only retry rule, the
+  idle close (5 minutes), a closed forward retiring its connection (tailscaled
+  stalls later channels on it), and one "Cannot reach the sandbox" wording.
+  Attachments, the Claude worker, the computer's tool calls and the browser's
+  setup and tunnels no longer pay a fresh SSH handshake per call or per socket.
+  
+  **Breaking** (`@tiny-agents/agent`): the toolkits and transports take
+  `{ connection }` instead of host, port, user, host keys and key; the removed
+  exports are `createSsh2Transport`, `SandboxTransport`, `SandboxSession`,
+  `createSsh2TerminalTransport`, `Ssh2TerminalTransport(Options)`,
+  `TerminalTransport` (now `TerminalConnection`) and `dialSsh`;
+  `createSandboxClaudeWorker` takes `connection` instead of `endpoint` and
+  `dial`.
+
+- [#147](https://github.com/AshikNesin/tiny-agents/pull/147) [`f83139d`](https://github.com/AshikNesin/tiny-agents/commit/f83139da1ddcf6e9861b71ffab229c9e7fc5e757) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Share bots with guests (issue [#145](https://github.com/AshikNesin/tiny-agents/issues/145)): a collaborative chat where the owner and a
+  guest write in the same conversation with a bot.
+  
+  `@groot/web` adds guests (Settings → People: name, email and a password the
+  owner passes on) and per-bot sharing (bot settings → Sharing). A shared bot's
+  chat is one conversation everybody in it sees live; each message shows its
+  sender, and the bot reads it as `Name: message` with a prompt line naming
+  everyone and asking it to reply `[skip]` when people only talk to each other
+  (those replies are hidden and leave the Bot list alone). Guests reach only the
+  bots shared with them (chat, approvals, Questions, live browser and computer
+  views), uploads, Code and their own account; every other route answers 403
+  (`guest.guard.ts`, default-deny). In a shared chat every vault use asks and
+  only the owner may approve it, and memory capture and injection are off. New
+  tables `guests` and `bot_guests` (migration 0005). Nothing changes until a
+  guest is added: an account with no `guests` row is the owner.
+  
+  `@tiny-agents/agent` adds `ChatMessage.author` / `QueuedMessage.author` (the
+  trusted sender, stored on the entry by `submit({ author })`, with the name
+  prefix stripped from the transcript text), `authoredText`, `SKIP_REPLY` and
+  `isSkipReply`.
+
+- [#144](https://github.com/AshikNesin/tiny-agents/pull/144) [`07ef32e`](https://github.com/AshikNesin/tiny-agents/commit/07ef32ec5092a30c17e8668c1931b04867c705c2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add the Code page: a first-class workspace for the Shelley coding agent (issue [#143](https://github.com/AshikNesin/tiny-agents/issues/143)).
+  
+  `@groot/web` talks to Shelley's official HTTP/SSE API from the server only
+  (`SHELLEY_URL`, the only setting; requests carry `X-Exedev-Userid` for an
+  exe.dev Shelley's require-header guard): one
+  `/api/stream2` connection (`ShelleyHub`) feeds the live conversation list,
+  per-conversation streams, unread markers, Pushover pushes (`shelley.update`)
+  and bot hand-off finishes. `/api/v1/shelley/*` is a curated allowlist of
+  Shelley routes (lists, conversation, steer/queue/stop/retry/resume/fork,
+  settings, background jobs, `@` file search, skills, uploads, git diffs,
+  files and images). `/code` shows every conversation and subagent, a live
+  transcript with per-tool rows (live bash output, patch diffs, subagent
+  links, screenshots), the composer (steer, queue, `@` files, `/` commands,
+  attachments, skills), model and reasoning switching, a context meter, cost,
+  and a Changes panel with line comments. New tables `shelley_handoffs` and
+  `shelley_seen` (migration 0004).
+  
+  `@tiny-agents/agent` adds the `shelley` toolkit (`shelley_start`,
+  `shelley_send`, `shelley_status`, `shelley_list`, `shelley_models`; no tools
+  without a store; start and send default to Allow via the new
+  `ToolInfo.allowByDefault`)
+  and `ChatToolCall.shelley`, the hand-off card a `shelley_start` result
+  carries.
+
+- [#152](https://github.com/AshikNesin/tiny-agents/pull/152) [`56c0bd5`](https://github.com/AshikNesin/tiny-agents/commit/56c0bd51e1de477542d21c2361c047686e32b6e1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Terminal: copy/paste that works and a steadier screen. Ctrl+V (and
+  Ctrl+Shift+V, Shift+Insert, Cmd+V) now pastes from the browser, bracketed,
+  even on plain-http pages; xterm used to turn Ctrl+V into ^V. Dragging over
+  text in tmux copies it to the browser clipboard (tmux `set-clipboard on`
+  plus an OSC 52 handler that accepts tmux's empty selection and refuses
+  clipboard reads from the VM), with a "Copied" toast; Shift/Option+drag
+  selects locally and Ctrl+C / Ctrl+Shift+C / Cmd+C copies it. Right-click
+  opens a Copy / Paste / Select all menu, and the keys panel's paste is a
+  real (bracketed) paste. Glitch fixes: unicode11 widths so emoji/CJK line up
+  with tmux, truecolor through tmux, tabs attach at the rendered size (no
+  120x34-then-resize redraw), a second browser tab or device no longer kicks
+  the first off (no `attach -d`), the grid no longer widens its own column,
+  hidden tabs never shrink the pty, and the terminal resets before a
+  re-attach redraws. Pings run while the page is visible (no idle reconnect
+  while reading; half-open sockets are detected) and the server pauses on
+  client back-pressure. New: font size controls (A-/A+, Ctrl/Cmd +/-/0), a
+  cols×rows badge while resizing, tuned light/dark ANSI palettes, Cmd/Ctrl+
+  click links, and Reconnect after a detach.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`18498d5`](https://github.com/AshikNesin/tiny-agents/commit/18498d57e533d3db6bbd812fa62cade3e18ad74a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One tool-call row for both engines. A tool call's chat row (its status,
+  output, timing, approval and every Owner wait card) now comes from one
+  projection, `tool-call-row.ts`, that the pi transcript and the Claude plan
+  engine both use. On the Claude plan, a call waiting on a Question, a
+  credential request or a takeover now shows that card instead of a bare
+  "running" row, and a finished call shows its sources, Code hand-off,
+  answers, credentials, takeover and clipped output as on pi. pi rows are
+  unchanged.
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`c4759b1`](https://github.com/AshikNesin/tiny-agents/commit/c4759b13157722cac114bb5d24eb2f560dc880a1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One Tool gate for both bot engines (ADR 0014). A Claude plan tool call now
+  goes through the same gate as a pi one: it is counted while it waits for your
+  approval (the Bot list badge, push notifications), its result is scrubbed of
+  vault values, auto-review can approve it, and vault cards and refusals from
+  gate plans apply. YOLO mode reads one document for both engines, so a vault
+  tool called without a vault item runs under YOLO on the Claude plan too, and a
+  denied call shows as denied. Inside the package, `AgentEngine` is now a real
+  per-conversation interface: `PiEngine` owns the pi-specific code and
+  `AgentRuntime` only picks the engine (including the gateway fallback latch),
+  holds the store and merges activity.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`4ee6a86`](https://github.com/AshikNesin/tiny-agents/commit/4ee6a864e003e31faeb1a6848388f423456b7570) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Every vault sink goes through one use sequence.
+  
+  - `run_command` with `secrets` plans, asks, records and resolves through the
+    shared vault sequence instead of calling the broker by hand:
+    `vaultGatePlan` now takes several uses (`IntendedUses`: the uses, an
+    `everyUse` flag, an optional sink rule checked after policy, extra card
+    fields), and
+    `useAllFromSink` resolves them nested, the way `useFromSink` (now its
+    one-item form) does for one. The approval card is built by the shared plan:
+    a single secret's card shows the item's real kind (and username for a
+    login) instead of a fixed `api_key`; several secrets join their handles and
+    labels as before; a long command is cut at 2000 characters on every card. A
+    denied or expired command records against the uses the call was planned
+    for.
+  - New `VaultTargetMovedError` (root export, carries `actual` and the audit
+    `reason`): `OriginMismatchError` and `WindowMismatchError` extend it.
+    `useFromSink` turns one thrown by a sink into a `refused_origin`
+    `VaultError` worded by the sink. The app checks `instanceof` instead of the
+    error's name, so a desktop window that moved before typing is now audited as
+    `refused_origin` ("active window changed before typing") instead of
+    `sink_error`.
+  - `resolveConnectionSecret` (MCP connection headers) runs the same internal
+    path as `useItem`: one policy, audit, resolve and last-used step for both.
+    The connection still receives the value, its audit rows and messages are
+    unchanged.
+
+- [#153](https://github.com/AshikNesin/tiny-agents/pull/153) [`501ed71`](https://github.com/AshikNesin/tiny-agents/commit/501ed71b7d370bf76c625f42a25eb6b7a3521705) Thanks [@AshikNesin](https://github.com/AshikNesin)! - YOLO mode (issue [#151](https://github.com/AshikNesin/tiny-agents/issues/151)): a per-chat switch in the chat header under which
+  every tool call that would ask the owner runs without a card, including
+  `askOnly` tools and cards already waiting when it is switched on. Vault uses
+  always keep their card, and turns another bot or a guest started still ask.
+  It lives in the conversation's new `tiny.yolo` document (`YoloDoc`), so a New
+  chat starts with it off. The agent runtime adds `yolo(ref)` and
+  `setYolo(ref, on, by)`; the gate records such calls as `approval: "yolo"`;
+  `ToolInfo` gains a `vault` flag the Claude plan engine uses to keep vault
+  sinks asking. The app adds `PUT /bots/:id/yolo` (owner only) and a `yolo`
+  event on the bot's chat stream.
+
+### Patch Changes
+
+- [#162](https://github.com/AshikNesin/tiny-agents/pull/162) [`2cb4ea8`](https://github.com/AshikNesin/tiny-agents/commit/2cb4ea8e9fd925ccac5e662dc7ed203b1ca71727) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Auto-review: the classifier now defaults to `typesafe/jev` and calls Workers
+  AI's `/accounts/{account}/ai/run` through the AI Gateway (`cf-aig-gateway-id`,
+  with `CLOUDFLARE_API_KEY` as `Authorization`). Through the gateway, the old
+  default `@cf/cloudflare/clef` bills against Unified Billing credits and, on the
+  gateway's `workers-ai` route, so did Jev: without credits every review failed
+  with 402 and the owner got every approval card. A failed review now logs a
+  warning with its error.
+
+- [#155](https://github.com/AshikNesin/tiny-agents/pull/155) [`756aa4b`](https://github.com/AshikNesin/tiny-agents/commit/756aa4b7d0ed378ed248b6d306c385b2e97e38d0) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Keep a Claude Code chat's history across a server restart. The runtime synced the conversation before the engine had read `agent.db.claude.json`, so the empty in-memory session shadowed the saved transcript (and the next save overwrote the file). The engine now merges the saved transcript and resume id into an already-synced session, reads the file before it ever writes it, and loads it before serving a chat watcher.
+- Updated dependencies [[`e14a12f`](https://github.com/AshikNesin/tiny-agents/commit/e14a12f917572c757f115e31402748e080bad20c), [`ff9c364`](https://github.com/AshikNesin/tiny-agents/commit/ff9c3643377ed3a0bc379f0b8690a6cd846f9ab7), [`1fc7691`](https://github.com/AshikNesin/tiny-agents/commit/1fc769128276b1c25b1e78f751d33de68fa10904), [`721a473`](https://github.com/AshikNesin/tiny-agents/commit/721a473961c44b6a08d4360a192bede1d169d0c6)]:
+  - @tiny-agents/claude-worker@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

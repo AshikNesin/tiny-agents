@@ -1,5 +1,36 @@
 # @groot/ui
 
+## 0.10.0
+
+### Minor Changes
+
+- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adopt Fluid Functionalism components. `Dialog` and `AlertDialog` now spring in
+  and animate out (staying mounted through the exit) with a deeper dark-mode
+  overlay; `DialogContent` gains `size` (`sm` 400px default, `md`, `lg`, `xl`)
+  and `position` (`center` / `top`) props, and `CommandDialog` anchors to the
+  top. In the app, a bot's questions use the Fluid AskUserQuestions card
+  (single-choice questions answer on a click or number key) and the typing dots
+  are replaced by the ThinkingIndicator.
+
+- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rebuild the remaining kit components on Fluid Functionalism's design, with
+  their APIs unchanged. New `@groot/ui/motion` entry exports the shared
+  `spring` tiers, `useModalPresence` and `FluidHighlight`.
+  
+  - `TabsList` slides its selected pill (or `line` underline) between tabs and
+    shows a hover pill.
+  - `Tooltip` is an inverted chip that springs in and fades out; the provider's
+    delay drops to 200ms.
+  - `Select`, `DropdownMenu` and the command menu share one gliding row
+    highlight and a softer popup entrance; the picked select row is medium weight.
+  - The command menu gets a borderless search line, brightening rows and a new
+    `CommandFooter` of keyboard hints (hidden on touch); `CommandDialog` and the
+    shell palette open top-anchored at `lg` width.
+  - In the app: the switch thumb springs, stretches, squashes and can be
+    dragged; owner messages are a soft tinted bubble and bot replies plain text,
+    with time and copy in a hover row (always shown on touch) and a spring
+    entrance for new messages; the composer has Fluid's ring frame and a
+    send/stop button that morphs between states.
+
 ## 0.9.0
 
 ### Minor Changes

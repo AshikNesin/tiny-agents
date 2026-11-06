@@ -1,5 +1,490 @@
 # @groot/web
 
+## 0.4.0
+
+### Minor Changes
+
+- [`ce03073`](https://github.com/AshikNesin/tiny-agents/commit/ce03073832f41256ca1789759fd9ab560d5a8025) Thanks [@claude](https://github.com/claude)! - Bot chat: the Code page's look. The header is one line with a hairline
+  under it (the bot's name opens its settings; its description and model sit
+  beside it). A turn's tool steps fold into one line ("Read the page ×3 ·
+  1 failed"), across tool rounds too, so a bot that reads three pages shows one
+  row above its answer instead of three. The composer gains the Code page's
+  toolbar: "+" for files or mentioning a bot, a searchable model chip that
+  switches the bot's model, Queue (Alt+Enter) while a reply runs, and a
+  compact send/stop button. Queued and steering messages wait as compact rows
+  over the composer. Past chats get the same one-line header (bot / chat).
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`bdf8b7b`](https://github.com/AshikNesin/tiny-agents/commit/bdf8b7b59f10c03651b3a6d72224aef06a6c428d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bot chat stream and chat session refactor; the UI looks and behaves as before.
+  
+  - One wire contract for the bot stream: `BotStreamEvent` and
+    `EventsFeedEvent` (with `RoutineRunCard`, the `BotListEntry` row and a
+    `Jsonified<T>` helper) live in `apps/web/src/shared` and type both the
+    server's SSE writes (`openSse<E>`) and the client. The client re-exports
+    the agent package's chat types instead of copying them.
+  - `followBotChat(bot, sink)` (`bots.stream.ts`) owns every source of a bot's
+    chat stream (viewer count, transcript window, routine cards, YOLO mode, the
+    bot moving to another chat) and their order, on one per-bot event bus
+    (`bots.events.ts`) that replaces three listener sets. Card and YOLO events
+    that land while a stream starts are no longer lost to the first read.
+  - A chat session owns the Echo and the outbox: `useChat(botId)` returns a
+    ready-to-render view (timeline, outbox, busy, typing, health, unread
+    divider, YOLO) and the chat's commands, from a pure reducer
+    (`lib/chat-session.ts`) and a sessions store behind ports
+    (`store/chats.ts`). The bots store's `adoptBot(bot)` stores a fresh row,
+    drops a chat whose conversation changed and refreshes the list.
+  - `viewOf(call, { readOnly })` (`lib/tool-call-view.ts`) decides how a tool
+    call is shown; the chat's cards and rows derive from it.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`104a668`](https://github.com/AshikNesin/tiny-agents/commit/104a668ba1b65d4ac590b29d4a2ee4d55de5e83f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One module decides a bot's toolkits: `apps/web/src/server/api/bots/bot-toolkits.ts`
+  holds the list of built-in toolkit ids (`BOT_TOOLKITS`), the one parser for a
+  connection's cached and disabled tools, the "large connection needs tool
+  search" rule, and `botToolkits()`, the selection every bot's conversation runs
+  with. The bot conversation and the ConnectionManager both ask it instead of
+  keeping their own copies. At boot the server logs a warning if a bot would
+  select a toolkit the runtime has not installed (such an id used to be
+  ignored silently), and a test fails when the two drift apart. The server test
+  runtime installs the app's own toolkits from the same source as the server
+  (`appStoreCapabilities`). Every bot's selection is unchanged.
+
+- [#150](https://github.com/AshikNesin/tiny-agents/pull/150) [`e14a12f`](https://github.com/AshikNesin/tiny-agents/commit/e14a12f917572c757f115e31402748e080bad20c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: set `CLAUDE_CODE_ENGINE_ENABLED=1`, sign in once, and use it.
+  The app now installs and runs the Claude Code worker on the sandbox itself
+  (the VM or the local container) over the same SSH endpoint as the browser and
+  terminal: Node when needed, the pinned Agent SDK and Claude Code, the bundled
+  worker (`dist/server/claude-worker.mjs`), started on the sandbox's loopback and
+  reached through an SSH tunnel — no `tailscale serve`, token or unit file.
+  Settings → Claude plan shows the setup and login state and opens a terminal tab
+  running `claude auth login` to sign in (`POST /terminal/sessions` takes
+  `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
+  preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+  `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
+  systemd/launchd files are removed; the sandbox is the only path. The worker now
+  starts without a login (each session checks it), and the launcher unsets
+  API-key and backend overrides. See ADR 0010.
+
+- [#159](https://github.com/AshikNesin/tiny-agents/pull/159) [`1fc7691`](https://github.com/AshikNesin/tiny-agents/commit/1fc769128276b1c25b1e78f751d33de68fa10904) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code page harness adapters (issue [#157](https://github.com/AshikNesin/tiny-agents/issues/157), ADR 0011, ADR 0012): the Code page
+  drives any coding agent through one adapter contract, starting with Shelley
+  and Claude Code.
+  
+  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `TranscriptItem` rows upserted by id, thread and instance events, honest
+  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  stream2, snapshot list, normalizer and usage report moved off the client;
+  `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
+  mode), and a test kit (`capabilityProblems`, an in-memory thread index).
+  
+  `@groot/web` replaces the Shelley-only server code with a harness-generic
+  layer: `code_threads` (followed/unread, and the index for harnesses without
+  their own list) and `code_handoffs` (migration 0006, old Shelley rows copied
+  at boot), one hub over every instance, a watcher that delivers hand-off
+  finishes and pushes for any harness, and `/api/v1/code/*` routes
+  (`/api/v1/shelley/*` is removed). The Code page renders the contract: a
+  merged list with a harness filter, a harness picker for new threads, and
+  controls that follow each harness's capabilities (approval and question
+  cards, permission modes, steer/queue, recovery, Changes, usage).
+  
+  `@tiny-agents/agent` replaces the `shelley` toolkit with `code`:
+  `code_start`/`code_send`/`code_status`/`code_list`/`code_models` (Shelley by
+  default, any harness by name), keeping `shelley_start` and `shelley_send` as
+  aliases; `ChatToolCall.shelley` becomes `ChatToolCall.code` (older results
+  still parse).
+  
+  `@tiny-agents/claude-worker` adds the coding mode: Claude Code's built-in
+  tools in a plain working directory, `acceptEdits` by default, approvals and
+  questions through `canUseTool`, steer/queue/interrupt, history, fork and a
+  fixed set of workspace operations, with its own concurrency budget.
+
+- [#146](https://github.com/AshikNesin/tiny-agents/pull/146) [`34c54c9`](https://github.com/AshikNesin/tiny-agents/commit/34c54c94b64981d096181e8dfbfd3e72af622d45) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code page: a minimal UI modelled on Cursor's cloud agents and Claude Code on
+  the web. Model, reasoning, working directory, repository and diff pickers
+  are searchable (`SearchSelect`, type to filter); the model, reasoning and
+  context ring live in the composer, whose send button becomes Stop while
+  Shelley works; the header is one line with the actions in the title's menu;
+  a run of finished tool calls folds into one "Ran 3 commands, edited 2 files"
+  line; the list is one line per conversation; Changes stacks every changed
+  file's diff in one scroll. Archive (on a row's hover, or the header) moves a
+  conversation with all its subagents — `POST /shelley/conversations/:id/archive`
+  and `/unarchive` now cascade to descendants and answer `subagents` — with Undo.
+  Phones get a real new-conversation screen at `/code/new`.
+
+- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adopt Fluid Functionalism components. `Dialog` and `AlertDialog` now spring in
+  and animate out (staying mounted through the exit) with a deeper dark-mode
+  overlay; `DialogContent` gains `size` (`sm` 400px default, `md`, `lg`, `xl`)
+  and `position` (`center` / `top`) props, and `CommandDialog` anchors to the
+  top. In the app, a bot's questions use the Fluid AskUserQuestions card
+  (single-choice questions answer on a click or number key) and the typing dots
+  are replaced by the ThinkingIndicator.
+
+- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rebuild the remaining kit components on Fluid Functionalism's design, with
+  their APIs unchanged. New `@groot/ui/motion` entry exports the shared
+  `spring` tiers, `useModalPresence` and `FluidHighlight`.
+  
+  - `TabsList` slides its selected pill (or `line` underline) between tabs and
+    shows a hover pill.
+  - `Tooltip` is an inverted chip that springs in and fades out; the provider's
+    delay drops to 200ms.
+  - `Select`, `DropdownMenu` and the command menu share one gliding row
+    highlight and a softer popup entrance; the picked select row is medium weight.
+  - The command menu gets a borderless search line, brightening rows and a new
+    `CommandFooter` of keyboard hints (hidden on touch); `CommandDialog` and the
+    shell palette open top-anchored at `lg` width.
+  - In the app: the switch thumb springs, stretches, squashes and can be
+    dragged; owner messages are a soft tinted bubble and bot replies plain text,
+    with time and copy in a hover row (always shown on touch) and a spring
+    entrance for new messages; the composer has Fluid's ring frame and a
+    send/stop button that morphs between states.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`35642ff`](https://github.com/AshikNesin/tiny-agents/commit/35642ff1f684b8dddbef2cc77085b3f259cdcd96) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One owner for a routine's armed state. `routines.arming.ts` (was
+  `routines.chain.ts`) is the only module that writes `enabled`, `nextRunAt`,
+  `pendingJobId`, `blockedStreak`, `pausedReason`, `conversationId` and the
+  create-time `sourceKey`; the service, runs, fire job and toolkit store ask
+  it for transitions (create, arm, disarm, advance, record blocked, clear
+  streak, claim conversation, move to bot, remove). Each transition is one
+  compare-and-set write, the job handle a write replaces is cancelled, and a
+  job queued for a write that lost is cancelled too.
+  
+  Behaviour changes:
+  
+  - A routine the agent creates is inserted with its `sourceKey` (and already
+    armed) in one statement, so a replayed tool call can no longer create a
+    duplicate routine after a crash or a race mid-create.
+  - Advancing the chain after a fire only moves it while the handle is still
+    the one the fire loaded: an edit or pause that landed meanwhile wins, where
+    before the fire could leave a second chain or re-arm a paused routine.
+  - The third blocked run in a row pauses the routine and records the reason in
+    one write.
+  
+  A bot chat handle. `openBotChat` (`bots/bots.chat.ts`) looks a bot up once
+  and resolves its current conversation to a `ConversationRef`; the owner's
+  chat actions (read, page, abort, withdraw, approvals, questions, YOLO) act on
+  that ref. `conversationRef` (`bots.conversation.ts`) is the one place a stored
+  conversation id becomes a ref. Owner-wait errors are translated to HTTP in
+  one table (`OWNER_WAIT_ERRORS`), which the vault's credential requests use
+  too; status codes and messages are unchanged.
+
+- [#147](https://github.com/AshikNesin/tiny-agents/pull/147) [`f83139d`](https://github.com/AshikNesin/tiny-agents/commit/f83139da1ddcf6e9861b71ffab229c9e7fc5e757) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Share bots with guests (issue [#145](https://github.com/AshikNesin/tiny-agents/issues/145)): a collaborative chat where the owner and a
+  guest write in the same conversation with a bot.
+  
+  `@groot/web` adds guests (Settings → People: name, email and a password the
+  owner passes on) and per-bot sharing (bot settings → Sharing). A shared bot's
+  chat is one conversation everybody in it sees live; each message shows its
+  sender, and the bot reads it as `Name: message` with a prompt line naming
+  everyone and asking it to reply `[skip]` when people only talk to each other
+  (those replies are hidden and leave the Bot list alone). Guests reach only the
+  bots shared with them (chat, approvals, Questions, live browser and computer
+  views), uploads, Code and their own account; every other route answers 403
+  (`guest.guard.ts`, default-deny). In a shared chat every vault use asks and
+  only the owner may approve it, and memory capture and injection are off. New
+  tables `guests` and `bot_guests` (migration 0005). Nothing changes until a
+  guest is added: an account with no `guests` row is the owner.
+  
+  `@tiny-agents/agent` adds `ChatMessage.author` / `QueuedMessage.author` (the
+  trusted sender, stored on the entry by `submit({ author })`, with the name
+  prefix stripped from the transcript text), `authoredText`, `SKIP_REPLY` and
+  `isSkipReply`.
+
+- [#144](https://github.com/AshikNesin/tiny-agents/pull/144) [`07ef32e`](https://github.com/AshikNesin/tiny-agents/commit/07ef32ec5092a30c17e8668c1931b04867c705c2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add the Code page: a first-class workspace for the Shelley coding agent (issue [#143](https://github.com/AshikNesin/tiny-agents/issues/143)).
+  
+  `@groot/web` talks to Shelley's official HTTP/SSE API from the server only
+  (`SHELLEY_URL`, the only setting; requests carry `X-Exedev-Userid` for an
+  exe.dev Shelley's require-header guard): one
+  `/api/stream2` connection (`ShelleyHub`) feeds the live conversation list,
+  per-conversation streams, unread markers, Pushover pushes (`shelley.update`)
+  and bot hand-off finishes. `/api/v1/shelley/*` is a curated allowlist of
+  Shelley routes (lists, conversation, steer/queue/stop/retry/resume/fork,
+  settings, background jobs, `@` file search, skills, uploads, git diffs,
+  files and images). `/code` shows every conversation and subagent, a live
+  transcript with per-tool rows (live bash output, patch diffs, subagent
+  links, screenshots), the composer (steer, queue, `@` files, `/` commands,
+  attachments, skills), model and reasoning switching, a context meter, cost,
+  and a Changes panel with line comments. New tables `shelley_handoffs` and
+  `shelley_seen` (migration 0004).
+  
+  `@tiny-agents/agent` adds the `shelley` toolkit (`shelley_start`,
+  `shelley_send`, `shelley_status`, `shelley_list`, `shelley_models`; no tools
+  without a store; start and send default to Allow via the new
+  `ToolInfo.allowByDefault`)
+  and `ChatToolCall.shelley`, the hand-off card a `shelley_start` result
+  carries.
+
+- [`3d7ff0b`](https://github.com/AshikNesin/tiny-agents/commit/3d7ff0beec2defda84deae884056c4600a5a2d0b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code page: clicking the context meter in the composer opens a usage popup
+  (Shelley's own context-usage table, ported): total and subtotal, per-model
+  token bands (cache read/write, input, output) with models.dev rates and
+  estimated cost, "Other (indirect)" rows (compaction, slug generation, …), a
+  sub-agent column when children exist, and "Compact in place". Pricing is
+  looked up through a new curated proxy route, `POST /shelley/model-costs`.
+
+- [#152](https://github.com/AshikNesin/tiny-agents/pull/152) [`56c0bd5`](https://github.com/AshikNesin/tiny-agents/commit/56c0bd51e1de477542d21c2361c047686e32b6e1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Terminal: copy/paste that works and a steadier screen. Ctrl+V (and
+  Ctrl+Shift+V, Shift+Insert, Cmd+V) now pastes from the browser, bracketed,
+  even on plain-http pages; xterm used to turn Ctrl+V into ^V. Dragging over
+  text in tmux copies it to the browser clipboard (tmux `set-clipboard on`
+  plus an OSC 52 handler that accepts tmux's empty selection and refuses
+  clipboard reads from the VM), with a "Copied" toast; Shift/Option+drag
+  selects locally and Ctrl+C / Ctrl+Shift+C / Cmd+C copies it. Right-click
+  opens a Copy / Paste / Select all menu, and the keys panel's paste is a
+  real (bracketed) paste. Glitch fixes: unicode11 widths so emoji/CJK line up
+  with tmux, truecolor through tmux, tabs attach at the rendered size (no
+  120x34-then-resize redraw), a second browser tab or device no longer kicks
+  the first off (no `attach -d`), the grid no longer widens its own column,
+  hidden tabs never shrink the pty, and the terminal resets before a
+  re-attach redraws. Pings run while the page is visible (no idle reconnect
+  while reading; half-open sockets are detected) and the server pauses on
+  client back-pressure. New: font size controls (A-/A+, Ctrl/Cmd +/-/0), a
+  cols×rows badge while resizing, tuned light/dark ANSI palettes, Cmd/Ctrl+
+  click links, and Reconnect after a detach.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`10a1504`](https://github.com/AshikNesin/tiny-agents/commit/10a150410f40c44df1060c4cb89d054e01218c79) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One turn-outcome rule for every harness. `turnOutcome` and `turnAnswer`
+  (`@tiny-agents/code/server`) build what a thread's newest turn came to from
+  the rows the driver shows; Shelley and Claude Code use it for both
+  `outcome()` and `turn_ended`, which now carries that `outcome` instead of
+  `finalText`/`failed`. `lastAnswer` (shared and Shelley's own) is gone.
+  
+  - The text is the newest turn's answer or error, always a chat-sized
+    excerpt, and `failed` means that answer is an error, for both harnesses
+    (Shelley's turn ends used to carry no failure and its full final response).
+  - A message after the newest turn end opens a new turn: with nothing
+    answered yet the text is empty for both harnesses (Shelley used to report
+    the previous turn's answer). A steer's turn keeps its answer from before
+    the steer.
+  - `endedAt` is when the harness last wrote to the turn, on its own record,
+    and is absent while the thread works.
+  - Claude Code reports a turn end once the worker is idle, so a steer the CLI
+    ran as its own SDK turn no longer ends the hand-off early.
+  
+  The test kit adds `turnOutcomeProblems(snapshot, outcome, ended)`.
+  `parseThreadId(id, legacyInstanceId)` resolves bare (pre-ADR 0011) ids, with
+  `LEGACY_INSTANCE_ID`; the app splits thread ids only with it, so hand-offs and
+  labels of bare Shelley ids resolve. The Code watcher takes the outcome from
+  the event and no longer re-reads the thread or re-cuts the text.
+
+- [#177](https://github.com/AshikNesin/tiny-agents/pull/177) [`4ee6a86`](https://github.com/AshikNesin/tiny-agents/commit/4ee6a864e003e31faeb1a6848388f423456b7570) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Every vault sink goes through one use sequence.
+  
+  - `run_command` with `secrets` plans, asks, records and resolves through the
+    shared vault sequence instead of calling the broker by hand:
+    `vaultGatePlan` now takes several uses (`IntendedUses`: the uses, an
+    `everyUse` flag, an optional sink rule checked after policy, extra card
+    fields), and
+    `useAllFromSink` resolves them nested, the way `useFromSink` (now its
+    one-item form) does for one. The approval card is built by the shared plan:
+    a single secret's card shows the item's real kind (and username for a
+    login) instead of a fixed `api_key`; several secrets join their handles and
+    labels as before; a long command is cut at 2000 characters on every card. A
+    denied or expired command records against the uses the call was planned
+    for.
+  - New `VaultTargetMovedError` (root export, carries `actual` and the audit
+    `reason`): `OriginMismatchError` and `WindowMismatchError` extend it.
+    `useFromSink` turns one thrown by a sink into a `refused_origin`
+    `VaultError` worded by the sink. The app checks `instanceof` instead of the
+    error's name, so a desktop window that moved before typing is now audited as
+    `refused_origin` ("active window changed before typing") instead of
+    `sink_error`.
+  - `resolveConnectionSecret` (MCP connection headers) runs the same internal
+    path as `useItem`: one policy, audit, resolve and last-used step for both.
+    The connection still receives the value, its audit rows and messages are
+    unchanged.
+
+- [#153](https://github.com/AshikNesin/tiny-agents/pull/153) [`501ed71`](https://github.com/AshikNesin/tiny-agents/commit/501ed71b7d370bf76c625f42a25eb6b7a3521705) Thanks [@AshikNesin](https://github.com/AshikNesin)! - YOLO mode (issue [#151](https://github.com/AshikNesin/tiny-agents/issues/151)): a per-chat switch in the chat header under which
+  every tool call that would ask the owner runs without a card, including
+  `askOnly` tools and cards already waiting when it is switched on. Vault uses
+  always keep their card, and turns another bot or a guest started still ask.
+  It lives in the conversation's new `tiny.yolo` document (`YoloDoc`), so a New
+  chat starts with it off. The agent runtime adds `yolo(ref)` and
+  `setYolo(ref, on, by)`; the gate records such calls as `approval: "yolo"`;
+  `ToolInfo` gains a `vault` flag the Claude plan engine uses to keep vault
+  sinks asking. The app adds `PUT /bots/:id/yolo` (owner only) and a `yolo`
+  event on the bot's chat stream.
+
+### Patch Changes
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`89350a0`](https://github.com/AshikNesin/tiny-agents/commit/89350a09bf8ecc5949e381b5a9c27eed3315ab80) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Subpath exports for `@tiny-agents/agent`. The package root is now only the
+  pi-durable boundary (the runtime, the conversation and chat types, the
+  toolkits and capabilities, the gateway catalog), and exports only what
+  something outside the package imports: 328 named root exports become 105
+  (plus `export type * from "./types"`, unchanged). The areas that never touch
+  pi-durable get their own entry points, and the app imports them from there.
+  No behaviour changes; this is module layout only.
+  
+  New subpaths:
+  
+  - `@tiny-agents/agent/sandbox`: `createSandboxConnection`,
+    `createMemoryHostKeyStore`, and the types `SandboxConnection`,
+    `SandboxConnectionOptions`, `SandboxExecOptions`, `SandboxExecResult`,
+    `SandboxFile`, `PtyStream`, `PtySize`, `HostKeyStore`, `SshEndpoint`.
+  - `@tiny-agents/agent/terminal`: `createTerminalService`, `parseSessionName`,
+    `SessionBusyError`, `SessionLimitError`, `SessionNotFoundError`,
+    `TerminalUnreachableError`, `TmuxMissingError`, and the types
+    `TerminalService`, `TerminalServiceOptions`, `TerminalConnection`,
+    `TerminalSessionRow`, `TerminalStatus`, `SessionName`, `PtyStream`.
+  - `@tiny-agents/agent/browser`: `createBrowserSessions`,
+    `closeAllBrowserSessions`, `createChromiumTransport`,
+    `createRemoteCdpTransport`, and the types `BrowserSessions`,
+    `BrowserSessionsOptions`, `BrowserTarget`, `BrowserTransport`,
+    `ChromiumTransportOptions` (new), `RemoteCdpTransportOptions`.
+  - `@tiny-agents/agent/computer`: `createComputerSessions`,
+    `closeAllComputerSessions`, `createX11ComputerTransport`,
+    `parseDesktopSize`, `parseExtraPackages`, and the types
+    `ComputerSessions`, `ComputerSessionsOptions`, `ComputerTransport`,
+    `X11ComputerTransportOptions`.
+  - `@tiny-agents/agent/claude-worker`: `createSandboxClaudeWorker`,
+    `claudeLoginShellLine`, and the types `ClaudeWorkerLocator`,
+    `ClaudeWorkerTarget`, `ClaudeAccountStatus`, `ClaudeWorkerMode`,
+    `SandboxWorkerOptions`.
+  
+  `createSandboxToolkit`, `createBrowserToolkit` and `createComputerToolkit`
+  need pi-durable and stay on the root. `./testing` and `./peer-envelope` are
+  unchanged; the server now imports `stripPeerEnvelope` from `./peer-envelope`
+  like the client does.
+  
+  **Breaking** (`@tiny-agents/agent`): every name above is no longer exported
+  from the root; import it from its subpath. `parsePeerEnvelope`,
+  `stripPeerEnvelope` and `PeerEnvelope` are only on `./peer-envelope`.
+  
+  Removed from the package's public surface (nothing outside the package
+  imported them; they stay exported from their source modules inside it):
+  
+  - Runtime and store: `ConversationNotFoundError`, `ModelNotFoundError`,
+    `AgentRuntimeOptions`, `TurnOutcome`, `StoreLockedError`,
+    `acquireStoreLock`, `StoreLock`.
+  - Capabilities and policy: `defaultPermission`, `effectivePermission`,
+    `CapabilityInfo`, `CapabilityKind`, `CapabilitySelection`, `ToolInfo`,
+    `applyPermissions`, `compilePolicy`, `PermissionsDoc`, `resolveModelId`,
+    `CompiledPolicy`, `Permissions`.
+  - Approvals, the Tool gate and the engine seam: `approvalOf`,
+    `recordDecision`, `ApprovalDecision`, `ApprovalState`, `ApprovalView`,
+    `GateHooks`, `GatePlan`, `ToolGate`, `GateCall`, `GateStore`,
+    `ToolGateOptions`, `GateUserMessage`, `refuseUnattended`, `AgentEngine`,
+    `CompiledConversation`, `EngineSubmission`, `ClaudeEngineFallback`,
+    `CLAUDE_CODE_MODEL_PREFIX`, `CLAUDE_PLAN_NOTE`, `claudeCodeBareModel`,
+    `claudeCodeFallback`, `engineKindForConfig`, `engineKindForModel`.
+  - Projection and transcript: `ChatProjection`, `unansweredOf`,
+    `FoldOutcome`, `ProjectionSnapshot`, `deriveChat`, `diffChat`,
+    `chatState`, `CHAT_USER_ENTRY`, `peerOf`, `attachmentsOf`, `queuedOf`,
+    `RawChat`.
+  - Classifier and reviewer: `classifierFromModels`,
+    `DEFAULT_CLASSIFIER_MODEL`, `Classifier`, `REVIEW_QUESTIONS`,
+    `REVIEW_THRESHOLDS`, `ReviewEvent`, `ReviewInput`, `ReviewVerdict`.
+  - Vault, redaction and credentials: `GrantsDoc`, `VAULT_RULE`, `vaultGrant`,
+    `VaultRefusal`, `REDACTED`, `SecretRedactor`,
+    `CREDENTIAL_REQUEST_TTL_MS`, `credentialResultDetails`, `credentialsOf`,
+    `pendingCredentialDetails`, `SECRET_FIELD_TYPES`, `CredentialFieldType`,
+    `CredentialRequestOutcome`, `describeItem`, `VAULT_APPROVAL_TTL_MS`,
+    `VaultToolkitOptions`, `OriginMismatchError`, `SecretFill`.
+  - Toolkits: `ASK_OWNER`, `questionsOf`, `createTasksExtension`,
+    `TaskStatus`, `TaskPriority`, `CodeChangedFile`, `CodeHarnessRecord`,
+    `CodeModelRecord`, `CodeThreadStatus`, `CodeToolkitOptions`,
+    `TodayOptions`, `SandboxToolkitOptions`, `AttachmentsToolkitOptions`,
+    `createRoutinesExtension`, `confirmationCard`, `MAX_BLOCKED_REASON`,
+    `RoutineCreateInput`, `VISION_SYSTEM`, `DEFAULT_QUESTION`, `Transcriber`,
+    `CUSTODY_RULE`, `SkillContent`, `SkillSummary`, `isPrivateAddress`,
+    `WebToolkitOptions`, `UnauthorizedError`.
+  - Browser and computer internals: `conversationBrowserTarget`,
+    `isBlockedPrivateUrl`, `normalizeCredentialRequest`, `BrowserClock`,
+    `BrowserDriver`, `BrowserOpenState`, `BrowserPhase`, `BrowserSession`,
+    `BrowserToolkitOptions`, `BrowserVnc`, `LiveBrowserSession`,
+    `LiveBrowserTab`, `DesktopGoneError`, `normalizeKeys`, `OWNER_DRIVING`,
+    `OwnerDrivingError`, `SHARED_COMPUTER_PROFILE`, `WindowMismatchError`,
+    `windowTarget`, `ComputerApp`, `ComputerDesktop`, `ComputerDriver`,
+    `ComputerOpenState`, `ComputerPhase`, `ComputerToolkitOptions`,
+    `ComputerWindow`, `LiveComputer`, `OpenDesktopOptions`, `WindowBinding`.
+  - SSH, terminal and Claude worker internals: `SANDBOX_IDLE_TIMEOUT_MS`,
+    `describeSandboxError`, `hostKeyHash`, `verifyHostKey`,
+    `DEFAULT_SSH_PORT`, `DEFAULT_SSH_USER`, `ForwardRefusedError`,
+    `HostKeyChangedError`, `PreDispatchError`, `SandboxTimeoutError`,
+    `TMUX_INSTALL_COMMAND`, `TerminalExecResult`, `MAX_SESSIONS`,
+    `SCROLLBACK`, `SESSION_PREFIX`, `TERM`, `TMUX_SOCKET`, `noWorkerLocator`,
+    `CLAUDE_WORKER_NODE_VERSION`, `CLAUDE_WORKER_PACKAGES`,
+    `CLAUDE_WORKER_STACK_VERSION`.
+  - Models: `CLAUDE_OAUTH_TOKEN_MARKER`, `ClaudeOauthTokenError`,
+    `GATEWAY_ENV_KEYS`, `aiProviderIds`, `assertNoClaudeOauthToken`,
+    `builtinProviderIds`, `configuredProviderIds`, `createGatewayModels`,
+    `createProviderModels`, `findClaudeOauthToken`, `isGatewayConfigured`,
+    `primaryProviderId`, `providerSetupHint`, `ProviderStatus`.
+  - pi-durable image re-exports: `ImageLimits`.
+  
+  The package's own tests that used the root for internals
+  (`policy`, `projection`, `runtime` and `attachments` tests) import them from
+  their source modules, as the rest of `tests/server/app/agent` already does.
+  
+  `checkPublicUrl` and `isPrivateAddress` move to `toolkits/public-url.ts`, so
+  no subpath loads pi-durable (`/browser` and `/claude-worker` reached it
+  through the web toolkit).
+
+- [`fc98270`](https://github.com/AshikNesin/tiny-agents/commit/fc98270fe39983a7f47451733a8249624568667e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add a `DATA_DIR` environment variable for the production data directory (default `/data`, so Docker behavior is unchanged). Outside Docker — e.g. a bare-metal macOS run — `/data` is not writable and boot failed with `ENOENT: mkdir /data`; set `DATA_DIR` to a writable path to move the app database (`app.db`), agent store (`agent.db`) and their sibling uploads directory together. Explicit `DATABASE_URL` / `AGENT_DB_PATH` / `UPLOADS_DIR` values still win.
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`5563dcd`](https://github.com/AshikNesin/tiny-agents/commit/5563dcd9d3f3fde3f338d0150a426dba854866de) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One sandbox connection. Everything that reaches the sandbox VM (or the local
+  sandbox container) now goes through one `SandboxConnection`
+  (`createSandboxConnection(endpoint)`), built once in the app's composition
+  root (`sandboxConnection()` in `sandbox-host.ts`) and handed to the sandbox
+  toolkit, attachments, the terminal, the computer, the browser and the Claude
+  worker. Its interface is `exec(cmd, { stdin, timeoutMs, maxBytes,
+  settleOnExit })`, `pty(cmd, size)`, `readFile`, `writeFile`, `forward(port)`
+  and `close()`. Behind it: one channel pool with a lazy shared dial, the
+  defaults, TOFU host keys (unchanged), the pre-dispatch-only retry rule, the
+  idle close (5 minutes), a closed forward retiring its connection (tailscaled
+  stalls later channels on it), and one "Cannot reach the sandbox" wording.
+  Attachments, the Claude worker, the computer's tool calls and the browser's
+  setup and tunnels no longer pay a fresh SSH handshake per call or per socket.
+  
+  **Breaking** (`@tiny-agents/agent`): the toolkits and transports take
+  `{ connection }` instead of host, port, user, host keys and key; the removed
+  exports are `createSsh2Transport`, `SandboxTransport`, `SandboxSession`,
+  `createSsh2TerminalTransport`, `Ssh2TerminalTransport(Options)`,
+  `TerminalTransport` (now `TerminalConnection`) and `dialSsh`;
+  `createSandboxClaudeWorker` takes `connection` instead of `endpoint` and
+  `dial`.
+
+- [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`603d3fd`](https://github.com/AshikNesin/tiny-agents/commit/603d3fd1df8dc733d253d15060ed2ea65d590b84) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Relay @mention and bot-to-bot replies that take real model time. Boot built
+  the Delivery answerer before the agent runtime had opened, so every relay
+  from a conversation's settling (and the boot sweep) failed against an
+  undefined runtime; only replies that finished before the submit returned
+  were relayed. The answerer is now built from the opened runtime.
+  
+  Server internals behind it:
+  
+  - `startSettledPipeline(runtime, { notifier, memoryCapture })` builds every
+    Settled step from the opened runtime, in the glossary's order, subscribes
+    once, resets the bot-to-bot per-turn budget, and runs each step's boot
+    sweep after subscribing. Boot has one "settled conversations" part.
+    Routine runs read only the settled conversation's awaiting rows.
+  - `createSideCaller(runtime)` runs memory capture and Past chat title calls:
+    model choice, a deadline that aborts the call (a timed-out capture no
+    longer keeps spending tokens), failure detection and logging in one place.
+  - `memoryLedger(botId)` applies the memory rules (dedupe, tombstones,
+    supersession, expiry, budget, the capture watermark) to every write.
+    Memory page adds now dedupe: adding text the bot already has returns that
+    memory, and adding a removed or archived one brings it back instead of
+    creating a second row. A restored memory is kept past a full budget
+    instead of being archived again at once. Capture no longer lists expired
+    memories as current, and only supersedes active ones.
+
+- [#175](https://github.com/AshikNesin/tiny-agents/pull/175) [`e017985`](https://github.com/AshikNesin/tiny-agents/commit/e017985c00e325edeb018761b9de854276fe9fe3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fixes for bugs found by the verify-tiny-agents full pass:
+  
+  - Vault: a refused step-up (a wrong password, someone else's passkey, or a
+    passkey the server does not know) is answered with 403, not 401, so the
+    owner is no longer signed out and keeps unsaved edits ([#164](https://github.com/AshikNesin/tiny-agents/issues/164)).
+  - Chat attachments: the enlarged image viewer is portalled to the page, so it
+    covers the window instead of being clipped to its message row ([#165](https://github.com/AshikNesin/tiny-agents/issues/165)).
+  - ⌘K palette: the app's own Navigation, Theme and Account groups are no longer
+    listed a second time by the shell, and Code no longer shows when no coding
+    agent is configured ([#166](https://github.com/AshikNesin/tiny-agents/issues/166)).
+  - Chat composer: "+ → Mention a bot" leaves focus in the composer, so the
+    mention list opens ([#167](https://github.com/AshikNesin/tiny-agents/issues/167)).
+  - Jobs: `/jobs/:jobId` is mounted, so job rows and the Add Job / Re-run toast
+    links open the job instead of falling through to the chats ([#169](https://github.com/AshikNesin/tiny-agents/issues/169)).
+  - Terminal: in full screen, the exit control sits inside the terminal region,
+    so the CSS full screen used where the Fullscreen API is missing (iPhone
+    Safari) can be left again ([#170](https://github.com/AshikNesin/tiny-agents/issues/170)).
+  - Settings → Claude plan: with the engine off, the card no longer claims that
+    no sandbox is configured ([#171](https://github.com/AshikNesin/tiny-agents/issues/171)).
+  - Bots: deleting a bot with its own browser profile also closes its own
+    desktop and wipes that desktop's profile on the sandbox, as it already did
+    for its browser.
+- Updated dependencies [[`89350a0`](https://github.com/AshikNesin/tiny-agents/commit/89350a09bf8ecc5949e381b5a9c27eed3315ab80), [`2cb4ea8`](https://github.com/AshikNesin/tiny-agents/commit/2cb4ea8e9fd925ccac5e662dc7ed203b1ca71727), [`756aa4b`](https://github.com/AshikNesin/tiny-agents/commit/756aa4b7d0ed378ed248b6d306c385b2e97e38d0), [`e14a12f`](https://github.com/AshikNesin/tiny-agents/commit/e14a12f917572c757f115e31402748e080bad20c), [`ff9c364`](https://github.com/AshikNesin/tiny-agents/commit/ff9c3643377ed3a0bc379f0b8690a6cd846f9ab7), [`1fc7691`](https://github.com/AshikNesin/tiny-agents/commit/1fc769128276b1c25b1e78f751d33de68fa10904), [`a47cc42`](https://github.com/AshikNesin/tiny-agents/commit/a47cc42036b90e6b9f0b1f3dd0f3d517c32b434e), [`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8), [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc), [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da), [`bb9fec6`](https://github.com/AshikNesin/tiny-agents/commit/bb9fec6089651c66d975c919884be5690d0d4833), [`5563dcd`](https://github.com/AshikNesin/tiny-agents/commit/5563dcd9d3f3fde3f338d0150a426dba854866de), [`f83139d`](https://github.com/AshikNesin/tiny-agents/commit/f83139da1ddcf6e9861b71ffab229c9e7fc5e757), [`07ef32e`](https://github.com/AshikNesin/tiny-agents/commit/07ef32ec5092a30c17e8668c1931b04867c705c2), [`56c0bd5`](https://github.com/AshikNesin/tiny-agents/commit/56c0bd51e1de477542d21c2361c047686e32b6e1), [`18498d5`](https://github.com/AshikNesin/tiny-agents/commit/18498d57e533d3db6bbd812fa62cade3e18ad74a), [`c4759b1`](https://github.com/AshikNesin/tiny-agents/commit/c4759b13157722cac114bb5d24eb2f560dc880a1), [`10a1504`](https://github.com/AshikNesin/tiny-agents/commit/10a150410f40c44df1060c4cb89d054e01218c79), [`4ee6a86`](https://github.com/AshikNesin/tiny-agents/commit/4ee6a864e003e31faeb1a6848388f423456b7570), [`501ed71`](https://github.com/AshikNesin/tiny-agents/commit/501ed71b7d370bf76c625f42a25eb6b7a3521705)]:
+  - @tiny-agents/agent@0.3.0
+  - @tiny-agents/code@0.2.0
+  - @groot/core@1.2.0
+  - @groot/shell@1.3.0
+  - @groot/ui@0.10.0
+  - @groot/jobs@1.1.1
+
 ## 0.3.0
 
 ### Minor Changes

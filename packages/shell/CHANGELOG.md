@@ -1,5 +1,46 @@
 # @groot/shell
 
+## 1.3.0
+
+### Minor Changes
+
+- [#139](https://github.com/AshikNesin/tiny-agents/pull/139) [`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add first-run setup: create the first user from the browser at `/setup`.
+  
+  `@groot/core` adds `GET /api/v1/auth/setup` (`{ needsSetup }`) and
+  `POST /api/v1/auth/setup`, which creates the first account and signs it in
+  (cookie + token, like login). It answers 403 once any user exists and is
+  rate-limited like login. The service gains `hasAnyUser()` and
+  `createFirstUser()`; the schema exports `SetupStatus`.
+  
+  `@groot/shell` adds the `Setup` page (`@groot/shell/pages/auth/Setup`), the
+  `useSetupStatus()` hook and the store's `setup()` action. `Login` redirects to
+  `/setup` while no user exists, and `Setup` redirects to `/login` once one
+  does. Apps mount it with `<Route path="/setup" element={<Setup />} />`.
+
+### Patch Changes
+
+- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rebuild the remaining kit components on Fluid Functionalism's design, with
+  their APIs unchanged. New `@groot/ui/motion` entry exports the shared
+  `spring` tiers, `useModalPresence` and `FluidHighlight`.
+  
+  - `TabsList` slides its selected pill (or `line` underline) between tabs and
+    shows a hover pill.
+  - `Tooltip` is an inverted chip that springs in and fades out; the provider's
+    delay drops to 200ms.
+  - `Select`, `DropdownMenu` and the command menu share one gliding row
+    highlight and a softer popup entrance; the picked select row is medium weight.
+  - The command menu gets a borderless search line, brightening rows and a new
+    `CommandFooter` of keyboard hints (hidden on touch); `CommandDialog` and the
+    shell palette open top-anchored at `lg` width.
+  - In the app: the switch thumb springs, stretches, squashes and can be
+    dragged; owner messages are a soft tinted bubble and bot replies plain text,
+    with time and copy in a hover row (always shown on touch) and a spring
+    entrance for new messages; the composer has Fluid's ring frame and a
+    send/stop button that morphs between states.
+- Updated dependencies [[`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8), [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc), [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da)]:
+  - @groot/core@1.2.0
+  - @groot/ui@0.10.0
+
 ## 1.2.0
 
 ### Minor Changes
