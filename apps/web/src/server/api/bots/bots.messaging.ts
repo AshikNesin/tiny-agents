@@ -6,6 +6,7 @@
 import { and, asc, eq, gte, ne } from "drizzle-orm";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
+import { conversationRef } from "./bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
 
@@ -128,7 +129,7 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
         .orderBy(asc(bots.name));
       return rows.map(({ conversationId: botConversation, ...bot }) => ({
         ...bot,
-        busy: rt.isBusy(Number(botConversation)),
+        busy: rt.isBusy(conversationRef(botConversation)),
       }));
     },
   };

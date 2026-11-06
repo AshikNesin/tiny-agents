@@ -9,6 +9,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { bots, db, routineRuns, routines } from "../../db";
+import { conversationRef } from "../bots/bots.conversation";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import {
   armRoutine,
@@ -87,7 +88,7 @@ async function findRoutine(id: string): Promise<RoutineRow> {
 async function retireConversation(conversationId: string | null): Promise<void> {
   if (!conversationId) return;
   try {
-    await getAgentRuntime().abort(Number(conversationId));
+    await getAgentRuntime().abort(conversationRef(conversationId));
   } catch (error) {
     logger.warn({ error, conversationId }, "Failed to stop a retired routine conversation");
   }

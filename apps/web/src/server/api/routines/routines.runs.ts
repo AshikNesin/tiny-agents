@@ -17,6 +17,7 @@
 import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
+import { conversationRef } from "../bots/bots.conversation";
 import type { ChatRead } from "../bots/bots.settled";
 import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
 import type { RoutineRunRef } from "../notifications/notifications.events";
@@ -240,7 +241,7 @@ async function awaitingRuns(conversationId?: number) {
     .orderBy(asc(routineRuns.scheduledFor));
   return rows.map((row) => ({
     run: { id: row.id, routineId: row.routineId, requestId: row.requestId },
-    conversationId: Number(row.conversationId),
+    conversationId: conversationRef(row.conversationId),
     ref: {
       runId: row.id,
       routineName: row.routineName,

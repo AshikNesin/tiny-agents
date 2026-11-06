@@ -18,7 +18,7 @@ import { chatCards } from "../routines/routines.cards";
 import { firstMessageTitle, titlePastChat } from "./chats.title";
 import { publishBotChatEvent } from "./bots.events";
 import type { ChatHistoryDTO } from "./bots.schema";
-import type { BotRow } from "./bots.conversation";
+import { conversationRef, type BotRow } from "./bots.conversation";
 
 export type PastChatRuntime = Pick<AgentRuntime, "readChat">;
 export type LeaveChatRuntime = Pick<AgentRuntime, "readChat" | "abort">;
@@ -91,7 +91,7 @@ export async function retireConversation(
   conversationId: string,
 ): Promise<void> {
   try {
-    await rt.abort(Number(conversationId));
+    await rt.abort(conversationRef(conversationId));
   } catch (error) {
     logger.warn({ error, conversationId }, "Failed to stop a retired bot conversation");
   }
@@ -126,7 +126,7 @@ export async function recordPastChat(
   endedAt = new Date(),
 ): Promise<PastChat | undefined> {
   try {
-    const { messages } = await rt.readChat(Number(ending.conversationId));
+    const { messages } = await rt.readChat(conversationRef(ending.conversationId));
     const said = messages.filter((m) => m.role === "user" || m.role === "assistant");
     if (said.length === 0) return undefined;
     // Recorded once per conversation: an existing row is kept as it is.
@@ -196,7 +196,7 @@ function publicChat({ conversationId: _ref, ...chat }: PastChat & { conversation
  */
 export async function readPastChat(botId: string, chatId: string, rt: PastChatRuntime) {
   const chat = await findPastChat(botId, chatId);
-  const full = await rt.readChat(Number(chat.conversationId));
+  const full = await rt.readChat(conversationRef(chat.conversationId));
   return {
     chat: publicChat(chat),
     state: windowChat(full, CHAT_WINDOW)!,
@@ -212,7 +212,7 @@ export async function pastChatPage(
   rt: PastChatRuntime,
 ) {
   const chat = await findPastChat(botId, chatId);
-  const { messages } = await rt.readChat(Number(chat.conversationId));
+  const { messages } = await rt.readChat(conversationRef(chat.conversationId));
   const page = pageBefore(messages, query.before, query.limit);
   if (!page) throw Boom.badRequest("Unknown message cursor");
   return page;

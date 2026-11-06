@@ -21,3 +21,11 @@ Behaviour changes:
   before the fire could leave a second chain or re-arm a paused routine.
 - The third blocked run in a row pauses the routine and records the reason in
   one write.
+
+A bot chat handle. `openBotChat` (`bots/bots.chat.ts`) looks a bot up once
+and resolves its current conversation to a `ConversationRef`; the owner's
+chat actions (read, page, abort, withdraw, approvals, questions, YOLO) act on
+that ref. `conversationRef` (`bots.conversation.ts`) is the one place a stored
+conversation id becomes a ref. Owner-wait errors are translated to HTTP in
+one table (`OWNER_WAIT_ERRORS`), which the vault's credential requests use
+too; status codes and messages are unchanged.

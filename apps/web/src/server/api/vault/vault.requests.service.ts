@@ -12,7 +12,6 @@
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
-  CredentialRequestNotPendingError,
   SecretValue,
   secretRedactor,
   type AgentRuntime,
@@ -26,20 +25,15 @@ import { getBrowserSessions } from "../bots/browser.sessions";
 import { browserTargetForConversation } from "../bots/browser.targets";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { conversationOwner } from "../bots/bots.owner";
+import { onOwnerWait } from "../bots/bots.chat";
 import { createItem, updateItem } from "./vault.admin.service";
 import { audit } from "./vault.service";
 
 type RequestRuntime = Pick<AgentRuntime, "credentialRequest" | "settleCredentialRequest">;
 
-async function pending(taskId: number, runtime: RequestRuntime) {
-  try {
-    return await runtime.credentialRequest(taskId);
-  } catch (error) {
-    if (error instanceof CredentialRequestNotPendingError) {
-      throw Boom.notFound("This request was answered, cancelled or expired");
-    }
-    throw error;
-  }
+/** The pending request; 404 once it was answered, cancelled or expired. */
+function pending(taskId: number, runtime: RequestRuntime) {
+  return onOwnerWait(() => runtime.credentialRequest(taskId));
 }
 
 /** The sheet's content: metadata only. */
