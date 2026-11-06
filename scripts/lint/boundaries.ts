@@ -20,11 +20,13 @@ type ImportRestriction = {
 
 type BoundaryRule = {
   id: string;
-  scope: Scope;
-  /** Files (paths or `<dir>/**`) inside the scope that the rule skips. */
+  /** Files inside the scope that the rule skips; an import rule takes paths or `<dir>/**`. */
   except?: string[];
   enabled: boolean;
-} & ({ kind: "import"; restrict: ImportRestriction } | { kind: "plugin"; rule: `repo/${string}` });
+} & (
+  | { kind: "import"; scope: Scope; restrict: ImportRestriction }
+  | { kind: "plugin"; scope: string; rule: `repo/${string}` }
+);
 
 const R2_ALLOWED = ["async_hooks", "buffer"];
 const bareBuiltins = [
@@ -106,7 +108,7 @@ export const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R5b",
     kind: "plugin",
-    scope: "**",
+    scope: "**/*.tsx",
     rule: "repo/no-nested-breadcrumb-separator",
     enabled: true,
   },
