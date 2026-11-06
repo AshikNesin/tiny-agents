@@ -82,11 +82,11 @@ A message sent to a harness while its turn runs: it goes into that turn. Queue h
 _Avoid_: interrupt (Stop interrupts)
 
 **Vault use**:
-One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit; `useFromSink` in the agent package is the one sequence every sink follows.
+One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem` and `resolveConnectionSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
 _Avoid_: fill, lookup, secret access
 
 **Sink**:
-The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header. A sink declares its target kind; it never sees policy.
+The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header. A sink declares its target kind; it never sees policy. A sink whose target moved (a page left its origin, a window lost focus) throws `VaultTargetMovedError`.
 _Avoid_: consumer, client
 
 **Settled**:
