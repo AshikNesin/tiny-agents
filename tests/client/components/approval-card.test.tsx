@@ -10,9 +10,10 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { ChatMessageView, toolAskLabel } from "@/components/ChatMessageView";
+import { ChatMessageView } from "@/components/ChatMessageView";
 import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
+import { NO_TOOL_LABELS, toolAskLabel } from "@/lib/tool-call-text";
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -92,7 +93,9 @@ describe("ApprovalCard wording", () => {
       "E2E Test wants to use Search pages",
     );
     // Not in the catalog at all: the prettified connection tool name.
-    expect(toolAskLabel({}, {}, "mcp__linear__create_issue")).toBe("use Create Issue via linear");
+    expect(toolAskLabel(NO_TOOL_LABELS, "mcp__linear__create_issue")).toBe(
+      "use Create Issue via linear",
+    );
   });
 });
 

@@ -3,6 +3,7 @@ import { ArrowLeftRight, ChevronRight, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@groot/ui/dialog";
 import { cn } from "@groot/ui/lib/utils";
 import type { ChatToolCall } from "../lib/chat-types";
+import { formatDuration } from "../lib/tool-call-text";
 import { viewOf, type ToolPhase } from "../lib/tool-call-view";
 import { BotAvatar } from "./BotAvatar";
 
@@ -17,10 +18,6 @@ function handoffLabel(phase: ToolPhase, status: ChatToolCall["status"]): string 
   if (phase === "pending" || phase === "running") return "Messaging";
   if (phase === "done") return "Messaged";
   return ENDED[status] ?? "Failed to message";
-}
-
-function formatDuration(ms: number): string {
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
 /** A sender label (avatar + name) above a bordered bubble, as in Grok's thread view. */
