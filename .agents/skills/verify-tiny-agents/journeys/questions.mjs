@@ -64,7 +64,7 @@ await journey("questions", async ({ page, step, proof, cleanup, api, stamp }) =>
       timeout: 60_000,
     });
     await expect(page.getByText(/A: React/).first()).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/A: Auth, Tests/).first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/A: Auth; Tests/).first()).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText(new RegExp(`A: Ship it Friday ${stamp}`)).first()).toBeVisible({
       timeout: 60_000,
     });

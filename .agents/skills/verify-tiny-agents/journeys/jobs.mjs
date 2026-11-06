@@ -10,7 +10,6 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
   const jobRow = (id) => page.getByRole("row", { name: `Job routine-fire (${short(id)})` });
   const detailPath = (id) => `/jobs/routine-fire/${id}`; // the route App.tsx mounts
   const jobState = async (id) => (await api.get(`/jobs/${id}`)).state;
-  const created = new Set();
   const forget = (id) => async () => {
     const res = await page.request.get(`/api/v1/jobs/${id}`);
     if (res.status() === 200) await api.delete(`/jobs/${id}`);
@@ -25,13 +24,31 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
       await proof(`bug-${bugs.length}`);
     }
   };
+  let routineId;
   let armedId;
   let doneId;
   let failedId;
 
+  // Resume fires a real routine occurrence, which pushes "Routine finished" when Pushover is
+  // configured. Refuse to drive against an instance that would reach real phones.
+  await step("guard: Pushover is not configured on this instance", async () => {
+    expect((await api.get("/notifications/status")).state).toBe("not_configured");
+  });
   await step(
     "setup: a faux bot and an enabled 15-minute routine, which arms a job (API)",
     async () => {
+      // Runs last: every job this drive's routine or payloads produced (the routine's
+      // delete only cancels its pending job).
+      cleanup(async () => {
+        const { jobs } = await api.get("/jobs?name=routine-fire&limit=500");
+        const ours = jobs.filter(
+          (j) =>
+            j.data?.routineId === routineId ||
+            j.data?.routineId === missingRoutine ||
+            j.data?.verify === stamp,
+        );
+        for (const j of ours) await api.delete(`/jobs/${j.id}`);
+      });
       const models = await api.get("/models");
       const bot = await api.post("/bots", { name: botName, modelId: models.defaultModel });
       cleanup(() => api.delete(`/bots/${bot.id}`));
@@ -42,6 +59,7 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
         schedule: { kind: "interval", minutes: 15 },
         enabled: true,
       });
+      routineId = routine.id;
       cleanup(() => api.delete(`/routines/${routine.id}`));
       const { jobs } = await api.get("/jobs?name=routine-fire&limit=500");
       armedId = jobs.find((j) => j.data?.routineId === routine.id)?.id;
@@ -98,30 +116,39 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
     expect(await jobState(armedId)).toBe("cancelled");
   });
   await proof("detail-cancelled");
-  await step("Resume puts it back to Created", async () => {
+  await step("Resume re-queues it to run now; the page polls it to Completed", async () => {
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(page.getByText("Job has been resumed")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(await jobState(armedId)).toBe("created");
+    // Resume (like Retry) sets runAt to now, so the occurrence fires at once.
+    await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("button", { name: "Re-run" })).toBeVisible();
+    expect(await jobState(armedId)).toBe("completed");
   });
+  await proof("detail-resumed-completed");
   await step("Add Job: a routine-fire for a missing routine runs and completes", async () => {
     await page.goto("/jobs");
     await page.getByRole("button", { name: "Add Job" }).click();
     const dialog = page.getByRole("dialog", { name: "Add New Job" });
-    await dialog.getByRole("button", { name: "Select job type" }).click();
-    await page.getByRole("menuitem", { name: "routine-fire" }).click();
+    // Payload first: the job-type menu's closing focus juggling can swallow the editor click.
     await dialog.locator(".cm-content").click();
     await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.type(
+    // insertText, not type(): CodeMirror auto-closes quotes while typing.
+    await page.keyboard.insertText(
       `{"routineId": "${missingRoutine}", "scheduledFor": "2026-01-01T00:00:00.000Z"}`,
     );
+    await expect(dialog.locator(".cm-content")).toContainText(missingRoutine);
+    await dialog.getByRole("button", { name: "Job type" }).click();
+    await page.getByRole("menuitem", { name: "routine-fire" }).click();
+    await expect(dialog.getByRole("button", { name: "Job type" })).toHaveText("routine-fire");
+    await expect(dialog.locator(".cm-content")).toContainText(missingRoutine);
     await dialog.getByRole("button", { name: "Add Job" }).click();
     await expect(page.getByText("Job has been added to the queue.")).toBeVisible();
     const { jobs } = await api.get("/jobs?name=routine-fire&limit=500");
     doneId = jobs.find((j) => j.data?.routineId === missingRoutine)?.id;
     expect(doneId, "the dialog queued the job").toBeTruthy();
     cleanup(forget(doneId));
-    created.add(doneId);
     await expect.poll(() => jobState(doneId), { timeout: 30_000 }).toBe("completed");
   });
   await bugStep("the toast's View job link opens the new job", async () => {
@@ -190,7 +217,7 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
   });
   await step("an unknown job id shows Job Not Found", async () => {
     await page.goto("/jobs/routine-fire/00000000-0000-4000-8000-000000000000");
-    await expect(page.getByText("Job Not Found")).toBeVisible();
+    await expect(page.getByText("Job Not Found", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back to Jobs" })).toBeVisible();
   });
   await proof("not-found");

@@ -98,7 +98,22 @@ async function deadPort() {
   return port;
 }
 
+/**
+ * The instance is a Vite dev server: edits anywhere in the repo (other agents, formatters)
+ * push HMR updates that can remount the SPA mid-journey and wipe form or step-up state.
+ * Keep the HMR socket (PORT+1) open but silent, then reload once so the page uses it.
+ */
+async function silenceHmr(page) {
+  const hmrPort = String(Number(new URL(process.env.TA_VERIFY_URL).port) + 1);
+  await page.context().routeWebSocket(
+    (url) => url.port === hmrPort,
+    () => {},
+  );
+  await page.reload();
+}
+
 await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) => {
+  await step("setup: silence dev-server HMR for this browser", () => silenceHmr(page));
   const name = `Verify MCP ${stamp}`;
   const broken = `Verify Broken ${stamp}`;
   const botName = `MCP Bot ${stamp}`;
@@ -251,7 +266,7 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
     await expect(page.getByText(`mcp__${slug}__echo`)).toBeVisible();
     await expect(page.getByRole("switch", { name: "Available to bots" })).toBeChecked();
     await expect(page.getByText("Echo a value back")).toBeVisible();
-    await page.locator("#tool-arg-value").fill(`hi ${stamp}`);
+    await page.getByRole("textbox", { name: /^value/ }).fill(`hi ${stamp}`);
     await page.getByRole("button", { name: "Run tool" }).click();
     await expect(page.getByText("Success", { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(`echo:hi ${stamp}`)).toBeVisible();
