@@ -8,23 +8,10 @@ import type {
   ChatPage,
   ChatState,
   ChatToolCall,
-  ChatToolStatus,
   QueuedMessage,
 } from "./types";
-import { approvalOf } from "./approvals";
-import { credentialsOf } from "./credentials";
 import type { GateUserMessage } from "./policy";
-import { secretRedactor } from "./redact";
-import { takeoverOf } from "./toolkits/computer-sessions";
-import { questionsOf } from "./toolkits/questions";
-
-/** A tool call of the current round, as `pi.live` presents it. */
-export interface LiveTool {
-  status: "pending" | "running" | "done";
-  taskId?: number;
-  output?: string;
-  details?: unknown;
-}
+import { finishedToolRow, liveToolRow, type LiveTool } from "./tool-call-row";
 
 /** Raw pieces of a conversation the chat view is derived from. */
 export interface RawChat {
@@ -41,13 +28,9 @@ export interface RawChat {
   queued?: readonly QueuedMessage[];
 }
 
-/** Longest tool output kept for the user. */
-const MAX_TOOL_OUTPUT = 4000;
-
 interface ToolResult {
   message: ToolResultMessage;
-  codes: string[];
-  diagnostics: string[];
+  diagnostics: { code?: string; message?: string }[];
 }
 
 const UNANSWERED_REASONS: Record<string, string> = {
@@ -212,65 +195,6 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Bounded, and scrubbed of vault values (a backstop: the gate already scrubbed results). */
-function clip(raw: string): string {
-  const text = secretRedactor.scrub(raw);
-  return text.length > MAX_TOOL_OUTPUT ? `${text.slice(0, MAX_TOOL_OUTPUT)}…` : text;
-}
-
-function sourcesOf(details: unknown): ChatToolCall["sources"] {
-  const sources = record(details)?.sources ?? record(record(details)?.result)?.sources;
-  if (!Array.isArray(sources)) return undefined;
-  const valid = sources.filter(
-    (s): s is { url: string; title: string } =>
-      typeof s?.url === "string" && typeof s?.title === "string",
-  );
-  return valid.length > 0 ? valid.map(({ url, title }) => ({ url, title })) : undefined;
-}
-
-/**
- * A hand-off's thread (issue #143, ADR 0011): the Code page card. Results
- * from before the harness layer carry `shelley: { conversationId, slug }`.
- */
-function codeOf(details: unknown): ChatToolCall["code"] {
-  const outer = record(details);
-  const result = record(outer?.result);
-  const code = record(outer?.code ?? result?.code);
-  if (code && typeof code.threadId === "string" && typeof code.url === "string") {
-    return {
-      threadId: code.threadId,
-      harness: typeof code.harness === "string" ? code.harness : "Shelley",
-      title: typeof code.title === "string" ? code.title : null,
-      cwd: typeof code.cwd === "string" ? code.cwd : null,
-      url: code.url,
-    };
-  }
-  const legacy = record(outer?.shelley ?? result?.shelley);
-  if (!legacy || typeof legacy.conversationId !== "string" || typeof legacy.url !== "string")
-    return undefined;
-  return {
-    threadId: `shelley:${legacy.conversationId}`,
-    harness: "Shelley",
-    title: typeof legacy.slug === "string" ? legacy.slug : null,
-    cwd: typeof legacy.cwd === "string" ? legacy.cwd : null,
-    url: legacy.url,
-  };
-}
-
-function resultStatus(result: ToolResult): ChatToolStatus {
-  const approval = approvalOf(result.message.details);
-  if (approval?.state === "denied") return "denied";
-  if (
-    approval?.state === "expired" ||
-    credentialsOf(result.message.details)?.status === "expired"
-  ) {
-    return "expired";
-  }
-  if (approval?.interrupted || result.codes.includes("interrupted")) return "interrupted";
-  if (result.codes.includes("aborted")) return "aborted";
-  return result.message.isError ? "error" : "done";
-}
-
 /** A tool call merged with its stored result, else with its live slot. */
 function toolCallView(
   call: ToolCall,
@@ -285,79 +209,21 @@ function toolCallView(
     status: "pending",
   };
   if (result) {
-    const message = result.message;
-    const output = textOf(message.content) || result.diagnostics.join("\n");
-    const approved = approvalOf(message.details);
-    const approval = approved?.state;
-    const sources = sourcesOf(message.details);
-    const code = codeOf(message.details);
-    const { questions, answers } = questionsOf(message.details);
-    const credentials = credentialsOf(message.details);
-    const takeover = takeoverOf(approved?.result ?? message.details);
-    // The tool's clock includes any wait for the owner's approval: report
-    // the run and the wait apart.
-    const waitedMs = approved?.waitedMs;
+    const { message, diagnostics } = result;
     return {
       ...base,
-      status: resultStatus(result),
-      ...(output ? { output: clip(output) } : {}),
-      ...(message.durationMs !== undefined
-        ? { durationMs: Math.max(0, message.durationMs - (waitedMs ?? 0)) }
-        : {}),
-      ...(waitedMs ? { waitedMs } : {}),
-      ...(approval === "approved" ||
-      approval === "denied" ||
-      approval === "auto" ||
-      approval === "yolo" ||
-      approval === "refused"
-        ? { approval }
-        : {}),
-      ...(sources ? { sources } : {}),
-      ...(code ? { code } : {}),
-      ...(questions ? { questions } : {}),
-      ...(answers ? { answers } : {}),
-      ...(credentials ? { credentials } : {}),
-      ...(takeover ? { takeover } : {}),
+      ...finishedToolRow({
+        output: textOf(message.content),
+        details: message.details,
+        isError: message.isError,
+        ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+        diagnostics,
+      }),
     };
   }
-  if (slot) {
-    const approval = approvalOf(slot.details);
-    const waiting = approval?.state === "pending";
-    const asked = questionsOf(slot.details);
-    const credentials = credentialsOf(slot.details);
-    const takeover = takeoverOf(slot.details);
-    const vault = approval?.vault;
-    const expiresAt = approval?.expiresAt ?? credentialExpiry(slot.details);
-    return {
-      ...base,
-      status: waiting
-        ? "awaiting_approval"
-        : asked.pending
-          ? "awaiting_answer"
-          : credentials?.status === "pending"
-            ? "awaiting_credentials"
-            : takeover?.status === "pending"
-              ? "awaiting_takeover"
-              : slot.status === "running"
-                ? "running"
-                : "pending",
-      ...(slot.taskId !== undefined ? { taskId: slot.taskId } : {}),
-      ...(slot.output ? { output: clip(slot.output) } : {}),
-      ...(asked.pending ? { questions: asked.questions } : {}),
-      ...(vault ? { vault } : {}),
-      ...(credentials ? { credentials } : {}),
-      ...(takeover ? { takeover } : {}),
-      ...(expiresAt !== undefined ? { expiresAt } : {}),
-    };
-  }
+  if (slot) return { ...base, ...liveToolRow(slot) };
   // No result and no live slot: still queued in a busy run, or cut off for good.
   return { ...base, status: settled ? "interrupted" : "pending" };
-}
-
-/** A pending credential request's deadline rides its own details, like an approval's. */
-function credentialExpiry(details: unknown): number | undefined {
-  const at = record(details)?.expiresAt;
-  return typeof at === "number" ? at : undefined;
 }
 
 /** How an assistant message that ended in a model error reads to the owner. */
@@ -379,11 +245,7 @@ function toolResultsByAssistant(entries: readonly EntryRecord[]): Map<number, To
         message?: string;
       }[];
       const list = out.get(assistant) ?? [];
-      list.push({
-        message,
-        codes: diagnostics.map((d) => d.code ?? ""),
-        diagnostics: diagnostics.map((d) => d.message ?? "").filter(Boolean),
-      });
+      list.push({ message, diagnostics });
       out.set(assistant, list);
     } else if (entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) assistant = undefined;
   }
