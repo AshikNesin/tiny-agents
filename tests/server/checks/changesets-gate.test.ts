@@ -93,15 +93,14 @@ function runGate(args: string[]): { status: number | null; stdout: string; stder
   };
 }
 
-// A git repo whose root package.json is named tiny-agents and whose base
-// already holds a merged reason and a pending root changeset, as main does.
-// The branch commit edits a migration and adds branchFiles.
+const MERGED_BEFORE_BRANCH = {
+  "package.json": JSON.stringify({ name: "tiny-agents" }),
+  ".no-release/earlier.md": "# No release: an earlier branch\n",
+  ".changeset/earlier.md": rootChangeset("tiny-agents"),
+};
+
 function migrationBranch(branchFiles: Record<string, string>): { dir: string; base: string } {
-  const dir = fixtureTree({
-    "package.json": JSON.stringify({ name: "tiny-agents" }),
-    ".no-release/earlier.md": "# No release: an earlier branch\n",
-    ".changeset/earlier.md": rootChangeset("tiny-agents"),
-  });
+  const dir = fixtureTree(MERGED_BEFORE_BRANCH);
   const git = (...args: string[]) =>
     execFileSync(
       "git",
@@ -197,8 +196,11 @@ describe("changesets gate", () => {
     expect(run.stderr).toContain("missing changeset for tiny-agents");
   }, 30_000);
 
-  it("accepts a no-release reason the branch adds", () => {
-    const run = runOnMigrationBranch({ ".no-release/mine.md": "# No release: internal\n" });
+  it("accepts the first non-empty no-release reason the branch adds", () => {
+    const run = runOnMigrationBranch({
+      ".no-release/a-empty.md": "",
+      ".no-release/mine.md": "# No release: internal\n",
+    });
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
     expect(run.stdout).toContain("no-release reason accepted (mine.md");
