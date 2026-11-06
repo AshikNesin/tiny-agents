@@ -1,6 +1,6 @@
 /** Request validation for the memories API (issue #22). */
 import { z } from "zod";
-import { MEMORY_TEXT_MAX, memoryCategorySchema, memoryTextSchema } from "./memories.domain";
+import { memoryCategorySchema, memoryTextSchema } from "./memories.domain";
 
 export const listMemoriesSchema = z.object({
   // stringbool, not coerce: coerce.boolean() would read the string "false" as true.
@@ -21,8 +21,6 @@ export const updateMemorySchema = z
     restore: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
-
-export const MEMORY_MAX_CHARS_HINT = MEMORY_TEXT_MAX;
 
 export type CreateMemoryDTO = z.infer<typeof createMemorySchema>;
 export type UpdateMemoryDTO = z.infer<typeof updateMemorySchema>;

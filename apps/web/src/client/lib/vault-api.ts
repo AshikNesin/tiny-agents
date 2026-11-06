@@ -152,20 +152,13 @@ export interface CredentialRequestView {
 // ── Step-up ─────────────────────────────────────────────────────────────
 
 let stepUp: { token: string; expiresAt: number } | undefined;
-const listeners = new Set<() => void>();
 
 export function hasStepUp(): boolean {
   return stepUp !== undefined && stepUp.expiresAt > Date.now() + 5_000;
 }
 
-export function onStepUpChange(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
 function setStepUp(next: typeof stepUp) {
   stepUp = next;
-  for (const listener of listeners) listener();
 }
 
 export class StepUpRequiredError extends Error {

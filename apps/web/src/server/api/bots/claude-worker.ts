@@ -51,13 +51,6 @@ export async function claudeWorkerScript(): Promise<string> {
   return bundleFromSource();
 }
 
-/** The sandbox worker, or undefined when no sandbox is configured. */
-export function claudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
-  const connection = sandboxConnection(env);
-  if (!connection) return undefined;
-  return createSandboxClaudeWorker({ connection, script: claudeWorkerScript });
-}
-
 let shared: { connection: SandboxConnection; locator: ClaudeWorkerLocator } | undefined;
 
 /**

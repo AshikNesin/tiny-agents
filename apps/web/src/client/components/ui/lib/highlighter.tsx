@@ -128,13 +128,3 @@ export async function loadHighlighter(language: string): Promise<LoadedHighlight
     },
   };
 }
-
-/** Returns one React node per line, or null for a language that is not listed. */
-export async function highlightCode(
-  code: string,
-  language: string,
-): Promise<React.ReactNode[] | null> {
-  const loaded = await loadHighlighter(language);
-
-  return loaded ? loaded.highlight(code).lines : null;
-}
