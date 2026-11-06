@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
@@ -17,26 +17,31 @@ import { describe, expect, it } from "vite-plus/test";
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-changesets.mjs");
 
+type GateState = {
+  managedPackages: string[];
+  coveredPackages: string[];
+  reason: string | null;
+  changedManagedFiles: string[];
+  unknownReleases: string[];
+  workspacePackages: string[];
+};
+
 type Gate = {
   collect: (state: {
     rootDir?: string;
     changedFiles: string[];
-    changesetFiles: { name: string; body: string }[];
+    changesetFiles: { name: string; body: string; added: boolean }[];
     noReleaseReason?: string | null;
-  }) => {
-    managedPackages: string[];
-    coveredPackages: string[];
-    reason: string | null;
-    changedManagedFiles: string[];
-  };
+    workspacePackages: string[];
+  }) => GateState;
   parseChangesetReleases: (body: string) => string[];
   isReleaseBotCommit: (commit: { name: string; email: string }) => boolean;
-  evaluate: (state: {
-    managedPackages: string[];
-    coveredPackages: string[];
-    reason: string | null;
-    changedManagedFiles: string[];
-  }) => { status: number; out?: string; err?: string; missing?: string[] };
+  evaluate: (state: GateState) => {
+    status: number;
+    out?: string;
+    err?: string;
+    missing?: string[];
+  };
   pkgJsonChangeIsReleaseRelevant: (beforeJson: string, afterJson: string) => boolean;
 };
 
@@ -71,8 +76,13 @@ async function collectFixture(
       state: gate.collect({
         rootDir: dir,
         changedFiles,
-        changesetFiles: changesetBodies.map((body, i) => ({ name: `cs-${i}.md`, body })),
+        changesetFiles: changesetBodies.map((body, i) => ({
+          name: `cs-${i}.md`,
+          body,
+          added: true,
+        })),
         noReleaseReason,
+        workspacePackages: WORKSPACE,
       }),
     };
   } finally {
@@ -91,6 +101,70 @@ function runGate(args: string[]): { status: number | null; stdout: string; stder
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
+}
+
+const WORKSPACE = ["tiny-agents", "@groot/core", "@groot/ui"];
+
+const MERGED_BEFORE_BRANCH = {
+  "package.json": JSON.stringify({ name: "tiny-agents" }),
+  "pnpm-workspace.yaml": 'minimumReleaseAge: 1440\npackages:\n  - "."\n  - "packages/*"\n',
+  "packages/ui/package.json": JSON.stringify({ name: "@groot/ui" }),
+  ".no-release/earlier.md": "# No release: an earlier branch\n",
+  ".changeset/earlier.md": rootChangeset("tiny-agents"),
+};
+
+const MIGRATION = { "apps/web/drizzle/meta/_journal.json": "{}\n" };
+
+// branchFiles maps a path to its new content, or to null to delete it.
+function branchFromMain(branchFiles: Record<string, string | null>): {
+  dir: string;
+  base: string;
+} {
+  const dir = fixtureTree(MERGED_BEFORE_BRANCH);
+  const git = (...args: string[]) =>
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Dev",
+        "-c",
+        "user.email=dev@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        ...args,
+      ],
+      { cwd: dir, encoding: "utf8" },
+    ).trim();
+  git("init", "-q");
+  git("add", ".");
+  git("commit", "-q", "-m", "base");
+  const base = git("rev-parse", "HEAD");
+  for (const [rel, body] of Object.entries(branchFiles)) {
+    if (body === null) {
+      rmSync(path.join(dir, rel));
+      continue;
+    }
+    mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), body);
+  }
+  git("add", "-A");
+  git("commit", "-q", "-m", "branch");
+  return { dir, base };
+}
+
+function rootChangeset(name: string): string {
+  return `---\n"${name}": patch\n---\n\nAdd a migration.\n`;
+}
+
+function runOnBranch(branchFiles: Record<string, string | null>) {
+  const { dir, base } = branchFromMain(branchFiles);
+  try {
+    return runGate(["--root", dir, "--base", base]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const CORE_PKG = JSON.stringify({ name: "@groot/core" });
@@ -117,12 +191,84 @@ describe("changesets gate", () => {
 
   it("maps migration and .groot changes to the root package", async () => {
     const { state } = await collectFixture(
-      { "package.json": JSON.stringify({ name: "groot" }) },
+      { "package.json": JSON.stringify({ name: "tiny-agents" }) },
       ["apps/web/drizzle/0000_init.sql", ".groot/lib/patterns.ts"],
       [],
     );
-    expect(state.managedPackages).toEqual(["groot"]);
+    expect(state.managedPackages).toEqual(["tiny-agents"]);
   }, 20_000);
+
+  it("accepts a migration changeset naming the root package.json name", () => {
+    const run = runOnBranch({
+      ...MIGRATION,
+      ".changeset/migration.md": rootChangeset("tiny-agents"),
+    });
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("tiny-agents covered");
+  }, 30_000);
+
+  it("rejects a migration changeset naming groot and names the root package", () => {
+    const run = runOnBranch({ ...MIGRATION, ".changeset/migration.md": rootChangeset("groot") });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      '.changeset/migration.md names unknown package "groot"; packages are: tiny-agents, @groot/ui',
+    );
+    expect(run.stderr).toContain('use "tiny-agents" for apps/web/drizzle and .groot changes');
+  }, 30_000);
+
+  it("rejects groot in a CRLF changeset with a none bump", () => {
+    const run = runOnBranch({
+      ...MIGRATION,
+      ".changeset/migration.md":
+        '---\r\n"tiny-agents": patch\r\n"groot": none\r\n---\r\n\r\nMigrate.\r\n',
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('.changeset/migration.md names unknown package "groot"');
+  }, 30_000);
+
+  it("does not count an edited or renamed reason merged before the branch", () => {
+    const edited = runOnBranch({
+      "packages/ui/src/button.tsx": "export {};\n",
+      ".no-release/earlier.md": "# No release: an earlier branch, typo fixed\n",
+    });
+    expect(edited.status).toBe(1);
+    expect(edited.stderr).toContain("missing changeset for @groot/ui");
+    const renamed = runOnBranch({
+      "packages/ui/src/button.tsx": "export {};\n",
+      ".no-release/earlier.md": null,
+      ".no-release/mine.md": MERGED_BEFORE_BRANCH[".no-release/earlier.md"],
+    });
+    expect(renamed.status).toBe(1);
+    expect(renamed.stderr).toContain("missing changeset for @groot/ui");
+  }, 30_000);
+
+  it("rejects a changeset naming groot beside the root package", () => {
+    const run = runOnBranch({
+      ...MIGRATION,
+      ".changeset/migration.md": '---\n"tiny-agents": patch\n"groot": patch\n---\n\nMigrate.\n',
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('.changeset/migration.md names unknown package "groot"');
+    expect(run.stderr).not.toContain('unknown package "tiny-agents"');
+  }, 30_000);
+
+  it("ignores reasons and changesets merged before the branch", () => {
+    const run = runOnBranch(MIGRATION);
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain("missing changeset for tiny-agents");
+  }, 30_000);
+
+  it("accepts the first non-empty no-release reason the branch adds", () => {
+    const run = runOnBranch({
+      ...MIGRATION,
+      ".no-release/a-empty.md": "",
+      ".no-release/mine.md": "# No release: internal\n",
+    });
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("no-release reason accepted (mine.md");
+  }, 30_000);
 
   it("passes when every changed package has its changeset", async () => {
     const gate = await loadGate();
@@ -222,6 +368,7 @@ describe("changesets gate", () => {
         ],
         changesetFiles: [],
         noReleaseReason: null,
+        workspacePackages: WORKSPACE,
       });
       expect(withBlobs.managedPackages).toEqual(["@groot/core"]);
       const verdict = gate.evaluate(withBlobs);
@@ -256,6 +403,7 @@ describe("changesets gate", () => {
         ],
         changesetFiles: [],
         noReleaseReason: null,
+        workspacePackages: WORKSPACE,
       });
       expect(state.managedPackages).toEqual([]);
     } finally {
