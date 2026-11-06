@@ -4,6 +4,7 @@
  * (base64). Secrets never leave the server.
  */
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { appEnv } from "../../env";
 
 export class SecretsKeyMissingError extends Error {
   constructor() {
@@ -13,13 +14,13 @@ export class SecretsKeyMissingError extends Error {
 }
 
 function key(): Buffer {
-  const raw = process.env.SECRETS_KEY?.trim();
+  const raw = appEnv().SECRETS_KEY?.trim();
   if (!raw) throw new SecretsKeyMissingError();
   return createHash("sha256").update(raw).digest();
 }
 
 export function hasSecretsKey(): boolean {
-  return Boolean(process.env.SECRETS_KEY?.trim());
+  return Boolean(appEnv().SECRETS_KEY?.trim());
 }
 
 export function encryptSecret(plain: string): string {

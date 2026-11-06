@@ -51,9 +51,7 @@ export function findClaudeOauthToken(
 }
 
 /** Throw `ClaudeOauthTokenError` when model-provider config holds `sk-ant-oat`. */
-export function assertNoClaudeOauthToken(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): void {
+export function assertNoClaudeOauthToken(env: Readonly<Record<string, string | undefined>>): void {
   const where = findClaudeOauthToken(env);
   if (where) throw new ClaudeOauthTokenError(where);
 }
@@ -164,9 +162,7 @@ export function builtinProviderIds(): ReadonlySet<string> {
  *   AI_PROVIDERS=openai                         # OpenAI direct only
  *   AI_PROVIDERS=cloudflare-ai-gateway,openai   # both; gateway ids stay bare
  */
-export function aiProviderIds(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): string[] {
+export function aiProviderIds(env: Readonly<Record<string, string | undefined>>): string[] {
   const raw = unquote(env.AI_PROVIDERS);
   if (!raw) return [GATEWAY_PROVIDER];
   const known = builtinProviderIds();
@@ -194,9 +190,7 @@ export function aiProviderIds(
 }
 
 /** The provider bare model ids resolve against (the first of AI_PROVIDERS). */
-export function primaryProviderId(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): string {
+export function primaryProviderId(env: Readonly<Record<string, string | undefined>>): string {
   return aiProviderIds(env)[0];
 }
 
@@ -213,9 +207,7 @@ export function unquote(value: string | undefined): string | undefined {
 }
 
 /** True when every Cloudflare AI Gateway setting is present. */
-export function isGatewayConfigured(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): boolean {
+export function isGatewayConfigured(env: Readonly<Record<string, string | undefined>>): boolean {
   return GATEWAY_ENV_KEYS.every((key) => (env[key] ?? "").trim() !== "");
 }
 
@@ -227,7 +219,7 @@ export function isGatewayConfigured(
  * the gateway, so they register only when it is one of the providers.
  */
 export function createProviderModels(
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>>,
 ): MutableModels {
   assertNoClaudeOauthToken(env);
   const ids = aiProviderIds(env);
@@ -320,7 +312,7 @@ function gatewayCustomAuth(useNativeHeader: boolean) {
 
 export function registerGatewayCustomProviders(
   models: MutableModels,
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>>,
 ): void {
   let raw = unquote(env.GATEWAY_CUSTOM_PROVIDERS);
   if (!raw) return;

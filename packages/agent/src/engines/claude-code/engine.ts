@@ -124,7 +124,7 @@ export class ClaudeCodeEngine implements AgentEngine {
   private readonly gate: ToolGate;
 
   constructor(private readonly options: ClaudeCodeEngineOptions) {
-    this.env = options.env ?? (() => process.env);
+    this.env = options.env ?? (() => ({}));
     this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 

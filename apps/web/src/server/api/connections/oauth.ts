@@ -6,6 +6,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { and, eq, isNotNull } from "drizzle-orm";
+import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import type {
   OAuthClientInformationMixed,
@@ -27,7 +28,7 @@ export interface OAuthState {
 }
 
 export function appOrigin(): string {
-  return (process.env.ORIGIN?.trim() || "http://localhost:3000").replace(/\/+$/, "");
+  return env.ORIGIN.replace(/\/+$/, "");
 }
 
 export function oauthCallbackUrl(): string {

@@ -111,6 +111,54 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export { db } from "../../../../apps/web/src/server/db";\n',
     rules: ["R1"],
   },
+  "apps/web/src/server/api/code/r3-default-param-fail.ts": {
+    source:
+      "type Env = Readonly<Record<string, string | undefined>>;\nexport function shelleyUrl(env: Env = process.env) {\n  return env.SHELLEY_URL;\n}\n",
+    rules: ["R3"],
+    mentions: "`appEnv()`",
+  },
+  "apps/web/src/server/r3-global-fail.ts": {
+    source: "export const url = globalThis.process.env.SHELLEY_URL;\n",
+    rules: ["R3"],
+  },
+  "packages/agent/src/r3-destructure-fail.ts": {
+    source: "const { env } = process;\nexport const url = env.SHELLEY_URL;\n",
+    rules: ["R3"],
+    mentions: "add the key to that schema",
+  },
+  "packages/agent/src/r3-computed-fail.ts": {
+    source: 'export const url = process["env"].SHELLEY_URL;\n',
+    rules: ["R3"],
+  },
+  "packages/agent/src/r3-import-fail.ts": {
+    source: 'import { env } from "node:process";\nexport const url = env.SHELLEY_URL;\n',
+    rules: ["R3"],
+  },
+  "apps/web/src/server/r3-pass.ts": {
+    source:
+      'import { appEnv } from "./env";\nconst options = { env: {} };\nconst { env } = options;\nexport const url = appEnv().SHELLEY_URL ?? env;\n',
+    rules: [],
+  },
+  "apps/web/src/server/env.ts": {
+    source: "export const appEnv = (source = process.env) => source;\n",
+    rules: [],
+  },
+  "apps/web/src/server/entry.node.ts": {
+    source: 'export const isProduction = process.env.NODE_ENV === "production";\n',
+    rules: [],
+  },
+  "packages/claude-worker/src/bin.ts": {
+    source: "export const token = process.env.CLAUDE_WORKER_TOKEN;\n",
+    rules: [],
+  },
+  "tests/server/r3-test-pass.ts": {
+    source: 'process.env.NODE_ENV = "test";\n',
+    rules: [],
+  },
+  "vitest.config.server.ts": {
+    source: "delete process.env.OPENAI_API_KEY;\n",
+    rules: [],
+  },
   "apps/web/src/client/r4-fail.tsx": {
     source: `${SHELL_CN}\nexport const x = cn("a");\n`,
     rules: ["R4"],

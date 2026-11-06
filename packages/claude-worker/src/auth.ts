@@ -115,7 +115,7 @@ const defaultRunner: CommandRunner = (command, args, env) =>
 
 /** Run `claude auth status`. Missing binary is "not available", not a thrown error. */
 export async function readClaudeAuth(
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined>,
   run: CommandRunner = defaultRunner,
 ): Promise<ClaudeStatusReport> {
   const command = env.CLAUDE_CODE_COMMAND?.trim() || "claude";
@@ -144,7 +144,7 @@ export async function readClaudeAuth(
 }
 
 export async function requireSubscriptionLogin(
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined>,
   run?: CommandRunner,
 ): Promise<ClaudeStatusReport> {
   const report = await readClaudeAuth(env, run);

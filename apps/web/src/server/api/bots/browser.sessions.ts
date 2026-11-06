@@ -13,8 +13,7 @@ import {
   type BrowserTransport,
 } from "@tiny-agents/agent/browser";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
-
-type Env = Readonly<Record<string, string | undefined>>;
+import { appEnv, type AppEnv } from "../../env";
 
 /**
  * Browser transport for the deploy model: chromium runs on the sandbox VM
@@ -22,7 +21,7 @@ type Env = Readonly<Record<string, string | undefined>>;
  * BROWSER_EXECUTABLE_PATH set we drive that local binary instead (dev on
  * the exe.dev VM); with neither, Playwright's bundled Chromium.
  */
-export function browserTransport(env: Env = process.env): BrowserTransport {
+export function browserTransport(env: AppEnv = appEnv()): BrowserTransport {
   const executable = unquoteEnv(env.BROWSER_EXECUTABLE_PATH);
   if (executable) return createChromiumTransport({ executablePath: executable });
   const connection = sandboxConnection(env);
@@ -35,7 +34,7 @@ export function browserTransport(env: Env = process.env): BrowserTransport {
  * only Chrome on the sandbox VM runs on a display that can be streamed; a
  * local binary or Playwright's Chromium runs headless.
  */
-export function browserLiveViewHint(env: Env = process.env): string | undefined {
+export function browserLiveViewHint(env: AppEnv = appEnv()): string | undefined {
   if (unquoteEnv(env.BROWSER_EXECUTABLE_PATH)) {
     return "BROWSER_EXECUTABLE_PATH runs a headless browser on this server, so there is nothing to show. Unset it and set SANDBOX_HOST for a live browser on the sandbox VM.";
   }
@@ -48,7 +47,7 @@ export function browserLiveViewHint(env: Env = process.env): string | undefined 
 let instance: BrowserSessions | undefined;
 
 /** The process's manager, created on first use from the env. */
-export function getBrowserSessions(env: Env = process.env): BrowserSessions {
+export function getBrowserSessions(env: AppEnv = appEnv()): BrowserSessions {
   return (instance ??= createBrowserSessions({
     profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
     idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,

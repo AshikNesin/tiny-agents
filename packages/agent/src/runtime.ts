@@ -126,7 +126,10 @@ export interface AgentRuntimeOptions {
   onReport?: (error: unknown) => void;
   /** The Harness failed (storage error) and closed itself. The host should exit/restart. */
   onFatal?: (error: unknown) => void;
-  /** Env snapshot override (tests/faux boot). Defaults to process.env. */
+  /**
+   * The environment provider config and the Claude plan engine read: the
+   * host's `process.env`, or a literal in tests. Default: empty.
+   */
   env?: Readonly<Record<string, string | undefined>>;
   /**
    * Where Claude plan turns run: the sandbox worker the app sets up over SSH.
@@ -185,6 +188,7 @@ export class AgentRuntime {
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
+    env: Readonly<Record<string, string | undefined>>,
     persistPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
@@ -193,7 +197,7 @@ export class AgentRuntime {
     this.#gate = gate;
     this.#pi = new PiEngine(harness, { onBusy: (ref) => this.#busyChanged(ref) });
     this.#claude = new ClaudeCodeEngine({
-      env: () => process.env,
+      env: () => env,
       persistPath,
       worker: claudeWorker,
       ...(claudeConnect ? { connect: claudeConnect } : {}),
@@ -219,12 +223,11 @@ export class AgentRuntime {
    * `StoreLockedError` when another process owns the store.
    */
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {
-    // Snapshot the env at open, so later changes to process.env never shift
+    // Snapshot the env at open, so later changes to the environment never shift
     // the runtime's provider config. Callers that swap the provider (faux
-    // boot, tests) pass their own snapshot, e.g. without GATEWAY_MODEL_ALLOWLIST.
-    const envSource: Readonly<Record<string, string | undefined>> = options.env
-      ? { ...options.env }
-      : { ...process.env };
+    // boot, tests) pass their own, e.g. without GATEWAY_MODEL_ALLOWLIST.
+    const env = options.env ?? {};
+    const envSource = { ...env };
     assertNoClaudeOauthToken(envSource);
     const inMemory = options.storePath === ":memory:";
     const lock = inMemory
@@ -303,6 +306,7 @@ export class AgentRuntime {
         approvals,
         questions,
         capabilities,
+        env,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
