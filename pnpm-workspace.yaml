@@ -65,5 +65,3 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
-
-verifyDepsBeforeRun: error
