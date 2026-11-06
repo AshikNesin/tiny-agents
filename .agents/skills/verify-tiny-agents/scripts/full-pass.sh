@@ -12,17 +12,20 @@ TAG=$(date -u +%Y%m%d-%H%M%S)
 OUT=data/verify-evidence/full-pass-$TAG
 
 GROUP_A="auth account-shell command-palette settings notifications passkeys tasks"
-GROUP_B="chats past-chats chat-attachments message-steering questions bot-settings memory"
+GROUP_B="chats past-chats chat-attachments message-steering questions bot-settings memory message-paging"
 GROUP_C="tool-permissions yolo self-improve auto-review bot-to-bot shared-bots routines"
-GROUP_D="skills connections vault model-providers storage jobs"
-GROUP_SBX="terminal computer browser code claude-plan"
+GROUP_D="skills connections vault model-providers storage jobs jobs-admin"
+# vault-passkey spends ~11 auth attempts (logins, passkey options/verify); the
+# two scheduled-routine journeys each wait ~2 min for a fire: their own group.
+GROUP_E="vault-passkey routine-schedule workflow-e2e"
+GROUP_SBX="terminal computer browser code claude-plan bot-profiles code-extras"
 GROUP_EMPTY="setup"
 # Also driven against the production build (--prod). Not part of the
 # exactly-once check below: these journeys run twice, dev server and bundle.
 PROD_SMOKE="auth chats tasks settings storage"
 
 # Every journey must be in exactly one group: a new journey not listed here fails loudly.
-listed=$(echo $GROUP_A $GROUP_B $GROUP_C $GROUP_D $GROUP_SBX $GROUP_EMPTY | tr ' ' '\n' | sort)
+listed=$(echo $GROUP_A $GROUP_B $GROUP_C $GROUP_D $GROUP_E $GROUP_SBX $GROUP_EMPTY | tr ' ' '\n' | sort)
 present=$(ls "$J" | sed 's/\.mjs$//' | sort)
 if [ "$listed" != "$present" ]; then
   echo "full-pass: groups and journeys/ disagree; update the GROUP_* lists:" >&2
@@ -48,6 +51,7 @@ pass "$TAG-a" 3300 "" $GROUP_A &
 pass "$TAG-b" 3310 "" $GROUP_B &
 pass "$TAG-c" 3320 "" $GROUP_C &
 pass "$TAG-d" 3330 "" $GROUP_D &
+pass "$TAG-e" 3370 "" $GROUP_E &
 pass "$TAG-sbx" 3280 "--sandbox --shelley" $GROUP_SBX &
 pass "$TAG-empty" 3340 "--empty" $GROUP_EMPTY &
 pass "$TAG-prod" 3360 "--prod" $PROD_SMOKE &

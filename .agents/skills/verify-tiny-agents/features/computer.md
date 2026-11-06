@@ -45,4 +45,4 @@ Preconditions:
 - noVNC sends keys as QEMU extended key events to TigerVNC (type 255), not plain RFB KeyEvent; count both.
 - The desktop is shared with the browser's display lock; reset at the end so the next drive starts from `This desktop is off.` A cold desktop takes ~10–30 s to start.
 - Headless Chromium ignores Esc for full screen; leave with `exitFullscreen()`.
-- HARNESS BUG (open): `lib.mjs` silences Vite HMR with `context.routeWebSocket`, which swaps in Playwright's WebSocket mock for every socket in the page. noVNC then receives the RFB banner but never reaches `Live` (status stays `Reconnecting`), so this journey fails at the live-view step until the stub is replaced (stubbing `/@vite/client` with `context.route` keeps noVNC working). Passing runs from before the stub: `sbx-3` (computer), `sbx-1` (browser).
+- Never use `context.routeWebSocket` in a journey: any WebSocket route makes Playwright proxy every socket in the page, and noVNC then stays `Reconnecting`. `lib.mjs` silences Vite HMR by serving a no-op `/@vite/client` instead.

@@ -46,4 +46,4 @@ Preconditions:
 - The final echo repeats the last snapshot, so count `^Echo:` texts rather than matching their content.
 - Opening from the page first creates the owner's tab; the bot then gets a tab of its own (two tabs in the live view is expected).
 - Headless Chromium ignores Esc for full screen; leave with `exitFullscreen()`.
-- HARNESS BUG (open): `lib.mjs` silences Vite HMR with `context.routeWebSocket`, which swaps in Playwright's WebSocket mock for every socket in the page. noVNC then receives the RFB banner but never reaches `Live` (status stays `Reconnecting`), so this journey fails at the live-view step until the stub is replaced (stubbing `/@vite/client` with `context.route` keeps noVNC working). Passing runs from before the stub: `sbx-3` (computer), `sbx-1` (browser).
+- Never use `context.routeWebSocket` in a journey: any WebSocket route makes Playwright proxy every socket in the page, and noVNC then stays `Reconnecting`. `lib.mjs` silences Vite HMR by serving a no-op `/@vite/client` instead.

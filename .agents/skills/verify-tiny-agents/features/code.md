@@ -14,7 +14,7 @@
 - `code-changes` `Changes` panel (`code-changes`): one `code-file` card per changed file with its diff; `Close changes`.
 - `code-list` navigation `Code threads`: `Working now` / `Recent`, `Working` status, `Unread` dot, `Search threads`, row `Archive <title>`, radio `Active` / `Archived`, `Restore <title>`.
 - `code-handoff` a bot's `/code cwd=<dir> <task>` (faux trigger) starts a Shelley thread: hand-off card with `Open in Code`, then `Shelley reply relayed into this chat` with the outcome.
-- Not driven: change directory, fork, delete from the menu (cleanup uses the API), attachments and `@` file completion, skills, usage popover, Open in Shelley, new worktree creation, repository filter, subagents (`subagent:` prompts), push notifications (off in verify runs).
+- Covered by [Code extras](./code-extras.md): change directory, fork, attachments, `@` file completion, `/` commands, skills, usage popover, new worktree, repository filter, chips, queued Send now/Cancel, recover. Not driven anywhere: delete from the menu (cleanup uses the API), Open in Shelley, subagents (`subagent:` prompts), push notifications (off in verify runs).
 - Harness picker, Claude Code threads, permission chips and approval cards: need the Claude Code harness (see `claude-plan.md`); unreachable.
 
 ## How to get to it (user POV)

@@ -48,6 +48,7 @@ Chats
 
 - [Chats with bots](./chats.md): create a bot, streamed reply, reload, New chat, Chat history.
 - [Past chats](./past-chats.md): titles, read-only view, continue, delete.
+- [Message paging](./message-paging.md): older messages load on scroll-back in live and past chats, in order, no duplicates.
 - [Chat attachments](./chat-attachments.md): images and text files, image-only sends, refused uploads.
 - [Message steering](./message-steering.md): steer, queue, withdraw and stop while a reply streams.
 - [Questions for the owner](./questions.md): `/ask` cards, answers, skip, dismiss.
@@ -64,12 +65,16 @@ Work
 
 - [Tasks](./tasks.md): quick add, edit, complete, reopen, delete.
 - [Routines](./routines.md): schedule preview, paused routine, Run now, the quiet chat line.
+- [Scheduled routines](./routine-schedule.md): a routine fires on its own clock; edit, pause/resume, delete.
+- [End-to-end workflow](./workflow-e2e.md): bot + skill + vault-backed MCP connection + scheduled routine, the result in chat, wiring after reload.
 - [Skills](./skills.md): create, edit, attach to bots, import, delete.
 - [Connections (MCP)](./connections.md): against a real local MCP server the journey starts.
 - [Vault](./vault.md): every item kind, step-up, masking, reveal, policy, delete.
+- [Vault step-up with a passkey](./vault-passkey.md): Use a passkey, refused foreign and unknown passkeys, edit in the same window.
 - [Model providers](./model-providers.md): catalog and picker with no provider keys.
 - [Storage](./storage.md): folders, byte-exact upload/download, rename, bulk delete.
 - [Jobs](./jobs.md): list, filters, detail, cancel/resume, re-run, delete.
+- [Jobs admin](./jobs-admin.md): retry, bulk re-run, schedule/edit/cancel a job, purge by state.
 
 Sandbox and code
 
@@ -77,6 +82,8 @@ Sandbox and code
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
 - [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, archive, bot hand-off.
+- [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, chips, completions, uploads, usage, queued actions, recover.
+- [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.
 
 ## A full pass
@@ -102,6 +109,8 @@ These steps caught real bugs in the 2026-11 pass; the bugs are fixed and the ste
 - `terminal` (#170): CSS full screen (no Fullscreen API) can be left from inside the region.
 - `claude-plan` (#171): with the engine off, the card never claims there is no sandbox.
 - `storage`, `jobs` (#172): no `<li>` nested in `<li>` in `result.json` `consoleErrors`.
+- `bot-profiles` (#173): deleting a bot closes and wipes its own desktop, not only its browser.
+- `vault-passkey` (#174): a passkey the server doesn't know is refused with 403 and the owner stays signed in.
 
 ## Unreachable here (prerequisite)
 

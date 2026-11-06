@@ -23,7 +23,7 @@ Preconditions:
 - Setup (API): an API-key item `verify-pk-key-<stamp>` (password step-up), and a guest `vault-guest-<stamp>@example.com` (`POST /api/v1/people`) who signs in in a second browser context and adds a passkey on its own CDP virtual authenticator. That credential is copied (`WebAuthn.getCredentials` → `WebAuthn.addCredential`) into a virtual authenticator on the owner's page: one laptop holding both accounts' passkeys.
 
 - **Someone else.** `/vault/items/<handle>` → `Reveal` → `Use a passkey`: the owner has no passkeys, so the browser offers the guest's. Step-up calls `options` 200, `step-up` 403; toast; dialog open, URL unchanged, `GET /api/v1/auth/me` is the owner; `Escape` closes the dialog on the item.
-- **Leftover (bug step).** Remove the guest (`DELETE /api/v1/people/<id>`; its passkeys go with it) and repeat: `step-up` must be 403 and the owner stay on the item. Runs before the owner registers a passkey (afterwards the browser offers only the owner's).
+- **Leftover (regression check for #174).** Remove the guest (`DELETE /api/v1/people/<id>`; its passkeys go with it) and repeat: `step-up` must be 403 and the owner stay on the item. Runs before the owner registers a passkey (afterwards the browser offers only the owner's).
 - **Register.** Swap in a fresh authenticator; `Settings` → `Security` → `Name (optional)` `vault-pk-<stamp>` → `Add passkey` → toast; `GET /api/v1/passkey/list` has only it.
 - **Confirm with it.** Reload the item, `Reveal` → `Use a passkey`: `options` 200 + `step-up` 200 (keep the token), dialog gone, the value shows in row `Key`; the passkey's `lastUsedAt` is set.
 - **Same window.** `Hide`, `Edit` → `New value` → `Save`: `PUT` 200, `Key saved`, no step-up call; `POST /vault/items/<handle>/reveal` with the passkey's token returns the new value.
@@ -32,7 +32,7 @@ Preconditions:
 
 ## Gotchas
 
-- **Open bug (found 2026-11):** `POST /vault/step-up` with a passkey the server does not know answers **401** `Passkey not found` (core's `verifyAuthentication` throws 401 for an unknown credential or a failed signature check), and the shell's global 401 handler drops the session: the owner lands on `/login` although the session cookie is still valid (`/auth/me` 200). Same class as #164. The journey records it as a bug step, signs in again (login returns to the item) and finishes the rest.
+- Regression check for #174 (fixed 2026-11): `POST /vault/step-up` with a passkey the server does not know used to pass on core's 401 `Passkey not found`, and the shell's global 401 handler signed the owner out. Step-up answers 403 now. If it regresses, the journey records the bug step, signs in again and finishes the rest.
 - Residue per drive: the fresh owner account and its passkey (owners cannot be deleted through the API, and the last passkey cannot be deleted). Harmless on a disposable run.
 - With `allowCredentials` empty (an owner without passkeys) a virtual authenticator answers with any discoverable credential it holds for the RP; once the owner has a passkey, the browser offers only theirs, so the someone-else and leftover paths are reachable only before registering.
 - Step-up costs auth attempts (options and verify both count, about 11 for the drive including the logins): drive it on a run with budget left, or `up` a new run.

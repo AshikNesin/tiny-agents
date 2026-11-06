@@ -11,7 +11,7 @@ A bot shares the owner's browser and desktop by default. Switched to its own bro
 - `own-desktop-open` chat Computer panel (`computer-toggle`): `The computer is off.` → `Open computer` → the bot's own desktop live; `Take control` / `Release control` flip `computer-driver`.
 - `own-desktop-page` `/computer` lists tab `computer-tab-bot-<id>` (`own desktop`); selecting it streams that desktop.
 - `own-desktop-reset` panel `Reset computer` → alertdialog `Reset this bot's computer?` → `Reset`; toast `Computer reset; the next session starts a fresh desktop.`; `Open computer` returns.
-- `own-delete` bot settings → `Delete bot` (twice): its own browser closes and its profile is wiped; its own desktop should too (open bug, see Gotchas).
+- `own-delete` bot settings → `Delete bot` (twice): its own browser closes and its profile is wiped; and so does its own desktop (regression check for #173).
 - Not driven: the bot itself using its own browser or desktop (`/browse N` works the same as on the shared profile, see `browser.md`; `computer_*` tools need a real model), Paste, full screen, switching an own-profile bot back to Shared.
 
 ## How to get to it (user POV)
@@ -32,12 +32,12 @@ Preconditions:
 - **Browser reset.** Back in the chat: `Reset browser profile` → `Reset this bot's browser?` → `Reset`: `DELETE /bots/<id>/browser/profile` 200, toast, `Open browser` back, status inactive, no Chrome for that profile and its directory gone on the VM.
 - **Own desktop.** `computer-toggle` → `Open computer`: `POST /bots/<id>/computer/start` 200, socket `/bots/<id>/computer/vnc` streams, `Live`. Not Shared: status `{active: true, profile: "own"}`, `GET /computer` has `bot-<id>` active and `shared` inactive, `~/.tiny-agents/computer-profiles/bot-<id>/.desktop-env` exists and `wmctrl -l` under it lists windows; no shared desktop env. `Take control` → `You drive` (API `driver: "human"`) → `Release control`. `/computer` → tab `computer-tab-bot-<id>` (`own desktop`) → socket `/computer/bot-<id>/vnc` streams, view-only hint.
 - **Desktop reset.** Chat → `Reset computer` → `Reset this bot's computer?` → `Reset`: `DELETE /bots/<id>/computer/profile` 200, toast, `Open computer` back, status inactive, profile directory gone, no `Xtigervnc` left.
-- **Delete.** Open both again (status `active: true`), then `Edit <bot>` → `Delete bot` → confirm `Delete <bot>? This cannot be undone.` → `Delete bot`: `GET /bots/<id>` 404; Chrome for `bot-<id>` gone and its directory wiped; bug step: `GET /computer` no longer lists `bot-<id>`, no `Xtigervnc` left, desktop profile directory gone.
+- **Delete.** Open both again (status `active: true`), then `Edit <bot>` → `Delete bot` → confirm `Delete <bot>? This cannot be undone.` → `Delete bot`: `GET /bots/<id>` 404; Chrome for `bot-<id>` gone and its directory wiped; regression check for #173: `GET /computer` no longer lists `bot-<id>`, no `Xtigervnc` left, desktop profile directory gone.
 - **Proof.** `ta-verify drive $S/journeys/bot-profiles.mjs` → `bot-profiles/settings-own`, `browser-own-live`, `browser-page-own-tab`, `browser-own-reset`, `computer-own-live`, `computer-page-own-tab`, `computer-own-reset`, `bot-deleted` (and `bug-1` while the bug is open).
 
 ## Gotchas
 
-- OPEN BUG: deleting a bot with its own profile closes its browser and wipes it (#88) but leaves its desktop running (`Xtigervnc`, XFCE) until the 10-minute idle close, and never wipes `~/.tiny-agents/computer-profiles/bot-<id>`; `/computer` stops listing it at once, so the owner cannot reach or reset it. The journey's last step fails until this is fixed; everything before it passes.
+- Regression check for #173 (fixed 2026-11): deleting a bot with its own profile used to close and wipe its browser (#88) but leave its desktop running (`Xtigervnc`, XFCE) until the idle close and its desktop profile on the sandbox. `deleteBot` now releases both; the last step asserts it.
 - `Browser profile` is a radiogroup (`radio` + `aria-checked`), not a toggle-button group. It shows only when the `Browser` group is expanded and the tool search is empty.
 - The Computer panel's `Open the Computer page` always goes to `/computer` (no profile in the URL, unlike the Browser panel's link), and the page selects the remembered or Shared tab: click the bot's tab.
 - Only one live panel shows at a time in a chat; opening one puts it in front, so close or toggle rather than looking for both.
