@@ -218,6 +218,7 @@ describe("Shelley harness", () => {
     shelley.conversations.set("cA", { messages: [user(1, "hi")], conversation: row("cA") });
     harness.start();
     await shelley.waitForStreams(1);
+    await eventually(() => expect(harness.status()).toEqual({ state: "connected" }));
     const watcher = collect();
     harness.watchThread("cA", watcher.listener);
     await watcher.next((e) => e.type === "snapshot");
