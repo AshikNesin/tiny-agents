@@ -46,6 +46,22 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     );
     await page.keyboard.press("Escape");
   });
+  await step("Send feedback opens the FeedbackBee panel (closed without sending)", async () => {
+    await account.click();
+    await page.getByRole("menuitem", { name: "Send feedback" }).click();
+    // Third-party embed loaded from feedbackbee.nesin.workers.dev; without it the app toasts.
+    const panel = page.getByRole("dialog", { name: "Tell us more" });
+    const unavailable = page.getByText("Feedback isn't available right now");
+    await expect(panel.or(unavailable)).toBeVisible();
+    if (await panel.isVisible()) {
+      await expect(panel.getByRole("textbox", { name: "Your feedback" })).toBeVisible();
+      await proof("feedback-panel");
+      await panel.getByRole("button", { name: "Close" }).click();
+      await expect(panel).toBeHidden();
+    } else {
+      await proof("feedback-unavailable");
+    }
+  });
   await step("⌘K palette opens (Ctrl+K) and filters", async () => {
     await page.keyboard.press("Control+k");
     const palette = page.getByRole("dialog", { name: "Command Menu" });
@@ -167,7 +183,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   await step("phone: a detail page shows Back instead of the menu button", async () => {
     await page.goto("/vault/new/login");
     await expect(page.getByRole("button", { name: "Open menu" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await expect(page).toHaveURL(/\/vault$/);
     await expect(page.getByRole("button", { name: "Open menu" })).toBeVisible();
   });

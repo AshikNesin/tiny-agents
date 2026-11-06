@@ -38,10 +38,12 @@ await journey(
         if (!s.bytes && Buffer.from(p).toString("latin1").startsWith("RFB ")) s.banner = true;
         s.bytes += p.length;
       });
-      // RFB client message type 4 = KeyEvent.
+      // Key presses: RFB KeyEvent (type 4, 8 bytes) or, on TigerVNC, QEMU extended
+      // key event (type 255 subtype 0, 12 bytes). noVNC may batch several per frame.
       ws.on("framesent", (f) => {
         const p = Buffer.from(f.payload);
-        if (p[0] === 4 && p.length === 8) s.keyEvents++;
+        if (p[0] === 4) s.keyEvents += Math.floor(p.length / 8);
+        else if (p[0] === 255 && p[1] === 0) s.keyEvents += Math.floor(p.length / 12);
       });
     });
     const streamed = (re, min = 20_000) =>

@@ -15,8 +15,7 @@ await journey("memory", async ({ page, step, proof, cleanup, api, stamp }) => {
   const memories = (all = false) =>
     api.get(`/bots/${botId}/memories${all ? "?includeArchived=true" : ""}`);
   const find = async (text) => {
-    const rows = await memories(true);
-    return (Array.isArray(rows) ? rows : (rows?.memories ?? [])).find((m) => m.text === text);
+    return (await memories(true)).memories.find((m) => m.text === text);
   };
   const pickCategory = async (dialog, label) => {
     await dialog.getByRole("combobox", { name: "Category" }).click();
@@ -119,7 +118,8 @@ await journey("memory", async ({ page, step, proof, cleanup, api, stamp }) => {
     await expect(page.getByText("Memory deleted")).toBeVisible();
     await expect(page.getByText(edited)).toHaveCount(0);
     await expect(without.getByText(name)).toBeVisible();
-    expect((await find(edited))?.status ?? "deleted").toBe("deleted");
+    // The list (even with archived rows) leaves tombstones out.
+    expect(await find(edited)).toBeUndefined();
   });
   await proof("deleted");
 
@@ -130,8 +130,8 @@ await journey("memory", async ({ page, step, proof, cleanup, api, stamp }) => {
     await dialog.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByText("Memory added")).toBeVisible();
     await expect(section.getByText(edited)).toBeVisible();
-    const rows = (await memories(true)).filter?.((m) => m.text === edited) ?? [];
-    expect(rows.filter((m) => m.status === "active")).toHaveLength(1);
+    const rows = (await memories(true)).memories.filter((m) => m.text === edited);
+    expect(rows.map((m) => m.status)).toEqual(["active"]);
   });
   await proof("restored");
 });

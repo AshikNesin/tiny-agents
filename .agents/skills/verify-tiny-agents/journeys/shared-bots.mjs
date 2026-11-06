@@ -51,9 +51,10 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
 
   await step("Settings → People: add a guest", async () => {
     await peopleTab();
-    await page.getByLabel("Name").fill(guest.name);
-    await page.getByLabel("Email").fill(guest.email);
-    await page.getByLabel("Password").fill(guest.password);
+    // exact: the feedback embed also has an "Email (optional)" field.
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill(guest.name);
+    await page.getByRole("textbox", { name: "Email", exact: true }).fill(guest.email);
+    await page.getByLabel("Password", { exact: true }).fill(guest.password);
     await page.getByRole("button", { name: "Add guest" }).click();
     await expect(page.getByText("Guest added")).toBeVisible();
     await expect(guestRow()).toContainText("No bots shared");
@@ -104,7 +105,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
       });
     cleanup(() => guestContext.close());
     guestPage = await guestContext.newPage();
-    await guestPage.goto("/login");
+    // domcontentloaded: the page's third-party feedback embed can hold "load" for 30 s+.
+    await guestPage.goto("/login", { waitUntil: "domcontentloaded" });
     await guestPage.getByLabel("Email", { exact: true }).fill(guest.email);
     await guestPage.getByLabel(/password/i).fill(guest.password);
     await guestPage.getByRole("button", { name: "Sign In", exact: true }).click();
