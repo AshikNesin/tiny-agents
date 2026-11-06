@@ -2,11 +2,12 @@
  * routine-fire: the scheduling engine's only job. Loads the routine, applies
  * the missed-run grace policy, submits the labeled prompt into the routine's
  * own durable conversation (issue #63: never the bot's chat), records the run
- * (routines.runs.ts) and schedules the next occurrence (routines.chain.ts).
+ * (routines.runs.ts) and advances the chain to the next occurrence
+ * (routines.arming.ts).
  * Fast and LLM-free: the run resolves when its Finished reply lands
  * (routines.watcher.ts).
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { registerJobHandler } from "@groot/jobs/server/worker";
 import type { JobHandler } from "@groot/jobs/server/types";
@@ -19,10 +20,11 @@ import {
 } from "../bots/bots.conversation";
 import {
   ROUTINE_FIRE_JOB,
+  advanceRoutine,
+  claimConversation,
   firePayloadSchema,
-  scheduleAfterOccurrence,
   type RoutineFirePayload,
-} from "./routines.chain";
+} from "./routines.arming";
 import { recordAwaiting, recordMissed, recordSubmitFailed, runRequestId } from "./routines.runs";
 import { composeRoutinePrompt, safeParseSchedule, withinGrace } from "./routines.schedule";
 
@@ -68,7 +70,7 @@ export async function dispatchOccurrence(
     const chainStalled =
       !routine.pendingJobId || (jobId !== undefined && routine.pendingJobId === jobId);
     if (payload.trigger === "schedule" && routine.enabled && chainStalled) {
-      await scheduleAfterOccurrence(routine, scheduledFor, now);
+      await advanceRoutine(routine, scheduledFor, now);
     }
     return existing.id;
   }
@@ -76,7 +78,7 @@ export async function dispatchOccurrence(
   if (!withinGrace(schedule, scheduledFor, now)) {
     const runId = await recordMissed(routine, scheduledFor, payload.trigger, now, lateMinutes);
     if (payload.trigger === "schedule" && routine.enabled) {
-      await scheduleAfterOccurrence(routine, now, now);
+      await advanceRoutine(routine, now, now);
     }
     return runId;
   }
@@ -100,7 +102,7 @@ export async function dispatchOccurrence(
 
   const runId = await recordAwaiting(routine, scheduledFor, payload.trigger, now);
   if (payload.trigger === "schedule") {
-    await scheduleAfterOccurrence(routine, scheduledFor, now);
+    await advanceRoutine(routine, scheduledFor, now);
   }
   return runId;
 }
@@ -117,18 +119,7 @@ async function routineConversation(
 ): Promise<string> {
   if (routine.conversationId) return routine.conversationId;
   const created = await startBotConversation(routine.botId, runtime, { unattended: true });
-  const claimed = await db
-    .update(routines)
-    .set({ conversationId: created })
-    .where(and(eq(routines.id, routine.id), isNull(routines.conversationId)))
-    .returning({ id: routines.id });
-  if (claimed.length === 1) return created;
-  const row = await db.query.routines.findFirst({
-    where: eq(routines.id, routine.id),
-    columns: { conversationId: true },
-  });
-  if (!row?.conversationId) throw new Error("The routine's conversation could not be stored");
-  return row.conversationId;
+  return claimConversation(routine.id, created);
 }
 
 export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {

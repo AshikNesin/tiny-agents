@@ -14,7 +14,7 @@ import { runNow } from "../../../../apps/web/src/server/api/routines/routines.se
 import {
   ROUTINE_FIRE_JOB,
   type RoutineFirePayload,
-} from "../../../../apps/web/src/server/api/routines/routines.chain";
+} from "../../../../apps/web/src/server/api/routines/routines.arming";
 import {
   createRoutineRunResolver as createRoutinesCompletionWatcher,
   refusalReason,
