@@ -66,10 +66,6 @@ export function isBrowserDismissed(conversationId: string): boolean {
   return browserDismissals.has(conversationId);
 }
 
-export function dismissBrowser(conversationId: string) {
-  browserDismissals.add(conversationId);
-}
-
 /** Test seam: forget every dismissal. */
 export function resetBrowserDismissals() {
   browserDismissals.reset();

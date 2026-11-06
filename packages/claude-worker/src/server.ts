@@ -10,7 +10,7 @@
  * their own messages and subscribe their sockets to their sessions' logs.
  */
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { createServer, type IncomingMessage, type Server as HttpServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { ClaudeAuthStatus } from "./auth";
 import { createBotHandler } from "./bot-handler";
@@ -222,10 +222,4 @@ export async function createClaudeWorkerServer(
         httpServer.close(() => resolve());
       }),
   };
-}
-
-/** Exposed for tests that check the bind address without accepting a socket. */
-export function boundHost(server: HttpServer): string | undefined {
-  const address = server.address();
-  return typeof address === "object" && address ? address.address : undefined;
 }
