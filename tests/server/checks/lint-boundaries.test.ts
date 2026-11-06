@@ -86,6 +86,14 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export { join } from "path";\n',
     rules: ["R2"],
   },
+  "packages/core/src/auth/r2-subpath-fail.ts": {
+    source: 'import { readFile } from "node:fs/promises";\nexport const x = readFile;\n',
+    rules: ["R2"],
+  },
+  "packages/core/src/auth/r2-subpath-reexport-fail.ts": {
+    source: 'export { join } from "node:path/posix";\n',
+    rules: ["R2"],
+  },
   "packages/core/src/auth/r2-allowed-pass.ts": {
     source:
       'export { AsyncLocalStorage } from "node:async_hooks";\nexport { Buffer } from "node:buffer";\n',
@@ -107,6 +115,14 @@ const FIXTURES: Record<string, Fixture> = {
     source: `${SHELL_CN}\nexport const x = cn("a");\n`,
     rules: ["R4"],
     mentions: "@groot/ui/lib/utils",
+  },
+  "apps/web/src/client/r4-reexport-fail.ts": {
+    source: 'export { cn } from "@groot/shell/lib/utils";\n',
+    rules: ["R4"],
+  },
+  "apps/web/src/client/r4-ts-suffix-fail.tsx": {
+    source: 'import { cn } from "@groot/shell/lib/utils.ts";\nexport const x = cn("a");\n',
+    rules: ["R4"],
   },
   "packages/core/src/auth/r4-and-r2-fail.ts": {
     source: `${SHELL_CN}\nexport { readFileSync } from "node:fs";\nexport const x = cn("a");\n`,

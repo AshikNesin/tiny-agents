@@ -55,7 +55,10 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
     restrict: {
       patterns: [
-        { group: ["node:*", ...R2_ALLOWED.map((m) => `!node:${m}`)], message: R2_MESSAGE },
+        {
+          group: ["node:*", "node:*/**", ...R2_ALLOWED.map((m) => `!node:${m}`)],
+          message: R2_MESSAGE,
+        },
         { regex: `^(${bareBuiltins.join("|")})(/|$)`, message: R2_MESSAGE },
       ],
     },
@@ -73,14 +76,12 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**",
     enabled: true,
     restrict: {
-      paths: [
-        {
-          name: "@groot/shell/lib/utils",
-          importNames: ["cn"],
-          message:
-            "R4: import cn from @groot/ui/lib/utils, its one source. `pnpm exec tsx scripts/codemods/cn-import-path.ts` rewrites every old import.",
-        },
-      ],
+      paths: ["@groot/shell/lib/utils", "@groot/shell/lib/utils.ts"].map((name) => ({
+        name,
+        importNames: ["cn"],
+        message:
+          "R4: import cn from @groot/ui/lib/utils, its one source. `pnpm exec tsx scripts/codemods/cn-import-path.ts` rewrites every old import.",
+      })),
     },
   },
   {
