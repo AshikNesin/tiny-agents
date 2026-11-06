@@ -68,6 +68,29 @@ describe("computer routes", () => {
     await db.delete(bots);
   });
 
+  it("deleting a bot closes and wipes its own desktop", async () => {
+    const own = await call("/api/v1/bots", {
+      method: "POST",
+      json: { name: "Own", modelId: "m", systemPrompt: "", browserProfile: "own" },
+    });
+    expect(own.status).toBe(201);
+    const ownId: string = own.body.data.id;
+    const profile = `bot-${ownId}`;
+    await sessions.acquire(profile);
+    const close = vi.spyOn(sessions, "close");
+    expect((await call(`/api/v1/bots/${ownId}`, { method: "DELETE" })).status).toBe(200);
+    expect(close).toHaveBeenCalledWith(profile, { wipe: true });
+    expect(sessions.get(profile)).toBeUndefined();
+  });
+
+  it("deleting a bot on the shared desktop leaves that desktop to the others", async () => {
+    await sessions.acquire("shared");
+    const close = vi.spyOn(sessions, "close");
+    expect((await call(`/api/v1/bots/${botId}`, { method: "DELETE" })).status).toBe(200);
+    expect(close).not.toHaveBeenCalled();
+    expect(sessions.get("shared")).toBeDefined();
+  });
+
   it("says why there is no computer without a sandbox VM", async () => {
     setComputerSessionsForTests(null);
     const status = await call(`/api/v1/bots/${botId}/computer`);

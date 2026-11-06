@@ -31,6 +31,7 @@ import {
 import { getAgentRuntime } from "./bots.runtime";
 import { browserTargetForBot } from "./browser.targets";
 import { getBrowserSessions } from "./browser.sessions";
+import { computerProfileForBot, getComputerSessions } from "./computer.sessions";
 import {
   findBotRow,
   startBotConversation,
@@ -250,6 +251,23 @@ async function releaseBrowser(bot: { id: string; browserProfile: string }): Prom
   }
 }
 
+/**
+ * A deleted bot's own desktop goes with it, like its own browser: otherwise
+ * Xtigervnc and XFCE ran on until the idle close, its profile stayed on the
+ * sandbox, and /computer no longer listed it, so nobody could reset it. A
+ * shared desktop belongs to the other bots on it and is left alone.
+ */
+async function releaseComputer(bot: { id: string; browserProfile: string }): Promise<void> {
+  if (bot.browserProfile !== "own") return;
+  const sessions = getComputerSessions();
+  if (!sessions) return;
+  try {
+    await sessions.close(computerProfileForBot(bot), { wipe: true });
+  } catch (error) {
+    logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's computer");
+  }
+}
+
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   const bot = await findBotRow(id);
   // Its routines go with it (cascade), and their conversations (issue #63).
@@ -263,7 +281,7 @@ export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
   if (!deleted) throw Boom.notFound("Record not found");
   await retireConversation(rt, bot.conversationId);
   await Promise.all(routineRows.map((routine) => retireConversation(rt, routine.conversationId!)));
-  await releaseBrowser(bot);
+  await Promise.all([releaseBrowser(bot), releaseComputer(bot)]);
   return toBot(deleted);
 }
 

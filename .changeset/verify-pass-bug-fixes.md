@@ -21,3 +21,6 @@ Fixes for bugs found by the verify-tiny-agents full pass:
   Safari) can be left again (#170).
 - Settings → Claude plan: with the engine off, the card no longer claims that
   no sandbox is configured (#171).
+- Bots: deleting a bot with its own browser profile also closes its own
+  desktop and wipes that desktop's profile on the sandbox, as it already did
+  for its browser.
