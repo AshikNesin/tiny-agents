@@ -5,6 +5,9 @@
 // paths are recorded as unreachable in the feature file.
 import { journey, expect, caps } from "../scripts/lib.mjs";
 
+// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
+const LOADED = { waitUntil: "domcontentloaded" };
+
 await journey(
   "claude-plan",
   async ({ page, step, proof, api }) => {
@@ -18,7 +21,7 @@ await journey(
     );
 
     await step("Settings → Claude plan explains how to turn the engine on", async () => {
-      await page.goto("/settings");
+      await page.goto("/settings", LOADED);
       await page.getByRole("tab", { name: "Claude plan" }).click();
       const card = page.getByRole("tabpanel", { name: "Claude plan" });
       await expect(card.getByText("Claude plan", { exact: true })).toBeVisible();
@@ -41,7 +44,7 @@ await journey(
         ).toHaveCount(0);
         return;
       }
-      await page.goto("/code/new");
+      await page.goto("/code/new", LOADED);
       await expect(page.getByRole("textbox", { name: /^Message / })).toBeVisible({
         timeout: 20_000,
       });
@@ -54,7 +57,7 @@ await journey(
     // account check reports "unconfigured", and the card tells an owner whose
     // sandbox works (terminal, computer, browser) to set SANDBOX_HOST.
     await step("with a sandbox configured, the card does not say there is none", async () => {
-      await page.goto("/settings");
+      await page.goto("/settings", LOADED);
       await page.getByRole("tab", { name: "Claude plan" }).click();
       await expect(page.getByTestId("claude-plan-account")).toBeVisible();
       expect((await api.get("/terminal/sessions")).status.kind).toBe("ready"); // the sandbox works

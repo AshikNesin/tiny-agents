@@ -4,22 +4,7 @@
 // (no warning banner, sending enabled, the faux model answers).
 import { journey, expect } from "../scripts/lib.mjs";
 
-/**
- * The instance is a Vite dev server: edits anywhere in the repo (other agents, formatters)
- * push HMR updates that can remount the SPA mid-journey and wipe form or step-up state.
- * Keep the HMR socket (PORT+1) open but silent, then reload once so the page uses it.
- */
-async function silenceHmr(page) {
-  const hmrPort = String(Number(new URL(process.env.TA_VERIFY_URL).port) + 1);
-  await page.context().routeWebSocket(
-    (url) => url.port === hmrPort,
-    () => {},
-  );
-  await page.reload();
-}
-
 await journey("model-providers", async ({ page, step, proof, cleanup, api, stamp }) => {
-  await step("setup: silence dev-server HMR for this browser", () => silenceHmr(page));
   const botName = `Model Bot ${stamp}`;
   let botId;
   let catalog;

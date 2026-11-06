@@ -6,6 +6,9 @@
 import { execFileSync } from "node:child_process";
 import { journey, expect } from "../scripts/lib.mjs";
 
+// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
+const LOADED = { waitUntil: "domcontentloaded" };
+
 const CONTAINER = process.env.TA_VERIFY_SANDBOX_CONTAINER ?? "tiny-agents-sandbox-sandbox-1";
 /** Read-only shell on the sandbox as the bots' user. */
 const vm = (script) => {
@@ -63,7 +66,7 @@ await journey(
     });
 
     await step("open /computer: the Shared desktop tab names its bot", async () => {
-      await page.goto("/computer");
+      await page.goto("/computer", LOADED);
       const tab = page
         .getByRole("tablist", { name: "Desktops" })
         .getByTestId("computer-tab-shared");
@@ -149,7 +152,7 @@ await journey(
     });
 
     await step("chat: the Computer panel shows the same live desktop", async () => {
-      await page.goto(`/chats/${botId}`);
+      await page.goto(`/chats/${botId}`, LOADED);
       await page.getByTestId("computer-toggle").click();
       const panel = page.getByTestId("computer-panel");
       await expect(panel).toBeVisible();
@@ -172,7 +175,7 @@ await journey(
     });
 
     await step("Reset asks first, closes the desktop and wipes its settings", async () => {
-      await page.goto("/computer");
+      await page.goto("/computer", LOADED);
       await page.getByRole("button", { name: "Reset desktop" }).click();
       const dialog = page.getByRole("alertdialog");
       await expect(dialog).toContainText("Reset the Shared desktop?");

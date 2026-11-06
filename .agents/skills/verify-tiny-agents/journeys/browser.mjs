@@ -6,6 +6,9 @@
 import { execFileSync } from "node:child_process";
 import { journey, expect } from "../scripts/lib.mjs";
 
+// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
+const LOADED = { waitUntil: "domcontentloaded" };
+
 const CONTAINER = process.env.TA_VERIFY_SANDBOX_CONTAINER ?? "tiny-agents-sandbox-sandbox-1";
 /** Chrome processes on the sandbox (read-only). */
 const chromes = () => {
@@ -66,7 +69,7 @@ await journey(
 
     // ---- /browser page ----------------------------------------------------
     await step("open /browser: Shared tab selected, own-profile bot has its own tab", async () => {
-      await page.goto("/browser");
+      await page.goto("/browser", LOADED);
       const tabs = page.getByRole("tablist", { name: "Browsers" });
       await expect(tabs.getByTestId("browser-tab-shared")).toHaveAttribute(
         "aria-selected",
@@ -79,7 +82,7 @@ await journey(
       await expect(tabs.getByTestId(`browser-tab-bot-${ownId}`)).toContainText("own browser");
     });
     await step("deep link ?profile=bot-<id> selects that browser", async () => {
-      await page.goto(`/browser?profile=bot-${ownId}`);
+      await page.goto(`/browser?profile=bot-${ownId}`, LOADED);
       await expect(page.getByTestId(`browser-tab-bot-${ownId}`)).toHaveAttribute(
         "aria-selected",
         "true",
@@ -139,7 +142,7 @@ await journey(
     };
 
     await step("chat: /browse 2 opens the Browser panel live beside the chat", async () => {
-      await page.goto(`/chats/${botId}`);
+      await page.goto(`/chats/${botId}`, LOADED);
       await expect(composer).toBeVisible({ timeout: 20_000 });
       await expect(panel).toHaveCount(0);
       await browse(2);
@@ -194,7 +197,7 @@ await journey(
       await browse(1);
       await echoes(2);
       await expect(panel).toHaveCount(0);
-      await page.reload();
+      await page.reload(LOADED);
       await echoes(2);
       await expect(panel).toHaveCount(0);
       await toggle.click();
@@ -207,7 +210,7 @@ await journey(
       "/browser Reset asks, names the bots, closes Chrome and wipes the profile",
       async () => {
         await page.setViewportSize({ width: 1280, height: 860 });
-        await page.goto("/browser");
+        await page.goto("/browser", LOADED);
         await expect(page.getByTestId("browser-page-status")).toBeVisible({ timeout: 30_000 });
         await page.getByRole("button", { name: "Reset browser" }).click();
         const dialog = page.getByRole("alertdialog");

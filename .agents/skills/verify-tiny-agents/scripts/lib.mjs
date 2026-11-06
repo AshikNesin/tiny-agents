@@ -72,6 +72,26 @@ function makeApi(page) {
   };
 }
 
+/** A stand-in for Vite's `/@vite/client`: the exports transformed modules import, no HMR socket. */
+const NOOP_VITE_CLIENT = `
+const noop = () => {};
+export const createHotContext = () => ({ data: {}, accept: noop, acceptExports: noop, dispose: noop, prune: noop, invalidate: noop, decline: noop, on: noop, off: noop, send: noop });
+const styleOf = (id) => document.querySelector('style[data-vite-dev-id="' + id + '"]');
+export const updateStyle = (id, css) => {
+  let style = styleOf(id);
+  if (!style) {
+    style = document.createElement("style");
+    style.setAttribute("type", "text/css");
+    style.setAttribute("data-vite-dev-id", id);
+    document.head.appendChild(style);
+  }
+  style.textContent = css;
+};
+export const removeStyle = (id) => styleOf(id)?.remove();
+export const injectQuery = (url) => url;
+export class ErrorOverlay {}
+`;
+
 /** Launch options of the current run (`up --sandbox`, `up --empty`). */
 export const caps = new Set((process.env.TA_VERIFY_CAPS ?? "").split(",").filter(Boolean));
 /** X-Admin-Auth-Key for this run (admin-only routes, e.g. POST /api/v1/auth/users). */
@@ -106,13 +126,13 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
     baseURL: BASE,
     viewport: { width: 1280, height: 860 },
   });
-  // The instance is a Vite dev server: its HMR socket (port + 1) would push live
-  // updates, even full reloads, into the page when anything in the checkout
-  // changes mid-drive. Answer it with a socket that stays open and silent.
-  const hmrPort = String(Number(new URL(BASE).port) + 1);
-  await context.routeWebSocket(
-    (url) => url.port === hmrPort,
-    () => {},
+  // The instance is a Vite dev server: its HMR client would push live updates,
+  // even full reloads, into the page when anything in the checkout changes
+  // mid-drive. Serve a no-op client instead (CSS injection still works). Do NOT
+  // use context.routeWebSocket for this: any WebSocket route makes Playwright
+  // proxy every socket, and noVNC live views then never leave "Reconnecting".
+  await context.route("**/@vite/client", (route) =>
+    route.fulfill({ contentType: "application/javascript", body: NOOP_VITE_CLIENT }),
   );
   const page = await context.newPage();
   const consoleErrors = [];

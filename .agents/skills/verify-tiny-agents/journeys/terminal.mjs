@@ -6,6 +6,9 @@
 import { execFileSync } from "node:child_process";
 import { journey, expect } from "../scripts/lib.mjs";
 
+// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
+const LOADED = { waitUntil: "domcontentloaded" };
+
 const CONTAINER = process.env.TA_VERIFY_SANDBOX_CONTAINER ?? "tiny-agents-sandbox-sandbox-1";
 /** Read-only tmux query on the sandbox (the app's tmux socket is `-L ta-terminal`). */
 const tmux = (...args) => {
@@ -59,7 +62,7 @@ await journey(
     let second;
 
     await step("open /terminal: sandbox ready, tmux reachable", async () => {
-      await page.goto("/terminal");
+      await page.goto("/terminal", LOADED);
       await expect(page.getByRole("heading", { name: "Terminal" })).toBeVisible();
       expect((await api.get("/terminal/sessions")).status.kind).toBe("ready");
       // Either the empty state or the tab strip, never an error state.
@@ -107,7 +110,7 @@ await journey(
 
     await step("reload: the tab is still listed and the re-attach redraws the output", async () => {
       received.length = 0;
-      await page.reload();
+      await page.reload(LOADED);
       await expect(tab(first)).toBeVisible({ timeout: 30_000 });
       await expect(page.getByTestId(`terminal-tab-status-${first}`)).toHaveAttribute(
         "data-state",
@@ -133,7 +136,7 @@ await journey(
     });
 
     await step("?tab=<name> opens on that tab; clicking a tab switches back", async () => {
-      await page.goto(`/terminal?tab=${first}`);
+      await page.goto(`/terminal?tab=${first}`, LOADED);
       await expect(tab(first)).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
       await tab(second).click();
       await expect(tab(second)).toHaveAttribute("aria-selected", "true");
@@ -145,7 +148,7 @@ await journey(
       );
     });
 
-    await step("keys panel: Arrow up sends ESC [ A to the pty", async () => {
+    await step("keys panel: Arrow up, Ctrl+L and Ctrl+C reach the pty as their bytes", async () => {
       const keys = page.getByRole("complementary", { name: "Terminal keys" });
       await expect(keys).toBeVisible(); // desktop viewport: open by default
       sent.length = 0;
@@ -158,6 +161,11 @@ await journey(
       sent.length = 0;
       await keys.getByRole("button", { name: "Ctrl+L" }).click();
       await expect.poll(() => sent.includes("\x0c"), { timeout: 10_000 }).toBe(true);
+      // Arrow up may have recalled a command from the VM's bash history; ^C
+      // drops that line so the next typed command starts clean.
+      sent.length = 0;
+      await keys.getByRole("button", { name: "Ctrl+C" }).click();
+      await expect.poll(() => sent.includes("\x03"), { timeout: 10_000 }).toBe(true);
     });
 
     await step("keys panel: hide and show from the header, choice persisted", async () => {
@@ -240,7 +248,7 @@ await journey(
       await phone.addInitScript(() => {
         delete Element.prototype.requestFullscreen;
       });
-      await phone.goto("/terminal");
+      await phone.goto("/terminal", LOADED);
       const before = await listed();
       const empty = phone.getByRole("button", { name: "Open your first tab" });
       await expect(empty.or(phone.getByRole("tablist"))).toBeVisible({ timeout: 30_000 });

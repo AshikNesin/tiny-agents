@@ -2,22 +2,7 @@
 // assign to a bot from both sides, search, import a pasted SKILL.md, delete.
 import { journey, expect } from "../scripts/lib.mjs";
 
-/**
- * The instance is a Vite dev server: edits anywhere in the repo (other agents, formatters)
- * push HMR updates that can remount the SPA mid-journey and wipe form or step-up state.
- * Keep the HMR socket (PORT+1) open but silent, then reload once so the page uses it.
- */
-async function silenceHmr(page) {
-  const hmrPort = String(Number(new URL(process.env.TA_VERIFY_URL).port) + 1);
-  await page.context().routeWebSocket(
-    (url) => url.port === hmrPort,
-    () => {},
-  );
-  await page.reload();
-}
-
 await journey("skills", async ({ page, step, proof, cleanup, api, stamp }) => {
-  await step("setup: silence dev-server HMR for this browser", () => silenceHmr(page));
   const name = `verify-skill-${stamp}`;
   const imported = `verify-import-${stamp}`;
   const botName = `Skill Bot ${stamp}`;

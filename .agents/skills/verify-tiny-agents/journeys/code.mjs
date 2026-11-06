@@ -12,6 +12,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { journey, expect } from "../scripts/lib.mjs";
 
+// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
+const LOADED = { waitUntil: "domcontentloaded" };
+
 await journey(
   "code",
   async ({ page, step, proof, cleanup, api, stamp }) => {
@@ -145,7 +148,7 @@ await journey(
         (r) => r.url().includes(`/code/threads/${encodeURIComponent(mainId)}/events`),
         { timeout: 20_000 },
       );
-      await page.reload(); // re-subscribes; the stream starts with a snapshot
+      await page.reload(LOADED); // re-subscribes; the stream starts with a snapshot
       expect((await events).headers()["content-type"]).toMatch(/text\/event-stream/);
       await expect(transcript.getByText(`queued-${stamp}`, { exact: true })).toBeVisible({
         timeout: 20_000,
@@ -181,8 +184,8 @@ await journey(
       await expect
         .poll(async () => (await threads()).find((t) => t.id === mainId)?.title)
         .toBe(title);
-      await page.goto("/");
-      await page.goto(`/code/s/${title}`);
+      await page.goto("/", LOADED);
+      await page.goto(`/code/s/${title}`, LOADED);
       await expect(page.getByTestId("code-title")).toHaveText(title, { timeout: 20_000 });
       await expect(transcript.getByText(`hello-${stamp}`, { exact: true })).toBeVisible();
     });
@@ -267,7 +270,7 @@ await journey(
       const name = `Verify Coder ${stamp}`;
       const bot = await api.post("/bots", { name, modelId: "test-model" });
       cleanup(() => api.delete(`/bots/${bot.id}`));
-      await page.goto(`/chats/${bot.id}`);
+      await page.goto(`/chats/${bot.id}`, LOADED);
       const chat = page.getByPlaceholder(new RegExp(`(?:ask|message) ${name}`, "i"));
       await chat.fill(`/code cwd=${dir} echo: handoff-${stamp}`);
       await chat.press("Enter");
