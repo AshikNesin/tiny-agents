@@ -74,13 +74,22 @@ describe("Code watcher", () => {
       working: false,
       title: "fix-login",
       cwd: "/repo",
-      text: "Fixed it.",
+      text: "All tests pass.",
       failed: false,
       endedAt: Date.now() + 1000,
       cursor: 9,
     });
-    harness.emit({ type: "turn_ended", nativeId: "tH", finalText: "All tests pass." });
-    harness.emit({ type: "turn_ended", nativeId: "tH" });
+    harness.endTurn("tH");
+    harness.endTurn("tH");
+    // The event carries the outcome: the watcher does not read the thread again.
+    harness.outcomes.set("tH", {
+      working: true,
+      title: "fix-login",
+      cwd: "/repo",
+      text: "",
+      failed: false,
+      cursor: 10,
+    });
 
     await eventually(() => expect(delivered).toHaveLength(1));
     expect(delivered[0]).toMatchObject({
@@ -107,7 +116,7 @@ describe("Code watcher", () => {
       cursor: 1,
     });
     hub.start();
-    harness.emit({ type: "turn_ended", nativeId: "tQ" });
+    harness.endTurn("tQ");
     await settle();
     expect(delivered).toHaveLength(0);
   });
@@ -139,8 +148,8 @@ describe("Code watcher", () => {
     await follow("fake", "tF");
     hub.start();
     const viewing = hub.watch("fake:tF", () => {});
-    harness.emit({ type: "turn_ended", nativeId: "tF" });
-    harness.emit({ type: "turn_ended", nativeId: "tX" }); // not followed
+    harness.endTurn("tF");
+    harness.endTurn("tX"); // not followed
     await settle();
     expect(pushed).toHaveLength(0);
     viewing();
@@ -153,10 +162,26 @@ describe("Code watcher", () => {
       endedAt: 5,
       cursor: 3,
     });
-    harness.emit({ type: "turn_ended", nativeId: "tF" });
+    harness.endTurn("tF");
     await eventually(() => expect(pushed).toHaveLength(1));
     expect(pushed[0]).toMatchObject({ event: "shelley.update", path: "/code/fake%3AtF" });
     expect(pushed[0]!.title).toBe("⚠️ Fake hit an error in fix");
+  });
+
+  it("reconciles a hand-off whose thread id is bare (before ADR 0011) with the legacy instance", async () => {
+    stop();
+    hub.stop();
+    const shelley = fakeHarness("shelley");
+    hub = createCodeHub({ instances: [shelley], listDebounceMs: 5 });
+    stop = startCodeWatcher({
+      hub,
+      deliver: async (id, submission) => void delivered.push({ botId: id, ...submission }),
+      notify: (n) => void pushed.push(n),
+    });
+    await recordHandoff({ botId, idempotencyKey: "k5", task: "t", threadId: "cLegacy" });
+    hub.start();
+    await eventually(() => expect(delivered).toHaveLength(1));
+    expect(delivered[0]!.text).toContain("finished **cLegacy**");
   });
 
   it("pushes when the harness asks for the owner mid-turn", async () => {

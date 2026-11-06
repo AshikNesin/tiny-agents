@@ -5,6 +5,7 @@
  * Neither side puts a Claude credential on this socket.
  */
 import { z } from "zod";
+import type { Sequenced } from "./session-log";
 
 export const DEFAULT_TIMINGS = {
   /** Ping interval. An idle socket stays up for hours because each ping resets silence. */
@@ -185,8 +186,4 @@ export function parseWorkerMessage(value: unknown): WorkerMessage | undefined {
 }
 
 /** Buffered event as the worker stores and replays it. */
-export interface SequencedEvent {
-  sessionId: string;
-  seq: number;
-  event: SessionEvent;
-}
+export type SequencedEvent = Sequenced<SessionEvent>;

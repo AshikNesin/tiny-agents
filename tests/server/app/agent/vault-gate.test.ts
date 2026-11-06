@@ -2,10 +2,18 @@
  * Vault sinks behind the approval gate (issue #56), on real pi-durable turns:
  * item-level approval on top of tool permissions, "for this chat" grants,
  * refusals that never ask, expiring approvals, and the canary invariant —
- * a resolved value never reaches the model or the transcript.
+ * a resolved value never reaches the model or the transcript. Then the use
+ * sequence every sink follows (`vaultGatePlan`, `useFromSink`,
+ * `useAllFromSink`) at its own interface, on a fake broker and tool API.
  */
+import type { Context } from "@earendil-works/chord";
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import {
+  defineExtension,
+  defineTool,
+  type JsonValue,
+  type ToolExecutionApi,
+} from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { withGatePlan } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
@@ -18,11 +26,20 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
+import { OriginMismatchError } from "../../../../packages/agent/src/toolkits/browser-fill";
+import {
+  useAllFromSink,
+  useFromSink,
+  vaultGatePlan,
+  type IntendedUse,
+} from "../../../../packages/agent/src/toolkits/vault";
 import { createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
 import type { ChatEvent, ChatState, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
+  GrantsDoc,
   SecretValue,
   VaultError,
+  type SecretField,
   type VaultApproval,
   type VaultBroker,
   type VaultItemMeta,
@@ -370,4 +387,281 @@ describe("expiring approvals", () => {
     expect(ran).toEqual([]);
     expect(runtime.pendingApprovals(ref)).toBe(0);
   }, 20_000);
+});
+
+// ── The use sequence itself (vaultGatePlan, useFromSink, useAllFromSink) ──
+
+const context = {} as Context;
+
+/** The slice of a tool call's API the sequence reads: memos, the grants doc, the conversation. */
+function fakeApi(options: { grants?: string[]; approved?: boolean } = {}) {
+  const memos = new Map<string, JsonValue>();
+  if (options.approved !== undefined) memos.set("gate:approved", options.approved);
+  const api = {
+    conversationId: "7",
+    async memo(name: string, ...rest: unknown[]) {
+      if (rest.length === 2 && !memos.has(name)) memos.set(name, rest[0] as JsonValue);
+      return memos.get(name);
+    },
+    async snapshot(doc: unknown) {
+      return doc === GrantsDoc ? { grants: options.grants ?? [] } : undefined;
+    },
+  } as unknown as ToolExecutionApi;
+  return api;
+}
+
+const keyItem = (handle: string, approval: VaultApproval = "every_use"): VaultItemMeta => ({
+  handle,
+  kind: "api_key",
+  label: `${handle} token`,
+  origins: [],
+  allowedHosts: [],
+  hasTotp: false,
+  approval,
+  tools: ["run_command"],
+});
+
+/** A broker over `items` that traces each step: plans, nested uses, records. */
+function sequenceBroker(items: VaultItemMeta[]) {
+  const trace: string[] = [];
+  const recorded: [string, VaultOutcome, string | undefined][] = [];
+  const planOf = async (use: VaultUse) => {
+    const item = items.find((candidate) => candidate.handle === use.handle);
+    if (!item) {
+      return { refused: "unknown_handle" as const, message: `No vault item \`${use.handle}\`.` };
+    }
+    return {
+      approve:
+        item.approval === "every_use" || (item.approval === "per_conversation" && !use.granted),
+      grantable: item.approval !== "every_use",
+      unattended: false,
+      card: {
+        handle: item.handle,
+        label: item.label,
+        kind: item.kind,
+        tool: use.tool,
+        target: use.target,
+      },
+    };
+  };
+  const broker: VaultBroker = {
+    list: async () => items,
+    async plan(use) {
+      trace.push(`plan ${use.handle}`);
+      return planOf(use);
+    },
+    async use(use, fields, sink) {
+      const plan = await planOf(use);
+      if (plan.refused) throw new VaultError(plan.refused, plan.message);
+      if (plan.approve && !use.approved) throw new VaultError("refused_policy", "Needs approval.");
+      const item = items.find((candidate) => candidate.handle === use.handle)!;
+      const wanted: readonly SecretField[] = typeof fields === "function" ? fields(item) : fields;
+      const value = new SecretValue(`value-of-${use.handle}`);
+      trace.push(`open ${use.handle}`);
+      try {
+        return await sink(Object.fromEntries(wanted.map((f) => [f, value])), item);
+      } finally {
+        trace.push(`close ${use.handle}`);
+      }
+    },
+    async record(use, outcome, reason) {
+      recorded.push([use.handle, outcome, reason]);
+    },
+    requested: async () => ({}),
+  };
+  return { broker, trace, recorded };
+}
+
+const commandUse = (handle: string, target = "gh api user"): IntendedUse => ({
+  handle,
+  tool: "run_command",
+  targetKind: "command",
+  target,
+});
+
+describe("the vault use sequence", () => {
+  it("plans several items on one card and records a denial against each", async () => {
+    const { broker, trace, recorded } = sequenceBroker([keyItem("github"), keyItem("npm")]);
+    const command = "x".repeat(2500);
+    const hooks = vaultGatePlan(broker, true, async () => ({
+      uses: [commandUse("github", command), commandUse("npm", command)],
+      card: { env: ["GH", "NPM"] },
+    }));
+    const api = fakeApi();
+    const plan = await hooks.plan(undefined as never, api, context, false);
+    expect(trace).toEqual(["plan github", "plan npm"]);
+    expect(plan).toMatchObject({ ask: true, expiresInMs: 10 * 60_000 });
+    expect(plan.grant).toBeUndefined();
+    expect(plan.details?.vault).toEqual({
+      handle: "github, npm",
+      label: "github token, npm token",
+      kind: "api_key",
+      tool: "run_command",
+      target: `${"x".repeat(2000)}…`,
+      env: ["GH", "NPM"],
+      grantable: false,
+    });
+    await hooks.settled!(undefined as never, api, context, "denied");
+    expect(recorded).toEqual([
+      ["github", "denied", undefined],
+      ["npm", "denied", undefined],
+    ]);
+  });
+
+  it("refuses every item when one is refused, and audits the sink's own rule against each", async () => {
+    const { broker, recorded } = sequenceBroker([keyItem("github"), keyItem("npm")]);
+    const refusedItem = vaultGatePlan(broker, true, async () => ({
+      uses: [commandUse("github"), commandUse("nope")],
+    }));
+    expect(await refusedItem.plan(undefined as never, fakeApi(), context, false)).toEqual({
+      refuse: "No vault item `nope`.",
+      ask: false,
+    });
+    const confined = vaultGatePlan(broker, true, async () => ({
+      uses: [commandUse("github"), commandUse("npm")],
+      confine: () => ({ refuse: "Names evil.example.", reason: "command names evil.example" }),
+    }));
+    expect(await confined.plan(undefined as never, fakeApi(), context, false)).toEqual({
+      refuse: "Names evil.example.",
+      ask: false,
+    });
+    expect(recorded).toEqual([
+      ["github", "refused_policy", "command names evil.example"],
+      ["npm", "refused_policy", "command names evil.example"],
+    ]);
+  });
+
+  it("offers a grant for one item, and skips the card once it is granted", async () => {
+    const { broker } = sequenceBroker([keyItem("github", "per_conversation")]);
+    const hooks = vaultGatePlan(broker, true, async () => commandUse("github"));
+    expect(await hooks.plan(undefined as never, fakeApi(), context, false)).toMatchObject({
+      ask: true,
+      grant: "vault:github",
+      details: { vault: { handle: "github", grantable: true } },
+    });
+    const granted = fakeApi({ grants: ["vault:github"] });
+    expect(await hooks.plan(undefined as never, granted, context, true)).toEqual({ ask: false });
+    // A sink that holds the value in model-written code asks anyway, with no grant.
+    const everyUse = vaultGatePlan(broker, true, async () => ({
+      uses: [commandUse("github")],
+      everyUse: true,
+    }));
+    const plan = await everyUse.plan(undefined as never, granted, context, false);
+    expect(plan).toMatchObject({ ask: true, details: { vault: { grantable: false } } });
+    expect(plan.grant).toBeUndefined();
+  });
+
+  it("resolves several items nested, in the order named, and hands them to one sink", async () => {
+    const { broker, trace } = sequenceBroker([keyItem("github"), keyItem("npm")]);
+    const api = fakeApi({ approved: true });
+    const uses = [commandUse("github"), commandUse("npm")];
+    await vaultGatePlan(broker, true, async () => ({ uses })).plan(
+      undefined as never,
+      api,
+      context,
+      false,
+    );
+    const revealed = await useAllFromSink(
+      broker,
+      api,
+      context,
+      uses,
+      ["value"],
+      async (values, items) => {
+        trace.push("sink");
+        return { values: values.map((v) => v.value!.reveal()), items: items.map((i) => i.handle) };
+      },
+    );
+    expect(revealed).toEqual({
+      values: ["value-of-github", "value-of-npm"],
+      items: ["github", "npm"],
+    });
+    expect(trace.slice(2)).toEqual([
+      "open github",
+      "open npm",
+      "sink",
+      "close npm",
+      "close github",
+    ]);
+  });
+
+  it("never reaches the sink when a later item is refused or unapproved", async () => {
+    const { broker } = sequenceBroker([keyItem("github"), keyItem("npm")]);
+    let ran = false;
+    const sink = async () => {
+      ran = true;
+    };
+    await expect(
+      useAllFromSink(
+        broker,
+        fakeApi({ approved: true }),
+        context,
+        [commandUse("github"), commandUse("nope")],
+        ["value"],
+        sink,
+      ),
+    ).rejects.toMatchObject({ code: "unknown_handle" });
+    await expect(
+      useAllFromSink(
+        broker,
+        fakeApi(),
+        context,
+        [commandUse("github"), commandUse("npm")],
+        ["value"],
+        sink,
+      ),
+    ).rejects.toMatchObject({ code: "refused_policy" });
+    expect(ran).toBe(false);
+  });
+
+  it("refuses a target that moved after planning, audited against each use", async () => {
+    const { broker, trace, recorded } = sequenceBroker([keyItem("github"), keyItem("npm")]);
+    const api = fakeApi({ approved: true });
+    await vaultGatePlan(broker, true, async () => ({
+      uses: [commandUse("github", "cmd A"), commandUse("npm", "cmd A")],
+    })).plan(undefined as never, api, context, false);
+    await expect(
+      useAllFromSink(
+        broker,
+        api,
+        context,
+        [commandUse("github", "cmd B"), commandUse("npm", "cmd B")],
+        ["value"],
+        async () => "ran",
+      ),
+    ).rejects.toMatchObject({
+      code: "refused_origin",
+      message: expect.stringContaining("now cmd B"),
+    });
+    expect(recorded).toEqual([
+      ["github", "refused_origin", "target moved after planning"],
+      ["npm", "refused_origin", "target moved after planning"],
+    ]);
+    expect(trace.filter((step) => step.startsWith("open"))).toEqual([]);
+  });
+
+  it("words a target the sink found moved with the sink's own text", async () => {
+    const { broker } = sequenceBroker([keyItem("github", "allowed")]);
+    const error = await useFromSink(
+      broker,
+      fakeApi(),
+      context,
+      {
+        handle: "github",
+        tool: "browser_fill_secret",
+        targetKind: "origin",
+        target: "https://github.com",
+      },
+      ["password"],
+      async () => {
+        throw new OriginMismatchError("https://evil.example");
+      },
+      (actual) => `The page is now on ${actual}.`,
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(VaultError);
+    expect(error).toMatchObject({
+      code: "refused_origin",
+      message: "The page is now on https://evil.example.",
+    });
+  });
 });

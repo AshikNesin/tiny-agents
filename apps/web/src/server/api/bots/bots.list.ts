@@ -14,7 +14,7 @@ import { isSkipReply, type AgentRuntime, type AttachmentRef } from "@tiny-agents
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, bots } from "../../db";
 import { guestReadMarkers, type Viewer } from "../people/people.service";
-import type { BotRow } from "./bots.conversation";
+import { conversationRef, type BotRow } from "./bots.conversation";
 import type { SettledStep } from "./bots.settled";
 import type { BotListEntry } from "../../../shared/bot-list";
 
@@ -88,7 +88,7 @@ export async function listBots(rt: BotListRuntime, viewer?: Viewer): Promise<Bot
     : all;
   const busy = new Set(rt.busyConversations());
   return rows.map((bot) => {
-    const ref = Number(bot.conversationId);
+    const ref = conversationRef(bot.conversationId);
     return toListEntry(bot, busy.has(ref), {
       approvals: rt.pendingApprovals(ref),
       questions: rt.pendingQuestions(ref),

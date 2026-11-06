@@ -4,6 +4,7 @@
  * Types are the harness contracts (`@tiny-agents/code/contracts`).
  */
 import { apiClient } from "@groot/shell/lib/api";
+import { LEGACY_INSTANCE_ID, parseThreadId, threadIdOf } from "@tiny-agents/code/contracts";
 import type {
   Capabilities,
   CodeListEvent,
@@ -160,13 +161,13 @@ export const codeApi = {
 
 /** The instance part of a thread id (`shelley:c1` → `shelley`); legacy bare ids are Shelley's. */
 export function instanceOf(threadId: string): string {
-  const at = threadId.indexOf(":");
-  return at > 0 ? threadId.slice(0, at) : "shelley";
+  return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? LEGACY_INSTANCE_ID;
 }
 
 /** A thread id for links: legacy bare ids (from old chats and pushes) become Shelley's. */
 export function normalizeThreadId(id: string): string {
-  return id.includes(":") ? id : `shelley:${id}`;
+  const parsed = parseThreadId(id, LEGACY_INSTANCE_ID);
+  return parsed ? threadIdOf(parsed.instanceId, parsed.nativeId) : id;
 }
 
 /** The thread's page. */

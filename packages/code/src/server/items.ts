@@ -1,8 +1,8 @@
 /**
  * Small helpers every driver's normalizer and live feed share. What goes
- * out to watchers, and when, is `feed.ts`.
+ * out to watchers, and when, is `feed.ts`; what a turn came to is
+ * `outcome.ts`.
  */
-import type { TranscriptItem } from "../contracts";
 
 /** Listener sets that never let one failing listener stop the others. */
 export class Emitter<T> {
@@ -62,18 +62,4 @@ const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
 
 export function isImageFile(path: string): boolean {
   return IMAGE_FILE.test(path);
-}
-
-/**
- * The answer of the last turn: its last assistant row, or its last error
- * notice (`failed`). Empty when the newest user message has neither yet.
- */
-export function lastAnswer(items: readonly TranscriptItem[]): { text: string; failed: boolean } {
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i]!;
-    if (item.kind === "assistant") return { text: item.text, failed: false };
-    if (item.kind === "notice" && item.level === "error") return { text: item.text, failed: true };
-    if (item.kind === "user") break;
-  }
-  return { text: "", failed: false };
 }

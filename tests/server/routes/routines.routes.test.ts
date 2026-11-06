@@ -8,7 +8,7 @@
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, jobs, routineRuns, routines } from "../../../apps/web/src/server/db";
-import { ROUTINE_FIRE_JOB } from "../../../apps/web/src/server/api/routines/routines.chain";
+import { ROUTINE_FIRE_JOB } from "../../../apps/web/src/server/api/routines/routines.arming";
 import { api, createTestApp, type TestApp } from "../helpers";
 import {
   authToken,

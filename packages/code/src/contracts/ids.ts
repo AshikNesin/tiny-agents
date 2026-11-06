@@ -29,12 +29,28 @@ export function threadIdOf(instanceId: InstanceId, nativeId: string): ThreadId {
   return `${instanceId}:${nativeId}`;
 }
 
-/** Split a thread id; undefined when it is not `<instance>:<native>` with valid parts. */
+/**
+ * The instance bare thread ids belong to: links, cards and pushes written
+ * before ADR 0011 named a Shelley conversation alone.
+ */
+export const LEGACY_INSTANCE_ID: InstanceId = "shelley";
+
+/**
+ * Split a thread id; undefined when it is not `<instance>:<native>` with
+ * valid parts. With `legacyInstanceId`, a bare native id (no `:`) belongs to
+ * that instance. The one parser of thread ids: nothing else splits them.
+ */
 export function parseThreadId(
   id: string,
+  legacyInstanceId?: InstanceId,
 ): { instanceId: InstanceId; nativeId: string } | undefined {
   const at = id.indexOf(":");
-  if (at <= 0) return undefined;
+  if (at < 0) {
+    return legacyInstanceId !== undefined && isNativeId(id)
+      ? { instanceId: legacyInstanceId, nativeId: id }
+      : undefined;
+  }
+  if (at === 0) return undefined;
   const instanceId = id.slice(0, at);
   const nativeId = id.slice(at + 1);
   if (!isInstanceId(instanceId) || !isNativeId(nativeId)) return undefined;

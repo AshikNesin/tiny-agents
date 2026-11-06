@@ -15,7 +15,7 @@ import type {
   ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { ToolResultPayload, ToolSpec, WorkerMessage } from "@tiny-agents/claude-worker";
-import { approvalOf, gateHooksOf } from "../../approvals";
+import { gateHooksOf } from "../../approvals";
 import type { ToolPermission } from "../../capabilities";
 import {
   claudeCodeEngineEnabled,
@@ -27,6 +27,7 @@ import {
 } from "../../engine";
 import { ToolGate } from "../../gate";
 import type { GateUserMessage } from "../../policy";
+import { finishedToolRow, liveToolRow, type ToolCallRow } from "../../tool-call-row";
 import { pageBefore } from "../../transcript";
 import type {
   ChatEvent,
@@ -402,44 +403,43 @@ export class ClaudeCodeEngine implements AgentEngine {
   /**
    * Claude asks for a tool: the call goes through the Tool gate like a pi
    * call, with its answer held by the gate (a Claude call does not survive
-   * a restart), and its row in the chat follows the gate's card details.
+   * a restart). Its row in the chat is the one a pi call gets: projected
+   * from the details it publishes while it runs (any Owner wait's card),
+   * then from its result.
    */
   private async onTool(call: ToolUseCall): Promise<ToolResultPayload> {
     const ref = Number(call.sessionId);
     const session = this.sessions.get(ref);
     if (!session) return { content: "Unknown conversation.", isError: true };
     const args = asRecord(call.input);
-    const row = (patch: Omit<ChatToolCall, "id" | "name" | "args">) => {
+    const row = (fields: ToolCallRow) => {
       this.upsertTool(session, call.turnId, {
         id: call.toolUseId,
         name: call.name,
         args,
-        ...patch,
+        ...fields,
       });
       this.emit(ref);
     };
-    row({ status: "running" });
-    if (session.permissions[call.name] === "off") {
-      const content = `${call.name} is off for this bot.`;
-      row({ status: "error", output: content });
+    const failed = (content: string): ToolResultPayload => {
+      row(finishedToolRow({ output: content, isError: true }));
       return { content, isError: true };
-    }
+    };
+    row(liveToolRow({ status: "running" }));
+    if (session.permissions[call.name] === "off")
+      return failed(`${call.name} is off for this bot.`);
     session.nextTask += 1;
     const taskId = session.nextTask;
+    // As on pi, a result without details keeps the last ones the call published.
+    let published: unknown;
     const api = claudeToolApi({
       name: call.name,
       conversation: ref,
       task: taskId,
       ...(this.options.docs ? { docs: this.options.docs } : {}),
       details: (value) => {
-        const card = approvalOf(value);
-        if (card?.state !== "pending") return;
-        row({
-          status: "awaiting_approval",
-          taskId,
-          ...(card.vault ? { vault: card.vault } : {}),
-          ...(card.expiresAt !== undefined ? { expiresAt: card.expiresAt } : {}),
-        });
+        published = value;
+        row(liveToolRow({ status: "running", taskId, details: value }));
       },
     });
     const runner = session.runners.get(call.name);
@@ -457,18 +457,24 @@ export class ClaudeCodeEngine implements AgentEngine {
           instructions: async () => session.system || undefined,
         },
         async () => {
-          row({ status: "running", taskId });
+          row(liveToolRow({ status: "running", taskId }));
           if (!runner) return unavailable(call.name);
           return runner.execute(args as never, api, ctx);
         },
       );
       const content = resultText(result);
-      row(toolRowOf(result, content));
+      // The Claude plan does not time its calls: the row has no duration.
+      row(
+        finishedToolRow({
+          output: content,
+          details: result.details ?? published,
+          ...(result.isError ? { isError: true } : {}),
+          ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
+        }),
+      );
       return { content, ...(result.isError ? { isError: true } : {}) };
     } catch (error) {
-      const content = error instanceof Error ? error.message : String(error);
-      row({ status: "error", output: content });
-      return { content, isError: true };
+      return failed(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -549,7 +555,8 @@ export class ClaudeCodeEngine implements AgentEngine {
     if (!row) return;
     const tools = row.toolCalls ? [...row.toolCalls] : [];
     const index = tools.findIndex((item) => item.id === tool.id);
-    if (index >= 0) tools[index] = { ...tools[index], ...tool };
+    // Each update is the whole row: a finished call keeps nothing of its wait.
+    if (index >= 0) tools[index] = tool;
     else tools.push(tool);
     row.toolCalls = tools;
   }
@@ -680,36 +687,6 @@ function resultText(result: ToolExecutionResult): string {
     .map((block) => (block.type === "text" ? block.text : ""))
     .filter(Boolean)
     .join("\n");
-}
-
-/** A finished call's row, from the gate's result: the same labels a pi call gets. */
-function toolRowOf(
-  result: ToolExecutionResult,
-  output: string,
-): Omit<ChatToolCall, "id" | "name" | "args"> {
-  const card = approvalOf(result.details);
-  const approval = card?.state;
-  return {
-    status:
-      approval === "denied"
-        ? "denied"
-        : approval === "expired"
-          ? "expired"
-          : card?.interrupted
-            ? "interrupted"
-            : result.isError
-              ? "error"
-              : "done",
-    output,
-    ...(card?.waitedMs ? { waitedMs: card.waitedMs } : {}),
-    ...(approval === "approved" ||
-    approval === "denied" ||
-    approval === "auto" ||
-    approval === "yolo" ||
-    approval === "refused"
-      ? { approval }
-      : {}),
-  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

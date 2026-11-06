@@ -3,11 +3,11 @@
  * a run resolves when the conversation it awaits settles. Its boot sweep,
  * which the pipeline runs once it is subscribed, resolves or marks
  * interrupted the runs left awaiting on idle conversations, and re-arms
- * armed routines whose fire job is gone (routines.chain.ts).
+ * armed routines whose fire job is gone (routines.arming.ts).
  */
 import { logger } from "@groot/core/logger";
 import type { SettledStep } from "../bots/bots.settled";
-import { rearmRoutines } from "./routines.chain";
+import { rearmRoutines } from "./routines.arming";
 import { createRoutineRunResolver, type RoutineRunsRuntime } from "./routines.runs";
 
 export function routineRunsStep(rt: RoutineRunsRuntime): SettledStep {

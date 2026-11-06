@@ -10,6 +10,7 @@
  */
 import { logger } from "@groot/core/logger";
 import {
+  LEGACY_INSTANCE_ID,
   parseThreadId,
   threadIdOf,
   type HarnessInstance,
@@ -57,7 +58,7 @@ export interface HubOptions {
 export function createCodeHub(options: HubOptions): CodeHub {
   const byId = new Map(options.instances.map((i) => [i.id, i]));
   const debounceMs = options.listDebounceMs ?? 300;
-  const legacy = options.legacyInstanceId ?? "shelley";
+  const legacy = options.legacyInstanceId ?? LEGACY_INSTANCE_ID;
   const lists = new Map<string, ThreadSummary[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const viewerCounts = new Map<string, number>();
@@ -127,15 +128,10 @@ export function createCodeHub(options: HubOptions): CodeHub {
     instances: () => [...byId.values()],
     instance: (instanceId) => byId.get(instanceId),
     resolve(threadId) {
-      const parsed = parseThreadId(threadId);
-      if (parsed) {
-        const instance = byId.get(parsed.instanceId);
-        return instance ? { instance, nativeId: parsed.nativeId } : undefined;
-      }
-      // Links written before ADR 0011 (`/code/<shelley conversation id>`).
-      const instance = byId.get(legacy);
-      if (!instance || !/^[A-Za-z0-9_-]{1,128}$/.test(threadId)) return undefined;
-      return { instance, nativeId: threadId };
+      // Bare ids are links written before ADR 0011 (`/code/<shelley conversation id>`).
+      const parsed = parseThreadId(threadId, legacy);
+      const instance = parsed && byId.get(parsed.instanceId);
+      return instance ? { instance, nativeId: parsed.nativeId } : undefined;
     },
     statuses() {
       const out: Record<string, InstanceStatus> = {};

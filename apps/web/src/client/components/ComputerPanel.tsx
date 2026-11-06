@@ -12,7 +12,6 @@
  * back. When the bot asked for the takeover itself, the panel says what it
  * asked for.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot as BotIcon,
   ClipboardPaste,
@@ -30,192 +29,75 @@ import {
 import { Link } from "react-router-dom";
 import { Button, Card, CardTitle, EmptyState, ErrorState, LoadingSpinner, Text } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
-import { toast } from "sonner";
-import { useConfirm } from "@groot/ui/primitives";
 import { botsApi, type Bot, type ComputerStatus } from "../lib/bots-api";
-import { VncView, type VncHandle, type VncState } from "./browser/VncView";
-import { errorMessage } from "../lib/errors";
+import {
+  connectionOf,
+  panelHandoffButton as handoffButton,
+  panelHandoffLabel as handoffLabel,
+  panelNote as noteClass,
+  panelStatusPart as statusPart,
+  panelToolButton as toolButton,
+  panelToolLabel as toolLabel,
+  useLiveView,
+  usePanelWidth,
+} from "../lib/live-view";
+import { VncView } from "./browser/VncView";
 
 const WIDTH_KEY = "tiny-agents:computer-panel-width";
 const DEFAULT_WIDTH = 720;
-const MIN_WIDTH = 360;
-/** Keys the desktop should get in full screen instead of the page reacting. */
-const LOCKED_KEYS = ["Escape", "Tab", "KeyW", "KeyT", "KeyN", "KeyL", "KeyR", "KeyQ", "F4", "F5"];
-
-type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
-
-/** Room the docked panel leaves for the sidebar (256px) and a usable chat (416px). */
-const RESERVED_WIDTH = 672;
-
-function maxWidth(): number {
-  return Math.max(
-    MIN_WIDTH,
-    Math.min(Math.floor(window.innerWidth * 0.75), window.innerWidth - RESERVED_WIDTH),
-  );
-}
-
-function clampWidth(value: number): number {
-  return Math.min(maxWidth(), Math.max(MIN_WIDTH, Math.round(value)));
-}
-
-function readStoredWidth(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(WIDTH_KEY));
-    return stored > 0 ? clampWidth(stored) : clampWidth(DEFAULT_WIDTH);
-  } catch {
-    return clampWidth(DEFAULT_WIDTH);
-  }
-}
-
-const toolLabel = "hidden @xl:inline";
-const toolButton = "@max-xl:w-7 @max-xl:px-0";
-const handoffLabel = "hidden @md:inline";
-const handoffButton = "@max-md:w-7 @max-md:px-0";
-const statusPart = "min-w-0 truncate before:pr-1.5 before:content-['·'] @max-md:hidden";
-const noteClass = "mx-auto block max-w-sm";
 
 export function ComputerPanel({ bot, onClose }: { bot: Bot; onClose: () => void }) {
-  const [status, setStatus] = useState<ComputerStatus | null>(null);
-  const [vncState, setVncState] = useState<VncState>("connecting");
-  const [width, setWidth] = useState(readStoredWidth);
-  const [fullscreen, setFullscreen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const vncRef = useRef<VncHandle>(null);
-  const confirm = useConfirm();
+  const { width, startResize } = usePanelWidth(WIDTH_KEY, DEFAULT_WIDTH);
+  const view = useLiveView<ComputerStatus, ComputerStatus>({
+    kind: "computer",
+    source: bot.id,
+    // The desktop may start on the bot's first computer call, or from "Open
+    // computer"; a takeover request flips the driver from the server side.
+    load: () => botsApi.computerStatus(bot.id),
+    select: (status) => status,
+    replace: (_, status) => status,
+    driver: (driver) => botsApi.computerDriver(bot.id, driver),
+    start: () => botsApi.computerStart(bot.id),
+    reset: () => botsApi.computerReset(bot.id),
+    startFailed: "Failed to open the computer",
+    resetCopy: (status) => {
+      const shared = status?.profile !== "own";
+      return {
+        confirm: {
+          title: shared ? "Reset the shared computer?" : "Reset this bot's computer?",
+          description: shared
+            ? "This closes the desktop every bot on the shared profile uses and deletes its settings and app state. Files in the home folder stay."
+            : "This closes the desktop and deletes its settings and app state. Files in the home folder stay.",
+          confirmLabel: "Reset",
+          destructive: true,
+        },
+        done: "Computer reset; the next session starts a fresh desktop.",
+      };
+    },
+  });
+  const {
+    status,
+    humanDrives,
+    vncRef,
+    vncState,
+    setVncState,
+    regionRef: panelRef,
+    fullscreen,
+    toggleFullscreen,
+    setDriver,
+    start: openComputer,
+    reset,
+    paste: pasteClipboard,
+  } = view;
 
-  const humanDrives = status?.driver === "human";
   const starting = Boolean(status?.starting);
   const live = Boolean(status?.active);
-
-  const refresh = useCallback(async () => {
-    try {
-      setStatus(await botsApi.computerStatus(bot.id));
-    } catch {
-      /* the panel stays on the last known status */
-    }
-  }, [bot.id]);
-
-  // The desktop may start on the bot's first computer call, or from "Open
-  // computer"; a takeover request flips the driver from the server side.
-  const pollMs = starting ? 1500 : 3000;
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), pollMs);
-    return () => clearInterval(timer);
-  }, [refresh, pollMs]);
-
-  useEffect(() => {
-    if (!live) setVncState("connecting");
-  }, [live]);
-
-  useEffect(() => {
-    const onChange = () => {
-      const full = document.fullscreenElement === panelRef.current;
-      setFullscreen(full);
-      const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
-      if (full) void keyboard?.lock?.(LOCKED_KEYS).catch(() => undefined);
-      else keyboard?.unlock?.();
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    const panel = panelRef.current;
-    if (!panel?.requestFullscreen) {
-      toast.error("Full screen is not available in this browser.");
-      return;
-    }
-    void panel.requestFullscreen().catch(() => toast.error("Could not enter full screen."));
-  };
-
-  const setDriver = async (driver: "agent" | "human") => {
-    try {
-      await botsApi.computerDriver(bot.id, driver);
-      setStatus((s) =>
-        s ? { ...s, driver, ...(driver === "agent" ? { takeover: null } : {}) } : s,
-      );
-      if (driver === "human") vncRef.current?.focus();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to switch driver"));
-    }
-  };
-
-  const openComputer = async () => {
-    try {
-      await botsApi.computerStart(bot.id);
-      await refresh();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to open the computer"));
-    }
-  };
-
   const shared = status?.profile !== "own";
-  const reset = async () => {
-    const ok = await confirm({
-      title: shared ? "Reset the shared computer?" : "Reset this bot's computer?",
-      description: shared
-        ? "This closes the desktop every bot on the shared profile uses and deletes its settings and app state. Files in the home folder stay."
-        : "This closes the desktop and deletes its settings and app state. Files in the home folder stay.",
-      confirmLabel: "Reset",
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await botsApi.computerReset(bot.id);
-      setStatus((s) => (s ? { ...s, active: false, driver: null, takeover: null } : s));
-      toast.success("Computer reset; the next session starts a fresh desktop.");
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to reset"));
-    }
-  };
 
-  const pasteClipboard = () => {
-    void vncRef.current?.paste().catch(() => {
-      toast.error("Could not read the clipboard. Allow clipboard access and try again.");
-    });
-  };
-
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX;
-    const startWidth = width;
-    let latest = width;
-    const move = (e: PointerEvent) => {
-      latest = clampWidth(startWidth + (startX - e.clientX));
-      setWidth(latest);
-    };
-    const stop = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", stop);
-      handle.removeEventListener("pointercancel", stop);
-      try {
-        window.localStorage.setItem(WIDTH_KEY, String(latest));
-      } catch {
-        /* storage unavailable: the size just won't persist */
-      }
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", stop);
-    handle.addEventListener("pointercancel", stop);
-  };
-
-  const connection = (() => {
-    if (status && !status.configured) return { label: "Not set up", dot: "bg-muted-foreground" };
-    if (starting) return { label: "Starting", dot: "animate-pulse bg-muted-foreground" };
-    if (!live) return { label: "Closed", dot: "bg-muted-foreground" };
-    if (vncState === "live") return { label: "Live", dot: "bg-success" };
-    return {
-      label: vncState === "connecting" ? "Connecting" : "Reconnecting",
-      dot: "animate-pulse bg-warning",
-    };
-  })();
+  const connection = connectionOf(
+    status && { configured: status.configured, starting, mode: live ? "vnc" : null },
+    vncState,
+  );
 
   const sizing = fullscreen
     ? "fixed inset-0 z-40 w-full bg-background"

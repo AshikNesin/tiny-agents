@@ -12,6 +12,8 @@
 import type { Context } from "@earendil-works/chord";
 import { defineDoc, type ToolExecutionApi } from "@earendil-works/pi-durable";
 
+export { VaultTargetMovedError } from "./vault-target";
+
 export type VaultKind = "login" | "card" | "identity" | "api_key";
 
 export type VaultApproval = "every_use" | "per_conversation" | "allowed";

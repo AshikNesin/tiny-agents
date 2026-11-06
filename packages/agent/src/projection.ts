@@ -16,7 +16,8 @@ import type {
   SubmissionRecord,
   ToolSlot,
 } from "@earendil-works/pi-durable";
-import { chatState, diffChat, windowChat, type LiveTool, type RawChat } from "./transcript";
+import type { LiveTool } from "./tool-call-row";
+import { chatState, diffChat, windowChat, type RawChat } from "./transcript";
 import type { ChatEvent, ChatState, QueuedMessage } from "./types";
 
 /** Everything a projection starts from (or starts over from on a re-snapshot). */

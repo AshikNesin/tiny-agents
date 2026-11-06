@@ -17,6 +17,7 @@ import type {
   ThreadSettings,
   ThreadSnapshot,
   ThreadSummary,
+  TurnOutcome,
 } from "./threads";
 
 export type InstanceState = "disabled" | "connecting" | "connected" | "reconnecting";
@@ -33,8 +34,12 @@ export type InstanceEvent =
   | { type: "threads" }
   /** Every (re)connect: missed turn ends must be reconciled. */
   | { type: "connected" }
-  /** A turn ended (working went true → false). */
-  | { type: "turn_ended"; nativeId: string; finalText?: string; failed?: boolean }
+  /**
+   * A turn ended (working went true → false), with where the thread stands
+   * as it ended: what `outcome()` answers. `working` is true when the
+   * harness already started the next turn (a queued message).
+   */
+  | { type: "turn_ended"; nativeId: string; outcome: TurnOutcome }
   /** The harness asks for the owner mid-turn (a `message_user` call, an approval). */
   | { type: "attention"; nativeId: string; text: string; key: string };
 

@@ -51,10 +51,12 @@ import {
   type ThreadSnapshot,
   type ThreadSummary,
   type TranscriptItem,
+  type TurnOutcome,
   type UsageReport,
 } from "../../contracts";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
-import { Emitter, excerpt, firstLine, lastAnswer, record } from "../../server/items";
+import { Emitter, excerpt, firstLine, record } from "../../server/items";
+import { turnOutcome } from "../../server/outcome";
 import { CodingWorkerClient, type ClientState } from "./client";
 import {
   approvalRequestOf,
@@ -155,8 +157,8 @@ interface ThreadData {
   turnCount?: number;
   usage?: Record<string, ModelTotals>;
   costUsd?: number;
+  /** When the newest result arrived (ms): the turn outcome's `endedAt`. */
   endedAt?: number;
-  failed?: boolean;
   contextMax?: number;
 }
 
@@ -170,6 +172,8 @@ interface Runtime {
   requests: Map<string, ApprovalRecord>;
   notified: Set<string>;
   working: boolean;
+  /** A fresh result arrived: report the turn's end once the worker says it is idle. */
+  ending: boolean;
   queued: QueuedMessage[];
   /** What this thread's watchers are sent (rows, streaming text, state). */
   feed: ThreadFeed;
@@ -286,6 +290,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           requests: new Map(),
           notified: new Set(),
           working: false,
+          ending: false,
           queued: [],
           feed: new ThreadFeed((error) =>
             log.warn("claude-code watcher failed", { nativeId, error: String(error) }),
@@ -362,6 +367,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     // Not working: the feed drops the streaming text with this state.
     emitState(runtime);
     if (wasWorking) events.emit({ type: "threads" });
+    reportTurnEnd(runtime);
   }
 
   async function onResume(runtime: Runtime, result: CodingResumeResult): Promise<void> {
@@ -504,6 +510,14 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     };
   }
 
+  function outcomeOf(runtime: Runtime): TurnOutcome {
+    return turnOutcome({
+      thread: summaryOf(runtime.row, runtime),
+      items: itemsOf(runtime).items,
+      endedAt: dataOf(runtime.row).endedAt,
+    });
+  }
+
   function emitItems(runtime: Runtime): void {
     // Normalizing the transcript is the costly part: only for someone watching.
     if (!runtime.feed.live) return;
@@ -607,13 +621,22 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     }
     emitState(runtime);
     if (wasWorking !== runtime.working) events.emit({ type: "threads" });
+    reportTurnEnd(runtime);
+  }
+
+  /**
+   * `turn_ended` once per fresh result, when the worker says nothing runs:
+   * a steer the CLI ran as its own turn belongs to the turn it went into.
+   */
+  function reportTurnEnd(runtime: Runtime): void {
+    if (!runtime.ending || runtime.working) return;
+    runtime.ending = false;
+    events.emit({ type: "turn_ended", nativeId: runtime.nativeId, outcome: outcomeOf(runtime) });
   }
 
   async function onResult(runtime: Runtime, entry: ClaudeEntry): Promise<void> {
     const uuid = typeof entry.uuid === "string" ? entry.uuid : randomUUID();
     const turn = turnRecordOf(uuid, entry);
-    const limit = !!turn.usage_limit;
-    const failed = entry.is_error === true && entry.interrupted !== true;
     let fresh = false;
     await saveRow(runtime, (row) => {
       const data = dataOf(row);
@@ -631,26 +654,14 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           usage,
           costUsd: (data.costUsd ?? 0) + (turn.turn_cost_usd ?? 0),
           endedAt: host.now().getTime(),
-          failed: failed || limit,
           ...(contextMax ? { contextMax } : {}),
         } satisfies ThreadData,
       };
     });
     if (!fresh) return;
+    runtime.ending = true;
     emitItems(runtime);
     emitState(runtime);
-    const { items } = itemsOf(runtime);
-    const answer = lastAnswer(items);
-    const finalText =
-      typeof entry.result === "string" && entry.result.trim() && !failed
-        ? entry.result
-        : answer.text;
-    events.emit({
-      type: "turn_ended",
-      nativeId: runtime.nativeId,
-      ...(finalText ? { finalText: excerpt(finalText) } : {}),
-      ...(failed || limit ? { failed: true } : {}),
-    });
   }
 
   function turnRecordOf(uuid: string, entry: ClaudeEntry): TurnRecord {
@@ -819,18 +830,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     async outcome(nativeId) {
       const runtime = await runtimeOf(nativeId);
       await loadHistory(runtime).catch(() => undefined);
-      const { items, cursor } = itemsOf(runtime);
-      const answer = lastAnswer(items);
-      const data = dataOf(runtime.row);
-      return {
-        working: runtime.working,
-        title: runtime.row.title,
-        cwd: runtime.row.cwd,
-        text: answer.text,
-        failed: data.failed ?? answer.failed,
-        ...(data.endedAt ? { endedAt: data.endedAt } : {}),
-        cursor,
-      };
+      return outcomeOf(runtime);
     },
 
     async createThread(input) {

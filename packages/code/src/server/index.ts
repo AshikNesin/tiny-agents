@@ -4,7 +4,8 @@
  * `HarnessHost`; nothing here imports the app.
  */
 export * from "../contracts";
-export { Emitter, excerpt, firstLine, isImageFile, lastAnswer, pick, record } from "./items";
+export { Emitter, excerpt, firstLine, isImageFile, pick, record } from "./items";
+export { turnAnswer, turnOutcome, type TurnFacts } from "./outcome";
 export {
   NO_PARTIAL,
   ThreadFeed,

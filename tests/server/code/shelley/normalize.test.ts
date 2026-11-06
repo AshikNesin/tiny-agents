@@ -10,7 +10,7 @@ import {
   assetFromUrl,
   assetPath,
   buildTranscript,
-  lastAnswer,
+  lastWriteAt,
   messageUserText,
   queuedMessages,
   splitAttachments,
@@ -116,7 +116,7 @@ describe("buildTranscript on real Shelley payloads", () => {
     expect(buildTranscript([error({ ErrorType: "refusal" })], "shelley")[0]).toMatchObject({
       refusal: true,
     });
-    expect(lastAnswer([error({})])).toMatchObject({ text: "rate limited", failed: true });
+    expect(lastWriteAt([error({})])).toBe(Date.parse("2026-11-03T17:00:00Z"));
   });
 });
 

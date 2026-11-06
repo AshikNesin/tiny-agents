@@ -4,14 +4,8 @@
  * than the max age are recycled but keep the Claude session id for `resume`.
  */
 import { randomBytes } from "node:crypto";
-import type {
-  ImagePart,
-  SequencedEvent,
-  SessionEvent,
-  Timings,
-  ToolResultPayload,
-  ToolSpec,
-} from "./protocol";
+import type { ImagePart, SessionEvent, Timings, ToolResultPayload, ToolSpec } from "./protocol";
+import { SessionLog } from "./session-log";
 import { ToolProxy, type ArmTimer } from "./tool-proxy";
 import { usagePauseMessage, usagePauseReason, type RateLimitInfo } from "./usage";
 
@@ -66,8 +60,8 @@ export class Session {
   tools: readonly ToolSpec[];
   alive = false;
   running = false;
-  private seq = 0;
-  private readonly buffer: SequencedEvent[] = [];
+  /** Every event of this session, numbered, kept for resume and followed by the sockets. */
+  readonly log: SessionLog<SessionEvent>;
   private readonly proxy: ToolProxy;
   private turnQueue = new AsyncQueue<QueryTurn>();
   private abort = new AbortController();
@@ -91,23 +85,12 @@ export class Session {
     this.tools = open.tools;
     this.createdAt = now;
     this.lastUsed = now;
+    this.log = new SessionLog(open.sessionId, timings.eventBuffer);
     this.proxy = new ToolProxy(timings.toolResultTimeoutMs, arm);
   }
 
   touch(now: number): void {
     this.lastUsed = now;
-  }
-
-  replay(afterSeq: number): SequencedEvent[] {
-    return this.buffer.filter((event) => event.seq > afterSeq);
-  }
-
-  get firstSeq(): number {
-    return this.buffer[0]?.seq ?? this.seq + 1;
-  }
-
-  get lastSeq(): number {
-    return this.seq;
   }
 
   settleTool(toolUseId: string, result: ToolResultPayload): boolean {
@@ -245,15 +228,8 @@ export class Session {
   }
 
   private publish(event: SessionEvent): void {
-    this.seq += 1;
-    const sequenced: SequencedEvent = { sessionId: this.id, seq: this.seq, event };
-    this.buffer.push(sequenced);
-    const extra = this.buffer.length - this.timings.eventBuffer;
-    if (extra > 0) this.buffer.splice(0, extra);
-    this.fanout?.(sequenced);
+    this.log.append(event);
   }
-
-  fanout: ((event: SequencedEvent) => void) | undefined;
 
   private async *turns(): AsyncIterable<QueryTurn> {
     const queue = this.turnQueue;
@@ -361,10 +337,6 @@ export class SessionBook {
 
   settle(sessionId: string, toolUseId: string, result: ToolResultPayload): boolean {
     return this.sessions.get(sessionId)?.settleTool(toolUseId, result) ?? false;
-  }
-
-  replay(sessionId: string, afterSeq: number): SequencedEvent[] {
-    return this.sessions.get(sessionId)?.replay(afterSeq) ?? [];
   }
 }
 

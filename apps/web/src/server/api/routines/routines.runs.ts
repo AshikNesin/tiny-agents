@@ -14,21 +14,19 @@
  * in for the answer and two queued runs never swap replies. Every finished
  * run is announced: a push notification and a card in its bot's chat.
  */
-import { and, asc, desc, eq, gt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
+import { conversationRef } from "../bots/bots.conversation";
 import type { ChatRead } from "../bots/bots.settled";
 import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
-import { disarmRoutine } from "./routines.chain";
+import { clearBlockedStreak, disarmRoutine, recordBlocked } from "./routines.arming";
 
 export const KEEP_RUNS_PER_ROUTINE = 50;
 export const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
-/** Blocked runs in a row that pause a routine (issue #87). */
-export const BLOCKED_RUNS_BEFORE_PAUSE = 3;
-const PAUSED_REASON_CHARS = 500;
 
 /** Minimal runtime surface run resolution needs (the full AgentRuntime satisfies it). */
 export type RoutineRunsRuntime = Pick<AgentRuntime, "isBusy" | "readChat" | "listCapabilities">;
@@ -42,7 +40,6 @@ export function runRequestId(routineId: string, scheduledFor: Date): string {
 export interface RunRoutine {
   id: string;
   name: string;
-  pendingJobId: string | null;
   bot: { id: string; name: string };
 }
 
@@ -152,7 +149,7 @@ export async function recordSubmitFailed(
     finishedAt: now,
     error: pausedError(error),
   });
-  await disarmRoutine(routine.id, routine.pendingJobId);
+  await disarmRoutine(routine.id);
   announceRun(refOf(runId, routine), { status: "paused", error: submitError(error) });
   return runId;
 }
@@ -202,41 +199,6 @@ export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): st
 }
 
 /**
- * A run ended blocked: count it, and pause the routine once
- * BLOCKED_RUNS_BEFORE_PAUSE runs in a row have. Returns the paused reason
- * when this run paused it, else null; a routine that is already paused (a
- * manual run) only counts.
- */
-async function recordBlockedRun(id: string, reason: string): Promise<string | null> {
-  const [row] = await db
-    .update(routines)
-    .set({ blockedStreak: sql`${routines.blockedStreak} + 1` })
-    .where(eq(routines.id, id))
-    .returning({
-      enabled: routines.enabled,
-      pendingJobId: routines.pendingJobId,
-      blockedStreak: routines.blockedStreak,
-    });
-  if (!row) throw new Error(`Routine ${id} not found`);
-  if (!row.enabled || row.blockedStreak < BLOCKED_RUNS_BEFORE_PAUSE) return null;
-  const pausedReason = `Paused after ${row.blockedStreak} blocked runs: ${reason}`.slice(
-    0,
-    PAUSED_REASON_CHARS,
-  );
-  await disarmRoutine(id, row.pendingJobId);
-  await db.update(routines).set({ pausedReason }).where(eq(routines.id, id));
-  return pausedReason;
-}
-
-/** A run finished some other way: the blocked streak is broken. */
-async function clearBlockedStreak(id: string): Promise<void> {
-  await db
-    .update(routines)
-    .set({ blockedStreak: 0 })
-    .where(and(eq(routines.id, id), gt(routines.blockedStreak, 0)));
-}
-
-/**
  * Update one run row. Throws when it is gone (its routine was deleted
  * meanwhile), so the caller skips the announcement.
  */
@@ -279,7 +241,7 @@ async function awaitingRuns(conversationId?: number) {
     .orderBy(asc(routineRuns.scheduledFor));
   return rows.map((row) => ({
     run: { id: row.id, routineId: row.routineId, requestId: row.requestId },
-    conversationId: Number(row.conversationId),
+    conversationId: conversationRef(row.conversationId),
     ref: {
       runId: row.id,
       routineName: row.routineName,
@@ -335,7 +297,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
         error,
         output: output || null,
       });
-      const pausedReason = await recordBlockedRun(routineId, error);
+      const pausedReason = await recordBlocked(routineId, error);
       announceRun(ref, { status: "blocked", error, pausedReason });
       return;
     }

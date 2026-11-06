@@ -33,7 +33,11 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
-import type { SecretFill } from "../../../packages/agent/src/toolkits/browser-fill";
+import {
+  OriginMismatchError,
+  type SecretFill,
+} from "../../../packages/agent/src/toolkits/browser-fill";
+import { WindowMismatchError } from "../../../packages/agent/src/toolkits/computer-sessions";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
 import { api, createTestApp, type TestApp } from "../helpers";
@@ -288,24 +292,39 @@ describe("vault policy", () => {
     ).toMatchObject({ approve: false });
   });
 
-  it("audits a sink that failed as sink_error, not as used", async () => {
-    await expect(
-      useItem(
-        { ...use("https://github.com"), approved: true },
-        { unattended: false, botName: "Bot" },
-        ["password"],
-        async () => {
-          throw new Error("page gone");
-        },
-      ),
-    ).rejects.toThrow("page gone");
-    const [row] = await db.select().from(vaultItems).where(eq(vaultItems.handle, "github"));
-    expect(row?.lastUsedAt).toBeNull();
-    const outcomes = (
-      await db.select().from(vaultAuditEvents).where(ne(vaultAuditEvents.tool, "vault_ui"))
-    ).map((e) => [e.outcome, e.reason]);
-    expect(outcomes).toEqual([["sink_error", "the sink failed: Error"]]);
-  });
+  it.each([
+    [new Error("page gone"), "sink_error", "the sink failed: Error"],
+    [
+      new OriginMismatchError("https://evil.example"),
+      "refused_origin",
+      "page origin changed before the fill",
+    ],
+    [
+      new WindowMismatchError("firefox — Phish"),
+      "refused_origin",
+      "active window changed before typing",
+    ],
+  ])(
+    "audits a sink that threw %s as what happened, not as used",
+    async (thrown, outcome, reason) => {
+      await expect(
+        useItem(
+          { ...use("https://github.com"), approved: true },
+          { unattended: false, botName: "Bot" },
+          ["password"],
+          async () => {
+            throw thrown;
+          },
+        ),
+      ).rejects.toBe(thrown);
+      const [row] = await db.select().from(vaultItems).where(eq(vaultItems.handle, "github"));
+      expect(row?.lastUsedAt).toBeNull();
+      const outcomes = (
+        await db.select().from(vaultAuditEvents).where(ne(vaultAuditEvents.tool, "vault_ui"))
+      ).map((e) => [e.outcome, e.reason]);
+      expect(outcomes).toEqual([[outcome, reason]]);
+    },
+  );
 
   it("resolves a connection's secret through the same policy, without a bot scope", async () => {
     // An api_key allows mcp by default; scoping it to a bot does not shut
@@ -325,8 +344,27 @@ describe("vault policy", () => {
     const [row] = await db.select().from(vaultItems).where(eq(vaultItems.handle, "gh-mcp"));
     expect(row?.lastUsedBy).toBe("mcp:github");
     await db.update(vaultItems).set({ disabled: true }).where(eq(vaultItems.handle, "gh-mcp"));
-    await expect(resolveConnectionSecret("gh-mcp", "github")).rejects.toThrow(/disabled/);
-    await expect(resolveConnectionSecret("nope", "github")).rejects.toThrow(/No vault item/);
+    await expect(resolveConnectionSecret("gh-mcp", "github")).rejects.toThrow(
+      'Vault item "gh-mcp": Vault item `gh-mcp` is disabled.',
+    );
+    await expect(resolveConnectionSecret("nope", "github")).rejects.toThrow(
+      'Vault item "nope": No vault item `nope`. Call vault_list.',
+    );
+    // The same audit as a bot's use, with no bot, conversation or approval behind it.
+    const audited = await db
+      .select()
+      .from(vaultAuditEvents)
+      .where(eq(vaultAuditEvents.tool, "mcp"));
+    expect(
+      audited
+        .map((e) => [e.outcome, e.handle, e.target, e.botId, e.conversationId, e.unattended])
+        .sort(),
+    ).toEqual([
+      ["disabled", "gh-mcp", "mcp:github", null, null, false],
+      ["unknown_handle", "nope", "mcp:github", null, null, false],
+      ["used", "gh-mcp", "mcp:github", null, null, false],
+    ]);
+    await assertNoCanary();
   });
 
   it("refuses unknown handles, other tools and unattended runs, and audits each", async () => {
@@ -456,11 +494,15 @@ describe("credential request submit", () => {
   const target = { profile: "shared", tab: `conversation-${conversation}` };
   const fills: { origin: string; fields: { key: string; value: string }[] }[] = [];
   let origin = "https://hi.nesin.io";
+  /** The page navigates here as the fill starts (a redirect racing the submit). */
+  let movesTo: string | undefined;
 
   const session: BrowserSession = {
     url: () => `${origin}/login`,
     origin: async () => origin,
     fillSecret: async (fill: SecretFill) => {
+      if (movesTo) origin = movesTo;
+      if (fill.origin !== origin) throw new OriginMismatchError(origin);
       fills.push({
         origin: fill.origin,
         fields: fill.fields.map((f) => ({ key: f.key, value: f.value.reveal() })),
@@ -506,6 +548,7 @@ describe("credential request submit", () => {
   beforeEach(async () => {
     fills.length = 0;
     origin = "https://hi.nesin.io";
+    movesTo = undefined;
     sessions = createBrowserSessions({ transport: async () => session });
     setBrowserSessionsForTests(sessions);
     await sessions.start(target);
@@ -560,6 +603,23 @@ describe("credential request submit", () => {
         runtime as never,
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
+    expect(fills).toEqual([]);
+    expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the page moves as the fill starts", async () => {
+    movesTo = "https://evil.example";
+    const runtime = fakeRuntime();
+    await expect(
+      submitRequest(
+        7,
+        { values: { email: "a@b.c", password: CANARY }, save: false },
+        runtime as never,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "The page moved before the fill. Nothing was filled.",
+    });
     expect(fills).toEqual([]);
     expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
   });

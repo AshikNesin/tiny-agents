@@ -10,7 +10,8 @@
  * - `reply`: exactly one per request (a client message with a `requestId`).
  * - Session events carry `sessionId` and a per-session `seq`; a resume request
  *   (`resume` or `coding.resume`) answers a `ResumeResult`, then replays the
- *   buffered events after `afterSeq`.
+ *   buffered events after `afterSeq`. Both protocols keep those events in a
+ *   `SessionLog` (`session-log.ts`), which also answers the `ResumeResult`.
  */
 import { z } from "zod";
 
@@ -42,18 +43,4 @@ export interface ResumeResult {
   /** The oldest event still buffered (the replay starts here on a gap). */
   firstSeq: number;
   lastSeq: number;
-}
-
-/** The resume answer for a session the worker holds (or `undefined`: does not). */
-export function resumeResultOf(
-  session: { firstSeq: number; lastSeq: number } | undefined,
-  afterSeq: number,
-): ResumeResult {
-  if (!session) return { known: false, gap: false, firstSeq: 1, lastSeq: 0 };
-  return {
-    known: true,
-    gap: afterSeq < session.firstSeq - 1,
-    firstSeq: session.firstSeq,
-    lastSeq: session.lastSeq,
-  };
 }

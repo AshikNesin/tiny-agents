@@ -11,7 +11,7 @@
  * driving, the owner can open apps and send the shortcuts the local browser
  * would keep for itself (Alt+Tab, Alt+F4, Ctrl+W).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import {
   AppWindow,
@@ -37,7 +37,6 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/shell/lib/utils";
-import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import {
   computerApi,
@@ -47,13 +46,10 @@ import {
 } from "../../lib/computer-api";
 import { DESKTOP_SHORTCUTS } from "../../lib/desktop-keys";
 import { errorMessage } from "../../lib/errors";
-import { VncView, type VncHandle, type VncState } from "../../components/browser/VncView";
+import { useLiveView } from "../../lib/live-view";
+import { VncView } from "../../components/browser/VncView";
 
 const SELECTED_KEY = "tiny-agents:computer-desktop";
-/** Keys the desktop should get in full screen instead of the page reacting. */
-const LOCKED_KEYS = ["Escape", "Tab", "KeyW", "KeyT", "KeyN", "KeyQ", "F4", "F5"];
-
-type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
 
 function readSelected(): string {
   try {
@@ -227,129 +223,60 @@ function OffState({ desktop, onOpen }: { desktop: Desktop; onOpen: () => void })
 }
 
 export function ComputerPage() {
-  const [list, setList] = useState<DesktopList | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState(readSelected);
-  const [vncState, setVncState] = useState<VncState>("connecting");
-  const [fullscreen, setFullscreen] = useState(false);
-  const regionRef = useRef<HTMLDivElement>(null);
-  const vncRef = useRef<VncHandle>(null);
-  const confirm = useConfirm();
-
-  const refresh = useCallback(async () => {
-    try {
-      setList(await computerApi.list());
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load the desktops"));
-    }
-  }, []);
-
-  const desktops = list?.desktops ?? [];
-  const desktop = desktops.find((d) => d.profile === selected) ?? desktops[0];
-  const profile = desktop?.profile;
-  const live = Boolean(desktop?.active);
-  const driving = desktop?.driver === "human";
 
   // Desktops start, stop and change hands from other tabs and from bots.
-  const pollMs = desktops.some((d) => d.starting) ? 1500 : 3000;
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), pollMs);
-    return () => clearInterval(timer);
-  }, [refresh, pollMs]);
-
-  useEffect(() => {
-    if (!live) setVncState("connecting");
-  }, [live, profile]);
-
-  useEffect(() => {
-    const onChange = () => {
-      const full = document.fullscreenElement === regionRef.current;
-      setFullscreen(full);
-      const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
-      if (full) void keyboard?.lock?.(LOCKED_KEYS).catch(() => undefined);
-      else keyboard?.unlock?.();
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
+  const view = useLiveView<DesktopList, Desktop>({
+    kind: "computer",
+    source: "desktops",
+    load: () => computerApi.list(),
+    select: (list) => list.desktops.find((d) => d.profile === selected) ?? list.desktops[0],
+    replace: (list, next) => ({
+      ...list,
+      desktops: list.desktops.map((d) => (d.profile === next.profile ? next : d)),
+    }),
+    starting: (list) => list.desktops.some((d) => d.starting),
+    driver: (driver, d) => computerApi.driver(d?.profile ?? "shared", driver),
+    start: (d) => computerApi.start(d?.profile ?? "shared"),
+    reset: (d) => computerApi.reset(d?.profile ?? "shared"),
+    startFailed: "Failed to start the desktop",
+    resetCopy: (d) => ({
+      confirm: {
+        title: `Reset the ${d?.label ?? "Shared"} desktop?`,
+        description:
+          "This closes the desktop and deletes its settings and app state on the VM" +
+          ((d?.bots.length ?? 0) > 1 ? ", for every bot that uses it" : "") +
+          ". Files in the home folder stay.",
+        confirmLabel: "Reset",
+        destructive: true,
+      },
+      done: "Desktop reset; it starts fresh next time.",
+    }),
+  });
+  const {
+    status: list,
+    item: desktop,
+    streaming: live,
+    humanDrives: driving,
+    vncRef,
+    vncState,
+    setVncState,
+    regionRef,
+    fullscreen,
+    toggleFullscreen,
+    setDriver,
+    start,
+    reset,
+    paste,
+    refresh,
+  } = view;
+  const loadError = view.error ? errorMessage(view.error, "Failed to load the desktops") : null;
+  const desktops = list?.desktops ?? [];
+  const profile = desktop?.profile;
 
   const select = (next: string) => {
     setSelected(next);
     storeSelected(next);
-  };
-
-  const patch = (next: Partial<Desktop>) =>
-    setList((current) =>
-      current
-        ? {
-            ...current,
-            desktops: current.desktops.map((d) => (d.profile === profile ? { ...d, ...next } : d)),
-          }
-        : current,
-    );
-
-  const setDriver = async (driver: "agent" | "human") => {
-    if (!profile) return;
-    try {
-      await computerApi.driver(profile, driver);
-      patch({ driver, ...(driver === "agent" ? { takeover: null } : {}) });
-      if (driver === "human") vncRef.current?.focus();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to switch driver"));
-    }
-  };
-
-  const start = async () => {
-    if (!profile) return;
-    try {
-      await computerApi.start(profile);
-      patch({ starting: true, error: null });
-      await refresh();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to start the desktop"));
-    }
-  };
-
-  const reset = async () => {
-    if (!desktop || !profile) return;
-    const ok = await confirm({
-      title: `Reset the ${desktop.label} desktop?`,
-      description:
-        "This closes the desktop and deletes its settings and app state on the VM" +
-        (desktop.bots.length > 1 ? ", for every bot that uses it" : "") +
-        ". Files in the home folder stay.",
-      confirmLabel: "Reset",
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await computerApi.reset(profile);
-      patch({ active: false, driver: null, takeover: null });
-      toast.success("Desktop reset; it starts fresh next time.");
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to reset"));
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    const region = regionRef.current;
-    if (!region?.requestFullscreen) {
-      toast.error("Full screen is not available in this browser.");
-      return;
-    }
-    void region.requestFullscreen().catch(() => toast.error("Could not enter full screen."));
-  };
-
-  const paste = () => {
-    void vncRef.current?.paste().catch(() => {
-      toast.error("Could not read the clipboard. Allow clipboard access and try again.");
-    });
   };
 
   const sendShortcut = (index: number) => {

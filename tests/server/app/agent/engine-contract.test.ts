@@ -5,10 +5,13 @@
  * its callers read (chat state, streams, pages, the Bot list preview, busy
  * activity, Finished replies) must not depend on which one runs.
  */
+import { Type } from "@earendil-works/pi-ai";
+import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import type { Capability } from "../../../../packages/agent/src/capabilities";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import { TEST_MODEL } from "../../../../packages/agent/src/testing";
-import type { ActivityChange } from "../../../../packages/agent/src/types";
+import type { ActivityChange, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
   awaitingApproval,
   CLAUDE_MODEL,
@@ -174,6 +177,123 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     await until(() => !runtime.isBusy(ref), "the reply to stop");
     expect((await runtime.readChat(ref)).busy).toBe(false);
   }, 15_000);
+});
+
+// ── Owner wait cards ────────────────────────────────────────────────────
+
+const questions = [{ question: "Which repo?", options: [{ label: "web" }, { label: "api" }] }];
+const request = {
+  origin: "https://shop.dev",
+  title: "Shop login",
+  purpose: "Sign in",
+  fields: [{ key: "username", label: "Username", type: "text", required: true }],
+};
+
+/**
+ * One tool per Owner wait card that is not an approval: each publishes the
+ * card's pending details (the shape its wait kind writes), holds until the
+ * test lets it go, then finishes with the card's answered details.
+ */
+const CARDS = [
+  {
+    tool: "ask_questions",
+    pending: { question: "pending", questions },
+    done: { question: "answered", questions, answers: [{ selected: ["web"] }] },
+    waiting: {
+      status: "awaiting_answer",
+      questions,
+    } satisfies Partial<ChatToolCall>,
+    finished: { status: "done", questions, answers: [{ selected: ["web"] }] },
+  },
+  {
+    tool: "request_login",
+    pending: { credentials: "pending", request, expiresAt: 4_102_444_800_000 },
+    done: { credentials: "filled", request, filled: ["username"] },
+    waiting: {
+      status: "awaiting_credentials",
+      credentials: { status: "pending", ...request },
+      expiresAt: 4_102_444_800_000,
+    } satisfies Partial<ChatToolCall>,
+    finished: {
+      status: "done",
+      credentials: { status: "filled", ...request, filled: ["username"] },
+    },
+  },
+  {
+    tool: "hand_over",
+    pending: { takeover: { status: "pending", reason: "Solve the captcha" } },
+    done: { takeover: { status: "released", reason: "Solve the captcha" } },
+    waiting: {
+      status: "awaiting_takeover",
+      takeover: { status: "pending", reason: "Solve the captcha" },
+    } satisfies Partial<ChatToolCall>,
+    finished: { status: "done", takeover: { status: "released", reason: "Solve the captcha" } },
+  },
+] as const;
+
+function cardsCapability(release: Map<string, () => void>): Capability {
+  const tools = CARDS.map((card) =>
+    defineTool({
+      name: card.tool,
+      description: card.tool,
+      parameters: Type.Object({}),
+      execute: async (_args, api, context) => {
+        await api.details(card.pending as never, context);
+        await new Promise<void>((resolve) => release.set(card.tool, resolve));
+        return {
+          output: [{ type: "text" as const, text: "answered" }],
+          details: card.done as never,
+        };
+      },
+    }),
+  );
+  return {
+    id: "cards",
+    kind: "toolkit",
+    name: "Cards",
+    description: "Owner wait cards",
+    extension: defineExtension({ name: "cards", tools }),
+    tools: CARDS.map((card) => ({
+      name: card.tool,
+      label: card.tool,
+      description: card.tool,
+      readOnly: true,
+    })),
+  };
+}
+
+describe.each(ENGINES)("Owner wait cards on %s", (kind) => {
+  it.each(CARDS)(
+    "shows $tool's card while it waits, then its answer",
+    async (card) => {
+      const release = new Map<string, () => void>();
+      const engine = await openEngine(kind, { capabilities: [cardsCapability(release)] });
+      runtimes.push(engine.runtime);
+      const { runtime } = engine;
+      const ref = await runtime.createConversation({
+        modelId: engine.modelId,
+        systemPrompt: "Be brief.",
+        capabilities: { enabled: ["cards"], permissions: {} },
+      });
+      const chat = await watch(runtime, ref);
+      await engine.send(ref, { requestId: "r1", text: card.tool });
+
+      const waiting = await until(() => {
+        const call = chat.toolCall(card.tool);
+        return call?.status === card.waiting.status ? call : undefined;
+      }, `${card.tool}'s card`);
+      expect(waiting).toMatchObject({ ...card.waiting, taskId: expect.any(Number) });
+
+      release.get(card.tool)?.();
+      await until(() => chat.results().length > 0, `${card.tool}'s result`);
+      const finished = chat.toolCall(card.tool);
+      expect(finished).toMatchObject({ ...card.finished, output: "answered" });
+      expect(finished).not.toHaveProperty("expiresAt");
+      expect(finished).not.toHaveProperty("taskId");
+      await chat.stop();
+    },
+    15_000,
+  );
 });
 
 describe("choosing the engine", () => {

@@ -4,6 +4,7 @@
  * Keychain, the credentials file, or a token.
  */
 import { spawn } from "node:child_process";
+import { assertNoOverrides } from "./guards";
 
 export const INSTALL_HINT =
   "Claude Code is not installed. Install it with `npm install -g @anthropic-ai/claude-code` " +
@@ -50,6 +51,18 @@ export function assertSubscriptionLogin(status: ClaudeAuthStatus): void {
   if (!isSubscriptionLogin(status)) {
     throw new SubscriptionRequired(LOGIN_HINT);
   }
+}
+
+/**
+ * The checks before Claude Code starts for a session, under either protocol:
+ * no backend override in `env`, and a subscription login.
+ */
+export async function assertSessionMayStart(
+  env: Record<string, string | undefined>,
+  authStatus: () => Promise<ClaudeAuthStatus>,
+): Promise<void> {
+  assertNoOverrides(env);
+  assertSubscriptionLogin(await authStatus());
 }
 
 export type CommandRunner = (

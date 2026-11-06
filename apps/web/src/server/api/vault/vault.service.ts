@@ -12,6 +12,7 @@ import { logger } from "@groot/core/logger";
 import {
   secretRedactor,
   VaultError,
+  VaultTargetMovedError,
   type SecretField,
   type SecretValues,
   type VaultApproval,
@@ -324,7 +325,6 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
     return { refused: refusal.refused, message: refusal.message };
   }
   const item = row!;
-  const approval = effectiveApproval(item);
   const card: VaultCard = {
     handle: item.handle,
     label: item.label,
@@ -336,6 +336,16 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   };
   const meta = parseJson<{ brand: string; last4: string }>(item.cardMetaJson);
   if (meta) card.card = { brand: meta.brand, last4: meta.last4 };
+  return { ...approvalOf(item, use, who), unattended: who.unattended, card };
+}
+
+/** Whether a bot's use of an allowed item asks the owner, and may be granted for the chat. */
+function approvalOf(
+  item: VaultItemRow,
+  use: Pick<VaultUse, "targetKind"> & { granted?: boolean },
+  who: UseContext,
+): { approve: boolean; grantable: boolean } {
+  const approval = effectiveApproval(item);
   // A command is code the model wrote holding the secret, and a window is
   // one the model named: every use asks.
   const everyUse =
@@ -346,8 +356,6 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   return {
     approve: everyUse || (approval === "per_conversation" && !use.granted),
     grantable: !everyUse,
-    unattended: who.unattended,
-    card,
   };
 }
 
@@ -380,11 +388,25 @@ export async function useItem<T>(
   fields: readonly SecretField[] | ((item: VaultItemMeta) => readonly SecretField[]),
   sink: (values: SecretValues, item: VaultItemMeta) => Promise<T>,
 ): Promise<T> {
-  const plan = await planUse(use, who);
-  if (plan.refused) throw new VaultError(plan.refused, plan.message);
-  const row = (await findItem(use.handle))!;
+  return runUse(use, who, { botScoped: true, usedBy: who.botName ?? null }, fields, sink);
+}
+
+/**
+ * The one use path every sink's value takes: policy (a refusal audited),
+ * the owner's approval, resolve, the sink, then the outcome's audit and the
+ * item's last use. A bot's use is scoped to the item's bots and asks per the
+ * item; a linked one (`botScoped: false`, an MCP connection) is neither.
+ */
+async function runUse<T>(
+  use: PolicyUse & { conversation?: number; granted?: boolean; approved: boolean },
+  who: UseContext & { taskId?: number },
+  path: { botScoped: boolean; usedBy: string | null },
+  fields: readonly SecretField[] | ((item: VaultItemMeta) => readonly SecretField[]),
+  sink: (values: SecretValues, item: VaultItemMeta) => Promise<T>,
+): Promise<T> {
+  const row = await findItem(use.handle);
   const base = {
-    item: row,
+    ...(row ? { item: row } : {}),
     handle: use.handle,
     botId: who.botId,
     conversationId: use.conversation,
@@ -393,31 +415,37 @@ export async function useItem<T>(
     target: use.target,
     unattended: who.unattended,
   };
-  if (plan.approve && !use.approved) {
+  const refusal = await policyRefusal(row, use, who, path.botScoped);
+  if (refusal) {
+    await audit({ ...base, outcome: refusal.refused, reason: refusal.reason ?? refusal.message });
+    throw new VaultError(refusal.refused, refusal.message);
+  }
+  const item = row!;
+  if (path.botScoped && approvalOf(item, use, who).approve && !use.approved) {
     await audit({ ...base, outcome: "refused_policy", reason: "approval required" });
     throw new VaultError("refused_policy", `Using \`${use.handle}\` needs the owner's approval.`);
   }
-  const meta = toMeta(row);
+  const meta = toMeta(item);
   const wanted = typeof fields === "function" ? fields(meta) : fields;
-  const values = await resolveValues(row, wanted, base);
+  const values = await resolveValues(item, wanted, base);
   let result: T;
   try {
     result = await sink(values, meta);
   } catch (error) {
     // The audit says what happened, not what was meant: a sink that threw
-    // used nothing it can vouch for.
-    const movedAway = error instanceof Error && error.name === "OriginMismatchError";
+    // used nothing it can vouch for, and one whose target moved refused.
+    const moved = error instanceof VaultTargetMovedError;
     await audit({
       ...base,
-      outcome: movedAway ? "refused_origin" : "sink_error",
-      reason: movedAway
-        ? "page origin changed before the fill"
+      outcome: moved ? "refused_origin" : "sink_error",
+      reason: moved
+        ? error.reason
         : `the sink failed: ${error instanceof Error ? error.name : "error"}`,
     });
     throw error;
   }
   await audit({ ...base, outcome: use.approved ? "approved_used" : "used" });
-  await markUsed(row.id, who.botName ?? null);
+  await markUsed(item.id, path.usedBy);
   return result;
 }
 
@@ -475,31 +503,29 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
 
 /**
  * A connection's header value from its vault item (`Connection.secretRef`):
- * resolved at connect time, registered with the redactor and audited. The
- * owner linked the item to the connection, so there is no per-use approval;
- * the item must still allow `mcp` and be enabled. Throws a message the
- * connection's status shows.
+ * resolved at connect time through the same use path as a bot's sink, so it
+ * is registered with the redactor and audited. The owner linked the item to
+ * the connection, so there is no bot scope, no per-use approval and nobody
+ * "present" for the unattended rule; the item must still allow `mcp` and be
+ * enabled. Throws a message the connection's status shows.
  */
 export async function resolveConnectionSecret(handle: string, slug: string): Promise<string> {
-  const row = await findItem(handle);
-  const use: PolicyUse = { handle, tool: "mcp", targetKind: "connection", target: `mcp:${slug}` };
-  const base = { ...(row ? { item: row } : {}), handle, tool: use.tool, target: use.target };
-  // No bot behind a connection: the owner linked the item to it, and nobody
-  // is "present", so neither the bot scope nor the unattended rule applies.
-  const refusal = await policyRefusal(row, use, { unattended: false }, false);
-  if (refusal) {
-    const message = `Vault item "${handle}": ${refusal.message}`;
-    await audit({ ...base, outcome: refusal.refused, reason: refusal.reason ?? refusal.message });
-    throw new Error(message);
-  }
-  const item = row!;
-  let values: SecretValues;
+  const target = `mcp:${slug}`;
   try {
-    values = await resolveValues(item, ["value"], base);
+    return await runUse(
+      { handle, tool: "mcp", targetKind: "connection", target, approved: false },
+      { unattended: false },
+      { botScoped: false, usedBy: target },
+      ["value"],
+      async (values) => values.value!.reveal(),
+    );
   } catch (error) {
-    throw new Error(error instanceof VaultError ? error.message : "Vault backend failed");
+    if (!(error instanceof VaultError)) throw error;
+    // A backend failure's message stands alone; a refusal names the item.
+    throw new Error(
+      error.code === "backend_error" || error.code === "missing_field"
+        ? error.message
+        : `Vault item "${handle}": ${error.message}`,
+    );
   }
-  await audit({ ...base, outcome: "used" });
-  await markUsed(item.id, `mcp:${slug}`);
-  return values.value!.reveal();
 }

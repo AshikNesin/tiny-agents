@@ -1,18 +1,23 @@
 /**
  * Routine CRUD + lifecycle over Drizzle. Thin: schedule math lives in
- * routines.schedule.ts, dispatch in routines.jobs.ts, the chain in routines.chain.ts. Every mutation that can
- * move nextRunAt reconciles the pending queue job (cancel the old, enqueue
- * the new), so the queue and the row never disagree.
- *
- * Arming a routine again (resume) starts its blocked-run count over
- * (issue #87; the count itself is routines.runs.ts's).
+ * routines.schedule.ts, dispatch in routines.jobs.ts, and a routine's armed
+ * state (its queued job, slot, blocked count and conversation) in
+ * routines.arming.ts: every mutation that can move nextRunAt asks it to arm
+ * or disarm, so the queue and the row never disagree.
  */
 import { and, asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { bots, db, routineRuns, routines } from "../../db";
+import { conversationRef } from "../bots/bots.conversation";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { cancelPendingJob, disarmRoutine, enqueueOccurrence } from "./routines.chain";
+import {
+  armRoutine,
+  createRoutine,
+  disarmRoutine,
+  moveToBot,
+  removeRoutine,
+} from "./routines.arming";
 import { dispatchOccurrence } from "./routines.jobs";
 import {
   MAX_ROUTINES,
@@ -83,7 +88,7 @@ async function findRoutine(id: string): Promise<RoutineRow> {
 async function retireConversation(conversationId: string | null): Promise<void> {
   if (!conversationId) return;
   try {
-    await getAgentRuntime().abort(Number(conversationId));
+    await getAgentRuntime().abort(conversationRef(conversationId));
   } catch (error) {
     logger.warn({ error, conversationId }, "Failed to stop a retired routine conversation");
   }
@@ -95,19 +100,6 @@ async function assertBotExists(botId: string): Promise<void> {
     columns: { id: true },
   });
   if (!bot) throw Boom.badRequest("Bot not found");
-}
-
-/** Enable the chain: next occurrence from `from`, queued, handle stored.
- * The queue is a table, so arming always succeeds; the worker runs the job
- * when it comes due. Arming starts the blocked count over: the owner resumed
- * it, presumably having fixed what blocked it. */
-async function armRoutine(id: string, schedule: Schedule, from: Date): Promise<void> {
-  const now = new Date();
-  const next = await enqueueOccurrence(id, schedule, from, now);
-  await db
-    .update(routines)
-    .set({ enabled: true, nextRunAt: next, blockedStreak: 0, pausedReason: null })
-    .where(eq(routines.id, id));
 }
 
 export async function list(): Promise<ReturnType<typeof toApi>[]> {
@@ -136,27 +128,31 @@ function assertCanArm(schedule: Schedule): void {
   }
 }
 
-export async function create(input: CreateRoutineDTO): Promise<ReturnType<typeof toApi>> {
+/**
+ * Create a routine, armed unless `enabled` is false. `sourceKey` (the agent
+ * toolkit's durable tool-call id) makes a replayed create return the routine
+ * the first call made.
+ */
+export async function create(
+  input: CreateRoutineDTO & { sourceKey?: string },
+): Promise<ReturnType<typeof toApi>> {
   await assertBotExists(input.botId);
   assertFutureOnce(input.schedule);
   const count = await db.$count(routines);
   if (count >= MAX_ROUTINES) {
     throw Boom.badRequest(`Routine limit reached (${MAX_ROUTINES})`);
   }
-  const [row] = await db
-    .insert(routines)
-    .values({
+  const { id } = await createRoutine(
+    {
       botId: input.botId,
       name: input.name,
       prompt: input.prompt,
       schedule: input.schedule,
-      enabled: false, // armed below once the queue job exists
-    })
-    .returning({ id: routines.id });
-  if (input.enabled) {
-    await armRoutine(row!.id, input.schedule, new Date());
-  }
-  return get(row!.id);
+      ...(input.sourceKey ? { sourceKey: input.sourceKey } : {}),
+    },
+    input.enabled,
+  );
+  return get(id);
 }
 
 export async function update(
@@ -170,19 +166,17 @@ export async function update(
   await db
     .update(routines)
     .set({
-      ...(input.botId !== undefined ? { botId: input.botId } : {}),
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.schedule !== undefined ? { schedule: input.schedule } : {}),
-      // The conversation runs with the old bot's persona and tools: the next
-      // fire starts a fresh one for the new bot.
-      ...(botChanged ? { conversationId: null } : {}),
       // An `enabled`-only edit sets no field here; the row is still touched.
       updatedAt: new Date(),
     })
     .where(eq(routines.id, id));
   if (botChanged) {
-    await retireConversation(row.conversationId);
+    // The conversation runs with the old bot's persona and tools: the next
+    // fire starts a fresh one for the new bot.
+    await retireConversation(await moveToBot(id, input.botId!));
     // A run still awaiting its reply there never gets one now.
     await db
       .update(routineRuns)
@@ -194,23 +188,12 @@ export async function update(
     // Any schedule-affecting edit re-arms from now; the old pending job dies.
     // `enabled` rides along so a schedule edit cannot silently re-enable a
     // paused routine.
-    await cancelPendingJob(row.pendingJobId);
     const schedule =
       input.schedule !== undefined ? input.schedule : safeParseSchedule(row.schedule);
     if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
     const wantsEnabled = input.enabled ?? row.enabled;
-    if (wantsEnabled) {
-      await db
-        .update(routines)
-        .set({ pendingJobId: null, nextRunAt: null })
-        .where(eq(routines.id, id));
-      await armRoutine(id, schedule, new Date());
-    } else {
-      await db
-        .update(routines)
-        .set({ pendingJobId: null, nextRunAt: null, enabled: false })
-        .where(eq(routines.id, id));
-    }
+    if (wantsEnabled) await armRoutine(id, schedule, new Date());
+    else await disarmRoutine(id);
   } else if (input.enabled !== undefined) {
     if (input.enabled && !row.enabled) {
       const schedule = safeParseSchedule(row.schedule);
@@ -218,22 +201,20 @@ export async function update(
       assertCanArm(schedule);
       await armRoutine(id, schedule, new Date());
     } else if (!input.enabled && row.enabled) {
-      await disarmRoutine(id, row.pendingJobId);
+      await disarmRoutine(id);
     }
   }
   return get(id);
 }
 
 export async function remove(id: string): Promise<void> {
-  const row = await findRoutine(id);
-  await cancelPendingJob(row.pendingJobId);
-  await db.delete(routines).where(eq(routines.id, id));
-  await retireConversation(row.conversationId);
+  await findRoutine(id);
+  await retireConversation(await removeRoutine(id));
 }
 
 export async function pause(id: string): Promise<ReturnType<typeof toApi>> {
   const row = await findRoutine(id);
-  if (row.enabled) await disarmRoutine(id, row.pendingJobId);
+  if (row.enabled) await disarmRoutine(id);
   return get(id);
 }
 

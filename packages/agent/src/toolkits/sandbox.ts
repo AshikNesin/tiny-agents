@@ -19,21 +19,10 @@
  * configured, every command runs confined to it.
  */
 import { Type } from "@earendil-works/pi-ai";
-import {
-  defineExtension,
-  defineTool,
-  type JsonObject,
-  type ToolExecutionResult,
-} from "@earendil-works/pi-durable";
-import { gateApproved, withGatePlan, type GatePlan } from "../approvals";
+import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import { withGatePlan, type GateHooks } from "../approvals";
 import type { Capability } from "../capabilities";
-import {
-  VAULT_RULE,
-  VaultError,
-  type SecretValue,
-  type VaultBroker,
-  type VaultItemMeta,
-} from "../vault";
+import { VAULT_RULE, VaultError, type VaultBroker, type VaultItemMeta } from "../vault";
 import {
   checkEnvName,
   commandHosts,
@@ -46,7 +35,13 @@ import {
 } from "./sandbox-egress";
 import { SandboxTimeoutError } from "../ssh/connection";
 import type { SandboxConnection, SandboxExecResult } from "../ssh/sandbox-connection";
-import { safeMessage, VAULT_APPROVAL_TTL_MS } from "./vault";
+import {
+  safeMessage,
+  useAllFromSink,
+  vaultGatePlan,
+  type IntendedUse,
+  type IntendedUses,
+} from "./vault";
 
 /** One command's outcome as the tool reports it: combined output plus exit status. */
 interface CommandResult {
@@ -138,37 +133,35 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     secrets?: { handle: string; env: string }[];
   };
 
-  /** The items a call names, or why the call can't run. */
-  const secretItems = async (
-    args: RunArgs,
-    conversation: number,
-  ): Promise<{ items: VaultItemMeta[] } | { refuse: string }> => {
+  /** Why a call's secrets can't be passed, read from its arguments alone. */
+  const secretsProblem = (args: RunArgs): string | undefined => {
     const secrets = args.secrets ?? [];
-    if (!broker) return { refuse: "The vault is not configured." };
+    if (!broker) return "The vault is not configured.";
     if (secrets.length > MAX_COMMAND_SECRETS) {
-      return { refuse: `At most ${MAX_COMMAND_SECRETS} secrets per command.` };
+      return `At most ${MAX_COMMAND_SECRETS} secrets per command.`;
     }
-    if (args.detached) return { refuse: "Secrets can't be passed to a detached command." };
+    if (args.detached) return "Secrets can't be passed to a detached command.";
     const names = new Set<string>();
     for (const secret of secrets) {
       const problem = checkEnvName(secret.env);
-      if (problem) return { refuse: problem };
-      if (names.has(secret.env)) return { refuse: `${secret.env} is named twice.` };
+      if (problem) return problem;
+      if (names.has(secret.env)) return `${secret.env} is named twice.`;
       names.add(secret.env);
     }
-    const listed = await broker.list({ conversation, tool: "run_command" });
-    const items: VaultItemMeta[] = [];
-    for (const secret of secrets) {
-      const item = listed.find((candidate) => candidate.handle === secret.handle);
-      // Unknown or not allowed for run_command: the broker's plan refuses
-      // with the precise reason (and audits it).
-      if (item) items.push(item);
-    }
-    return { items };
+    return undefined;
   };
 
+  /** One vault use per secret: the target is the whole command. */
+  const usesOf = (args: RunArgs): IntendedUse[] =>
+    (args.secrets ?? []).map((secret) => ({
+      handle: secret.handle,
+      tool: "run_command",
+      targetKind: "command",
+      target: args.command,
+    }));
+
   /** Where a command may connect: the allowlist, plus its secrets' hosts. */
-  const allowedFor = (items: VaultItemMeta[]): EgressEntry[] => [
+  const allowedFor = (items: readonly VaultItemMeta[]): EgressEntry[] => [
     ...egress.entries,
     ...parseEgressList(items.flatMap((item) => item.allowedHosts)).entries,
   ];
@@ -176,66 +169,55 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
   const hostAllowed = (host: string, allow: EgressEntry[]) =>
     allow.some((entry) => "host" in entry && entry.host === host);
 
-  const planSecrets = async (args: RunArgs, api: Parameters<GatePlanFn>[1], toolAsks: boolean) => {
-    if (!args.secrets?.length) return { ask: toolAsks } satisfies GatePlan;
-    const found = await secretItems(args, Number(api.conversationId));
-    if ("refuse" in found) return { refuse: found.refuse, ask: false };
-    const cards: JsonObject[] = [];
-    for (const secret of args.secrets) {
-      const plan = await broker!.plan({
-        handle: secret.handle,
-        tool: "run_command",
-        targetKind: "command",
-        target: args.command,
-        conversation: Number(api.conversationId),
-        granted: false,
-      });
-      if (plan.refused) return { refuse: plan.message, ask: false };
-      cards.push(plan.card as unknown as JsonObject);
-    }
-    // A heuristic early refusal; the confinement below is the real control.
-    const allow = allowedFor(found.items);
-    const stray = commandHosts(args.command).filter((host) => !hostAllowed(host, allow));
-    if (stray.length > 0) {
-      for (const secret of args.secrets) {
-        await broker!.record(
-          {
-            handle: secret.handle,
-            tool: "run_command",
-            targetKind: "command",
-            target: args.command,
-            conversation: Number(api.conversationId),
-            granted: false,
-          },
-          "refused_policy",
-          `command names ${stray.join(", ")}`,
-        );
-      }
-      return {
-        refuse: `This command names ${stray.join(", ")}, which its secrets may not reach. Allowed: ${allow.map((e) => ("host" in e ? e.host : e.cidr)).join(", ") || "nothing"}.`,
-        ask: false,
-      };
-    }
-    const first = cards[0] as unknown as { bot?: string };
+  const shown = (allow: EgressEntry[]) => allow.map((e) => ("host" in e ? e.host : e.cidr));
+
+  /**
+   * What a call with secrets intends: a use per secret, refused when the
+   * command names a host they may not reach, asked on one card that shows
+   * the env vars and the hosts.
+   */
+  const intendedUses = async (
+    args: RunArgs,
+    conversation: number,
+  ): Promise<IntendedUses | { refuse: string } | undefined> => {
+    if (!args.secrets?.length) return undefined;
+    const problem = secretsProblem(args);
+    if (problem) return { refuse: problem };
+    const listed = await broker!.list({ conversation, tool: "run_command" });
+    // Unknown or not allowed for run_command: the broker's plan refuses
+    // with the precise reason (and audits it).
+    const items = args.secrets.flatMap(
+      (secret) => listed.find((item) => item.handle === secret.handle) ?? [],
+    );
+    const allow = allowedFor(items);
     return {
+      uses: usesOf(args),
       // Env injection asks every time: the model wrote the code holding the secret.
-      ask: true,
-      details: {
-        vault: {
-          handle: args.secrets.map((s) => s.handle).join(", "),
-          label: cards.map((card) => String(card.label)).join(", "),
-          kind: "api_key",
-          tool: "run_command",
-          target: args.command.length > 2000 ? `${args.command.slice(0, 2000)}…` : args.command,
-          ...(first.bot ? { bot: first.bot } : {}),
-          env: args.secrets.map((s) => s.env),
-          hosts: allow.map((e) => ("host" in e ? e.host : e.cidr)),
-          grantable: false,
-        },
+      everyUse: true,
+      // A heuristic early refusal; the confinement below is the real control.
+      confine: () => {
+        const stray = commandHosts(args.command).filter((host) => !hostAllowed(host, allow));
+        if (stray.length === 0) return undefined;
+        return {
+          refuse: `This command names ${stray.join(", ")}, which its secrets may not reach. Allowed: ${shown(allow).join(", ") || "nothing"}.`,
+          reason: `command names ${stray.join(", ")}`,
+        };
       },
-      expiresInMs: VAULT_APPROVAL_TTL_MS,
-    } satisfies GatePlan;
+      card: { env: args.secrets.map((s) => s.env), hosts: shown(allow) },
+    };
   };
+
+  /** run_command's gate: a call with secrets plans and asks through the vault's shared plan. */
+  const runGate: GateHooks<RunArgs> = broker
+    ? vaultGatePlan(broker, true, async (args: RunArgs, api) =>
+        intendedUses(args, Number(api.conversationId)),
+      )
+    : {
+        plan: async (args, _api, _context, toolAsks) =>
+          args.secrets?.length
+            ? { refuse: "The vault is not configured.", ask: false }
+            : { ask: toolAsks },
+      };
 
   const runCommand = withGatePlan(
     defineTool({
@@ -285,42 +267,23 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         try {
           let result: CommandResult;
           if (args.secrets?.length) {
-            const found = await secretItems(args, Number(api.conversationId));
-            if ("refuse" in found) return fail(found.refuse);
-            const secrets = args.secrets;
-            const approved = await gateApproved(api, context);
-            // Each secret is resolved inside the previous one's sink, so no
-            // value outlives the call or leaves the broker's audited scope.
-            const withSecrets = async (
-              index: number,
-              values: SecretValue[],
-            ): Promise<CommandResult> => {
-              if (index === secrets.length) {
-                const lines = values.map((value) => value.reveal());
+            const problem = secretsProblem(args);
+            if (problem) return fail(problem);
+            const env = args.secrets.map((s) => s.env);
+            result = await useAllFromSink(
+              broker!,
+              api,
+              context,
+              usesOf(args),
+              ["value"],
+              async (values, items) => {
+                const lines = values.map((value) => value.value!.reveal());
                 if (lines.some((line) => /[\r\n\0]/.test(line))) {
                   throw new Error("A multi-line secret can't be passed as an env var.");
                 }
-                return run(
-                  allowedFor(found.items),
-                  secrets.map((s) => s.env),
-                  `${lines.join("\n")}\n`,
-                );
-              }
-              return broker!.use(
-                {
-                  handle: secrets[index].handle,
-                  tool: "run_command",
-                  targetKind: "command",
-                  target: args.command,
-                  conversation: Number(api.conversationId),
-                  granted: false,
-                  approved,
-                },
-                ["value"],
-                async (resolved) => withSecrets(index + 1, [...values, resolved.value!]),
-              );
-            };
-            result = await withSecrets(0, []);
+                return run(allowedFor(items), env, `${lines.join("\n")}\n`);
+              },
+            );
           } else {
             result = await run(egress.entries.length > 0 ? egress.entries : undefined);
           }
@@ -348,24 +311,8 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         }
       },
     }),
-    {
-      plan: (args, api, _context, toolAsks) => planSecrets(args as RunArgs, api, toolAsks),
-      async settled(args, api, _context, decision) {
-        for (const secret of (args as RunArgs).secrets ?? []) {
-          await broker?.record(
-            {
-              handle: secret.handle,
-              tool: "run_command",
-              targetKind: "command",
-              target: (args as RunArgs).command,
-              conversation: Number(api.conversationId),
-              granted: false,
-            },
-            decision,
-          );
-        }
-      },
-    },
+    // The schema's args type `secrets` loosely (it exists only with a broker).
+    runGate as GateHooks<never>,
   );
 
   const readFile = defineTool({
@@ -477,5 +424,3 @@ function looksUtf8(buffer: Buffer): boolean {
   // round-trip means the bytes are valid UTF-8.
   return !buffer.toString("utf8").includes("\uFFFD");
 }
-
-type GatePlanFn = Parameters<typeof withGatePlan>[1]["plan"];

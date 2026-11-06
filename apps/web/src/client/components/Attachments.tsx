@@ -4,13 +4,8 @@ import { createPortal } from "react-dom";
 import { Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
+import { humanSize, type StagedUpload } from "../lib/staged-uploads";
 import { FilePreviewDialog, statusLabel, useUploadStatus } from "./FilePreview";
-
-export function humanSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /** Placeholder until an upload has a ref: an image ref is never polled. */
 const NO_FILE: AttachmentRef = { uploadId: "", kind: "image", name: "", mimeType: "", size: 0 };
@@ -84,15 +79,8 @@ export function StagedAttachment({
   );
 }
 
-export type StagedItem = {
-  key: string;
-  name: string;
-  status: "uploading" | "done" | "error";
-  error?: string;
-  previewUrl?: string;
-  /** Set when done. */
-  ref?: AttachmentRef;
-};
+/** A bot chat attachment staged in the composer (lib/staged-uploads.ts). */
+export type StagedItem = StagedUpload<AttachmentRef>;
 
 /**
  * A sent file: name, size and its live extraction state (issue #58). The
