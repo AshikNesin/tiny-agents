@@ -44,7 +44,7 @@ describe("typecheck coverage", () => {
   it(
     "typechecks repo-owned declarations",
     () => {
-      const broken = path.join(repoRoot, "packages/ai/src/audit-broken.d.ts");
+      const broken = path.join(repoRoot, "packages/core/src/audit-broken.d.ts");
       writeFileSync(
         broken,
         'declare module "__audit_broken__" {\n  export const broken: numbr;\n}\n',
@@ -52,7 +52,7 @@ describe("typecheck coverage", () => {
       try {
         const run = runCoverageScript();
         expect(run.status).toBe(1);
-        expect(run.stderr).toContain("packages/ai/src/audit-broken.d.ts");
+        expect(run.stderr).toContain("packages/core/src/audit-broken.d.ts");
       } finally {
         rmSync(broken, { force: true });
       }

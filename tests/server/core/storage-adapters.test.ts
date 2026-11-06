@@ -2,108 +2,15 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { R2Bucket } from "@cloudflare/workers-types";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { StorageAdapter } from "@groot/core/storage";
 import { memoryStorage } from "@groot/core/storage/memory";
 import { localStorage } from "@groot/core/storage/node";
-import { r2Storage } from "@groot/core/storage/r2";
 
 /**
  * The storage contract (packages/core/src/storage/adapter.ts), run once per
- * adapter. R2 runs against a small in-memory bucket that mimics the binding,
- * including its quirk of leaving `httpMetadata` off listed objects unless
- * `include: ["httpMetadata"]` is asked for.
+ * adapter.
  */
-
-interface FakeObject {
-  key: string;
-  bytes: Uint8Array;
-  uploaded: Date;
-  httpMetadata?: { contentType?: string };
-  customMetadata?: Record<string, string>;
-}
-
-function fakeR2Bucket() {
-  const objects = new Map<string, FakeObject>();
-  const calls = { head: 0, delete: 0 };
-  const describeObject = (object: FakeObject, withMetadata = true) => ({
-    key: object.key,
-    size: object.bytes.byteLength,
-    uploaded: object.uploaded,
-    httpMetadata: withMetadata ? object.httpMetadata : undefined,
-    customMetadata: withMetadata ? object.customMetadata : undefined,
-  });
-  const bucket = {
-    async put(
-      key: string,
-      value: ArrayBuffer,
-      options: Pick<FakeObject, "httpMetadata" | "customMetadata"> = {},
-    ) {
-      const object: FakeObject = {
-        key,
-        bytes: new Uint8Array(value.slice(0)),
-        uploaded: new Date(),
-        httpMetadata: { ...options.httpMetadata },
-        customMetadata: { ...options.customMetadata },
-      };
-      objects.set(key, object);
-      return describeObject(object);
-    },
-    async get(key: string) {
-      const object = objects.get(key);
-      if (!object) return null;
-      return { ...describeObject(object), arrayBuffer: async () => object.bytes.slice().buffer };
-    },
-    async head(key: string) {
-      calls.head += 1;
-      const object = objects.get(key);
-      return object ? describeObject(object) : null;
-    },
-    async delete(keys: string | string[]) {
-      calls.delete += 1;
-      const list = Array.isArray(keys) ? keys : [keys];
-      if (list.length > 1000) throw new Error("R2 deletes at most 1000 keys per call");
-      for (const key of list) objects.delete(key);
-    },
-    async list(
-      options: {
-        prefix?: string;
-        delimiter?: string;
-        cursor?: string;
-        limit?: number;
-        include?: string[];
-      } = {},
-    ) {
-      const prefix = options.prefix ?? "";
-      const entries: Array<{ key: string; prefix: boolean }> = [];
-      const seen = new Set<string>();
-      for (const key of [...objects.keys()].sort()) {
-        if (!key.startsWith(prefix)) continue;
-        const index = options.delimiter ? key.indexOf(options.delimiter, prefix.length) : -1;
-        const entry = index === -1 ? key : key.slice(0, index + (options.delimiter ?? "").length);
-        if (seen.has(entry)) continue;
-        seen.add(entry);
-        entries.push({ key: entry, prefix: index !== -1 });
-      }
-      const start = options.cursor ? Number(options.cursor) : 0;
-      const limit = options.limit ?? 1000;
-      if (limit > 1000) throw new Error("R2 lists at most 1000 entries per call");
-      const page = entries.slice(start, start + limit);
-      const truncated = start + limit < entries.length;
-      const withMetadata = options.include?.includes("httpMetadata") ?? false;
-      return {
-        objects: page
-          .filter((entry) => !entry.prefix)
-          .map((entry) => describeObject(objects.get(entry.key)!, withMetadata)),
-        delimitedPrefixes: page.filter((entry) => entry.prefix).map((entry) => entry.key),
-        truncated,
-        cursor: truncated ? String(start + limit) : undefined,
-      };
-    },
-  };
-  return { bucket: bucket as unknown as R2Bucket, calls };
-}
 
 const tempRoots: string[] = [];
 afterEach(async () => {
@@ -126,7 +33,6 @@ interface AdapterCase {
 const adapters: AdapterCase[] = [
   { name: "memory", create: async () => memoryStorage(), storesContentType: true },
   { name: "local", create: async () => localStorage(await tempRoot()), storesContentType: false },
-  { name: "r2", create: async () => r2Storage(fakeR2Bucket().bucket), storesContentType: true },
 ];
 
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -345,17 +251,6 @@ describe("local storage adapter", () => {
     const root = await tempRoot();
     const storage = localStorage(path.join(root, "not-yet"));
     expect(await storage.list({ delimiter: "/" })).toEqual({ objects: [], prefixes: [] });
-  });
-});
-
-describe("r2 storage adapter", () => {
-  it("deletes without a head per key, in batches of 1000", async () => {
-    const { bucket, calls } = fakeR2Bucket();
-    const storage = r2Storage(bucket);
-    const keys = Array.from({ length: 1001 }, (_, index) => `bulk/${index}`);
-    await storage.delete(keys);
-    expect(calls.head).toBe(0);
-    expect(calls.delete).toBe(2);
   });
 });
 

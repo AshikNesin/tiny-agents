@@ -14,9 +14,7 @@
       "@groot/jobs/client": ["../../packages/jobs/src/client/index.ts"],
       "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"],
       "@groot/jobs/server": ["../../packages/jobs/src/server/index.ts"],
-      "@groot/jobs/server/*": ["../../packages/jobs/src/server/*"],
-      "@groot/ai": ["../../packages/ai/src/index.ts"],
-      "@groot/ai/*": ["../../packages/ai/src/*"]
+      "@groot/jobs/server/*": ["../../packages/jobs/src/server/*"]
     }
   },
   "include": ["./consumer.tsx"]

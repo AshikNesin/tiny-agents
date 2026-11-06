@@ -12,6 +12,13 @@
     "packages/agent/**",
     "packages/core/src/notification/**",
     "tests/server/api/todos.test.ts",
-    "tests/server/core/notification.test.ts"
+    "tests/server/core/notification.test.ts",
+    "packages/ai/**",
+    "tests/server/ai/**",
+    "packages/core/src/database/d1.ts",
+    "packages/core/src/storage/r2.ts",
+    "tests/server/core/d1-migrate.test.ts",
+    "docs/guides/deploy-cloudflare.md",
+    "docs/features/ai-inference.md"
   ]
 }
