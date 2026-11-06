@@ -318,6 +318,7 @@ describe("routine-fire dispatch", () => {
   });
 
   it("two Run now clicks in the same second are two runs", async () => {
+    vi.useRealTimers(); // a manual run is keyed by its millisecond, so the clicks need two
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     const first = await runNow(routine.id);
     const second = await runNow(routine.id);

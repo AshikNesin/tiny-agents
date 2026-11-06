@@ -4,9 +4,11 @@
  * file storage. `NODE_ENV=test` disables the job queue, so tests drive
  * `runTick()` explicitly; logs are silent.
  */
+import { beforeEach, vi } from "vite-plus/test";
 import { bootstrap } from "@groot/core/bootstrap";
 import { memoryStorage } from "@groot/core/storage/memory";
 import { asCoreDatabase, createAppDb } from "../../apps/web/src/server/db";
+import { FIXED_NOW } from "../test-clock";
 
 process.env.NODE_ENV = "test";
 // Connection-secret encryption needs a key in tests (unset in dev until
@@ -19,4 +21,8 @@ bootstrap({
   // The app schema is attached so app code can use relational queries.
   db: asCoreDatabase(createAppDb(":memory:", { migrationsFolder: "apps/web/drizzle" })),
   storage: memoryStorage(),
+});
+
+beforeEach(() => {
+  vi.setSystemTime(FIXED_NOW);
 });

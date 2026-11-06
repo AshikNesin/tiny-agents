@@ -6,7 +6,7 @@
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import {
   createComputerSessions,
@@ -239,6 +239,7 @@ describe("computer toolkit", () => {
   });
 
   it("gives up on an action after the bounded wait, without acting", async () => {
+    vi.useRealTimers(); // the wait ends at a Date.now() deadline, which a frozen clock never reaches
     const { fake, sessions, toolkit } = setup({ humanDriverWaitMs: 30 });
     await run(toolkit, "computer_screenshot");
     await sessions.setDriver("shared", "human");

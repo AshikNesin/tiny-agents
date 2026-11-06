@@ -1,7 +1,8 @@
-import { expect, afterEach } from "vite-plus/test";
+import { expect, afterEach, beforeEach, vi } from "vite-plus/test";
 import { cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { MotionGlobalConfig } from "motion/react";
+import { FIXED_NOW } from "../test-clock";
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
@@ -34,6 +35,10 @@ if (typeof window !== "undefined") {
     };
   }
 }
+
+beforeEach(() => {
+  vi.setSystemTime(FIXED_NOW);
+});
 
 // Cleanup after each test
 afterEach(() => {

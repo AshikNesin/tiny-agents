@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv, kv, purgeExpiredKv } from "@groot/core/kv";
 
 describe("kv", () => {
@@ -46,6 +46,7 @@ describe("kv", () => {
   });
 
   it("expires entries", async () => {
+    vi.useRealTimers(); // a 1 ms TTL has to lapse in real time
     await kv.set("ttl", "soon", 1);
     await kv.set("keep", "forever");
     await new Promise((r) => setTimeout(r, 5));

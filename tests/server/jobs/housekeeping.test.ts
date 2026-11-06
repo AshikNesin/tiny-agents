@@ -18,6 +18,7 @@ import {
 
 describe("housekeeping", () => {
   it("removes old finished jobs with their logs, keeps recent and pending ones, purges expired kv", async () => {
+    vi.useRealTimers(); // the kv entry's 1 ms TTL has to lapse in real time
     clearJobHandlers();
     registerJobHandler("hk", (job) => {
       job.logger.info("hello from hk");

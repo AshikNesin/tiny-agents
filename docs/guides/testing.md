@@ -129,6 +129,24 @@ Call them directly; the database is real, so there is nothing to mock
 (`tests/server/core/kv.test.ts`, `tests/server/jobs/queue.test.ts`). Reach for
 `vi.mock` only for external services.
 
+### Dates and time
+
+Both setup files call `vi.setSystemTime(FIXED_NOW)` before every test, so
+`Date` reports `FIXED_NOW` (from `tests/test-clock.ts`) on any real day and
+does not tick. Only `Date` is faked: `setTimeout`, `setInterval` and
+`performance.now()` stay real.
+
+- A fixture that must lie in the future uses `futureIso(days)`, never a date
+  literal. A literal passes on the day it is written and fails once the real
+  clock passes it; against the frozen clock it gives the same result on any
+  day.
+- A test that needs another instant calls `vi.setSystemTime(...)` in its body.
+  The next test starts at `FIXED_NOW` again.
+- A test that measures elapsed time (a TTL that lapses, a `Date.now()`
+  deadline, two calls that need distinct milliseconds) starts with
+  `vi.useRealTimers()` and a one-line reason, as in
+  `tests/server/core/kv.test.ts`.
+
 ## Coverage checklist per route
 
 1. Success path with the right status (`200`, `201`, `204`) and body shape

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { ApprovalNotPendingError, type AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
@@ -199,6 +199,7 @@ describe("capabilities and approvals", () => {
   }, 15_000);
 
   it("reports the wait for approval apart from the tool's own run time (issue #86)", async () => {
+    vi.useRealTimers(); // waitedMs and durationMs are measured with Date
     const mailer: Mailer = { sent: [] };
     const runtime = await open(mailer, callThenReport("send_email", { to: "ana@x.dev" }));
     const ref = await runtime.createConversation({
