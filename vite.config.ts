@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { boundaryOverrides } from "./scripts/lint/boundaries";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const clientSrc = path.resolve(rootDir, "apps/web/src/client");
@@ -146,6 +147,7 @@ export default defineConfig({
       "site/demos/kit/**",
       "site/assets/**",
     ],
+    overrides: boundaryOverrides("./scripts/lint/repo-plugin.mjs"),
   },
 
   // Formatting configuration
