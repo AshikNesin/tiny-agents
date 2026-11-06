@@ -37,7 +37,7 @@ import {
   Text,
   monoClass,
 } from "@groot/ui";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { Link } from "react-router-dom";
 import { useIsGuest } from "../store/people";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";

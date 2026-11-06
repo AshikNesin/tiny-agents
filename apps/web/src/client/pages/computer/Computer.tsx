@@ -36,7 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import {
   computerApi,

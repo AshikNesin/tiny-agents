@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button, Card, CardTitle, EmptyState, ErrorState, LoadingSpinner, Text } from "@groot/ui";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { botsApi, type Bot, type ComputerStatus } from "../lib/bots-api";
 import {
   connectionOf,

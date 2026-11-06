@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import type { BotListEntry } from "../../lib/bots-api";
 import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
 import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
