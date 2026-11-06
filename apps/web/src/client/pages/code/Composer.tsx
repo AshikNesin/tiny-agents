@@ -39,33 +39,22 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
-
-const DRAFT_PREFIX = "tiny-agents:code-draft:";
-
-function readDraft(key: string): string {
-  try {
-    return window.localStorage.getItem(DRAFT_PREFIX + key) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeDraft(key: string, text: string) {
-  try {
-    if (text) window.localStorage.setItem(DRAFT_PREFIX + key, text);
-    else window.localStorage.removeItem(DRAFT_PREFIX + key);
-  } catch {
-    // Private mode: the draft just isn't kept.
-  }
-}
-
-interface Attachment {
-  id: string;
-  name: string;
-  status: "uploading" | "ready" | "error";
-  /** The harness's ref for the uploaded file. */
-  ref?: string;
-}
+import {
+  canSend as draftCanSend,
+  editText,
+  emptyDraft,
+  hasContent,
+  outgoing,
+  withStaged,
+  type ComposerDraft,
+} from "../../lib/composer-draft";
+import {
+  codeDraftKey,
+  prefersCoarsePointer,
+  readStoredDraft,
+  writeStoredDraft,
+} from "../../lib/composer-browser";
+import { canStageMore, stageUploads, unstageUpload, type Staging } from "../../lib/staged-uploads";
 
 /** The `@token` (or `/command` at the start) around the cursor, if any. */
 function tokenAt(
@@ -78,11 +67,6 @@ function tokenAt(
   const slash = /^\/([a-z-]*)$/.exec(before);
   if (slash) return { kind: "/", start: 0, query: slash[1] };
   return undefined;
-}
-
-/** On touch screens Enter adds a newline; the send button sends. */
-function coarsePointer(): boolean {
-  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 }
 
 function quoteRef(path: string): string {
@@ -138,9 +122,12 @@ export function Composer({
   const steers = caps.turns.steer;
   const commands = harness.commands;
   const name = harness.label;
-  const [text, setText] = useState(() => readDraft(draftKey));
+  // The text and the staged attachments (lib/composer-draft.ts; no picks here).
+  const [draft, setDraft] = useState<ComposerDraft<string>>(() =>
+    emptyDraft(readStoredDraft(codeDraftKey(draftKey))),
+  );
+  const { text, staged: attachments } = draft;
   const [sending, setSending] = useState(false);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [skills, setSkills] = useState<Skill[] | null>(null);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<
@@ -154,15 +141,16 @@ export function Composer({
 
   // A new conversation key loads its own draft.
   useEffect(() => {
-    setText(readDraft(draftKey));
-    setAttachments([]);
+    setDraft(emptyDraft(readStoredDraft(codeDraftKey(draftKey))));
     setSelectedSkills([]);
   }, [draftKey]);
-  useEffect(() => writeDraft(draftKey, text), [draftKey, text]);
+  useEffect(() => writeStoredDraft(codeDraftKey(draftKey), text), [draftKey, text]);
 
   useEffect(() => {
     if (!insert) return;
-    setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${insert.text}` : insert.text));
+    setDraft((prev) =>
+      editText(prev, prev.text.trim() ? `${prev.text.trimEnd()}\n${insert.text}` : insert.text),
+    );
     requestAnimationFrame(() => {
       area.current?.focus();
       const end = area.current?.value.length ?? 0;
@@ -221,52 +209,40 @@ export function Composer({
       .catch(() => setSkills([]));
   }, [skills, cwd, canSkills, harness.id, threadId]);
 
-  const upload = useCallback(
-    (files: FileList | File[]) => {
-      if (!canUpload) return;
-      for (const file of Array.from(files)) {
-        const id = `${file.name}-${Date.now()}-${Math.random()}`;
-        setAttachments((prev) => [
-          ...prev,
-          { id, name: file.name || "pasted image", status: "uploading" },
-        ]);
-        codeApi
-          .upload(harness.id, file)
-          .then((ref) =>
-            setAttachments((prev) =>
-              prev.map((a) => (a.id === id ? { ...a, status: "ready", ref } : a)),
-            ),
-          )
-          .catch((error: unknown) => {
-            toast.error(errorMessage(error, "Upload failed."));
-            setAttachments((prev) =>
-              prev.map((a) => (a.id === id ? { ...a, status: "error" } : a)),
-            );
-          });
-      }
-    },
-    [canUpload, harness.id],
-  );
+  // Staging reads the list as it is when an upload lands: one removed (or
+  // dropped by a thread switch) meanwhile is not resurrected. Harnesses
+  // have no delete for uploads, so there is none to call.
+  const stagedRef = useRef(attachments);
+  useEffect(() => {
+    stagedRef.current = attachments;
+  }, [attachments]);
+  const staging: Staging<string> = {
+    upload: (file) => codeApi.upload(harness.id, file),
+    current: () => stagedRef.current,
+    update: (change) => setDraft((current) => withStaged(current, change)),
+    notify: (message) => toast.error(message),
+  };
 
-  const uploading = attachments.some((a) => a.status === "uploading");
-  const ready = attachments.filter((a) => a.status === "ready" && a.ref);
-  const canSend = (text.trim().length > 0 || ready.length > 0) && !sending && !uploading;
+  const upload = (files: FileList | File[]) => {
+    if (canUpload) void stageUploads(files, staging);
+  };
+
+  const canSend = draftCanSend(draft) && !sending;
 
   const send = async (queue: boolean) => {
     if (!canSend) return;
-    const message = text.trim() || "(see the attached files)";
+    const sent = outgoing(draft);
     setSending(true);
     try {
-      await onSend(message, {
+      await onSend(sent.body || "(see the attached files)", {
         // A harness that cannot steer holds a mid-turn message instead.
         queue: queue || (working && !steers && canQueue),
         skills: selectedSkills,
-        attachments: ready.map((a) => a.ref!),
+        attachments: sent.attachments,
       });
-      setText("");
-      setAttachments([]);
+      setDraft(emptyDraft());
       setSelectedSkills([]);
-      writeDraft(draftKey, "");
+      writeStoredDraft(codeDraftKey(draftKey), "");
     } catch (error) {
       toast.error(errorMessage(error, "Could not send the message."));
     } finally {
@@ -281,7 +257,7 @@ export function Composer({
     const replacement =
       token.kind === "/" ? `${pick.value} ` : `@${quoteRef(pick.value)}${pick.dir ? "" : " "}`;
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
-    setText(next);
+    setDraft((current) => editText(current, next));
     setToken(undefined);
     requestAnimationFrame(() => {
       const pos = token.start + replacement.length;
@@ -314,7 +290,7 @@ export function Composer({
         return;
       }
     }
-    if (event.key === "Enter" && !event.shiftKey && !coarsePointer()) {
+    if (event.key === "Enter" && !event.shiftKey && !prefersCoarsePointer()) {
       event.preventDefault();
       void send(event.altKey && working && canQueue);
     }
@@ -322,7 +298,7 @@ export function Composer({
 
   const updateToken = (value: string, cursor: number) => setToken(tokenAt(value, cursor));
 
-  const showStop = working && !text.trim() && ready.length === 0 && Boolean(onStop);
+  const showStop = working && !hasContent(draft) && Boolean(onStop);
 
   return (
     <div
@@ -392,7 +368,7 @@ export function Composer({
           ))}
           {attachments.map((a) => (
             <Chip
-              key={a.id}
+              key={a.key}
               icon={
                 a.status === "uploading" ? (
                   <Spinner className="size-3" />
@@ -402,7 +378,7 @@ export function Composer({
               }
               label={a.name}
               tone={a.status === "error" ? "destructive" : undefined}
-              onRemove={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+              onRemove={() => unstageUpload(a, staging)}
               removeLabel={`Remove ${a.name}`}
             />
           ))}
@@ -444,7 +420,7 @@ export function Composer({
                   : `Message ${name}${canFind ? " — @ for files" : ""}${commands.length ? `${canFind ? "," : " —"} / for commands` : ""}`))
           }
           onChange={(e) => {
-            setText(e.target.value);
+            setDraft((current) => editText(current, e.target.value));
             updateToken(e.target.value, e.target.selectionStart);
           }}
           onSelect={(e) => updateToken(e.currentTarget.value, e.currentTarget.selectionStart)}
@@ -491,7 +467,10 @@ export function Composer({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="max-h-96 w-72">
                 {canUpload && (
-                  <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                  <DropdownMenuItem
+                    disabled={!canStageMore(attachments)}
+                    onSelect={() => fileInput.current?.click()}
+                  >
                     <Paperclip />
                     Add files or images
                     <span className="text-muted-foreground ml-auto text-xs">paste · drop</span>

@@ -19,17 +19,31 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { toast } from "sonner";
-import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
+import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
 import {
-  activeMentionToken,
-  mentionableBots,
-  resolveMentions,
-  trackPickedMentions,
-  type PickedMention,
-} from "../lib/mentions";
+  canSend as draftCanSend,
+  editText,
+  emptyDraft,
+  insertMention as draftInsertMention,
+  outgoing,
+  restoreRefused,
+  startMention as draftStartMention,
+  withStaged,
+  type ComposerDraft,
+} from "../lib/composer-draft";
+import {
+  chatDraftKey,
+  markMentionTipSeen,
+  mentionTipSeen as readMentionTipSeen,
+  prefersCoarsePointer,
+  readStoredDraft,
+  writeStoredDraft,
+} from "../lib/composer-browser";
+import { activeMentionToken, mentionableBots, resolveMentions } from "../lib/mentions";
+import { canStageMore, stageUploads, unstageUpload, type Staging } from "../lib/staged-uploads";
 import { useBotsStore } from "../store/bots";
 import type { OwnerSendOutcome, OwnerSubmission } from "../store/chats";
-import { StagedAttachment, type StagedItem, humanSize } from "./Attachments";
+import { StagedAttachment, type StagedItem } from "./Attachments";
 import {
   MentionAutocomplete,
   type MentionAutocompleteHandle,
@@ -37,49 +51,9 @@ import {
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
 import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
-import { errorMessage } from "../lib/errors";
-
-/** Most attachments one message can carry. */
-const MAX_ATTACHMENTS = 10;
-const MENTION_TIP_KEY = "tiny-agents:mention-tip-seen";
-/** The server's per-file limit (uploads.routes.ts MAX_UPLOAD_MB), checked before uploading. */
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
-
-/**
- * Primary-pointer media query (pointer: coarse = touch, e.g. phones and
- * tablets). On such devices Enter inserts a newline and only the send
- * button sends — Enter-to-send is a physical-keyboard affordance (issue #1).
- */
-function prefersCoarsePointer(): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-}
-
-/**
- * Unsent text survives switching bots and reloads (per bot, this browser
- * only). Storage can be unavailable (private mode, blocked site data), so
- * every access is best-effort.
- */
-const draftKey = (botId: string) => `tiny-agents:draft:${botId}`;
-
-function readDraft(botId: string): string {
-  try {
-    return localStorage.getItem(draftKey(botId)) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeDraft(botId: string, text: string) {
-  try {
-    if (text) localStorage.setItem(draftKey(botId), text);
-    else localStorage.removeItem(draftKey(botId));
-  } catch {
-    // Drafts are a convenience; losing one is fine.
-  }
-}
 
 /** The hint shown instead of sending when a typed @name fits several bots. */
 function ambiguousMentionHint(names: string[]): string {
@@ -182,14 +156,16 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   { bot, model, models = [], onModelChange, gatewayConfigured, busy, onSend, onStop, onEditBot },
   ref,
 ) {
-  const [text, setText] = useState(() => readDraft(bot.id));
-  // Mentions picked from the autocomplete, kept in step with the text: they
-  // send to the bot picked, not whichever bot the name matches (issue #80).
-  const [picked, setPicked] = useState<PickedMention[]>([]);
+  // The text, the mentions picked from the autocomplete (kept in step with
+  // the text: they send to the bot picked, not whichever bot the name
+  // matches, issue #80) and the staged attachments (lib/composer-draft.ts).
+  const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
+    emptyDraft(readStoredDraft(chatDraftKey(bot.id))),
+  );
+  const { text, staged } = draft;
   const [mentionHint, setMentionHint] = useState<string | null>(null);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
-  const [staged, setStaged] = useState<StagedItem[]>([]);
   const [stopRequested, setStopRequested] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -198,7 +174,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   /** Set by "+ → Mention a bot" so the closing menu leaves focus in the composer. */
   const mentionFromMenu = useRef(false);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
-  const pasteCount = useRef(0);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
   const reduceMotion = useReducedMotion() ?? false;
 
@@ -206,22 +181,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
   // The @ tip lives under the composer (not in the placeholder, where a long
   // bot name wrapped it onto two lines) until the owner has used a mention.
-  const [mentionTipSeen, setMentionTipSeen] = useState(() => {
-    try {
-      return window.localStorage.getItem(MENTION_TIP_KEY) === "1";
-    } catch {
-      return true;
-    }
-  });
+  const [mentionTipSeen, setMentionTipSeen] = useState(readMentionTipSeen);
   const mentionTip = !mentionTipSeen && mentionCandidates.length > 0;
   useEffect(() => {
     if (mentionTipSeen || !text.includes("@")) return;
     setMentionTipSeen(true);
-    try {
-      window.localStorage.setItem(MENTION_TIP_KEY, "1");
-    } catch {
-      // Storage blocked: the tip just shows again next time.
-    }
+    markMentionTipSeen();
   }, [text, mentionTipSeen]);
   // The overlay follows the caret inside the mention token, so it needs
   // the caret on every keystroke; `mentionClosed` covers Escape.
@@ -230,9 +195,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const modelKnown = model !== undefined;
   const enabled = gatewayConfigured && modelKnown;
-  const uploading = staged.some((item) => item.status === "uploading");
-  const readyAttachments = staged.filter((item) => item.status === "done" && item.ref);
-  const canSend = enabled && !uploading && (text.trim().length > 0 || readyAttachments.length > 0);
+  const canSend = enabled && draftCanSend(draft);
   // Busy no longer blocks sending (steering, issue #9): the server queues
   // the message. Whenever there is nothing sendable (nothing typed, or an
   // attachment still uploading) the same button stops the reply, so the
@@ -243,7 +206,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   // request left over from an earlier run means nothing once busy drops.
   const stopping = stopRequested && busy;
 
-  useEffect(() => writeDraft(bot.id, text), [bot.id, text]);
+  useEffect(() => writeStoredDraft(chatDraftKey(bot.id), text), [bot.id, text]);
 
   // Object URLs pin their files in memory; release whatever is still staged
   // when the composer goes away (switching bots with an image attached).
@@ -266,104 +229,55 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     if (!coarsePointer && enabled) textareaRef.current?.focus({ preventScroll: true });
   }, [coarsePointer, enabled]);
 
+  const staging: Staging<AttachmentRef> = {
+    upload: async (file) => (await botsApi.upload(file)).ref,
+    deleteUpload: (ref) => botsApi.deleteUpload(ref.uploadId),
+    current: () => stagedRef.current,
+    update: (change) => setDraft((current) => withStaged(current, change)),
+    notify: (message) => toast.error(message),
+    previewUrl: (file) => URL.createObjectURL(file),
+    releasePreview: (url) => URL.revokeObjectURL(url),
+  };
+
   const stageFiles = (files: FileList | File[]) => {
-    const limit = MAX_ATTACHMENTS - staged.length;
-    if (limit <= 0) {
-      toast.error(`Up to ${MAX_ATTACHMENTS} attachments per message`);
-      return;
-    }
-    for (const file of Array.from(files).slice(0, limit)) {
-      const key = crypto.randomUUID();
-      const isImage = file.type.startsWith("image/");
-      const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
-      const name = file.name || `pasted-image-${++pasteCount.current}.png`;
-      if (file.size > MAX_UPLOAD_BYTES) {
-        const error = `${name} is ${humanSize(file.size)}; files can be up to 25 MB.`;
-        setStaged((current) => [...current, { key, name, status: "error", error, previewUrl }]);
-        toast.error(error);
-        continue;
-      }
-      setStaged((current) => [...current, { key, name, status: "uploading", previewUrl }]);
-      botsApi
-        .upload(new File([file], name, { type: file.type || "application/octet-stream" }))
-        .then(({ ref }) => {
-          // Removed (or sent without it) while uploading: nothing will ever
-          // reference this upload, so delete it instead of leaking it.
-          if (!stagedRef.current.some((item) => item.key === key)) {
-            void botsApi.deleteUpload(ref.uploadId).catch(() => undefined);
-            return;
-          }
-          setStaged((current) =>
-            current.map((item) => (item.key === key ? { ...item, status: "done", ref } : item)),
-          );
-        })
-        .catch((error) => {
-          const message = errorMessage(error, "Upload failed");
-          // The 64px tile has no room for the reason; say it once, readably.
-          toast.error(`${name}: ${message}`);
-          setStaged((current) =>
-            current.map((item) =>
-              item.key === key ? { ...item, status: "error", error: message } : item,
-            ),
-          );
-        });
-    }
+    void stageUploads(files, staging);
     textareaRef.current?.focus({ preventScroll: true });
   };
 
   useImperativeHandle(ref, () => ({ stageFiles }));
 
-  const unstage = (item: StagedItem) => {
-    setStaged((current) => current.filter((candidate) => candidate.key !== item.key));
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    if (item.ref) void botsApi.deleteUpload(item.ref.uploadId).catch(() => undefined);
-  };
+  const unstage = (item: StagedItem) => unstageUpload(item, staging);
 
   const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     if (!canSend) return;
-    const body = text.trim();
-    // Picks are placed in `text`; trimming moves them left by the indent.
-    const indent = text.length - text.trimStart().length;
-    const bodyPicked = picked.map((pick) => ({ ...pick, start: pick.start - indent }));
-    const mentions = resolveMentions(body, mentionCandidates, bot.id, bodyPicked);
+    const sent = outgoing(draft);
+    const mentions = resolveMentions(sent.body, mentionCandidates, bot.id, sent.picked);
     // A typed name several bots share would reach an arbitrary one of them.
     if (mentions.ambiguous.length > 0) {
       setMentionHint(ambiguousMentionHint(mentions.ambiguous));
       return;
     }
-    const attachments = readyAttachments.map((item) => item.ref!);
-    setText("");
-    setPicked([]);
-    setStaged([]);
+    setDraft(emptyDraft());
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     // An offline send stays an Echo and goes again by itself once the
     // browser is back (store/chats.ts); only a refusal comes back here.
     const outcome = await onSend({
-      body,
-      attachments,
+      body: sent.body,
+      attachments: sent.attachments,
       mentions: mentions.ids,
       whenBusy,
     }).catch((): OwnerSendOutcome => "restored");
     if (outcome === "restored") {
       // The send was refused (and toasted); hand the message back for another
       // try, ahead of anything typed or attached while the send was in flight.
-      setText((current) => (current.trim() ? `${body}\n\n${current}` : body));
-      // Picks made meanwhile imply text, so they move down behind the body.
-      setPicked((current) => [
-        ...bodyPicked,
-        ...current.map((pick) => ({ ...pick, start: pick.start + body.length + 2 })),
-      ]);
-      setStaged((current) => [
-        ...attachments.map((ref) => ({
-          key: crypto.randomUUID(),
-          name: ref.name,
-          status: "done" as const,
-          ref,
-          previewUrl: ref.kind === "image" ? botsApi.uploadUrl(ref.uploadId) : undefined,
+      setDraft((current) =>
+        restoreRefused(current, sent, (attachment) => ({
+          name: attachment.name,
+          previewUrl:
+            attachment.kind === "image" ? botsApi.uploadUrl(attachment.uploadId) : undefined,
         })),
-        ...current,
-      ]);
+      );
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
@@ -380,33 +294,23 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const insertMention = (chosen: MentionableBot) => {
     if (!mention) return;
-    const insertion = `@${chosen.name} `;
-    const next = text.slice(0, mention.start) + insertion + text.slice(caret);
-    setText(next);
-    // The latest pick at this `@` replaces any earlier one there.
-    setPicked((current) => [
-      ...trackPickedMentions(text, next, current).filter((pick) => pick.start !== mention.start),
-      { start: mention.start, botId: chosen.id, name: chosen.name },
-    ]);
+    const next = draftInsertMention(draft, mention, caret, chosen);
+    setDraft(next.draft);
     setMentionHint(null);
     // Restore the caret after the trailing space once React re-renders the
     // textarea (it would otherwise land at the very end of the text).
-    const target = mention.start + insertion.length;
-    setCaret(target);
-    pendingCaret.current = target;
+    setCaret(next.caret);
+    pendingCaret.current = next.caret;
   };
 
   /** "+" → Mention a bot: type an `@` at the caret, which opens the picker. */
   const startMention = () => {
     const el = textareaRef.current;
-    const at = el?.selectionStart ?? text.length;
-    const before = text.slice(0, at);
-    const insertion = before && !/\s$/.test(before) ? " @" : "@";
-    setText(before + insertion + text.slice(at));
-    const target = at + insertion.length;
-    setCaret(target);
+    const next = draftStartMention(draft, el?.selectionStart ?? text.length);
+    setDraft(next.draft);
+    setCaret(next.caret);
     setMentionClosed(false);
-    pendingCaret.current = target;
+    pendingCaret.current = next.caret;
     mentionFromMenu.current = true;
     requestAnimationFrame(() => el?.focus({ preventScroll: true }));
   };
@@ -502,8 +406,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             value={text}
             onChange={(e) => {
               const next = e.target.value;
-              setPicked((current) => trackPickedMentions(text, next, current));
-              setText(next);
+              setDraft((current) => editText(current, next));
               setMentionHint(null);
               setCaret(e.target.selectionStart ?? e.target.value.length);
               setMentionClosed(false);
@@ -577,7 +480,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 }}
               >
                 <DropdownMenuItem
-                  disabled={staged.length >= MAX_ATTACHMENTS}
+                  disabled={!canStageMore(staged)}
                   onSelect={() => fileInputRef.current?.click()}
                 >
                   <Paperclip />
