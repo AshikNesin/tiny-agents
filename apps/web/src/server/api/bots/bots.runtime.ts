@@ -9,6 +9,7 @@
 import {
   AgentRuntime,
   createAttachmentsToolkit,
+  createBotBuilderCapability,
   createBotsToolkit,
   createBrowserToolkit,
   createClassifier,
@@ -48,6 +49,7 @@ import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
 import { createInstructionsStore } from "./self-improve.store";
+import { createBotCreationStore } from "./bot-builder.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -98,6 +100,9 @@ function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
     // Self-improvement (issue #128): the bot edits its own system prompt;
     // `askOnly`, so every change waits for the owner in chat.
     createSelfImproveCapability(createInstructionsStore()),
+    // Bot builder (issue #149): create a new bot when the owner asks;
+    // `askOnly`, so every new bot waits for the owner in chat.
+    createBotBuilderCapability(createBotCreationStore()),
     own.tasks,
     own.routines,
     createWebToolkit({

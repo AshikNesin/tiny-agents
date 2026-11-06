@@ -4,7 +4,8 @@
  * subagents nested under their parent, unread dots, a harness and a
  * repository filter, and search. Hovering a row offers Archive (Restore in
  * the archived view) when its harness archives, which moves the thread
- * together with its subagents, with Undo.
+ * together with its subagents, with Undo. **Select** (issue #148) turns the
+ * rows into checkboxes to archive or restore many threads at once.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -16,10 +17,13 @@ import {
   ChevronRight,
   FolderGit2,
   Layers,
+  ListChecks,
   Search,
   SquarePen,
+  X,
 } from "lucide-react";
 import { Button, metaLabelClass } from "@groot/ui";
+import { Checkbox } from "@groot/ui/checkbox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
 import { SearchSelect } from "../../components/ui/search-select";
@@ -32,8 +36,14 @@ import {
   type HarnessInfo,
   type ThreadSummary,
 } from "../../lib/code/api";
-import { buildSections, buildTree, repositories, type ListNode } from "../../lib/code/list";
-import { useArchive } from "./controls";
+import {
+  buildSections,
+  buildTree,
+  repositories,
+  selectionRoots,
+  type ListNode,
+} from "../../lib/code/list";
+import { useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const ALL_REPOS = "__all__";
@@ -47,35 +57,48 @@ function countDescendants(node: ListNode): number {
   return node.children.reduce((n, child) => n + 1 + countDescendants(child), 0);
 }
 
-function Row({
-  node,
-  activeId,
-  depth,
-  archivedView,
-  onArchive,
-  canArchive,
-  labelOf,
-}: {
-  node: ListNode;
+/** The list's multi-selection (issue #148); absent outside Select mode. */
+interface Selection {
+  selected: ReadonlySet<string>;
+  /** Ids an ancestor's selection already takes along. */
+  covered: ReadonlySet<string>;
+  toggle(row: ThreadSummary): void;
+}
+
+interface RowProps {
   activeId?: string;
-  depth: number;
   archivedView: boolean;
   onArchive(node: ListNode): void;
   canArchive(row: ThreadSummary): boolean;
   /** The harness label, when several harnesses share the list. */
   labelOf(row: ThreadSummary): string | undefined;
+  selection?: Selection;
+}
+
+function Row({
+  node,
+  depth,
+  ...props
+}: RowProps & {
+  node: ListNode;
+  depth: number;
 }) {
+  const { activeId, archivedView, onArchive, canArchive, labelOf, selection } = props;
   const [open, setOpen] = useState(true);
   const { row } = node;
   const isActive = row.id === activeId;
   const label = depth === 0 ? labelOf(row) : undefined;
   const nested = countDescendants(node);
+  const selectable = Boolean(selection) && canArchive(row);
+  // A subagent goes along with its selected parent: shown ticked, not its own pick.
+  const inherited = Boolean(selection?.covered.has(row.id)) && !selection?.selected.has(row.id);
+  const checked = Boolean(selection?.selected.has(row.id)) || inherited;
   return (
     <li>
       <div
         className={cn(
           "group/row relative flex items-stretch rounded-lg",
-          isActive ? "bg-muted" : "hover:bg-muted",
+          isActive || (selection && checked) ? "bg-muted" : "hover:bg-muted",
         )}
         style={{ paddingLeft: depth * 12 }}
       >
@@ -92,10 +115,30 @@ function Row({
         ) : (
           <span className="w-5 shrink-0" />
         )}
+        {selection && (
+          <span className="flex w-6 shrink-0 items-center justify-center">
+            {selectable && (
+              <Checkbox
+                checked={checked}
+                disabled={inherited}
+                onCheckedChange={() => selection.toggle(row)}
+                aria-label={`Select ${row.title}`}
+                title={inherited ? "Goes with its parent" : undefined}
+                data-testid="code-row-select"
+              />
+            )}
+          </span>
+        )}
         <Link
           to={threadPath(row.id)}
           aria-current={isActive ? "page" : undefined}
           title={row.preview || row.cwd || undefined}
+          onClick={(event) => {
+            // In Select mode a click on the row picks it instead of opening it.
+            if (!selection) return;
+            event.preventDefault();
+            if (selectable && !inherited) selection.toggle(row);
+          }}
           className="flex h-8 min-w-0 flex-1 items-center rounded-lg pr-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           data-testid="code-conversation-row"
         >
@@ -124,7 +167,7 @@ function Row({
             </span>
           </span>
         </Link>
-        {canArchive(row) && (
+        {canArchive(row) && !selection && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -144,16 +187,7 @@ function Row({
       {open && node.children.length > 0 && (
         <ul className="mt-px space-y-px">
           {node.children.map((child) => (
-            <Row
-              key={child.row.id}
-              node={child}
-              activeId={activeId}
-              depth={depth + 1}
-              archivedView={archivedView}
-              onArchive={onArchive}
-              canArchive={canArchive}
-              labelOf={labelOf}
-            />
+            <Row key={child.row.id} node={child} depth={depth + 1} {...props} />
           ))}
         </ul>
       )}
@@ -165,14 +199,9 @@ function Section({
   title,
   nodes,
   ...rest
-}: {
+}: RowProps & {
   title: string;
   nodes: ListNode[];
-  activeId?: string;
-  archivedView: boolean;
-  onArchive(node: ListNode): void;
-  canArchive(row: ThreadSummary): boolean;
-  labelOf(row: ThreadSummary): string | undefined;
 }) {
   if (nodes.length === 0) return null;
   return (
@@ -215,6 +244,12 @@ export function ConversationList({
     [harnesses, harnessFilter],
   );
   const canSearch = harnesses.some((h) => h.capabilities.threads.search);
+  const anyArchives = harnesses.some((h) => h.capabilities.threads.archive);
+  /** Select mode (issue #148): null when off, else the picked thread ids. */
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+
+  // A selection belongs to the view it was made in.
+  useEffect(() => setSelected((prev) => (prev ? new Set() : prev)), [view]);
 
   useEffect(() => {
     if (view !== "archived") return;
@@ -287,12 +322,78 @@ export function ConversationList({
   );
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
 
-  const listProps = {
+  // Select mode works on what is on screen: the search results, or the sections.
+  const visible = useMemo(
+    () => searchTree ?? [...sections.working, ...sections.recent],
+    [searchTree, sections],
+  );
+  const picked = useMemo(
+    () => (selected ? selectionRoots(visible, selected) : null),
+    [visible, selected],
+  );
+  const selectableIds = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (node: ListNode) => {
+      if (canArchive(node.row)) ids.push(node.row.id);
+      node.children.forEach(walk);
+    };
+    visible.forEach(walk);
+    return ids;
+  }, [visible, canArchive]);
+  const toggle = useCallback((row: ThreadSummary) => {
+    setSelected((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      if (next.has(row.id)) next.delete(row.id);
+      else next.add(row.id);
+      return next;
+    });
+  }, []);
+  const selection = useMemo(
+    () => (selected && picked ? { selected, covered: picked.covered, toggle } : undefined),
+    [selected, picked, toggle],
+  );
+  const allPicked = Boolean(picked) && selectableIds.every((id) => picked!.covered.has(id));
+
+  const archiveMany = useArchiveMany();
+  const [moving, setMoving] = useState(false);
+  const onArchiveSelected = useCallback(async () => {
+    if (!picked || picked.roots.length === 0) return;
+    const restoring = view === "archived";
+    const leave = !restoring && Boolean(activeId) && picked.covered.has(activeId!);
+    setMoving(true);
+    try {
+      const done = new Set(
+        await archiveMany(
+          picked.roots.map((node) => node.row),
+          !restoring,
+          { leave },
+        ),
+      );
+      if (done.size === 0) return;
+      if (restoring) {
+        // The archived list is read on demand: drop what was restored.
+        const gone = new Set<string>();
+        const collect = (n: ListNode) => {
+          gone.add(n.row.id);
+          n.children.forEach(collect);
+        };
+        picked.roots.filter((node) => done.has(node.row.id)).forEach(collect);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
+      }
+      setSelected(null);
+    } finally {
+      setMoving(false);
+    }
+  }, [picked, view, activeId, archiveMany]);
+
+  const listProps: RowProps = {
     activeId,
     archivedView: view === "archived",
     onArchive,
     canArchive,
     labelOf,
+    selection,
   };
 
   return (
@@ -310,6 +411,19 @@ export function ConversationList({
             aria-label="Search threads"
           />
         </InputGroup>
+        {anyArchives && (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={selected ? "Stop selecting" : "Select threads"}
+            title={selected ? "Stop selecting" : "Select threads"}
+            aria-pressed={Boolean(selected)}
+            onClick={() => setSelected((prev) => (prev ? null : new Set()))}
+            data-testid="code-select"
+          >
+            {selected ? <X /> : <ListChecks />}
+          </Button>
+        )}
         <Button asChild size="icon" variant="ghost" aria-label="New thread" title="New thread">
           <Link to="/code/new" data-testid="code-new">
             <SquarePen />
@@ -401,6 +515,43 @@ export function ConversationList({
           </>
         )}
       </nav>
+      {selected && picked && (
+        <div
+          className="border-border flex shrink-0 items-center gap-1.5 border-t px-3 py-2"
+          role="toolbar"
+          aria-label="Selected threads"
+          data-testid="code-selection-bar"
+        >
+          <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs tabular-nums">
+            {picked.roots.length === 0
+              ? "Select threads"
+              : `${picked.roots.length} selected` +
+                (picked.covered.size > picked.roots.length
+                  ? ` + ${picked.covered.size - picked.roots.length} ${
+                      picked.covered.size - picked.roots.length === 1 ? "subagent" : "subagents"
+                    }`
+                  : "")}
+          </span>
+          {selectableIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(allPicked ? new Set() : new Set(selectableIds))}
+            >
+              {allPicked ? "Clear" : "Select all"}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            disabled={picked.roots.length === 0 || moving}
+            onClick={() => void onArchiveSelected()}
+            data-testid="code-archive-selected"
+          >
+            {view === "archived" ? <ArchiveRestore /> : <Archive />}
+            {view === "archived" ? "Restore" : "Archive"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

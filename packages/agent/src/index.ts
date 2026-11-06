@@ -84,6 +84,12 @@ export {
   type MemoryStore,
 } from "./toolkits/memory";
 export { createSelfImproveCapability, type InstructionsStore } from "./toolkits/self-improve";
+export {
+  createBotBuilderCapability,
+  type BotCreationRefusal,
+  type BotCreationStore,
+  type NewBotInput,
+} from "./toolkits/bot-builder";
 export { createWebToolkit } from "./toolkits/web";
 export { checkPublicUrl } from "./toolkits/public-url";
 export {
