@@ -72,11 +72,8 @@ describe("gateway env tolerance", () => {
   });
 
   it("keeps the allowlist working when the whole value is quote-wrapped", async () => {
-    const allow = AgentRuntime as unknown as { __testAllowlist?: never };
-    void allow;
-    // modelAllowlist is module-private; exercise it through listModels
-    // with a permissive runtime (memory store, faux not needed — only
-    // listModels is called).
+    // The allowlist is the catalog's own; exercise it through the runtime's
+    // catalog (memory store, faux not needed — only the list is read).
     const runtime = await AgentRuntime.open({
       storePath: ":memory:",
       env: {
@@ -86,7 +83,7 @@ describe("gateway env tolerance", () => {
         CLOUDFLARE_GATEWAY_ID: "gw",
       },
     });
-    const ids = runtime.listModels().map((m) => m.id);
+    const ids = runtime.catalog.list().map((m) => m.id);
     expect(ids).toEqual(["custom:custom-zai-coding-plan/glm-5.3-flash"]);
     await runtime.close();
   });

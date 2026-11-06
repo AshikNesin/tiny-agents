@@ -12,7 +12,13 @@ import { createAttachmentStore } from "../../../apps/web/src/server/api/uploads/
 import { captureWindow } from "../../../apps/web/src/server/api/bots/memories.runner";
 import { pdf, xlsx } from "../api/uploads/fixtures";
 import { api, createTestApp, type TestApp } from "../helpers";
-import { authToken, createFakeRuntime, installFakeRuntime, resetAppTables } from "../fixtures";
+import {
+  authToken,
+  createFakeRuntime,
+  fakeCatalog,
+  installFakeRuntime,
+  resetAppTables,
+} from "../fixtures";
 
 const token = await authToken("uploads@example.com");
 const authorization = { Authorization: `Bearer ${token}` };
@@ -66,8 +72,7 @@ const models = [
 
 let nextConversationId = 100;
 /** The shared fake, listing a text model and a vision model. */
-const agentRuntime = createFakeRuntime();
-agentRuntime.listModels.mockReturnValue(models);
+const agentRuntime = createFakeRuntime({ catalog: fakeCatalog(models) });
 
 async function createBot(app: TestApp, modelId: string): Promise<string> {
   const response = await api<{ id: string }>(app, "/api/v1/bots", {

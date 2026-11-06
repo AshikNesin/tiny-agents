@@ -33,7 +33,7 @@ describe("openAgentRuntime (production shape)", () => {
     });
     const toolkits = runtime.listCapabilities().filter((c) => c.kind === "toolkit");
     expect(toolkits.map((t) => t.id)).toContain("vision");
-    expect(runtime.listModels().length).toBeGreaterThan(0);
+    expect(runtime.catalog.list().length).toBeGreaterThan(0);
     await runtime.close();
   }, 20_000);
 });

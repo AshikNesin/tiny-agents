@@ -12,7 +12,8 @@
  *   a suite that must inject a reply the faux model would not give (a model
  *   error, a refused tool, a vision model) or script what a conversation
  *   says. Type-checked against `AgentRuntime` method by method, so a fake
- *   cannot drift from the runtime it stands in for.
+ *   cannot drift from the runtime it stands in for. Its Model catalog is
+ *   `fakeCatalog()`: `FAKE_MODELS`, every id known.
  */
 import { vi, type MockInstance } from "vite-plus/test";
 import {
@@ -27,6 +28,7 @@ import {
   type ChatMessage,
   type ChatState,
   type FinishedReply,
+  type ModelCatalog,
   type ModelInfo,
   type WaitEvent,
 } from "../../../packages/agent/src/index";
@@ -102,8 +104,6 @@ const FAKE_METHODS = [
   "onWait",
   "lastMessage",
   "finishedReplies",
-  "listModels",
-  "hasModel",
   "listCapabilities",
   "installCapability",
   "uninstallCapability",
@@ -124,8 +124,14 @@ type FakeMethod = (typeof FAKE_METHODS)[number];
 type Procedure = (...args: any[]) => any;
 type MockOf<F> = F extends Procedure ? ReturnType<typeof vi.fn<F>> : never;
 
+type CatalogMethod = Exclude<keyof ModelCatalog, "primary">;
+
+/** A Model catalog fake: every method a mock, typed against `ModelCatalog`. */
+export type FakeCatalog = { [K in CatalogMethod]: MockOf<ModelCatalog[K]> } & { primary: string };
+
 export type FakeRuntime = { [K in FakeMethod]: MockOf<AgentRuntime[K]> } & {
   provider: string;
+  catalog: FakeCatalog;
   /** The transcript the fake shows, scripted by request id. */
   script: TranscriptScript;
   /** Fire an activity change at every `onActivity` listener. */
@@ -275,10 +281,30 @@ function createScript(): Script {
 }
 
 /**
+ * A catalog listing `models` (`FAKE_MODELS` by default) that knows every id
+ * (`has`), reads `info` from what `list` returns, resolves nothing to a
+ * registry model and can answer. Override per test through the mocks
+ * (`catalog.has.mockReturnValue(false)`).
+ */
+export function fakeCatalog(models: ModelInfo[] = FAKE_MODELS): FakeCatalog {
+  const catalog: FakeCatalog = {
+    primary: "fake",
+    list: vi.fn<ModelCatalog["list"]>(() => models),
+    info: vi.fn<ModelCatalog["info"]>((id) => catalog.list().find((m) => m.id === id)),
+    has: vi.fn<ModelCatalog["has"]>(() => true),
+    resolve: vi.fn<ModelCatalog["resolve"]>(() => undefined),
+    model: vi.fn<ModelCatalog["model"]>(() => undefined),
+    providers: vi.fn<ModelCatalog["providers"]>(() => []),
+    canAnswer: vi.fn<ModelCatalog["canAnswer"]>(() => true),
+  };
+  return catalog;
+}
+
+/**
  * A fake with every method defaulted: conversations number from 100,
  * submits land in the script, nothing is busy or waiting, the catalog is
- * `FAKE_MODELS` and every model id is known. Override per test through the
- * mocks (`fake.hasModel.mockReturnValue(false)`).
+ * `fakeCatalog()`. Override per test through the mocks
+ * (`fake.catalog.has.mockReturnValue(false)`).
  */
 export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRuntime {
   const script = createScript();
@@ -289,6 +315,7 @@ export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRun
 
   const fake: FakeRuntime = {
     provider: "fake",
+    catalog: fakeCatalog(),
     script,
     activityListeners: activity,
     emitActivity(change) {
@@ -329,8 +356,6 @@ export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRun
         : undefined;
     }),
     finishedReplies: vi.fn<AgentRuntime["finishedReplies"]>(async () => []),
-    listModels: vi.fn<AgentRuntime["listModels"]>(() => FAKE_MODELS),
-    hasModel: vi.fn<AgentRuntime["hasModel"]>(() => true),
     listCapabilities: vi.fn<AgentRuntime["listCapabilities"]>(() => []),
     installCapability: vi.fn<AgentRuntime["installCapability"]>(() => undefined),
     uninstallCapability: vi.fn<AgentRuntime["uninstallCapability"]>(() => undefined),

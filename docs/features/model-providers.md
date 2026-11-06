@@ -37,6 +37,16 @@ resolves shows "no longer available" until it is given a model again.
 `DEFAULT_MODEL`, `MEMORY_CAPTURE_MODEL`, `CHAT_TITLE_MODEL`, `VISION_MODEL`
 and `GATEWAY_MODEL_ALLOWLIST` take ids in the same form.
 
+One module reads and builds these ids: the Model catalog
+(`packages/agent/src/model-catalog.ts`, `runtime.catalog`). The picker list,
+bot validation (`has`), the registry model a turn or a Side-call runs on
+(`resolve`, `model`), whether a model sees images (`info`) and the provider
+status all come from it, so nothing else parses `custom:` or `claude-code/`.
+`GATEWAY_MODEL_ALLOWLIST` trims only the picker: a bot saved on a model the
+allowlist later hides keeps running and stays editable. A Claude plan bot's
+Side-calls (memory capture) run on the same model when a registry provider
+serves it (e.g. `claude-sonnet-4-6` on `anthropic`), and are skipped otherwise.
+
 ## Which models are listed
 
 At boot the runtime checks each provider's credentials with pi-ai's own auth
@@ -71,5 +81,5 @@ An `sk-ant-oat` token is refused at boot. See
   listed provider serves a vision model.
 
 The code lives in `packages/agent/src/models.ts` (`aiProviderIds`,
-`createProviderModels`, `configuredProviderIds`) and
-`AgentRuntime.providerStatus()`.
+`createProviderModels`, `configuredProviderIds`) and the Model catalog
+(`packages/agent/src/model-catalog.ts`: `providers()`, `canAnswer()`).

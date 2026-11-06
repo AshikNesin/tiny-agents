@@ -55,7 +55,7 @@ const findConnection = (id: string) =>
 
 type ManagedRuntime = Pick<
   AgentRuntime,
-  "installCapability" | "uninstallCapability" | "configure" | "listModels"
+  "installCapability" | "uninstallCapability" | "configure" | "catalog"
 >;
 
 interface Live extends ConnectionLiveState {

@@ -147,16 +147,12 @@ export async function findBotRow(id: string): Promise<BotWithLinks> {
 /** What the conversation module needs from the runtime. */
 export type BotConversationRuntime = Pick<
   AgentRuntime,
-  "createConversation" | "configure" | "submit" | "listModels"
+  "createConversation" | "configure" | "submit" | "catalog"
 >;
 
 /** Whether the bot's model reads image blocks natively (else the see_image side-call). */
-function modelSeesImages(rt: Pick<AgentRuntime, "listModels">, modelId: string): boolean {
-  try {
-    return Boolean(rt.listModels().find((m) => m.id === modelId)?.vision);
-  } catch {
-    return false; // a partial runtime (tests): treat as text-only
-  }
+function modelSeesImages(rt: Pick<AgentRuntime, "catalog">, modelId: string): boolean {
+  return Boolean(rt.catalog.info(modelId)?.vision);
 }
 
 /** A bot that does not exist yet: the fields its first conversation is created from. */
@@ -203,7 +199,7 @@ export function sharedChatGuidance(names: string[]): string {
  */
 function agentConfig(
   bot: BotDraft & { connections?: ConnectionLink[] },
-  rt: Pick<AgentRuntime, "listModels">,
+  rt: Pick<AgentRuntime, "catalog">,
   unattended = false,
   /** Everyone in a shared chat (issue #145); empty when it is not shared. */
   participants: string[] = [],
@@ -246,7 +242,7 @@ function enabledToolCount(connection: ConnectionLink["connection"]): number {
 /** Config from a bot row; a shared bot's chat (not its routines) also names its people. */
 async function rowConfig(
   row: BotWithLinks,
-  rt: Pick<AgentRuntime, "listModels">,
+  rt: Pick<AgentRuntime, "catalog">,
   unattended = false,
 ): Promise<BotAgentConfig> {
   const participants =
@@ -275,7 +271,7 @@ export async function startBotConversation(
 /** Re-apply a bot's stored configuration to its conversation (after row or link changes). */
 export async function reconcileBotConversation(
   id: string,
-  rt: Pick<BotConversationRuntime, "configure" | "listModels">,
+  rt: Pick<BotConversationRuntime, "configure" | "catalog">,
 ): Promise<Bot> {
   const row = await findBotRow(id);
   await rt.configure(Number(row.conversationId), await rowConfig(row, rt));

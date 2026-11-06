@@ -31,15 +31,12 @@ import {
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import {
-  aiProviderIds,
   assertNoClaudeOauthToken,
   configuredProviderIds,
   createProviderModels,
   primaryProviderId,
-  providerSetupHint,
-  toModelInfo,
-  type ProviderStatus,
 } from "./models";
+import { createModelCatalog, type ModelCatalog, type ModelRef } from "./model-catalog";
 import { gateExtension, PiEngine } from "./engines/pi";
 import {
   claudeCodeBareModel,
@@ -49,7 +46,6 @@ import {
   type CompiledConversation,
   type EngineSubmission,
 } from "./engine";
-import { claudePlanModels } from "./engines/claude-code/catalog";
 import type { WebSocketLike } from "./engines/claude-code/client";
 import { ClaudeCodeEngine } from "./engines/claude-code/engine";
 import type {
@@ -58,7 +54,7 @@ import type {
 } from "./engines/claude-code/sandbox-worker";
 import { claudeToolSurface } from "./engines/claude-code/tools";
 import { ToolGate } from "./gate";
-import { compilePolicy, YoloDoc, resolveModelId } from "./policy";
+import { compilePolicy, YoloDoc } from "./policy";
 import {
   createQuestionsCapability,
   QuestionNotPendingError,
@@ -76,7 +72,6 @@ import type {
   ConversationRef,
   FinishedReply,
   LastMessage,
-  ModelInfo,
   OwnerAnswer,
   WaitEvent,
   WithdrawOutcome,
@@ -144,27 +139,6 @@ export interface AgentRuntimeOptions {
 /**
  * The single owner of pi-durable in tiny-agents (PRD §7.2). One instance per
  * process, opened at boot before the HTTP server accepts requests.
- */
-/** Parse GATEWAY_MODEL_ALLOWLIST (comma-separated ids) into a set, or null. */
-function modelAllowlist(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): Set<string> | null {
-  // Tolerate the whole value being quote-wrapped by container env UIs
-  // (Coolify editors keep literal quotes); individual ids are trimmed.
-  const raw = env.GATEWAY_MODEL_ALLOWLIST?.trim()
-    .replace(/^(['"])([\s\S]*)\1$/, "$2")
-    .trim();
-  if (!raw) return null;
-  const ids = raw
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-  return ids.length > 0 ? new Set(ids) : null;
-}
-
-/**
- * The single owner of pi-durable in tiny-agents (PRD §7.2). One instance per
- * process, opened at boot before the HTTP server accepts requests.
  *
  * It owns the store (the pi-durable harness, its lock, and every
  * conversation's documents: permissions, YOLO, Owner waits), the capability
@@ -180,17 +154,13 @@ export class AgentRuntime {
   readonly #engines: readonly AgentEngine[];
   readonly #gate: ToolGate;
   readonly #models: MutableModels;
-  readonly #env: Readonly<Record<string, string | undefined>>;
+  readonly #catalog: ModelCatalog;
   readonly #lock: StoreLock | undefined;
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
   readonly #registry: Registry;
   readonly #approvals: WaitTracker;
   readonly #questions: WaitTracker;
   readonly #capabilities = new Map<string, Capability>();
-  /** Providers whose auth resolved at open (the env is snapshotted then too). */
-  #configured: ReadonlySet<string> = new Set();
-  /** The configured providers' ids, primary first (AI_PROVIDERS order). */
-  #providerIds: readonly string[] = [];
   /** Conversations replying on any engine. */
   #busy = new Set<ConversationRef>();
   #closed = false;
@@ -200,17 +170,21 @@ export class AgentRuntime {
     return this.#models;
   }
 
+  /** What every model id means: the picker list, validation, resolution, providers. */
+  get catalog(): ModelCatalog {
+    return this.#catalog;
+  }
+
   private constructor(
     harness: Harness,
     models: MutableModels,
-    provider: string,
+    catalog: ModelCatalog,
     lock: StoreLock | undefined,
     registry: Registry,
     gate: ToolGate,
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
-    envSource: Readonly<Record<string, string | undefined>> = process.env,
     persistPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
@@ -229,13 +203,13 @@ export class AgentRuntime {
     });
     this.#engines = [this.#pi, this.#claude];
     this.#models = models;
-    this.provider = provider;
+    this.#catalog = catalog;
+    this.provider = catalog.primary;
     this.#lock = lock;
     this.#registry = registry;
     this.#approvals = approvals;
     this.#questions = questions;
     for (const capability of capabilities) this.#capabilities.set(capability.id, capability);
-    this.#env = { ...envSource };
     approvals.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
     questions.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
   }
@@ -314,24 +288,24 @@ export class AgentRuntime {
         },
         ctx,
       );
+      const catalog = createModelCatalog(models, {
+        primary: options.provider ?? primaryProviderId(envSource),
+        configured,
+        env: envSource,
+      });
       const opened = new AgentRuntime(
         harness,
         models,
-        options.provider ?? primaryProviderId(envSource),
+        catalog,
         lock,
         registry,
         gate,
         approvals,
         questions,
         capabilities,
-        envSource,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
-      );
-      opened.#configured = configured;
-      opened.#providerIds = [opened.provider, ...aiProviderIds(envSource)].filter(
-        (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
       );
       runtime = opened;
       pi = opened.#pi;
@@ -353,58 +327,6 @@ export class AgentRuntime {
     }
   }
 
-  // ── Models ────────────────────────────────────────────────────────────
-
-  listModels(): ModelInfo[] {
-    // The primary provider's models plus every other registered provider's
-    // (AI_PROVIDERS extras such as openai, and gateway custom providers),
-    // whose ids are namespaced "custom:<provider>/<model>" so bots' saved
-    // modelIds stay stable and never collide with the primary's ids.
-    // Once any provider is configured, unconfigured providers' models are
-    // left out: they could not answer. With none configured all are listed
-    // and the client shows the setup banner.
-    const anyConfigured = this.#configured.size > 0;
-    const listed = (id: string) => !anyConfigured || this.#configured.has(id);
-    const nameOf = (id: string) => this.#models.getProvider(id)?.name ?? id;
-    const primary = listed(this.provider)
-      ? this.#models
-          .getModels(this.provider)
-          .map((m) => toModelInfo(m, undefined, nameOf(m.provider)))
-      : [];
-    const others = this.#models
-      .getProviders()
-      .filter((p) => p.id !== this.provider && listed(p.id))
-      .flatMap((p) =>
-        this.#models
-          .getModels(p.id)
-          .map((model) => toModelInfo(model, `custom:${p.id}`, nameOf(p.id))),
-      );
-    const all = [...primary, ...others, ...claudePlanModels()];
-    const allow = modelAllowlist(this.#env);
-    return allow ? all.filter((m) => allow.has(m.id)) : all;
-  }
-
-  /**
-   * The inference providers this runtime was configured with (AI_PROVIDERS,
-   * or the provider it was opened on) and whether each has credentials.
-   */
-  providerStatus(): ProviderStatus[] {
-    return this.#providerIds.map((id) => {
-      const name = this.#models.getProvider(id)?.name ?? id;
-      return {
-        id,
-        name,
-        configured: this.#configured.has(id),
-        setupHint: providerSetupHint(id, name),
-      };
-    });
-  }
-
-  /** True when at least one inference provider has credentials. */
-  hasConfiguredProvider(): boolean {
-    return this.providerStatus().some((status) => status.configured);
-  }
-
   /** Kill switch, fallback, and whether a worker URL is configured. No secrets. */
   claudeCodeStatus(): ReturnType<ClaudeCodeEngine["status"]> {
     return this.#claude.status();
@@ -420,33 +342,10 @@ export class AgentRuntime {
     this.#claude.prepare();
   }
 
-  hasModel(modelId: string): boolean {
-    if (claudeCodeBareModel(modelId)) return true;
-    return this.#resolveModel(modelId) !== undefined;
-  }
-
-  #anyCatalogModel(): { provider: string; model: string } | undefined {
+  /** Any model of the primary provider: a Claude plan conversation's last-resort stand-in. */
+  #anyPrimaryModel(): ModelRef | undefined {
     const model = this.#models.getModels(this.provider)[0];
     return model ? { provider: this.provider, model: model.id } : undefined;
-  }
-
-  /** A pi model a Claude-plan conversation can fall back onto. */
-  #standInForClaude(bare: string): { provider: string; model: string } | undefined {
-    const onPrimary = this.#resolveModel(bare);
-    if (onPrimary) return onPrimary;
-    for (const provider of this.#models.getProviders()) {
-      if (provider.id === this.provider) continue;
-      if (this.#models.getModel(provider.id, bare)) return { provider: provider.id, model: bare };
-    }
-    return this.#anyCatalogModel();
-  }
-
-  #resolveModel(modelId: string): { provider: string; model: string } | undefined {
-    return resolveModelId(
-      modelId,
-      this.provider,
-      (provider, model) => this.#models.getModel(provider, model) !== undefined,
-    );
   }
 
   /**
@@ -550,9 +449,9 @@ export class AgentRuntime {
       if (!bare) throw new ModelNotFoundError(config.modelId);
       // The harness stores a real catalog model so a gateway/provider fallback
       // can run there. It is not called unless this turn is handed to pi.
-      // Prefer the same model id on any configured provider (the primary one
-      // first), then any model of the primary provider.
-      const resolved = this.#standInForClaude(bare);
+      // Prefer the same model id on any provider (the primary one first),
+      // then any model of the primary provider.
+      const resolved = this.#catalog.resolve(config.modelId) ?? this.#anyPrimaryModel();
       if (!resolved) throw new ModelNotFoundError(config.modelId);
       const surface = claudeToolSurface(this.#capabilities, config.capabilities);
       const change: AgentChange = {
@@ -579,7 +478,7 @@ export class AgentRuntime {
         claude,
       };
     }
-    const resolved = this.#resolveModel(config.modelId);
+    const resolved = this.#catalog.resolve(config.modelId);
     if (!resolved) throw new ModelNotFoundError(config.modelId);
     const change: AgentChange = {
       model: { provider: resolved.provider, modelId: resolved.model },

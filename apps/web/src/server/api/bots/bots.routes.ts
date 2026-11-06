@@ -44,20 +44,15 @@ router.get("/claude-code/account", async (c) => {
 });
 
 router.get("/models", (c) => {
-  const runtime = getAgentRuntime();
-  const models = runtime.listModels();
+  const catalog = getAgentRuntime().catalog;
+  const models = catalog.list();
   const override = env.DEFAULT_MODEL?.trim();
-  // The faux provider (dev/E2E) answers without credentials, so it counts as
-  // configured; otherwise at least one AI_PROVIDERS provider (the gateway by
-  // default) must have its credentials. `gatewayConfigured` keeps its name
-  // for existing clients; it means "some provider can answer".
-  const providers = runtime.providerStatus();
-  const configured = runtime.provider === "faux" || runtime.hasConfiguredProvider();
   return ok(c, {
     models,
-    defaultModel: override && runtime.hasModel(override) ? override : models[0]?.id,
-    gatewayConfigured: configured,
-    providers,
+    defaultModel: override && catalog.has(override) ? override : models[0]?.id,
+    // Keeps its name for existing clients; it means "some provider can answer".
+    gatewayConfigured: catalog.canAnswer(),
+    providers: catalog.providers(),
   });
 });
 

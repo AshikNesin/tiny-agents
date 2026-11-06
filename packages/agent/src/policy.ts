@@ -121,28 +121,6 @@ export function applyPermissions(doc: Permissions, permissions: Permissions): vo
   else delete doc.unattended;
 }
 
-/**
- * Resolve a bot's model id to (provider, model). Catalog ids are plain;
- * gateway custom providers use "custom:<provider>/<model>" (the slash inside
- * the provider segment is forbidden by registration, so the first "/"
- * splits). `has` says whether the registry knows the pair.
- */
-export function resolveModelId(
-  modelId: string,
-  provider: string,
-  has: (provider: string, model: string) => boolean,
-): { provider: string; model: string } | undefined {
-  if (modelId.startsWith("custom:")) {
-    const rest = modelId.slice("custom:".length);
-    const slash = rest.indexOf("/");
-    if (slash <= 0) return undefined;
-    const providerId = rest.slice(0, slash);
-    const model = rest.slice(slash + 1);
-    return has(providerId, model) ? { provider: providerId, model } : undefined;
-  }
-  return has(provider, modelId) ? { provider, model: modelId } : undefined;
-}
-
 // ── What a running tool call reads ──────────────────────────────────────
 
 /** The conversation's permissions say nobody is there to answer (a routine's, issue #63). */
