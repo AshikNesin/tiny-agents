@@ -65,18 +65,20 @@ router.post("/vault/step-up/options", authRateLimiter, async (c) => {
   return ok(c, await passkeyService.generateAuthenticationOptions({ email }));
 });
 
+// A refused confirmation is 403, never 401: the client treats any 401 as an
+// expired session and signs the owner out (#164).
 router.post("/vault/step-up", authRateLimiter, async (c) => {
   const { userId } = requireUser(c);
   const body = await parseBody(c, stepUpSchema);
   if ("password" in body) {
-    if (!(await verifyPassword(userId, body.password))) throw Boom.unauthorized("Wrong password");
+    if (!(await verifyPassword(userId, body.password))) throw Boom.forbidden("Wrong password");
   } else {
     const result = await passkeyService.verifyAuthentication({
       response: body.passkey as unknown as Parameters<
         typeof passkeyService.verifyAuthentication
       >[0]["response"],
     });
-    if (result.user.id !== userId) throw Boom.unauthorized("That passkey belongs to someone else");
+    if (result.user.id !== userId) throw Boom.forbidden("That passkey belongs to someone else");
   }
   return ok(c, issueStepUp(userId));
 });

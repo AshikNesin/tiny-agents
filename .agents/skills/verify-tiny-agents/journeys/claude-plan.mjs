@@ -29,8 +29,8 @@ await journey(
         card.getByText(/The engine is off\. Set CLAUDE_CODE_ENGINE_ENABLED=1/),
       ).toBeVisible();
       await expect(card.getByText(/turns pause\./)).toBeVisible();
-      // With the engine off no worker is wired, so there is no account to sign in to.
-      await expect(page.getByTestId("claude-plan-account")).toBeVisible();
+      // With the engine off no worker is wired: no account line, nothing to sign in to.
+      await expect(page.getByTestId("claude-plan-account")).toHaveCount(0);
       await expect(page.getByTestId("claude-plan-sign-in")).toHaveCount(0);
       await expect(card.getByText(/Never paste a Claude token into tiny-agents/)).toBeVisible();
     });
@@ -53,17 +53,16 @@ await journey(
     });
     await proof("code-no-claude-harness");
 
-    // Last, because it currently fails (PRODUCT BUG): with the engine off the
-    // account check reports "unconfigured", and the card tells an owner whose
-    // sandbox works (terminal, computer, browser) to set SANDBOX_HOST.
+    // Regression for #171: with the engine off the account check reports
+    // "unconfigured", and the card used to tell an owner whose sandbox works
+    // (terminal, computer, browser) to set SANDBOX_HOST.
     await step("with a sandbox configured, the card does not say there is none", async () => {
       await page.goto("/settings", LOADED);
       await page.getByRole("tab", { name: "Claude plan" }).click();
-      await expect(page.getByTestId("claude-plan-account")).toBeVisible();
+      const card = page.getByRole("tabpanel", { name: "Claude plan" });
+      await expect(card.getByText(/The engine is off/)).toBeVisible();
       expect((await api.get("/terminal/sessions")).status.kind).toBe("ready"); // the sandbox works
-      await expect(page.getByTestId("claude-plan-account")).not.toHaveText(
-        /No sandbox is configured/,
-      );
+      await expect(card).not.toContainText("No sandbox is configured");
     });
   },
   { requires: ["sandbox"] },

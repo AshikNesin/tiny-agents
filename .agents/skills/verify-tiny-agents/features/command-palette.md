@@ -33,7 +33,7 @@ Preconditions:
 
 ## Gotchas
 
-- Known product bug (2026-11): the palette shows the shell's built-in groups (`Navigation`, `Theme`, `Account`) as well as the app's own copies, so Navigation, Theme and Account (Log out) each appear twice, the shell's Navigation lists `Code` although Claude Code isn't configured, and a filter like `Tasks` highlights two options at once. Use `.first()` when picking options; the journey's last step asserts the de-duplicated listing and fails until it is fixed.
+- Regression check for #166 (fixed 2026-11): the shell used to list its built-in `Navigation`, `Theme` and `Account` groups next to the app's own, so every destination appeared twice and `Code` showed with no coding agent configured. The last step asserts one listing and nothing unconfigured.
 - Headless Chromium on Linux: use `Control+k`, not `Meta+k`.
 - The dialog's accessible name is the screen-reader title `Command Menu`, not the input's placeholder.
 - `New coding thread` and the Code threads group only appear when Claude Code is configured (not in the baseline); `Log out` in Account is covered by `auth.mjs`'s sign-out path, not run here (it would end the session).

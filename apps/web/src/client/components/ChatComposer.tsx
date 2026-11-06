@@ -195,6 +195,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** Where the caret goes once the text that was just set is rendered. */
   const pendingCaret = useRef<number | null>(null);
+  /** Set by "+ → Mention a bot" so the closing menu leaves focus in the composer. */
+  const mentionFromMenu = useRef(false);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const pasteCount = useRef(0);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
@@ -405,6 +407,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setCaret(target);
     setMentionClosed(false);
     pendingCaret.current = target;
+    mentionFromMenu.current = true;
     requestAnimationFrame(() => el?.focus({ preventScroll: true }));
   };
 
@@ -559,7 +562,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                   <Plus />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top" className="w-64">
+              <DropdownMenuContent
+                align="start"
+                side="top"
+                className="w-64"
+                onCloseAutoFocus={(event) => {
+                  // The menu returns focus to "+" when it closes, after startMention
+                  // focused the composer; the composer's blur then closed the
+                  // mention list (#167). Keep focus in the composer instead.
+                  if (!mentionFromMenu.current) return;
+                  mentionFromMenu.current = false;
+                  event.preventDefault();
+                  textareaRef.current?.focus({ preventScroll: true });
+                }}
+              >
                 <DropdownMenuItem
                   disabled={staged.length >= MAX_ATTACHMENTS}
                   onSelect={() => fileInputRef.current?.click()}

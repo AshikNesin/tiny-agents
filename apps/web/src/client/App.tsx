@@ -155,6 +155,9 @@ const router = createBrowserRouter(
         {page("/vault/requests/:taskId", <VaultPage />)}
         {page("/storage", <Storage />)}
         {page("/jobs", <Jobs />)}
+        {/* The jobs kit links to /jobs/:jobId (its documented route, #169); the
+            older two-segment form keeps working for existing links. */}
+        {page("/jobs/:jobId", <JobDetail />)}
         {page("/jobs/:queueName/:jobId", <JobDetail />)}
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

@@ -240,9 +240,9 @@ await journey(
     });
     await proof("closed");
 
-    // Last, because it currently fails (PRODUCT BUG): without the Fullscreen API
-    // (iPhone Safari never fullscreens a div) full screen is CSS only, the region
-    // covers the page header, and nothing on screen leaves it.
+    // Regression check for #170: without the Fullscreen API (iPhone Safari never
+    // fullscreens a div) full screen is CSS only and the region covers the page
+    // header, so the exit control must live inside the region.
     await step("CSS-only full screen (no Fullscreen API) can be left again", async () => {
       const phone = await context.newPage();
       await phone.addInitScript(() => {

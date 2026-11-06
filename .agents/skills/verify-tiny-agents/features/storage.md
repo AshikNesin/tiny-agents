@@ -35,7 +35,7 @@ Preconditions:
 
 ## Gotchas
 
-- KNOWN PRODUCT BUG: `.txt` downloads are served as `text/plain` with no charset, so `View` decodes UTF-8 as windows-1252 (`✓` shows as `âœ“`). The journey keeps asserting the right text in the step `View decodes UTF-8 text correctly` and fails the drive at the end until it is fixed; every other step still runs.
+- Regression check for #168 (fixed 2026-11): `View` opens a blob URL, and a blob keeps only `text/plain`, so UTF-8 text decoded as windows-1252 (`✓` as `âœ“`). The download route now adds `charset=utf-8` and `View` re-types text blobs; the step `View decodes UTF-8 text correctly` asserts the right text. The breadcrumb's console check (#172) is in `result.json` `consoleErrors`.
 - A folder is a `.keep` marker: it is listed as a file inside the folder, `Select All Files` selects it, and deleting it removes the (now empty) folder.
 - Upload through the `Upload` button's file chooser (`page.waitForEvent("filechooser")`), not the hidden input: the FeedbackBee embed adds another file input to the page.
 - Storage is per instance, not per user; stamp every name.

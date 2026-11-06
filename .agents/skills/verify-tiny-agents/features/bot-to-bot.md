@@ -26,12 +26,12 @@ Preconditions:
 - **Pick.** Type `what do you think @Relay`, click the option → composer value `what do you think @Relay Peer <stamp> `.
 - **Send + relay.** Add `ping <stamp>`, Enter. Within ~45 s a peer card for the peer contains `reply relayed into this chat`, `Echo: [From the owner` and `ping <stamp>`; no bubble shows `Reply from <peer>:`.
 - **Peer chat.** Open the peer's sidebar link: `You · in <host>'s chat` and the ping text; no bubble shows `From the owner, in`.
-- **Menu.** Back in the host chat, fill `second thought `, `+` → `Mention a bot`: the composer must keep focus with the list open, Enter picks the bot. **Currently fails (product bug, below).**
+- **Menu.** Back in the host chat, fill `second thought `, `+` → `Mention a bot`: the composer must keep focus with the list open, Enter picks the bot (regression check for #167).
 - **Proof.** `ta-verify drive $S/journeys/bot-to-bot.mjs` → `mention-picked`, `relayed`, `peer-chat` (and `failure` for the menu step while the bug stands).
 
 ## Gotchas
 
-- Product bug: `+` → `Mention a bot` inserts `@` but focus goes back to the `+` button, so the list never opens and typing goes nowhere (`activeElement` is `BUTTON "Add files or mention a bot"`). The journey asserts the intended behaviour and runs this step last so the relay is still proven.
+- Regression check for #167 (fixed 2026-11): `+` → `Mention a bot` used to insert `@` while the closing menu returned focus to `+`, so the list never opened. The step runs last, so the relay proofs are captured either way.
 - The mention query is the word after `@` up to the caret, without spaces: type `@Relay`, not `@Relay Peer`. `fill()` does not move the tracked caret reliably; use `pressSequentially`.
 - An unanchored `getByText(/Echo: …/)` can match the whole transcript's text; scope to the peer card or anchor the regex.
 - `message_bot` (the bot messaging a peer on its own, `data-testid=bot-handoff`) needs a model that calls tools; the faux bot never does.

@@ -119,12 +119,11 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
   await step("Resume re-queues it to run now; the page polls it to Completed", async () => {
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(page.getByText("Job has been resumed")).toBeVisible();
-    // Resume (like Retry) sets runAt to now, so the occurrence fires at once.
-    await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByRole("button", { name: "Re-run" })).toBeVisible();
-    expect(await jobState(armedId)).toBe("completed");
+    // Resume (like Retry) sets runAt to now, so the occurrence fires on the next
+    // queue tick. Wait on the job's state: the text "Completed" also labels an
+    // Overview field, so it matches before the job has run.
+    await expect.poll(() => jobState(armedId), { timeout: 30_000 }).toBe("completed");
+    await expect(page.getByRole("button", { name: "Re-run" })).toBeVisible({ timeout: 15_000 });
   });
   await proof("detail-resumed-completed");
   await step("Add Job: a routine-fire for a missing routine runs and completes", async () => {

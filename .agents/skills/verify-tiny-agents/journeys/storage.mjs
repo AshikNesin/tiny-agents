@@ -85,8 +85,8 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
     const tab = await popup;
     await expect(tab.locator("body")).toContainText(`hello from verify ${stamp}`);
     await tab.screenshot({ path: evidence("view-tab.png") });
-    // PRODUCT BUG (reported): .txt is served as `text/plain` without a charset, so the
-    // tab decodes UTF-8 as windows-1252 ("✓" shows as "âœ“"). Keep asserting the right text.
+    // Regression check for #168: text used to open as windows-1252 ("✓" as "âœ“")
+    // because the blob URL dropped the charset.
     await bugStep("View decodes UTF-8 text correctly", async () => {
       await expect(tab.locator("body")).toContainText("second line ✓", { timeout: 2000 });
     });

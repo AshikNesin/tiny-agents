@@ -146,8 +146,15 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
     }
   });
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (e) => pageErrors.push(String(e)));
+  // Browser console errors (React warnings such as invalid DOM nesting, failed
+  // fetches): recorded, not failing. The no-op Vite client no longer forwards
+  // them to the dev server's log, so this is the only place they show up.
   const consoleErrors = [];
-  page.on("pageerror", (e) => consoleErrors.push(String(e)));
+  context.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text().slice(0, 500));
+  });
 
   const proof = async (label) => {
     await page.screenshot({ path: path.join(dir, `${label}.png`), fullPage: false });
@@ -198,7 +205,7 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
     writeFileSync(
       path.join(dir, "result.json"),
       JSON.stringify(
-        { feature, ok, base: BASE, at: new Date().toISOString(), steps, pageErrors: consoleErrors },
+        { feature, ok, base: BASE, at: new Date().toISOString(), steps, pageErrors, consoleErrors },
         null,
         2,
       ),

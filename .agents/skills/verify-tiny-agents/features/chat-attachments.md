@@ -36,7 +36,7 @@ Preconditions:
 
 ## Gotchas
 
-- Known product bug (2026-11): the enlarged image viewer is a `fixed inset-0` overlay rendered inside the transcript row, whose `content-visibility: auto` makes it the containing block, so the "lightbox" is clipped to the message row and its `Download` button covers `Close image`. The journey's last step asserts the correct full-window viewer and fails until it is fixed; every earlier step still proves the rest.
+- Regression check for #165 (fixed 2026-11): the enlarged image viewer used to render inside the transcript row, whose `content-visibility: auto` clipped it; it is portalled to the page now. The last step asserts a full-window viewer whose Close works.
 - Use the real file chooser path, not `setInputFiles` on the hidden input: the hidden input skips the `+` menu the user goes through.
 - A 1x1 PNG renders as a near-invisible dot; use a bigger image (the journey crops a screenshot of the app) so proofs are readable.
 - The faux model is text-only: the composer shows `Test Model (faux) reads images with the see_image tool`, and an image-only send echoes as a bare `Echo:`.

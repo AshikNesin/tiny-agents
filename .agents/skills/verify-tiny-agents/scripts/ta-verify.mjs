@@ -8,6 +8,9 @@
  *       --sandbox  point it at the local sandbox container (`pnpm sandbox:up`):
  *                  terminal, computer, browser and bot sandbox tools become reachable
  *       --empty    skip the demo-user seed (no users: first-run /setup is reachable)
+ *       --prod     build (`pnpm build`) and run the production bundle
+ *                  (`node dist/server/bundle.js`, NODE_ENV=production, built client,
+ *                  Secure cookies, no Vite) instead of the dev server
  *       --shelley  start a keyless Shelley (`-predictable-only`) for this run and set
  *                  SHELLEY_URL, so /code and bots' code_* tools are reachable. Binary:
  *                  $TA_VERIFY_SHELLEY_BIN, else `shelley` on PATH, else copied out of
@@ -22,7 +25,7 @@
  * Both live under the git-ignored `data/`.
  */
 import { spawn, execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import net from "node:net";
 import {
   existsSync,
@@ -48,7 +51,7 @@ const DEMO = { email: "demo@example.com", password: "demo@example.com" }; // git
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const positional = [];
-const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley"]);
+const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley", "prod"]);
 for (let i = 0; i < rest.length; i++) {
   const name = rest[i].slice(2);
   if (rest[i].startsWith("--") && BOOLEAN_FLAGS.has(name)) flags[name] = true;
@@ -74,20 +77,41 @@ const APP_PATHS = [
   "tsconfig.base.json",
 ];
 
-/** App files that differ between the launch revision and the working tree (committed or not). */
-function appChangesSince(revision) {
+/**
+ * App sources as they are right now: per file, a content hash of every tracked
+ * file that differs from the launch commit plus every untracked one. Recorded
+ * at `up`; doctor compares, so uncommitted edits already present at launch
+ * don't count as stale, and a commit of exactly those edits doesn't either.
+ */
+function appSnapshot(revision) {
+  const git = (args) =>
+    execFileSync("git", ["-C", REPO, ...args], { encoding: "utf8" })
+      .split("\n")
+      .filter(Boolean);
   try {
-    const out = execFileSync(
-      "git",
-      ["-C", REPO, "diff", "--name-only", revision, "--", ...APP_PATHS],
-      {
-        encoding: "utf8",
-      },
-    );
-    return out.split("\n").filter(Boolean);
+    const files = new Set([
+      ...git(["diff", "--name-only", revision, "--", ...APP_PATHS]),
+      ...git(["ls-files", "--others", "--exclude-standard", "--", ...APP_PATHS]),
+    ]);
+    const snapshot = {};
+    for (const file of [...files].sort()) {
+      const full = path.join(REPO, file);
+      snapshot[file] = existsSync(full)
+        ? createHash("sha256").update(readFileSync(full)).digest("hex").slice(0, 16)
+        : "deleted";
+    }
+    return snapshot;
   } catch {
-    return [`(git diff against ${revision} failed)`];
+    return { "(git failed)": String(Date.now()) };
   }
+}
+
+/** Files whose content differs from the snapshot taken at launch. */
+function appChangesSince(run) {
+  const now = appSnapshot(run.revision);
+  const before = run.appSnapshot ?? {};
+  const names = new Set([...Object.keys(now), ...Object.keys(before)]);
+  return [...names].filter((file) => now[file] !== before[file]).sort();
 }
 
 const head = () =>
@@ -312,7 +336,9 @@ function baseEnv() {
 function serverEnv(run) {
   return {
     ...baseEnv(),
-    NODE_ENV: "development",
+    NODE_ENV: run.prod ? "production" : "development",
+    // Production refuses the development fallbacks: per-run secrets instead.
+    ...(run.prod ? { JWT_SECRET_KEY: run.jwtKey, DATA_DIR: run.stateDir } : {}),
     PORT: String(run.port),
     ORIGIN: run.url,
     RP_ID: "localhost",
@@ -378,15 +404,19 @@ async function up() {
     stateDir,
     evidenceDir,
     revision: head(),
+    appSnapshot: undefined,
     startedAt: new Date().toISOString(),
     sandbox: !!flags.sandbox,
     sandboxPort: flags.sandbox ? sandboxPort() : undefined,
     empty: !!flags.empty,
+    prod: !!flags.prod,
+    jwtKey: flags.prod ? randomBytes(32).toString("hex") : undefined,
     shelleyPort: flags.shelley ? port + 1000 : undefined,
     shelleyUrl: flags.shelley ? `http://127.0.0.1:${port + 1000}` : undefined,
     secretsKey: randomBytes(32).toString("base64"),
     adminKey: randomBytes(24).toString("hex"),
   };
+  run.appSnapshot = appSnapshot(run.revision);
   const env = serverEnv(run);
   const tsx = path.join(REPO, "node_modules", ".bin", "tsx");
   if (!existsSync(tsx)) fail("node_modules missing: run `pnpm install` first");
@@ -404,7 +434,19 @@ async function up() {
   const logFile = path.join(stateDir, "server.log");
   const out = openSync(logFile, "a");
   // detached = own process group, so `down` kills exactly this tree.
-  const child = spawn(tsx, ["apps/web/src/server/entry.node.ts"], {
+  if (run.prod) {
+    // The real artifact: server bundle + built client, as `pnpm start` runs it.
+    log("--prod: pnpm build (server bundle + client) ...");
+    execFileSync("pnpm", ["-s", "build"], {
+      cwd: REPO,
+      env: { ...process.env, NODE_ENV: "production" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+  }
+  const [command, args] = run.prod
+    ? [process.execPath, ["dist/server/bundle.js"]]
+    : [tsx, ["apps/web/src/server/entry.node.ts"]];
+  const child = spawn(command, args, {
     cwd: REPO,
     env,
     detached: true,
@@ -456,13 +498,13 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
   check("/ready ok", ready.status === 200, JSON.stringify(ready.body ?? ready.error));
   // No watcher: the instance runs the code it booted with. Only app sources count;
   // commits or edits that touch nothing but docs or this skill don't make it stale.
-  const stale = appChangesSince(run.revision);
+  const stale = appChangesSince(run);
   check(
     "app code unchanged since launch",
     stale.length === 0,
     stale.length
-      ? `changed since ${run.revision}: ${stale.slice(0, 5).join(", ")}${stale.length > 5 ? ", …" : ""} (relaunch)`
-      : `launched at ${run.revision}, HEAD ${head()}`,
+      ? `changed since launch: ${stale.slice(0, 5).join(", ")}${stale.length > 5 ? ", …" : ""} (relaunch)`
+      : `launched at ${run.revision}${Object.keys(run.appSnapshot ?? {}).length ? " + uncommitted edits" : ""}, HEAD ${head()}`,
   );
   const spa = await fetch(`${run.url}/login`)
     .then((r) => r.text())
@@ -558,6 +600,7 @@ async function drive() {
             run.sandbox && "sandbox",
             run.empty && "empty",
             run.shelleyUrl && "shelley",
+            run.prod && "prod",
           ]
             .filter(Boolean)
             .join(","),

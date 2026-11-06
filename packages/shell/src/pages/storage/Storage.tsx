@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Folder, FolderPlus, Home, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -58,19 +59,22 @@ export function Storage({ onView }: StorageProps = {}) {
             </button>
           </BreadcrumbLink>
         </BreadcrumbItem>
+        {/* The separator is an <li> itself: a sibling of the items, never inside one. */}
         {s.breadcrumbs.map((crumb, index) => (
-          <BreadcrumbItem key={crumb.path}>
+          <Fragment key={crumb.path}>
             <BreadcrumbSeparator />
-            {index === lastCrumbIndex ? (
-              <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
-            ) : (
-              <BreadcrumbLink asChild>
-                <button type="button" onClick={() => s.navigateToFolder(crumb.path)}>
-                  {crumb.name}
-                </button>
-              </BreadcrumbLink>
-            )}
-          </BreadcrumbItem>
+            <BreadcrumbItem>
+              {index === lastCrumbIndex ? (
+                <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink asChild>
+                  <button type="button" onClick={() => s.navigateToFolder(crumb.path)}>
+                    {crumb.name}
+                  </button>
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
+          </Fragment>
         ))}
       </BreadcrumbList>
     </Breadcrumb>

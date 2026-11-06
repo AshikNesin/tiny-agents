@@ -69,8 +69,9 @@ export function JobDetail() {
             <Link to="/jobs">Jobs</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
+        {/* The separator is an <li> itself: a sibling of the items, never inside one. */}
+        <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbSeparator />
           <BreadcrumbPage>{job.name}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>

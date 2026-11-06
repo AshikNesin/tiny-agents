@@ -467,7 +467,14 @@ describe("Terminal full screen", () => {
 
     await user.click(toggle);
     expect(request).toHaveBeenCalledTimes(1);
-    expect(toggle.getAttribute("aria-label")).toBe("Exit full screen");
+    // In full screen the header toggle is covered, so it gives way to an exit
+    // control inside the region (#170).
+    expect(screen.queryByTestId("terminal-fullscreen")).toBeNull();
+    expect(
+      within(screen.getByTestId("terminal-region")).getByRole("button", {
+        name: "Exit full screen",
+      }),
+    ).toBeTruthy();
 
     fullscreenElement = region;
     await act(async () => {
@@ -480,7 +487,10 @@ describe("Terminal full screen", () => {
       document.dispatchEvent(new Event("fullscreenchange"));
     });
     expect(screen.getByTestId("terminal-region").className).not.toContain("fixed");
-    expect(toggle.getAttribute("aria-label")).toBe("Full screen");
+    expect(screen.getByTestId("terminal-fullscreen").getAttribute("aria-label")).toBe(
+      "Full screen",
+    );
+    expect(screen.queryByTestId("terminal-exit-fullscreen")).toBeNull();
     expect(exit).not.toHaveBeenCalled();
   });
 
@@ -491,9 +501,13 @@ describe("Terminal full screen", () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
     await user.click(screen.getByTestId("terminal-fullscreen"));
-    expect(screen.getByTestId("terminal-region").className).toContain("fixed");
+    const region = screen.getByTestId("terminal-region");
+    expect(region.className).toContain("fixed");
+    // The region covers the page header: the way out must live inside it (#170).
+    await user.click(within(region).getByRole("button", { name: "Exit full screen" }));
+    expect(screen.getByTestId("terminal-region").className).not.toContain("fixed");
     expect(screen.getByTestId("terminal-fullscreen").getAttribute("aria-label")).toBe(
-      "Exit full screen",
+      "Full screen",
     );
   });
 });

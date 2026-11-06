@@ -39,6 +39,8 @@ export interface LayoutProps {
   header?: ReactNode;
   /** Extra ⌘K groups, listed after the `ShellConfig.nav` destinations and before Theme and Account. */
   commandGroups?: CommandGroupEntry[];
+  /** Also list the palette's built-in Navigation, Theme and Account groups (default true). */
+  commandBuiltIns?: boolean;
   /**
    * Whether `<main>` gets the shell's default horizontal + vertical padding.
    * Defaults to `true`. Set `false` when pages own their own padding (e.g. via
@@ -59,6 +61,7 @@ export interface LayoutProps {
 export function Layout({
   header,
   commandGroups,
+  commandBuiltIns,
   padded = true,
   mainClassName,
   className,
@@ -156,7 +159,7 @@ export function Layout({
   return (
     <div className={cn("min-h-dvh bg-background text-foreground", className)}>
       {/* Single shared command palette dialog — mounted once. */}
-      <CommandPaletteDialog groups={commandGroups} />
+      <CommandPaletteDialog groups={commandGroups} builtIns={commandBuiltIns} />
 
       {header ?? (
         <SidebarNav

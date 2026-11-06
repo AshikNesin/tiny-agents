@@ -51,6 +51,8 @@ describe("storage API", () => {
     });
     expect(download.status).toBe(200);
     expect(download.headers.get("content-type")).toContain("text/plain");
+    // Inline text says its charset, or browsers decode UTF-8 as windows-1252.
+    expect(download.headers.get("content-type")).toMatch(/charset=utf-8/i);
     expect(download.headers.get("content-disposition")).toContain('filename="hello.txt"');
     expect(await download.text()).toBe("hello groot");
 

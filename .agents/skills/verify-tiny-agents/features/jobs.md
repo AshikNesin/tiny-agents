@@ -39,7 +39,7 @@ Preconditions:
 
 ## Gotchas
 
-- KNOWN PRODUCT BUG: every in-app link to a job points at `/jobs/<id>` (row link, `View job` toast after Add Job, `View new job` after Re-run), but the app mounts `/jobs/:queueName/:jobId`, so `/jobs/<id>` falls through to `*` → `/` → `/chats/<last bot>`. The journey asserts the correct behaviour in two steps and fails at the end; it reaches details by the mounted URL meanwhile.
+- Regression check for #169 (fixed 2026-11): the kit links to `/jobs/<id>` (row link, `View job` toast after Add Job, `View new job` after Re-run), which the app now mounts beside `/jobs/:queueName/:jobId`; before the fix those links fell through to `/chats`. Two steps assert the links open the job.
 - `Resume` and `Retry` set the run time to now: resuming an armed routine's job fires that routine's occurrence early (a real routine run on the faux model) and queues the next one.
 - Deleting a routine only cancels its pending job; cancelled and completed jobs stay listed. The journey's last cleanup deletes every job carrying its routine id or stamp.
 - Type the payload with `keyboard.insertText` (CodeMirror auto-closes quotes on `type()`), and edit the payload before opening the `Job type` menu: the menu's focus return can swallow the editor click.

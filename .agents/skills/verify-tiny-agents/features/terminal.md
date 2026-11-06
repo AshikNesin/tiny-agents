@@ -36,12 +36,12 @@ Preconditions:
 - **Full screen.** `Full screen` (exact) → `document.fullscreenElement` is `terminal-region`, which fills the viewport. Leave with `document.exitFullscreen()` (stands in for Esc) and the button reads `Full screen` again.
 - **Busy close.** In the second tab run `sleep 600`; within ~5 s the tab shows `sleep`; `Close tab <n>` → alertdialog `sleep is running in this tab` → `Force close`; the tab and its tmux session are gone.
 - **Plain close.** `Close tab <n>` on the idle first tab: no dialog, tab and session gone.
-- **CSS-only full screen.** A second page with `Element.prototype.requestFullscreen` deleted (iPhone Safari has none for a div): `Full screen` makes the region `fixed`; `Exit full screen` must be clickable. Currently fails (see Gotchas).
+- **CSS-only full screen.** A second page with `Element.prototype.requestFullscreen` deleted (iPhone Safari has none for a div): `Full screen` makes the region `fixed`; `Exit full screen`, inside the region, must leave it (regression check for #170).
 - **Proof.** `ta-verify drive $S/journeys/terminal.mjs` → `terminal/open`, `command-output`, `fullscreen`, `busy-close-confirm`, `closed`, `css-fullscreen`.
 
 ## Gotchas
 
-- PRODUCT BUG: without the Fullscreen API (iPhone Safari) full screen is CSS only (`fixed inset-0 z-40` region) and covers the page header, so `Exit full screen` is unclickable and Esc goes to the shell: the owner is stuck until a reload. Under the real Fullscreen API the header is not rendered either; there the browser's Esc (hold Esc while the keyboard lock holds it) leaves. Evidence: `terminal/css-fullscreen.png`, the failing last step in `terminal/result.json`.
+- Regression check for #170 (fixed 2026-11): in full screen the region covers the page header, so the exit control now lives inside the region (`terminal-exit-fullscreen`) and the header shows only `Full screen`. Under the real Fullscreen API the header is not rendered either; the in-region exit or the browser's Esc leaves.
 - Assert on WebSocket frames, never canvas pixels: xterm renders on WebGL. Text the shell echoes as you type also arrives as frames, so make the expected output differ from the typed text.
 - Two buttons are named `New tab` (header and strip); scope to the tablist. `getByRole` names match substrings: use `exact: true` for `Full screen` (else it also matches `Exit full screen`).
 - The VM's bash history persists between drives; `Arrow up` can recall an old command into the line. Send `Ctrl+C` before typing the next command.

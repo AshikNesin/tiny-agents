@@ -222,6 +222,9 @@ export function AppShell() {
         <Layout
           header={<span />}
           commandGroups={commandGroups}
+          // AppShell builds its own Navigation (guest- and Code-aware), Theme and
+          // Account groups: the shell's built-ins would list them twice (#166).
+          commandBuiltIns={false}
           padded={!inChats}
           className="bg-background"
           mainClassName={inChats ? "h-dvh overflow-hidden" : "min-h-dvh"}

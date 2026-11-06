@@ -87,18 +87,21 @@ Run `../scripts/full-pass.sh` (it refuses to start if a journey is missing from 
 2. One `up --sandbox --shelley` run for terminal, computer, browser, code and claude-plan.
 3. One `up --empty` run for setup.
 
-Expected failures are listed under Known product bugs; anything else failing is new.
+Every journey is expected to pass; a failure is a regression or a new bug.
 
-## Known product bugs (journeys assert the correct behaviour)
+## Regression checks for fixed bugs
 
-- `vault`: a wrong step-up password signs the owner out (the step-up 401 hits the shell's global 401 handler).
-- `chat-attachments`: the enlarged image viewer is clipped to its message row and Download covers Close.
-- `command-palette`, `account-shell`: ⌘K lists Navigation, Theme and Account twice (shell groups plus the app's), including `Code` when no coding agent is configured.
-- `bot-to-bot`: `+` → `Mention a bot` inserts `@` but focus returns to `+`, so the mention list never opens.
-- `storage`: View shows UTF-8 text garbled (`text/plain` without a charset).
-- `jobs`: every in-app link to a job goes to `/jobs/<id>`, a route that isn't mounted.
-- `terminal`: CSS full screen (no Fullscreen API, e.g. iPhone Safari) covers the header, so it can't be exited.
-- `claude-plan`: with the engine off, the card says no sandbox is configured even when one is.
+These steps caught real bugs in the 2026-11 pass; the bugs are fixed and the steps now guard against regressions:
+
+- `vault` (#164): a wrong step-up password is refused with 403 and the owner stays signed in.
+- `chat-attachments` (#165): the enlarged image viewer covers the window and closes.
+- `command-palette`, `account-shell` (#166): ⌘K lists each destination once and nothing unconfigured.
+- `bot-to-bot` (#167): `+` → `Mention a bot` opens the mention list.
+- `storage` (#168): View shows UTF-8 text correctly.
+- `jobs` (#169): job rows and toast links open the job.
+- `terminal` (#170): CSS full screen (no Fullscreen API) can be left from inside the region.
+- `claude-plan` (#171): with the engine off, the card never claims there is no sandbox.
+- `storage`, `jobs` (#172): no `<li>` nested in `<li>` in `result.json` `consoleErrors`.
 
 ## Unreachable here (prerequisite)
 

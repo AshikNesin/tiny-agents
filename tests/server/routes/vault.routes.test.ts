@@ -132,7 +132,7 @@ describe("vault routes", () => {
     const response = await createGithub("not-a-token");
     expect(response.status).toBe(403);
     const wrong = await vault("/step-up", { method: "POST", json: { password: "nope" } });
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(403);
     expect(await db.$count(vaultItems)).toBe(0);
   });
 
@@ -153,7 +153,7 @@ describe("vault routes", () => {
         token: legacyToken,
       });
     expect((await step(PASSWORD)).status).toBe(200);
-    expect((await step("nope")).status).toBe(401);
+    expect((await step("nope")).status).toBe(403);
   });
 
   it("creates, lists, reveals and deletes with step-up; values never stored in the clear", async () => {

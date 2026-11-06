@@ -69,8 +69,8 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await palette.getByRole("combobox").fill("Tasks");
     await expect(palette.getByRole("option", { name: "Tasks" }).first()).toBeVisible();
   });
-  // PRODUCT BUG (reported): the shell adds a Navigation group from ShellConfig.nav and the app
-  // adds its own, so every destination is listed twice.
+  // Regression check for #166: the shell used to add its Navigation group from
+  // ShellConfig.nav next to the app's own, listing every destination twice.
   await bugStep("⌘K palette lists each destination once", async () => {
     await expect(page.getByRole("dialog").getByRole("option", { name: "Tasks" })).toHaveCount(1, {
       timeout: 2000,
@@ -127,13 +127,12 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
     await expect(sidebar.getByText("Demo User")).toBeVisible();
   });
-  await step("Claude plan tab: engine off, no sandbox, no sign-in button", async () => {
+  await step("Claude plan tab: engine off, no account line, no sign-in button", async () => {
     await page.getByRole("tab", { name: "Claude plan" }).click();
     const panel = page.getByRole("tabpanel", { name: "Claude plan" });
     await expect(panel).toContainText("The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1");
-    await expect(panel.getByTestId("claude-plan-account")).toHaveText(
-      "No sandbox is configured. Set SANDBOX_HOST, or run pnpm sandbox:up for a local one.",
-    );
+    // With the engine off the account line says nothing true either way (#171).
+    await expect(panel.getByTestId("claude-plan-account")).toHaveCount(0);
     await expect(panel.getByTestId("claude-plan-sign-in")).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "Check again" })).toHaveCount(0);
   });

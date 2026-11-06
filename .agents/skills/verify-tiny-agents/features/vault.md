@@ -42,7 +42,7 @@ Preconditions:
 
 ## Gotchas
 
-- **Product bug:** a wrong step-up password signs the owner out. `/vault/step-up` answers 401 `Wrong password`, and the shell's global 401 handler (`packages/shell/src/store/auth.ts`) treats any 401 as an expired session: the app jumps to `/login` and unsaved vault edits are lost. The journey's last step asserts the correct behaviour (dialog stays open) and fails until that is fixed.
+- Regression check for #164 (fixed 2026-11): `/vault/step-up` used to answer a wrong password with 401, which the shell's global 401 handler read as an expired session, signing the owner out. It answers 403 now; the last step asserts the dialog stays open and the session survives.
 - Step-up calls count toward the auth rate limit (20 per 15 min per instance) like logins.
 - Toasts stack (`Saved`, `Key saved`, `Key copied…`); assert the stored state rather than a toast that may be hidden under newer ones.
 - The contact form has two `Name` fields (item name and the contact's name) and the feedback widget has its own `Email (optional)`; use `exact` names / `first()`.
