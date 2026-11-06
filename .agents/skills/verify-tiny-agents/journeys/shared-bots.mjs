@@ -89,7 +89,7 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     await page.goto(`/chats/${ids[shared]}`);
     await ownerComposer.fill(`owner hello ${stamp}`);
     await ownerComposer.press("Enter");
-    await expect(page.getByText(new RegExp(`Echo: .*owner hello ${stamp}`)).first()).toBeVisible({
+    await expect(page.getByText(new RegExp(`^Echo: .*owner hello ${stamp}$`)).first()).toBeVisible({
       timeout: 30_000,
     });
   });
@@ -121,8 +121,10 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     await expect(bots.getByRole("button", { name: "New bot" })).toHaveCount(0);
     await expect(bots.getByRole("button", { name: `${shared} actions` })).toHaveCount(0);
     const nav = guestPage.getByRole("complementary", { name: "Sidebar" });
-    await expect(nav.getByRole("link", { name: "Code" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Tasks" })).toHaveCount(0);
+    // Code is the guest's only page, and it is hidden without a coding agent (verify runs).
+    for (const link of ["Tasks", "Terminal", "Computer", "Browser"]) {
+      await expect(nav.getByRole("link", { name: link, exact: true })).toHaveCount(0);
+    }
   });
   await step("guest opens the shared chat: history visible, sender labeled", async () => {
     await guestPage.goto(`/chats/${ids[shared]}`);
@@ -148,7 +150,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(guest.name, { exact: true }).first()).toBeVisible();
     // Everyone sees the bot's reply to the guest.
-    const reply = new RegExp(`Echo: .*guest hello ${stamp}`);
+    // Anchored: an unanchored regex also matches the whole transcript's text.
+    const reply = new RegExp(`^Echo: .*guest hello ${stamp}$`);
     await expect(guestPage.getByText(reply).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(reply).first()).toBeVisible({ timeout: 30_000 });
   });

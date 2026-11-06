@@ -62,6 +62,34 @@ const fail = (msg) => {
   process.exit(1);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Paths whose changes the running instance would not pick up. */
+const APP_PATHS = [
+  "apps",
+  "packages",
+  "scripts",
+  "vite.config.ts",
+  "package.json",
+  "pnpm-lock.yaml",
+  "drizzle.config.ts",
+  "tsconfig.base.json",
+];
+
+/** App files that differ between the launch revision and the working tree (committed or not). */
+function appChangesSince(revision) {
+  try {
+    const out = execFileSync(
+      "git",
+      ["-C", REPO, "diff", "--name-only", revision, "--", ...APP_PATHS],
+      {
+        encoding: "utf8",
+      },
+    );
+    return out.split("\n").filter(Boolean);
+  } catch {
+    return [`(git diff against ${revision} failed)`];
+  }
+}
+
 const head = () =>
   execFileSync("git", ["-C", REPO, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
 
@@ -426,11 +454,15 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
   );
   const ready = await getJson(`${run.url}/ready`);
   check("/ready ok", ready.status === 200, JSON.stringify(ready.body ?? ready.error));
-  const current = head();
+  // No watcher: the instance runs the code it booted with. Only app sources count;
+  // commits or edits that touch nothing but docs or this skill don't make it stale.
+  const stale = appChangesSince(run.revision);
   check(
-    "revision matches launch",
-    current === run.revision,
-    `launched ${run.revision}, HEAD ${current} (no watch: relaunch after code changes)`,
+    "app code unchanged since launch",
+    stale.length === 0,
+    stale.length
+      ? `changed since ${run.revision}: ${stale.slice(0, 5).join(", ")}${stale.length > 5 ? ", …" : ""} (relaunch)`
+      : `launched at ${run.revision}, HEAD ${head()}`,
   );
   const spa = await fetch(`${run.url}/login`)
     .then((r) => r.text())

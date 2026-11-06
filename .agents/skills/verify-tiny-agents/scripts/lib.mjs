@@ -103,6 +103,14 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
     baseURL: BASE,
     viewport: { width: 1280, height: 860 },
   });
+  // The instance is a Vite dev server: its HMR socket (port + 1) would push live
+  // updates, even full reloads, into the page when anything in the checkout
+  // changes mid-drive. Answer it with a socket that stays open and silent.
+  const hmrPort = String(Number(new URL(BASE).port) + 1);
+  await context.routeWebSocket(
+    (url) => url.port === hmrPort,
+    () => {},
+  );
   const page = await context.newPage();
   const consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(String(e)));
