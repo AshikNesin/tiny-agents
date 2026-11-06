@@ -14,7 +14,6 @@
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
-  MCP_DEFER_THRESHOLD,
   SKIP_REPLY,
   type AgentRuntime,
   type AttachmentRef,
@@ -25,6 +24,7 @@ import {
 import { db, bots } from "../../db";
 import { resolveAttachments } from "../uploads/uploads.attach";
 import { participantNames } from "../people/people.service";
+import { botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
 
 /** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
 export interface BotRow {
@@ -88,34 +88,6 @@ const withLinks = {
   guests: { columns: { userId: true } },
 } as const;
 
-/**
- * The built-in toolkits every bot gets. There is no per-bot selection: a bot
- * is shaped by its tool permissions (Off removes a tool from the model), and
- * effectful tools ask the owner before they run (ADR 0004).
- */
-export const BOT_TOOLKITS = [
-  "tasks",
-  "routines",
-  "web",
-  "sandbox",
-  "browser",
-  "computer",
-  "bots",
-  "skills",
-  "memory",
-  "self-improve",
-  "today",
-  "questions",
-  "vault",
-  "attachments",
-  "code",
-] as const;
-
-/** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */
-export function connectionCapabilityId(slug: string): string {
-  return `mcp:${slug}`;
-}
-
 function parseJson<T>(raw: string, fallback: T): T {
   try {
     return JSON.parse(raw) as T;
@@ -149,11 +121,6 @@ export type BotConversationRuntime = Pick<
   AgentRuntime,
   "createConversation" | "configure" | "submit" | "catalog"
 >;
-
-/** Whether the bot's model reads image blocks natively (else the see_image side-call). */
-function modelSeesImages(rt: Pick<AgentRuntime, "catalog">, modelId: string): boolean {
-  return Boolean(rt.catalog.info(modelId)?.vision);
-}
 
 /** A bot that does not exist yet: the fields its first conversation is created from. */
 export interface BotDraft {
@@ -193,8 +160,7 @@ export function sharedChatGuidance(names: string[]): string {
 
 /**
  * What the bot's durable conversation runs with: persona, model and
- * capabilities: every built-in toolkit, its connections, and the automatic
- * ones (vision for text-only models, tool search for large connections).
+ * capabilities (which ones is `botToolkits`'s decision, bot-toolkits.ts).
  * `unattended` (a routine's conversation): calls that would ask are refused.
  */
 function agentConfig(
@@ -204,10 +170,6 @@ function agentConfig(
   /** Everyone in a shared chat (issue #145); empty when it is not shared. */
   participants: string[] = [],
 ): BotAgentConfig {
-  const connections = bot.connections ?? [];
-  const largeServer = connections.some(
-    (link) => enabledToolCount(link.connection) > MCP_DEFER_THRESHOLD,
-  );
   return {
     modelId: bot.modelId,
     systemPrompt: unattended
@@ -216,27 +178,15 @@ function agentConfig(
         ? [bot.systemPrompt.trim(), sharedChatGuidance(participants)].filter(Boolean).join("\n\n")
         : bot.systemPrompt,
     capabilities: {
-      enabled: [
-        ...BOT_TOOLKITS,
-        // The see_image side-call is only for models without native vision.
-        ...(modelSeesImages(rt, bot.modelId) ? [] : ["vision"]),
-        ...connections.map((link) => connectionCapabilityId(link.connection.slug)),
-        ...(largeServer ? ["tool-search"] : []),
-      ],
+      enabled: botToolkits(
+        { modelId: bot.modelId, connections: bot.connections?.map((link) => link.connection) },
+        rt.catalog,
+      ),
       permissions: bot.toolPermissions,
       ...(bot.autoReview ? { autoReview: true } : {}),
       ...(unattended ? { unattended: true } : {}),
     },
   };
-}
-
-/** Tools the connection installs: the cached list minus those turned off. */
-function enabledToolCount(connection: ConnectionLink["connection"]): number {
-  const tools = parseJson<unknown>(connection.toolsCache, []);
-  const disabled = parseJson<unknown>(connection.disabledTools, []);
-  if (!Array.isArray(tools)) return 0;
-  const off = new Set(Array.isArray(disabled) ? disabled : []);
-  return tools.filter((tool: { name?: unknown }) => !off.has(tool?.name)).length;
 }
 
 /** Config from a bot row; a shared bot's chat (not its routines) also names its people. */
@@ -314,7 +264,7 @@ export async function submitToBot(
   target?: SubmitTarget,
 ): Promise<{ bot: Bot; attachments?: AttachmentRef[] }> {
   const row = await findBotRow(id);
-  const resolved = await resolveAttachments(submission, modelSeesImages(rt, row.modelId));
+  const resolved = await resolveAttachments(submission, modelSeesImages(rt.catalog, row.modelId));
   const conversation = Number(target?.routineConversationId ?? row.conversationId);
   await rt.configure(conversation, await rowConfig(row, rt, target !== undefined));
   await rt.submit(conversation, {

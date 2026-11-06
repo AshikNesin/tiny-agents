@@ -7,7 +7,7 @@ import {
   onBotChatEvent,
   type BotChatEvent,
 } from "../../../apps/web/src/server/api/bots/bots.events";
-import { BOT_TOOLKITS } from "../../../apps/web/src/server/api/bots/bots.conversation";
+import { botToolkits } from "../../../apps/web/src/server/api/bots/bot-toolkits";
 import { InvalidAnswersError } from "../../../packages/agent/src/toolkits/questions";
 import { CHAT_WINDOW } from "../../../packages/agent/src/transcript";
 import type { AgentRuntime } from "../../../packages/agent/src/index";
@@ -134,7 +134,7 @@ describe("Bots API routes", () => {
     rt = await openAppRuntime();
     const realOnActivity = rt.onActivity.bind(rt);
     realWatchChat = rt.watchChat.bind(rt);
-    enabled = rt.catalog.info(TEST_MODEL)?.vision ? [...BOT_TOOLKITS] : [...BOT_TOOLKITS, "vision"];
+    enabled = botToolkits({ modelId: TEST_MODEL }, rt.catalog);
     agentRuntime = spyOnRuntime(rt);
     activityListeners = 0;
     agentRuntime.onActivity.mockImplementation((listener) => {
@@ -852,7 +852,10 @@ it("leaves the vision side-call out for a model with native vision", async () =>
   expect(fake.configure).toHaveBeenCalledWith(777, {
     modelId: "vision-model",
     systemPrompt: "You help.",
-    capabilities: { enabled: [...BOT_TOOLKITS], permissions: {} },
+    capabilities: {
+      enabled: botToolkits({ modelId: "vision-model" }, fake.catalog),
+      permissions: {},
+    },
   });
   // Created through the API, a vision-model bot gets no vision toolkit either.
   const created = await call("/api/v1/bots", {
@@ -862,7 +865,10 @@ it("leaves the vision side-call out for a model with native vision", async () =>
   expect(created.status).toBe(201);
   expect(fake.createConversation).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      capabilities: { enabled: [...BOT_TOOLKITS], permissions: {} },
+      capabilities: {
+        enabled: botToolkits({ modelId: "vision-model" }, fake.catalog),
+        permissions: {},
+      },
     }),
   );
 });
