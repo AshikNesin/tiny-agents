@@ -162,9 +162,15 @@ export function ClaudePlanStatusCard() {
         <p>
           <Text>{error ?? engineLine(status)}</Text>
         </p>
-        <p>
-          <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
-        </p>
+        {/* With the engine off there is no worker, so the account check reports
+            "unconfigured" even when a sandbox is set up: saying "No sandbox is
+            configured" then is wrong (#171). The line only means something with
+            the engine on. */}
+        {status?.enabled === false ? null : (
+          <p>
+            <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
+          </p>
+        )}
         {onSandbox ? <AccountActions account={account} onCheck={() => void check()} /> : null}
         {status ? (
           <p>

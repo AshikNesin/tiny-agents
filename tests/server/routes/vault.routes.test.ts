@@ -132,8 +132,35 @@ describe("vault routes", () => {
     const response = await createGithub("not-a-token");
     expect(response.status).toBe(403);
     const wrong = await vault("/step-up", { method: "POST", json: { password: "nope" } });
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(403);
     expect(await db.$count(vaultItems)).toBe(0);
+  });
+
+  it("refuses a passkey it does not know with 403, never 401 (#164)", async () => {
+    // A 401 reads as an expired session in the client and signs the owner out.
+    const options = await vault("/step-up/options", { method: "POST" });
+    expect(options.status).toBe(200);
+    const clientDataJSON = Buffer.from(
+      JSON.stringify({
+        type: "webauthn.get",
+        challenge: options.body.data.challenge,
+        origin: "http://localhost:3000",
+      }),
+    ).toString("base64url");
+    const unknown = await vault("/step-up", {
+      method: "POST",
+      json: {
+        passkey: {
+          id: "not-a-registered-credential",
+          rawId: "not-a-registered-credential",
+          type: "public-key",
+          clientExtensionResults: {},
+          response: { clientDataJSON, authenticatorData: "", signature: "" },
+        },
+      },
+    });
+    expect(unknown.status).toBe(403);
+    expect(unknown.body.error?.message).toMatch(/Passkey not found/);
   });
 
   it("accepts the password of an account made before groot 3.0 (bcrypt hash)", async () => {
@@ -153,7 +180,7 @@ describe("vault routes", () => {
         token: legacyToken,
       });
     expect((await step(PASSWORD)).status).toBe(200);
-    expect((await step("nope")).status).toBe(401);
+    expect((await step("nope")).status).toBe(403);
   });
 
   it("creates, lists, reveals and deletes with step-up; values never stored in the clear", async () => {

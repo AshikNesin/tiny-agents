@@ -52,9 +52,18 @@ export function CommandPaletteTrigger() {
 /**
  * The command palette dialog: render once at the app root. It lists the
  * `ShellConfig.nav` destinations, then the app's own `groups`, then the
- * built-in Theme and Account (log out) commands.
+ * built-in Theme and Account (log out) commands. An app that builds its own
+ * Navigation, Theme and Account groups passes `builtIns={false}` so they are
+ * not listed twice.
  */
-export function CommandPaletteDialog({ groups = [] }: { groups?: CommandGroupEntry[] }) {
+export function CommandPaletteDialog({
+  groups = [],
+  builtIns = true,
+}: {
+  groups?: CommandGroupEntry[];
+  /** List the shell's Navigation, Theme and Account groups (default true). */
+  builtIns?: boolean;
+}) {
   const open = useCommandPaletteStore((state) => state.open);
   const setOpen = useCommandPaletteStore((state) => state.setOpen);
   const navigate = useNavigate();
@@ -70,38 +79,40 @@ export function CommandPaletteDialog({ groups = [] }: { groups?: CommandGroupEnt
     [setOpen],
   );
 
-  const resolvedGroups: CommandGroupEntry[] = [
-    ...(nav.length > 0
-      ? [
-          {
-            id: "shell-navigation",
-            heading: "Navigation",
-            items: nav.map((item) => ({
-              id: item.to,
-              label: item.label,
-              icon: item.icon,
-              onSelect: () => navigate(item.to),
-            })),
-          },
-        ]
-      : []),
-    ...groups,
-    {
-      id: "shell-theme",
-      heading: "Theme",
-      items: THEME_OPTIONS.map(({ value, label, icon }) => ({
-        id: `theme-${value}`,
-        label: `${label} theme`,
-        icon,
-        onSelect: () => setTheme(value),
-      })),
-    },
-    {
-      id: "shell-account",
-      heading: "Account",
-      items: [{ label: "Log out", icon: LogOut, onSelect: signOut, variant: "destructive" }],
-    },
-  ];
+  const resolvedGroups: CommandGroupEntry[] = builtIns
+    ? [
+        ...(nav.length > 0
+          ? [
+              {
+                id: "shell-navigation",
+                heading: "Navigation",
+                items: nav.map((item) => ({
+                  id: item.to,
+                  label: item.label,
+                  icon: item.icon,
+                  onSelect: () => navigate(item.to),
+                })),
+              },
+            ]
+          : []),
+        ...groups,
+        {
+          id: "shell-theme",
+          heading: "Theme",
+          items: THEME_OPTIONS.map(({ value, label, icon }) => ({
+            id: `theme-${value}`,
+            label: `${label} theme`,
+            icon,
+            onSelect: () => setTheme(value),
+          })),
+        },
+        {
+          id: "shell-account",
+          heading: "Account",
+          items: [{ label: "Log out", icon: LogOut, onSelect: signOut, variant: "destructive" }],
+        },
+      ]
+    : groups;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

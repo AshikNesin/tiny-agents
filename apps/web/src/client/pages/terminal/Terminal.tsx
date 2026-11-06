@@ -412,6 +412,21 @@ export function TerminalPage() {
           >
             <Plus />
           </Button>
+          {/* Inside the region, so it stays reachable in the CSS full screen that
+              covers the page header (no Fullscreen API on iOS Safari, #170). */}
+          {fullscreen && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleFullscreen}
+              aria-label="Exit full screen"
+              title="Exit full screen"
+              className="my-1 ml-auto shrink-0 self-center text-muted-foreground hover:text-foreground"
+              data-testid="terminal-exit-fullscreen"
+            >
+              <Minimize2 className="size-4" />
+            </Button>
+          )}
         </div>
         {/* The terminal row: the view column and the keys panel. Below md
             the panel overlays the terminal (it is positioned against this
@@ -521,17 +536,21 @@ export function TerminalPage() {
                 >
                   <Keyboard className="size-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={toggleFullscreen}
-                  aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-                  title={fullscreen ? "Exit full screen" : "Full screen"}
-                  className="text-muted-foreground hover:text-foreground"
-                  data-testid="terminal-fullscreen"
-                >
-                  {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-                </Button>
+                {/* Enter only: in full screen the region covers this header, so the
+                    exit control lives inside the region (#170). */}
+                {!fullscreen && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={toggleFullscreen}
+                    aria-label="Full screen"
+                    title="Full screen"
+                    className="text-muted-foreground hover:text-foreground"
+                    data-testid="terminal-fullscreen"
+                  >
+                    <Maximize2 className="size-4" />
+                  </Button>
+                )}
               </>
             )}
             <Button onClick={() => void create()} disabled={creating} data-testid="terminal-create">

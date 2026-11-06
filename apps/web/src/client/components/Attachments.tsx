@@ -1,5 +1,6 @@
 /** Attachment UI (issue #17): composer staging chips and transcript rendering. */
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { botsApi, type AttachmentRef } from "../lib/bots-api";
@@ -164,38 +165,43 @@ export function MessageAttachments({ attachments }: { attachments: AttachmentRef
         </div>
       )}
       <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
-      {enlarged && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          role="dialog"
-          aria-label={`Image ${enlarged.name}`}
-          onClick={() => setEnlarged(null)}
-        >
-          <img
-            src={botsApi.uploadUrl(enlarged.uploadId)}
-            alt={enlarged.name}
-            className="max-h-full max-w-full rounded-lg object-contain"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 rounded-full text-white"
-            aria-label="Close image"
+      {/* Portalled: a message row has content-visibility:auto, which makes it the
+          containing block for position:fixed, so an inline overlay was clipped
+          to the row (#165). */}
+      {enlarged &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            role="dialog"
+            aria-label={`Image ${enlarged.name}`}
             onClick={() => setEnlarged(null)}
           >
-            <X className="size-5" />
-          </Button>
-          <a
-            href={botsApi.uploadUrl(enlarged.uploadId)}
-            download={enlarged.name}
-            className="absolute bottom-4 right-4"
-          >
-            <Button variant="secondary" size="sm">
-              <Download className="size-4" /> Download
+            <img
+              src={botsApi.uploadUrl(enlarged.uploadId)}
+              alt={enlarged.name}
+              className="max-h-full max-w-full rounded-lg object-contain"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 rounded-full text-white"
+              aria-label="Close image"
+              onClick={() => setEnlarged(null)}
+            >
+              <X className="size-5" />
             </Button>
-          </a>
-        </div>
-      )}
+            <a
+              href={botsApi.uploadUrl(enlarged.uploadId)}
+              download={enlarged.name}
+              className="absolute bottom-4 right-4"
+            >
+              <Button variant="secondary" size="sm">
+                <Download className="size-4" /> Download
+              </Button>
+            </a>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
