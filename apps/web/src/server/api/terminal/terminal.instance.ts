@@ -8,7 +8,6 @@ import { createTerminalService, type TerminalService } from "@tiny-agents/agent/
 import { sandboxConnection } from "../bots/sandbox-host";
 
 let instance: TerminalService | undefined;
-let overridden = false;
 
 export function getTerminalService(): TerminalService {
   if (instance) return instance;
@@ -23,9 +22,4 @@ export function getTerminalService(): TerminalService {
 /** Route/WS tests inject a fake; pass undefined to restore production. */
 export function setTerminalServiceForTests(fake: TerminalService | undefined): void {
   instance = fake;
-  overridden = Boolean(fake);
-}
-
-export function terminalServiceOverriddenForTests(): boolean {
-  return overridden;
 }

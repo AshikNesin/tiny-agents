@@ -122,15 +122,6 @@ export async function setBotGuests(botId: string, userIds: number[]): Promise<vo
   });
 }
 
-/** The bots shared with a guest. */
-export async function sharedBotIds(userId: number): Promise<string[]> {
-  const rows = await db
-    .select({ botId: botGuests.botId })
-    .from(botGuests)
-    .where(eq(botGuests.userId, userId));
-  return rows.map((row) => row.botId);
-}
-
 /** Whether this viewer may open the bot: the owner always, a guest when it is shared with them. */
 export async function canOpenBot(viewer: Viewer, botId: string): Promise<boolean> {
   if (!viewer.guest) return true;
