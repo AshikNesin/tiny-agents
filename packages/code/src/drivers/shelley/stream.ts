@@ -16,8 +16,6 @@ import { isWorking, type ShelleyFrame, type ShelleyRow } from "./wire";
 
 export interface TurnEnd {
   conversationId: string;
-  /** Shelley's `agent_done` final response, when it sent one (top-level conversations). */
-  finalResponse?: string;
 }
 
 export interface StreamOptions {
@@ -148,9 +146,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
     const was = working.get(id);
     working.set(id, nowWorking);
     if (was === true && !nowWorking) {
-      const done =
-        frame.notification_event?.type === "agent_done" ? frame.notification_event : undefined;
-      emit(turnEndListeners, { conversationId: id, finalResponse: done?.payload?.final_response });
+      emit(turnEndListeners, { conversationId: id });
     }
   }
 

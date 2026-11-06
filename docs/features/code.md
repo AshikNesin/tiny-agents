@@ -151,6 +151,25 @@ waits for the owner on the Code page.
   `ThreadFeed` the whole thread (a snapshot, the full row list, the streaming
   text, state); the feed keeps the event order for every watcher, so no
   driver writes it again.
+- **Turn outcome:** `packages/code/src/server/outcome.ts`. Both `outcome()`
+  and the `turn_ended` event are `turnOutcome(thread, rows, endedAt)`, so a
+  hand-off finish, `code_status` and a push read the same thing for every
+  harness:
+  - the text is the newest turn's last answer (consecutive text rows are
+    one answer) or its error (`failed`), cut to a chat-sized excerpt;
+  - a turn ends at a turn row or an error. A message after the newest turn
+    end opened a new turn, so with nothing answered since the text is empty
+    (never an earlier turn's answer). A steer went into the running turn, so
+    that turn's answer before it still counts;
+  - `endedAt` is when the harness last wrote to the turn, on its own record
+    (Shelley's newest agent or error message, Claude Code's newest result),
+    and is absent while the thread works.
+
+  `turn_ended` fires once the harness is idle (a steer Claude Code runs as
+  its own SDK turn is part of the turn it went into) and carries the outcome;
+  the watcher only reads it. Thread ids are split only by `parseThreadId`
+  (bare ids from before ADR 0011 belong to `shelley`).
+
 - **App:** `apps/web/src/server/api/code/`:
   - `code.registry.ts`: which harnesses run, from env.
   - `code.hub.ts`: starts every instance, caches the decorated lists, counts
@@ -186,9 +205,11 @@ streaming text if a turn is still running.
      list and state (not diffs);
    - honest capabilities.
 2. Add one entry in `code.registry.ts`, with its config.
-3. Make the tests pass: `capabilityProblems(instance)` and
-   `threadEventProblems(events)` (on what a watcher received) must be empty,
-   plus the shared scenarios (a simple turn, multi-turn, queued turn,
+3. Make the tests pass: `capabilityProblems(instance)`,
+   `threadEventProblems(events)` (on what a watcher received) and
+   `turnOutcomeProblems(snapshot, outcome, ended)` must be empty, the shared
+   turn-outcome cases (`tests/server/code/turn-outcome-conformance.ts`) must
+   pass on the driver's fake, plus the shared scenarios (a simple turn, multi-turn, queued turn,
    interrupt, stop before start, steer, approvals, resume after reconnect).
 4. Add a row to the table above and a short section here.
 

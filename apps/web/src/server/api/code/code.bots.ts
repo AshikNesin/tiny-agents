@@ -9,6 +9,8 @@ import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
 import {
   HarnessError,
+  LEGACY_INSTANCE_ID,
+  parseThreadId,
   threadIdOf,
   type HarnessInstance,
   type TurnOutcome,
@@ -35,8 +37,9 @@ function instances(): HarnessInstance[] {
 }
 
 function labelOf(threadId: string): string {
-  const instanceId = threadId.split(":")[0] ?? "";
-  return codeHub()?.instance(instanceId)?.label ?? instanceId;
+  const target = codeHub()?.resolve(threadId);
+  if (target) return target.instance.label;
+  return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? threadId;
 }
 
 function toRecord(row: CodeHandoff): CodeHandoffRecord {

@@ -2,8 +2,9 @@
  * `@tiny-agents/code/testing`: what driver tests share — an in-memory
  * thread index, a quiet host, and the contract checks every driver must
  * pass: a capability is on exactly when its method exists
- * (`capabilityProblems`), and a watch keeps the event order
- * (`threadEventProblems`).
+ * (`capabilityProblems`), a watch keeps the event order
+ * (`threadEventProblems`), and a turn's outcome keeps the one rule
+ * (`turnOutcomeProblems`).
  */
 import type {
   Capabilities,
@@ -12,7 +13,10 @@ import type {
   IndexedThread,
   ThreadEvent,
   ThreadIndex,
+  ThreadSnapshot,
+  TurnOutcome,
 } from "./contracts";
+import { turnAnswer } from "./server/outcome";
 
 export function memoryIndex(): ThreadIndex & { rows: Map<string, IndexedThread> } {
   const rows = new Map<string, IndexedThread>();
@@ -180,6 +184,63 @@ export function threadEventProblems(events: readonly ThreadEvent[]): string[] {
   });
   if (owed !== undefined) {
     problems.push(`${at(owed, events[owed]!)} dropped the streaming text without re-sending it`);
+  }
+  return problems;
+}
+
+/**
+ * Problems with what a driver says a thread's turn came to, read against the
+ * thread it shows (`getThread`) with nothing changing in between. Empty when
+ * the driver keeps the turn-outcome rule (`turnOutcome`):
+ *
+ * - `working`, `title`, `cwd` and `cursor` are the thread's;
+ * - `text` and `failed` are the rule's answer over the thread's rows
+ *   (`turnAnswer`), so chat-sized and the same for every harness;
+ * - `endedAt` is a time, absent while the thread works and present once an
+ *   idle thread has an answer;
+ * - a `turn_ended` event's outcome (`ended`) is what `outcome()` answers.
+ */
+export function turnOutcomeProblems(
+  snapshot: Pick<ThreadSnapshot, "thread" | "items">,
+  outcome: TurnOutcome,
+  ended?: TurnOutcome,
+): string[] {
+  const problems: string[] = [];
+  const { thread } = snapshot;
+  for (const key of ["working", "title", "cwd", "cursor"] as const) {
+    if (outcome[key] !== thread[key]) {
+      problems.push(
+        `${key} is ${JSON.stringify(outcome[key])}, the thread's is ${JSON.stringify(thread[key])}`,
+      );
+    }
+  }
+  const answer = turnAnswer(snapshot.items);
+  if (outcome.text !== answer.text) {
+    problems.push(
+      `text is ${JSON.stringify(outcome.text)}, the rule answers ${JSON.stringify(answer.text)}`,
+    );
+  }
+  if (outcome.failed !== answer.failed) {
+    problems.push(`failed is ${outcome.failed}, the rule answers ${answer.failed}`);
+  }
+  if (outcome.endedAt !== undefined && !Number.isFinite(outcome.endedAt)) {
+    problems.push("endedAt is not a time");
+  }
+  if (outcome.working && outcome.endedAt !== undefined) {
+    problems.push("endedAt is set while the thread works");
+  }
+  if (!outcome.working && outcome.text && outcome.endedAt === undefined) {
+    problems.push("endedAt is missing for an answered turn");
+  }
+  if (ended) {
+    const keys = new Set([...Object.keys(ended), ...Object.keys(outcome)]);
+    for (const key of keys as Set<keyof TurnOutcome>) {
+      if (ended[key] !== outcome[key]) {
+        problems.push(
+          `turn_ended said ${key} ${JSON.stringify(ended[key])} but outcome() answers ${JSON.stringify(outcome[key])}`,
+        );
+      }
+    }
   }
   return problems;
 }

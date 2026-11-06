@@ -21,6 +21,8 @@ export interface FakeHarness extends HarnessInstance {
   sent: Array<{ nativeId: string; message: string; queue?: boolean }>;
   created: Array<Record<string, unknown>>;
   emit(event: InstanceEvent): void;
+  /** Report a turn end with the thread's outcome now (`outcomes`, else a finished "Done."). */
+  endTurn(nativeId: string): void;
   push(nativeId: string, event: ThreadEvent): void;
 }
 
@@ -44,6 +46,16 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     cursor: 0,
     ...extra,
   });
+  const outcomeOf = (nativeId: string): TurnOutcome =>
+    harness.outcomes.get(nativeId) ?? {
+      working: false,
+      title: nativeId,
+      cwd: "/repo",
+      text: "Done.",
+      failed: false,
+      endedAt: Date.now() + 1000,
+      cursor: 1,
+    };
   const harness: FakeHarness = {
     id,
     kind: "fake",
@@ -62,6 +74,9 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     },
     emit(event) {
       for (const listener of listeners) listener(event);
+    },
+    endTurn(nativeId) {
+      harness.emit({ type: "turn_ended", nativeId, outcome: outcomeOf(nativeId) });
     },
     push(nativeId, event) {
       for (const listener of watchers.get(nativeId) ?? []) listener(event);
@@ -89,17 +104,7 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
       return () => set.delete(listener);
     },
     async outcome(nativeId) {
-      return (
-        harness.outcomes.get(nativeId) ?? {
-          working: false,
-          title: nativeId,
-          cwd: "/repo",
-          text: "Done.",
-          failed: false,
-          endedAt: Date.now() + 1000,
-          cursor: 1,
-        }
-      );
+      return outcomeOf(nativeId);
     },
     async createThread(input) {
       created += 1;

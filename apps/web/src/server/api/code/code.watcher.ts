@@ -8,19 +8,16 @@
  *   notification when it finishes, fails or asks for the owner while no tab
  *   shows it.
  *
- * Nothing polls: instances report working → idle, and on every (re)connect
- * the running hand-offs of that instance are reconciled, so a finish missed
- * while a harness was unreachable is still delivered once.
+ * Nothing polls: instances report working → idle with the turn's outcome
+ * (the one turn-outcome rule, `@tiny-agents/code/server`), and on every
+ * (re)connect the running hand-offs of that instance are reconciled, so a
+ * finish missed while a harness was unreachable is still delivered once. The
+ * watcher only reads outcomes; it never re-derives the text or the failure.
  */
 import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { sanitizePeerText } from "@tiny-agents/agent";
-import {
-  excerpt,
-  threadIdOf,
-  type HarnessInstance,
-  type TurnOutcome,
-} from "@tiny-agents/code/server";
+import { threadIdOf, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
 import type { CodeHandoff } from "../../db";
 import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
@@ -37,7 +34,7 @@ export interface WatcherDeps {
   notify(notification: Notification): void;
 }
 
-/** The chat text a bot receives when its hand-off's turn ends. */
+/** The chat text a bot receives when its hand-off's turn ends (`text` is already chat-sized). */
 export function handoffFinishText(
   harness: string,
   handoff: Pick<CodeHandoff, "threadId" | "title">,
@@ -47,7 +44,7 @@ export function handoffFinishText(
   const head = outcome.failed
     ? `${harness} stopped with an error in **${name}**.`
     : `${harness} finished **${name}**.`;
-  const body = outcome.text ? `\n\n${sanitizePeerText(excerpt(outcome.text))}` : "";
+  const body = outcome.text ? `\n\n${sanitizePeerText(outcome.text)}` : "";
   return relayText(
     harness,
     `${head} [Open in Code](/code/${encodeURIComponent(handoff.threadId)})${body}`,
@@ -76,14 +73,12 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     }
   }
 
-  async function onTurnEnd(instance: HarnessInstance, nativeId: string, finalText?: string) {
+  async function onTurnEnd(instance: HarnessInstance, nativeId: string, outcome: TurnOutcome) {
+    // A queued message started the next turn already: wait for that one.
+    if (outcome.working) return;
     const id = threadIdOf(instance.id, nativeId);
     const [handoffs, followed] = await Promise.all([runningHandoffs([id]), isFollowed(id)]);
     if (handoffs.length === 0 && !followed) return;
-    const outcome = await instance.outcome(nativeId);
-    // A queued message started the next turn already: wait for that one.
-    if (outcome.working) return;
-    if (finalText && !outcome.failed) outcome.text = finalText;
     await deliverFinished(instance, handoffs, outcome);
     if (followed && hub.viewers(id) === 0) {
       deps.notify(
@@ -99,12 +94,17 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
 
   /** Hand-offs of this instance whose turn ended while it was unreachable. */
   async function reconcile(instance: HarnessInstance) {
-    const open = (await runningHandoffs()).filter((h) => h.threadId.startsWith(`${instance.id}:`));
-    const byThread = new Map<string, CodeHandoff[]>();
-    for (const h of open) byThread.set(h.threadId, [...(byThread.get(h.threadId) ?? []), h]);
-    for (const [threadId, handoffs] of byThread) {
+    const byThread = new Map<string, { nativeId: string; handoffs: CodeHandoff[] }>();
+    for (const h of await runningHandoffs()) {
+      const target = hub.resolve(h.threadId);
+      if (target?.instance.id !== instance.id) continue;
+      const entry = byThread.get(h.threadId) ?? { nativeId: target.nativeId, handoffs: [] };
+      entry.handoffs.push(h);
+      byThread.set(h.threadId, entry);
+    }
+    for (const [threadId, { nativeId, handoffs }] of byThread) {
       try {
-        const outcome = await instance.outcome(threadId.slice(instance.id.length + 1));
+        const outcome = await instance.outcome(nativeId);
         if (outcome.working) continue;
         // Only a turn that ended after the hand-off started counts.
         const ended = outcome.endedAt ?? 0;
@@ -132,7 +132,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
   return hub.onEvent(({ instance, event }) => {
     if (event.type === "turn_ended") {
       const id = threadIdOf(instance.id, event.nativeId);
-      void onTurnEnd(instance, event.nativeId, event.finalText).catch((error: unknown) =>
+      void onTurnEnd(instance, event.nativeId, event.outcome).catch((error: unknown) =>
         logError(error, id, "turn end"),
       );
     } else if (event.type === "connected") {

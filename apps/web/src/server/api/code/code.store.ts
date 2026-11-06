@@ -5,7 +5,13 @@
  * hand-offs (`code_handoffs`). Every harness keeps its own transcript.
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { threadIdOf, type IndexedThread, type ThreadIndex } from "@tiny-agents/code/server";
+import {
+  LEGACY_INSTANCE_ID,
+  parseThreadId,
+  threadIdOf,
+  type IndexedThread,
+  type ThreadIndex,
+} from "@tiny-agents/code/server";
 import {
   codeHandoffs,
   codeThreads,
@@ -184,7 +190,9 @@ export async function listHandoffs(
     .orderBy(desc(codeHandoffs.createdAt))
     .limit(options.instanceId ? 200 : (options.limit ?? 20));
   const filtered = options.instanceId
-    ? rows.filter((r) => r.threadId.startsWith(`${options.instanceId}:`))
+    ? rows.filter(
+        (r) => parseThreadId(r.threadId, LEGACY_INSTANCE_ID)?.instanceId === options.instanceId,
+      )
     : rows;
   return filtered.slice(0, options.limit ?? 20);
 }

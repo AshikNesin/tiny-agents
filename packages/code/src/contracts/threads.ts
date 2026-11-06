@@ -75,15 +75,20 @@ export interface ThreadSnapshot {
   costUsd: number;
 }
 
-/** A conversation's state now, for hand-offs and bot tools. */
+/**
+ * A conversation's state now, for hand-offs and bot tools. Every driver
+ * builds it with the one turn-outcome rule (`turnOutcome`,
+ * `@tiny-agents/code/server`).
+ */
 export interface TurnOutcome {
   working: boolean;
   title: string;
   cwd: string | null;
-  /** The last answer, or the last error. */
+  /** The newest turn's answer or error, chat-sized; empty when it has none yet. */
   text: string;
+  /** That answer is an error. */
   failed: boolean;
-  /** When that answer was written (ms). */
+  /** When the harness last wrote to the newest turn (ms, its own record); absent while working. */
   endedAt?: number;
   cursor: number;
 }

@@ -24,6 +24,7 @@ import {
 import { badGateway, badRequest } from "../../server/errors";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
 import { Emitter } from "../../server/items";
+import { turnOutcome } from "../../server/outcome";
 import {
   encodePath,
   qs,
@@ -36,7 +37,7 @@ import {
 import {
   assetPath,
   buildTranscript,
-  lastAnswer,
+  lastWriteAt,
   maxSequence,
   messageUserText,
   queuedMessages,
@@ -187,13 +188,17 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
   stream.onList(() => events.emit({ type: "threads" }));
   stream.onStatus((status) => events.emit({ type: "status", status }));
   stream.onConnected(() => events.emit({ type: "connected" }));
-  stream.onTurnEnd((end) =>
-    events.emit({
-      type: "turn_ended",
-      nativeId: end.conversationId,
-      ...(end.finalResponse ? { finalText: end.finalResponse } : {}),
-    }),
-  );
+  // The outcome is read after the end: a queued message may have started the next turn.
+  stream.onTurnEnd(({ conversationId: nativeId }) => {
+    outcomeOf(nativeId).then(
+      (outcome) => events.emit({ type: "turn_ended", nativeId, outcome }),
+      (error: unknown) =>
+        host.logger.warn("Could not read a Shelley turn's outcome", {
+          nativeId,
+          error: String(error),
+        }),
+    );
+  });
   stream.subscribe(null, (frame) => {
     const nativeId = frame.conversation_id;
     if (!nativeId || !frame.messages?.length) return;
@@ -279,18 +284,39 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     contextMax?: number;
   }
 
-  async function load(nativeId: string): Promise<Loaded> {
-    const [detail, children, rawSettings] = await Promise.all([
-      json<ShelleyDetail>(conv(nativeId)),
-      json<unknown>(`${conv(nativeId)}/subagents`).catch(() => []),
-      json<ShelleySettings>(`${conv(nativeId)}/settings`).catch(() => undefined),
-    ]);
+  /** The conversation's row: the list's, updated by a fresher detail read. */
+  function rowOf(nativeId: string, detail: ShelleyDetail): ShelleyRow {
     const listed = stream.list()?.find((r) => r.conversation_id === nativeId);
     const row = { ...listed, ...detail.conversation } as ShelleyRow;
     // The detail read is fresher than the list snapshot's `working`.
     if (typeof detail.conversation?.agent_working === "boolean") {
       row.working = detail.conversation.agent_working;
     }
+    if (!row.conversation_id) row.conversation_id = nativeId;
+    return row;
+  }
+
+  async function outcomeOf(nativeId: string): Promise<TurnOutcome> {
+    const detail = await json<ShelleyDetail>(conv(nativeId));
+    const messages = detail.messages ?? [];
+    const row = rowOf(nativeId, detail);
+    return turnOutcome({
+      thread: summary({
+        ...row,
+        max_sequence_id: Math.max(row.max_sequence_id ?? 0, maxSequence(messages)),
+      }),
+      items: buildTranscript(messages, id),
+      endedAt: lastWriteAt(messages),
+    });
+  }
+
+  async function load(nativeId: string): Promise<Loaded> {
+    const [detail, children, rawSettings] = await Promise.all([
+      json<ShelleyDetail>(conv(nativeId)),
+      json<unknown>(`${conv(nativeId)}/subagents`).catch(() => []),
+      json<ShelleySettings>(`${conv(nativeId)}/settings`).catch(() => undefined),
+    ]);
+    const row = rowOf(nativeId, detail);
     const settings = settingsOf(rawSettings, row);
     const models = await shelleyModels().catch(() => [] as ShelleyModel[]);
     const contextMax = models.find((m) => m.id === settings.model)?.max_context_tokens;
@@ -471,22 +497,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       };
     },
 
-    async outcome(nativeId): Promise<TurnOutcome> {
-      const detail = await json<ShelleyDetail>(conv(nativeId));
-      const messages = detail.messages ?? [];
-      const answer = lastAnswer(messages);
-      return {
-        working: isWorking(detail.conversation),
-        title: detail.conversation?.slug || nativeId,
-        cwd: detail.conversation?.cwd ?? null,
-        text: answer.text,
-        failed: answer.failed,
-        ...(answer.endedAt !== undefined && Number.isFinite(answer.endedAt)
-          ? { endedAt: answer.endedAt }
-          : {}),
-        cursor: maxSequence(messages),
-      };
-    },
+    outcome: outcomeOf,
 
     async createThread(input: CreateThreadInput) {
       const created = await json<{ conversation_id?: string }>("/conversations/new", {
