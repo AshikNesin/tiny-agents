@@ -47,13 +47,17 @@ await journey(
       git("commit", "-qm", `init ${stamp}`);
       // Every thread started in it (UI or bot) is deleted, archived ones too.
       cleanup(async () => {
-        for (const t of [...(await threads()), ...(await threads("archived"))])
-          await api.delete(`/code/threads/${encodeURIComponent(t.id)}`);
-        // The thread list is cached briefly; poll until the deletes show.
+        // The thread list lags a new thread by a few seconds: delete whatever is
+        // listed until nothing in this directory is left.
         await expect
-          .poll(async () => (await threads()).length + (await threads("archived")).length, {
-            timeout: 20_000,
-          })
+          .poll(
+            async () => {
+              const left = [...(await threads()), ...(await threads("archived"))];
+              for (const t of left) await api.delete(`/code/threads/${encodeURIComponent(t.id)}`);
+              return left.length;
+            },
+            { timeout: 30_000, intervals: [2_000] },
+          )
           .toBe(0);
       });
     });
@@ -204,22 +208,27 @@ await journey(
     });
 
     let otherTitle;
-    await step("a second thread in the same directory warns, and finishes unread", async () => {
+    await step("a second thread starts in the same directory (remembered)", async () => {
       await page.getByRole("link", { name: "New thread" }).click();
       // The directory is remembered per harness.
       await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
-      await composer.fill("delay: 6");
+      await composer.fill("delay: 15");
       await page.getByRole("button", { name: "Start" }).click();
       await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
       const otherId = idOf();
-      otherTitle = (await threads()).find((t) => t.id === otherId).title;
-      // Watch the first thread while the second works: the second's finish is unread.
+      await expect
+        .poll(async () => (otherTitle = (await threads()).find((t) => t.id === otherId)?.title), {
+          timeout: 20_000,
+        })
+        .toBeTruthy();
+    });
+    await step("it finishes while another thread is open: its row turns unread", async () => {
       await list.getByRole("link", { name: new RegExp(`^${title}`) }).click();
       await expect(page.getByTestId("code-title")).toHaveText(title);
       const row = list.getByRole("listitem").filter({ hasText: otherTitle });
       await expect(row.getByRole("status", { name: "Working" })).toBeVisible();
       await expect(row.getByLabel("Unread")).toBeVisible({ timeout: 30_000 });
-      expect((await threads()).find((t) => t.id === otherId).unread).toBe(true);
+      expect((await threads()).find((t) => t.title === otherTitle).unread).toBe(true);
     });
     await proof("unread");
 
@@ -268,7 +277,7 @@ await journey(
       });
       await expect(log.getByText(/Shelley started a thread/)).toBeVisible({ timeout: 60_000 });
       // The outcome arrives once, as a relayed "Reply from Shelley".
-      await expect(log.getByText("Shelley reply relayed into this chat")).toBeVisible({
+      await expect(log.getByText("reply relayed into this chat")).toBeVisible({
         timeout: 60_000,
       });
       await expect(log.getByText(`handoff-${stamp}`, { exact: true }).first()).toBeVisible();

@@ -183,7 +183,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     await editDialog.getByRole("button", { name: "Save changes" }).click();
     await expect(editDialog).not.toBeVisible({ timeout: 15_000 });
     await guestPage.goto("/chats");
-    await expect(guestPage.getByText("Nothing shared with you yet.")).toBeVisible({
+    // The sidebar and the empty chats page can both say it.
+    await expect(guestPage.getByText("Nothing shared with you yet.").first()).toBeVisible({
       timeout: 15_000,
     });
     expect(await guestApi("GET", `/bots/${ids[shared]}`)).toBe(404);

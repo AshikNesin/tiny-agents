@@ -132,6 +132,19 @@ await journey(
       );
     });
 
+    await step("?tab=<name> opens on that tab; clicking a tab switches back", async () => {
+      await page.goto(`/terminal?tab=${first}`);
+      await expect(tab(first)).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+      await tab(second).click();
+      await expect(tab(second)).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByTestId(`terminal-view-${second}`)).toBeVisible();
+      await expect(page.getByTestId(`terminal-tab-status-${second}`)).toHaveAttribute(
+        "data-state",
+        "live",
+        { timeout: 30_000 },
+      );
+    });
+
     await step("keys panel: Arrow up sends ESC [ A to the pty", async () => {
       const keys = page.getByRole("complementary", { name: "Terminal keys" });
       await expect(keys).toBeVisible(); // desktop viewport: open by default
