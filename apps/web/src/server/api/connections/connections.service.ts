@@ -22,12 +22,8 @@ import {
   vaultItems,
   type Connection,
 } from "../../db";
-import {
-  getConnectionManager,
-  parseDisabledTools,
-  parseTools,
-  type ConnectionStatus,
-} from "./connections.manager";
+import { getConnectionManager, type ConnectionStatus } from "./connections.manager";
+import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
 import { encryptJson, encryptSecret, hasSecretsKey } from "./secrets";
 import type {
   CallToolDTO,

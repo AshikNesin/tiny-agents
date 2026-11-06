@@ -56,7 +56,7 @@ owner send while questions wait → submit (steer) → AgentRuntime.dismissQuest
   (`ActivityChange.questions`, `BotListEntry.questions`).
 - **The runtime owns it.** `AgentRuntime.open` installs the `questions`
   capability itself (it answers the document); the app enables it for every
-  bot through `BOT_TOOLKITS`.
+  bot through `BOT_TOOLKITS` (`bot-toolkits.ts`).
 - **Validation.** `answerQuestions` refuses (`InvalidAnswersError` → 400) a
   wrong answer count, a pick that is not an option, several picks on a
   single-choice question and an over-long own-words answer, and

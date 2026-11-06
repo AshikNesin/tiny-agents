@@ -14,7 +14,7 @@
  *   the owner are Reconciled here too, each bot once per change, however
  *   many steps of the change asked for it.
  * - `tool_search` is installed while any connection defers its tools
- *   (more than MCP_DEFER_THRESHOLD) and uninstalled once none does.
+ *   (`needsToolSearch`, bot-toolkits.ts) and uninstalled once none does.
  * - A server that needs (re)authorization marks the connection
  *   "needs_auth" and withdraws its tools until the owner signs in (D11).
  * - Tools the owner turned off on the connection are never installed, so no
@@ -27,7 +27,6 @@ import {
   connectMcp,
   createMcpCapability,
   createToolSearchCapability,
-  MCP_DEFER_THRESHOLD,
   isUnauthorized,
   mcpAuth,
   type AgentRuntime,
@@ -36,7 +35,14 @@ import {
   type McpTransportKind,
 } from "@tiny-agents/agent";
 import { botConnections, connections, db, type Connection } from "../../db";
-import { connectionCapabilityId, reconcileBotConversation } from "../bots/bots.conversation";
+import { reconcileBotConversation } from "../bots/bots.conversation";
+import {
+  connectionCapabilityId,
+  connectionTools,
+  needsToolSearch,
+  parseTools,
+  TOOL_SEARCH_TOOLKIT,
+} from "../bots/bot-toolkits";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { decryptSecret, SecretsKeyMissingError } from "./secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
@@ -74,28 +80,7 @@ export const CONNECT_WAIT_MS = 15_000;
 /** How long a tool call waits for a (re)connect. */
 const CALL_WAIT_MS = 30_000;
 
-const TOOL_SEARCH_ID = "tool-search";
-
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
-
-export function parseTools(raw: string): McpToolInfo[] {
-  try {
-    const tools = JSON.parse(raw) as McpToolInfo[];
-    return Array.isArray(tools) ? tools : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Server tool names the owner turned off for every bot. */
-export function parseDisabledTools(raw: string): Set<string> {
-  try {
-    const names = JSON.parse(raw) as unknown;
-    return new Set(Array.isArray(names) ? names.filter((n) => typeof n === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
 
 export class ConnectionManager {
   readonly #live = new Map<string, Live>();
@@ -275,8 +260,7 @@ export class ConnectionManager {
   }
 
   #install(row: ConnectionRow, allTools: McpToolInfo[]): void {
-    const disabled = parseDisabledTools(row.disabledTools);
-    const tools = allTools.filter((tool) => !disabled.has(tool.name));
+    const tools = connectionTools(row, allTools);
     this.#runtime?.installCapability(
       createMcpCapability({
         slug: row.slug,
@@ -287,7 +271,7 @@ export class ConnectionManager {
       }),
     );
     // A server with many tools defers them; the model finds them via tool_search.
-    if (tools.length > MCP_DEFER_THRESHOLD) this.#deferred.add(row.id);
+    if (needsToolSearch(tools)) this.#deferred.add(row.id);
     else this.#deferred.delete(row.id);
     this.#syncToolSearch();
   }
@@ -303,7 +287,7 @@ export class ConnectionManager {
     const wanted = this.#deferred.size > 0;
     if (wanted === this.#toolSearchInstalled) return;
     if (wanted) this.#runtime?.installCapability(createToolSearchCapability());
-    else this.#runtime?.uninstallCapability(TOOL_SEARCH_ID);
+    else this.#runtime?.uninstallCapability(TOOL_SEARCH_TOOLKIT);
     this.#toolSearchInstalled = wanted;
   }
 

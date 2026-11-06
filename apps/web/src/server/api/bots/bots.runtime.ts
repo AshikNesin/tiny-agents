@@ -59,6 +59,7 @@ import {
 } from "./computer.sessions";
 import { sandboxConnection, unquoteEnv as unquote } from "./sandbox-host";
 import { sharedClaudeWorkerLocator } from "./claude-worker";
+import { missingToolkits } from "./bot-toolkits";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -68,26 +69,42 @@ type Env = Readonly<Record<string, string | undefined>>;
  */
 const ownerWaits = new WaitTracker();
 
+/**
+ * The built-in toolkits whose stores are the app's own: no hosts, keys or
+ * processes behind them. The server test runtime installs exactly these
+ * (with `botsCapability`); `builtinCapabilities` adds the rest.
+ */
+export function appStoreCapabilities(env: Env = process.env) {
+  return {
+    tasks: createTasksToolkit(taskStore),
+    routines: createRoutinesToolkit(createRoutineStore()),
+    skills: createSkillsCapability(skillStore),
+    memory: createMemoryCapability(memoryStore),
+    today: createTodayCapability({ timeZone: unquote(env.TZ) }),
+  } satisfies Record<string, Capability>;
+}
+
 /** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
 export function builtinCapabilities(env: Env = process.env): Capability[] {
   // Every value the vault resolves is scrubbed from logs and error reports too.
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
+  const own = appStoreCapabilities(env);
   return [
-    createSkillsCapability(skillStore),
-    createMemoryCapability(memoryStore),
+    own.skills,
+    own.memory,
     // Self-improvement (issue #128): the bot edits its own system prompt;
     // `askOnly`, so every change waits for the owner in chat.
     createSelfImproveCapability(createInstructionsStore()),
-    createTasksToolkit(taskStore),
-    createRoutinesToolkit(createRoutineStore()),
+    own.tasks,
+    own.routines,
     createWebToolkit({
       apiKey: unquote(env.TINYFISH_API_KEY),
       vault,
     }),
     // Vault (issue #56): handles only; sinks live in the browser and web toolkits.
     createVaultToolkit({ broker: vault }),
-    createTodayCapability({ timeZone: unquote(env.TZ) }),
+    own.today,
     createSandboxToolkit({
       // The one sandbox connection every SSH user shares.
       connection: sandboxConnection(env),
@@ -228,6 +245,11 @@ export async function openAgentRuntime(
 function finishOpen(instance: AgentRuntime, env: Env = process.env): AgentRuntime {
   instance.installCapability(botsCapability(instance));
   instance.installCapability(visionCapability(instance, instance.models, env));
+  // A selected id the runtime lacks is silently ignored at configure: say so.
+  const missing = missingToolkits(instance.listCapabilities().map((c) => c.id));
+  if (missing.length > 0) {
+    logger.warn({ missing }, "Bots select toolkits the runtime has not installed");
+  }
   runtime = instance;
   ready = true;
   return instance;

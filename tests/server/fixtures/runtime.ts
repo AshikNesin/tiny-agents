@@ -17,11 +17,6 @@
  */
 import { vi, type MockInstance } from "vite-plus/test";
 import {
-  createMemoryCapability,
-  createRoutinesToolkit,
-  createSkillsCapability,
-  createTasksToolkit,
-  createTodayCapability,
   REPORT_ROUTINE_BLOCKED,
   type ActivityChange,
   type AgentRuntime,
@@ -34,13 +29,10 @@ import {
 } from "../../../packages/agent/src/index";
 import { openTestRuntime, type TestRuntimeOptions } from "../../../packages/agent/src/testing";
 import {
+  appStoreCapabilities,
   botsCapability,
   setAgentRuntimeForTests,
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
-import { memoryStore } from "../../../apps/web/src/server/api/bots/memories.store";
-import { createRoutineStore } from "../../../apps/web/src/server/api/routines/routines.toolkit-store";
-import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
-import { taskStore } from "../../../apps/web/src/server/api/tasks/task.store";
 
 export { TEST_MODEL, TEST_MODEL_2 } from "../../../packages/agent/src/testing";
 
@@ -56,9 +48,10 @@ export function currentAppRuntime(): Current | undefined {
 
 /**
  * Open the real runtime in memory and make it the app's. Installs the
- * capabilities `BOT_TOOLKITS` selects whose stores are the app's own
- * (bots, tasks, routines, skills, memory, today); web, sandbox, browser and
- * attachments read the environment and are left to their own suites.
+ * built-in toolkits whose stores are the app's own, from the same source as
+ * the server (`botsCapability` and `appStoreCapabilities`: bots, tasks,
+ * routines, skills, memory, today); web, sandbox, browser and attachments
+ * read the environment and are left to their own suites.
  */
 export async function openAppRuntime(
   options: Partial<TestRuntimeOptions> = {},
@@ -66,11 +59,8 @@ export async function openAppRuntime(
   const runtime = await openTestRuntime({ storePath: ":memory:", ...options });
   for (const capability of [
     botsCapability(runtime),
-    createTasksToolkit(taskStore),
-    createRoutinesToolkit(createRoutineStore()),
-    createSkillsCapability(skillStore),
-    createMemoryCapability(memoryStore),
-    createTodayCapability(),
+    // No TZ: the host's timezone, as before the server's env applied.
+    ...Object.values(appStoreCapabilities({})),
   ]) {
     runtime.installCapability(capability);
   }
