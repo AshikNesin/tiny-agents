@@ -20,6 +20,18 @@ import { toast } from "sonner";
 import type { ChatMessage, ChatToolCall } from "../lib/chat-types";
 import { isActive, viewOf } from "../lib/tool-call-view";
 import {
+  approvalNote,
+  approvalText,
+  credentialRequestText,
+  durationText,
+  groupText,
+  stepTitle,
+  toolSteps,
+  vaultApprovalText,
+  type ToolLabelCatalog,
+  type ToolLabels,
+} from "../lib/tool-call-text";
+import {
   type OwnerActions,
   showComputerPanel,
   useOwnerActions,
@@ -213,46 +225,6 @@ function Reasoning({ text, running }: { text: string; running: boolean }) {
   );
 }
 
-/** Short argument phrase for a tool row (“Fix SSE”, “pi-durable”). */
-/** The payload behind an approval: `instructions`/`append` for a
- * self-improve change, else summarizeArgs' key. */
-function approvalPayload(call: ChatToolCall): string {
-  const args = call.args ?? {};
-  for (const key of ["instructions", "append"]) {
-    const value = args[key];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return summarizeArgs(call);
-}
-
-/** Beyond this many characters the approval card folds the payload behind
- * "Read more" — approving from a 60-char slice of a 700-word change is
- * rubber-stamping, and the one-line title can't hold it anyway. */
-const PAYLOAD_FOLD = 120;
-
-function summarizeArgs(call: ChatToolCall): string {
-  const args = call.args ?? {};
-  for (const key of ["title", "query", "url", "name", "id", "to", "text"]) {
-    const value = args[key];
-    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 60);
-  }
-  const first = Object.values(args)[0];
-  return typeof first === "string" ? first.slice(0, 60) : "";
-}
-
-function formatDuration(ms: number): string {
-  return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-/** A human wait: "40s", "1m 40s", "2h 5m". */
-function formatWait(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${Math.max(1, seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
-  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
-}
-
 const STATUS_ICONS = {
   clock: <Clock className="text-primary size-3.5" />,
   ban: <Ban className="size-3.5" />,
@@ -264,12 +236,12 @@ const STATUS_ICONS = {
  */
 function ApprovalCard({
   call,
-  ask,
+  labels,
   actions,
   botName,
 }: {
   call: ChatToolCall & { taskId: number };
-  ask: string;
+  labels: ToolLabelCatalog;
   actions: OwnerActions;
   botName: string;
 }) {
@@ -277,17 +249,12 @@ function ApprovalCard({
   const [showFull, setShowFull] = useState(false);
   const decide = (decision: "approved" | "denied", alwaysAllow?: string) =>
     run(() => actions.decideApproval(call.taskId, decision, { alwaysAllow }));
-  const summary = summarizeArgs(call);
-  const payload = approvalPayload(call);
-  const foldable = payload.length > PAYLOAD_FOLD;
+  const text = approvalText(call, botName, labels);
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
-        <ItemTitle>
-          {botName} wants to {ask}
-          {summary ? ` — “${summary.slice(0, 60)}${summary.length > 60 ? "…" : ""}”` : ""}
-        </ItemTitle>
-        {foldable ? (
+        <ItemTitle>{text.title}</ItemTitle>
+        {text.foldedPayload !== undefined ? (
           <div className="space-y-1">
             <button
               type="button"
@@ -299,7 +266,7 @@ function ApprovalCard({
             </button>
             {showFull && (
               <pre className="bg-muted max-h-64 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap">
-                {payload}
+                {text.foldedPayload}
               </pre>
             )}
           </div>
@@ -318,7 +285,7 @@ function ApprovalCard({
           variant="ghost"
           disabled={busy}
           onClick={() => decide("approved", call.name)}
-          title={`Approve, and let ${botName} ${ask} without asking`}
+          title={text.alwaysAllowHint}
         >
           Always allow
         </Button>
@@ -326,19 +293,6 @@ function ApprovalCard({
     </Item>
   );
 }
-
-function minutesLeft(expiresAt: number | undefined): string | undefined {
-  if (expiresAt === undefined) return undefined;
-  const minutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));
-  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
-}
-
-const VAULT_VERB: Record<string, string> = {
-  browser_fill_secret: "fill",
-  browser_enter_code: "enter a code from",
-  computer_fill_secret: "type",
-  http_request: "send",
-};
 
 /** A vault use's approval (issue #56): the item and where it goes, never the value. */
 function VaultApprovalCard({
@@ -351,34 +305,22 @@ function VaultApprovalCard({
   botName: string;
 }) {
   const { busy, run } = useOwnerDecision("Failed to answer");
-  const { vault } = call;
   const decide = (decision: "approved" | "denied", grant?: boolean) =>
     run(() => actions.decideApproval(call.taskId, decision, { grant }));
-  const what = vault.card ? `${vault.card.brand} ••${vault.card.last4}` : vault.label;
-  const verb = VAULT_VERB[vault.tool] ?? "use";
-  const where = vault.tool === "http_request" ? `to ${vault.target}` : `on ${vault.target}`;
-  const left = minutesLeft(call.expiresAt);
-  const command = vault.tool === "run_command";
+  const text = vaultApprovalText(call, botName);
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
           <KeyRound className="size-4" />
-          {command
-            ? `${botName} wants to run a command with ${what}`
-            : `${botName} wants to ${verb} ${what} ${where}`}
+          {text.title}
         </ItemTitle>
-        {command && (
+        {text.command !== undefined && (
           <pre className="bg-muted max-h-40 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap">
-            {vault.target}
+            {text.command}
           </pre>
         )}
-        <ItemDescription>
-          {command
-            ? `${(vault.env ?? []).join(", ")} ${vault.env?.length === 1 ? "is" : "are"} set for this command only, and it can reach only ${vault.hosts?.join(", ") || "nothing"}. ${botName} never sees the value, but the command can use it: check what it does.`
-            : `${vault.username ? `As ${vault.username}. ` : ""}The value goes straight ${vault.tool === "http_request" ? "into the request" : vault.tool === "computer_fill_secret" ? "into that window on the computer, and only if it is in front" : "into the page"}; ${botName} never sees it.`}
-          {left ? ` Expires in ${left}.` : ""}
-        </ItemDescription>
+        <ItemDescription>{text.description}</ItemDescription>
       </ItemContent>
       <ItemActions className="flex flex-col items-stretch gap-1.5">
         <Button size="xs" disabled={busy} onClick={() => decide("denied")}>
@@ -387,13 +329,13 @@ function VaultApprovalCard({
         <Button size="xs" variant="outline" disabled={busy} onClick={() => decide("approved")}>
           Approve once
         </Button>
-        {vault.grantable && (
+        {call.vault.grantable && (
           <Button
             size="xs"
             variant="ghost"
             disabled={busy}
             onClick={() => decide("approved", true)}
-            title={`Approve and stop asking about ${vault.handle} in this chat`}
+            title={text.grantHint}
           >
             For this chat
           </Button>
@@ -411,25 +353,15 @@ function CredentialRequestCard({
   call: ChatToolCall & { credentials: NonNullable<ChatToolCall["credentials"]> };
   botName: string;
 }) {
-  const { credentials } = call;
-  let host = credentials.origin;
-  try {
-    host = new URL(credentials.origin).host;
-  } catch {
-    // keep the raw origin
-  }
-  const left = minutesLeft(call.expiresAt);
+  const text = credentialRequestText(call, botName);
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>
           <KeyRound className="size-4" />
-          {botName} needs you on {host}
+          {text.title}
         </ItemTitle>
-        <ItemDescription>
-          {credentials.title}. What you type is filled into the page and never shown to {botName}.
-          {left ? ` Expires in ${left}.` : ""}
-        </ItemDescription>
+        <ItemDescription>{text.description}</ItemDescription>
       </ItemContent>
       <ItemActions>
         <Button size="xs" asChild>
@@ -522,21 +454,17 @@ function ToolDetailBlock({
  */
 function ToolRow({
   call,
-  label,
-  ask,
+  labels,
   botName,
 }: {
   call: ChatToolCall;
-  label: string;
-  ask: string;
+  labels: ToolLabelCatalog;
   botName: string;
 }) {
   // No owner actions: a Past chat (issue #101), where what still waits can
   // no longer be answered.
   const actions = useOwnerActions();
   const view = viewOf(call, { readOnly: !actions });
-  const extra = view.note;
-  const summary = summarizeArgs(call);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const argsJson = JSON.stringify(call.args, null, 2);
   const detail =
@@ -586,7 +514,7 @@ function ToolRow({
         <div data-waiting={view.anchor}>
           <ApprovalCard
             call={{ ...call, taskId: call.taskId! }}
-            ask={ask}
+            labels={labels}
             actions={actions!}
             botName={botName}
           />
@@ -621,7 +549,7 @@ function ToolRow({
         </div>
       );
     case "asked-questions":
-      return <AskedQuestions call={call} note={extra} />;
+      return <AskedQuestions call={call} note={view.note} />;
     // message_bot row: Grok's centered handoff line that opens the thread.
     case "bot-handoff":
       return <BotHandoff call={call} botName={botName} />;
@@ -630,6 +558,9 @@ function ToolRow({
       return <CodeHandoffCard handoff={call.code!} />;
   }
 
+  const title = stepTitle(call, labels);
+  const note = approvalNote(view.note, call.approval);
+  const duration = durationText(call);
   const line = (
     <TraceLine status={view.trace}>
       {view.icon ? <TraceIcon>{STATUS_ICONS[view.icon]}</TraceIcon> : null}
@@ -637,30 +568,14 @@ function ToolRow({
         {call.name === "load_skill" ? (
           <span className="inline-flex items-center gap-1">
             <Sparkles className="size-3" />
-            Using skill {summary}
+            {title}
           </span>
         ) : (
-          label
+          title
         )}
-        {summary && call.name !== "load_skill" ? ` “${summary}”` : ""}
       </TraceTitle>
-      {(extra ||
-        call.approval === "approved" ||
-        call.approval === "auto" ||
-        call.approval === "yolo") && (
-        <TraceDescription>
-          {extra}
-          {extra && call.approval === "approved" ? " · approved by you" : ""}
-          {call.approval === "auto" ? `${extra ? " · " : ""}auto-approved` : ""}
-          {call.approval === "yolo" ? `${extra ? " · " : ""}auto-approved (YOLO)` : ""}
-        </TraceDescription>
-      )}
-      {call.durationMs !== undefined && (
-        <TraceDescription>
-          {formatDuration(call.durationMs)}
-          {call.waitedMs ? ` · waited ${formatWait(call.waitedMs)} for you` : ""}
-        </TraceDescription>
-      )}
+      {note !== undefined && <TraceDescription>{note}</TraceDescription>}
+      {duration !== undefined && <TraceDescription>{duration}</TraceDescription>}
     </TraceLine>
   );
 
@@ -690,60 +605,17 @@ function ToolRow({
   );
 }
 
-type ToolStep =
-  | { kind: "call"; call: ChatToolCall; i: number }
-  | { kind: "group"; calls: ChatToolCall[]; i: number };
-
-/** Runs of two or more foldable calls (`viewOf`) become one group; the rest stay rows. */
-function toolSteps(calls: ChatToolCall[]): ToolStep[] {
-  const steps: ToolStep[] = [];
-  let run: ChatToolCall[] = [];
-  let start = 0;
-  const flush = () => {
-    if (run.length >= 2) steps.push({ kind: "group", calls: run, i: start });
-    else run.forEach((call, k) => steps.push({ kind: "call", call, i: start + k }));
-    run = [];
-  };
-  calls.forEach((call, i) => {
-    if (!viewOf(call).foldable) {
-      flush();
-      steps.push({ kind: "call", call, i });
-      return;
-    }
-    if (run.length === 0) start = i;
-    run.push(call);
-  });
-  flush();
-  return steps;
-}
-
-/** "Read the page ×3, searched the web": what a run of calls did, by label. */
-export function describeCalls(calls: ChatToolCall[], labels: ToolLabels): string {
-  const counts = new Map<string, number>();
-  for (const call of calls) {
-    const label = call.name === "load_skill" ? "Used a skill" : toolLabel(labels, call.name);
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  const parts = [...counts].map(([label, n]) => (n > 1 ? `${label} ×${n}` : label));
-  return parts
-    .map((part, i) => (i === 0 ? part : part.charAt(0).toLowerCase() + part.slice(1)))
-    .join(", ");
-}
-
 /** Finished tool calls folded into one line, as on the Code page; each call inside. */
 function ToolGroupRow({
   calls,
   labels,
-  askLabels,
   botName,
 }: {
   calls: ChatToolCall[];
-  labels: ToolLabels;
-  askLabels: ToolLabels;
+  labels: ToolLabelCatalog;
   botName: string;
 }) {
-  const failed = calls.filter((call) => viewOf(call).phase === "failed").length;
-  const duration = calls.reduce((sum, call) => sum + (call.durationMs ?? 0), 0);
+  const text = groupText(calls, labels);
   return (
     <Trace data-testid="tool-group">
       <TraceCollapsible>
@@ -752,11 +624,11 @@ function ToolGroupRow({
             <TraceIcon>
               <ListChecks />
             </TraceIcon>
-            <TraceTitle>{describeCalls(calls, labels)}</TraceTitle>
-            {failed > 0 && (
-              <TraceDescription className="text-destructive">· {failed} failed</TraceDescription>
+            <TraceTitle>{text.title}</TraceTitle>
+            {text.failed !== undefined && (
+              <TraceDescription className="text-destructive">{text.failed}</TraceDescription>
             )}
-            {duration > 0 && <TraceDescription>{formatDuration(duration)}</TraceDescription>}
+            {text.duration !== undefined && <TraceDescription>{text.duration}</TraceDescription>}
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="space-y-1">
@@ -764,8 +636,7 @@ function ToolGroupRow({
             <ToolRow
               key={`${call.id}-${i}-${call.name}`}
               call={call}
-              label={toolLabel(labels, call.name)}
-              ask={toolAskLabel(askLabels, labels, call.name)}
+              labels={labels}
               botName={botName}
             />
           ))}
@@ -775,31 +646,10 @@ function ToolGroupRow({
   );
 }
 
-/** Label lookup for tool names, from the capability catalog. */
-export type ToolLabels = Record<string, string>;
-
-export function toolLabel(labels: ToolLabels, name: string): string {
-  if (labels[name]) return labels[name];
-  const via = name.match(/^mcp__([a-z0-9-]+)__(.+)$/);
-  if (via) {
-    const pretty = via[2].replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    return `${pretty} via ${via[1]}`;
-  }
-  return name.replace(/_/g, " ");
-}
-
-/**
- * What a tool call asks to do, completing "<bot> wants to …": the tool's
- * imperative label from the catalog, else "use <display name>" (connection
- * tools have no imperative label).
- */
-export function toolAskLabel(askLabels: ToolLabels, labels: ToolLabels, name: string): string {
-  return askLabels[name] ?? `use ${toolLabel(labels, name)}`;
-}
-
 export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
+  /** Tool name → past-tense label for transcript rows ("Opened a page"). */
   toolLabels?: ToolLabels;
   /** Tool name → imperative label for approval cards ("open a page"). */
   toolAskLabels?: ToolLabels;
@@ -1024,7 +874,8 @@ function assistantView(
     toolAskLabels: ToolLabels;
   },
 ) {
-  const { botName, toolLabels, toolAskLabels } = ctx;
+  const { botName } = ctx;
+  const labels: ToolLabelCatalog = { done: ctx.toolLabels, ask: ctx.toolAskLabels };
   const streaming = message.status === "streaming";
   // Terminal status notices render inside the reply card, so a failed or
   // stopped turn with no text still surfaces its notice.
@@ -1040,16 +891,14 @@ function assistantView(
                 <ToolGroupRow
                   key={`group-${step.calls[0].id}-${step.i}`}
                   calls={step.calls}
-                  labels={toolLabels}
-                  askLabels={toolAskLabels}
+                  labels={labels}
                   botName={botName}
                 />
               ) : (
                 <ToolRow
                   key={`${step.call.id}-${step.i}-${step.call.name}`}
                   call={step.call}
-                  label={toolLabel(toolLabels, step.call.name)}
-                  ask={toolAskLabel(toolAskLabels, toolLabels, step.call.name)}
+                  labels={labels}
                   botName={botName}
                 />
               ),

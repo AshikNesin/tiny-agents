@@ -14,12 +14,12 @@
  * It must render inside a `MessageScrollerProvider` (the pane drives the
  * scroller too: send → scroll to the end).
  */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { botsApi } from "../lib/bots-api";
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { TimelineItem } from "../lib/chat-timeline";
 import { formatDayDivider } from "../lib/day-divider";
 import { OwnerActionsProvider, type OwnerActions } from "../lib/owner-actions";
-import { ChatMessageView, type ToolLabels } from "./ChatMessageView";
+import { useToolLabels } from "../lib/use-tool-labels";
+import { ChatMessageView } from "./ChatMessageView";
 import { RoutineRuns } from "./RoutineRuns";
 import {
   MessageScroller,
@@ -55,36 +55,6 @@ export interface TranscriptProps {
   /** Rows after the timeline (the typing indicator). */
   tail?: ReactNode;
   contentTestId?: string;
-}
-
-const NO_TOOL_LABELS: { done: ToolLabels; ask: ToolLabels } = { done: {}, ask: {} };
-
-/**
- * Tool labels for transcript rows (past tense) and approval cards
- * (imperative), from the capability catalog (fetched once per page load).
- */
-function useToolLabels(): { done: ToolLabels; ask: ToolLabels } {
-  const [labels, setLabels] = useState(NO_TOOL_LABELS);
-  useEffect(() => {
-    let cancelled = false;
-    void botsApi
-      .capabilities()
-      .then((capabilities) => {
-        if (cancelled) return;
-        const tools = capabilities.flatMap((capability) => capability.tools);
-        setLabels({
-          done: Object.fromEntries(tools.map((tool) => [tool.name, tool.label])),
-          ask: Object.fromEntries(
-            tools.flatMap((tool) => (tool.askLabel ? [[tool.name, tool.askLabel]] : [])),
-          ),
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return labels;
 }
 
 /**
