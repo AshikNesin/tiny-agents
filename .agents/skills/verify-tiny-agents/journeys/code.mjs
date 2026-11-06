@@ -98,7 +98,7 @@ await journey(
     });
 
     await step("start a thread: it is Working now, the composer steers, Stop shows", async () => {
-      await composer.fill("delay: 12");
+      await composer.fill("delay: 20");
       await page.getByRole("button", { name: "Start" }).click();
       await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
       mainId = idOf();
@@ -113,7 +113,9 @@ await journey(
       await expect(transcript.getByText(`echo: steer-${stamp}`)).toBeVisible();
       // Shelley drops the answer to a steer that a queued message follows within
       // ~1 s (upstream behaviour, reproduced on its API alone); give it time to land.
-      await page.waitForTimeout(4_000);
+      // 8 s, not less: under load (several runs at once) 4 s still lost the answer.
+      // The 20 s delay keeps the turn running long enough to queue behind it.
+      await page.waitForTimeout(8_000);
     });
     await step("queue: Alt+Enter holds a message, listed with Send now / Cancel", async () => {
       await composer.fill(`echo: queued-${stamp}`);
@@ -127,7 +129,7 @@ await journey(
     await step(
       "the turn ends: delay reply, the steer answered, then the queued one runs",
       async () => {
-        await expect(transcript.getByText("Delayed for 12 seconds")).toBeVisible({
+        await expect(transcript.getByText("Delayed for 20 seconds")).toBeVisible({
           timeout: 30_000,
         });
         await expect(transcript.getByText(`steer-${stamp}`, { exact: true })).toBeVisible({

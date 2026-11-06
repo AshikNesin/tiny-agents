@@ -144,7 +144,10 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
     await expect(confirm).toContainText(`Delete folder "${folder}/"?`);
     await confirm.getByRole("button", { name: "Delete" }).click();
     await expect(page.getByRole("cell", { name: folder, exact: true })).toHaveCount(0);
-    expect((await api.get("/storage/files")).map((f) => f.name)).not.toContain(folder);
+    // The row leaves the UI first; poll the server rather than read it once.
+    await expect
+      .poll(async () => (await api.get("/storage/files")).map((f) => f.name), { timeout: 15_000 })
+      .not.toContain(folder);
   });
   await proof("folder-deleted");
   if (bugs.length) throw new Error(`product bug(s): ${bugs.join("; ")}`);

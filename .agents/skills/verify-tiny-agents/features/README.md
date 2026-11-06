@@ -81,7 +81,7 @@ Sandbox and code
 
 ## A full pass
 
-The auth rate limit and the shared sandbox mean one instance can't drive everything:
+Run `../scripts/full-pass.sh` (it refuses to start if a journey is missing from its groups). The auth rate limit and the shared sandbox mean one instance can't drive everything, so it runs these in parallel:
 
 1. Three plain runs on spaced ports, each driving about a third of the non-sandbox journeys.
 2. One `up --sandbox --shelley` run for terminal, computer, browser, code and claude-plan.

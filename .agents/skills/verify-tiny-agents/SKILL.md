@@ -130,11 +130,12 @@ by the skill; remove old ones under `data/verify-evidence/` by hand.
 
 ## Helpers
 
-| File                    | Invocation                                      | Purpose                                        |
-| ----------------------- | ----------------------------------------------- | ---------------------------------------------- |
-| `scripts/ta-verify.mjs` | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                     |
-| `scripts/lib.mjs`       | imported by journeys                            | browser, login, step/proof/cleanup, API helper |
-| `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature              |
+| File                    | Invocation                                      | Purpose                                                 |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `scripts/ta-verify.mjs` | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                              |
+| `scripts/lib.mjs`       | imported by journeys                            | browser, login, step/proof/cleanup, API helper          |
+| `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                       |
+| `scripts/full-pass.sh`  | `full-pass.sh`                                  | every journey on six fresh parallel runs, then teardown |
 
 Full pass: `up --sandbox --shelley` → `doctor` → `drive $S/journeys/*.mjs` → `down`,
 then `up --empty` → `drive` the `requires: ["empty"]` journeys → `down`. With
