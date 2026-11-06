@@ -11,6 +11,7 @@
  */
 import { z } from "zod";
 import type { ResumeResult } from "./envelope";
+import type { Sequenced } from "./session-log";
 
 export const DEFAULT_CODING_LIMITS = {
   /** Coding processes alive at once (their own budget, separate from bot chats). */
@@ -341,11 +342,7 @@ export function isCodingMessage(value: unknown): boolean {
 }
 
 /** Buffered coding event as the worker stores and replays it. */
-export interface CodingSequencedEvent {
-  sessionId: string;
-  seq: number;
-  event: CodingEvent;
-}
+export type CodingSequencedEvent = Sequenced<CodingEvent>;
 
 // --- reply payloads (not validated on the wire: the client trusts its worker) ---
 
