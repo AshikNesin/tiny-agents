@@ -3,7 +3,11 @@
  * ta-verify: launch, health-check, drive and tear down one isolated
  * tiny-agents instance for verification.
  *
- *   ta-verify up [--port 3100] [--run <id>]   start a fresh instance (own DBs, faux model)
+ *   ta-verify up [--port 3100] [--run <id>] [--sandbox] [--empty]
+ *                                             start a fresh instance (own DBs, faux model)
+ *       --sandbox  point it at the local sandbox container (`pnpm sandbox:up`):
+ *                  terminal, computer, browser and bot sandbox tools become reachable
+ *       --empty    skip the demo-user seed (no users: first-run /setup is reachable)
  *   ta-verify doctor [--run <id>]             read-only "is this instance worth driving?"
  *   ta-verify drive <journey.mjs>... [--run <id>]  run journeys against the instance
  *   ta-verify down [--run <id>]               stop what `up` started, delete its state, keep evidence
@@ -14,6 +18,8 @@
  * Both live under the git-ignored `data/`.
  */
 import { spawn, execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import net from "node:net";
 import {
   existsSync,
   mkdirSync,
@@ -38,8 +44,11 @@ const DEMO = { email: "demo@example.com", password: "demo@example.com" }; // git
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const positional = [];
+const BOOLEAN_FLAGS = new Set(["sandbox", "empty"]);
 for (let i = 0; i < rest.length; i++) {
-  if (rest[i].startsWith("--")) flags[rest[i].slice(2)] = rest[++i];
+  const name = rest[i].slice(2);
+  if (rest[i].startsWith("--") && BOOLEAN_FLAGS.has(name)) flags[name] = true;
+  else if (rest[i].startsWith("--")) flags[name] = rest[++i];
   else positional.push(rest[i]);
 }
 
@@ -113,6 +122,29 @@ async function getJson(url, init) {
   }
 }
 
+const SANDBOX_KEY = path.join(REPO, "data", "sandbox", "id_ed25519");
+const sandboxPort = () => Number(process.env.SANDBOX_LOCAL_PORT || 2222);
+
+/** True when something accepts TCP on 127.0.0.1:<port> within 2 s. */
+function tcpOpen(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port, timeout: 2000 });
+    socket.once("connect", () => (socket.destroy(), resolve(true)));
+    socket.once("error", () => resolve(false));
+    socket.once("timeout", () => (socket.destroy(), resolve(false)));
+  });
+}
+
+function sandboxEnv(run) {
+  if (!run.sandbox) return { SANDBOX_HOST: "" };
+  return {
+    SANDBOX_HOST: "127.0.0.1",
+    SANDBOX_PORT: String(run.sandboxPort),
+    SANDBOX_USER: "exedev",
+    SANDBOX_SSH_KEY_FILE: SANDBOX_KEY,
+  };
+}
+
 function serverEnv(run) {
   return {
     ...process.env,
@@ -125,8 +157,12 @@ function serverEnv(run) {
     UPLOADS_DIR: path.join(run.stateDir, "uploads"),
     TINY_AGENTS_FAUX: "1",
     TINY_AGENTS_FAUX_TOKENS_PER_SECOND: "6",
-    // No sandbox VM: terminal/computer/browser pages are unreachable by design.
-    SANDBOX_HOST: "",
+    // Per-run key for vault items and connection secrets (scaffolding, dies with the run).
+    SECRETS_KEY: run.secretsKey,
+    // Per-run admin key for X-Admin-Auth-Key routes (e.g. creating a second user).
+    ADMIN_AUTH_KEY: run.adminKey,
+    // Without --sandbox: no sandbox, so terminal/computer/browser are unreachable.
+    ...sandboxEnv(run),
     PORTLESS: "0",
     NODE_OPTIONS: "--max-old-space-size=1024",
   };
@@ -149,6 +185,22 @@ async function up() {
     );
   }
 
+  if (flags.sandbox) {
+    if (!existsSync(SANDBOX_KEY))
+      fail(`no sandbox key at ${SANDBOX_KEY}: run \`pnpm sandbox:up\` first`);
+    if (!(await tcpOpen(sandboxPort())))
+      fail(
+        `local sandbox SSH is not answering on 127.0.0.1:${sandboxPort()}: run \`pnpm sandbox:up\``,
+      );
+    // The sandbox is one shared machine (tmux tabs, browser profiles): one run at a time.
+    for (const other of existsSync(RUNS) ? readdirSync(RUNS) : []) {
+      const file = path.join(RUNS, other, "run.json");
+      if (!existsSync(file)) continue;
+      const r = JSON.parse(readFileSync(file, "utf8"));
+      if (r.sandbox && alive(r.pid))
+        fail(`run ${other} already drives the sandbox; \`down\` it first`);
+    }
+  }
   mkdirSync(path.join(stateDir, "uploads"), { recursive: true });
   const evidenceDir = path.join(EVIDENCE, id);
   mkdirSync(evidenceDir, { recursive: true });
@@ -160,13 +212,21 @@ async function up() {
     evidenceDir,
     revision: head(),
     startedAt: new Date().toISOString(),
+    sandbox: !!flags.sandbox,
+    sandboxPort: flags.sandbox ? sandboxPort() : undefined,
+    empty: !!flags.empty,
+    secretsKey: randomBytes(32).toString("base64"),
+    adminKey: randomBytes(24).toString("hex"),
   };
   const env = serverEnv(run);
   const tsx = path.join(REPO, "node_modules", ".bin", "tsx");
   if (!existsSync(tsx)) fail("node_modules missing: run `pnpm install` first");
 
-  log(`seeding ${env.DATABASE_URL} (migrations + demo user)`);
-  execFileSync(tsx, ["scripts/seed.ts"], { cwd: REPO, env, stdio: "inherit" });
+  if (run.empty) log("--empty: no seed; the server applies migrations on boot");
+  else {
+    log(`seeding ${env.DATABASE_URL} (migrations + demo user)`);
+    execFileSync(tsx, ["scripts/seed.ts"], { cwd: REPO, env, stdio: "inherit" });
+  }
 
   const logFile = path.join(stateDir, "server.log");
   const out = openSync(logFile, "a");
@@ -235,6 +295,19 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
     spa.includes('id="root"') || spa.includes("<script"),
     "GET /login returns the client shell",
   );
+  if (run.sandbox) {
+    check("sandbox SSH answers", await tcpOpen(run.sandboxPort), `127.0.0.1:${run.sandboxPort}`);
+  }
+  if (run.empty) {
+    // No demo user by design; once /setup has created the first account, needsSetup is false.
+    const setup = await getJson(`${run.url}/api/v1/auth/setup`);
+    check(
+      "setup endpoint",
+      setup.status === 200,
+      `GET /api/v1/auth/setup -> ${setup.status} ${JSON.stringify(setup.body?.data)}`,
+    );
+    return report(run, checks, quiet);
+  }
   const login = await getJson(`${run.url}/api/v1/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -256,6 +329,10 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
     `GET /api/v1/models -> ${models.status}, faux=${faux}`,
   );
 
+  return report(run, checks, quiet);
+}
+
+function report(run, checks, quiet) {
   const okAll = checks.every((c) => c.pass);
   if (!quiet || !okAll) {
     for (const c of checks)
@@ -269,6 +346,7 @@ async function drive() {
   if (!positional.length) fail("usage: ta-verify drive <journey.mjs>... [--run <id>]");
   const run = readRun(runId());
   let failed = 0;
+  const unreachable = [];
   for (const journey of positional) {
     const file = path.resolve(journey);
     if (!existsSync(file)) fail(`no journey at ${file}`);
@@ -282,16 +360,23 @@ async function drive() {
           TA_VERIFY_URL: run.url,
           TA_VERIFY_EVIDENCE: run.evidenceDir,
           TA_VERIFY_RUN: run.id,
+          TA_VERIFY_ADMIN_KEY: run.adminKey,
+          TA_VERIFY_CAPS: [run.sandbox && "sandbox", run.empty && "empty"]
+            .filter(Boolean)
+            .join(","),
         },
       });
       child.on("exit", (c) => resolve(c ?? 1));
     });
-    if (code !== 0) failed++;
+    // Exit 3 = the journey needs a launch option this run lacks (see journey `requires`).
+    if (code === 3) unreachable.push(path.basename(file));
+    else if (code !== 0) failed++;
   }
+  const passed = positional.length - failed - unreachable.length;
   log(
-    `${positional.length - failed}/${positional.length} journeys passed; evidence ${path.relative(REPO, run.evidenceDir)}`,
+    `${passed}/${positional.length} journeys passed, ${failed} failed, ${unreachable.length} unreachable${unreachable.length ? ` (${unreachable.join(", ")})` : ""}; evidence ${path.relative(REPO, run.evidenceDir)}`,
   );
-  if (failed) process.exit(1);
+  if (failed || unreachable.length) process.exit(1);
 }
 
 async function down() {
@@ -337,7 +422,7 @@ function status() {
     if (!existsSync(file)) continue;
     const run = JSON.parse(readFileSync(file, "utf8"));
     console.log(
-      `${id === current ? "*" : " "} ${id} ${run.url} pid=${run.pid} ${alive(run.pid) ? "alive" : "dead"} rev=${run.revision}`,
+      `${id === current ? "*" : " "} ${id} ${run.url} pid=${run.pid} ${alive(run.pid) ? "alive" : "dead"} rev=${run.revision}${run.sandbox ? " sandbox" : ""}${run.empty ? " empty" : ""}`,
     );
   }
 }

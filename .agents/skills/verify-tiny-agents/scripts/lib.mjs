@@ -69,7 +69,16 @@ function makeApi(page) {
   };
 }
 
-export async function journey(feature, fn, { signIn = true } = {}) {
+/** Launch options of the current run (`up --sandbox`, `up --empty`). */
+export const caps = new Set((process.env.TA_VERIFY_CAPS ?? "").split(",").filter(Boolean));
+/** X-Admin-Auth-Key for this run (admin-only routes, e.g. POST /api/v1/auth/users). */
+export const adminKey = process.env.TA_VERIFY_ADMIN_KEY;
+
+/**
+ * `requires`: launch options the journey needs, e.g. ["sandbox"]. Without them
+ * the journey records itself as unreachable (exit 3) instead of failing.
+ */
+export async function journey(feature, fn, { signIn = true, requires = [] } = {}) {
   if (!BASE || !EVIDENCE) {
     console.error(
       "Run journeys through `ta-verify drive` (TA_VERIFY_URL / TA_VERIFY_EVIDENCE unset).",
@@ -78,6 +87,16 @@ export async function journey(feature, fn, { signIn = true } = {}) {
   }
   const dir = path.join(EVIDENCE, feature);
   mkdirSync(dir, { recursive: true });
+  const missing = requires.filter((cap) => !caps.has(cap));
+  if (missing.length) {
+    const reason = `needs \`ta-verify up ${missing.map((m) => `--${m}`).join(" ")}\``;
+    writeFileSync(
+      path.join(dir, "result.json"),
+      JSON.stringify({ feature, ok: false, unreachable: reason, base: BASE }, null, 2),
+    );
+    console.log(`UNREACHABLE ${feature}: ${reason}`);
+    process.exit(3);
+  }
   const steps = [];
   const browser = await launch();
   const context = await browser.newContext({
