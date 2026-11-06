@@ -47,11 +47,12 @@ and `@playwright/test`).
 
 Launch options (journeys that need one declare it, see Drive):
 
-| Option      | Adds                                                                                                                                                                                                                                     | Needs                                                                                |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `--sandbox` | `SANDBOX_HOST=127.0.0.1` + the local key: Terminal, Computer, Browser and bots' sandbox tools reach the local sandbox container. One `--sandbox` run at a time (the container is shared state).                                          | `pnpm sandbox:up` (Docker; see `docs/guides/local-sandbox.md`)                       |
-| `--shelley` | A keyless Shelley (`-predictable-only` model) on port + 1000 with its own DB and `HOME`, and `SHELLEY_URL` pointing at it: `/code` and bots' `code_*` tools. It runs on the **host**: give coding threads a throwaway working directory. | `TA_VERIFY_SHELLEY_BIN`, `shelley` on PATH, or the sandbox container to copy it from |
-| `--empty`   | Skips the demo-user seed (migrations still run on boot): first-run `/setup` is reachable. Doctor then checks `GET /api/v1/auth/setup` instead of logging in.                                                                             | —                                                                                    |
+| Option      | Adds                                                                                                                                                                                                                                                                                                                                                  | Needs                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `--sandbox` | `SANDBOX_HOST=127.0.0.1` + the local key: Terminal, Computer, Browser and bots' sandbox tools reach the local sandbox container. One `--sandbox` run at a time (the container is shared state).                                                                                                                                                       | `pnpm sandbox:up` (Docker; see `docs/guides/local-sandbox.md`)                       |
+| `--shelley` | A keyless Shelley (`-predictable-only` model) on port + 1000 with its own DB and `HOME`, and `SHELLEY_URL` pointing at it: `/code` and bots' `code_*` tools. It runs on the **host**: give coding threads a throwaway working directory.                                                                                                              | `TA_VERIFY_SHELLEY_BIN`, `shelley` on PATH, or the sandbox container to copy it from |
+| `--empty`   | Skips the demo-user seed (migrations still run on boot): first-run `/setup` is reachable. Doctor then checks `GET /api/v1/auth/setup` instead of logging in.                                                                                                                                                                                          | —                                                                                    |
+| `--prod`    | Runs `pnpm build`, then the production bundle (`node dist/server/bundle.js`, `NODE_ENV=production`, built client from `dist/client`, Secure cookies, no Vite) with per-run `JWT_SECRET_KEY`/`ADMIN_AUTH_KEY` and `DATA_DIR` = the run's state dir. Proves what ships, not the dev server. Builds into the repo's `dist/`: one `--prod` run at a time. | —                                                                                    |
 
 Server log: `data/verify/<run>/server.log` (copied into the evidence on `down`).
 Because there is no watcher, **relaunch after changing code** (`down`, then `up`);
@@ -130,12 +131,12 @@ by the skill; remove old ones under `data/verify-evidence/` by hand.
 
 ## Helpers
 
-| File                    | Invocation                                      | Purpose                                                 |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------- |
-| `scripts/ta-verify.mjs` | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                              |
-| `scripts/lib.mjs`       | imported by journeys                            | browser, login, step/proof/cleanup, API helper          |
-| `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                       |
-| `scripts/full-pass.sh`  | `full-pass.sh`                                  | every journey on six fresh parallel runs, then teardown |
+| File                    | Invocation                                      | Purpose                                                                            |
+| ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `scripts/ta-verify.mjs` | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                                                         |
+| `scripts/lib.mjs`       | imported by journeys                            | browser, login, step/proof/cleanup, API helper                                     |
+| `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                                                  |
+| `scripts/full-pass.sh`  | `full-pass.sh`                                  | every journey on six fresh parallel runs, plus a `--prod` smoke run, then teardown |
 
 Full pass: `up --sandbox --shelley` → `doctor` → `drive $S/journeys/*.mjs` → `down`,
 then `up --empty` → `drive` the `requires: ["empty"]` journeys → `down`. With

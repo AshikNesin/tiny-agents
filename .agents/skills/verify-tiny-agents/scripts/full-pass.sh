@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Full pass: every journey on fresh runs, in parallel, each group up -> doctor -> drive -> down.
+# Full pass: every journey on fresh runs, in parallel, each group up -> doctor -> drive -> down,
+# plus a smoke group against the production build (--prod).
 # Groups stay under the auth rate limit (20 per 15 min per instance); the sandbox
 # group needs `pnpm sandbox:up`. Logs: data/verify-evidence/full-pass-<time>/<run>.log
 #   .agents/skills/verify-tiny-agents/scripts/full-pass.sh
@@ -16,6 +17,9 @@ GROUP_C="tool-permissions yolo self-improve auto-review bot-to-bot shared-bots r
 GROUP_D="skills connections vault model-providers storage jobs"
 GROUP_SBX="terminal computer browser code claude-plan"
 GROUP_EMPTY="setup"
+# Also driven against the production build (--prod). Not part of the
+# exactly-once check below: these journeys run twice, dev server and bundle.
+PROD_SMOKE="auth chats tasks settings storage"
 
 # Every journey must be in exactly one group: a new journey not listed here fails loudly.
 listed=$(echo $GROUP_A $GROUP_B $GROUP_C $GROUP_D $GROUP_SBX $GROUP_EMPTY | tr ' ' '\n' | sort)
@@ -46,7 +50,8 @@ pass "$TAG-c" 3320 "" $GROUP_C &
 pass "$TAG-d" 3330 "" $GROUP_D &
 pass "$TAG-sbx" 3280 "--sandbox --shelley" $GROUP_SBX &
 pass "$TAG-empty" 3340 "--empty" $GROUP_EMPTY &
+pass "$TAG-prod" 3360 "--prod" $PROD_SMOKE &
 wait
 
 for log in "$OUT"/*.log; do echo "=== $(basename "$log" .log)"; cat "$log"; done
-echo "Expected failures are the known product bugs in features/README.md."
+echo "Every journey should pass: a failure is a regression or a new bug (features/README.md)."
