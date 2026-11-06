@@ -183,7 +183,7 @@ async function startShelley(run) {
     // Its own HOME: Shelley puts a unix socket under ~/.config/shelley.
     {
       cwd: run.stateDir,
-      env: { ...process.env, HOME: home },
+      env: { ...baseEnv(), HOME: home },
       detached: true,
       stdio: ["ignore", out, out],
     },
@@ -227,9 +227,63 @@ function sandboxEnv(run) {
   };
 }
 
+/**
+ * The base environment for processes a run starts: an allowlist of harmless
+ * variables, never the caller's whole environment. Every key in the repo's
+ * `.env` and every known external-service credential is set to "" on top, so
+ * neither the shell nor `.env` (which the server and seed load, without
+ * overriding variables that already exist) can hand a verification run real
+ * keys: no real push notifications, model calls or error reports.
+ */
+const SAFE_VARS =
+  /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LC_\w+|TZ|TMPDIR|TERM|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE)$/;
+const EXTERNAL_KEYS = [
+  "PUSHOVER_API_TOKEN",
+  "PUSHOVER_USER_KEY",
+  "CLOUDFLARE_API_KEY",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_GATEWAY_ID",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+  "OPENROUTER_API_KEY",
+  "GROQ_API_KEY",
+  "MISTRAL_API_KEY",
+  "AI_PROVIDERS",
+  "DEFAULT_MODEL",
+  "SENTRY_DSN",
+  "SENTRY_AUTH_TOKEN",
+  "SHELLEY_URL",
+  "CLAUDE_CODE_ENGINE_ENABLED",
+  "SANDBOX_HOST",
+  "SANDBOX_PORT",
+  "SANDBOX_USER",
+  "SANDBOX_SSH_KEY_FILE",
+  "DATA_DIR",
+  "DATABASE_URL",
+  "AGENT_DB_PATH",
+  "UPLOADS_DIR",
+];
+
+function baseEnv() {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => SAFE_VARS.test(key)),
+  );
+  for (const key of EXTERNAL_KEYS) env[key] = "";
+  const dotenv = path.join(REPO, ".env");
+  if (existsSync(dotenv)) {
+    for (const line of readFileSync(dotenv, "utf8").split("\n")) {
+      const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
+      if (match) env[match[1]] = "";
+    }
+  }
+  return env;
+}
+
 function serverEnv(run) {
   return {
-    ...process.env,
+    ...baseEnv(),
     NODE_ENV: "development",
     PORT: String(run.port),
     ORIGIN: run.url,
@@ -421,6 +475,13 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
   const cookie = login.headers?.get("set-cookie")?.split(";")[0];
   const token = login.body?.data?.token;
   const auth = token ? { authorization: `Bearer ${token}` } : cookie ? { cookie } : {};
+  // A verification run must never reach real devices (see baseEnv()).
+  const push = await getJson(`${run.url}/api/v1/notifications/status`, { headers: auth });
+  check(
+    "push notifications off",
+    push.status === 200 && push.body?.data?.state === "not_configured",
+    `GET /api/v1/notifications/status -> ${push.status} ${JSON.stringify(push.body?.data)}`,
+  );
   const models = await getJson(`${run.url}/api/v1/models`, { headers: auth });
   const faux = (models.body?.data?.models ?? []).some((m) => /faux/i.test(`${m.id} ${m.name}`));
   check(
