@@ -4,17 +4,12 @@
  * file storage. `NODE_ENV=test` disables the job queue, so tests drive
  * `runTick()` explicitly; logs are silent.
  */
-import { beforeEach, vi } from "vite-plus/test";
 import { bootstrap } from "@groot/core/bootstrap";
 import { memoryStorage } from "@groot/core/storage/memory";
 import { asCoreDatabase, createAppDb } from "../../apps/web/src/server/db";
-import { FIXED_NOW } from "../test-clock";
+import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
 
-// Pinned at import as well, so module-scope code in a test file also reads FIXED_NOW.
-vi.setSystemTime(FIXED_NOW);
-beforeEach(() => {
-  vi.setSystemTime(FIXED_NOW);
-});
+pinClockWhileLoadingAndBeforeEachTest();
 
 process.env.NODE_ENV = "test";
 // Connection-secret encryption needs a key in tests (unset in dev until

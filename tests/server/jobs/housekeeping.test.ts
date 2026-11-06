@@ -65,7 +65,6 @@ describe("housekeeping schedule", () => {
 
   it("runs at most once per interval, even when another process ran it", async () => {
     clearJobHandlers();
-    // Past the interval an earlier test's tick may have claimed, so the first claim is free.
     const start = Date.now() + 24 * 60 * MINUTE;
     const at = (minutes: number) => vi.setSystemTime(start + minutes * MINUTE);
 

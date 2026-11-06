@@ -131,9 +131,10 @@ Call them directly; the database is real, so there is nothing to mock
 
 ### Dates and time
 
-Both setup files call `vi.setSystemTime(FIXED_NOW)` when they load and again
-before every test, so `Date` reports `FIXED_NOW` (from `tests/test-clock.ts`)
-on any real day and does not tick. That covers a test file's module scope too,
+Both setup files call `pinClockWhileLoadingAndBeforeEachTest()` from
+`tests/test-clock.ts`. It runs `vi.setSystemTime(FIXED_NOW)` when the setup
+loads and again before every test, so `Date` reports `FIXED_NOW` on any real
+day and does not tick. That covers a test file's module scope too,
 such as a token minted at the top of the file. Only `Date` is faked:
 `setTimeout`, `setInterval` and `performance.now()` stay real.
 

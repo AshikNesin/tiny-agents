@@ -240,7 +240,7 @@ describe("computer toolkit", () => {
   });
 
   it("gives up on an action after the bounded wait, without acting", async () => {
-    vi.useFakeTimers(); // the wait polls Date.now() between timers, so both need to move together
+    vi.useFakeTimers();
     const { fake, sessions, toolkit } = setup({ humanDriverWaitMs: 30 });
     await run(toolkit, "computer_screenshot");
     await sessions.setDriver("shared", "human");
