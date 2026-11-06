@@ -1,6 +1,3 @@
-// Oxlint JS plugin for the boundary rules that an import ban cannot express.
-// scripts/lint/boundaries.ts decides which files each rule runs on.
-
 const jsxName = (node) =>
   node.type === "JSXElement" && node.openingElement.name.type === "JSXIdentifier"
     ? node.openingElement.name.name

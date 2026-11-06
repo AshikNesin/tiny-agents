@@ -66,6 +66,4 @@ peerDependencyRules:
     vite: "*"
     vitest: "*"
 
-# A script run on a stale node_modules (a pulled lockfile change, a switched
-# branch) stops with "Run pnpm install" instead of "Cannot find package".
 verifyDepsBeforeRun: error

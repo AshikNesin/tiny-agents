@@ -1,13 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Rewrite every `cn` import from @groot/shell/lib/utils to @groot/ui/lib/utils,
- * the one source lint rule R4 allows. Other names imported alongside `cn` keep
- * their @groot/shell/lib/utils import. Safe to rerun.
- *
- * Usage: pnpm exec tsx scripts/codemods/cn-import-path.ts [file...]
- * With no files it rewrites every tracked .ts and .tsx file under apps/ and
- * packages/.
- */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 

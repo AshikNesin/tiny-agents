@@ -1,16 +1,12 @@
 import { builtinModules } from "node:module";
 
 /**
- * The repo's dependency boundaries as one table. `boundaryOverrides()` turns
- * it into the oxlint overrides that the `lint` block of vite.config.ts uses.
- *
  * Oxlint does not merge two overrides that set the same rule on one file: the
  * later override replaces the earlier. So the generator gives every file
  * exactly one `no-restricted-imports` entry, holding every import row that
  * applies to it.
  */
 
-/** `**` for the whole repo, or `<dir>/**` for one directory. */
 type Scope = "**" | `${string}/**`;
 
 type ImportRestriction = {
@@ -20,7 +16,6 @@ type ImportRestriction = {
 
 type BoundaryRule = {
   id: string;
-  /** Files inside the scope that the rule skips; an import rule takes paths or `<dir>/**`. */
   except?: string[];
   enabled: boolean;
 } & (
@@ -36,7 +31,7 @@ const bareBuiltins = [
 const R2_MESSAGE =
   "R2: packages/core/src stays runtime-neutral (AGENTS.md). Use Web APIs (crypto.subtle, fetch, TextEncoder), or move Node-only code to packages/core/src/database/node.ts, packages/core/src/storage/node.ts or apps/web/src/server/entry.node.ts.";
 
-export const BOUNDARY_RULES: BoundaryRule[] = [
+const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
     kind: "import",
@@ -114,7 +109,6 @@ export const BOUNDARY_RULES: BoundaryRule[] = [
   },
 ];
 
-/** True when `glob` (`**`, `<dir>/**` or a file path) covers every file in `zone`. */
 const covers = (glob: string, zone: string) =>
   glob === "**" || glob === zone || (glob.endsWith("/**") && zone.startsWith(glob.slice(0, -2)));
 
@@ -127,17 +121,8 @@ type Override = {
   rules: Record<string, unknown>;
 };
 
-/**
- * Oxlint overrides for `rules`. Each import scope and each exception is a
- * zone. A zone's override holds the import rows that apply there, and zones
- * run general to specific, so the deepest zone matching a file wins.
- * `pluginPath` is where oxlint loads scripts/lint/repo-plugin.mjs from.
- */
-export function boundaryOverrides(
-  pluginPath: string,
-  rules: BoundaryRule[] = BOUNDARY_RULES,
-): Override[] {
-  const enabled = rules.filter((r) => r.enabled);
+export function boundaryOverrides(pluginPath: string): Override[] {
+  const enabled = BOUNDARY_RULES.filter((r) => r.enabled);
   const importRules = enabled.filter((r) => r.kind === "import");
   const zones = [...new Set(importRules.flatMap((r) => [r.scope, ...(r.except ?? [])]))];
   for (const zone of zones) {
