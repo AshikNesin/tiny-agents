@@ -8,6 +8,10 @@
  *       --sandbox  point it at the local sandbox container (`pnpm sandbox:up`):
  *                  terminal, computer, browser and bot sandbox tools become reachable
  *       --empty    skip the demo-user seed (no users: first-run /setup is reachable)
+ *       --shelley  start a keyless Shelley (`-predictable-only`) for this run and set
+ *                  SHELLEY_URL, so /code and bots' code_* tools are reachable. Binary:
+ *                  $TA_VERIFY_SHELLEY_BIN, else `shelley` on PATH, else copied out of
+ *                  the local sandbox container (`pnpm sandbox:up`)
  *   ta-verify doctor [--run <id>]             read-only "is this instance worth driving?"
  *   ta-verify drive <journey.mjs>... [--run <id>]  run journeys against the instance
  *   ta-verify down [--run <id>]               stop what `up` started, delete its state, keep evidence
@@ -44,7 +48,7 @@ const DEMO = { email: "demo@example.com", password: "demo@example.com" }; // git
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const positional = [];
-const BOOLEAN_FLAGS = new Set(["sandbox", "empty"]);
+const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley"]);
 for (let i = 0; i < rest.length; i++) {
   const name = rest[i].slice(2);
   if (rest[i].startsWith("--") && BOOLEAN_FLAGS.has(name)) flags[name] = true;
@@ -135,6 +139,84 @@ function tcpOpen(port) {
   });
 }
 
+const SANDBOX_CONTAINER = "tiny-agents-sandbox-sandbox-1";
+
+/** A Shelley binary: env override, PATH, or copied out of the sandbox container. */
+function shelleyBinary(stateDir) {
+  if (process.env.TA_VERIFY_SHELLEY_BIN) return process.env.TA_VERIFY_SHELLEY_BIN;
+  try {
+    return execFileSync("which", ["shelley"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {}
+  const copy = path.join(stateDir, "shelley");
+  try {
+    execFileSync("docker", ["cp", `${SANDBOX_CONTAINER}:/usr/local/bin/shelley`, copy], {
+      stdio: "ignore",
+    });
+    return copy;
+  } catch {
+    fail(
+      "--shelley: no binary (set TA_VERIFY_SHELLEY_BIN, put shelley on PATH, or `pnpm sandbox:up`)",
+    );
+  }
+}
+
+/** Start a predictable-only Shelley in its own process group, own DB and HOME. */
+async function startShelley(run) {
+  const bin = shelleyBinary(run.stateDir);
+  const home = path.join(run.stateDir, "shelley-home");
+  mkdirSync(home, { recursive: true });
+  if ((listeners(run.shelleyPort) ?? []).length) fail(`--shelley: port ${run.shelleyPort} is busy`);
+  const out = openSync(path.join(run.stateDir, "shelley.log"), "a");
+  const child = spawn(
+    bin,
+    [
+      "-predictable-only",
+      "-db",
+      path.join(run.stateDir, "shelley.db"),
+      "serve",
+      "-port",
+      String(run.shelleyPort),
+    ],
+    // Its own HOME: Shelley puts a unix socket under ~/.config/shelley.
+    {
+      cwd: run.stateDir,
+      env: { ...process.env, HOME: home },
+      detached: true,
+      stdio: ["ignore", out, out],
+    },
+  );
+  child.unref();
+  run.shelleyPid = child.pid;
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const models = await getJson(`${run.shelleyUrl}/api/models`);
+    if (models.status === 200)
+      return log(`shelley (predictable) on ${run.shelleyUrl}, pid ${child.pid}`);
+    if (!alive(child.pid)) break;
+    await sleep(500);
+  }
+  fail(`--shelley: did not answer; see ${path.join(run.stateDir, "shelley.log")}`);
+}
+
+async function stopGroup(pgid, label) {
+  if (!pgid || !alive(pgid)) return;
+  log(`stopping ${label} process group ${pgid}`);
+  try {
+    process.kill(-pgid, "SIGTERM");
+  } catch {}
+  const deadline = Date.now() + 15_000;
+  while (alive(pgid) && Date.now() < deadline) await sleep(250);
+  if (alive(pgid)) {
+    log(`${label} still alive after 15s; SIGKILL`);
+    try {
+      process.kill(-pgid, "SIGKILL");
+    } catch {}
+  }
+}
+
 function sandboxEnv(run) {
   if (!run.sandbox) return { SANDBOX_HOST: "" };
   return {
@@ -163,6 +245,7 @@ function serverEnv(run) {
     ADMIN_AUTH_KEY: run.adminKey,
     // Without --sandbox: no sandbox, so terminal/computer/browser are unreachable.
     ...sandboxEnv(run),
+    ...(run.shelleyUrl ? { SHELLEY_URL: run.shelleyUrl } : {}),
     PORTLESS: "0",
     NODE_OPTIONS: "--max-old-space-size=1024",
   };
@@ -177,11 +260,13 @@ async function up() {
   if (existsSync(path.join(stateDir, "run.json")))
     fail(`run ${id} already exists; pick another --run or \`down\` it`);
 
-  const busy = listeners(port);
+  // The dev server also opens Vite's HMR socket on port + 1: both must be free,
+  // so space concurrent runs at least 2 apart (10 apart is easy to read).
+  const busy = [...(listeners(port) ?? []), ...(listeners(port + 1) ?? [])];
   const probe = await getJson(`http://localhost:${port}/health`);
-  if ((busy && busy.length) || probe.status) {
+  if (busy.length || probe.status) {
     fail(
-      `port ${port} is already in use (pids: ${busy?.join(",") || "?"}). Not ours: pick --port, never drive it.`,
+      `port ${port} or ${port + 1} (HMR) is already in use (pids: ${busy.join(",") || "?"}). Not ours: pick --port, never drive it.`,
     );
   }
 
@@ -215,6 +300,8 @@ async function up() {
     sandbox: !!flags.sandbox,
     sandboxPort: flags.sandbox ? sandboxPort() : undefined,
     empty: !!flags.empty,
+    shelleyPort: flags.shelley ? port + 1000 : undefined,
+    shelleyUrl: flags.shelley ? `http://127.0.0.1:${port + 1000}` : undefined,
     secretsKey: randomBytes(32).toString("base64"),
     adminKey: randomBytes(24).toString("hex"),
   };
@@ -228,6 +315,10 @@ async function up() {
     execFileSync(tsx, ["scripts/seed.ts"], { cwd: REPO, env, stdio: "inherit" });
   }
 
+  if (flags.shelley) {
+    writeFileSync(path.join(stateDir, "run.json"), JSON.stringify(run, null, 2));
+    await startShelley(run);
+  }
   const logFile = path.join(stateDir, "server.log");
   const out = openSync(logFile, "a");
   // detached = own process group, so `down` kills exactly this tree.
@@ -295,6 +386,15 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
     spa.includes('id="root"') || spa.includes("<script"),
     "GET /login returns the client shell",
   );
+  if (run.shelleyUrl) {
+    const models = await getJson(`${run.shelleyUrl}/api/models`);
+    const predictable = (models.body ?? []).some?.((m) => m.id === "predictable");
+    check(
+      "shelley (predictable) answers",
+      models.status === 200 && !!predictable,
+      `${run.shelleyUrl}/api/models -> ${models.status}`,
+    );
+  }
   if (run.sandbox) {
     check("sandbox SSH answers", await tcpOpen(run.sandboxPort), `127.0.0.1:${run.sandboxPort}`);
   }
@@ -361,7 +461,11 @@ async function drive() {
           TA_VERIFY_EVIDENCE: run.evidenceDir,
           TA_VERIFY_RUN: run.id,
           TA_VERIFY_ADMIN_KEY: run.adminKey,
-          TA_VERIFY_CAPS: [run.sandbox && "sandbox", run.empty && "empty"]
+          TA_VERIFY_CAPS: [
+            run.sandbox && "sandbox",
+            run.empty && "empty",
+            run.shelleyUrl && "shelley",
+          ]
             .filter(Boolean)
             .join(","),
         },
@@ -382,19 +486,11 @@ async function drive() {
 async function down() {
   const id = runId();
   const run = readRun(id);
-  if (alive(run.pid)) {
-    log(`stopping process group ${run.pgid}`);
-    try {
-      process.kill(-run.pgid, "SIGTERM");
-    } catch {}
-    const deadline = Date.now() + 15_000;
-    while (alive(run.pid) && Date.now() < deadline) await sleep(250);
-    if (alive(run.pid)) {
-      log("still alive after 15s; SIGKILL");
-      try {
-        process.kill(-run.pgid, "SIGKILL");
-      } catch {}
-    }
+  await stopGroup(alive(run.pid) ? run.pgid : undefined, "server");
+  await stopGroup(run.shelleyPid, "shelley");
+  for (const name of ["shelley.log"]) {
+    const file = path.join(run.stateDir, name);
+    if (existsSync(file)) writeFileSync(path.join(run.evidenceDir, name), readFileSync(file));
   }
   const leftovers = listeners(run.port);
   if (leftovers?.length)
