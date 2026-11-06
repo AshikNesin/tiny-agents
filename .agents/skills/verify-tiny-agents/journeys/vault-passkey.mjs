@@ -62,12 +62,12 @@ await journey(
       if (/^\/api\/v1\/vault\/step-up(\/options)?$/.test(url.pathname))
         stepUps.push({ path: url.pathname, status: res.status() });
     });
-    const signInForm = async (p, who) => {
+    const signInForm = async (p, who, landing = /\/chats(\/[^/]+)?$/) => {
       await p.goto("/login", { waitUntil: "domcontentloaded" });
       await p.getByLabel("Email", { exact: true }).fill(who.email);
       await p.getByLabel(/password/i).fill(who.password);
       await p.getByRole("button", { name: "Sign In", exact: true }).click();
-      await expect(p).toHaveURL(/\/chats(\/[^/]+)?$/);
+      await expect(p).toHaveURL(landing);
     };
     const me = async () => {
       const res = await page.request.get("/api/v1/auth/me");
@@ -248,7 +248,10 @@ await journey(
       /\/login/.test(page.url())
     ) {
       // The shell dropped the session although the cookie is valid: sign in again to go on.
-      await step("recover: sign the owner in again", () => signInForm(page, owner));
+      // Login returns to the page the session ended on (the item).
+      await step("recover: sign the owner in again", () =>
+        signInForm(page, owner, new RegExp(`${itemPath}$`)),
+      );
     }
 
     await step(
