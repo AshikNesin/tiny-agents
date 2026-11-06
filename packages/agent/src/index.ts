@@ -26,6 +26,7 @@ export { createReviewer, type Reviewer } from "./reviewer";
 export {
   SecretValue,
   VaultError,
+  VaultTargetMovedError,
   type SecretField,
   type SecretValues,
   type VaultApproval,

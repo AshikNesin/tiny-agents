@@ -13,7 +13,7 @@ import {
   OriginMismatchError,
   pageOrigin,
 } from "../../../../packages/agent/src/toolkits/browser-fill";
-import { SecretValue } from "../../../../packages/agent/src/vault";
+import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
 
 const executable = [
   process.env.CHROMIUM_PATH,
@@ -87,16 +87,18 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     ]);
   });
 
-  it("refuses to fill when the page is on another origin", async () => {
+  it("refuses to fill when the page is on another origin, naming where it is", async () => {
     await page.goto(`${origin}/login`);
-    await expect(
-      fillSecretFields(page, {
-        origin: "https://github.com",
-        fields: [
-          { key: "password", autocomplete: "current-password", value: new SecretValue("canary-2") },
-        ],
-      }),
-    ).rejects.toBeInstanceOf(OriginMismatchError);
+    const error = await fillSecretFields(page, {
+      origin: "https://github.com",
+      fields: [
+        { key: "password", autocomplete: "current-password", value: new SecretValue("canary-2") },
+      ],
+    }).catch((caught: unknown) => caught);
+    // The vault's one "target moved" error: what the app audits as refused_origin.
+    expect(error).toBeInstanceOf(OriginMismatchError);
+    expect(error).toBeInstanceOf(VaultTargetMovedError);
+    expect(error).toMatchObject({ actual: origin, reason: "page origin changed before the fill" });
     expect(await page.inputValue("#p")).toBe("");
   });
 

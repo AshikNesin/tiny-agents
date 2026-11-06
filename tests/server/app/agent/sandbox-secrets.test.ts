@@ -342,6 +342,9 @@ describe("run_command with vault secrets", () => {
       "approval",
     );
     expect(waiting.vault).toMatchObject({
+      handle: "github",
+      label: "GitHub token",
+      kind: "api_key",
       tool: "run_command",
       target: command,
       env: ["GITHUB_TOKEN"],
@@ -361,6 +364,26 @@ describe("run_command with vault secrets", () => {
     expect(text).toBe("token=[vault]");
     expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
     expect(recorded.map((r) => r.outcome)).toEqual(["approved_used"]);
+  }, 20_000);
+
+  it("runs nothing when the owner denies, and audits the denial against the secret", async () => {
+    const { broker, recorded } = fakeBroker();
+    const vm = fakeVm(() => ({ output: "", exitCode: 0 }));
+    const { runtime, ref, events } = await open(
+      { command: "gh api user", secrets: [{ handle: "github", env: "GITHUB_TOKEN" }] },
+      vm,
+      { broker },
+    );
+    const waiting = await until(
+      () => (lastCall(events)?.status === "awaiting_approval" ? lastCall(events) : undefined),
+      "approval",
+    );
+    await runtime.decideApproval(ref, waiting.taskId!, "denied");
+    expect(await until(() => result(events), "result")).toMatch(/denied/);
+    expect(vm.execs).toEqual([]);
+    expect(recorded.map((r) => [r.use.handle, r.use.target, r.outcome])).toEqual([
+      ["github", "gh api user", "denied"],
+    ]);
   }, 20_000);
 
   it("refuses a command that names a host its secrets may not reach, without asking", async () => {

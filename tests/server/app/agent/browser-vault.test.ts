@@ -22,7 +22,10 @@ import {
   createBrowserToolkit,
   type BrowserSession,
 } from "../../../../packages/agent/src/toolkits/browser";
-import type { SecretFill } from "../../../../packages/agent/src/toolkits/browser-fill";
+import {
+  OriginMismatchError,
+  type SecretFill,
+} from "../../../../packages/agent/src/toolkits/browser-fill";
 import type { ChatEvent, ChatState, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
   SecretValue,
@@ -38,14 +41,16 @@ const CANARY = "canary-gh-Lr8x";
 function fakePage(start: string) {
   const state = {
     origin: start,
+    /** The page navigates here as the fill starts (a redirect racing the call). */
+    movesTo: undefined as string | undefined,
     fills: [] as { origin: string; values: Record<string, string> }[],
   };
   const session: BrowserSession = {
     url: () => `${state.origin}/`,
     origin: async () => state.origin,
     fillSecret: async (fill: SecretFill) => {
-      if (fill.origin !== state.origin)
-        throw Object.assign(new Error("moved"), { name: "OriginMismatchError" });
+      if (state.movesTo) state.origin = state.movesTo;
+      if (fill.origin !== state.origin) throw new OriginMismatchError(state.origin);
       state.fills.push({
         origin: fill.origin,
         values: Object.fromEntries(fill.fields.map((f) => [f.key, f.value.reveal()])),
@@ -228,6 +233,20 @@ describe("browser_fill_secret", () => {
     expect(text).toContain('"filled":["password"]');
     // The snapshot echoed the password; the gate scrubbed it.
     expect(text).toContain("[vault]");
+    expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
+  }, 20_000);
+
+  it("fills nothing when the page moves as the fill starts, and says where it went", async () => {
+    const page = fakePage("https://github.com");
+    page.state.movesTo = "https://github.com.evil.example";
+    const { runtime, ref, events } = await open(page, [
+      ["browser_fill_secret", { handle: "github" }],
+    ]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    expect(await until(() => result(events), "result")).toBe(
+      "The page is now on https://github.com.evil.example, not the origin this call was approved for. Nothing was filled.",
+    );
+    expect(page.state.fills).toEqual([]);
     expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
   }, 20_000);
 

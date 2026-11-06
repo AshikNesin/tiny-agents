@@ -12,6 +12,7 @@
  */
 import type { Frame, Page } from "playwright-core";
 import type { SecretValue } from "../vault";
+import { VaultTargetMovedError } from "../vault-target";
 import { assertRefShape } from "./browser-guard";
 
 export interface SecretFillField {
@@ -32,10 +33,14 @@ export interface SecretFill {
   fields: SecretFillField[];
 }
 
-/** The page is not on the origin the fill is bound to. */
-export class OriginMismatchError extends Error {
-  constructor(readonly actual: string) {
-    super("The page is not on the origin this value may be filled on.");
+/** The page is not on the origin the fill is bound to; `actual` is where it is. */
+export class OriginMismatchError extends VaultTargetMovedError {
+  constructor(actual: string) {
+    super(
+      actual,
+      "The page is not on the origin this value may be filled on.",
+      "page origin changed before the fill",
+    );
     this.name = "OriginMismatchError";
   }
 }

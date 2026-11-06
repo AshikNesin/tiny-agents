@@ -29,7 +29,7 @@ import {
 } from "../credentials";
 import { SecretValue, VAULT_RULE, type VaultBroker } from "../vault";
 import { refuseUnattended, waitForOwner, type WaitTracker } from "../waiting";
-import { OriginMismatchError, type SecretFill, type SecretFillField } from "./browser-fill";
+import type { SecretFill, SecretFillField } from "./browser-fill";
 import { assertRefShape, parseExemptHosts } from "./browser-guard";
 import {
   describeBrowserError,
@@ -479,9 +479,6 @@ export function createBrowserVaultTools(
                 details: { filled, origin },
               };
             } catch (error) {
-              if (error instanceof OriginMismatchError) {
-                return fail(ORIGIN_MOVED(error.actual));
-              }
               return fail(safeMessage(error));
             }
           },
@@ -581,7 +578,6 @@ export function createBrowserVaultTools(
                 details: { filled: ["code"], origin },
               };
             } catch (error) {
-              if (error instanceof OriginMismatchError) return fail(ORIGIN_MOVED(error.actual));
               return fail(safeMessage(error));
             }
           },

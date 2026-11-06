@@ -34,7 +34,6 @@ import { refuseUnattended, unattendedOnce, type WaitTracker } from "../waiting";
 import {
   DesktopGoneError,
   OwnerDrivingError,
-  WindowMismatchError,
   type ComputerSessions,
   type KeyModifier,
   type LiveComputer,
@@ -505,6 +504,8 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
                     title: args.window_title,
                   });
                 },
+                (active) =>
+                  `The active window is ${active || "unknown"}, not the one this secret is bound to. Nothing was typed.`,
               );
               return {
                 output: [
@@ -516,9 +517,6 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
               };
             } catch (error) {
               dropIfGone(profile, live, error);
-              if (error instanceof WindowMismatchError) {
-                return fail(`${error.message} Nothing was typed.`);
-              }
               if (error instanceof VaultError) return fail(safeMessage(error));
               return fail(
                 error instanceof DesktopGoneError ? describe(error) : "Typing the secret failed.",
