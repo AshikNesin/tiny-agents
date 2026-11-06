@@ -34,6 +34,16 @@ const exists = (p) => vm(`test -e ${p} && echo yes || echo no`).trim() === "yes"
 await journey(
   "bot-profiles",
   async ({ page, step, proof, cleanup, api, stamp }) => {
+    // Steps that catch a product bug record it and fail the journey at the end.
+    const bugs = [];
+    const bugStep = async (label, body) => {
+      try {
+        await step(label, body);
+      } catch {
+        bugs.push(label);
+        await proof(`bug-${bugs.length}`);
+      }
+    };
     const sockets = [];
     page.on("websocket", (ws) => {
       if (!/\/(browser|computer)\/vnc|\/(browser|computer)\/[^/]+\/vnc/.test(ws.url())) return;
@@ -70,15 +80,16 @@ await journey(
       browserDir = `~/data/browser-profiles/${profile}`;
       desktopDir = `~/.tiny-agents/computer-profiles/${profile}`;
       cleanup(async () => {
-        await api.delete(`/bots/${botId}`);
-        // This drive's own profile directories only (deleting a bot does not close
-        // or wipe a desktop of its own).
-        vm(`rm -rf ${browserDir} ${desktopDir}`);
-      });
-      // Before anything else: neither this bot's browser nor its desktop is up.
-      cleanup(async () => {
-        if ((await browserStatus()).active) await api.delete(`/bots/${botId}/browser/profile`);
-        if ((await computerStatus()).active) await api.delete(`/bots/${botId}/computer/profile`);
+        if ((await page.request.get(`/api/v1/bots/${botId}`)).ok()) {
+          if ((await browserStatus()).active) await api.delete(`/bots/${botId}/browser/profile`);
+          if ((await computerStatus()).active) await api.delete(`/bots/${botId}/computer/profile`);
+          await api.delete(`/bots/${botId}`);
+        }
+        // This drive's own leftovers on the VM only: a desktop its deleted bot left
+        // running (see the bug step), and both profile directories.
+        vm(
+          `P=${desktopDir}; if [ -s $P/.desktop-pids ]; then for X in $(cat $P/.desktop-pids); do kill -- -$X 2>/dev/null; kill $X 2>/dev/null; done; sleep 1; fi; rm -rf ${browserDir} $P`,
+        );
       });
       expect((await browserStatus()).profile).toBe("shared");
       expect((await computerStatus()).profile).toBe("shared");
@@ -290,6 +301,43 @@ await journey(
       },
     );
     await proof("computer-own-reset");
+
+    // ---- deleting the bot releases what it owned ------------------------------------
+    await step("open the bot's browser and desktop again", async () => {
+      await page.getByTestId("browser-toggle").click();
+      await browserPanel.getByRole("button", { name: "Open browser" }).click();
+      await expect
+        .poll(async () => (await browserStatus()).active, { timeout: 120_000 })
+        .toBe(true);
+      await page.getByTestId("computer-toggle").click();
+      await computerPanel.getByRole("button", { name: "Open computer" }).click();
+      await expect
+        .poll(async () => (await computerStatus()).active, { timeout: 120_000 })
+        .toBe(true);
+      expect(procs(`browser-profiles/${profile}`)).toBeGreaterThan(0);
+      expect(exists(`${desktopDir}/.desktop-env`)).toBe(true);
+    });
+    await step("bot settings → Delete bot removes the bot", async () => {
+      await page.getByRole("button", { name: `Edit ${name}` }).click();
+      const dialog = page.getByRole("dialog", { name: `Edit ${name}` });
+      await dialog.getByRole("button", { name: "Delete bot" }).click();
+      await expect(dialog.getByText(`Delete ${name}? This cannot be undone.`)).toBeVisible();
+      await dialog.getByRole("button", { name: "Delete bot" }).click();
+      await expect(dialog).toHaveCount(0);
+      expect((await page.request.get(`/api/v1/bots/${botId}`)).status()).toBe(404);
+    });
+    await step("its own browser closes with it and the profile is wiped (#88)", async () => {
+      await expect.poll(() => procs(`browser-profiles/${profile}`), { timeout: 30_000 }).toBe(0);
+      await expect.poll(() => exists(browserDir), { timeout: 30_000 }).toBe(false);
+    });
+    await bugStep("its own desktop closes with it and the profile is wiped", async () => {
+      // The Computer page no longer lists it, so nothing in the UI could reach it.
+      expect(await pageDesktop(profile)).toBeUndefined();
+      await expect.poll(() => procs("Xtigervnc"), { timeout: 30_000 }).toBe(0);
+      await expect.poll(() => exists(desktopDir), { timeout: 30_000 }).toBe(false);
+    });
+    await proof("bot-deleted");
+    if (bugs.length) throw new Error(`product bug(s): ${bugs.join("; ")}`);
   },
   { requires: ["sandbox"] },
 );

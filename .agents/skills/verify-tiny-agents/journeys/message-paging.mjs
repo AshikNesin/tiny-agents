@@ -43,12 +43,12 @@ await journey("message-paging", async ({ page, step, proof, cleanup, api, stamp 
     });
   });
 
-  /** Wheel up over the transcript until `target` renders (each wheel arms the loader). */
+  /** Wheel up over the transcript until `target` is on screen (each wheel arms the loader). */
   const scrollUpUntil = async (target) => {
     await bubble(EXCHANGES).hover();
     await expect(async () => {
       await page.mouse.wheel(0, -5000);
-      await expect(target).toBeVisible({ timeout: 1_000 });
+      await expect(target).toBeInViewport({ timeout: 1_000 });
     }).toPass({ timeout: 45_000 });
   };
 

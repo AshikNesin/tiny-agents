@@ -218,7 +218,10 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
     cleanup(purgeVault);
     await expect(page).toHaveURL(new RegExp(`/vault/items/${handle}$`));
     await expect(page.getByRole("heading", { name: keyTitle })).toBeVisible();
-    await expect(page.getByText("Not used yet.")).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: /^created · vault_ui/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: /^used · / })).toHaveCount(0);
     expect(await page.content()).not.toContain(vaultSecret);
   });
   await proof("vault-item");
@@ -286,7 +289,7 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
           .sort()
           .join(","),
       )
-      .toBe("echo,reset");
+      .toBe(`mcp__${slug}__echo,mcp__${slug}__reset`);
   });
   await proof("connection-linked");
 
@@ -424,7 +427,10 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
     expect(row.tools.map((t) => t.name).sort()).toEqual(
       [`mcp__${slug}__echo`, `mcp__${slug}__reset`].sort(),
     );
-    expect(toolNames(await capability()).sort()).toEqual(["echo", "reset"]);
+    expect(toolNames(await capability()).sort()).toEqual([
+      `mcp__${slug}__echo`,
+      `mcp__${slug}__reset`,
+    ]);
     expect(await api.get(`/routines/${routineId}`)).toMatchObject({ botId, done: true });
   });
 
