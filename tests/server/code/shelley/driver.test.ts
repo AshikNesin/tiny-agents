@@ -13,6 +13,7 @@ import {
   threadEventProblems,
 } from "@tiny-agents/code/testing";
 import { eventually, startFakeShelley, type FakeShelley } from "./fake-shelley";
+import { describeTurnOutcomeRule, type TurnCase } from "../turn-outcome-conformance";
 
 let shelley: FakeShelley;
 let harness: ShelleyHarness;
@@ -45,6 +46,17 @@ const user = (seq: number, text: string) => ({
   created_at: "2026-11-05T00:00:00Z",
   llm_data: JSON.stringify({ Content: [{ Type: 2, Text: text }] }),
 });
+
+const error = (seq: number, text: string) => ({
+  message_id: `m${seq}`,
+  sequence_id: seq,
+  type: "error",
+  created_at: "2026-11-05T00:00:00Z",
+  llm_data: JSON.stringify({ Content: [{ Type: 2, Text: text }] }),
+});
+
+const said = (text: string) => [{ Type: 2, Text: text }];
+const endOfTurn = { end_of_turn: true };
 
 beforeEach(async () => {
   shelley = await startFakeShelley();
@@ -99,7 +111,11 @@ describe("Shelley harness", () => {
     expect(shelley.seen[0]!.headers["x-exedev-userid"]).toBeTruthy();
   });
 
-  it("reports turn ends once and message_user calls as attention", async () => {
+  it("reports turn ends once, with the outcome read after the end, and message_user calls as attention", async () => {
+    shelley.conversations.set("cA", {
+      messages: [user(1, "go"), agent(6, said("All green."), endOfTurn)],
+      conversation: row("cA"),
+    });
     const events: InstanceEvent[] = [];
     harness.subscribe((e) => events.push(e));
     harness.start();
@@ -121,7 +137,19 @@ describe("Shelley harness", () => {
 
     await eventually(() =>
       expect(events.filter((e) => e.type === "turn_ended")).toEqual([
-        { type: "turn_ended", nativeId: "cA", finalText: "All green." },
+        {
+          type: "turn_ended",
+          nativeId: "cA",
+          outcome: {
+            working: false,
+            title: "slug-cA",
+            cwd: "/repo",
+            text: "All green.",
+            failed: false,
+            endedAt: Date.parse("2026-11-05T00:00:00Z"),
+            cursor: 6,
+          },
+        },
       ]),
     );
     expect(events.find((e) => e.type === "attention")).toEqual({
@@ -269,18 +297,12 @@ describe("Shelley harness", () => {
     await expect(harness.fileDiff!("/repo", "working", "../x")).rejects.toThrow(/Invalid path/);
   });
 
-  it("answers a thread's outcome for hand-offs", async () => {
+  it("reads one Shelley message's text blocks as one answer", async () => {
     shelley.conversations.set("cA", {
-      messages: [user(1, "go"), agent(2, [{ Type: 2, Text: "Done: 3 files." }])],
+      messages: [user(1, "go"), agent(2, [...said("Done:"), ...said("3 files.")], endOfTurn)],
       conversation: row("cA"),
     });
-    expect(await harness.outcome("cA")).toMatchObject({
-      working: false,
-      title: "slug-cA",
-      text: "Done: 3 files.",
-      failed: false,
-      cursor: 2,
-    });
+    expect(await harness.outcome("cA")).toMatchObject({ text: "Done:\n3 files.", cursor: 2 });
   });
 
   it("reports Shelley unreachable with the reason", async () => {
@@ -290,4 +312,29 @@ describe("Shelley harness", () => {
     expect(harness.status().detail).toMatch(/unreachable/);
     shelley = await startFakeShelley();
   });
+});
+
+describeTurnOutcomeRule("Shelley", async (turn: TurnCase) => {
+  const messages = {
+    answered: [user(1, "go"), agent(2, said("Done: 3 files."), endOfTurn)],
+    failed: [user(1, "go"), error(2, "boom")],
+    // Stopped after the steer: Shelley ends the turn with nothing more to say.
+    steered: [
+      user(1, "task"),
+      agent(2, said("Halfway.")),
+      user(3, "also docs"),
+      agent(4, [], endOfTurn),
+    ],
+    // The second turn was cancelled before Shelley wrote anything.
+    unanswered: [user(1, "one"), agent(2, said("First done."), endOfTurn), user(3, "two")],
+  }[turn];
+  shelley.conversations.set("cT", { messages, conversation: row("cT") });
+  const events: InstanceEvent[] = [];
+  harness.subscribe((e) => events.push(e));
+  harness.start();
+  await shelley.waitForStreams(1);
+  shelley.push({ conversation_id: "cT", conversation_state: { working: true } });
+  shelley.push({ conversation_id: "cT", conversation_state: { working: false } });
+  await eventually(() => expect(events.some((e) => e.type === "turn_ended")).toBe(true));
+  return { harness, nativeId: "cT", events };
 });

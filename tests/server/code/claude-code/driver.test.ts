@@ -41,6 +41,7 @@ import {
   type Brain,
   type FakeQuery,
 } from "./fake-sdk";
+import { describeTurnOutcomeRule, type TurnCase } from "../turn-outcome-conformance";
 
 const TOKEN = Buffer.alloc(32, 9).toString("base64");
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -178,8 +179,10 @@ describe("Claude Code harness", () => {
     });
     expect(nativeId).toMatch(/^[A-Za-z0-9_-]+$/);
     const [ended] = await waitTurnEnds(events, 1);
-    expect(ended).toMatchObject({ nativeId, finalText: "Echo:   hello there\nsecond line" });
-    expect(ended?.failed).toBeUndefined();
+    expect(ended).toMatchObject({
+      nativeId,
+      outcome: { working: false, failed: false, text: "Echo:   hello there\nsecond line" },
+    });
 
     const query = sdk.queries[0]!;
     expect(query.options).toMatchObject({
@@ -345,14 +348,17 @@ describe("Claude Code harness", () => {
     expect(steer).toMatchObject({ priority: "next", message: { content: "keep the old API" } });
     query.emit(toolResult(query, "toolu_read", "export function parse() {}"));
     query.emit(text(query, "Keeping the old API."));
-    // The CLI ran the steer in its own turn: still working after the first result.
+    // The CLI ran the steer in its own turn: still working after the first result,
+    // and the steer belongs to the turn it went into, so no turn end yet.
     query.emit(result(query, { totalCost: 0.01, queuedTurnCount: 1 }));
-    await waitTurnEnds(events, 1);
+    await vi.waitFor(async () => expect((await harness.getThread(nativeId)).thread.cursor).toBe(1));
     expect((await harness.outcome(nativeId)).working).toBe(true);
+    expect(turnEnds(events)).toEqual([]);
     query.emit(text(query, "All done."));
     query.emit(result(query, { totalCost: 0.015 }));
-    await waitTurnEnds(events, 2);
-    await vi.waitFor(async () => expect((await harness.outcome(nativeId)).working).toBe(false));
+    const [ended] = await waitTurnEnds(events, 1);
+    expect(ended?.outcome).toMatchObject({ working: false, text: "All done." });
+    expect(turnEnds(events)).toHaveLength(1);
     const snapshot = await harness.getThread(nativeId);
     expect(kinds(snapshot.items)).toEqual([
       "user:refactor the parser",
@@ -392,7 +398,7 @@ describe("Claude Code harness", () => {
     });
     query.emit(result(query, { totalCost: 0.01, isError: true, errors: ["Request was aborted."] }));
     const [ended] = await waitTurnEnds(events, 1);
-    expect(ended?.failed).toBeUndefined();
+    expect(ended?.outcome).toMatchObject({ failed: false, text: "" });
     const snapshot = await harness.getThread(nativeId);
     expect(kinds(snapshot.items)).toEqual([
       "user:run the tests",
@@ -571,7 +577,7 @@ describe("Claude Code harness", () => {
     await interrupted;
     query.emit(result(query, { totalCost: 0.01, isError: true, errors: ["Request was aborted."] }));
     const [ended] = await waitTurnEnds(events, 1);
-    expect(ended?.failed).toBe(true);
+    expect(ended?.outcome.failed).toBe(true);
     const snapshot = await harness.getThread(nativeId);
     expect(snapshot.items.find((item) => item.kind === "notice")).toMatchObject({
       level: "error",
@@ -836,4 +842,44 @@ describe("Claude Code harness", () => {
       attachments: [{ ref, name: "diagram.png", image: true }],
     });
   });
+});
+
+describeTurnOutcomeRule("Claude Code", async (turn: TurnCase) => {
+  const { harness, sdk, dir, events } = await setup(manual);
+  const first = turn === "steered" ? "task" : turn === "unanswered" ? "one" : "go";
+  const { nativeId } = await harness.createThread({ message: first, cwd: dir });
+  const query = await queryOf(sdk);
+  await query.nextInput();
+  const stop = async () => {
+    const interrupted = query.waitInterrupt();
+    await harness.interrupt(nativeId);
+    await interrupted;
+    query.emit(result(query, { totalCost: 0.01, isError: true, errors: ["Request was aborted."] }));
+  };
+  switch (turn) {
+    case "answered":
+      query.emit(text(query, "Done: 3 files."));
+      query.emit(result(query, { totalCost: 0.01, text: "Done: 3 files." }));
+      break;
+    case "failed":
+      query.emit(result(query, { totalCost: 0.01, isError: true, errors: ["boom"] }));
+      break;
+    case "steered":
+      query.emit(text(query, "Halfway."));
+      await harness.send(nativeId, { message: "also docs" });
+      await query.nextInput();
+      await stop();
+      break;
+    case "unanswered":
+      query.emit(text(query, "First done."));
+      query.emit(result(query, { totalCost: 0.01, text: "First done." }));
+      await waitTurnEnds(events, 1);
+      await harness.send(nativeId, { message: "two" });
+      await query.nextInput();
+      await stop();
+      await waitTurnEnds(events, 2);
+      break;
+  }
+  await waitTurnEnds(events, 1);
+  return { harness, nativeId, events };
 });

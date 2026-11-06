@@ -406,22 +406,16 @@ export function messageUserText(llmData: string): string | undefined {
 }
 
 /**
- * Text of the last agent message (or error) and when it was written. Not
- * the shared `lastAnswer(items)`: rows carry no time, a Shelley message's
- * text blocks are one answer (rows split them), and a user message with no
- * reply yet (a cancelled `delay`, a steer) keeps the previous answer here.
+ * When Shelley last wrote to the conversation (ms): its newest agent or error
+ * message, on Shelley's clock. The turn outcome's `endedAt`
+ * (`server/outcome.ts`); undefined before Shelley answered anything.
  */
-export function lastAnswer(messages: ShelleyMessage[]): {
-  text: string;
-  failed: boolean;
-  endedAt?: number;
-} {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]!;
+export function lastWriteAt(messages: Iterable<ShelleyMessage>): number | undefined {
+  let newest: ShelleyMessage | undefined;
+  for (const m of messages) {
     if (m.type !== "agent" && m.type !== "error") continue;
-    const body = textOf(parse<LlmData>(m.llm_data)?.Content).trim();
-    if (!body && m.type === "agent") continue;
-    return { text: body, failed: m.type === "error", endedAt: Date.parse(m.created_at) };
+    if (!newest || m.sequence_id > newest.sequence_id) newest = m;
   }
-  return { text: "", failed: false };
+  const at = newest ? Date.parse(newest.created_at) : Number.NaN;
+  return Number.isFinite(at) ? at : undefined;
 }
