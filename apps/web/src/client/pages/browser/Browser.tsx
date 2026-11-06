@@ -13,9 +13,8 @@
  *
  * `?profile=bot-<id>` opens a given browser (the chat panel links here).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 import {
   Bot as BotIcon,
   ClipboardPaste,
@@ -29,17 +28,13 @@ import {
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingSpinner, LoadingState } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
-import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { browserPageApi, type PageBrowser, type PageBrowserList } from "../../lib/browser-page-api";
 import { errorMessage } from "../../lib/errors";
-import { VncView, type VncHandle, type VncState } from "../../components/browser/VncView";
+import { connectionOf, useLiveView } from "../../lib/live-view";
+import { VncView } from "../../components/browser/VncView";
 
 export const BROWSER_SELECTED_KEY = "tiny-agents:browser-page-profile";
-/** Keys the browser should get in full screen instead of the page reacting. */
-const LOCKED_KEYS = ["Escape", "Tab", "KeyW", "KeyT", "KeyN", "KeyL", "KeyR", "F5"];
-
-type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
 
 function readSelected(): string {
   try {
@@ -125,14 +120,7 @@ function OffState({ browser, onOpen }: { browser: PageBrowser; onOpen: () => voi
 
 export function BrowserPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [list, setList] = useState<PageBrowserList | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState(() => searchParams.get("profile") ?? readSelected());
-  const [vncState, setVncState] = useState<VncState>("connecting");
-  const [fullscreen, setFullscreen] = useState(false);
-  const regionRef = useRef<HTMLDivElement>(null);
-  const vncRef = useRef<VncHandle>(null);
-  const confirm = useConfirm();
 
   // A deep link picks the browser, and is remembered like a click.
   const linked = searchParams.get("profile");
@@ -142,125 +130,69 @@ export function BrowserPage() {
     storeSelected(linked);
   }, [linked]);
 
-  const refresh = useCallback(async () => {
-    try {
-      setList(await browserPageApi.list());
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load the browsers"));
-    }
-  }, []);
-
-  const browsers = list?.browsers ?? [];
   // An unknown profile (a deleted bot, a stale link) falls back to Shared.
-  const browser = browsers.find((b) => b.profile === selected) ?? browsers[0];
-  const profile = browser?.profile;
-  const live = Boolean(browser?.active);
-  const streaming = live && browser?.mode === "vnc";
-  const driving = browser?.driver === "human";
+  const pick = (list: PageBrowserList) =>
+    list.browsers.find((b) => b.profile === selected) ?? list.browsers[0];
 
   // Browsers open, close and change hands from other tabs and from bots.
-  const pollMs = browsers.some((b) => b.starting) ? 1500 : 3000;
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), pollMs);
-    return () => clearInterval(timer);
-  }, [refresh, pollMs]);
-
-  useEffect(() => {
-    if (!streaming) setVncState("connecting");
-  }, [streaming, profile]);
-
-  useEffect(() => {
-    const onChange = () => {
-      const full = document.fullscreenElement === regionRef.current;
-      setFullscreen(full);
-      const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
-      if (full) void keyboard?.lock?.(LOCKED_KEYS).catch(() => undefined);
-      else keyboard?.unlock?.();
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
+  const view = useLiveView<PageBrowserList, PageBrowser>({
+    kind: "browser",
+    source: "browsers",
+    load: () => browserPageApi.list(),
+    select: pick,
+    replace: (list, next) => ({
+      ...list,
+      browsers: list.browsers.map((b) => (b.profile === next.profile ? next : b)),
+    }),
+    starting: (list) => list.browsers.some((b) => b.starting),
+    driver: (driver, b) => browserPageApi.driver(b?.profile ?? "shared", driver),
+    start: (b) => browserPageApi.start(b?.profile ?? "shared"),
+    reset: (b) => browserPageApi.reset(b?.profile ?? "shared"),
+    startFailed: "Failed to open the browser",
+    resetCopy: (b) => {
+      const others = b?.bots.map((bot) => bot.name) ?? [];
+      return {
+        confirm: {
+          title: `Reset the ${b?.label ?? "Shared"} browser?`,
+          description:
+            "This closes the browser and deletes its profile: cookies, logins and history" +
+            (b?.profile === "shared" && others.length > 0
+              ? `. Every bot on it is signed out (${others.join(", ")}).`
+              : "."),
+          confirmLabel: "Reset",
+          destructive: true,
+        },
+        done: "Browser reset; it starts fresh next time.",
+      };
+    },
+  });
+  const {
+    status: list,
+    item: browser,
+    streaming,
+    humanDrives: driving,
+    vncRef,
+    vncState,
+    setVncState,
+    regionRef,
+    fullscreen,
+    toggleFullscreen,
+    setDriver,
+    start,
+    reset,
+    paste,
+    refresh,
+  } = view;
+  const loadError = view.error ? errorMessage(view.error, "Failed to load the browsers") : null;
+  const browsers = list?.browsers ?? [];
+  const profile = browser?.profile;
+  const live = Boolean(browser?.active);
+  const connection = connectionOf({ mode: streaming ? "vnc" : "headless" }, vncState);
 
   const select = (next: string) => {
     setSelected(next);
     storeSelected(next);
     if (linked) setSearchParams({}, { replace: true });
-  };
-
-  const patch = (next: Partial<PageBrowser>) =>
-    setList((current) =>
-      current
-        ? {
-            ...current,
-            browsers: current.browsers.map((b) => (b.profile === profile ? { ...b, ...next } : b)),
-          }
-        : current,
-    );
-
-  const setDriver = async (driver: "agent" | "human") => {
-    if (!profile) return;
-    try {
-      await browserPageApi.driver(profile, driver);
-      patch({ driver });
-      if (driver === "human") vncRef.current?.focus();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to switch driver"));
-    }
-  };
-
-  const start = async () => {
-    if (!profile) return;
-    try {
-      await browserPageApi.start(profile);
-      patch({ starting: true, error: null });
-      await refresh();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to open the browser"));
-    }
-  };
-
-  const reset = async () => {
-    if (!browser || !profile) return;
-    const others = browser.bots.map((b) => b.name);
-    const ok = await confirm({
-      title: `Reset the ${browser.label} browser?`,
-      description:
-        "This closes the browser and deletes its profile: cookies, logins and history" +
-        (browser.profile === "shared" && others.length > 0
-          ? `. Every bot on it is signed out (${others.join(", ")}).`
-          : "."),
-      confirmLabel: "Reset",
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await browserPageApi.reset(profile);
-      patch({ active: false, driver: null, mode: null });
-      toast.success("Browser reset; it starts fresh next time.");
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to reset"));
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    const region = regionRef.current;
-    if (!region?.requestFullscreen) {
-      toast.error("Full screen is not available in this browser.");
-      return;
-    }
-    void region.requestFullscreen().catch(() => toast.error("Could not enter full screen."));
-  };
-
-  const paste = () => {
-    void vncRef.current?.paste().catch(() => {
-      toast.error("Could not read the clipboard. Allow clipboard access and try again.");
-    });
   };
 
   // Stable per browser, so the viewer reconnects only on a switch.
@@ -356,26 +288,8 @@ export function BrowserPage() {
             className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
             data-testid="browser-page-status"
           >
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                !streaming
-                  ? "bg-muted-foreground/40"
-                  : vncState === "live"
-                    ? "bg-success"
-                    : "animate-pulse bg-warning",
-              )}
-              aria-hidden
-            />
-            <span>
-              {!streaming
-                ? "Headless"
-                : vncState === "live"
-                  ? "Live"
-                  : vncState === "connecting"
-                    ? "Connecting"
-                    : "Reconnecting"}
-            </span>
+            <span className={cn("size-1.5 shrink-0 rounded-full", connection.dot)} aria-hidden />
+            <span>{connection.label}</span>
             <span aria-hidden>·</span>
             <span>{driverOf(browser)}</span>
           </div>
