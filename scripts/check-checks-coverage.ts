@@ -11,10 +11,6 @@
  *     area silently unschedules every suite under it — those tests fall to
  *     drift in sync — and nothing turns red.
  *
- * A root or area under a glob in `additional_exclusions`
- * (.groot/boilerplate-sync.json) is skipped: the project opted out of that
- * kit surface, so its absence is the intended state.
- *
  * Usage:  tsx scripts/check-checks-coverage.ts
  * Exit:   0 = covered, 1 = stale ownership entry.
  */
@@ -26,9 +22,9 @@ import { ownedSourceRootsForTests, TEST_AREA_OWNERSHIP } from "../.groot/lib/pat
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
-const { additional_exclusions: excluded } = await loadConfig(ROOT);
-const optedOut = (pathOrRoot: string) =>
-  micromatch.isMatch(`${pathOrRoot.replace(/\/\*\*$/, "")}/x`, excluded);
+const { additional_exclusions } = await loadConfig(ROOT);
+const excludedFromSync = (dirOrRoot: string) =>
+  micromatch.isMatch(dirOrRoot.replace(/\/\*\*$/, ""), additional_exclusions);
 
 /** Expand a root pattern (may contain one `*` segment) to the dirs that exist. */
 function expandRoot(root: string): string[] {
@@ -51,7 +47,7 @@ interface Failure {
 const failures: Failure[] = [];
 
 // --- 1. Owned source roots (what the synced test areas own) exist. --------
-const ownedRoots = ownedSourceRootsForTests().filter((root) => !optedOut(root));
+const ownedRoots = ownedSourceRootsForTests().filter((root) => !excludedFromSync(root));
 for (const root of ownedRoots) {
   const dir = root.replace(/\/\*\*$/, "");
   if (expandRoot(dir).length === 0) {
@@ -77,7 +73,7 @@ function countTestFiles(dir: string): number {
   return count;
 }
 
-const areas = Object.keys(TEST_AREA_OWNERSHIP).filter((area) => !optedOut(area));
+const areas = Object.keys(TEST_AREA_OWNERSHIP).filter((area) => !excludedFromSync(area));
 for (const area of areas) {
   if (!existsSync(join(ROOT, area))) {
     failures.push({

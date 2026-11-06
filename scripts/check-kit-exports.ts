@@ -2,7 +2,7 @@
 /**
  * Kit export guard.
  *
- * @groot/ui and @groot/jobs declare every public entrypoint explicitly. A
+ * Each package in PACKAGES declares every public entrypoint explicitly. A
  * wildcard export ("./*") accepts any file that lands in src, so the public
  * surface would drift silently. This guard keeps three sets in agreement:
  * the explicit keys in each package's exports map, the source files under

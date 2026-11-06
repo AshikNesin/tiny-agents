@@ -7,11 +7,6 @@ import type { StorageAdapter } from "@groot/core/storage";
 import { memoryStorage } from "@groot/core/storage/memory";
 import { localStorage } from "@groot/core/storage/node";
 
-/**
- * The storage contract (packages/core/src/storage/adapter.ts), run once per
- * adapter.
- */
-
 const tempRoots: string[] = [];
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
