@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
+import { withRepoCopy } from "./repo-copy";
 
 /**
  * Kit export guard (scripts/check-kit-exports.ts).
@@ -17,8 +18,12 @@ const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-kit-exports.ts");
 const TIMEOUT = 60_000;
 
-function runGuard(): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync("pnpm", ["exec", "tsx", SCRIPT], {
+function runGuard(checkedRepo = repoRoot): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+} {
+  const result = spawnSync("pnpm", ["exec", "tsx", path.join(checkedRepo, SCRIPT)], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: TIMEOUT,
@@ -40,56 +45,51 @@ describe("kit exports guard", () => {
 
   it(
     "fails when an exports entry loses its fixture import",
-    () => {
-      const fixture = path.join(repoRoot, "tests/kit-consumers/consumer.tsx");
-      const original = fs.readFileSync(fixture, "utf8");
-      // Drop one barrel import so the "." entry stops being exercised.
-      const mutated = original.replace(/import \{ Button as ButtonFromBarrel[^\n]*\n/, "");
-      expect(mutated).not.toBe(original);
-      fs.writeFileSync(fixture, mutated);
-      try {
-        const run = runGuard();
+    () =>
+      withRepoCopy((root) => {
+        const fixture = path.join(root, "tests/kit-consumers/consumer.tsx");
+        const original = fs.readFileSync(fixture, "utf8");
+        // Drop one barrel import so the "." entry stops being exercised.
+        const withoutBarrelImport = original.replace(
+          /import \{ Button as ButtonFromBarrel[^\n]*\n/,
+          "",
+        );
+        expect(withoutBarrelImport).not.toBe(original);
+        fs.writeFileSync(fixture, withoutBarrelImport);
+        const run = runGuard(root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("public but the kit fixture never imports it");
-      } finally {
-        fs.writeFileSync(fixture, original);
-      }
-    },
+      }),
     TIMEOUT,
   );
 
   it(
     "fails when a source module has no exports entry",
-    () => {
-      const modulePath = path.join(repoRoot, "packages/ui/src/kit-guard-probe.tsx");
-      fs.writeFileSync(modulePath, "export function KitGuardProbe() {\n  return null;\n}\n");
-      try {
-        const run = runGuard();
+    () =>
+      withRepoCopy((root) => {
+        fs.writeFileSync(
+          path.join(root, "packages/ui/src/kit-guard-probe.tsx"),
+          "export function KitGuardProbe() {\n  return null;\n}\n",
+        );
+        const run = runGuard(root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("kit-guard-probe");
-      } finally {
-        fs.rmSync(modulePath, { force: true });
-      }
-    },
+      }),
     TIMEOUT,
   );
 
   it(
     "fails when the exports map reintroduces a wildcard",
-    () => {
-      const manifest = path.join(repoRoot, "packages/jobs/package.json");
-      const original = fs.readFileSync(manifest, "utf8");
-      const pkg = JSON.parse(original);
-      pkg.exports["./*"] = "./src/*";
-      fs.writeFileSync(manifest, JSON.stringify(pkg, null, 2) + "\n");
-      try {
-        const run = runGuard();
+    () =>
+      withRepoCopy((root) => {
+        const manifest = path.join(root, "packages/jobs/package.json");
+        const pkg = JSON.parse(fs.readFileSync(manifest, "utf8"));
+        pkg.exports["./*"] = "./src/*";
+        fs.writeFileSync(manifest, JSON.stringify(pkg, null, 2) + "\n");
+        const run = runGuard(root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain('wildcard export "./*"');
-      } finally {
-        fs.writeFileSync(manifest, original);
-      }
-    },
+      }),
     TIMEOUT,
   );
 });

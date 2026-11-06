@@ -1,7 +1,10 @@
 import { defineConfig } from "vite-plus";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 
 const rootDir = path.resolve();
+// Most server test files wait on timers and child processes, not the CPU.
+const WORKERS_PER_CORE = 2;
 
 // Never reach real services from tests, whatever the shell exports: with real
 // Pushover keys in the environment, the notification route tests sent actual
@@ -43,11 +46,7 @@ export default defineConfig({
     include: ["tests/server/**/*.test.ts"],
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
-    // Every file shares one test database and most reset whole tables
-    // (bots, routines, ledger rows) between tests, so files running side by
-    // side delete each other's rows. One file at a time keeps runs
-    // deterministic on both engines.
-    fileParallelism: false,
+    maxWorkers: availableParallelism() * WORKERS_PER_CORE,
   },
   resolve: {
     alias: {

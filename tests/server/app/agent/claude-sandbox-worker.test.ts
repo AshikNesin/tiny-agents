@@ -80,6 +80,7 @@ function fakeSandbox(env: Record<string, string> = {}) {
         child.on("exit", (code) =>
           setTimeout(() => resolve({ stdout, stderr, exitCode: code ?? 255 }), 50),
         );
+        child.stdin.on("error", () => {});
         child.stdin.end(options.stdin);
       }),
     forward: (port) =>
