@@ -159,6 +159,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     configured = [];
     setAgentRuntimeForTests({
       configure: async () => undefined,
+      catalog: { info: () => undefined, has: () => true },
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
     } as never);
@@ -172,6 +173,7 @@ describe("MCP connections (header auth, streamable http)", () => {
       },
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
       configure: async (conversationId: number) => void configured.push(conversationId),
+      catalog: { info: () => undefined },
     } as never);
   });
 
@@ -384,6 +386,7 @@ describe("MCP connections (header auth, streamable http)", () => {
       installCapability: (capability: { id: string }) => installed.push(capability.id),
       uninstallCapability: () => undefined,
       configure: async () => undefined,
+      catalog: { info: () => undefined, has: () => true },
     } as never);
     try {
       const deadline = Date.now() + 15_000;
@@ -432,6 +435,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     changes = [];
     setAgentRuntimeForTests({
       configure: async () => undefined,
+      catalog: { info: () => undefined, has: () => true },
       installCapability: () => undefined,
       uninstallCapability: () => undefined,
     } as never);
@@ -442,7 +446,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
       configure: async (conversationId: number) => void configured.push(conversationId),
-      listModels: () => [],
+      catalog: { info: () => undefined },
     } as never);
   }
 
@@ -623,6 +627,7 @@ describe("MCP OAuth (fake authorization server)", () => {
       installCapability: () => undefined,
       uninstallCapability: (id: string) => uninstalled.push(id),
       configure: async () => undefined,
+      catalog: { info: () => undefined, has: () => true },
     } as never;
     await manager.start(runtime);
 

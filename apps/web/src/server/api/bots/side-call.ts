@@ -3,9 +3,9 @@
  * the reply path (memory capture, Past chat titles). One module owns how
  * every one of them runs, so its rules hold in one place:
  *
- * - The model: an explicit override when the runtime knows it, else the
- *   bot's own model; ids of another provider than the runtime's primary are
- *   "custom:<provider>/<model>".
+ * - The model: an explicit override when the Model catalog can call it,
+ *   else the bot's own model (a Claude plan bot's runs on the same model
+ *   served by a registry provider, when one serves it).
  * - The deadline: the call is aborted when it runs out (it must not keep
  *   spending tokens), and the caller gets its answer then even when the
  *   provider ignores the abort.
@@ -17,13 +17,13 @@
  */
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import { logger } from "@groot/core/logger";
-import { GATEWAY_PROVIDER, type AgentRuntime } from "@tiny-agents/agent";
+import type { ModelCatalog } from "@tiny-agents/agent";
 
-/** What a side-caller needs from the runtime: its model registry and primary provider. */
-export type SideCallRuntime = Pick<AgentRuntime, "hasModel"> & {
-  models: Pick<MutableModels, "getModel" | "completeSimple">;
-  provider?: string;
-};
+/** What a side-caller needs from the runtime: its Model catalog and the registry that calls models. */
+export interface SideCallRuntime {
+  catalog: Pick<ModelCatalog, "model">;
+  models: Pick<MutableModels, "completeSimple">;
+}
 
 export interface SideCallRequest {
   /** The bot's model: the fallback when `override` is unset or unknown to the runtime. */
@@ -46,33 +46,21 @@ export interface SideCaller {
   complete(request: SideCallRequest): Promise<string | undefined>;
 }
 
-/** The model id a call runs on: `override` when the runtime has it, else the bot's model when it has that. */
-function modelIdFor(
-  runtime: Pick<AgentRuntime, "hasModel">,
+/** The model a call runs on: `override` when the catalog can call it, else the bot's model when it can. */
+function modelFor(
+  catalog: SideCallRuntime["catalog"],
   botModelId: string | undefined,
   override: string | undefined,
-): string | undefined {
+) {
   const explicit = override
     ?.trim()
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim();
-  if (explicit && runtime.hasModel(explicit)) return explicit;
-  return botModelId && runtime.hasModel(botModelId) ? botModelId : undefined;
-}
-
-/**
- * The registry model behind an app model id: the primary provider's ids as
- * they are; other providers as "custom:<provider>/<model>" (the slash
- * inside the model id is theirs).
- */
-function registryModel(models: Pick<MutableModels, "getModel">, modelId: string, primary: string) {
-  const customPrefix = "custom:";
-  if (modelId.startsWith(customPrefix)) {
-    const rest = modelId.slice(customPrefix.length);
-    const slash = rest.indexOf("/");
-    return slash > 0 ? models.getModel(rest.slice(0, slash), rest.slice(slash + 1)) : undefined;
+  for (const modelId of [explicit, botModelId]) {
+    const model = modelId ? catalog.model(modelId) : undefined;
+    if (model) return { modelId, model };
   }
-  return models.getModel(primary, modelId);
+  return { modelId: explicit || botModelId, model: undefined };
 }
 
 const TIMED_OUT = Symbol("timed out");
@@ -81,10 +69,7 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
   return {
     async complete(request) {
       const { label } = request;
-      const modelId = modelIdFor(runtime, request.botModelId, request.override);
-      const model = modelId
-        ? registryModel(runtime.models, modelId, runtime.provider ?? GATEWAY_PROVIDER)
-        : undefined;
+      const { modelId, model } = modelFor(runtime.catalog, request.botModelId, request.override);
       const fields = { ...request.context, label, modelId };
       if (!model) {
         logger.warn(fields, `${label}: no model available; skipped`);

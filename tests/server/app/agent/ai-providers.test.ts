@@ -91,7 +91,7 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
     });
     try {
       expect(runtime.provider).toBe("openai");
-      const models = runtime.listModels();
+      const models = runtime.catalog.list();
       expect(models.length).toBeGreaterThan(0);
       expect(models.every((m) => !m.id.startsWith("custom:"))).toBe(true);
       // Claude plan models are a separate engine, not another pi-ai provider.
@@ -101,8 +101,8 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
       expect(
         models.some((m) => m.id.startsWith("claude-code/") && m.provider === "Claude plan"),
       ).toBe(true);
-      expect(runtime.hasModel(models[0].id)).toBe(true);
-      expect(runtime.providerStatus()).toEqual([
+      expect(runtime.catalog.has(models[0].id)).toBe(true);
+      expect(runtime.catalog.providers()).toEqual([
         {
           id: "openai",
           name: "OpenAI",
@@ -110,7 +110,7 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
           setupHint: providerSetupHint("openai", "OpenAI"),
         },
       ]);
-      expect(runtime.hasConfiguredProvider()).toBe(true);
+      expect(runtime.catalog.canAnswer()).toBe(true);
     } finally {
       await runtime.close();
     }
@@ -121,10 +121,10 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
     const env = { AI_PROVIDERS: "openai,anthropic" };
     const runtime = await AgentRuntime.open({ storePath: ":memory:", env });
     try {
-      const ids = runtime.listModels().map((m) => m.id);
+      const ids = runtime.catalog.list().map((m) => m.id);
       // Anthropic has no key: only OpenAI's models are offered.
       expect(ids.some((id) => id.startsWith("custom:anthropic/"))).toBe(false);
-      expect(runtime.providerStatus().map((s) => [s.id, s.configured])).toEqual([
+      expect(runtime.catalog.providers().map((s) => [s.id, s.configured])).toEqual([
         ["openai", true],
         ["anthropic", false],
       ]);
@@ -135,10 +135,10 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
     credentials({ OPENAI_API_KEY: "sk-test", ANTHROPIC_API_KEY: "sk-ant-test" });
     const both = await AgentRuntime.open({ storePath: ":memory:", env });
     try {
-      const anthropic = both.listModels().filter((m) => m.id.startsWith("custom:anthropic/"));
+      const anthropic = both.catalog.list().filter((m) => m.id.startsWith("custom:anthropic/"));
       expect(anthropic.length).toBeGreaterThan(0);
       expect(anthropic[0].family).toBe("anthropic");
-      expect(both.hasModel(anthropic[0].id)).toBe(true);
+      expect(both.catalog.has(anthropic[0].id)).toBe(true);
     } finally {
       await both.close();
     }
@@ -151,11 +151,11 @@ describe("AgentRuntime on AI_PROVIDERS", () => {
       env: { AI_PROVIDERS: "cloudflare-ai-gateway,openai" },
     });
     try {
-      expect(runtime.hasConfiguredProvider()).toBe(false);
-      const ids = runtime.listModels().map((m) => m.id);
+      expect(runtime.catalog.canAnswer()).toBe(false);
+      const ids = runtime.catalog.list().map((m) => m.id);
       expect(ids.some((id) => id.startsWith("custom:openai/"))).toBe(true);
       expect(ids.some((id) => !id.startsWith("custom:"))).toBe(true);
-      const hints = runtime.providerStatus().map((s) => s.setupHint);
+      const hints = runtime.catalog.providers().map((s) => s.setupHint);
       expect(hints[0]).toContain("CLOUDFLARE_GATEWAY_ID");
       expect(hints[1]).toContain("OPENAI_API_KEY");
     } finally {

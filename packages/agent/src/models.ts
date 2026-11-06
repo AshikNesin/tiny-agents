@@ -1,4 +1,3 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   createModels,
   createProvider,
@@ -8,7 +7,6 @@ import {
 } from "@earendil-works/pi-ai/models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import type { ModelInfo } from "./types";
 
 /** The default inference provider (PRD §7.3): Cloudflare AI Gateway. */
 export const GATEWAY_PROVIDER = "cloudflare-ai-gateway";
@@ -207,7 +205,7 @@ export function primaryProviderId(
  * leave around values: '"https://x"' is a string containing quotes, not a
  * quoted string. Also drops incidental whitespace. Keeps inner quotes intact.
  */
-function unquote(value: string | undefined): string | undefined {
+export function unquote(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return trimmed || undefined;
   const match = trimmed.match(/^(['"])([\s\S]*)\1$/);
@@ -474,37 +472,4 @@ export function registerGatewayCustomProviders(
       }),
     );
   }
-}
-
-/** `providerTag` is the "custom:<provider>" prefix a custom-provider model id carries. */
-function familyOf(model: Model<Api>, providerTag?: string): ModelInfo["family"] {
-  // Gateway BYOK providers speak OpenAI-compat whatever the upstream is;
-  // a built-in provider (openai, anthropic, ...) keeps its real family.
-  if (providerTag?.startsWith("custom:") && !builtinProviderIds().has(model.provider)) {
-    return "other";
-  }
-  if (model.id.startsWith("workers-ai/")) return "workers-ai";
-  if (model.api === "anthropic-messages") return "anthropic";
-  if (model.api === "openai-responses" || model.api === "openai-completions") return "openai";
-  return "other";
-}
-
-/**
- * `providerTag` is the "custom:<provider>" prefix a non-primary model id
- * carries; `providerName` is the display name of the provider serving it.
- */
-export function toModelInfo(
-  model: Model<Api>,
-  providerTag?: string,
-  providerName?: string,
-): ModelInfo {
-  return {
-    id: providerTag ? `${providerTag}/${model.id}` : model.id,
-    name: model.name,
-    family: familyOf(model, providerTag),
-    provider: providerName ?? model.provider,
-    reasoning: Boolean(model.reasoning),
-    contextWindow: model.contextWindow,
-    vision: (model.input ?? []).includes("image"),
-  };
 }

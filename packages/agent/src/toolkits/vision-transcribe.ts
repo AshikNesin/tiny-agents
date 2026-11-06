@@ -14,6 +14,7 @@
  * None available throws "no vision model is configured".
  */
 import type { Api, AssistantMessage, Context, Model, UserMessage } from "@earendil-works/pi-ai";
+import { formatModelId, parseModelId } from "../model-catalog";
 
 /** Transcription prompts, reused verbatim from the dotfiles CLI. */
 export const VISION_SYSTEM =
@@ -72,22 +73,18 @@ export function createTranscriber(
   const directKey = env.VISION_API_KEY?.trim();
 
   const resolveCatalog = (modelId: string): Model<Api> | undefined => {
-    if (modelId.startsWith("custom:")) {
-      const rest = modelId.slice("custom:".length);
-      const slash = rest.indexOf("/");
-      return slash > 0 ? models.getModel(rest.slice(0, slash), rest.slice(slash + 1)) : undefined;
-    }
-    return models.getModel(options.providerId, modelId);
+    const parsed = parseModelId(modelId, options.providerId);
+    return parsed?.engine === "pi" ? models.getModel(parsed.provider, parsed.model) : undefined;
   };
+  const idOf = (provider: string, model: string) =>
+    formatModelId({ provider, model }, options.providerId);
 
   const catalogVisionIds = (): string[] => {
     const ids: string[] = [];
     for (const provider of models.getProviders()) {
       for (const model of models.getModels(provider.id)) {
         if (!(model.input ?? []).includes("image")) continue;
-        ids.push(
-          provider.id === options.providerId ? model.id : `custom:${provider.id}/${model.id}`,
-        );
+        ids.push(idOf(provider.id, model.id));
       }
     }
     // workers-ai image models are the cheap gateway-served default; first.
@@ -104,7 +101,7 @@ export function createTranscriber(
     for (const provider of models.getProviders()) {
       if (provider.id === options.providerId) continue; // gateway-native ids, not custom
       for (const model of models.getModels(provider.id)) {
-        if (model.id.includes("glm-5.3-flash")) return `custom:${provider.id}/${model.id}`;
+        if (model.id.includes("glm-5.3-flash")) return idOf(provider.id, model.id);
       }
     }
     return undefined;

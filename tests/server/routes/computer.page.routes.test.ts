@@ -32,11 +32,14 @@ const agentRuntime = {
   abort: vi.fn().mockResolvedValue(undefined),
   watchChat: vi.fn(async () => ({ stop: async () => undefined })),
   onActivity: vi.fn(() => () => undefined),
-  hasModel: vi.fn(() => true),
   isBusy: vi.fn(() => false),
-  listModels: vi.fn(() => [
-    { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
-  ]),
+  catalog: {
+    has: vi.fn(() => true),
+    list: vi.fn(() => [
+      { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
+    ]),
+    info: vi.fn(() => undefined),
+  },
   busyConversations: vi.fn(() => []),
   listCapabilities: vi.fn(() => []),
 };

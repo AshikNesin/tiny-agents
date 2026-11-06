@@ -77,6 +77,10 @@ _Avoid_: done, finished (for the conversation)
 A one-shot model call the app makes off the reply path: memory capture, Past chat titles. `createSideCaller(runtime).complete` (`side-call.ts`) picks the model (an override the runtime knows, else the bot's own), aborts it at its deadline, and turns any failure into no answer, logged. Callers take it as a port; faux mode has none, so it makes no side-calls.
 _Avoid_: background call, LLM call
 
+**Model catalog**:
+What every model id means (`ModelCatalog`, `model-catalog.ts`, `runtime.catalog`): the id grammar (bare for the primary provider, `custom:<provider>/<model>`, `claude-code/<model>`), what the picker lists (configured providers, then GATEWAY_MODEL_ALLOWLIST), which ids a bot can run on, the registry model an id resolves to, whether a model sees images, and the providers' status. Nothing else parses or builds a model id.
+_Avoid_: model list, model registry (that is pi-ai's, which the catalog reads)
+
 **Memory ledger**:
 One bot's memories and the rules every write follows, whether a memory comes from capture, the `remember` tool or the Memory page: one row per text (a tombstone is never re-added, except by the owner on the Memory page), supersession of the same bot's active memories only, expiry, the active budget, and the capture watermark, each write one transaction (`memoryLedger(botId)`, `memories.ledger.ts`).
 _Avoid_: memory store (that is the agent's port), memory service

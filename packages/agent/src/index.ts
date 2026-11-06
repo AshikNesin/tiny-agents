@@ -102,6 +102,7 @@ export {
   type OAuthTokens,
 } from "./mcp";
 export { GATEWAY_PROVIDER } from "./models";
+export type { ModelCatalog, ModelRef } from "./model-catalog";
 export { claudeCodeEngineEnabled } from "./engine";
 export {
   windowChat,

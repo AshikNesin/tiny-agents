@@ -3,6 +3,12 @@ import { logger } from "@groot/core/logger";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
 import {
+  createModelCatalog,
+  formatModelId,
+  type CatalogModels,
+} from "../../../../packages/agent/src/model-catalog";
+import { GATEWAY_PROVIDER } from "../../../../packages/agent/src/models";
+import {
   createSideCaller,
   type SideCallRequest,
   type SideCallRuntime,
@@ -19,18 +25,31 @@ afterEach(() => {
 
 type Completion = SideCallRuntime["models"]["completeSimple"];
 
-/** A runtime that knows `known` model ids and answers with `reply`. */
+/**
+ * A runtime whose registry serves `known` app model ids (bare on `primary`,
+ * `custom:<provider>/<model>` elsewhere) and answers with `reply`. The
+ * catalog is the real one over that registry.
+ */
 function fakeRuntime(
   known: string[],
   reply: Completion = async () => fauxAssistantMessage([fauxText("answer")]),
-  provider?: string,
+  primary = GATEWAY_PROVIDER,
 ) {
-  const getModel = vi.fn((_provider: string, id: string) => ({ id }) as Model<Api>);
+  const getModel = vi.fn((provider: string, id: string) =>
+    known.includes(formatModelId({ provider, model: id }, primary))
+      ? ({ id } as Model<Api>)
+      : undefined,
+  );
   const completeSimple = vi.fn<Completion>(reply);
+  const registry = {
+    getModel,
+    getModels: () => [],
+    getProviders: () => [],
+    getProvider: () => undefined,
+  } as unknown as CatalogModels;
   const runtime: SideCallRuntime = {
-    models: { getModel, completeSimple },
-    hasModel: (id) => known.includes(id),
-    ...(provider ? { provider } : {}),
+    catalog: createModelCatalog(registry, { primary, configured: new Set(), env: {} }),
+    models: { completeSimple },
   };
   return { runtime, getModel, completeSimple };
 }
@@ -62,6 +81,21 @@ describe("createSideCaller: the model", () => {
       expect.objectContaining({ label: "Test call" }),
       expect.stringContaining("no model"),
     );
+  });
+
+  it("runs a Claude plan bot's call on the same model a registry provider serves", async () => {
+    const { runtime, getModel, completeSimple } = fakeRuntime(["claude-sonnet-4-6"]);
+    const caller = createSideCaller(runtime);
+
+    await caller.complete(request({ botModelId: "claude-code/claude-sonnet-4-6" }));
+    expect(getModel).toHaveBeenLastCalledWith("cloudflare-ai-gateway", "claude-sonnet-4-6");
+    expect(completeSimple).toHaveBeenCalledOnce();
+
+    completeSimple.mockClear();
+    expect(
+      await caller.complete(request({ botModelId: "claude-code/claude-opus-4-6" })),
+    ).toBeUndefined();
+    expect(completeSimple).not.toHaveBeenCalled();
   });
 
   it("maps bare ids to the runtime's primary provider", async () => {

@@ -134,9 +134,7 @@ describe("Bots API routes", () => {
     rt = await openAppRuntime();
     const realOnActivity = rt.onActivity.bind(rt);
     realWatchChat = rt.watchChat.bind(rt);
-    enabled = rt.listModels().find((m) => m.id === TEST_MODEL)?.vision
-      ? [...BOT_TOOLKITS]
-      : [...BOT_TOOLKITS, "vision"];
+    enabled = rt.catalog.info(TEST_MODEL)?.vision ? [...BOT_TOOLKITS] : [...BOT_TOOLKITS, "vision"];
     agentRuntime = spyOnRuntime(rt);
     activityListeners = 0;
     agentRuntime.onActivity.mockImplementation((listener) => {
@@ -169,11 +167,10 @@ describe("Bots API routes", () => {
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        models: rt.listModels(),
+        models: rt.catalog.list(),
         gatewayConfigured: expect.any(Boolean),
       },
     });
-    expect(agentRuntime.listModels).toHaveBeenCalled();
   });
 
   it("creates a bot row and its durable conversation", async () => {

@@ -1,13 +1,8 @@
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vite-plus/test";
-import {
-  applyPermissions,
-  compilePolicy,
-  resolveModelId,
-} from "../../../../packages/agent/src/policy";
+import { applyPermissions, compilePolicy } from "../../../../packages/agent/src/policy";
 import type { Capability, CapabilitySelection } from "../../../../packages/agent/src/capabilities";
-import { toModelInfo } from "../../../../packages/agent/src/models";
 
 const tool = (name: string) =>
   defineTool({
@@ -108,37 +103,5 @@ describe("compilePolicy", () => {
     expect(doc).toEqual({ allow: ["a"] });
     applyPermissions(doc, { allow: [], review: ["b"], unattended: true });
     expect(doc).toEqual({ allow: [], review: ["b"], unattended: true });
-  });
-});
-
-describe("model ids", () => {
-  const known = new Set(["gw/claude", "acme/glm"]);
-  const has = (provider: string, model: string) => known.has(`${provider}/${model}`);
-
-  it("resolves catalog ids against the default provider and custom: ids against theirs", () => {
-    expect(resolveModelId("claude", "gw", has)).toEqual({ provider: "gw", model: "claude" });
-    expect(resolveModelId("custom:acme/glm", "gw", has)).toEqual({
-      provider: "acme",
-      model: "glm",
-    });
-    expect(resolveModelId("custom:/glm", "gw", has)).toBeUndefined();
-    expect(resolveModelId("custom:acme/nope", "gw", has)).toBeUndefined();
-    expect(resolveModelId("nope", "gw", has)).toBeUndefined();
-  });
-
-  it("puts a custom provider's models in the 'other' family by their custom: tag", () => {
-    const model = {
-      id: "glm",
-      name: "GLM",
-      api: "openai-completions",
-      reasoning: false,
-      contextWindow: 8192,
-      input: [],
-    } as never;
-    expect(toModelInfo(model, "custom:acme")).toMatchObject({
-      id: "custom:acme/glm",
-      family: "other",
-    });
-    expect(toModelInfo(model)).toMatchObject({ id: "glm", family: "openai" });
   });
 });
