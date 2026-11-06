@@ -72,7 +72,7 @@ changes a managed surface without a changeset of its own naming the package:
 Docs-only or internal changes to those paths can instead add a reviewed
 reason file under `.no-release/` (any non-empty `.md`; it covers the
 whole branch). Changesets and reasons merged by earlier branches cover
-nothing. The release bot's own commits are exempt. A changeset that names a
+nothing, even when the branch edits or renames them. The release bot's own commits are exempt. A changeset that names a
 package outside the pnpm workspace fails the gate, because `changeset status`
 and the Release workflow reject it.
 
