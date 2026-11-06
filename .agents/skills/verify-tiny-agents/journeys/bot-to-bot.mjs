@@ -35,15 +35,11 @@ await journey("bot-to-bot", async ({ page, step, proof, cleanup, api, stamp }) =
     await expect(list.getByRole("option", { name: host })).toHaveCount(0);
     await composer.pressSequentially("zz");
     await expect(list).toHaveCount(0);
-    await composer.fill("");
   });
-  await step("+ menu → Mention a bot opens the list; Enter picks the bot", async () => {
-    await composer.fill("what do you think ");
-    await page.getByRole("button", { name: "Add files or mention a bot" }).click();
-    await page.getByRole("menuitem", { name: /Mention a bot/ }).click();
-    await expect(list.getByRole("option", { name: peer })).toBeVisible();
-    await expect(list.getByRole("option", { name: peer })).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("Enter");
+  await step("pick the bot from the list: the full @name lands in the composer", async () => {
+    await composer.fill("");
+    await composer.pressSequentially("what do you think @Relay");
+    await list.getByRole("option", { name: peer }).click();
     await expect(list).toHaveCount(0);
     await expect(composer).toHaveValue(new RegExp(`^what do you think @${peer}\\s*$`));
   });
@@ -85,4 +81,23 @@ await journey("bot-to-bot", async ({ page, step, proof, cleanup, api, stamp }) =
     ).toHaveCount(0);
   });
   await proof("peer-chat");
+
+  // Last, so a failure here (see features/bot-to-bot.md Gotchas) leaves the relay proven above.
+  await step("back to the host chat", async () => {
+    await page.goto(`/chats/${ids[host]}`);
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+  });
+  await step("+ menu → Mention a bot opens the list; Enter picks the bot", async () => {
+    await composer.fill("second thought ");
+    await page.getByRole("button", { name: "Add files or mention a bot" }).click();
+    await page.getByRole("menuitem", { name: /Mention a bot/ }).click();
+    // The menu inserts "@" and must leave the caret in the composer with the list open.
+    await expect(composer).toBeFocused();
+    await expect(list.getByRole("option", { name: peer })).toBeVisible();
+    await expect(list.getByRole("option", { name: peer })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(list).toHaveCount(0);
+    await expect(composer).toHaveValue(new RegExp(`^second thought @${peer}\\s*$`));
+  });
+  await proof("menu-mention");
 });

@@ -143,7 +143,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     const panel = page.getByRole("tabpanel", { name: "People" });
     await panel.getByLabel("Name").fill(guestName);
     await panel.getByLabel("Email").fill(guestEmail);
-    await panel.getByLabel("Password").fill(`pw-${stamp}`);
+    await panel.getByLabel("Password").fill(`pw-${stamp}`); // gitleaks:allow (throwaway test password)
     await panel.getByRole("button", { name: "Add guest" }).click();
     cleanup(async () => {
       const guests = await api.get("/people");
