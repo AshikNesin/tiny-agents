@@ -6,17 +6,17 @@
 import { assertNoOverrides } from "./guards";
 import { requireSubscriptionLogin } from "./auth";
 import { createClaudeWorkerServer } from "./server";
-import { createSdkQueryFactory, type ClaudeSdkModule } from "./sdk";
+import { createSdkQueryFactory } from "./sdk";
 import { timingsFromEnv } from "./protocol";
 import { codingLimitsFromEnv } from "./coding-protocol";
-import type { CodingSdk } from "./coding-sdk";
+import { codingSdkOf } from "./coding-sdk";
 
 const token = process.env.CLAUDE_WORKER_TOKEN?.trim() ?? "";
 const port = Number(process.env.CLAUDE_WORKER_PORT ?? "8765");
 
-type LoadedSdk = ClaudeSdkModule & Partial<Pick<CodingSdk, "getSessionMessages" | "forkSession">>;
+type AgentSdk = typeof import("@anthropic-ai/claude-agent-sdk");
 
-async function loadSdk(): Promise<LoadedSdk> {
+async function loadSdk(): Promise<AgentSdk> {
   try {
     // Optional: installed on the worker VM, not in CI. A missing package throws here.
     const sdk = await import("@anthropic-ai/claude-agent-sdk");
@@ -41,17 +41,8 @@ async function main(): Promise<void> {
     console.warn(error instanceof Error ? error.message : error);
   });
   const sdk = await loadSdk();
-  const { getSessionMessages, forkSession } = sdk;
   // Coding mode (the Code page) also needs the session helpers.
-  const coding: CodingSdk | undefined =
-    typeof getSessionMessages === "function" && typeof forkSession === "function"
-      ? {
-          // The same `query()`, called with Claude Code's own tools and streaming input.
-          query: sdk.query as unknown as CodingSdk["query"],
-          getSessionMessages,
-          forkSession,
-        }
-      : undefined;
+  const coding = codingSdkOf(sdk);
   if (!coding) console.warn("This Agent SDK has no getSessionMessages/forkSession: coding is off.");
   const server = await createClaudeWorkerServer({
     token,

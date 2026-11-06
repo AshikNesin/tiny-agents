@@ -20,7 +20,6 @@ export {
 } from "./protocol";
 export {
   replyFrameSchema,
-  resumeResultOf,
   welcomeFrameSchema,
   type EnvelopeFrame,
   type ReplyFrame,
@@ -35,6 +34,7 @@ export {
   conflictingOverrides,
   workerProcessEnv,
 } from "./guards";
+export { SessionLog, resumeResultOf, type Sequenced, type SessionLogListener } from "./session-log";
 export { usagePauseMessage, usagePauseReason, type RateLimitInfo } from "./usage";
 export {
   INSTALL_HINT,
@@ -76,6 +76,7 @@ export {
 export * from "./coding-protocol";
 export {
   buildCodingSdkOptions,
+  codingSdkOf,
   type CodingCanUseTool,
   type CodingPermissionResult,
   type CodingQuery,

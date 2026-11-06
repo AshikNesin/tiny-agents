@@ -19,8 +19,7 @@
  *   No result within `stopGraceMs` closes the process.
  */
 import { randomBytes, randomUUID } from "node:crypto";
-import { assertSubscriptionLogin, type ClaudeAuthStatus } from "./auth";
-import { assertNoOverrides } from "./guards";
+import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import {
   DEFAULT_CODING_PERMISSION_MODE,
   promptWithAttachments,
@@ -32,7 +31,6 @@ import {
   type CodingLimits,
   type CodingQueued,
   type CodingSendResult,
-  type CodingSequencedEvent,
   type CodingSessionConfig,
   type CodingSettingsChange,
   type CodingSettingsResult,
@@ -47,6 +45,7 @@ import {
   type CodingSdkMessage,
   type CodingSdkUserMessage,
 } from "./coding-sdk";
+import { SessionLog } from "./session-log";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
 
 export class CodingError extends Error {
@@ -157,6 +156,13 @@ interface UsageTotals {
 
 const MAX_SENT_UUIDS = 200;
 
+/** Streaming text of the message Claude Code is writing (not sequenced). */
+export interface CodingPartial {
+  reset?: boolean;
+  text?: string;
+  thinking?: string;
+}
+
 export class CodingSession {
   readonly id: string;
   config: CodingSessionConfig;
@@ -165,11 +171,9 @@ export class CodingSession {
   live = false;
   starting = false;
   lastUsed: number;
-  fanout: ((event: CodingSequencedEvent) => void) | undefined;
-  partial: ((partial: { reset?: boolean; text?: string; thinking?: string }) => void) | undefined;
+  /** Every event of this session, numbered, kept for resume and followed by the sockets. */
+  readonly log: SessionLog<CodingEvent>;
 
-  private seq = 0;
-  private readonly buffer: CodingSequencedEvent[] = [];
   private query: CodingQuery | undefined;
   private input: InputQueue | undefined;
   private generation = 0;
@@ -196,14 +200,7 @@ export class CodingSession {
     this.config = { ...config };
     this.claudeSessionId = config.resume;
     this.lastUsed = deps.now();
-  }
-
-  get firstSeq(): number {
-    return this.buffer[0]?.seq ?? this.seq + 1;
-  }
-
-  get lastSeq(): number {
-    return this.seq;
+    this.log = new SessionLog(id, deps.limits.eventBuffer);
   }
 
   get busy(): boolean {
@@ -218,10 +215,6 @@ export class CodingSession {
     if (this.live || this.starting) return;
     this.config = { ...this.config, ...config };
     if (config.resume && !this.claudeSessionId) this.claudeSessionId = config.resume;
-  }
-
-  replay(afterSeq: number): CodingSequencedEvent[] {
-    return this.buffer.filter((event) => event.seq > afterSeq);
   }
 
   state(): CodingState {
@@ -435,8 +428,7 @@ export class CodingSession {
     this.book.reserveProcess(this);
     this.starting = true;
     try {
-      assertNoOverrides(this.deps.env);
-      assertSubscriptionLogin(await this.deps.authStatus());
+      await assertSessionMayStart(this.deps.env, this.deps.authStatus);
       const generation = ++this.generation;
       const input = new InputQueue();
       const canUseTool: CodingCanUseTool = (name, toolInput, options) =>
@@ -600,7 +592,7 @@ export class CodingSession {
         }
       }
       if (typeof message.uuid === "string") this.lastEntryUuid = message.uuid;
-      this.partial?.({ reset: true });
+      this.partial({ reset: true });
       this.publish({ type: "message", message });
     }
     // Hooks, task progress, tool progress and the rest are not transcript rows.
@@ -637,15 +629,15 @@ export class CodingSession {
     const event = record(message.event);
     if (!event) return;
     if (event.type === "message_start") {
-      this.partial?.({ reset: true });
+      this.partial({ reset: true });
       return;
     }
     if (event.type !== "content_block_delta") return;
     const delta = record(event.delta);
     if (delta?.type === "text_delta" && typeof delta.text === "string") {
-      this.partial?.({ text: delta.text });
+      this.partial({ text: delta.text });
     } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
-      this.partial?.({ thinking: delta.thinking });
+      this.partial({ thinking: delta.thinking });
     }
   }
 
@@ -876,12 +868,11 @@ export class CodingSession {
   }
 
   private publish(event: CodingEvent): void {
-    this.seq += 1;
-    const sequenced: CodingSequencedEvent = { sessionId: this.id, seq: this.seq, event };
-    this.buffer.push(sequenced);
-    const extra = this.buffer.length - this.deps.limits.eventBuffer;
-    if (extra > 0) this.buffer.splice(0, extra);
-    this.fanout?.(sequenced);
+    this.log.append(event);
+  }
+
+  private partial(partial: CodingPartial): void {
+    this.book.onPartial?.(this.id, partial);
   }
 
   private remember(uuid: string, result: CodingSendResult): void {
@@ -897,6 +888,7 @@ export class CodingBook {
   private readonly sessions = new Map<string, CodingSession>();
   catalog: CodingCatalog | undefined;
   onCatalog: ((catalog: CodingCatalog) => void) | undefined;
+  onPartial: ((sessionId: string, partial: CodingPartial) => void) | undefined;
   private catalogLoading = false;
 
   constructor(readonly deps: CodingDeps) {}

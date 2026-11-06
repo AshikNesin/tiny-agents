@@ -115,6 +115,22 @@ export interface CodingSdk {
   ): Promise<{ sessionId: string }>;
 }
 
+/**
+ * The coding slice of the loaded Agent SDK module, or `undefined` when the
+ * SDK predates the session helpers (the coding mode stays off).
+ */
+export function codingSdkOf(module: {
+  query: CodingSdk["query"];
+  getSessionMessages?: CodingSdk["getSessionMessages"] | undefined;
+  forkSession?: CodingSdk["forkSession"] | undefined;
+}): CodingSdk | undefined {
+  const { query, getSessionMessages, forkSession } = module;
+  if (typeof getSessionMessages !== "function" || typeof forkSession !== "function") {
+    return undefined;
+  }
+  return { query, getSessionMessages, forkSession };
+}
+
 export function buildCodingSdkOptions(input: {
   cwd: string;
   resume?: string;
