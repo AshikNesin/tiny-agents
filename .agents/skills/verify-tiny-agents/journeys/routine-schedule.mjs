@@ -20,16 +20,6 @@ await journey("routine-schedule", async ({ page, step, proof, cleanup, api, stam
   let onceId;
   let editId;
   let fireAt; // ms epoch of the once slot
-  // A product bug fails the drive at the end but lets the rest of the recipe run.
-  const bugs = [];
-  const bugStep = async (name, body) => {
-    try {
-      await step(name, body);
-    } catch {
-      bugs.push(name);
-      await proof(`bug-${bugs.length}`);
-    }
-  };
   // A routine card has no landmark: anchor on its pause/resume switch.
   const card = (name) =>
     page
@@ -317,6 +307,4 @@ await journey("routine-schedule", async ({ page, step, proof, cleanup, api, stam
     await expect(card(onceName).getByRole("switch", { name: `Resume ${onceName}` })).toBeDisabled();
   });
   await proof("recent-runs");
-
-  if (bugs.length) throw new Error(`product bug(s): ${bugs.join("; ")}`);
 });
