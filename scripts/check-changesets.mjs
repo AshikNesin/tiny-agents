@@ -10,7 +10,8 @@
 // Rules:
 //   1. A branch that changes files under packages/[pkg]/src, apps/web/drizzle,
 //      or .groot needs a changeset naming each affected package, or a
-//      reviewed no-release reason file under .no-release/.
+//      reviewed no-release reason file under .no-release/. Only changesets
+//      and reasons the branch itself adds or edits count.
 //   2. apps/web/drizzle and .groot belong to the root package, named by the
 //      root package.json, so a changeset naming it covers them.
 //   3. The release bot's own commits are exempt, because versioning PRs are
@@ -24,7 +25,7 @@
 // The base defaults to the merge-base with origin/main.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
@@ -186,29 +187,34 @@ function git(args, root) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 }
 
-function listChangesetFiles(root) {
-  const dir = path.join(root, ".changeset");
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".md") && f !== "README.md")
-    .map((name) => ({ name, body: readFileSync(path.join(dir, name), "utf8") }));
+// Markdown files directly under dir that this branch adds or edits. Files
+// merged earlier stay on disk (reasons forever, changesets until a release
+// consumes them), and each covered only the branch that added it.
+function branchMarkdown(root, changedFiles, dir) {
+  return changedFiles
+    .filter(
+      (f) => path.posix.dirname(f) === dir && f.endsWith(".md") && existsSync(path.join(root, f)),
+    )
+    .sort();
 }
 
-// The earliest no-release reason file, or null. Any recorded, non-empty
-// reason satisfies the gate for the branch that carries it.
-function findNoReleaseReason(root) {
+function listChangesetFiles(root, changedFiles) {
+  return branchMarkdown(root, changedFiles, ".changeset")
+    .filter((f) => f !== ".changeset/README.md")
+    .map((f) => ({ name: path.basename(f), body: readFileSync(path.join(root, f), "utf8") }));
+}
+
+// The earliest no-release reason file the branch adds, or null. Any recorded,
+// non-empty reason satisfies the gate for the branch that carries it.
+function findNoReleaseReason(root, changedFiles) {
   // Lives outside .changeset/: @changesets/read's legacy v1 reader treats any
   // directory there as an old-format changeset (needs changes.md + changes.json)
   // and fails the Release workflow with ENOENT.
-  const dir = path.join(root, ".no-release");
-  if (!existsSync(dir)) return null;
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".md"))
-    .sort();
-  if (files.length === 0) return null;
-  const body = readFileSync(path.join(dir, files[0]), "utf8").trim();
+  const [file] = branchMarkdown(root, changedFiles, ".no-release");
+  if (!file) return null;
+  const body = readFileSync(path.join(root, file), "utf8").trim();
   if (!body) return null;
-  return `${files[0]}: ${body.split("\n")[0]}`;
+  return `${path.basename(file)}: ${body.split("\n")[0]}`;
 }
 
 // True when every commit in base..HEAD that touches a managed file is the
@@ -294,8 +300,8 @@ export function run({ base, root }) {
     rootDir: repoRoot,
     changedFiles,
     changedEntries,
-    changesetFiles: listChangesetFiles(repoRoot),
-    noReleaseReason: findNoReleaseReason(repoRoot),
+    changesetFiles: listChangesetFiles(repoRoot, changedFiles),
+    noReleaseReason: findNoReleaseReason(repoRoot, changedFiles),
   });
   const verdict = evaluate(state);
   if (verdict.status === 1 && botOnlySurfaces(repoRoot, diffBase, state.changedManagedFiles)) {

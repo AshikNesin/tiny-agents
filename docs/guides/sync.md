@@ -61,7 +61,7 @@ tag.
 ### Which packages a changeset must name
 
 `pnpm check:changesets` (run in CI against the base branch) fails a branch that
-changes a managed surface without naming its package:
+changes a managed surface without a changeset of its own naming the package:
 
 | Changed path                                                             | Package to name                   |
 | ------------------------------------------------------------------------ | --------------------------------- |
@@ -69,9 +69,10 @@ changes a managed surface without naming its package:
 | `packages/<pkg>/package.json` (any key but `name`, `version`, `private`) | that package                      |
 | `apps/web/drizzle/**`, `.groot/**`                                       | the root package                  |
 
-Docs-only or internal changes to those paths can instead carry a reviewed
+Docs-only or internal changes to those paths can instead add a reviewed
 reason file under `.no-release/` (any non-empty `.md`; it covers the
-whole branch). The release bot's own commits are exempt.
+whole branch). Changesets and reasons merged by earlier branches cover
+nothing. The release bot's own commits are exempt.
 
 ### Writing a Changeset (for AI Agents)
 

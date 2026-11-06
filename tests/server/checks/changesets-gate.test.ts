@@ -93,10 +93,15 @@ function runGate(args: string[]): { status: number | null; stdout: string; stder
   };
 }
 
-// A git repo whose root package.json is named tiny-agents, with a branch
-// commit that edits a migration and adds one changeset naming `released`.
-function rootPackageBranch(released: string): { dir: string; base: string } {
-  const dir = fixtureTree({ "package.json": JSON.stringify({ name: "tiny-agents" }) });
+// A git repo whose root package.json is named tiny-agents and whose base
+// already holds a merged reason and a pending root changeset, as main does.
+// The branch commit edits a migration and adds branchFiles.
+function migrationBranch(branchFiles: Record<string, string>): { dir: string; base: string } {
+  const dir = fixtureTree({
+    "package.json": JSON.stringify({ name: "tiny-agents" }),
+    ".no-release/earlier.md": "# No release: an earlier branch\n",
+    ".changeset/earlier.md": rootChangeset("tiny-agents"),
+  });
   const git = (...args: string[]) =>
     execFileSync(
       "git",
@@ -117,16 +122,29 @@ function rootPackageBranch(released: string): { dir: string; base: string } {
   git("add", ".");
   git("commit", "-q", "-m", "base");
   const base = git("rev-parse", "HEAD");
-  mkdirSync(path.join(dir, "apps/web/drizzle/meta"), { recursive: true });
-  writeFileSync(path.join(dir, "apps/web/drizzle/meta/_journal.json"), "{}\n");
-  mkdirSync(path.join(dir, ".changeset"));
-  writeFileSync(
-    path.join(dir, ".changeset/migration.md"),
-    `---\n"${released}": patch\n---\n\nAdd a migration.\n`,
-  );
+  for (const [rel, body] of Object.entries({
+    "apps/web/drizzle/meta/_journal.json": "{}\n",
+    ...branchFiles,
+  })) {
+    mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), body);
+  }
   git("add", ".");
   git("commit", "-q", "-m", "migration");
   return { dir, base };
+}
+
+function rootChangeset(name: string): string {
+  return `---\n"${name}": patch\n---\n\nAdd a migration.\n`;
+}
+
+function runOnMigrationBranch(branchFiles: Record<string, string>) {
+  const { dir, base } = migrationBranch(branchFiles);
+  try {
+    return runGate(["--root", dir, "--base", base]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const CORE_PKG = JSON.stringify({ name: "@groot/core" });
@@ -161,26 +179,29 @@ describe("changesets gate", () => {
   }, 20_000);
 
   it("accepts a migration changeset naming the root package.json name", () => {
-    const { dir, base } = rootPackageBranch("tiny-agents");
-    try {
-      const run = runGate(["--root", dir, "--base", base]);
-      expect(run.stderr).toBe("");
-      expect(run.status).toBe(0);
-      expect(run.stdout).toContain("tiny-agents covered");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const run = runOnMigrationBranch({ ".changeset/migration.md": rootChangeset("tiny-agents") });
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("tiny-agents covered");
   }, 30_000);
 
   it("rejects a migration changeset naming groot and names the root package", () => {
-    const { dir, base } = rootPackageBranch("groot");
-    try {
-      const run = runGate(["--root", dir, "--base", base]);
-      expect(run.status).toBe(1);
-      expect(run.stderr).toContain("missing changeset for tiny-agents");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const run = runOnMigrationBranch({ ".changeset/migration.md": rootChangeset("groot") });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain("missing changeset for tiny-agents");
+  }, 30_000);
+
+  it("ignores reasons and changesets merged before the branch", () => {
+    const run = runOnMigrationBranch({});
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain("missing changeset for tiny-agents");
+  }, 30_000);
+
+  it("accepts a no-release reason the branch adds", () => {
+    const run = runOnMigrationBranch({ ".no-release/mine.md": "# No release: internal\n" });
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("no-release reason accepted (mine.md");
   }, 30_000);
 
   it("passes when every changed package has its changeset", async () => {
