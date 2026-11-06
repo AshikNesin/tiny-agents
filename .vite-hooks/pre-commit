@@ -1,5 +1,4 @@
-# Vite+ pre-commit hook: Gitleaks (secret detection), then Vite+ staged checks
-# (lint + format). The hook wrapper runs this with `sh -e`.
+# The hook wrapper runs this with `sh -e`.
 
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks protect --staged --verbose --redact --config .gitleaks.toml

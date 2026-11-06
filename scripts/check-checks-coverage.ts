@@ -109,8 +109,6 @@ for (const area of areas) {
 
 // --- 3. The Tests workflow runs the gates, and only through gates.mjs. -----
 const WORKFLOW = ".github/workflows/test.yml";
-// Package scripts the workflow runs after `pnpm build`, which the static gates
-// run before.
 const POST_BUILD_CHECKS = ["check:closure"];
 const STATIC_CHECK =
   /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;

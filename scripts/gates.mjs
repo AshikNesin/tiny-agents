@@ -1,9 +1,5 @@
-#!/usr/bin/env node
-// The static gates, in the order the Tests workflow runs them. The workflow
-// calls `pnpm verify:static`, so a gate added here runs locally and in CI;
-// `pnpm check:coverage` fails when a static check runs anywhere else.
-//
-// Usage: pnpm verify:static (stops at the first failing gate and names it)
+// The Tests workflow runs these through `pnpm verify:static`, so a gate added
+// here runs locally and in CI.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -41,13 +37,8 @@ function readTree(dir) {
   );
 }
 
-// Generates a migration and compares the folder before and after, then puts
-// back what it found, so a local run neither trips on an uncommitted
-// migration nor leaves a ci-check migration behind.
-function migrationsMatchSchema() {
-  const before = readTree(MIGRATIONS_DIR);
-  if (!sh("pnpm db:generate --name ci-check")) return false;
-  const after = readTree(MIGRATIONS_DIR);
+function restoreTree(dir, before) {
+  const after = readTree(dir);
   const changed = [...new Set([...before.keys(), ...after.keys()])].filter(
     (file) => before.get(file) !== after.get(file),
   );
@@ -55,6 +46,14 @@ function migrationsMatchSchema() {
     if (before.has(file)) writeFileSync(file, before.get(file));
     else unlinkSync(file);
   }
+  return changed;
+}
+
+function migrationsMatchSchema() {
+  const before = readTree(MIGRATIONS_DIR);
+  const generated = sh("pnpm db:generate --name ci-check");
+  const changed = restoreTree(MIGRATIONS_DIR, before);
+  if (!generated) return false;
   if (changed.length === 0) return true;
   console.error(
     `Schema changed without a migration. Run 'pnpm db:generate' and commit ${MIGRATIONS_DIR}.`,
