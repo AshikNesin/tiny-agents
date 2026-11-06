@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
@@ -93,6 +93,42 @@ function runGate(args: string[]): { status: number | null; stdout: string; stder
   };
 }
 
+// A git repo whose root package.json is named tiny-agents, with a branch
+// commit that edits a migration and adds one changeset naming `released`.
+function rootPackageBranch(released: string): { dir: string; base: string } {
+  const dir = fixtureTree({ "package.json": JSON.stringify({ name: "tiny-agents" }) });
+  const git = (...args: string[]) =>
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Dev",
+        "-c",
+        "user.email=dev@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        ...args,
+      ],
+      { cwd: dir, encoding: "utf8" },
+    ).trim();
+  git("init", "-q");
+  git("add", ".");
+  git("commit", "-q", "-m", "base");
+  const base = git("rev-parse", "HEAD");
+  mkdirSync(path.join(dir, "apps/web/drizzle/meta"), { recursive: true });
+  writeFileSync(path.join(dir, "apps/web/drizzle/meta/_journal.json"), "{}\n");
+  mkdirSync(path.join(dir, ".changeset"));
+  writeFileSync(
+    path.join(dir, ".changeset/migration.md"),
+    `---\n"${released}": patch\n---\n\nAdd a migration.\n`,
+  );
+  git("add", ".");
+  git("commit", "-q", "-m", "migration");
+  return { dir, base };
+}
+
 const CORE_PKG = JSON.stringify({ name: "@groot/core" });
 const UI_PKG = JSON.stringify({ name: "@groot/ui" });
 
@@ -117,12 +153,35 @@ describe("changesets gate", () => {
 
   it("maps migration and .groot changes to the root package", async () => {
     const { state } = await collectFixture(
-      { "package.json": JSON.stringify({ name: "groot" }) },
+      { "package.json": JSON.stringify({ name: "tiny-agents" }) },
       ["apps/web/drizzle/0000_init.sql", ".groot/lib/patterns.ts"],
       [],
     );
-    expect(state.managedPackages).toEqual(["groot"]);
+    expect(state.managedPackages).toEqual(["tiny-agents"]);
   }, 20_000);
+
+  it("accepts a migration changeset naming the root package.json name", () => {
+    const { dir, base } = rootPackageBranch("tiny-agents");
+    try {
+      const run = runGate(["--root", dir, "--base", base]);
+      expect(run.stderr).toBe("");
+      expect(run.status).toBe(0);
+      expect(run.stdout).toContain("tiny-agents covered");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("rejects a migration changeset naming groot and names the root package", () => {
+    const { dir, base } = rootPackageBranch("groot");
+    try {
+      const run = runGate(["--root", dir, "--base", base]);
+      expect(run.status).toBe(1);
+      expect(run.stderr).toContain("missing changeset for tiny-agents");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   it("passes when every changed package has its changeset", async () => {
     const gate = await loadGate();

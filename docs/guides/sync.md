@@ -20,7 +20,8 @@ The groot sync system has four workflows:
 ## How Versioning Works
 
 Groot uses [changesets](https://github.com/changesets/changesets) for versioning.
-The released packages are the root `groot` package and the kit packages
+The released packages are the root package (the `name` in the root
+`package.json`) and the kit packages
 `@groot/core`, `@groot/jobs`, `@groot/shell`, `@groot/ui` and `@groot/ai`
 (all private: they are versioned, never published to npm).
 
@@ -43,10 +44,11 @@ The released packages are the root `groot` package and the kit packages
 3. **When the version PR merges**, the workflow tags the root version (e.g.
    `v3.1.0`) and creates a GitHub Release from the root `CHANGELOG.md`.
 
-The tag follows the root `groot` version only, and sync reads versions from
-those tags and changelog entries from the root `CHANGELOG.md`. Name `"groot"`
-in the changeset when a change should appear as a new boilerplate version to
-child projects; a release that bumps only kit packages creates no new tag.
+The tag follows the root package's version only, and sync reads versions from
+those tags and changelog entries from the root `CHANGELOG.md`. Name the root
+package in the changeset when a change should appear as a new boilerplate
+version to child projects; a release that bumps only kit packages creates no new
+tag.
 
 ### Changeset Types
 
@@ -65,7 +67,7 @@ changes a managed surface without naming its package:
 | ------------------------------------------------------------------------ | --------------------------------- |
 | `packages/<pkg>/src/**`                                                  | that package (`@groot/core`, ...) |
 | `packages/<pkg>/package.json` (any key but `name`, `version`, `private`) | that package                      |
-| `apps/web/drizzle/**`, `.groot/**`                                       | `groot`                           |
+| `apps/web/drizzle/**`, `.groot/**`                                       | the root package                  |
 
 Docs-only or internal changes to those paths can instead carry a reviewed
 reason file under `.no-release/` (any non-empty `.md`; it covers the

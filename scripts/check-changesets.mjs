@@ -11,8 +11,8 @@
 //   1. A branch that changes files under packages/[pkg]/src, apps/web/drizzle,
 //      or .groot needs a changeset naming each affected package, or a
 //      reviewed no-release reason file under .no-release/.
-//   2. apps/web/drizzle and .groot belong to the root "groot" package, so a
-//      changeset naming "groot" covers them.
+//   2. apps/web/drizzle and .groot belong to the root package, named by the
+//      root package.json, so a changeset naming it covers them.
 //   3. The release bot's own commits are exempt, because versioning PRs are
 //      the output of this gate, not its input.
 //
@@ -29,7 +29,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
 
-const ROOT_PACKAGE = "groot";
 const RELEASE_BOTS = ["github-actions[bot]", "renovate[bot]"];
 const BOT_EMAIL_SUFFIX = "@users.noreply.github.com";
 
@@ -93,11 +92,15 @@ function readPkgJsonAt(rootDir, file) {
 // Files under apps/web/drizzle or .groot map to the root package.
 function packageNameFor(file, rootDir) {
   if (file.startsWith("apps/web/drizzle") || file.startsWith(".groot/")) {
-    return ROOT_PACKAGE;
+    return readPackageName(rootDir);
   }
   const scopeDir = file.split("/")[1];
   if (!scopeDir) return null;
-  const pkgJson = path.join(rootDir, "packages", scopeDir, "package.json");
+  return readPackageName(path.join(rootDir, "packages", scopeDir));
+}
+
+function readPackageName(dir) {
+  const pkgJson = path.join(dir, "package.json");
   if (!existsSync(pkgJson)) return null;
   return JSON.parse(readFileSync(pkgJson, "utf8")).name ?? null;
 }
