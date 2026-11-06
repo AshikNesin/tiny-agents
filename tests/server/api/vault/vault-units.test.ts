@@ -1,11 +1,14 @@
 /**
  * Vault building blocks (issue #56): RFC 6238 codes, the redactor, values
- * that can't be serialized by accident, and the 1Password field mapping.
+ * that can't be serialized by accident, the one "target moved" error, and
+ * the 1Password field mapping.
  */
 import { inspect } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { SecretRedactor } from "../../../../packages/agent/src/redact";
-import { SecretValue } from "../../../../packages/agent/src/vault";
+import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
+import { OriginMismatchError } from "../../../../packages/agent/src/toolkits/browser-fill";
+import { WindowMismatchError } from "../../../../packages/agent/src/toolkits/computer-sessions";
 import {
   applyDraft,
   expiryFromConnect,
@@ -50,6 +53,23 @@ describe("SecretValue", () => {
     expect(`${value}`).toBe("[vault]");
     expect(inspect({ value })).not.toContain("canary");
     expect(value.reveal()).toBe("canary-hunter2");
+  });
+});
+
+describe("VaultTargetMovedError", () => {
+  it("is the one type every sink's moved target throws", () => {
+    const page = new OriginMismatchError("https://evil.example");
+    const window = new WindowMismatchError("firefox — Phish");
+    for (const error of [page, window]) expect(error).toBeInstanceOf(VaultTargetMovedError);
+    expect(page).toMatchObject({
+      actual: "https://evil.example",
+      reason: "page origin changed before the fill",
+    });
+    expect(window).toMatchObject({
+      actual: "firefox — Phish",
+      reason: "active window changed before typing",
+      message: "The active window is firefox — Phish, not the one this secret is bound to.",
+    });
   });
 });
 

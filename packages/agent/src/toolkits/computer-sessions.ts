@@ -15,6 +15,7 @@
  * - dropping a desktop that died under the app, so the next call relaunches.
  */
 import type { Duplex } from "node:stream";
+import { VaultTargetMovedError } from "../vault-target";
 import type { BrowserClock } from "./browser-sessions";
 
 /** Where a desktop is while it opens; `installing` is the one-time VM setup. */
@@ -51,10 +52,14 @@ export interface WindowBinding {
   title?: string;
 }
 
-/** The desktop changed under a tool: its active window is not the bound one. */
-export class WindowMismatchError extends Error {
-  constructor(readonly active: string) {
-    super(`The active window is ${active || "unknown"}, not the one this secret is bound to.`);
+/** The desktop changed under a tool: its active window (`actual`) is not the bound one. */
+export class WindowMismatchError extends VaultTargetMovedError {
+  constructor(active: string) {
+    super(
+      active,
+      `The active window is ${active || "unknown"}, not the one this secret is bound to.`,
+      "active window changed before typing",
+    );
     this.name = "WindowMismatchError";
   }
 }

@@ -14,6 +14,7 @@ import { Boom } from "@groot/core/errors";
 import {
   SecretValue,
   secretRedactor,
+  VaultTargetMovedError,
   type AgentRuntime,
   type CredentialField,
   type CredentialRequest,
@@ -225,7 +226,7 @@ async function fillRequest(
   try {
     result = await getBrowserSessions().fillSecret(target, { origin: request.origin, fields });
   } catch (error) {
-    if (error instanceof Error && error.name === "OriginMismatchError") {
+    if (error instanceof VaultTargetMovedError) {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");
     }
     throw Boom.badGateway("Couldn't fill the page. Try the live browser instead.");
