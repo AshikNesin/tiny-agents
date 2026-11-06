@@ -46,13 +46,12 @@ describe("kv", () => {
   });
 
   it("expires entries", async () => {
-    vi.useRealTimers(); // a 1 ms TTL has to lapse in real time
     await kv.set("ttl", "soon", 1);
     await kv.set("keep", "forever");
-    await new Promise((r) => setTimeout(r, 5));
+    vi.setSystemTime(Date.now() + 5);
     expect(await kv.get("ttl")).toBeUndefined();
     await kv.set("ttl2", "soon", 1);
-    await new Promise((r) => setTimeout(r, 5));
+    vi.setSystemTime(Date.now() + 5);
     expect(await purgeExpiredKv()).toBe(1);
     expect(await kv.get("keep")).toBe("forever");
   });

@@ -131,21 +131,34 @@ Call them directly; the database is real, so there is nothing to mock
 
 ### Dates and time
 
-Both setup files call `vi.setSystemTime(FIXED_NOW)` before every test, so
-`Date` reports `FIXED_NOW` (from `tests/test-clock.ts`) on any real day and
-does not tick. Only `Date` is faked: `setTimeout`, `setInterval` and
-`performance.now()` stay real.
+Both setup files call `vi.setSystemTime(FIXED_NOW)` when they load and again
+before every test, so `Date` reports `FIXED_NOW` (from `tests/test-clock.ts`)
+on any real day and does not tick. That covers a test file's module scope too,
+such as a token minted at the top of the file. Only `Date` is faked:
+`setTimeout`, `setInterval` and `performance.now()` stay real.
 
 - A fixture that must lie in the future uses `futureIso(days)`, never a date
   literal. A literal passes on the day it is written and fails once the real
-  clock passes it; against the frozen clock it gives the same result on any
+  clock passes it. Against the frozen clock it gives the same result on any
   day.
 - A test that needs another instant calls `vi.setSystemTime(...)` in its body.
   The next test starts at `FIXED_NOW` again.
-- A test that measures elapsed time (a TTL that lapses, a `Date.now()`
-  deadline, two calls that need distinct milliseconds) starts with
-  `vi.useRealTimers()` and a one-line reason, as in
+- A test that needs time to pass (a TTL that lapses, a measured wait, two calls
+  that need distinct milliseconds) moves the frozen clock forward with
+  `vi.setSystemTime(Date.now() + ms)` instead of sleeping, as in
   `tests/server/core/kv.test.ts`.
+- Code that reads `Date.now()` between timers, such as a deadline loop, runs
+  under `vi.useFakeTimers()` with `await vi.advanceTimersByTimeAsync(ms)`. The
+  default fakes `Date` too, starting at `FIXED_NOW`, so both move together
+  (`tests/server/app/agent/computer-toolkit.test.ts`). Reset with
+  `vi.useRealTimers()` in `afterEach`.
+- `vi.useFakeTimers({ toFake: [...] })` without `"Date"` in the list puts the
+  real clock back for the rest of that test
+  (`tests/server/api/notifications/notifications.wiring.test.ts`). List
+  `"Date"` when the test writes or compares dates.
+- Do not call `vi.useRealTimers()` to opt a test out of the frozen clock. A row
+  written at the real time is later read against `FIXED_NOW`, and the result
+  depends on the day the suite runs. Call it only to undo `vi.useFakeTimers()`.
 
 ## Coverage checklist per route
 

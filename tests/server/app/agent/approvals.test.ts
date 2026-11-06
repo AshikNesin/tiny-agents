@@ -199,7 +199,6 @@ describe("capabilities and approvals", () => {
   }, 15_000);
 
   it("reports the wait for approval apart from the tool's own run time (issue #86)", async () => {
-    vi.useRealTimers(); // waitedMs and durationMs are measured with Date
     const mailer: Mailer = { sent: [] };
     const runtime = await open(mailer, callThenReport("send_email", { to: "ana@x.dev" }));
     const ref = await runtime.createConversation({
@@ -217,12 +216,12 @@ describe("capabilities and approvals", () => {
           : undefined,
       "approval card",
     );
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    vi.setSystemTime(Date.now() + 400);
     await runtime.decideApproval(ref, waiting.taskId!, "approved");
     await until(() => finalText(events), "reply");
 
     const done = toolCall(events, "send_email")!;
-    expect(done.waitedMs).toBeGreaterThanOrEqual(350);
+    expect(done.waitedMs).toBe(400);
     expect(done.durationMs).toBeLessThan(done.waitedMs!);
   }, 15_000);
 

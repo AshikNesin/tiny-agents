@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db, kv as kvTable } from "@groot/core/database";
 import { config } from "@groot/core/config";
@@ -18,7 +18,6 @@ import {
 
 describe("housekeeping", () => {
   it("removes old finished jobs with their logs, keeps recent and pending ones, purges expired kv", async () => {
-    vi.useRealTimers(); // the kv entry's 1 ms TTL has to lapse in real time
     clearJobHandlers();
     registerJobHandler("hk", (job) => {
       job.logger.info("hello from hk");
@@ -35,7 +34,7 @@ describe("housekeeping", () => {
     );
     await db.update(jobs).set({ completedAt: longAgo }).where(eq(jobs.id, old));
     await kv.set("hk-expired", 1, 1);
-    await new Promise((r) => setTimeout(r, 5));
+    vi.setSystemTime(Date.now() + 5);
 
     await housekeeping();
 
@@ -49,8 +48,6 @@ describe("housekeeping", () => {
 });
 
 describe("housekeeping schedule", () => {
-  afterEach(() => vi.useRealTimers());
-
   const MINUTE = 60_000;
   const LAST_RUN_KEY = "jobs:housekeeping:lastRunAt";
 
@@ -68,8 +65,7 @@ describe("housekeeping schedule", () => {
 
   it("runs at most once per interval, even when another process ran it", async () => {
     clearJobHandlers();
-    vi.useFakeTimers({ toFake: ["Date"] });
-    // Later than any real-time tick in this file, so the first claim is free.
+    // Past the interval an earlier test's tick may have claimed, so the first claim is free.
     const start = Date.now() + 24 * 60 * MINUTE;
     const at = (minutes: number) => vi.setSystemTime(start + minutes * MINUTE);
 
