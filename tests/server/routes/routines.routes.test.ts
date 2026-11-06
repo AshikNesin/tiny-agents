@@ -19,6 +19,7 @@ import {
   spyOnRuntime,
   type SpiedRuntime,
 } from "../fixtures";
+import { futureIso } from "../../test-clock";
 
 const token = await authToken("routines-test@example.com");
 
@@ -249,7 +250,7 @@ describe("Routines API routes", () => {
 
   it("run-now submits a manual occurrence without archiving a future once routine", async () => {
     const routine = await createRoutine(app, {
-      schedule: { kind: "once", at: "2026-12-01T09:00:00+05:30" },
+      schedule: { kind: "once", at: futureIso(25) },
     });
     const jobsBefore = (await fireJobs()).length;
 
