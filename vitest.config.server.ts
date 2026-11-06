@@ -3,6 +3,35 @@ import path from "node:path";
 
 const rootDir = path.resolve();
 
+// Never reach real services from tests, whatever the shell exports: with real
+// Pushover keys in the environment, the notification route tests sent actual
+// test pushes (their fetch spy watches calls, it does not stop them). Remove the
+// keys and model settings outright, matching CI, which sets none of them.
+// Test workers inherit this process's environment.
+for (const key of [
+  "PUSHOVER_API_TOKEN",
+  "PUSHOVER_USER_KEY",
+  "CLOUDFLARE_API_KEY",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_GATEWAY_ID",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "SENTRY_DSN",
+  // Model selection and other providers' credentials change what the runtime
+  // lists (an allowlist of gateway models leaves none without gateway keys).
+  "GATEWAY_MODEL_ALLOWLIST",
+  "GATEWAY_CUSTOM_PROVIDERS",
+  "AI_PROVIDERS",
+  "DEFAULT_MODEL",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "COPILOT_GITHUB_TOKEN",
+  "GEMINI_API_KEY",
+]) {
+  delete process.env[key];
+}
+
 export default defineConfig({
   root: ".",
   test: {
@@ -14,20 +43,6 @@ export default defineConfig({
     include: ["tests/server/**/*.test.ts"],
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
-    // Never reach real services from tests, whatever the shell exports: with
-    // real Pushover keys in the environment, the notification route tests sent
-    // actual test pushes (their fetch spy watches calls, it does not stop them).
-    // Core treats "" as unset.
-    env: {
-      PUSHOVER_API_TOKEN: "",
-      PUSHOVER_USER_KEY: "",
-      CLOUDFLARE_API_KEY: "",
-      CLOUDFLARE_ACCOUNT_ID: "",
-      CLOUDFLARE_GATEWAY_ID: "",
-      OPENAI_API_KEY: "",
-      ANTHROPIC_API_KEY: "",
-      SENTRY_DSN: "",
-    },
     // Every file shares one test database and most reset whole tables
     // (bots, routines, ledger rows) between tests, so files running side by
     // side delete each other's rows. One file at a time keeps runs
