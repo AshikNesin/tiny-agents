@@ -46,7 +46,9 @@ async function launch() {
 
 /** Sign in through the real login form as the seeded demo user. */
 export async function login(page) {
-  await page.goto("/login");
+  // domcontentloaded: a third-party embed (the feedback widget) can hold the
+  // full load event long enough to time out an otherwise ready login page.
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email", { exact: true }).fill(DEMO.email);
   await page.getByLabel(/password/i).fill(DEMO.password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
@@ -65,6 +67,7 @@ function makeApi(page) {
     get: (url) => call("GET", url),
     post: (url, data) => call("POST", url, data),
     patch: (url, data) => call("PATCH", url, data),
+    put: (url, data) => call("PUT", url, data),
     delete: (url) => call("DELETE", url),
   };
 }

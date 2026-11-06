@@ -49,7 +49,12 @@ await journey(
       cleanup(async () => {
         for (const t of [...(await threads()), ...(await threads("archived"))])
           await api.delete(`/code/threads/${encodeURIComponent(t.id)}`);
-        expect([...(await threads()), ...(await threads("archived"))]).toHaveLength(0);
+        // The thread list is cached briefly; poll until the deletes show.
+        await expect
+          .poll(async () => (await threads()).length + (await threads("archived")).length, {
+            timeout: 20_000,
+          })
+          .toBe(0);
       });
     });
 
@@ -99,6 +104,9 @@ await journey(
       await composer.fill(`echo: steer-${stamp}`);
       await composer.press("Enter");
       await expect(transcript.getByText(`echo: steer-${stamp}`)).toBeVisible();
+      // Shelley drops the answer to a steer that a queued message follows within
+      // ~1 s (upstream behaviour, reproduced on its API alone); give it time to land.
+      await page.waitForTimeout(4_000);
     });
     await step("queue: Alt+Enter holds a message, listed with Send now / Cancel", async () => {
       await composer.fill(`echo: queued-${stamp}`);
