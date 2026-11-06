@@ -11,14 +11,24 @@
  *     area silently unschedules every suite under it — those tests fall to
  *     drift in sync — and nothing turns red.
  *
+ * It also holds the static gates to one list, `scripts/gates.mjs`, so local
+ * runs and CI can't drift apart:
+ *
+ *  3. The Tests workflow runs `pnpm verify:static`, and no other step of it
+ *     runs a static check.
+ *  4. Every `check:*` and `typecheck:*` package script is a gate, or a check
+ *     the workflow runs after the build.
+ *
  * Usage:  tsx scripts/check-checks-coverage.ts
- * Exit:   0 = covered, 1 = stale ownership entry.
+ * Exit:   0 = covered, 1 = stale ownership entry or a check outside the gates.
  */
-import { readdirSync, existsSync, statSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { load as loadYaml } from "js-yaml";
 import micromatch from "micromatch";
 import { loadConfig } from "../.groot/lib/config";
 import { ownedSourceRootsForTests, TEST_AREA_OWNERSHIP } from "../.groot/lib/patterns";
+import { gates } from "./gates.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -40,7 +50,13 @@ function expandRoot(root: string): string[] {
 }
 
 interface Failure {
-  kind: "root-missing" | "area-missing" | "area-empty";
+  kind:
+    | "root-missing"
+    | "area-missing"
+    | "area-empty"
+    | "gates-not-in-ci"
+    | "check-outside-gates"
+    | "script-not-a-gate";
   detail: string;
 }
 
@@ -91,6 +107,59 @@ for (const area of areas) {
   }
 }
 
+// --- 3. The Tests workflow runs the gates, and only through gates.mjs. -----
+const WORKFLOW = ".github/workflows/test.yml";
+// Package scripts the workflow runs after `pnpm build`, which the static gates
+// run before.
+const POST_BUILD_CHECKS = ["check:closure"];
+const STATIC_CHECK =
+  /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
+
+interface WorkflowStep {
+  name?: string;
+  run?: string;
+}
+const workflow = loadYaml(readFileSync(join(ROOT, WORKFLOW), "utf8")) as {
+  jobs: Record<string, { steps: WorkflowStep[] }>;
+};
+const runSteps = Object.values(workflow.jobs).flatMap((job) =>
+  job.steps.filter((step): step is Required<WorkflowStep> => typeof step.run === "string"),
+);
+const gateSteps = runSteps.filter((step) => step.run.trim() === "pnpm verify:static");
+if (gateSteps.length !== 1) {
+  failures.push({
+    kind: "gates-not-in-ci",
+    detail: `${WORKFLOW} has ${gateSteps.length} steps running \`pnpm verify:static\`. It needs exactly one, so CI runs every gate in scripts/gates.mjs.`,
+  });
+}
+for (const step of runSteps) {
+  if (gateSteps.includes(step)) continue;
+  for (const match of step.run.matchAll(STATIC_CHECK)) {
+    if (match[1] && POST_BUILD_CHECKS.includes(match[1])) continue;
+    failures.push({
+      kind: "check-outside-gates",
+      detail: `${WORKFLOW} step "${step.name ?? step.run}" runs \`${match[0]}\` outside the static gates. Add it to scripts/gates.mjs and delete the step, so \`pnpm verify:static\` runs it locally too.`,
+    });
+  }
+}
+
+// --- 4. Every check script is a gate. --------------------------------------
+const { scripts } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
+const gateCommands = gates.flatMap((gate) => (typeof gate.run === "string" ? [gate.run] : []));
+for (const script of Object.keys(scripts)) {
+  if (!/^(check|typecheck):/.test(script) || POST_BUILD_CHECKS.includes(script)) continue;
+  if (
+    !gateCommands.some((command) => command.split(" ").slice(0, 2).join(" ") === `pnpm ${script}`)
+  ) {
+    failures.push({
+      kind: "script-not-a-gate",
+      detail: `package.json script "${script}" is not a static gate, so neither CI nor \`pnpm verify:static\` runs it. Add { name, run: "pnpm ${script}" } to scripts/gates.mjs.`,
+    });
+  }
+}
+
 // --- Report. --------------------------------------------------------------
 if (failures.length > 0) {
   console.error(
@@ -104,6 +173,7 @@ if (failures.length > 0) {
 
 console.log(
   `✓ Checks covered: ${areas.length} declared test areas ` +
-    `owning ${ownedRoots.length} source roots, all present on disk.`,
+    `owning ${ownedRoots.length} source roots, all present on disk; ` +
+    `${gates.length} static gates, all run by \`pnpm verify:static\` in ${WORKFLOW}.`,
 );
 process.exit(0);

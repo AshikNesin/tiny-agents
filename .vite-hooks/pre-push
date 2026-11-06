@@ -1,0 +1,3 @@
+# Vite+ pre-push hook: the typecheck CI runs, which lint and format don't cover.
+
+pnpm typecheck

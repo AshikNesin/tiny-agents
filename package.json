@@ -23,6 +23,8 @@
     "test": "NODE_ENV=test vp test run --config vitest.config.server.ts",
     "test:client": "vp test run",
     "test:all": "pnpm test && pnpm test:client",
+    "verify": "pnpm verify:static && pnpm test && pnpm test:client",
+    "verify:static": "node scripts/gates.mjs",
     "test:watch": "NODE_ENV=test vp test --config vitest.config.server.ts",
     "test:e2e": "PORTLESS=0 playwright test",
     "test:e2e:ui": "playwright test --ui",

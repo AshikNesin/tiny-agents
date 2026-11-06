@@ -32,37 +32,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (server)
-        run: pnpm exec tsc --noEmit
-      - name: Typecheck (client)
-        run: pnpm typecheck:client
-      - name: Typecheck coverage
-        run: pnpm exec tsx scripts/check-typecheck-coverage.ts
-      - name: Typecheck kit consumers
-        run: pnpm typecheck:kit
-      - name: Kit export guard
-        run: pnpm exec tsx scripts/check-kit-exports.ts
-      - name: Changeset gate
-        run: pnpm check:changesets --base origin/${{ github.base_ref || 'main' }}
-      - name: Checks coverage
-        run: pnpm check:coverage
-      - name: Lint & format check
-        run: pnpm check
       - name: Install ripgrep
         # The instabox CI image, unlike ubuntu-latest, ships without ripgrep,
         # which scripts/check-design-tokens.ts shells out to.
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
-
-      - name: Design tokens
-        run: pnpm check:tokens
-      - name: Migrations are up to date with the schema
+      - name: Secret scan (gitleaks)
+        # The pre-commit hook skips gitleaks where it isn't installed, so this
+        # scan is what gates every PR. It covers the commits the event adds.
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          RANGE: ${{ github.event_name == 'pull_request' && format('origin/{0}..HEAD', github.base_ref) || format('{0}..{1}', github.event.before, github.sha) }}
         run: |
-          pnpm db:generate --name ci-check
-          if git status --porcelain apps/web/drizzle | grep -q .; then
-            echo "::error::Schema changed without a migration. Run 'pnpm db:generate' and commit apps/web/drizzle."
-            git status --porcelain apps/web/drizzle
-            exit 1
-          fi
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --no-banner --log-opts="$RANGE"
+
+      - name: Static gates (scripts/gates.mjs)
+        run: pnpm verify:static
 
       - name: Server tests
         run: pnpm test
