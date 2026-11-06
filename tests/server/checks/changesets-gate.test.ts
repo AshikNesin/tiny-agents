@@ -17,26 +17,31 @@ import { describe, expect, it } from "vite-plus/test";
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-changesets.mjs");
 
+type GateState = {
+  managedPackages: string[];
+  coveredPackages: string[];
+  reason: string | null;
+  changedManagedFiles: string[];
+  unknownReleases: string[];
+  workspacePackages: string[];
+};
+
 type Gate = {
   collect: (state: {
     rootDir?: string;
     changedFiles: string[];
     changesetFiles: { name: string; body: string }[];
     noReleaseReason?: string | null;
-  }) => {
-    managedPackages: string[];
-    coveredPackages: string[];
-    reason: string | null;
-    changedManagedFiles: string[];
-  };
+    workspacePackages: string[];
+  }) => GateState;
   parseChangesetReleases: (body: string) => string[];
   isReleaseBotCommit: (commit: { name: string; email: string }) => boolean;
-  evaluate: (state: {
-    managedPackages: string[];
-    coveredPackages: string[];
-    reason: string | null;
-    changedManagedFiles: string[];
-  }) => { status: number; out?: string; err?: string; missing?: string[] };
+  evaluate: (state: GateState) => {
+    status: number;
+    out?: string;
+    err?: string;
+    missing?: string[];
+  };
   pkgJsonChangeIsReleaseRelevant: (beforeJson: string, afterJson: string) => boolean;
 };
 
@@ -73,6 +78,7 @@ async function collectFixture(
         changedFiles,
         changesetFiles: changesetBodies.map((body, i) => ({ name: `cs-${i}.md`, body })),
         noReleaseReason,
+        workspacePackages: WORKSPACE,
       }),
     };
   } finally {
@@ -93,8 +99,12 @@ function runGate(args: string[]): { status: number | null; stdout: string; stder
   };
 }
 
+const WORKSPACE = ["tiny-agents", "@groot/core", "@groot/ui"];
+
 const MERGED_BEFORE_BRANCH = {
   "package.json": JSON.stringify({ name: "tiny-agents" }),
+  "pnpm-workspace.yaml": 'minimumReleaseAge: 1440\npackages:\n  - "."\n  - "packages/*"\n',
+  "packages/ui/package.json": JSON.stringify({ name: "@groot/ui" }),
   ".no-release/earlier.md": "# No release: an earlier branch\n",
   ".changeset/earlier.md": rootChangeset("tiny-agents"),
 };
@@ -187,7 +197,18 @@ describe("changesets gate", () => {
   it("rejects a migration changeset naming groot and names the root package", () => {
     const run = runOnMigrationBranch({ ".changeset/migration.md": rootChangeset("groot") });
     expect(run.status).toBe(1);
-    expect(run.stderr).toContain("missing changeset for tiny-agents");
+    expect(run.stderr).toContain(
+      '.changeset/migration.md names unknown package "groot"; packages are: tiny-agents, @groot/ui',
+    );
+  }, 30_000);
+
+  it("rejects a changeset naming groot beside the root package", () => {
+    const run = runOnMigrationBranch({
+      ".changeset/migration.md": '---\n"tiny-agents": patch\n"groot": patch\n---\n\nMigrate.\n',
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('.changeset/migration.md names unknown package "groot"');
+    expect(run.stderr).not.toContain('unknown package "tiny-agents"');
   }, 30_000);
 
   it("ignores reasons and changesets merged before the branch", () => {
@@ -304,6 +325,7 @@ describe("changesets gate", () => {
         ],
         changesetFiles: [],
         noReleaseReason: null,
+        workspacePackages: WORKSPACE,
       });
       expect(withBlobs.managedPackages).toEqual(["@groot/core"]);
       const verdict = gate.evaluate(withBlobs);
@@ -338,6 +360,7 @@ describe("changesets gate", () => {
         ],
         changesetFiles: [],
         noReleaseReason: null,
+        workspacePackages: WORKSPACE,
       });
       expect(state.managedPackages).toEqual([]);
     } finally {

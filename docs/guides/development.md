@@ -223,5 +223,5 @@ model is in [Background jobs](../features/jobs.md).
 2. Change code
 3. `pnpm test` (or `pnpm test:watch`) and `pnpm check`
 4. Schema changed? `pnpm db:generate` and commit `apps/web/drizzle/`
-5. Touched `packages/*/src`, `packages/*/package.json`, `apps/web/drizzle` or `.groot/`? `pnpm changeset`, or a no-release reason under `.no-release/` for internal changes
+5. Touched `packages/*/src`, `packages/*/package.json`, `apps/web/drizzle` or `.groot/`? `pnpm changeset`, or a no-release reason under `.no-release/` for internal changes. The branch must add the changeset or reason itself; ones already on `main` don't count
 6. Update docs if behaviour changed
