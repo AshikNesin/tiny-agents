@@ -136,6 +136,33 @@ describe("vault routes", () => {
     expect(await db.$count(vaultItems)).toBe(0);
   });
 
+  it("refuses a passkey it does not know with 403, never 401 (#164)", async () => {
+    // A 401 reads as an expired session in the client and signs the owner out.
+    const options = await vault("/step-up/options", { method: "POST" });
+    expect(options.status).toBe(200);
+    const clientDataJSON = Buffer.from(
+      JSON.stringify({
+        type: "webauthn.get",
+        challenge: options.body.data.challenge,
+        origin: "http://localhost:3000",
+      }),
+    ).toString("base64url");
+    const unknown = await vault("/step-up", {
+      method: "POST",
+      json: {
+        passkey: {
+          id: "not-a-registered-credential",
+          rawId: "not-a-registered-credential",
+          type: "public-key",
+          clientExtensionResults: {},
+          response: { clientDataJSON, authenticatorData: "", signature: "" },
+        },
+      },
+    });
+    expect(unknown.status).toBe(403);
+    expect(unknown.body.error?.message).toMatch(/Passkey not found/);
+  });
+
   it("accepts the password of an account made before groot 3.0 (bcrypt hash)", async () => {
     const [legacy] = await db
       .insert(users)

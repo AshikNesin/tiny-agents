@@ -4,9 +4,9 @@
 
 Fixes for bugs found by the verify-tiny-agents full pass:
 
-- Vault: a wrong step-up password (or someone else's passkey) is refused with
-  403, not 401, so the owner is no longer signed out and keeps unsaved edits
-  (#164).
+- Vault: a refused step-up (a wrong password, someone else's passkey, or a
+  passkey the server does not know) is answered with 403, not 401, so the
+  owner is no longer signed out and keeps unsaved edits (#164).
 - Chat attachments: the enlarged image viewer is portalled to the page, so it
   covers the window instead of being clipped to its message row (#165).
 - ⌘K palette: the app's own Navigation, Theme and Account groups are no longer
