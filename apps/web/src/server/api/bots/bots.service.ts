@@ -1,22 +1,16 @@
 /**
  * Bot records and the owner's chat actions over Drizzle. Everything that
  * touches a bot's durable conversation (create, reconcile, submit) goes
- * through `bots.conversation.ts`; moving between chats through
- * `chats.history.ts`; @mentions through `bots.delivery.ts`; the sidebar's
+ * through `bots.conversation.ts`; acting on the chat a bot is on now
+ * (read, abort, withdraw, approvals, questions, YOLO) through `bots.chat.ts`;
+ * moving between chats through `chats.history.ts`; @mentions through `bots.delivery.ts`; the sidebar's
  * list through `bots.list.ts`. This module adds the row bookkeeping around
  * them. Every action takes the runtime it acts on (`rt`), the test seam.
  */
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import {
-  AgentRuntime,
-  ApprovalNotPendingError,
-  authoredText,
-  InvalidAnswersError,
-  QuestionNotPendingError,
-  type OwnerAnswer,
-} from "@tiny-agents/agent";
+import { AgentRuntime, authoredText, type OwnerAnswer } from "@tiny-agents/agent";
 import {
   db,
   botChats,
@@ -40,6 +34,7 @@ import {
   toBot,
   type Bot,
 } from "./bots.conversation";
+import { openBotChat } from "./bots.chat";
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 import { findPastChat, leaveChat, retireConversation } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
@@ -297,7 +292,8 @@ export async function sendMessage(
   /** The sender. In a shared bot's chat (issue #145) the bot reads their name with the message. */
   senderId?: number,
 ) {
-  const shared = senderId !== undefined && (await findBotRow(id)).guests?.length;
+  const chat = await openBotChat(id, rt);
+  const shared = senderId !== undefined && chat.row.guests?.length;
   const author = shared ? await authorOf(senderId) : undefined;
   const text = author ? authoredText(author.name, input.text) : input.text;
   const { bot, attachments } = await submitToBot(
@@ -321,12 +317,9 @@ export async function sendMessage(
   // Questions the bot is waiting on block its reply, so the message would
   // only queue behind them: writing in the chat instead dismisses them, and
   // the bot reads the message right after (a steer joins the same reply).
-  const ref = Number(bot.conversationId);
-  if (rt.pendingQuestions(ref) > 0) {
-    await rt.dismissQuestions(ref).catch((error: unknown) => {
-      logger.warn({ error, botId: id }, "Failed to dismiss questions after an owner message");
-    });
-  }
+  await chat.dismissPendingQuestions().catch((error: unknown) => {
+    logger.warn({ error, botId: id }, "Failed to dismiss questions after an owner message");
+  });
 }
 
 /**
@@ -338,15 +331,11 @@ export async function chatHistory(
   query: ChatHistoryDTO,
   rt: BotAgentRuntime = runtime(),
 ) {
-  const bot = await getBot(id);
-  const page = await rt.readChatPage(Number(bot.conversationId), query);
-  if (!page) throw Boom.badRequest("Unknown message cursor");
-  return page;
+  return (await openBotChat(id, rt)).page(query);
 }
 
 export async function abortReply(id: string, rt: BotAgentRuntime = runtime()) {
-  const bot = await getBot(id);
-  await rt.abort(Number(bot.conversationId));
+  await (await openBotChat(id, rt)).abort();
 }
 
 /**
@@ -359,11 +348,7 @@ export async function withdrawMessage(
   input: { requestId: string },
   rt: BotAgentRuntime = runtime(),
 ) {
-  const bot = await getBot(id);
-  const outcome = await rt.withdraw(Number(bot.conversationId), input.requestId);
-  if (outcome === "not_found") throw Boom.notFound("Message not found");
-  if (outcome !== "withdrawn") throw Boom.conflict("Message is no longer queued");
-  return { withdrawn: true };
+  return (await openBotChat(id, rt)).withdraw(input.requestId);
 }
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
@@ -464,13 +449,13 @@ export async function decideApproval(
   rt: BotAgentRuntime = runtime(),
   viewer?: Viewer,
 ) {
-  const bot = toBot(await findBotRow(id));
+  const chat = await openBotChat(id, rt);
+  const { bot } = chat;
   if (viewer?.guest) {
     // A guest answers the bot's approvals, but the vault holds the owner's
     // secrets and "always allow" changes the bot: both stay the owner's.
     if (input.alwaysAllow || input.grant) throw Boom.forbidden("Only the owner can do that");
-    const chat = await rt.readChat(Number(bot.conversationId));
-    const call = chat.messages
+    const call = (await chat.read()).messages
       .flatMap((message) => message.toolCalls ?? [])
       .find((toolCall) => toolCall.taskId === input.taskId);
     if (call?.vault) throw Boom.forbidden("Only the owner can approve vault use");
@@ -480,14 +465,7 @@ export async function decideApproval(
     await updateRow(id, { toolPermissions: JSON.stringify(toolPermissions) });
     await reconcileBotConversation(id, rt);
   }
-  try {
-    const ref = Number(bot.conversationId);
-    if (input.grant) await rt.decideApproval(ref, input.taskId, input.decision, { grant: true });
-    else await rt.decideApproval(ref, input.taskId, input.decision);
-  } catch (error) {
-    if (error instanceof ApprovalNotPendingError) throw Boom.conflict(error.message);
-    throw error;
-  }
+  await chat.decideApproval(input.taskId, input.decision, { grant: input.grant });
 }
 
 // ── YOLO mode (issue #151) ──────────────────────────────────────────────
@@ -504,9 +482,9 @@ export async function setYolo(
   ownerId: number,
   rt: BotAgentRuntime = runtime(),
 ): Promise<{ on: boolean; approved: number[] }> {
-  const bot = await findBotRow(id);
-  const result = await rt.setYolo(Number(bot.conversationId), on, ownerId);
-  publishBotChatEvent(bot.id, { type: "yolo", on });
+  const chat = await openBotChat(id, rt);
+  const result = await chat.setYolo(on, ownerId);
+  publishBotChatEvent(chat.bot.id, { type: "yolo", on });
   return result;
 }
 
@@ -519,12 +497,5 @@ export async function answerQuestions(
   input: { taskId: number; answers: OwnerAnswer[] | null },
   rt: BotAgentRuntime = runtime(),
 ) {
-  const bot = await getBot(id);
-  try {
-    await rt.answerQuestions(Number(bot.conversationId), input.taskId, input.answers);
-  } catch (error) {
-    if (error instanceof QuestionNotPendingError) throw Boom.conflict(error.message);
-    if (error instanceof InvalidAnswersError) throw Boom.badRequest(error.message);
-    throw error;
-  }
+  await (await openBotChat(id, rt)).answerQuestions(input.taskId, input.answers);
 }

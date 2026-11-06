@@ -19,6 +19,7 @@ import {
   type AttachmentRef,
   type BotAgentConfig,
   type ChatMessage,
+  type ConversationRef,
   type ToolPermission,
 } from "@tiny-agents/agent";
 import { db, bots } from "../../db";
@@ -71,7 +72,17 @@ type ConnectionLink = {
   connection: { slug: string; toolsCache: string; disabledTools: string };
 };
 
-type BotWithLinks = BotRow & {
+/**
+ * A durable conversation as the runtime addresses it. Rows store it as text
+ * (`bots.conversationId`, `routines.conversationId`, `bot_chats`); this is
+ * the one place that turns a stored id into a ref, and `startBotConversation`
+ * the one that stores a new ref.
+ */
+export function conversationRef(stored: string): ConversationRef {
+  return Number(stored);
+}
+
+export type BotWithLinks = BotRow & {
   skills?: { skillId: string }[];
   connections?: ConnectionLink[];
   guests?: { userId: number }[];
@@ -224,7 +235,7 @@ export async function reconcileBotConversation(
   rt: Pick<BotConversationRuntime, "configure" | "catalog">,
 ): Promise<Bot> {
   const row = await findBotRow(id);
-  await rt.configure(Number(row.conversationId), await rowConfig(row, rt));
+  await rt.configure(conversationRef(row.conversationId), await rowConfig(row, rt));
   return toBot(row);
 }
 
@@ -265,7 +276,7 @@ export async function submitToBot(
 ): Promise<{ bot: Bot; attachments?: AttachmentRef[] }> {
   const row = await findBotRow(id);
   const resolved = await resolveAttachments(submission, modelSeesImages(rt.catalog, row.modelId));
-  const conversation = Number(target?.routineConversationId ?? row.conversationId);
+  const conversation = conversationRef(target?.routineConversationId ?? row.conversationId);
   await rt.configure(conversation, await rowConfig(row, rt, target !== undefined));
   await rt.submit(conversation, {
     requestId: submission.requestId,

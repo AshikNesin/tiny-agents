@@ -25,7 +25,12 @@ import {
   type FinishedReply,
 } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
-import { submitToBot, type Bot, type BotConversationRuntime } from "./bots.conversation";
+import {
+  conversationRef,
+  submitToBot,
+  type Bot,
+  type BotConversationRuntime,
+} from "./bots.conversation";
 import type { ChatRead } from "./bots.settled";
 
 /** What the Delivery module needs from the runtime. */
@@ -125,7 +130,7 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
         })
         .onConflictDoNothing();
     }
-    const queued = rt.isBusy(Number(target.conversationId));
+    const queued = rt.isBusy(conversationRef(target.conversationId));
     await submitToBot(
       input.toBotId,
       { requestId: input.requestId, text: input.prompt, peer: input.peer },
@@ -138,7 +143,7 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     // A target that already replied and went idle before the row was marked
     // delivered had its idle pass skip this row: answer it now. A target
     // still busy answers it on its own idle.
-    const conversationId = Number(target.conversationId);
+    const conversationId = conversationRef(target.conversationId);
     if (!rt.isBusy(conversationId)) {
       void answer(conversationId).catch((error: unknown) =>
         logger.warn({ error, conversationId }, "Answering a fast Delivery failed"),
@@ -223,7 +228,8 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
       .innerJoin(bots, eq(bots.id, botMessages.toBotId))
       .where(unanswered);
     let answered = 0;
-    for (const { conversationId } of pending) answered += await answer(Number(conversationId));
+    for (const { conversationId } of pending)
+      answered += await answer(conversationRef(conversationId));
     return answered;
   }
 

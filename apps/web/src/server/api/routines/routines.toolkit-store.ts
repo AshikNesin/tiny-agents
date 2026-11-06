@@ -77,17 +77,16 @@ export function createRoutineStore(): RoutineStore {
       if (existing) return toRecord(await service.get(existing.id));
       const schedule = checkedSchedule(input.schedule);
       try {
+        // The key rides on the insert itself, so a replay racing (or
+        // following a crash in) this create still finds the one routine.
         const routine = await service.create({
           botId: owner.bot.id,
           name: input.name,
           prompt: input.prompt,
           schedule,
           enabled: true,
+          ...(input.idempotencyKey ? { sourceKey: input.idempotencyKey } : {}),
         });
-        await db
-          .update(routines)
-          .set({ sourceKey: input.idempotencyKey })
-          .where(eq(routines.id, routine.id));
         return toRecord(routine);
       } catch (error) {
         throw new Error(reasonOf(error));

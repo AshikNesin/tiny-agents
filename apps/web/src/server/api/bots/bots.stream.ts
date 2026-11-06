@@ -21,7 +21,7 @@ import { chatCards } from "../routines/routines.cards";
 import { onBotChatEvent } from "./bots.events";
 import { getAgentRuntime } from "./bots.runtime";
 import { watchBot } from "./bots.viewers";
-import type { BotRow } from "./bots.conversation";
+import { conversationRef, type BotRow } from "./bots.conversation";
 
 /** Where a followed chat goes: an SSE response, or a test's recorder. */
 export interface BotChatSink {
@@ -54,7 +54,7 @@ export async function followBotChat(
       }
     }
   };
-  const conversation = Number(bot.conversationId);
+  const conversation = conversationRef(bot.conversationId);
   // Card and YOLO events that arrive before their first state is written.
   let held: BotStreamEvent[] | null = [];
   const send = (event: BotStreamEvent) => (held ? held.push(event) : sink.write(event));

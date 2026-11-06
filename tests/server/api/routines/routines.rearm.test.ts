@@ -16,7 +16,7 @@ import { db, jobs, routineRuns, routines } from "../../../../apps/web/src/server
 import {
   ROUTINE_FIRE_JOB,
   rearmRoutines,
-} from "../../../../apps/web/src/server/api/routines/routines.chain";
+} from "../../../../apps/web/src/server/api/routines/routines.arming";
 import { registerRoutineJobs } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import { runRequestId } from "../../../../apps/web/src/server/api/routines/routines.runs";
 import { routineRunsStep } from "../../../../apps/web/src/server/api/routines/routines.watcher";
