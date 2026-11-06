@@ -135,7 +135,12 @@ await journey(
     const composer = page.getByPlaceholder(new RegExp(`(?:ask|message) ${name}`, "i"));
     const panel = page.getByTestId("browser-panel");
     const toggle = page.getByTestId("browser-toggle");
-    const echoes = (n) => expect(page.getByText(/^Echo:/)).toHaveCount(n, { timeout: 90_000 });
+    // Count replies in the transcript only: the sidebar's last-message preview
+    // ("<bot> now Echo:") also matches, and on a phone it sits in the closed drawer.
+    const echoes = (n) =>
+      expect(page.getByRole("region", { name: "Messages" }).getByText(/^Echo:/)).toHaveCount(n, {
+        timeout: 90_000,
+      });
     const browse = async (n) => {
       await composer.fill(`/browse ${n}`);
       await composer.press("Enter");

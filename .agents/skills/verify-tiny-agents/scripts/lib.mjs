@@ -134,6 +134,17 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
   await context.route("**/@vite/client", (route) =>
     route.fulfill({ contentType: "application/javascript", body: NOOP_VITE_CLIENT }),
   );
+  // index.html loads a third-party feedback widget (feedbackbee) with an async
+  // script, which still holds the page's load event: a slow answer stalls every
+  // page.goto/reload that waits for "load". Fetch it with a 5 s cap and abort
+  // when slower; the app then shows its "Feedback isn't available" path.
+  await context.route("https://feedbackbee.nesin.workers.dev/**", async (route) => {
+    try {
+      await route.fulfill({ response: await route.fetch({ timeout: 5_000 }) });
+    } catch {
+      await route.abort().catch(() => {});
+    }
+  });
   const page = await context.newPage();
   const consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(String(e)));
