@@ -113,7 +113,7 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
   await step("delete one file from its row (no confirm)", async () => {
     await page.getByRole("button", { name: `Delete ${renamed}` }).click();
     await expect(row(renamed)).toHaveCount(0);
-    expect((await listFolder()).map((f) => f.name)).not.toContain(renamed);
+    await expect.poll(async () => (await listFolder()).map((f) => f.name)).not.toContain(renamed);
   });
   await step(
     "Select All Files selects every file (the folder's .keep marker too); Clear resets",
@@ -134,7 +134,13 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
       await expect(confirm).toContainText("Delete 1 file?");
       await confirm.getByRole("button", { name: "Delete" }).click();
       await expect(row(binName)).toHaveCount(0);
-      expect((await listFolder()).filter((f) => !f.isDirectory && f.name !== ".keep")).toEqual([]);
+      // The row leaves the UI before the DELETE resolves: poll the server.
+      await expect
+        .poll(
+          async () => (await listFolder()).filter((f) => !f.isDirectory && f.name !== ".keep"),
+          { timeout: 15_000 },
+        )
+        .toEqual([]);
     },
   );
   await step("back to root via the breadcrumb, delete the folder after confirming", async () => {

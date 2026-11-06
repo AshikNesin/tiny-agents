@@ -277,7 +277,9 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
     await page.getByRole("switch", { name: "Available to bots" }).click();
     await expect(page.getByText("Bots can use this tool")).toBeVisible();
     await expect(page.getByText("Off for every bot")).toHaveCount(0);
-    expect((await api.get(`/connections/${id}/tools/reset`)).enabled).toBe(true);
+    await expect
+      .poll(async () => (await api.get(`/connections/${id}/tools/reset`)).enabled)
+      .toBe(true);
     await expect.poll(async () => toolNames(await capability()).join(",")).toContain("reset");
   });
 

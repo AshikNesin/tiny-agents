@@ -195,7 +195,9 @@ await journey("jobs-admin", async ({ page, step, proof, cleanup, api, stamp }) =
     await expect(page.getByText("Scheduled job has been cancelled")).toBeVisible();
     await expect(cancelButton()).toHaveCount(0);
     await expect(page.getByText(CRON_EDITED, { exact: true })).toHaveCount(0);
-    expect((await api.get("/jobs/schedule")).some((s) => s.name === schedName)).toBe(false);
+    await expect
+      .poll(async () => (await api.get("/jobs/schedule")).some((s) => s.name === schedName))
+      .toBe(false);
     // Cancelling the schedule leaves already-queued jobs of that type alone.
     expect((await job(parked)).state).toBe("created");
   });

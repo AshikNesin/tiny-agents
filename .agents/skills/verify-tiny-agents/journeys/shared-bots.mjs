@@ -198,7 +198,9 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     const confirm = page.getByRole("alertdialog", { name: `Remove ${guest.name}?` });
     await confirm.getByRole("button", { name: "Remove", exact: true }).click();
     await expect(guestRow()).toHaveCount(0);
-    expect((await api.get("/people")).guests.some((g) => g.id === guestId)).toBe(false);
+    await expect
+      .poll(async () => (await api.get("/people")).guests.some((g) => g.id === guestId))
+      .toBe(false);
     const login = await guestPage.request.post("/api/v1/auth/login", {
       data: { email: guest.email, password: guest.password },
     });
