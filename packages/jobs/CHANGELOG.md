@@ -1,5 +1,14 @@
 # @groot/jobs
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8), [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc), [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da)]:
+  - @groot/core@1.2.0
+  - @groot/shell@1.3.0
+  - @groot/ui@0.10.0
+
 ## 1.1.0
 
 ### Minor Changes
