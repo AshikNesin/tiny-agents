@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";

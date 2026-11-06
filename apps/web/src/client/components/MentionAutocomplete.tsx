@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type Ref,
 } from "react";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { BotAvatar } from "./BotAvatar";
 
 export interface MentionableBot {

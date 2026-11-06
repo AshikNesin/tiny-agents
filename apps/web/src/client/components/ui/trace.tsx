@@ -2,7 +2,7 @@ import * as React from "react";
 import { ChevronRightIcon } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 /**
  * Trace — the step primitive that agent UIs (tool calls, reasoning, chain of

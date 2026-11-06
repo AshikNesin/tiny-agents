@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 /**
  * Chat message layout. `Message` is one turn (avatar + content column);

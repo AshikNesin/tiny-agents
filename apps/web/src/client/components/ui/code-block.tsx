@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { CheckIcon, CopyIcon } from "lucide-react";
 
 import { Button } from "@groot/ui/button";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 /**
  * Code block: header (title + actions), scrollable content, optional footer.

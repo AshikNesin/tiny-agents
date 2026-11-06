@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingState, monoClass } from "@groot/ui";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import {

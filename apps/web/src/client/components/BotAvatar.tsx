@@ -1,4 +1,4 @@
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 interface BotAvatarProps {
   name: string;

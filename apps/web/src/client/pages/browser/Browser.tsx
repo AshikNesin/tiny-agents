@@ -27,7 +27,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingSpinner, LoadingState } from "@groot/ui";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { browserPageApi, type PageBrowser, type PageBrowserList } from "../../lib/browser-page-api";
 import { errorMessage } from "../../lib/errors";

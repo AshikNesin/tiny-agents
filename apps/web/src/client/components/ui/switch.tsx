@@ -4,7 +4,7 @@ import * as React from "react";
 import { Switch as SwitchPrimitive } from "radix-ui";
 import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 /**
  * Toggle switch with Fluid Functionalism's thumb

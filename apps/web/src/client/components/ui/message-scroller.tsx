@@ -15,7 +15,7 @@ import {
 import { ArrowDownIcon } from "lucide-react";
 
 import { Button } from "@groot/ui/button";
-import { cn } from "@groot/shell/lib/utils";
+import { cn } from "@groot/ui/lib/utils";
 
 /**
  * Chat transcript scroller (stick-to-bottom while streaming, anchor-aware
