@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { ApprovalNotPendingError, type AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
@@ -216,12 +216,12 @@ describe("capabilities and approvals", () => {
           : undefined,
       "approval card",
     );
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    vi.setSystemTime(Date.now() + 400);
     await runtime.decideApproval(ref, waiting.taskId!, "approved");
     await until(() => finalText(events), "reply");
 
     const done = toolCall(events, "send_email")!;
-    expect(done.waitedMs).toBeGreaterThanOrEqual(350);
+    expect(done.waitedMs).toBe(400);
     expect(done.durationMs).toBeLessThan(done.waitedMs!);
   }, 15_000);
 

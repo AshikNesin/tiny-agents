@@ -2,6 +2,9 @@ import { expect, afterEach } from "vite-plus/test";
 import { cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { MotionGlobalConfig } from "motion/react";
+import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
+
+pinClockWhileLoadingAndBeforeEachTest();
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);

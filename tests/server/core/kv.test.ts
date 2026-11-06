@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv, kv, purgeExpiredKv } from "@groot/core/kv";
 
 describe("kv", () => {
@@ -48,10 +48,10 @@ describe("kv", () => {
   it("expires entries", async () => {
     await kv.set("ttl", "soon", 1);
     await kv.set("keep", "forever");
-    await new Promise((r) => setTimeout(r, 5));
+    vi.setSystemTime(Date.now() + 5);
     expect(await kv.get("ttl")).toBeUndefined();
     await kv.set("ttl2", "soon", 1);
-    await new Promise((r) => setTimeout(r, 5));
+    vi.setSystemTime(Date.now() + 5);
     expect(await purgeExpiredKv()).toBe(1);
     expect(await kv.get("keep")).toBe("forever");
   });

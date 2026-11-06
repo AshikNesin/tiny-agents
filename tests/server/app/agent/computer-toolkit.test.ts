@@ -6,7 +6,7 @@
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import {
   createComputerSessions,
@@ -21,6 +21,7 @@ import { FAKE_JPEG, fakeComputer, type FakeComputer } from "./computer-fakes";
 
 const sessionsList: ComputerSessions[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.allSettled(sessionsList.splice(0).map((s) => s.closeAll()));
 });
 
@@ -239,10 +240,13 @@ describe("computer toolkit", () => {
   });
 
   it("gives up on an action after the bounded wait, without acting", async () => {
+    vi.useFakeTimers();
     const { fake, sessions, toolkit } = setup({ humanDriverWaitMs: 30 });
     await run(toolkit, "computer_screenshot");
     await sessions.setDriver("shared", "human");
-    const result = await run(toolkit, "computer_type", { text: "hello" });
+    const pending = run(toolkit, "computer_type", { text: "hello" });
+    await vi.advanceTimersByTimeAsync(30);
+    const result = await pending;
     expect(result.isError).toBe(true);
     expect(result.text).toMatch(/owner is driving/);
     expect(methods(fake)).toEqual(["screenshot"]);

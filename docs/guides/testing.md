@@ -129,6 +129,38 @@ Call them directly; the database is real, so there is nothing to mock
 (`tests/server/core/kv.test.ts`, `tests/server/jobs/queue.test.ts`). Reach for
 `vi.mock` only for external services.
 
+### Dates and time
+
+Both setup files call `pinClockWhileLoadingAndBeforeEachTest()` from
+`tests/test-clock.ts`. It runs `vi.setSystemTime(FIXED_NOW)` when the setup
+loads and again before every test, so `Date` reports `FIXED_NOW` on any real
+day and does not tick. That covers a test file's module scope too,
+such as a token minted at the top of the file. Only `Date` is faked:
+`setTimeout`, `setInterval` and `performance.now()` stay real.
+
+- A fixture that must lie in the future uses `futureIso(days)`, never a date
+  literal. A literal passes on the day it is written and fails once the real
+  clock passes it. Against the frozen clock it gives the same result on any
+  day.
+- A test that needs another instant calls `vi.setSystemTime(...)` in its body.
+  The next test starts at `FIXED_NOW` again.
+- A test that needs time to pass (a TTL that lapses, a measured wait, two calls
+  that need distinct milliseconds) moves the frozen clock forward with
+  `vi.setSystemTime(Date.now() + ms)` instead of sleeping, as in
+  `tests/server/core/kv.test.ts`.
+- Code that reads `Date.now()` between timers, such as a deadline loop, runs
+  under `vi.useFakeTimers()` with `await vi.advanceTimersByTimeAsync(ms)`. The
+  default fakes `Date` too, starting at `FIXED_NOW`, so both move together
+  (`tests/server/app/agent/computer-toolkit.test.ts`). Reset with
+  `vi.useRealTimers()` in `afterEach`.
+- `vi.useFakeTimers({ toFake: [...] })` without `"Date"` in the list puts the
+  real clock back for the rest of that test
+  (`tests/server/api/notifications/notifications.wiring.test.ts`). List
+  `"Date"` when the test writes or compares dates.
+- Do not call `vi.useRealTimers()` to opt a test out of the frozen clock. A row
+  written at the real time is later read against `FIXED_NOW`, and the result
+  depends on the day the suite runs. Call it only to undo `vi.useFakeTimers()`.
+
 ## Coverage checklist per route
 
 1. Success path with the right status (`200`, `201`, `204`) and body shape
