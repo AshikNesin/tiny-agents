@@ -42,6 +42,7 @@ import { TerminalKeysPanel } from "./TerminalKeysPanel";
 import { errorMessage } from "../../lib/errors";
 import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from "../../lib/xterm";
 import { isMac } from "../../lib/clipboard";
+import { useFullScreen } from "../../lib/live-view";
 
 /** The modifier the terminal's font chords use on this platform. */
 const MOD = isMac() ? "⌘" : "Ctrl";
@@ -100,7 +101,8 @@ function storeFontSize(px: number): void {
   }
 }
 
-type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
+/** In full screen Escape goes to the shell (vim, less) instead of leaving it. */
+const LOCKED_KEYS = ["Escape"];
 
 export function TerminalPage() {
   const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
@@ -111,11 +113,16 @@ export function TerminalPage() {
   const [active, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
   const [creating, setCreating] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(readKeysOpen);
   const [fontSize, setFontSize] = useState(readFontSize);
   const confirm = useConfirm();
   const regionRef = useRef<HTMLDivElement>(null);
+  // Full screen is the CSS state (fixed inset-0), so it works where the
+  // Fullscreen API doesn't (iOS Safari never fullscreens a div). The API is
+  // best-effort chrome-hiding; when it does work, its events stay in sync.
+  const { fullscreen, toggleFullscreen } = useFullScreen(regionRef, LOCKED_KEYS, {
+    fallback: "css",
+  });
 
   // Live views by tab name: the keys panel writes into the active one. A ref,
   // not state, registrations happen on socket lifecycles that don't render.
@@ -211,38 +218,6 @@ export function TerminalPage() {
   const onState = useCallback((name: string, state: TerminalConnectionState) => {
     setTabStatus((prev) => (prev[name] === state ? prev : { ...prev, [name]: state }));
   }, []);
-
-  // Full screen is the CSS state (fixed inset-0), so it works where the
-  // Fullscreen API doesn't (iOS Safari never fullscreens a div). The API is
-  // best-effort chrome-hiding; when it does work, its events stay in sync.
-  useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement === regionRef.current);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  useEffect(() => {
-    const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
-    if (fullscreen) void keyboard?.lock?.(["Escape"]).catch(() => undefined);
-    else keyboard?.unlock?.();
-    return () => {
-      if (fullscreen) keyboard?.unlock?.();
-    };
-  }, [fullscreen]);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen?.();
-      return;
-    }
-    // Already pseudo-full-screen (the API was missing or refused): leave it.
-    if (fullscreen) {
-      setFullscreen(false);
-      return;
-    }
-    setFullscreen(true);
-    regionRef.current?.requestFullscreen?.().catch(() => undefined);
-  };
 
   // One size for every tab: switching tabs never changes the text size.
   const stepFont = useCallback((step: 1 | -1 | 0) => {

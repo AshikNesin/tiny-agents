@@ -14,7 +14,6 @@
  * hands the browser back; the agent continues from the tab the owner left in
  * front.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot as BotIcon,
   ClipboardPaste,
@@ -39,214 +38,88 @@ import {
   monoClass,
 } from "@groot/ui";
 import { cn } from "@groot/shell/lib/utils";
-import { toast } from "sonner";
-import { useConfirm } from "@groot/ui/primitives";
 import { Link } from "react-router-dom";
 import { useIsGuest } from "../store/people";
 import { botsApi, type BrowserStatus } from "../lib/bots-api";
 import type { Bot } from "../lib/bots-api";
-import { VncView, type VncHandle, type VncState } from "./browser/VncView";
-import { errorMessage } from "../lib/errors";
+import {
+  connectionOf,
+  panelHandoffButton as handoffButton,
+  panelHandoffLabel as handoffLabel,
+  panelNote as noteClass,
+  panelStatusPart as statusPart,
+  panelToolButton as toolButton,
+  panelToolLabel as toolLabel,
+  useLiveView,
+  usePanelWidth,
+} from "../lib/live-view";
+import { VncView } from "./browser/VncView";
 
 const WIDTH_KEY = "tiny-agents:browser-panel-width";
 const DEFAULT_WIDTH = 640;
-const MIN_WIDTH = 360;
-/** Keys the page should see in full screen instead of the browser reacting. */
-const LOCKED_KEYS = ["Escape", "Tab", "KeyW", "KeyT", "KeyN", "KeyL", "KeyR", "F5"];
-
-type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
-
-/** Room the docked panel leaves for the sidebar (256px) and a usable chat (416px). */
-const RESERVED_WIDTH = 672;
-
-function maxWidth(): number {
-  return Math.max(
-    MIN_WIDTH,
-    Math.min(Math.floor(window.innerWidth * 0.75), window.innerWidth - RESERVED_WIDTH),
-  );
-}
-
-function clampWidth(value: number): number {
-  return Math.min(maxWidth(), Math.max(MIN_WIDTH, Math.round(value)));
-}
-
-function readStoredWidth(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(WIDTH_KEY));
-    return stored > 0 ? clampWidth(stored) : clampWidth(DEFAULT_WIDTH);
-  } catch {
-    return clampWidth(DEFAULT_WIDTH);
-  }
-}
-
-/** The header is the container: tool labels show once it is wide enough for them. */
-const toolLabel = "hidden @xl:inline";
-/** Below that width a labelled tool shrinks to a square icon button. */
-const toolButton = "@max-xl:w-7 @max-xl:px-0";
-/** The hand-off control is the panel's main action, so it keeps its label longer. */
-const handoffLabel = "hidden @md:inline";
-const handoffButton = "@max-md:w-7 @max-md:px-0";
-/**
- * An optional part of the status line. Its separator belongs to it, so a part
- * squeezed out by a narrow header takes the separator along; narrower than
- * that the line is just the connection.
- */
-const statusPart = "min-w-0 truncate before:pr-1.5 before:content-['·'] @max-md:hidden";
-/** Keeps a state's explanation to a readable line length, even in full screen. */
-const noteClass = "mx-auto block max-w-sm";
 
 export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }) {
-  const [status, setStatus] = useState<BrowserStatus | null>(null);
-  const [vncState, setVncState] = useState<VncState>("connecting");
-  const [width, setWidth] = useState(readStoredWidth);
-  const [fullscreen, setFullscreen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const vncRef = useRef<VncHandle>(null);
-  const confirm = useConfirm();
+  const guest = useIsGuest();
+  // Desktop only: drag the left edge to size the panel.
+  const { width, startResize } = usePanelWidth(WIDTH_KEY, DEFAULT_WIDTH);
+  const view = useLiveView<BrowserStatus, BrowserStatus>({
+    kind: "browser",
+    source: bot.id,
+    // The session may start on the bot's first browser tool call, or from
+    // "Open browser"; the poll follows either.
+    load: () => botsApi.browserStatus(bot.id),
+    select: (status) => status,
+    replace: (_, status) => status,
+    driver: (driver) => botsApi.browserDriver(bot.id, driver),
+    start: () => botsApi.browserStart(bot.id),
+    reset: () => botsApi.browserResetProfile(bot.id),
+    startFailed: "Failed to open the browser",
+    // Bots share one browser profile unless set to their own, so a reset can
+    // sign every one of them out: say which before wiping.
+    resetCopy: (status) =>
+      status?.profile !== "own"
+        ? {
+            confirm: {
+              title: "Reset the shared browser?",
+              description:
+                "This closes the browser that every bot on the shared profile uses and deletes its cookies and logins, so all of those bots are signed out of every site.",
+              confirmLabel: "Reset",
+              destructive: true,
+            },
+            done: "Shared browser wiped; the next session starts fresh.",
+          }
+        : {
+            confirm: {
+              title: "Reset this bot's browser?",
+              description: "This closes the browser and deletes its cookies and logins.",
+              confirmLabel: "Reset",
+              destructive: true,
+            },
+            done: "Browser profile wiped; the next session starts fresh.",
+          },
+  });
+  const {
+    status,
+    humanDrives,
+    vncRef,
+    vncState,
+    setVncState,
+    regionRef: panelRef,
+    fullscreen,
+    toggleFullscreen,
+    setDriver,
+    start: openBrowser,
+    reset: resetProfile,
+    paste: pasteClipboard,
+  } = view;
 
-  const humanDrives = status?.driver === "human";
   const starting = Boolean(status?.starting);
   const mode = status?.active ? (status.mode ?? "headless") : null;
-
-  const refresh = useCallback(async () => {
-    try {
-      setStatus(await botsApi.browserStatus(bot.id));
-    } catch {
-      /* the panel stays on the last known status */
-    }
-  }, [bot.id]);
-
-  // Poll status: the session may start on the bot's first browser tool call,
-  // or from "Open browser" (faster while it opens).
-  const pollMs = starting ? 1500 : 4000;
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), pollMs);
-    return () => clearInterval(timer);
-  }, [refresh, pollMs]);
-
-  useEffect(() => {
-    if (!status?.active) setVncState("connecting");
-  }, [status?.active]);
-
-  useEffect(() => {
-    const onChange = () => {
-      const full = document.fullscreenElement === panelRef.current;
-      setFullscreen(full);
-      const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
-      if (full) void keyboard?.lock?.(LOCKED_KEYS).catch(() => undefined);
-      else keyboard?.unlock?.();
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    const panel = panelRef.current;
-    if (!panel?.requestFullscreen) {
-      toast.error("Full screen is not available in this browser.");
-      return;
-    }
-    void panel.requestFullscreen().catch(() => toast.error("Could not enter full screen."));
-  };
-
-  const setDriver = async (driver: "agent" | "human") => {
-    try {
-      await botsApi.browserDriver(bot.id, driver);
-      setStatus((s) => (s ? { ...s, driver } : s));
-      // Releasing makes the agent adopt the tab the owner left in front.
-      if (driver === "agent") await refresh();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to switch driver"));
-    }
-  };
-
-  const openBrowser = async () => {
-    try {
-      await botsApi.browserStart(bot.id);
-      await refresh();
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to open the browser"));
-    }
-  };
-
-  // Bots share one browser profile unless set to their own, so a reset can
-  // sign every one of them out: say which before wiping.
   const sharedProfile = status?.profile !== "own";
-  const guest = useIsGuest();
   // The Browser page (issue #160) is the owner's; it opens on this browser.
   const pageLink = `/browser?profile=${encodeURIComponent(sharedProfile ? "shared" : `bot-${bot.id}`)}`;
-  const resetProfile = async () => {
-    const ok = await confirm({
-      title: sharedProfile ? "Reset the shared browser?" : "Reset this bot's browser?",
-      description: sharedProfile
-        ? "This closes the browser that every bot on the shared profile uses and deletes its cookies and logins, so all of those bots are signed out of every site."
-        : "This closes the browser and deletes its cookies and logins.",
-      confirmLabel: "Reset",
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await botsApi.browserResetProfile(bot.id);
-      setStatus((s) => (s ? { ...s, active: false, url: null, driver: null, mode: null } : s));
-      toast.success(
-        sharedProfile
-          ? "Shared browser wiped; the next session starts fresh."
-          : "Browser profile wiped; the next session starts fresh.",
-      );
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to reset"));
-    }
-  };
 
-  const pasteClipboard = () => {
-    void vncRef.current?.paste().catch(() => {
-      toast.error("Could not read the clipboard. Allow clipboard access and try again.");
-    });
-  };
-
-  // Desktop only: drag the left edge to size the panel. The remote browser
-  // refits itself to whatever the panel becomes.
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX;
-    const startWidth = width;
-    let latest = width;
-    const move = (e: PointerEvent) => {
-      latest = clampWidth(startWidth + (startX - e.clientX));
-      setWidth(latest);
-    };
-    const stop = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", stop);
-      handle.removeEventListener("pointercancel", stop);
-      try {
-        window.localStorage.setItem(WIDTH_KEY, String(latest));
-      } catch {
-        /* storage unavailable: the size just won't persist */
-      }
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", stop);
-    handle.addEventListener("pointercancel", stop);
-  };
-
-  const connection = (() => {
-    if (starting) return { label: "Starting", dot: "animate-pulse bg-muted-foreground" };
-    if (!mode) return { label: "Closed", dot: "bg-muted-foreground" };
-    if (mode === "headless") return { label: "Headless", dot: "bg-muted-foreground" };
-    if (vncState === "live") return { label: "Live", dot: "bg-success" };
-    return {
-      label: vncState === "connecting" ? "Connecting" : "Reconnecting",
-      dot: "animate-pulse bg-warning",
-    };
-  })();
+  const connection = connectionOf(status && { starting, mode }, vncState);
   // The streamed Chrome has its own address bar, so the agent's last URL goes
   // while the owner drives.
   const url = mode && !(mode === "vnc" && humanDrives) ? status?.url : null;
