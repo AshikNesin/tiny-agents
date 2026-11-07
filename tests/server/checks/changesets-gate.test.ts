@@ -30,6 +30,7 @@ type Gate = {
   collect: (state: {
     rootDir?: string;
     changedFiles: string[];
+    changedEntries?: { file: string; pkgJsonBefore?: string; pkgJsonAfter?: string }[];
     changesetFiles: { name: string; body: string; added: boolean }[];
     noReleaseReason?: string | null;
     workspacePackages: string[];

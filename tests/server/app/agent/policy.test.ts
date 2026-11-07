@@ -74,12 +74,13 @@ describe("compilePolicy", () => {
       [],
     ],
   ] as const)("%s", (_case, selection, allow, review, removed) => {
-    const policy = compile(selection as Partial<CapabilitySelection>);
+    const selected: Partial<CapabilitySelection> = selection;
+    const policy = compile(selected);
     expect(policy.permissions.allow).toEqual(allow);
     expect(policy.permissions.review).toEqual(review);
     expect(policy.remove.map((t) => t.name)).toEqual(removed);
     expect(policy.extensions).toEqual([mail.extension]);
-    expect(policy.permissions.unattended).toBe(selection.unattended ? true : undefined);
+    expect(policy.permissions.unattended).toBe(selected.unattended ? true : undefined);
   });
 
   it("ignores capabilities that are not in the catalog or not installed", () => {

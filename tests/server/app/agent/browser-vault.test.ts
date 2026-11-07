@@ -4,7 +4,7 @@
  * the keys filled, and `request_credentials` waits for the owner's sheet,
  * holds no value, and resumes with the outcome.
  */
-import type { Context as PiContext } from "@earendil-works/pi-ai";
+import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
@@ -121,7 +121,7 @@ function loginBroker(): VaultBroker & { uses: VaultUse[] } {
 }
 
 /** Faux model: runs `steps` in order, one tool call per turn, then reports every result. */
-function script(steps: [string, Record<string, unknown>][]) {
+function script(steps: [string, JsonObject][]) {
   return (context: PiContext) => {
     const done = context.messages.filter((m) => m.role === "toolResult").length;
     if (done < steps.length) {
@@ -174,7 +174,7 @@ afterEach(async () => {
 
 async function open(
   page: ReturnType<typeof fakePage>,
-  steps: [string, Record<string, unknown>][],
+  steps: [string, JsonObject][],
   options: { unattended?: boolean } = {},
 ) {
   const tracker = new WaitTracker();
@@ -201,7 +201,9 @@ async function open(
   });
   await sessions.acquire(conversationBrowserTarget(Number(ref)));
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   return { runtime, ref, events, broker };
 }
 
@@ -256,7 +258,7 @@ describe("browser_fill_secret", () => {
 });
 
 describe("request_credentials", () => {
-  const ask = {
+  const ask: JsonObject = {
     title: "Sign in to Umami",
     purpose: "Read the analytics",
     fields: [

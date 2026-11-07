@@ -38,6 +38,7 @@ const model: ModelInfo = {
   family: "other",
   reasoning: false,
   contextWindow: 128000,
+  vision: false,
 };
 
 const HOST: Bot = {
@@ -54,14 +55,29 @@ const HOST: Bot = {
   skillIds: [],
   connectionIds: [],
   memoryEnabled: true,
+  autoReview: false,
+  browserProfile: "shared",
   pinnedAt: null,
+  guestIds: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
 
 function seedStore(bots: Array<{ id: string; name: string; description: string }>) {
   useBotsStore.setState({
-    bots: bots.map((bot) => ({ ...bot, conversationId: "c", unread: false, replying: false })),
+    bots: bots.map((bot) => ({
+      ...bot,
+      conversationId: "c",
+      modelId: "test-model",
+      lastMessagePreview: null,
+      lastActivityAt: HOST.lastActivityAt,
+      lastReadAt: null,
+      unread: false,
+      replying: false,
+      approvals: 0,
+      questions: 0,
+      pinnedAt: null,
+    })),
     gatewayConfigured: true,
   });
 }

@@ -178,11 +178,14 @@ describe("browser sessions", () => {
     );
     const sessions = createBrowserSessions({ transport: failing, profilesDir });
     await expect(sessions.acquire(TARGET)).rejects.toThrow("no display");
-    expect(sessions.openState(TARGET).error).toMatch(/no display/);
+    expect(sessions.openState(TARGET)).toEqual({
+      opening: false,
+      error: expect.stringMatching(/no display/),
+    });
 
     await expect(sessions.close(TARGET, { wipeProfile: true })).rejects.toThrow("VM unreachable");
 
-    expect(sessions.openState(TARGET).error).toBeUndefined();
+    expect(sessions.openState(TARGET)).toEqual({ opening: false });
     rmSync(profilesDir, { recursive: true, force: true });
   });
 

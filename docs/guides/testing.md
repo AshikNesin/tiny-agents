@@ -60,6 +60,11 @@ tests/
 sync with the source they exercise (`TEST_AREA_OWNERSHIP` in
 `.groot/lib/patterns.ts`); `tests/server/app` and `tests/e2e` stay project-local.
 
+`pnpm typecheck` compiles every test with the code it tests: `tsconfig.json`
+includes `tests/server`, `apps/web/tsconfig.json` includes `tests/client`, and
+`tests/e2e/tsconfig.json` covers the Playwright specs. A wrong import or a
+missing argument in a test fails there, before the suite runs.
+
 ## Patterns
 
 ### An API test
@@ -212,8 +217,8 @@ CI does not run Playwright.
 
 `.github/workflows/test.yml` runs, in order: a gitleaks scan of the commits
 the PR or push adds (`scripts/secret-scan.sh`), the static gates through
-`pnpm verify:static` (typechecks for the server, the client, typecheck
-coverage and the kit fixture, the kit export guard, the changeset gate, the
+`pnpm verify:static` (typechecks for the server, the client, the e2e specs,
+typecheck coverage and the kit fixture, the kit export guard, the changeset gate, the
 checks-coverage guard, lint + format, the doc reference check, the
 design-token check, and a migration freshness check that `pnpm db:generate`
 adds no migration; the list lives in `scripts/gates.mjs`), server and client

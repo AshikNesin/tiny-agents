@@ -9,7 +9,12 @@ import type { ThreadEvent, ThreadSnapshot, TranscriptItem } from "@tiny-agents/c
 import { NO_PARTIAL, ThreadFeed } from "@tiny-agents/code/server";
 import { collect, threadEventProblems } from "@tiny-agents/code/testing";
 
-const user = (id: string, text: string): TranscriptItem => ({ kind: "user", id, text });
+const user = (id: string, text: string): TranscriptItem => ({
+  kind: "user",
+  id,
+  text,
+  attachments: [],
+});
 const answer = (id: string, text: string): TranscriptItem => ({ kind: "assistant", id, text });
 
 function snapshot(items: TranscriptItem[], working = false): ThreadSnapshot {

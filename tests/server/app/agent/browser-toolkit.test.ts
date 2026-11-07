@@ -56,7 +56,7 @@ async function run(
   const tool = capability.extension.tools!.find((t) => t.name === name)!;
   const result = (await tool.execute(
     args as never,
-    { conversationId } as ToolExecutionApi,
+    { conversationId } as unknown as ToolExecutionApi,
     BACKGROUND_CONTEXT,
   )) as ToolExecutionResult;
   const text = (result.output ?? []).map((b) => (b.type === "text" ? b.text : "")).join("");

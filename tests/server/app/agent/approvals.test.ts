@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
+import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { approvalOf } from "../../../../packages/agent/src/approvals";
@@ -69,7 +69,7 @@ function mailCapability(mailer: Mailer): Capability {
 }
 
 /** Faux model: calls `tool` once, then answers with the tool result it got. */
-function callThenReport(tool: string, args: Record<string, unknown>) {
+function callThenReport(tool: string, args: JsonObject) {
   return (context: PiContext) => {
     const last = context.messages.at(-1);
     if (last?.role === "toolResult") {
@@ -148,7 +148,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "check mail" });
     expect(await until(() => finalText(events), "reply")).toBe("2 unread");
     expect(toolCall(events, "read_inbox")).toMatchObject({ status: "done", output: "2 unread" });
@@ -165,7 +167,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email ana" });
 
     const waiting = await until(
@@ -199,7 +203,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email ana" });
     const waiting = await until(
       () =>
@@ -226,7 +232,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: { send_email: "ask" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email bo" });
     const waiting = await until(
       () =>
@@ -250,7 +258,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: {}, unattended: true },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email di" });
 
     expect(await until(() => finalText(events), "reply")).toMatch(/needs the owner's approval/);
@@ -270,7 +280,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: { send_email: "allow" }, unattended: true },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email ed" });
     expect(await until(() => finalText(events), "reply")).toBe("Sent to ed@x.dev");
     expect((await runtime.finishedReplies(ref)).some((reply) => reply.refused)).toBe(false);
@@ -298,7 +310,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: { send_email: "allow" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "email cy" });
     expect(await until(() => finalText(events), "reply")).toBe("Sent to cy@x.dev");
 
@@ -308,7 +322,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: ["mail"], permissions: { send_email: "off" } },
     });
     events.length = 0;
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r2", text: "again" });
     await until(() => {
       const state = reduce(events);
@@ -331,7 +347,9 @@ describe("capabilities and approvals", () => {
       capabilities: { enabled: [], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "check" });
     await until(() => finalText(events) !== undefined || undefined, "reply");
     expect(toolCall(events, "read_inbox")?.status).toBe("error");
@@ -377,7 +395,9 @@ describe("decisions for calls that are not waiting", () => {
       capabilities: { enabled: ["slow"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "read" });
     const running = await until(() => {
       const call = toolCall(events, "slow_read");
@@ -415,7 +435,9 @@ describe("approvals across restarts", () => {
       capabilities: { enabled: ["mail"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await first.watchChat(ref, (batch) => events.push(...batch));
+    await first.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await first.submit(ref, { requestId: "r1", text: "email di" });
     await until(() => toolCall(events, "send_email")?.status === "awaiting_approval", "card");
     await first.close();
@@ -423,7 +445,9 @@ describe("approvals across restarts", () => {
 
     const second = await open(mailer, respond, storePath);
     const after: ChatEvent[] = [];
-    await second.watchChat(ref, (batch) => after.push(...batch));
+    await second.watchChat(ref, (batch) => {
+      after.push(...batch);
+    });
     const waiting = await until(
       () =>
         toolCall(after, "send_email")?.status === "awaiting_approval"
@@ -452,7 +476,9 @@ describe("approvals across restarts", () => {
       capabilities: { enabled: ["mail"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await first.watchChat(ref, (batch) => events.push(...batch));
+    await first.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await first.submit(ref, { requestId: "r1", text: "email ed" });
     const waiting = await until(
       () =>
@@ -472,7 +498,9 @@ describe("approvals across restarts", () => {
     mailer.hold = undefined;
     const second = await open(mailer, respond, storePath);
     const after: ChatEvent[] = [];
-    await second.watchChat(ref, (batch) => after.push(...batch));
+    await second.watchChat(ref, (batch) => {
+      after.push(...batch);
+    });
     expect(await until(() => finalText(after), "reply")).toMatch(/interrupted/);
     expect(mailer.sent).toEqual(["ed@x.dev"]);
     expect(toolCall(after, "send_email")).toMatchObject({ status: "interrupted" });

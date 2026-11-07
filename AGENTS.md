@@ -1,9 +1,9 @@
 # tiny-agents agent index
 
-Use **pnpm** for everything, never npm, yarn or a bare `vp`. Run `pnpm install`
-in each new worktree, or its git hooks never run. Pre-commit runs gitleaks and
-staged lint, pre-push runs `pnpm typecheck`, and `pnpm verify:static` runs the
-gates CI runs. Guides start at [`docs/README.md`](./docs/README.md).
+Use **pnpm**, never npm, yarn or a bare `vp`. Run `pnpm install` in each new
+worktree, or its git hooks never run. Pre-commit runs gitleaks and staged lint,
+and `pnpm verify:static` runs the gates CI runs. Guides start at
+[`docs/README.md`](./docs/README.md).
 
 ## Rules and their enforcers
 
@@ -16,6 +16,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Read env through `appEnv()` or core `env`, never `process.env`.    | R3                                                |
 | Import `cn` from `@groot/ui/lib/utils`.                            | R4                                                |
 | Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`. | R5a, R5b, R5c                                     |
+| Code and every test under `tests/` typecheck.                      | `pnpm typecheck`, run by the pre-push hook        |
 | No unused file or export.                                          | `pnpm check:dead`                                 |
 | Every path, link and `pnpm` script a doc names exists.             | `pnpm check:doc-refs`                             |
 | UI colors come from design tokens.                                 | `pnpm check:tokens`                               |
@@ -38,8 +39,7 @@ pages are also checked by `tests/client/guest-access-nav.test.tsx`.
 
 When the operator corrects an agent, fix the mistake and add its row. If the
 row was already here with no enforcer, fix it higher (structure, type, lint,
-test) in the same change. The breadcrumb `<li>` nesting was fixed twice (#76,
-#172) before a lint made it fail.
+test) in the same change.
 
 ## Where to look
 

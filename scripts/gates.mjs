@@ -12,6 +12,7 @@ const MIGRATIONS_DIR = "apps/web/drizzle";
 export const gates = [
   { name: "Typecheck (server)", run: "pnpm exec tsc --noEmit" },
   { name: "Typecheck (client)", run: "pnpm typecheck:client" },
+  { name: "Typecheck (e2e tests)", run: "pnpm typecheck:e2e" },
   { name: "Typecheck coverage", run: "pnpm exec tsx scripts/check-typecheck-coverage.ts" },
   { name: "Typecheck kit consumers", run: "pnpm typecheck:kit" },
   {

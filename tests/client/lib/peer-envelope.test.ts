@@ -17,8 +17,7 @@ describe("parsePeerEnvelope", () => {
 
   it("parses a relayed reply without markdown asterisks", () => {
     const parsed = parsePeerEnvelope("Reply from Radar: plain text");
-    expect(parsed?.kind).toBe("reply");
-    expect(parsed?.name).toBe("Radar");
+    expect(parsed).toMatchObject({ kind: "reply", name: "Radar" });
   });
 
   it("parses a message_bot delivery", () => {

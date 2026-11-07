@@ -53,6 +53,8 @@ const routine: Routine = {
   enabled: true,
   // 2026-10-21T03:30:00Z = 09:00 IST Wed; crosses the UTC day boundary.
   nextRunAt: "2026-10-21T03:30:00.000Z",
+  blockedStreak: 0,
+  pausedReason: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 };
@@ -145,7 +147,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect(await screen.findByText("Every 15 minutes")).toBeTruthy();
     expect(screen.getAllByText(/IST$/).length).toBeGreaterThanOrEqual(3);
 
-    await user.click(screen.getByRole("button", { name: "Create", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -173,7 +175,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getAllByText(/\d{2}:\d{2} IST/).length).toBe(3);
 
-    await user.click(screen.getByRole("button", { name: "Create", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock.mock.calls[0][0].schedule).toEqual({ kind: "cron", expr: "30 18 * * *" });
   });
@@ -200,7 +202,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
       2,
     );
     await fillBasics(user);
-    await user.click(screen.getByRole("button", { name: "Create", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock.mock.calls[0][0].schedule).toEqual({
       kind: "once",
@@ -262,7 +264,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
       screen.getByLabelText("Prompt"),
       "Summarize what changed in my repos overnight and flag anything urgent",
     );
-    await user.click(screen.getByRole("button", { name: "Create", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock.mock.calls[0][0]).toMatchObject({

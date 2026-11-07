@@ -4,7 +4,7 @@
  * always-allow, the takeover request shows as its own card, and a vault
  * value typed into a window never reaches the model or the transcript.
  */
-import type { Context as PiContext } from "@earendil-works/pi-ai";
+import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability, ToolPermission } from "../../../../packages/agent/src/capabilities";
@@ -34,7 +34,7 @@ import { fakeComputer } from "./computer-fakes";
 
 const CANARY = "canary-pw-77c1d0e2";
 
-function callThenReport(tool: string, args: Record<string, unknown>) {
+function callThenReport(tool: string, args: JsonObject) {
   return (context: PiContext) => {
     const last = context.messages.at(-1);
     if (last?.role === "toolResult") {
@@ -97,7 +97,9 @@ async function openWith(
     capabilities: { enabled: [capability.id], permissions },
   });
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   return { runtime, ref, events };
 }
 

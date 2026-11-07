@@ -38,7 +38,11 @@ function renderOverlay(props: Partial<Parameters<typeof MentionAutocomplete>[0]>
   // The composer owns focus, so keys reach the overlay through its handle.
   const press = (key: string) =>
     act(() => {
-      expect(handle.current!.handleKeyDown(new KeyboardEvent("keydown", { key }))).toBe(true);
+      expect(
+        handle.current!.handleKeyDown(
+          new KeyboardEvent("keydown", { key }) as unknown as React.KeyboardEvent,
+        ),
+      ).toBe(true);
     });
   return { onSelect, onClose, press, rerender, handle };
 }

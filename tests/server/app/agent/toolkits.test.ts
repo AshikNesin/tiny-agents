@@ -18,11 +18,9 @@ async function run(capability: Capability, name: string, args: Record<string, un
   return { ...result, text };
 }
 
-function fakeTinyFish(
-  result: unknown,
-  calls: { url: string; method: string; body: unknown; apiKey: string }[],
-  status = 200,
-) {
+type TinyFishCall = { url: string; method: string; body: unknown; apiKey: string };
+
+function fakeTinyFish(result: unknown, calls: TinyFishCall[], status = 200) {
   return (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({
       url: String(url),
@@ -36,7 +34,7 @@ function fakeTinyFish(
 
 describe("web toolkit", () => {
   it("searches through TinyFish and returns sources", async () => {
-    const calls: { url: string; method: string; body: unknown; apiKey: string }[] = [];
+    const calls: TinyFishCall[] = [];
     const web = createWebToolkit({
       apiKey: "tok",
       fetch: fakeTinyFish(
@@ -92,7 +90,7 @@ describe("web toolkit", () => {
   });
 
   it("reads a page as markdown through TinyFish Fetch", async () => {
-    const calls: { url: string; method: string; body: unknown; apiKey: string }[] = [];
+    const calls: TinyFishCall[] = [];
     const web = createWebToolkit({
       apiKey: "tok",
       fetch: fakeTinyFish(
@@ -140,7 +138,7 @@ describe("web toolkit", () => {
     expect(() => checkPublicUrl("http://localhost:3000")).toThrow(/Private/);
     expect(() => checkPublicUrl("http://192.168.1.4")).toThrow(/Private/);
     expect(() => checkPublicUrl("file:///etc/passwd")).toThrow(/http/);
-    const calls: { url: string }[] = [];
+    const calls: TinyFishCall[] = [];
     const web = createWebToolkit({
       apiKey: "tok",
       fetch: fakeTinyFish({}, calls),

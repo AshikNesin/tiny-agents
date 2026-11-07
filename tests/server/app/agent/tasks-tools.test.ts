@@ -4,6 +4,7 @@
  * flows back to the model, a create interrupted by a restart replays without
  * duplicating the task, and creates are never keyed on provider call ids.
  */
+import type { JsonObject } from "@earendil-works/pi-ai";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,7 +91,9 @@ async function settled(store: MemoryStore, replies0: ReturnType<typeof fauxAssis
     })(),
   });
   const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
-  const sub = await runtime.watchChat(ref, (batch) => events.push(...batch));
+  const sub = await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   await runtime.submit(ref, { requestId: "r1", text: "please" });
 
   const state = await until(() => {
@@ -209,7 +212,7 @@ describe("task tools (durable chat turns)", () => {
 async function interruptAndResume(
   store: MemoryStore,
   method: "create" | "remove",
-  call: { name: string; args: Record<string, unknown> },
+  call: { name: string; args: JsonObject },
 ): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "tiny-agents-tool-replay-"));
   const storePath = join(directory, "agent.db");
@@ -273,7 +276,9 @@ async function interruptAndResume(
     });
     try {
       const events: ChatEvent[] = [];
-      const sub = await second.watchChat(ref, (batch) => events.push(...batch));
+      const sub = await second.watchChat(ref, (batch) => {
+        events.push(...batch);
+      });
       const done = await until(() => {
         const state = reduce(events);
         return state && !state.busy

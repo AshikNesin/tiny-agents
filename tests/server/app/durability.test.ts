@@ -54,6 +54,10 @@ function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatSta
       };
       continue;
     }
+    if (event.type === "queued") {
+      state = { ...state, queued: event.items };
+      continue;
+    }
     state = { ...state, busy: event.busy };
   }
   return state;
@@ -171,7 +175,7 @@ describe("AgentRuntime durability", () => {
       if (typeof ref !== "number")
         throw new Error("Child reported a non-numeric conversation reference");
 
-      let state: ChatState = { messages: [], busy: false };
+      let state: ChatState = { messages: [], busy: false, queued: [] };
       const subscription = await resumed.watchChat(ref, (events) => {
         state = applyEvents(state, events);
       });

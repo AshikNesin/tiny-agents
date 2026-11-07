@@ -9,7 +9,7 @@ feature end to end.
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `pnpm dev`                                                                    | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                       |
 | `pnpm check` · `pnpm lint` · `pnpm format`                                    | Vite+ (Oxlint + Oxfmt)                                                                                          |
-| `pnpm typecheck` · `typecheck:client` · `typecheck:kit`                       | Server + client programs · client only · the kit consumer fixture                                               |
+| `pnpm typecheck` · `typecheck:client` · `typecheck:e2e` · `typecheck:kit`     | Server, client and e2e programs, tests included · client only · e2e only · the kit consumer fixture             |
 | `pnpm test` · `pnpm test:watch`                                               | Server tests (Vitest, in-memory SQLite per file)                                                                |
 | `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                        | Client tests (jsdom) · both suites · Playwright                                                                 |
 | `pnpm build`                                                                  | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                |

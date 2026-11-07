@@ -12,8 +12,9 @@ import {
   type ToolCallRow,
   type ToolOutcome,
 } from "../../../../packages/agent/src/tool-call-row";
+import type { ChatCredentialRequest, ChatVaultUse } from "../../../../packages/agent/src/types";
 
-const vault = {
+const vault: ChatVaultUse = {
   handle: "card-1",
   label: "Visa",
   kind: "card",
@@ -29,7 +30,7 @@ const request = {
   purpose: "Sign in to check the order",
   fields: [{ key: "username", label: "Username", type: "text", required: true }],
 };
-const credentialCard = (status: string) => ({
+const credentialCard = (status: ChatCredentialRequest["status"]): ChatCredentialRequest => ({
   status,
   origin: request.origin,
   title: request.title,

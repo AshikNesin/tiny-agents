@@ -33,6 +33,7 @@ import {
   botsCapability,
   setAgentRuntimeForTests,
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
+import { appEnv } from "../../../apps/web/src/server/env";
 
 export { TEST_MODEL } from "../../../packages/agent/src/testing";
 
@@ -60,7 +61,7 @@ export async function openAppRuntime(
   for (const capability of [
     botsCapability(runtime),
     // No TZ: the host's timezone, as before the server's env applied.
-    ...Object.values(appStoreCapabilities({})),
+    ...Object.values(appStoreCapabilities(appEnv({}))),
   ]) {
     runtime.installCapability(capability);
   }

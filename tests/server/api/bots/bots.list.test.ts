@@ -73,6 +73,7 @@ describe("botListStep", () => {
   const settled = (conversationId: number, messages: ChatMessage[]) => ({
     conversationId,
     chat: async () => ({ messages, busy: false, queued: [] }),
+    owner: async () => undefined,
   });
 
   it("folds the Turn's last reply into the row, with its time", async () => {

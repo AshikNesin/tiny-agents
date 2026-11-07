@@ -26,9 +26,12 @@ staged: {
 Keep `--staged`: without it `gitleaks protect` reads `git diff` (working tree
 against the index) and skips exactly the content the commit will contain.
 
-`.vite-hooks/pre-push` runs `pnpm typecheck` (the server and client programs)
-when the push updates a branch. It skips branch deletions and tag-only pushes.
-The typecheck reads the working tree, not the commits you push.
+`.vite-hooks/pre-push` runs `pnpm typecheck` (the server, client and e2e
+programs, their tests included) when the push updates a branch. It skips branch deletions and tag-only pushes.
+The typecheck reads the working tree, not the commits you push. It is
+incremental: each program keeps its state in `node_modules/.cache/tsc/`, so a
+push after a small edit rechecks only what changed. CI runs the same programs
+from scratch through `pnpm verify:static`.
 
 The Tests workflow runs a pinned gitleaks through `scripts/secret-scan.sh` on
 the commits each event adds: `origin/<base>..HEAD` on a PR and

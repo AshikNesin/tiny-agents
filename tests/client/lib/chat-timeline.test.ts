@@ -34,7 +34,9 @@ const shape = (items: ReturnType<typeof chatTimeline>) =>
   items.map((item) =>
     item.kind === "message"
       ? `${item.message.id}#${item.index}`
-      : `runs:${item.runs.map((run) => run.id).join("+")}`,
+      : item.kind === "routine-runs"
+        ? `runs:${item.runs.map((run) => run.id).join("+")}`
+        : `echo:${item.echo.requestId}`,
   );
 
 describe("chatTimeline", () => {

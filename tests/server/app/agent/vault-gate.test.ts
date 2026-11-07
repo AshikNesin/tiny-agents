@@ -8,13 +8,13 @@
  */
 import type { Context } from "@earendil-works/chord";
 import { until } from "../../fixtures/until";
-import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import {
-  defineExtension,
-  defineTool,
+  Type,
+  type Context as PiContext,
+  type JsonObject,
   type JsonValue,
-  type ToolExecutionApi,
-} from "@earendil-works/pi-durable";
+} from "@earendil-works/pi-ai";
+import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { withGatePlan } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
@@ -115,7 +115,7 @@ function echoFetch(calls: { url: string; auth?: string }[]): typeof fetch {
   }) as typeof fetch;
 }
 
-function callThenReport(tool: string, args: Record<string, unknown>) {
+function callThenReport(tool: string, args: JsonObject) {
   return (context: PiContext) => {
     const last = context.messages.at(-1);
     if (last?.role === "toolResult") {
@@ -172,7 +172,9 @@ async function openWith(capability: Capability, respondWith: ReturnType<typeof c
     capabilities: { enabled: [capability.id], permissions: {} },
   });
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   return { runtime, ref, events };
 }
 
@@ -241,7 +243,9 @@ describe("vault sinks behind the gate", () => {
       capabilities: { enabled: ["web"], permissions: { http_request: "allow" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "go" });
     const waiting = await until(
       () =>
@@ -303,7 +307,9 @@ describe("vault sinks behind the gate", () => {
       capabilities: { enabled: ["web"], permissions: { http_request: "allow" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "go" });
     await until(() => results(events).length === 1, "result");
     expect(seen).toEqual([

@@ -518,12 +518,14 @@ describe("worker connection: resume", () => {
 });
 
 describe("worker connection: requests", () => {
+  const op = (n: number) => ({ type: "op", n });
+
   it("resolves a reply, rejects a refusal with its code, and passes other frames on", async () => {
     const worker = fakeWorker();
     const { connection, frames } = open(worker);
     await settle();
-    const ok = connection.request<{ n: number }>({ type: "op", n: 1 });
-    const refused = connection.request({ type: "op", n: 2 });
+    const ok = connection.request<{ n: number }>(op(1));
+    const refused = connection.request(op(2));
     const [first, second] = worker.requests;
     worker.answer(first!, { ok: true, result: { n: 1 } });
     worker.answer(second!, {
@@ -542,7 +544,7 @@ describe("worker connection: requests", () => {
     const worker = fakeWorker();
     const { connection, after } = open(worker);
     await settle();
-    const reply = connection.request<string>({ type: "op", n: 1 });
+    const reply = connection.request<string>(op(1));
     expect(worker.requests).toHaveLength(1);
     worker.drop();
     await settle();

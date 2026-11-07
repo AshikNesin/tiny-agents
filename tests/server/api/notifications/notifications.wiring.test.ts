@@ -77,14 +77,17 @@ let lastNotifier: Notifier | undefined;
 function fakeNotifier(settings: Partial<NotificationSettings> = {}) {
   const sent: Notification[] = [];
   const cancelled: string[] = [];
-  return (lastNotifier = {
-    sent,
-    cancelled,
-    notify: vi.fn((n: Notification) => sent.push(n)),
-    cancel: vi.fn((key: string) => cancelled.push(key)),
+  lastNotifier = {
+    notify: vi.fn((n: Notification) => {
+      sent.push(n);
+    }),
+    cancel: vi.fn((key: string) => {
+      cancelled.push(key);
+    }),
     getSettings: async () => ({ ...DEFAULT_NOTIFICATION_SETTINGS, ...settings }),
     defineEvents: vi.fn(),
-  });
+  };
+  return { ...lastNotifier, sent, cancelled };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 50));

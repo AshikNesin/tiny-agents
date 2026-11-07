@@ -60,9 +60,9 @@ function gate() {
   const held = new Promise<ExtractResult>((resolve) => (release = resolve));
   const ready: ExtractResult = {
     status: "ready",
-    content: { pages: [{ page: 1, text: "hello" }] },
+    content: { format: "text", pages: [{ label: "1", text: "hello" }] },
     meta: { format: "text", chars: 5 },
-  } as ExtractResult;
+  };
   return { runner: () => held, release: () => release(ready) };
 }
 

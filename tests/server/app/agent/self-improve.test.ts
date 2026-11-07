@@ -111,7 +111,9 @@ describe("self-improve capability", () => {
       capabilities: { enabled: ["self-improve"], permissions: { update_instructions: "allow" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "talk like a pirate from now on" });
     const call = await until(
       () =>
@@ -159,7 +161,9 @@ describe("self-improve capability", () => {
       capabilities: { enabled: ["self-improve"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "be brief" });
     // The owner approves (a routine or peer turn asked); the store still refuses.
     const call = await until(
