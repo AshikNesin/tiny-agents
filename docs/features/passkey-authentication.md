@@ -25,8 +25,7 @@ challenge → `POST /login/verify` verifies the signature and counter, updates
 password login.
 
 Challenges live in the `kv` table (`passkey:challenge:` namespace) with a
-five-minute TTL and are consumed on first use, so they survive restarts and
-work across Workers isolates. A user can register any number of passkeys; the
+five-minute TTL and are consumed on first use, so they survive restarts. A user can register any number of passkeys; the
 last one cannot be deleted.
 
 ## Configuration
@@ -37,8 +36,7 @@ The relying party comes from `RP_NAME`, `RP_ID` and `ORIGIN` through
 the browser shows (`https://your-domain`); production refuses to boot without
 both. Under portless set `RP_ID=groot.localhost` and
 `ORIGIN=https://groot.localhost` in `.env` (see
-[portless](../guides/portless-https.md)). On Cloudflare they are `vars` in
-`wrangler.jsonc`. WebAuthn needs HTTPS everywhere except `localhost`.
+[portless](../guides/portless-https.md)). WebAuthn needs HTTPS everywhere except `localhost`.
 
 ## API (`/api/v1/passkey`)
 

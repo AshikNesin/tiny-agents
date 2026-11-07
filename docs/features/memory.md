@@ -109,7 +109,7 @@ Both tools work only in the owner's own turns. In a routine run (any turn in
 a routine's own conversation) or a turn another bot started they are refused,
 even with **Always allow**: a memory planted there (for example by injected
 web content) would reach every later prompt. The check is `isUnattended`
-(`bots.unattended.ts`), shared with the vault.
+(`bots.owner.ts`), shared with the vault.
 
 ## API
 

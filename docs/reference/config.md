@@ -112,13 +112,12 @@ startWebApp({ env, db, storage, reportError })   apps/web/src/server/app.ts
     loadEnv(source)          parse + validate, dev defaults outside production
     setConfig(overrides)     defaultConfig(env) ⊕ defineConfig(...)
     configureLogger()        level from config.logging.level, pretty outside production
-    setDb(...)               the Drizzle handle (better-sqlite3 or D1)
-    setStorageAdapter(...)   StorageAdapter (local, R2 or memory), if given
+    setDb(...)               the Drizzle handle (better-sqlite3)
+    setStorageAdapter(...)   StorageAdapter (local or memory), if given
     setErrorReporter(...)    Sentry or anything else, if given
   registerJobHandlers()
   createWebApp()           the Hono app
 ```
 
-Called once per process on Node (`entry.node.ts`, `scripts/seed.ts`), once per
-isolate on Workers (`entry.worker.ts`), and once per test file
-(`tests/server/setup.ts`).
+Called once per process (`entry.node.ts`, `scripts/seed.ts`) and once per test
+file (`tests/server/setup.ts`).

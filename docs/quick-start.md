@@ -9,9 +9,9 @@ Get the app running, sign in, and add your first feature.
 | Auth  | JWT login (httpOnly cookie or bearer), passkeys/WebAuthn, admin user management        |
 | API   | Hono routers, Zod-validated parsing helpers, `{ success, data }` envelope, Boom errors |
 | Jobs  | Table-backed queue with retries, cron schedules, logs and a dashboard                  |
-| Data  | Drizzle ORM on SQLite (better-sqlite3 on Node, D1 on Workers), `kv` table              |
-| Files | Storage adapter: local disk on Node, R2 bucket on Workers                              |
-| AI    | Unified LLM API with Zod structured output (`@groot/ai`)                               |
+| Data  | Drizzle ORM on SQLite (better-sqlite3), `kv` table                                     |
+| Files | Storage adapter: local disk                                                            |
+| AI    | Bots on pi-durable with pi-ai models (`packages/agent`)                                |
 | Infra | JSON logger with request context, Sentry seam, rate limiting, health probes            |
 | UI    | Radix + Tailwind component kit, layout shell, API client                               |
 
@@ -22,8 +22,8 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` creates `data/dev.db`, applies migrations, seeds a demo user and
-three todos, then starts the Node server with Vite in middleware mode (HMR on
+`pnpm dev` creates `data/dev.db`, applies migrations, seeds a demo user,
+then starts the Node server with Vite in middleware mode (HMR on
 the same port). Nothing to configure: every environment variable has a
 development default. Copy `.env.example` to `.env` only when you want to
 override something.
@@ -35,7 +35,7 @@ already running; first run asks to trust a local certificate, see
 `PORTLESS=0 pnpm dev` → `http://localhost:3000`.
 
 Optional: `pnpm groot:setup` renames the app (package name, `app.name`,
-Worker name, `RP_NAME`) and offers to install portless.
+`RP_NAME`) and offers to install portless.
 
 ## 2. Sign in
 
@@ -119,9 +119,9 @@ Every `pnpm` script is listed in
 - [ ] `NODE_ENV=production`
 - [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — in production the server will not start without them
 - [ ] `RP_ID` and `ORIGIN` set to your public domain (also required in production; passkeys use them)
-- [ ] Node: a persistent volume at `/data` (the production default is `file:/data/prod.db`) or `DATABASE_URL` pointing at one, and one replica — or deploy to [Cloudflare Workers](./guides/deploy-cloudflare.md)
+- [ ] Node: a persistent volume at `/data` (the production default is `file:/data/prod.db`) or `DATABASE_URL` pointing at one, and one replica
 - [ ] `CORS_ALLOWED_ORIGINS` set if the API is called from another origin
 - [ ] `SENTRY_DSN` (optional)
 - [ ] `pnpm build` and `pnpm test` pass
 
-→ Next: [Deploy on Node](./guides/deploy.md) or [Deploy on Cloudflare](./guides/deploy-cloudflare.md).
+→ Next: [Deploy on Node](./guides/deploy.md).

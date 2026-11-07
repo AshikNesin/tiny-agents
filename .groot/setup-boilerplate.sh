@@ -124,7 +124,7 @@ final_steps() {
     print_info "Next steps:"
     echo "  1. pnpm dev                      # SQLite + Vite, zero config"
     echo "  2. Sign in with demo@example.com / demo@example.com"
-    echo "  3. Deploy: docs/guides/deploy.md (Node) or docs/guides/deploy-cloudflare.md (Workers)"
+    echo "  3. Deploy: docs/guides/deploy.md"
     echo ""
     print_success "Setup complete!"
 }

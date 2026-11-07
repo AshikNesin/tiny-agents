@@ -7,14 +7,17 @@ client and React Query.
 
 Routes are defined in `apps/web/src/client/App.tsx` (React Router 7):
 
-| Route                   | Component            | From                                   | Auth      |
-| ----------------------- | -------------------- | -------------------------------------- | --------- |
-| `/login`                | `Login`              | `@groot/shell/pages/auth/Login`        | Public    |
-| `/setup`                | `Setup`              | `@groot/shell/pages/auth/Setup`        | Public    |
-| `/` → `/todos` (index)  | `Todos`              | `apps/web/src/client/pages/todo/Todos` | Protected |
-| `/storage`              | `Storage`            | `@groot/shell/pages/storage/Storage`   | Protected |
-| `/jobs`, `/jobs/:jobId` | `Jobs` / `JobDetail` | `@groot/jobs/client`                   | Protected |
-| `/settings`             | `Settings`           | `@groot/shell/pages/settings/Settings` | Protected |
+| Route                   | Component            | From                                          | Auth      |
+| ----------------------- | -------------------- | --------------------------------------------- | --------- |
+| `/login`                | `Login`              | `@groot/shell/pages/auth/Login`               | Public    |
+| `/setup`                | `Setup`              | `@groot/shell/pages/auth/Setup`               | Public    |
+| `/` → `/chats` (index)  | `ChatWorkspace`      | `apps/web/src/client/pages/chats/ChatsLayout` | Protected |
+| `/storage`              | `Storage`            | `@groot/shell/pages/storage/Storage`          | Protected |
+| `/jobs`, `/jobs/:jobId` | `Jobs` / `JobDetail` | `@groot/jobs/client`                          | Protected |
+| `/settings`             | `SettingsPage`       | `apps/web/src/client/pages/settings`          | Protected |
+
+The tiny-agents pages (tasks, routines, skills, memory, vault, ...) are listed
+in `apps/web/src/client/App.tsx`.
 
 `/setup` is first-run setup: while no user exists, `Login` redirects there and
 it creates the first account (`POST /auth/setup`) and signs in. Once a user
@@ -117,7 +120,7 @@ call `setDefaultTheme()` before `initTheme()` to change it.
 | `@groot/ui`          | `@groot/ui/button`     | Design primitives | Yes     |
 | `@groot/shell`       | `@groot/shell/lib/api` | Client infra      | Yes     |
 | `@groot/jobs/client` | `@groot/jobs/client`   | Jobs dashboard    | Yes     |
-| `apps/web/…/pages`   | `./pages/todo/Todos`   | Business features | No      |
+| `apps/web/…/pages`   | `./pages/tasks/Tasks`  | Business features | No      |
 
 `ui/` can't import `shell`/`pages`; `shell/` can't import `pages/`.
 

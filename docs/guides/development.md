@@ -5,23 +5,22 @@ feature end to end.
 
 ## Commands
 
-| Command                                                                       | What it does                                                                                                                |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                                                    | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                                   |
-| `pnpm dev:worker`                                                             | Build the client, run the Worker in workerd with a local D1 and R2                                                          |
-| `pnpm check` · `pnpm lint` · `pnpm format`                                    | Vite+ (Oxlint + Oxfmt)                                                                                                      |
-| `pnpm typecheck` · `typecheck:client` · `typecheck:kit`                       | Server + client programs · client only · the kit consumer fixture                                                           |
-| `pnpm test` · `pnpm test:watch`                                               | Server tests (Vitest, in-memory SQLite per file)                                                                            |
-| `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                        | Client tests (jsdom) · both suites · Playwright                                                                             |
-| `pnpm build`                                                                  | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                            |
-| `pnpm start`                                                                  | Run the production bundle                                                                                                   |
-| `pnpm check:worker`                                                           | Dry-run the Workers bundle into `tmp/worker-build`                                                                          |
-| `pnpm db:generate [--name x]`                                                 | drizzle-kit: schema diff → `apps/web/drizzle/NNNN_x.sql`, then refreshes `apps/web/drizzle/index.ts` for the Worker         |
-| `pnpm db:migrate` · `pnpm db:migrate:worker`                                  | Apply migrations to the local SQLite file · to remote D1 ahead of a deploy (optional; the Worker migrates on first request) |
-| `pnpm db:seed`                                                                | Demo user + three todos (idempotent; also applies migrations)                                                               |
-| `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                                        |
-| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                             |
-| `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites             |
+| Command                                                                       | What it does                                                                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                                                    | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                       |
+| `pnpm check` · `pnpm lint` · `pnpm format`                                    | Vite+ (Oxlint + Oxfmt)                                                                                          |
+| `pnpm typecheck` · `typecheck:client` · `typecheck:kit`                       | Server + client programs · client only · the kit consumer fixture                                               |
+| `pnpm test` · `pnpm test:watch`                                               | Server tests (Vitest, in-memory SQLite per file)                                                                |
+| `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                        | Client tests (jsdom) · both suites · Playwright                                                                 |
+| `pnpm build`                                                                  | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                |
+| `pnpm start`                                                                  | Run the production bundle                                                                                       |
+| `pnpm db:generate [--name x]`                                                 | drizzle-kit: schema diff → `apps/web/drizzle/NNNN_x.sql`, then refreshes `apps/web/drizzle/index.ts`            |
+| `pnpm db:migrate`                                                             | Apply migrations to the local SQLite file                                                                       |
+| `pnpm db:seed`                                                                | Demo user (idempotent; also applies migrations)                                                                 |
+| `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                            |
+| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                 |
+| `pnpm check:doc-refs`                                                         | Doc paths, links and `pnpm` scripts all exist                                                                   |
+| `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
 
 The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR. The pre-push hook runs `pnpm typecheck`. A new gate is one line in `scripts/gates.mjs`. `pnpm check:coverage` fails when a workflow step, or a `check:*` or `typecheck:*` script, runs a check outside that list.
 
@@ -206,7 +205,7 @@ Add `registerPostJobs()` to `registerJobHandlers()` in `apps/web/src/server/app.
 Queue it with `await addJob("post-count", { label: "nightly" })`, through
 `POST /api/v1/jobs`, or on a cron with `scheduleJob("post-count", {}, "0 3 * * *")`.
 In tests jobs are disabled, so call `await runTick()` after `addJob()` and
-assert on the row (`tests/server/app/todo.jobs.test.ts` is the model). The full
+assert on the row (`tests/server/api/routines/routines.rearm.test.ts` is the model). The full
 model is in [Background jobs](../features/jobs.md).
 
 ## Client tips
@@ -214,7 +213,7 @@ model is in [Background jobs](../features/jobs.md).
 | Concern       | Where                                                                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Routes        | `apps/web/src/client/App.tsx` (React Router)                                                                                                                                  |
-| Data fetching | React Query hooks next to the page (e.g. `pages/todo/hooks`)                                                                                                                  |
+| Data fetching | A typed client in `apps/web/src/client/lib/<feature>-api.ts` (e.g. `routines-api.ts`), called from the page                                                                   |
 | API calls     | `apiClient` from `@groot/shell/lib/api` (unwraps the envelope, sends the cookie)                                                                                              |
 | Auth state    | `useAuthStore` from `@groot/shell/store/auth` (Zustand; the user, sign-in, sign-out)                                                                                          |
 | UI components | `@groot/ui`; rules in [DLS](../features/dls.md), enforced by `pnpm check:tokens`                                                                                              |

@@ -18,6 +18,7 @@ export const gates = [
   { name: "Changeset gate", run: "pnpm check:changesets --base origin/${GITHUB_BASE_REF:-main}" },
   { name: "Checks coverage", run: "pnpm check:coverage" },
   { name: "Lint & format check", run: "pnpm check" },
+  { name: "Doc references", run: "pnpm check:doc-refs" },
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
 ];

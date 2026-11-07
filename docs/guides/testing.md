@@ -20,13 +20,13 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
 same `startWebApp()` as the entries, with:
 
 - `NODE_ENV=test`, `DATABASE_URL=":memory:"`, `LOG_LEVEL=silent`
-- `openDatabase(":memory:")`: a fresh database per file with every migration applied
+- `createAppDb(":memory:")`: a fresh database per file with every migration applied
 - `memoryStorage()` for uploads
 - `jobs.enabled = false` (a `NODE_ENV=test` default), so nothing runs in the
   background; tests call `runTick()` when they want jobs processed
 
 Files are isolated from each other for free. Within a file, clear what you
-need in `beforeEach` (e.g. `await db.delete(todos)`, `clearJobHandlers()`).
+need in `beforeEach` (e.g. `await db.delete(tasks)`, `clearJobHandlers()`).
 
 ## Helpers (`tests/server/helpers.ts`)
 
@@ -43,20 +43,20 @@ need in `beforeEach` (e.g. `await db.delete(todos)`, `clearJobHandlers()`).
 tests/
 ├── server/
 │   ├── setup.ts · helpers.ts
-│   ├── core/      # @groot/core units: env, config, logger, kv, storage adapters, D1 migrator, …
+│   ├── core/      # @groot/core units: env, config, logger, kv, storage adapters, …
 │   ├── jobs/      # @groot/jobs/server: queue + tick, schedules, housekeeping, routes, job logger
-│   ├── api/       # HTTP tests through the routers: auth, passkey, settings, storage, todos
-│   ├── app/       # app-owned: createApp, todo jobs (project-local, not synced)
+│   ├── api/       # HTTP tests through the routers (auth, passkey, settings, storage) and app services
+│   ├── app/       # app-owned: bot messaging, durability, the agent toolkits
+│   ├── routes/    # app-owned HTTP tests: bots, routines, vault, browser, terminal, …
 │   ├── checks/    # repo guards: changesets gate, kit exports, typecheck coverage
 │   ├── groot/     # sync tooling
-│   ├── ai/        # @groot/ai
 │   └── scripts/   # build scripts (runtime closure)
 ├── client/        # jsdom + testing-library (configured in vite.config.ts)
 ├── e2e/           # Playwright specs + global-setup.ts
 └── kit-consumers/ # compiled fixture for pnpm typecheck:kit (never executed)
 ```
 
-`tests/server/setup.ts`, `tests/server/{core,jobs,api,groot,ai}` and `tests/client`
+`tests/server/setup.ts`, `tests/server/{core,jobs,api,groot}` and `tests/client`
 sync with the source they exercise (`TEST_AREA_OWNERSHIP` in
 `.groot/lib/patterns.ts`); `tests/server/app` and `tests/e2e` stay project-local.
 
@@ -70,23 +70,24 @@ import { api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
 
-describe("todos API", () => {
-  it("creates, reads and deletes", async () => {
+describe("tasks API", () => {
+  it("creates, lists and deletes", async () => {
     const { token } = await signIn(app);
-    const created = await api<{ id: number }>(app, "/api/v1/todos", {
+    const created = await api<{ id: string }>(app, "/api/v1/tasks", {
       method: "POST",
       json: { title: "Write tests" },
       token,
     });
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const id = created.body.data!.id;
-    expect((await api(app, `/api/v1/todos/${id}`, { method: "DELETE", token })).status).toBe(204);
-    expect((await api(app, `/api/v1/todos/${id}`, { token })).status).toBe(404);
+    expect((await api(app, `/api/v1/tasks/${id}`, { method: "DELETE", token })).status).toBe(200);
+    const list = await api<{ id: string }[]>(app, "/api/v1/tasks", { token });
+    expect(list.body.data!.some((task) => task.id === id)).toBe(false);
   });
 
   it("rejects an invalid payload", async () => {
     const { token } = await signIn(app);
-    const res = await api(app, "/api/v1/todos", { method: "POST", json: { title: "" }, token });
+    const res = await api(app, "/api/v1/tasks", { method: "POST", json: { title: "" }, token });
     expect(res.status).toBe(400);
     expect(res.body.error?.details).toMatchObject({ title: [expect.any(String)] });
   });
@@ -204,9 +205,10 @@ CI does not run Playwright.
 the PR or push adds (`scripts/secret-scan.sh`), the static gates through
 `pnpm verify:static` (typechecks for the server, the client, typecheck
 coverage and the kit fixture, the kit export guard, the changeset gate, the
-checks-coverage guard, lint + format, the design-token check, and a migration
-freshness check that `pnpm db:generate` adds no migration; the list lives in
-`scripts/gates.mjs`), server and client tests, `pnpm build`, the runtime
-dependency closure check, and a pruned production boot (tracked files plus
-`dist` copied to a fresh directory, `pnpm install --prod`,
-`node dist/server/bundle.js`, `/health` answers, `SIGTERM` exits within 15 s).
+checks-coverage guard, lint + format, the doc reference check, the
+design-token check, and a migration freshness check that `pnpm db:generate`
+adds no migration; the list lives in `scripts/gates.mjs`), server and client
+tests, `pnpm build`, the runtime dependency closure check, and a pruned
+production boot (tracked files plus `dist` copied to a fresh directory,
+`pnpm install --prod`, `node dist/server/bundle.js`, `/health` answers,
+`SIGTERM` exits within 15 s).

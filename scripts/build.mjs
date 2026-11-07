@@ -10,7 +10,7 @@ import path from "node:path";
  * are inlined; npm dependencies stay external and are installed on the host
  * (`pnpm install --prod`). `pnpm check:closure` verifies every external import
  * is a declared root dependency. The client is built separately by Vite into
- * dist/client, and the Workers bundle by wrangler.
+ * dist/client.
  */
 
 /** Never bundled, whatever the manifest says. */

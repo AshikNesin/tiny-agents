@@ -1,8 +1,8 @@
 /**
- * The storage contract. Three implementations ship: the local filesystem for
- * Node (`./node`), an R2 bucket binding for Workers (`./r2`), and an in-memory
- * map for tests (`./memory`). `tests/server/core/storage-adapters.test.ts` runs
- * one contract suite against all three; a new adapter should pass it too.
+ * The storage contract. Two implementations ship: the local filesystem
+ * (`./node`) and an in-memory map for tests (`./memory`).
+ * `tests/server/core/storage-adapters.test.ts` runs one contract suite against
+ * both; a new adapter should pass it too.
  *
  * Semantics every adapter follows:
  *

@@ -1,8 +1,8 @@
 # Architecture
 
 How the server is put together and the conventions every feature module
-follows. The same Hono app runs on Node and on Cloudflare Workers; only the
-entry file differs.
+follows. tiny-agents runs on Node only: one Hono app behind one entry file,
+`apps/web/src/server/entry.node.ts`.
 
 ## Layout
 
@@ -13,9 +13,9 @@ packages/core/src/                 # Boilerplate (synced)
 ├── env.ts · config.ts             # Zod env schema · typed AppConfig + defineConfig()
 ├── context.ts                     # AsyncLocalStorage request context, waitUntil()
 ├── types.ts                       # AppEnv (Hono generics), AuthUser
-├── database/                      # db handle (index.ts), core tables (schema.ts), Node driver (node.ts), D1 migrator (d1.ts)
+├── database/                      # db handle (index.ts), core tables (schema.ts), Node driver (node.ts)
 ├── auth/ passkey/ settings/       # Reusable feature modules (routes + service + schema); import the module, there is no barrel
-├── storage/                       # StorageAdapter contract, local/R2/memory adapters, routes
+├── storage/                       # StorageAdapter contract, local/memory adapters, routes
 ├── kv/ logger/ errors/            # kv table store · structured logger + breadcrumbs · HttpError, Boom, toHttpError, reporting seam
 ├── notification/                  # startup notification the Node entry sends in production
 ├── middlewares/                   # request logger, JWT, admin key, rate limit, error handler
@@ -26,9 +26,9 @@ packages/jobs/src/server/          # queue, tick, worker, dashboard API — see 
 apps/web/src/server/               # App-owned (not synced)
 ├── app.ts                         # startWebApp(): bootstrap + register job handlers + createWebApp()
 ├── config.ts                      # defineConfig() overrides
-├── entry.node.ts · entry.worker.ts
+├── entry.node.ts                  # the only entry: env, db, storage, Sentry, static client, shutdown
 ├── db/schema.ts                   # app tables; drizzle-kit entry (re-exports core + jobs tables)
-├── db/node.ts                     # openDatabase(url): SQLite with migrations applied (Node entry, scripts, tests)
+├── db/open.ts                     # openNodeAppDatabase(): SQLite with migrations applied, legacy copy first
 └── api/<feature>/                 # feature.routes.ts, .service.ts, .schema.ts, .jobs.ts
 ```
 
@@ -56,7 +56,7 @@ A feature is one folder, `apps/web/src/server/api/<feature>/`: a Zod schema,
 a service that calls Drizzle directly (there is no model layer), a plain Hono
 router whose handlers parse, call the service and return the envelope, and
 optionally job handlers. [Development workflow](./development.md#adding-a-feature-end-to-end)
-builds one end to end; [Todos](../features/todos.md) is the reference module.
+builds one end to end; [Routines](../features/routines.md) is the reference module.
 Handlers use these helpers:
 
 | Helper (`@groot/core/utils/…`)                    | Does                                                                   |
@@ -86,50 +86,49 @@ returns a 500 whose message is only shown in development.
 ## Database
 
 Drizzle on SQLite, nothing else. `db` from `@groot/core/database` is a live
-binding set by `bootstrap()`: better-sqlite3 (sync driver) on Node, D1 (async
-driver) on Workers. Code that `await`s the query builder works on both. Rules:
-query builder only, no `db.transaction()` (D1 has none), timestamps as
+binding set by `bootstrap()` over better-sqlite3. Rules for `packages/`:
+query builder only, no `db.transaction()` (core and jobs stay driver-agnostic).
+App code in `apps/` may use synchronous transactions. Timestamps are stored as
 `integer({ mode: "timestamp_ms" })`, JSON as `text({ mode: "json" })`. Tables
 live in three schema files; `apps/web/src/server/db/schema.ts` re-exports them
 all and is the drizzle-kit entry. See [Database migrations](./database-migrations.md).
 
-## Bootstrap and the two runtimes
+## Bootstrap
 
 `bootstrap({ env, config, db, storage, reportError })` wires, in order, env →
 config → logger → db → storage → error reporter (see
 [boot order](../reference/config.md#boot-order)). Nothing calls it directly:
-both entries, `scripts/seed.ts` and the test setup go through
+`entry.node.ts`, `scripts/seed.ts` and the test setup go through
 `startWebApp(runtime)` in `apps/web/src/server/app.ts`, which adds the app
-config, registers the job handlers and builds the app. A runtime supplies only
-its env source and adapters:
+config, registers the job handlers and builds the app. The entry supplies the
+env source and adapters:
 
-|          | `entry.node.ts`                                                                                                                                       | `entry.worker.ts`                                                        |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| env      | `process.env` (+ `.env` via `process.loadEnvFile` when present)                                                                                       | Worker vars + secrets bindings                                           |
-| db       | `openDatabase(DATABASE_URL)` (`db/node.ts`), migrates on boot                                                                                         | `drizzle(env.DB)` (D1); `migrateD1()` on the first request of an isolate |
-| storage  | `localStorage(uploadsRoot(env))`: `UPLOADS_DIR`, else `uploads/` next to the SQLite file in production (`/data/uploads`), `./local/uploads` otherwise | `r2Storage(env.STORAGE)` when the bucket is bound                        |
-| errors   | `@sentry/node` when `config.sentry.dsn` is set                                                                                                        | `@sentry/cloudflare` `withSentry`, same config                           |
-| client   | Vite middleware (dev) / `dist/client` + SPA fallback (prod)                                                                                           | Static Assets; `run_worker_first` for `/api/*`, `/health`, `/ready`      |
-| jobs     | `startWorkers()` poller when `config.jobs.enabled`                                                                                                    | `scheduled` handler → `runTick()`                                        |
-| shutdown | `SIGTERM` / `SIGINT` → `/health` 503 → stop workers → close                                                                                           | n/a                                                                      |
+| Concern  | `entry.node.ts`                                                                                                                                       |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| env      | `process.env` (+ `.env` via `process.loadEnvFile` when present)                                                                                       |
+| db       | `openNodeAppDatabase()` (`db/open.ts`), migrates on boot                                                                                              |
+| storage  | `localStorage(uploadsRoot(env))`: `UPLOADS_DIR`, else `uploads/` next to the SQLite file in production (`/data/uploads`), `./local/uploads` otherwise |
+| errors   | `@sentry/node` when `config.sentry.dsn` is set                                                                                                        |
+| client   | Vite middleware (dev) / `dist/client` + SPA fallback (prod)                                                                                           |
+| jobs     | `startWorkers()` poller when `config.jobs.enabled`                                                                                                    |
+| shutdown | `SIGTERM` / `SIGINT` → `/health` 503 → stop workers → close                                                                                           |
 
-Core stays runtime-neutral: Web APIs only (`crypto.subtle`, `fetch`,
-`TextEncoder`), with `node:` imports confined to `database/node.ts`,
-`storage/node.ts`, `node:async_hooks` and `node:buffer` (both provided by
-Workers under `nodejs_compat`).
+Core stays runtime-neutral, a rule kept from groot: Web APIs only
+(`crypto.subtle`, `fetch`, `TextEncoder`), with `node:` imports confined to
+`database/node.ts`, `storage/node.ts`, `node:async_hooks` and `node:buffer`.
 
 ## Storage
 
 `storage` from `@groot/core/storage` is whatever `StorageAdapter` the entry
 injected: `put / get / head / delete / list / copy` over `/`-separated keys,
-folders as common prefixes. Three adapters ship (local filesystem, R2 bucket
-binding, memory for tests); another backend is one file implementing the
+folders as common prefixes. Two adapters ship (local filesystem, memory for
+tests); another backend is one file implementing the
 interface in `packages/core/src/storage/adapter.ts`. See [File storage](../features/storage.md).
 
 ## Background jobs
 
 The `jobs` table is the queue. `addJob()` inserts a row; `runTick()` claims and
-runs due rows; the Node poller or the Workers cron trigger calls it. Handlers
+runs due rows; the Node poller calls it. Handlers
 are registered by `startWebApp()`: add a feature's registration to
 `registerJobHandlers()` in `apps/web/src/server/app.ts`. Details in [Background jobs](../features/jobs.md).
 
@@ -148,9 +147,8 @@ this way.
 
 The request context (id, start time, breadcrumbs, `waitUntil`) lives in AsyncLocalStorage:
 `addBreadcrumb("auth", "token verified")` records a step that is attached to
-the next error log; `waitUntil(promise)` keeps a Workers request alive for
-background work and simply detaches on Node. `reportError(error, context)` is
-the seam the entries point at Sentry.
+the next error log; `waitUntil(promise)` detaches background work from the
+request. `reportError(error, context)` is the seam the entry points at Sentry.
 
 ## Key-value store
 
@@ -180,11 +178,11 @@ throws `ApiError`), `@groot/ui` primitives. See [Client](../features/client.md).
 
 ## Design principles
 
-| Principle                 | What it means                                                           |
-| ------------------------- | ----------------------------------------------------------------------- |
-| One app, two entries      | Runtime-specific code lives only in `entry.node.ts` / `entry.worker.ts` |
-| Feature isolation         | A feature is one folder: schema, service, routes, jobs                  |
-| Parse at the edge         | Zod on every body, query and param; services receive typed data         |
-| One envelope              | `ok()` / `noContent()` / thrown `Boom` — never hand-built JSON          |
-| The database is the queue | Jobs, schedules, logs, kv are tables, not services                      |
-| Boring persistence        | Query builder, no transactions, generated migrations                    |
+| Principle                 | What it means                                                   |
+| ------------------------- | --------------------------------------------------------------- |
+| One entry                 | Runtime-specific code lives only in `entry.node.ts`             |
+| Feature isolation         | A feature is one folder: schema, service, routes, jobs          |
+| Parse at the edge         | Zod on every body, query and param; services receive typed data |
+| One envelope              | `ok()` / `noContent()` / thrown `Boom` — never hand-built JSON  |
+| The database is the queue | Jobs, schedules, logs, kv are tables, not services              |
+| Boring persistence        | Query builder, no transactions, generated migrations            |

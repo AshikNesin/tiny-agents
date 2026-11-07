@@ -43,6 +43,7 @@
     "groot:upstream": "tsx .groot/upstream.ts",
     "changeset": "changeset",
     "check:changesets": "node scripts/check-changesets.mjs",
+    "check:doc-refs": "node scripts/check-doc-refs.mjs",
     "changeset:version": "changeset version",
     "changeset:status": "changeset status",
     "doctor": "pnpm dlx react-doctor@latest",

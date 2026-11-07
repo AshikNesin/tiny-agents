@@ -14,8 +14,8 @@ export interface BootstrapOptions {
   /** The database handle, or a factory that receives the validated env. */
   db: Database | ((env: Env) => Database);
   /**
-   * Where uploads live, or a factory that receives the validated env:
-   * `localStorage(uploadsRoot(env))` on Node, `r2Storage(env.STORAGE)` on Workers.
+   * Where uploads live, or a factory that receives the validated env, such as
+   * `localStorage(uploadsRoot(env))`.
    */
   storage?: StorageAdapter | ((env: Env) => StorageAdapter);
   /** Where unexpected errors go (Sentry, ...). */
