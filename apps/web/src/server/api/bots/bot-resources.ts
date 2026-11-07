@@ -23,6 +23,7 @@ import {
   promptRevisions,
   routines,
   shelleyHandoffs,
+  uploads,
   vaultAuditEvents,
   vaultItems,
 } from "../../db";
@@ -150,6 +151,7 @@ export const BOT_RESOURCES = {
   ]),
   history: retained(
     "PRD §5.1: conversation history (the current chat, past chats, routines) and the uploads its messages attach stay in agent.db; Phase 2 adds cleanup",
+    [uploads.botId],
   ),
   chatStreams: retained(
     "a chat stream open in another tab ends when that tab leaves; ending it here makes the client retry the 404",

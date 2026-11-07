@@ -1,10 +1,18 @@
 type Methods = readonly string[] | "*";
 
+/**
+ * The uploads a rule reaches: those the guest uploaded, or also those sent in
+ * the chat of a bot shared with them.
+ */
+export type UploadReach = "uploaded" | "uploadedOrShared";
+
 type GuestApiRule =
-  /** `path` is matched against the path under `/api/v1`, and never admits a `/bots/<id>` path. */
+  /** `path` is matched against the path under `/api/v1`, and never admits a `/bots/<id>` or `/uploads/<id>` path. */
   | { methods: Methods; path: RegExp }
   /** `bot` is matched against what follows `/bots/<id>`; the bot must be shared with the guest. */
-  | { methods: Methods; bot: RegExp };
+  | { methods: Methods; bot: RegExp }
+  /** `upload` is matched against what follows `/uploads/<id>`; the guest must reach the upload. */
+  | { methods: Methods; upload: RegExp; reach: UploadReach };
 
 interface GuestFeature {
   page?: `/${string}`;
@@ -38,12 +46,21 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
       },
     ],
   },
-  uploads: { api: [{ methods: "*", path: /^\/uploads(\/.*)?$/ }] },
+  uploads: {
+    api: [
+      { methods: ["POST"], path: /^\/uploads$/ },
+      { methods: READ, upload: /^(\/(content|text))?$/, reach: "uploadedOrShared" },
+      { methods: ["DELETE"], upload: /^$/, reach: "uploaded" },
+    ],
+  },
   code: { page: "/code", api: [{ methods: "*", path: /^\/code(\/.*)?$/ }] },
 };
 
 /** A `/bots/<id>` path: the bot id, then the rest of the path. */
 export const BOT_PATH = /^\/bots\/([^/]+)(\/.*)?$/;
+
+/** An `/uploads/<id>` path: the upload id, then the rest of the path. */
+export const UPLOAD_PATH = /^\/uploads\/([^/]+)(\/.*)?$/;
 
 const GUEST_PAGES = Object.values(GUEST_ACCESS).flatMap((feature) =>
   feature.page ? [feature.page] : [],

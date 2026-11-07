@@ -10,6 +10,7 @@ import { matchGuestRoute } from "../../../apps/web/src/server/api/people/guest.g
 import { conversationOwner } from "../../../apps/web/src/server/api/bots/bots.owner";
 import { sharedChatGuidance } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { botListStep } from "../../../apps/web/src/server/api/bots/bots.list";
+import { getConnectionManager } from "../../../apps/web/src/server/api/connections/connections.manager";
 import { isSkipReply, type AgentRuntime } from "../../../packages/agent/src/index";
 import { api, createTestApp } from "../helpers";
 import {
@@ -47,7 +48,55 @@ async function addGuest(name = "Priya") {
   const token = await authToken(email, id);
   const asGuest = (path: string, init: { method?: string; json?: unknown } = {}) =>
     api<Data>(app, path, { ...init, token });
-  return { id, email, asGuest };
+  return { id, email, token, asGuest };
+}
+
+type ActivityChange = Parameters<Parameters<AgentRuntime["onActivity"]>[0]>[0];
+
+const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+async function upload(token: string, name: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", new File([new Uint8Array(TINY_PNG)], name, { type: "image/png" }));
+  const response = await api<Data>(app, "/api/v1/uploads", { method: "POST", body: form, token });
+  expect(response.status).toBe(200);
+  return response.body.data.ref.uploadId;
+}
+
+async function readEvents(
+  token: string,
+  onFirstEvent: () => void,
+  until: string,
+): Promise<unknown[]> {
+  const response = await app.request("/api/v1/events", { headers: bearer(token) });
+  expect(response.status).toBe(200);
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let opened = false;
+  try {
+    while (!text.includes(until)) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      if (!opened && text.includes("data:")) {
+        opened = true;
+        onFirstEvent();
+      }
+    }
+  } finally {
+    await reader.cancel();
+  }
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => JSON.parse(line.slice("data:".length)) as { type: string })
+    .filter((event) => event.type !== "ping");
 }
 
 async function createBot(name: string, extra: Record<string, unknown> = {}) {
@@ -132,6 +181,100 @@ describe("shared bots", () => {
       });
       expect(response.status, `${method} ${path}`).toBe(403);
     }
+  });
+
+  it("lets a guest read only uploads they made or that sit in a chat shared with them", async () => {
+    const guest = await addGuest();
+    made.push(guest.id);
+    const shared = await createBot("Shared files");
+    await asOwner(`/api/v1/bots/${shared.id}`, {
+      method: "PATCH",
+      json: { guestIds: [guest.id] },
+    });
+    const ownerPrivate = await upload(ownerToken, "private.png");
+    const ownerShared = await upload(ownerToken, "shared.png");
+    const guestOwn = await upload(guest.token, "mine.png");
+    const send = (as: typeof asOwner, requestId: string, attachments: string[]) =>
+      as(`/api/v1/bots/${shared.id}/messages`, {
+        method: "POST",
+        json: { requestId, text: "see attached", attachments },
+      });
+    expect((await send(asOwner, "owner-files-01", [ownerShared])).status).toBe(200);
+
+    const reads = async (id: string) => [
+      (await guest.asGuest(`/api/v1/uploads/${id}`)).status,
+      (await app.request(`/api/v1/uploads/${id}/content`, { headers: bearer(guest.token) })).status,
+      (await guest.asGuest(`/api/v1/uploads/${id}/text`)).status,
+    ];
+    expect(await reads(ownerPrivate)).toEqual([404, 404, 404]);
+    expect(await reads(ownerShared)).toEqual([200, 200, 200]);
+    expect(await reads(guestOwn)).toEqual([200, 200, 200]);
+
+    expect((await send(guest.asGuest, "guest-files-01", [ownerPrivate])).status).toBe(404);
+    expect(await reads(ownerPrivate)).toEqual([404, 404, 404]);
+    expect((await send(guest.asGuest, "guest-files-02", [guestOwn])).status).toBe(200);
+
+    for (const id of [ownerPrivate, ownerShared]) {
+      expect((await guest.asGuest(`/api/v1/uploads/${id}`, { method: "DELETE" })).status).toBe(404);
+      expect((await asOwner(`/api/v1/uploads/${id}`)).status).toBe(200);
+    }
+    expect((await guest.asGuest(`/api/v1/uploads/${guestOwn}`, { method: "DELETE" })).status).toBe(
+      200,
+    );
+  });
+
+  it("streams a guest the activity of shared bots only, and no connection state", async () => {
+    const guest = await addGuest();
+    made.push(guest.id);
+    const shared = await createBot("Shared busy");
+    const other = await createBot("Private busy");
+    await asOwner(`/api/v1/bots/${shared.id}`, {
+      method: "PATCH",
+      json: { guestIds: [guest.id] },
+    });
+    const rt = runtime();
+    const activity = new Set<(change: ActivityChange) => void>();
+    vi.spyOn(rt, "onActivity").mockImplementation((listener) => {
+      activity.add(listener);
+      return () => activity.delete(listener);
+    });
+    vi.spyOn(rt, "busyConversations").mockReturnValue([
+      Number(other.conversationId),
+      Number(shared.conversationId),
+    ]);
+    const connections = new Set<(id: string, state: { status: string }) => void>();
+    vi.spyOn(getConnectionManager(), "onChange").mockImplementation((listener) => {
+      connections.add(listener);
+      return () => connections.delete(listener);
+    });
+    const emit = () => {
+      for (const listener of connections) listener("owner-mcp", { status: "connected" });
+      for (const conversation of [other.conversationId, shared.conversationId]) {
+        for (const listener of activity) {
+          listener({ conversation: Number(conversation), busy: true, approvals: 1, questions: 0 });
+        }
+      }
+    };
+
+    const seen = await readEvents(guest.token, emit, `"conversation":"${shared.conversationId}"`);
+    expect(seen).toEqual([
+      { type: "activity", busy: [shared.conversationId] },
+      {
+        type: "activity",
+        conversation: shared.conversationId,
+        busy: true,
+        approvals: 1,
+        questions: 0,
+      },
+    ]);
+
+    const owner = await readEvents(ownerToken, emit, `"conversation":"${shared.conversationId}"`);
+    expect(owner).toEqual([
+      { type: "activity", busy: [other.conversationId, shared.conversationId] },
+      { type: "connection", id: "owner-mcp", status: "connected" },
+      expect.objectContaining({ conversation: other.conversationId }),
+      expect.objectContaining({ conversation: shared.conversationId }),
+    ]);
   });
 
   it("puts both people's messages in one chat, with names for the bot", async () => {
@@ -271,6 +414,12 @@ describe("matchGuestRoute", () => {
     expect(matchGuestRoute("POST", "/bots/b1/browser/vnc-ticket")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/code/threads")).toEqual({});
     expect(matchGuestRoute("POST", "/uploads")).toEqual({});
+    expect(matchGuestRoute("GET", "/uploads/u1/content")).toEqual({
+      upload: { id: "u1", reach: "uploadedOrShared" },
+    });
+    expect(matchGuestRoute("DELETE", "/uploads/u1")).toEqual({
+      upload: { id: "u1", reach: "uploaded" },
+    });
 
     expect(matchGuestRoute("PATCH", "/bots/b1")).toBeUndefined();
     // YOLO mode is the owner's switch (issue #151).

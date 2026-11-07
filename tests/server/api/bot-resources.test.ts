@@ -17,6 +17,7 @@ import {
   db,
   jobs,
   notificationLog,
+  uploads,
   vaultAuditEvents,
   vaultItems,
 } from "../../../apps/web/src/server/db";
@@ -316,8 +317,17 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
         (message) => message.role === "user" && message.text === "Remember this.",
       );
     await vi.waitFor(async () => expect(await said()).toBe(true));
+    await db.insert(uploads).values({
+      kind: "file",
+      name: "notes.txt",
+      mimeType: "text/plain",
+      size: 5,
+      storageKey: `chat/${bot.id}/original`,
+      botId: bot.id,
+    });
     return async () => {
       expect(await said()).toBe(true);
+      expect(await db.$count(uploads, eq(uploads.botId, bot.id))).toBe(1);
     };
   },
   async chatStreams({ bot }) {

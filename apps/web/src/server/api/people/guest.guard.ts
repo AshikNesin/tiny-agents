@@ -1,8 +1,13 @@
 import type { MiddlewareHandler } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
-import { BOT_PATH, GUEST_ACCESS } from "../../../shared/guest-access";
-import { canOpenBot, viewerOf, type Viewer } from "./people.service";
+import {
+  BOT_PATH,
+  GUEST_ACCESS,
+  UPLOAD_PATH,
+  type UploadReach,
+} from "../../../shared/guest-access";
+import { canOpenBot, canReachUpload, viewerOf, type Viewer } from "./people.service";
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -13,14 +18,24 @@ declare module "hono" {
 
 const GUEST_API = Object.values(GUEST_ACCESS).flatMap((feature) => feature.api);
 
-/** The rule a guest's request matches, with the bot it names; undefined = owner only. */
-export function matchGuestRoute(method: string, path: string): { botId?: string } | undefined {
+interface GuestRoute {
+  botId?: string;
+  upload?: { id: string; reach: UploadReach };
+}
+
+/** The rule a guest's request matches, with the bot or upload it names; undefined = owner only. */
+export function matchGuestRoute(method: string, path: string): GuestRoute | undefined {
   const bot = BOT_PATH.exec(path);
+  const upload = UPLOAD_PATH.exec(path);
   for (const rule of GUEST_API) {
     if (rule.methods !== "*" && !rule.methods.includes(method)) continue;
     if ("bot" in rule) {
       if (bot && rule.bot.test(bot[2] ?? "")) return { botId: decodeURIComponent(bot[1]) };
-    } else if (!bot && rule.path.test(path)) {
+    } else if ("upload" in rule) {
+      if (upload && rule.upload.test(upload[2] ?? "")) {
+        return { upload: { id: decodeURIComponent(upload[1]), reach: rule.reach } };
+      }
+    } else if (!bot && !upload && rule.path.test(path)) {
       return {};
     }
   }
@@ -29,8 +44,8 @@ export function matchGuestRoute(method: string, path: string): { botId?: string 
 
 /**
  * Runs after the JWT middleware, mounted at the API root (`/api/v1`). Sets
- * `viewer`; for a guest, refuses anything outside `GUEST_ACCESS` and any bot
- * not shared with them.
+ * `viewer`; for a guest, refuses anything outside `GUEST_ACCESS`, any bot not
+ * shared with them and any upload they do not reach.
  */
 export function guestGuard(prefix = "/api/v1"): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
@@ -44,6 +59,10 @@ export function guestGuard(prefix = "/api/v1"): MiddlewareHandler<AppEnv> {
     if (!allowed) throw Boom.forbidden("Only the owner can do that");
     if (allowed.botId !== undefined && !(await canOpenBot(viewer, allowed.botId))) {
       throw Boom.notFound("Bot not found");
+    }
+    const { upload } = allowed;
+    if (upload && !(await canReachUpload(viewer, upload.id, upload.reach))) {
+      throw Boom.notFound("Unknown upload");
     }
     return next();
   };

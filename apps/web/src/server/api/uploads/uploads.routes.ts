@@ -76,6 +76,7 @@ router.post("/uploads", uploadRateLimiter, uploadBodyLimit, async (c) => {
     name: file.name,
     mimeType: file.type || "application/octet-stream",
     bytes: Buffer.from(await file.arrayBuffer()),
+    uploadedBy: c.get("viewer").userId,
   });
   return ok(c, stored);
 });

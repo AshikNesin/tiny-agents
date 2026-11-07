@@ -414,6 +414,10 @@ export const uploads = sqliteTable("uploads", {
   modelKey: text("model_key"),
   /** Storage key of the original bytes. */
   storageKey: text("storage_key").notNull().unique(),
+  /** The user who uploaded it; a guest reads their own uploads. */
+  uploadedBy: integer("uploaded_by"),
+  /** The bot whose chat it was first sent in; a guest of that bot reads it. */
+  botId: text("bot_id"),
   createdAt: createdAt(),
   /** SHA-256 of the original bytes (sandbox copies report it). */
   sha256: text("sha256"),
