@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vite-plus/test";
+import { db, users } from "@groot/core/database";
 import { adminHeaders, api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
@@ -55,6 +57,14 @@ describe("auth API", () => {
       expect(refused.status).toBe(401);
       expect(refused.body.error?.code).toBe("UNAUTHORIZED");
     }
+  });
+
+  it("refuses a valid token whose account is gone", async () => {
+    const { token, user } = await signIn(app);
+    await db.delete(users).where(eq(users.id, user.id));
+    const gone = await api(app, "/api/v1/auth/me", { token });
+    expect(gone.status).toBe(401);
+    expect(gone.body.error?.code).toBe("SESSION_INVALID");
   });
 
   it("validates the login payload", async () => {
