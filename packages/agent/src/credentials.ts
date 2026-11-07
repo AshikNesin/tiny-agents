@@ -152,7 +152,7 @@ export async function readPendingRequest(
   // Another tool's task has no request (and the throw rolls back the
   // document this read would create).
   const doc = await tx.doc(CredentialRequestDoc, id);
-  // Parsing copies the draft, a proxy that structuredClone can't copy.
+  // A plain copy: parsing builds new objects from the draft proxy.
   const request = storedRequest(doc);
   if (doc.status !== "pending" || !request) throw notPending();
   if (doc.expiresAt <= Date.now()) throw notPending();
@@ -223,6 +223,5 @@ const credentialRequest: z.ZodType<CredentialRequest> = z.object({
   savedHandle: z.string().optional(),
 });
 
-/** The request a `tiny.credential-request` document holds, parsed; `null` before the call stores one. */
 export const storedRequest = (doc: { request: JsonValue }) =>
   parseStored("tiny.credential-request.request", doc.request, credentialRequest.nullable());

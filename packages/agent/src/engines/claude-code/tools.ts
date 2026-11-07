@@ -84,7 +84,6 @@ export function claudeToolApi(options: {
   details?: (value: JsonValue) => void;
 }): ToolExecutionApi {
   const memos = new Map<string, JsonValue>();
-  // memo(name, context) reads; memo(name, candidate, context) keeps the first value.
   function memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
   function memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
   async function memo(name: string, ...rest: unknown[]) {
