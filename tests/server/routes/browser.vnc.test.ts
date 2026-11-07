@@ -308,6 +308,34 @@ describe("VNC WebSocket bridge", () => {
     });
   });
 
+  it("releases the slot and the VM stream of a viewer that closes while its stream opens", async () => {
+    const vms: ReturnType<typeof fakeVm>[] = [];
+    let opening: (() => void) | undefined;
+    await openLive(async () => {
+      const vm = fakeVm();
+      vms.push(vm);
+      await new Promise<void>((resolve) => (opening = resolve));
+      return vm.stream;
+    });
+    await listen();
+
+    for (let i = 0; i < 4; i++) {
+      opening = undefined;
+      const ws = connect(port, ticketPath(mint()));
+      await opened(ws);
+      await vi.waitFor(() => expect(opening).toBeDefined());
+      ws.close();
+      await closed(ws);
+      // The server side of the socket closes too, still inside openStream.
+      await vi.waitFor(async () =>
+        expect(await new Promise((r) => server.getConnections((_e, n) => r(n)))).toBe(0),
+      );
+      opening!();
+      await vi.waitFor(() => expect(vms[i]!.destroyed, `VM stream ${i}`).toBe(true));
+    }
+    expect((await rawUpgrade(port, ticketPath(mint()))).status).toBe(101);
+  });
+
   it("leaves other upgrade paths to their own listeners", async () => {
     const seen: { url?: string; destroyed: boolean }[] = [];
     await listen((s) => {
