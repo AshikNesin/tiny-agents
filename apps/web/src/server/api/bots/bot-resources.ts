@@ -27,6 +27,7 @@ import {
   botSkills,
   codeHandoffs,
   memories,
+  notificationLog,
   promptRevisions,
   routines,
   shelleyHandoffs,
@@ -150,6 +151,9 @@ export const BOT_RESOURCES = {
     release: (bot) => forgetBotInVault(bot.id),
   }),
   vaultAudit: retained("the audit log outlives what it audits", [vaultAuditEvents.botId]),
+  notificationLog: retained("the record of notifications sent outlives the bot they were about", [
+    notificationLog.botId,
+  ]),
   history: retained(
     "PRD §5.1: conversation history (the current chat, past chats, routines) and the uploads its messages attach stay in agent.db; Phase 2 adds cleanup",
   ),
