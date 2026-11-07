@@ -15,12 +15,21 @@ import {
   createLocalBackend,
   type LocalStore,
 } from "../../../apps/web/src/server/api/vault/backends/local";
-import { setWriteBackendsForTests } from "../../../apps/web/src/server/api/vault/vault.admin.service";
+import {
+  createAppCredential,
+  createItem,
+  deleteItem,
+  setWriteBackendsForTests,
+  updateItem,
+} from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
   clearStatusCache,
+  forgetAppCredential,
+  listFor,
   planUse,
   useItem,
   resolveConnectionSecret,
+  resolveProviderSecret,
 } from "../../../apps/web/src/server/api/vault/vault.service";
 import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import {
@@ -409,6 +418,141 @@ describe("vault policy", () => {
     expect(values.password.reveal()).toBe(CANARY);
     expect(secretRedactor.scrub(`x ${CANARY} y`)).toBe("x [vault] y");
     await assertNoCanary();
+  });
+});
+
+/** A full policy, as the route's schema would default it. */
+const policyOf = (policy: { handle: string; hosts?: string[]; tools?: string[] }) => ({
+  origins: [],
+  hosts: [],
+  tools: [],
+  bots: null,
+  approval: "per_conversation" as const,
+  allowUnattended: false,
+  disabled: false,
+  ...policy,
+});
+
+describe("app credentials (audience app)", () => {
+  const createKey = () =>
+    createAppCredential({
+      handle: "provider-anthropic",
+      label: "Model provider: Anthropic",
+      value: CANARY,
+      hosts: ["api.anthropic.com"],
+      inject: { as: "header", name: "x-api-key", format: "{value}" },
+    });
+
+  beforeEach(() => forgetAppCredential());
+
+  it("resolves for its provider's host only, without a per-use audit row", async () => {
+    await createKey();
+    const input = { providerId: "p1", host: "api.anthropic.com" };
+    expect(await resolveProviderSecret("provider-anthropic", input)).toBe(CANARY);
+    await expect(
+      resolveProviderSecret("provider-anthropic", { providerId: "p1", host: "evil.example" }),
+    ).rejects.toMatchObject({ code: "refused_origin" });
+    const outcomes = (
+      await db.select().from(vaultAuditEvents).where(eq(vaultAuditEvents.tool, "model"))
+    ).map((e) => e.outcome);
+    expect(outcomes).toEqual(["refused_origin"]);
+    const [row] = await db.select().from(vaultItems);
+    expect(row?.lastUsedBy).toBe("provider:p1");
+    await assertNoCanary();
+  });
+
+  it("is invisible to bots: not listed, and unknown to their tools", async () => {
+    await createKey();
+    expect(await listFor({})).toEqual([]);
+    expect(
+      await planUse(
+        {
+          handle: "provider-anthropic",
+          tool: "http_request",
+          targetKind: "host",
+          target: "api.anthropic.com",
+          conversation: 1,
+          granted: false,
+        },
+        { unattended: false },
+      ),
+    ).toMatchObject({ refused: "unknown_handle" });
+  });
+
+  it("a bot item can't be used as a provider key", async () => {
+    await createItem({
+      kind: "api_key",
+      title: "k",
+      urls: [],
+      values: { value: CANARY },
+      policy: policyOf({ handle: "bot-key", hosts: ["api.anthropic.com"], tools: ["model"] }),
+    });
+    await expect(
+      resolveProviderSecret("bot-key", { providerId: "p1", host: "api.anthropic.com" }),
+    ).rejects.toMatchObject({ code: "refused_origin" });
+  });
+
+  it("stops opening when its hosts are widened in the database", async () => {
+    await createKey();
+    await db
+      .update(vaultItems)
+      .set({ hostsJson: JSON.stringify(["api.anthropic.com", "evil.example"]) })
+      .where(eq(vaultItems.handle, "provider-anthropic"));
+    await expect(
+      resolveProviderSecret("provider-anthropic", { providerId: "p1", host: "evil.example" }),
+    ).rejects.toMatchObject({ code: "backend_error" });
+  });
+
+  it("can't be edited or deleted from the Vault page", async () => {
+    await createKey();
+    await expect(
+      updateItem("provider-anthropic", {
+        policy: policyOf({ handle: "provider-anthropic", hosts: ["evil.example"] }),
+      }),
+    ).rejects.toMatchObject({ output: { statusCode: 409 } });
+    await expect(deleteItem("provider-anthropic", { purge: true })).rejects.toMatchObject({
+      output: { statusCode: 409 },
+    });
+  });
+});
+
+describe("policy binding (local backend)", () => {
+  it("re-seals on a policy edit through the service, but not on one behind its back", async () => {
+    await createItem({
+      kind: "api_key",
+      title: "k",
+      urls: [],
+      values: { value: CANARY },
+      policy: policyOf({ handle: "k", hosts: ["api.example.com"], tools: ["http_request"] }),
+    });
+    const use = (target: string) =>
+      useItem(
+        {
+          handle: "k",
+          tool: "http_request",
+          targetKind: "host",
+          target,
+          conversation: 1,
+          granted: false,
+          approved: true,
+        },
+        { unattended: false },
+        ["value"],
+        async (values) => values.value!.reveal(),
+      );
+    await updateItem("k", {
+      policy: policyOf({
+        handle: "k",
+        hosts: ["api.example.com", "two.example.com"],
+        tools: ["http_request"],
+      }),
+    });
+    expect(await use("two.example.com")).toBe(CANARY);
+    await db
+      .update(vaultItems)
+      .set({ hostsJson: JSON.stringify(["api.example.com", "two.example.com", "evil.example"]) })
+      .where(eq(vaultItems.handle, "k"));
+    await expect(use("evil.example")).rejects.toMatchObject({ code: "backend_error" });
   });
 });
 

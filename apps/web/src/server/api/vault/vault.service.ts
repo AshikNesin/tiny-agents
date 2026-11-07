@@ -2,12 +2,15 @@
  * The vault's policy, audit and read path (issue #56).
  *
  * `VaultItem` rows hold references and policy; values stay in the backend
- * and are fetched per use (never cached). Every attempted use — refusals and
- * denials included — writes a `VaultAuditEvent` without any value. This
- * module resolves with the read-only backends only; writes live in
+ * and are fetched per use. Every attempted use by a bot or connection —
+ * refusals and denials included — writes a `VaultAuditEvent` without any
+ * value. An `app` item (a model provider's key, issue #179) audits refusals
+ * and failures only, and its value is cached in memory for a few minutes, so
+ * every model call neither writes a row nor reaches the backend. This module
+ * resolves with the read-only backends only; writes live in
  * `vault.admin.service.ts`.
  */
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
   secretRedactor,
@@ -26,6 +29,7 @@ import {
 } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
+import { policyDigest } from "../../secrets/secret-box";
 import { readBackends } from "./backends";
 import {
   BackendError,
@@ -89,6 +93,25 @@ export function toMeta(row: VaultItemRow): VaultItemMeta {
     approval: effectiveApproval(row),
     tools: effectiveTools(row),
   };
+}
+
+/**
+ * The digest of what an item's value may be used for: its audience, origins,
+ * hosts and injection. The local backend binds each value to it, so a row
+ * whose policy was widened in the database (not through the service, which
+ * re-seals) no longer opens its value.
+ */
+export function vaultPolicyDigest(
+  row: Pick<VaultItemRow, "audience" | "originsJson" | "hostsJson" | "injectJson">,
+): string {
+  return policyDigest({
+    audience: row.audience,
+    origins: [...parseList(row.originsJson)].sort(),
+    hosts: parseList(row.hostsJson)
+      .map((h) => h.toLowerCase())
+      .sort(),
+    inject: parseJson(row.injectJson) ?? null,
+  });
 }
 
 function botAllowed(row: VaultItemRow, botId: string | undefined): boolean {
@@ -202,7 +225,7 @@ export async function listFor(scope: {
   const rows = await db
     .select()
     .from(vaultItems)
-    .where(eq(vaultItems.disabled, false))
+    .where(and(eq(vaultItems.disabled, false), eq(vaultItems.audience, "bots")))
     .orderBy(asc(vaultItems.handle));
   const origin = scope.origin ? normalizeOrigin(scope.origin) : undefined;
   return rows
@@ -210,6 +233,12 @@ export async function listFor(scope: {
     .filter((row) => !scope.tool || effectiveTools(row).includes(scope.tool))
     .filter((row) => !origin || parseList(row.originsJson).includes(origin))
     .map(toMeta);
+}
+
+function hostAllowed(row: VaultItemRow, host: string): boolean {
+  return parseList(row.hostsJson)
+    .map((h) => h.toLowerCase())
+    .includes(host.toLowerCase());
 }
 
 /** Whether the item's policy lets a value go to this target, read by the target's kind. */
@@ -220,9 +249,10 @@ function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string)
       return origin !== undefined && parseList(row.originsJson).includes(origin);
     }
     case "host":
-      return parseList(row.hostsJson)
-        .map((h) => h.toLowerCase())
-        .includes(target.toLowerCase());
+      return hostAllowed(row, target);
+    // A model provider's requests: only an app item, and only to its hosts.
+    case "provider":
+      return row.audience === "app" && hostAllowed(row, target);
     // Commands run confined to the item's hosts, so it must name some.
     case "command":
       return parseList(row.hostsJson).length > 0;
@@ -266,8 +296,8 @@ async function policyRefusal(
   who: UseContext,
   botScoped = true,
 ): Promise<{ refused: Refusal["refused"]; message: string; reason?: string } | undefined> {
-  // A bot that may not see an item learns nothing about it.
-  if (!row || (botScoped && !botAllowed(row, who.botId))) {
+  // A bot that may not see an item learns nothing about it; app items are never a bot's.
+  if (!row || (botScoped && (row.audience !== "bots" || !botAllowed(row, who.botId)))) {
     return { refused: "unknown_handle", message: UNKNOWN_HANDLE(use.handle) };
   }
   if (row.disabled) {
@@ -393,7 +423,7 @@ export async function useItem<T>(
 async function runUse<T>(
   use: PolicyUse & { conversation?: number; granted?: boolean; approved: boolean },
   who: UseContext & { taskId?: number },
-  path: { botScoped: boolean; usedBy: string | null },
+  path: { botScoped: boolean; usedBy: string | null; auditUse?: boolean },
   fields: readonly SecretField[] | ((item: VaultItemMeta) => readonly SecretField[]),
   sink: (values: SecretValues, item: VaultItemMeta) => Promise<T>,
 ): Promise<T> {
@@ -437,7 +467,9 @@ async function runUse<T>(
     });
     throw error;
   }
-  await audit({ ...base, outcome: use.approved ? "approved_used" : "used" });
+  if (path.auditUse !== false) {
+    await audit({ ...base, outcome: use.approved ? "approved_used" : "used" });
+  }
   await markUsed(item.id, path.usedBy);
   return result;
 }
@@ -462,7 +494,11 @@ async function resolveValues(
   try {
     for (const field of wanted) {
       try {
-        const value = await backend.resolve(row.externalId, backendField(row, field));
+        const value = await backend.resolve(
+          row.externalId,
+          backendField(row, field),
+          vaultPolicyDigest(row),
+        );
         secretRedactor.register(value);
         values[field] = value;
       } catch (error) {
@@ -521,4 +557,46 @@ export async function resolveConnectionSecret(handle: string, slug: string): Pro
         : `Vault item "${handle}": ${error.message}`,
     );
   }
+}
+
+// ── App credentials ─────────────────────────────────────────────────────
+
+/** How long a resolved app credential is kept in memory. */
+const APP_VALUE_TTL_MS = 5 * 60_000;
+const appValues = new Map<string, { at: number; value: string }>();
+
+/** Drop a cached app credential (its item was edited, rotated or deleted). */
+export function forgetAppCredential(handle?: string): void {
+  if (handle === undefined) return appValues.clear();
+  for (const key of appValues.keys()) {
+    if (key.startsWith(`${handle}\0`)) appValues.delete(key);
+  }
+}
+
+/**
+ * A model provider account's key from its `app` vault item, for a request
+ * to `host`. The owner configured the provider, so there is no bot scope,
+ * no approval and nobody "present" for the unattended rule; the item must be
+ * an app item that lists `host`, and be enabled. Refusals and backend
+ * failures are audited; successful uses are not (one row per model call
+ * would bury the log), and the value is cached for a few minutes, keyed by
+ * item and host. Throws a `VaultError` whose message the provider's status
+ * shows.
+ */
+export async function resolveProviderSecret(
+  handle: string,
+  input: { providerId: string; host: string },
+): Promise<string> {
+  const key = `${handle}\0${input.host.toLowerCase()}`;
+  const cached = appValues.get(key);
+  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
+  const value = await runUse(
+    { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
+    { unattended: false },
+    { botScoped: false, usedBy: `provider:${input.providerId}`, auditUse: false },
+    ["value"],
+    async (values) => values.value!.reveal(),
+  );
+  appValues.set(key, { at: Date.now(), value });
+  return value;
 }

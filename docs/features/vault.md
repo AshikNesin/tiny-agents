@@ -97,6 +97,20 @@ A turn counts as **unattended** when it runs in a routine's own conversation
 user message is a delivery from another bot. When in doubt it counts as
 unattended, which only ever refuses more.
 
+## Audiences
+
+Every item has an audience (ADR 0015):
+
+- `bots` (the default): listed to bots and used through their tools, under
+  the policy and approvals above.
+- `app`: a secret the server uses itself, such as a model provider's key. It
+  is never listed to bots, and a bot's tool that names it is told there is no
+  such item. Only the `provider` sink resolves it, for a host the item lists,
+  with no approval. Refusals and failures are audited; successful uses only
+  update "last used", and the value is cached in memory for up to five
+  minutes. The Vault page lists these items under "Used by the app" and
+  refuses edits and deletes there with 409: they change where they are used.
+
 ## Sandbox commands and the egress allowlist
 
 `run_command` can hand a command vault values as env vars:
@@ -304,7 +318,10 @@ fully writable from the Vault UI.
   fingerprints the key.
 - **Binding.** The purpose, the record (the item's KV key, or the connection
   row) and the field are the AAD. A value copied to another item, row or
-  column does not decrypt.
+  column does not decrypt. A local item is also bound to a digest of its
+  row's policy (audience, origins, hosts, injection). Editing the policy in
+  the Vault UI re-seals the value; widening it in the database directly
+  leaves the value unreadable.
 - **Wrong key.** Losing or changing `SECRETS_KEY` makes stored values
   unreadable: the item reports "stored under a different SECRETS_KEY" and has
   to be re-entered. Boot is unaffected.

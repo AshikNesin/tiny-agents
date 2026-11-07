@@ -62,8 +62,17 @@ export interface VaultItemMeta {
  * - `connection`: an MCP connection the owner linked the item to.
  * - `window`: a desktop window on the bot's computer, bound by class and
  *   title and checked right before typing; every use asks.
+ * - `provider`: a model provider account's requests (issue #179). The item
+ *   must be an `app` item and list the request's host; no bot is behind it.
  */
-export const VAULT_TARGET_KINDS = ["origin", "host", "command", "connection", "window"] as const;
+export const VAULT_TARGET_KINDS = [
+  "origin",
+  "host",
+  "command",
+  "connection",
+  "window",
+  "provider",
+] as const;
 export type VaultTargetKind = (typeof VAULT_TARGET_KINDS)[number];
 
 /** One intended use of an item: what policy, the approval card and the audit see. */

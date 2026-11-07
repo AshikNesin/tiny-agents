@@ -82,12 +82,16 @@ A message sent to a harness while its turn runs: it goes into that turn. Queue h
 _Avoid_: interrupt (Stop interrupts)
 
 **Vault use**:
-One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem` and `resolveConnectionSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
+One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection, window, provider); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem`, `resolveConnectionSecret` and `resolveProviderSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
 _Avoid_: fill, lookup, secret access
 
 **Sink**:
-The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header. A sink declares its target kind; it never sees policy. A sink whose target moved (a page left its origin, a window lost focus) throws `VaultTargetMovedError`.
+The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header, a model provider's requests. A sink declares its target kind; it never sees policy. A sink whose target moved (a page left its origin, a window lost focus) throws `VaultTargetMovedError`.
 _Avoid_: consumer, client
+
+**App credential**:
+A vault item with audience `app`: a secret the server uses itself, such as a model provider account's key. Bots never list or use it; only the `provider` sink resolves it, for a host the item lists. Shown on the Vault page under "Used by the app" and changed where it is used.
+_Avoid_: system secret, server key
 
 **Settled**:
 A conversation whose reply finished and went idle. Settling resets the sender's per-turn budget, then answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript, one lookup of who is behind the conversation and one record of when the reply started. `startSettledPipeline` (`bots.settled.ts`) builds every step from the opened runtime, subscribes once, then runs each step's boot sweep. Nothing else listens for idle.

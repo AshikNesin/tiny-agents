@@ -47,6 +47,8 @@ export interface VaultBackendView {
 }
 
 export interface VaultItem {
+  /** `app`: a secret the server uses itself (a model provider's key); never a bot's. */
+  audience: "bots" | "app";
   id: string;
   handle: string;
   kind: VaultKind;

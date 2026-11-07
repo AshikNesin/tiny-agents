@@ -255,9 +255,15 @@ export function VaultList() {
       identity: [],
       api_key: [],
     };
-    for (const item of overview?.items ?? []) groups[item.kind].push(item);
+    for (const item of overview?.items ?? []) {
+      if (item.audience === "bots") groups[item.kind].push(item);
+    }
     return groups;
   }, [overview]);
+  const appItems = useMemo(
+    () => (overview?.items ?? []).filter((item) => item.audience === "app"),
+    [overview],
+  );
 
   return (
     <PageLayout
@@ -325,6 +331,16 @@ export function VaultList() {
                 <ItemRows items={byKind[kind]} />
               </Section>
             ) : null,
+          )}
+
+          {appItems.length > 0 && (
+            <Section
+              title="Used by the app"
+              meta={String(appItems.length)}
+              description="Keys the server uses itself, such as model providers'. Bots never see them; change them in Settings → Models."
+            >
+              <ItemRows items={appItems} />
+            </Section>
           )}
 
           {overview.unlinked.length > 0 && (
