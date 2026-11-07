@@ -74,9 +74,6 @@ const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
 
-// The string an expression always evaluates to, or null. Follows `+`,
-// template pieces and file-level string consts, so a name built from pieces
-// still reads as the name.
 const staticString = (node, consts) => {
   switch (node.type) {
     case "Literal":
@@ -239,7 +236,6 @@ export default {
     },
     "no-date-now-deadline-loop": {
       create(context) {
-        // Locals a wait loop sets from the clock on each pass: `const now = Date.now()`.
         const clockNames = new Set();
         const readsClock = (node) => {
           const target = unparenthesized(node);
