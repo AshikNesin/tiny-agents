@@ -26,7 +26,8 @@ straight away.
 1. **The owner approves every new bot.** The tool is `askOnly` (like
    `update_instructions`): it waits in chat even when its permission says
    `allow`. The approval card reads "<bot> wants to create a new bot —
-   “<name>”" and shows the full instructions behind Read more.
+   “<name>”" and shows instructions longer than 120 characters behind Read
+   more; shorter ones are not on the card.
 2. **Only the owner's own turns.** The store adapter
    (`apps/web/src/server/api/bots/bot-builder.store.ts`) refuses a routine
    run or a turn started by another bot's message (`isUnattended`), so a peer

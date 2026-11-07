@@ -311,6 +311,8 @@ const FAUX_ASK: ToolCall["arguments"] = {
  * reads the browser page N times (browser_snapshot), one tool round each.
  * "/improve" proposes appending a line to the bot's own instructions
  * (update_instructions), so e2e can drive the self-improvement approval.
+ * "/newbot NAME" asks to create a bot named NAME (create_bot), so e2e can
+ * drive the bot-builder approval.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -376,6 +378,19 @@ export async function openFauxAgentRuntime(
       const call = fauxAssistantMessage(
         fauxToolCall("update_instructions", {
           append,
+        }),
+      );
+      return { ...call, stopReason: "toolUse" as const };
+    }
+    const newBot = /^\/newbot\s+(.+)/.exec(text);
+    if (newBot && toolResults === 0) {
+      const call = fauxAssistantMessage(
+        fauxToolCall("create_bot", {
+          name: newBot[1],
+          description: "Made by the bot-builder e2e",
+          instructions:
+            "You help the owner with the bot-builder e2e.\n" +
+            "The owner reads these instructions on the approval card before the bot exists.",
         }),
       );
       return { ...call, stopReason: "toolUse" as const };

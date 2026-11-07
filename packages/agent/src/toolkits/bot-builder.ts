@@ -2,10 +2,10 @@
  * Bot builder (issue #149): a bot can create a new bot through `create_bot`
  * when the owner asks it to ("make a bot for my Limitless project"). The
  * tool is `askOnly`, like `update_instructions`: the owner approves every
- * new bot in chat, with its full instructions on the approval card, and the
- * app's store adapter refuses unattended turns (routine runs, peer
- * deliveries) and chats shared with guests (managing bots is the owner's),
- * so nobody but the owner can spawn bots.
+ * new bot in chat (instructions past 120 characters fold behind Read more
+ * on the card), and the app's store adapter refuses unattended turns
+ * (routine runs, peer deliveries) and chats shared with guests (managing
+ * bots is the owner's), so nobody but the owner can spawn bots.
  *
  * Replay is `unsafe`: a create interrupted by a restart is not re-run on
  * recovery (it would either duplicate the bot or fail on its now-taken
