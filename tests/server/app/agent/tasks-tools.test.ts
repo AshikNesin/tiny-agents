@@ -255,8 +255,11 @@ async function interruptAndResume(
       await new Promise((r) => setTimeout(r, 20));
     }
     // Close while the tool is mid-call: its result is never committed.
+    // Release only once close has reached the harness. A release that lands
+    // first commits the failure, and the always-calling model then loops and
+    // close never returns. 50 ms was not enough with test files in parallel.
     const closing = first.close();
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 1_000));
     release();
     await closing;
 

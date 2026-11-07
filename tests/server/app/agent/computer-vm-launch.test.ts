@@ -159,6 +159,8 @@ function run(
     let timedOut = false;
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));
+    // A script that exits before reading stdin makes this write fail with EPIPE.
+    child.stdin.on("error", () => {});
     child.stdin.end(stdin ?? "");
     const timer = setTimeout(() => {
       timedOut = true;
