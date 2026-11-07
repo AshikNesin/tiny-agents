@@ -1,16 +1,8 @@
 /**
- * Everything a bot owns, one entry per kind, and the one sequence that lets
- * it go when the bot is deleted. Something new a bot owns gets an entry
- * here: tests/server/api/bot-resources.test.ts fails for a schema column
- * holding bot ids, or an exported `…ForBot` key function, that no entry
- * claims, and needs a seed for every released or retained kind.
- *
- * - `cascade`: rows whose foreign key to bots.id deletes them with the bot.
- * - `retained`: kept on purpose, for `reason`.
- * - `release`: `capture` reads before the bot row is deleted (the cascade
- *   erases what it reads); `release` runs once this call's delete returned
- *   the row. A release must be idempotent and may throw: the failure is
- *   logged and the others still run.
+ * Something new a bot owns gets an entry in BOT_RESOURCES:
+ * tests/server/api/bot-resources.test.ts fails for a column holding bot ids
+ * or an exported `…ForBot` function that no entry claims. `capture` runs
+ * before the bot row is deleted because the cascade erases what it reads.
  */
 import { eq } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
@@ -62,7 +54,6 @@ interface Retained {
 interface Released {
   how: "release";
   columns?: Columns;
-  /** The function that names this resource from a bot (a key it is stored under). */
   keyedBy?: (...args: never[]) => unknown;
   prepare(bot: BotRow): Promise<(context: ReleaseContext) => Promise<void>>;
 }
@@ -74,7 +65,7 @@ function cascade(...columns: AnySQLiteColumn[]): Cascade {
 }
 
 function retained(reason: string, columns?: Columns): Retained {
-  return { how: "retained", reason, ...(columns ? { columns } : {}) };
+  return { how: "retained", reason, columns };
 }
 
 function released<Captured = undefined>(entry: {
@@ -127,8 +118,7 @@ export const BOT_RESOURCES = {
       );
     },
   }),
-  // Both browsers, whichever the bot is set to now: a bot switched from its
-  // own to the shared one still leaves its own profile behind.
+  // By bot id, not browserProfile: a bot switched to the shared browser left its own behind.
   browser: released({
     keyedBy: browserTargetForBot,
     release: async (bot) => {
@@ -139,7 +129,6 @@ export const BOT_RESOURCES = {
       ]);
     },
   }),
-  // The shared desktop belongs to the other bots on it and is left alone.
   desktop: released({
     keyedBy: computerProfileForBot,
     release: async (bot) => {
@@ -162,11 +151,7 @@ export const BOT_RESOURCES = {
   ),
 } satisfies Record<string, BotResource>;
 
-/**
- * Delete the bot and release everything it owned. 404 when it is gone,
- * including for the loser of two concurrent deletes, which releases nothing.
- * A failing release never fails the delete.
- */
+/** The loser of two concurrent deletes gets the 404 and releases nothing. */
 export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<BotRow> {
   const bot = await findBotRow(id);
   const entries: [string, BotResource][] = Object.entries(BOT_RESOURCES);

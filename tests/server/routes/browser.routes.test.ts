@@ -28,17 +28,16 @@ import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bot
  */
 let sessions: BrowserSessions | undefined;
 let currentTransport: BrowserTransport = async () => fakeSession().session;
-/** Profile dirs the transport was asked to wipe, oldest first. */
-let wiped: string[] = [];
+let wipedDirs: string[] = [];
 function freshManager(): BrowserSessions {
-  wiped = [];
+  wipedDirs = [];
   sessions = createBrowserSessions({
     profilesDir: "/tmp/ta-route-profiles",
     transport: Object.assign(
       (dir: string, open: OpenBrowserOptions) => currentTransport(dir, open),
       {
         wipe: async (dir: string) => {
-          wiped.push(dir);
+          wipedDirs.push(dir);
         },
       },
     ),
@@ -340,7 +339,7 @@ describe("browser routes", () => {
     const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
     expect(reset.status).toBe(200);
     expect(getLiveBrowserSession(target)).toBeUndefined();
-    expect(wiped).toEqual(["/tmp/ta-route-profiles/shared"]);
+    expect(wipedDirs).toEqual(["/tmp/ta-route-profiles/shared"]);
   });
 
   it("gives bots on the shared profile one browser, each with its own tab", async () => {
@@ -404,7 +403,7 @@ describe("browser routes", () => {
     // Resetting it wipes only its own profile; the shared browser stays up.
     const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
     expect(reset.status).toBe(200);
-    expect(wiped).toEqual([`/tmp/ta-route-profiles/bot-${botId}`]);
+    expect(wipedDirs).toEqual([`/tmp/ta-route-profiles/bot-${botId}`]);
     expect(getLiveBrowserSession(own)).toBeUndefined();
     expect(getLiveBrowserSession(target)).toBeDefined();
   });

@@ -69,7 +69,6 @@ const tables = Object.values(schema as Record<string, unknown>).filter(
 
 const columnName = (column: AnySQLiteColumn) => `${getTableName(column.table)}.${column.name}`;
 
-/** Every schema column holding bot ids: a foreign key to bots.id, or a name that says so. */
 function botIdColumns(): string[] {
   return tables.flatMap((table) => {
     const config = getTableConfig(table);
@@ -87,7 +86,6 @@ function botIdColumns(): string[] {
   });
 }
 
-/** Exported functions under apps/web/src/server named `…ForBot`, with their file. */
 function forBotFunctions(dir = "apps/web/src/server"): { name: string; file: string }[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -161,13 +159,10 @@ describe(RESOURCES, () => {
   });
 });
 
-// ── Deleting a bot ──────────────────────────────────────────────────────
-
 const token = await authToken("bot-resources-test@example.com");
 const app = createTestApp();
 const deleteBot = (id: string) => api(app, `/api/v1/bots/${id}`, { method: "DELETE", token });
 
-/** A browser whose tabs record their close; a browser's first tab is named after its dir. */
 function fakeBrowser() {
   const closed: string[] = [];
   let tabs = 0;
@@ -203,12 +198,10 @@ interface World {
 
 type Check = () => Promise<void>;
 
-/** Every kind a deleted bot releases or keeps: a new one fails typecheck here until it has a seed. */
 type SeededKind = {
   [K in Kind]: (typeof BOT_RESOURCES)[K]["how"] extends "cascade" ? never : K;
 }[Kind];
 
-/** Give the bot one of the kind; returns the check that it went, or stayed, after the delete. */
 const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
   async chat({ bot, spied }) {
     return async () => {
@@ -328,7 +321,6 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
   },
 };
 
-/** Whether `column` still holds the bot's id (an element, for a JSON list). */
 async function holds(column: AnySQLiteColumn, botId: string): Promise<boolean> {
   const where = column.name.endsWith("_json")
     ? sql`exists (select 1 from json_each(${column}) where value = ${botId})`
@@ -382,8 +374,7 @@ describe("deleting a bot", () => {
     await resetAppTables();
   });
 
-  /** Seed every kind, then switch the bot to the shared browser (its own profile stays behind). */
-  async function seedEverything(): Promise<Map<SeededKind, Check>> {
+  async function seedThenSwitchToShared(): Promise<Map<SeededKind, Check>> {
     const checks = new Map<SeededKind, Check>();
     for (const kind of Object.keys(seeds) as SeededKind[]) {
       checks.set(kind, await seeds[kind](world));
@@ -409,7 +400,7 @@ describe("deleting a bot", () => {
   });
 
   it("releases every released kind, keeps every retained one, and leaves no claimed bot id", async () => {
-    const checks = await seedEverything();
+    const checks = await seedThenSwitchToShared();
     const claimed = entries.flatMap(([, entry]) =>
       (entry.columns ?? []).map((column) => ({ column, how: entry.how })),
     );
@@ -428,7 +419,7 @@ describe("deleting a bot", () => {
 
   it("logs a failing release with its kind, runs the others, and still deletes", async () => {
     const warn = vi.spyOn(logger, "warn");
-    const checks = await seedEverything();
+    const checks = await seedThenSwitchToShared();
     vi.spyOn(world.browser, "closeTab").mockRejectedValue(new Error("browser gone"));
 
     expect((await deleteBot(world.bot.id)).status).toBe(200);

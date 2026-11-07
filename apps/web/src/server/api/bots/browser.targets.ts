@@ -9,7 +9,6 @@ import { conversationOwner } from "./bots.owner";
 
 export const SHARED_BROWSER_PROFILE = "shared";
 
-/** The browser (and desktop) profile of a bot set to its own; no other bot ever uses it. */
 export function ownBrowserProfile(botId: string): string {
   return `bot-${botId}`;
 }
