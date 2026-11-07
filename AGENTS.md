@@ -35,10 +35,11 @@ R1 to R5c are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 An `apps/` transaction is a sync `db.transaction()` with no `await` inside.
 Import `db` from `apps/web/src/server/db` or `@groot/core/database`. A wrong
-password or passkey is a plain 401, so it never signs the owner out. No check
-covers a kit export that `tests/kit-consumers/consumer.tsx` does not import,
-and groot f191f76 broke downstream apps that way. "None yet" rows are open
-follow-ups.
+password or passkey is a plain 401, so it never signs the owner out
+(`tests/server/routes/vault.routes.test.ts`). Guest pages are also checked by
+`tests/client/guest-access-nav.test.tsx`. No check covers a kit export that
+`tests/kit-consumers/consumer.tsx` does not import, and groot f191f76 broke
+downstream apps that way. "None yet" rows are open follow-ups.
 
 When the operator corrects an agent, fix the mistake and add its row. If the
 row was already here with no enforcer, fix it higher (structure, type, lint,
