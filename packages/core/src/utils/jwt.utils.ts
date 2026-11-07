@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import ms from "ms";
-import { Boom } from "../errors";
+import { Boom, ErrorCode, type HttpError } from "../errors";
 import { env } from "../env";
 import { config } from "../config";
 import { utf8Encode } from "./encoding.utils";
@@ -29,15 +29,20 @@ export async function generateToken(user: AuthUser): Promise<string> {
     .sign(secret());
 }
 
+/** Session failures only: a wrong password or an unknown passkey is a plain `Boom.unauthorized`. */
+export function sessionInvalid(message: string): HttpError {
+  return Boom.unauthorized(message, undefined, ErrorCode.SESSION_INVALID.code);
+}
+
 export async function verifyToken(token: string): Promise<AuthUser> {
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: [ALGORITHM] });
     if (typeof payload.userId !== "number" || typeof payload.email !== "string") {
-      throw Boom.unauthorized("Invalid token payload");
+      throw sessionInvalid("Invalid token payload");
     }
     return { userId: payload.userId, email: payload.email };
   } catch (error) {
     if (Boom.isHttpError(error)) throw error;
-    throw Boom.unauthorized("Invalid or expired token");
+    throw sessionInvalid("Invalid or expired token");
   }
 }

@@ -13,10 +13,7 @@ interface AuthState {
   isAuthenticated: boolean;
   /** False until the first `checkAuth()` settles. */
   hasCheckedAuth: boolean;
-  /**
-   * Bumped on every sign-in and sign-out. A request that records it when sent
-   * can tell whether its 401 belongs to the current session.
-   */
+  /** Bumped on every sign-in and sign-out. */
   generation: number;
 
   /** Sign in with email and password. Word a rejection with `loginErrorDescription`. */
@@ -83,9 +80,9 @@ async function passkeySignIn(): Promise<SessionUser> {
 let generationChangedAt = 0;
 
 /**
- * The client session: who is signed in, how they sign in and out, and what a
- * 401 means. The server keeps the session in an HttpOnly cookie, so this
- * holds only the user.
+ * The client session: who is signed in, how they sign in and out, and what
+ * the session guard's 401 means. The server keeps the session in an HttpOnly
+ * cookie, so this holds only the user.
  */
 export const useAuthStore = create<AuthState>((set) => {
   const change = (user: SessionUser | null) => {
@@ -151,9 +148,6 @@ export const useAuthStore = create<AuthState>((set) => {
   };
 });
 
-// A 401 mid-session means the cookie expired: drop the user so
-// <ProtectedRoute> sends them to /login. A 401 for a request sent before the
-// last sign-in or sign-out belongs to an earlier session and is ignored.
 apiClient.onUnauthorized(({ sentAt }) => {
   if (useAuthStore.getState().isAuthenticated && sentAt >= generationChangedAt) {
     useAuthStore.getState().clearAuth();

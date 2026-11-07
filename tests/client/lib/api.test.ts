@@ -105,11 +105,11 @@ describe("apiClient", () => {
     expect(await blob.text()).toBe("raw bytes");
   });
 
-  it("reports every 401 to the unauthorized handlers until they unsubscribe", async () => {
+  it("reports a session the guard rejected to the unauthorized handlers until they unsubscribe", async () => {
     const handler = vi.fn();
     const unsubscribe = apiClient.onUnauthorized(handler);
     const before = performance.now();
-    respond(401, { success: false, error: { code: "UNAUTHORIZED", message: "No token" } });
+    respond(401, { success: false, error: { code: "SESSION_INVALID", message: "No token" } });
     await expect(apiClient.get("/todos")).rejects.toMatchObject({ status: 401 });
     expect(handler).toHaveBeenCalledOnce();
     expect(handler.mock.calls[0]![0]).toMatchObject({ path: "/todos" });
@@ -118,5 +118,25 @@ describe("apiClient", () => {
     unsubscribe();
     await expect(apiClient.get("/todos")).rejects.toMatchObject({ status: 401 });
     expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("only throws for a credential 401 such as a wrong password or an unknown passkey", async () => {
+    const handler = vi.fn();
+    const unsubscribe = apiClient.onUnauthorized(handler);
+    respond(401, {
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Passkey not found" },
+    });
+    await expect(apiClient.post("/vault/step-up", { passkey: {} })).rejects.toMatchObject({
+      status: 401,
+      message: "Passkey not found",
+      fromServer: true,
+    });
+    respond(401);
+    await expect(apiClient.getBlob("/storage/files/download")).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(handler).not.toHaveBeenCalled();
+    unsubscribe();
   });
 });

@@ -234,11 +234,11 @@ await journey(
       async () => {
         await openRevealPrompt();
         await usePasskey();
+        await expect(page.getByText("Passkey not found")).toBeVisible();
         await expect.poll(() => stepUps.length, { timeout: 15_000 }).toBe(2);
         const refusal = stepUps[1];
         await proof("leftover-refused");
-        // A refusal, never 401: the shell reads any 401 as an expired session (#164).
-        expect(refusal.status, "POST /vault/step-up status").toBe(403);
+        expect(refusal.status, "POST /vault/step-up is a plain 401, not SESSION_INVALID").toBe(401);
         await expectRefusedInPlace();
       },
     );
