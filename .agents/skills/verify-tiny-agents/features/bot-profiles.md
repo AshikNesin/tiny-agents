@@ -34,6 +34,7 @@ Preconditions:
 - **Desktop reset.** Chat → `Reset computer` → `Reset this bot's computer?` → `Reset`: `DELETE /bots/<id>/computer/profile` 200, toast, `Open computer` back, status inactive, profile directory gone, no `Xtigervnc` left.
 - **Delete.** Open both again (status `active: true`), then `Edit <bot>` → `Delete bot` → confirm `Delete <bot>? This cannot be undone.` → `Delete bot`: `GET /bots/<id>` 404; Chrome for `bot-<id>` gone and its directory wiped; regression check for #173: `GET /computer` no longer lists `bot-<id>`, no `Xtigervnc` left, desktop profile directory gone.
 - **Proof.** `ta-verify drive $S/journeys/bot-profiles.mjs` → `bot-profiles/settings-own`, `browser-own-live`, `browser-page-own-tab`, `browser-own-reset`, `computer-own-live`, `computer-page-own-tab`, `computer-own-reset`, `bot-deleted` (and `bug-1` while the bug is open).
+- **Delete releases (P11).** `ta-verify drive $S/journeys/bot-delete.mjs` (needs `--sandbox`): a deleted bot's tab in the shared browser closes and another bot's stays (#88); a bot switched from its own profile to shared still has its own desktop and browser stopped and both profile folders removed (#173); a delete while the bot replies answers 200 with no error toast and a second tab's transcript stops growing; a second delete answers 404. Proofs `bot-delete/tab`, `desktop`, `mid-turn`, `twice.png`.
 
 ## Gotchas
 
