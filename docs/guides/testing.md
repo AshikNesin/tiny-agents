@@ -200,12 +200,13 @@ CI does not run Playwright.
 
 ## Continuous integration
 
-`.github/workflows/test.yml` runs, in order: typechecks (server, client,
-typecheck coverage, kit fixture), the kit export guard, the changeset gate, the
-checks-coverage guard, lint + format (`pnpm check`), the design-token check
-(`pnpm check:tokens`), a migration freshness check (`pnpm db:generate` must
-leave `apps/web/drizzle` unchanged), server and client tests, `pnpm build`,
-the runtime dependency closure check, a wrangler dry run, and a pruned
-production boot (tracked files plus `dist` copied to a fresh directory,
-`pnpm install --prod`, `node dist/server/bundle.js`, `/health` answers,
-`SIGTERM` exits within 15 s).
+`.github/workflows/test.yml` runs, in order: a gitleaks scan of the commits
+the PR or push adds (`scripts/secret-scan.sh`), the static gates through
+`pnpm verify:static` (typechecks for the server, the client, typecheck
+coverage and the kit fixture, the kit export guard, the changeset gate, the
+checks-coverage guard, lint + format, the design-token check, and a migration
+freshness check that `pnpm db:generate` adds no migration; the list lives in
+`scripts/gates.mjs`), server and client tests, `pnpm build`, the runtime
+dependency closure check, and a pruned production boot (tracked files plus
+`dist` copied to a fresh directory, `pnpm install --prod`,
+`node dist/server/bundle.js`, `/health` answers, `SIGTERM` exits within 15 s).

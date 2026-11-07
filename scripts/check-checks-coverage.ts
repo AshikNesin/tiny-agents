@@ -118,11 +118,15 @@ interface WorkflowStep {
   run?: string;
 }
 const workflow = loadYaml(readFileSync(join(ROOT, WORKFLOW), "utf8")) as {
-  jobs: Record<string, { steps: WorkflowStep[] }>;
+  jobs: Record<string, { steps?: WorkflowStep[] }>;
 };
-const runSteps = Object.values(workflow.jobs).flatMap((job) =>
-  job.steps.filter((step): step is Required<WorkflowStep> => typeof step.run === "string"),
-);
+const runSteps = Object.values(workflow.jobs).flatMap((job) => {
+  const steps = (job.steps ?? []).filter(
+    (step): step is WorkflowStep & { run: string } => typeof step.run === "string",
+  );
+  const buildAt = steps.findIndex((step) => /\bpnpm build\b/.test(step.run));
+  return steps.map((step, i) => ({ ...step, afterBuild: buildAt !== -1 && i > buildAt }));
+});
 const gateSteps = runSteps.filter((step) => step.run.trim() === "pnpm verify:static");
 if (gateSteps.length !== 1) {
   failures.push({
@@ -134,9 +138,13 @@ for (const step of runSteps) {
   if (gateSteps.includes(step)) continue;
   for (const match of step.run.matchAll(STATIC_CHECK)) {
     if (match[1] && POST_BUILD_CHECKS.includes(match[1])) continue;
+    const fix =
+      step.afterBuild && match[1]
+        ? `If it needs \`pnpm build\` first, add "${match[1]}" to POST_BUILD_CHECKS in scripts/check-checks-coverage.ts. Otherwise move it to scripts/gates.mjs and delete the step.`
+        : "Add it to scripts/gates.mjs and delete the step, so `pnpm verify:static` runs it locally too.";
     failures.push({
       kind: "check-outside-gates",
-      detail: `${WORKFLOW} step "${step.name ?? step.run}" runs \`${match[0]}\` outside the static gates. Add it to scripts/gates.mjs and delete the step, so \`pnpm verify:static\` runs it locally too.`,
+      detail: `${WORKFLOW} step "${step.name ?? step.run}" runs \`${match[0]}\` outside the static gates. ${fix}`,
     });
   }
 }
@@ -153,7 +161,7 @@ for (const script of Object.keys(scripts)) {
   ) {
     failures.push({
       kind: "script-not-a-gate",
-      detail: `package.json script "${script}" is not a static gate, so neither CI nor \`pnpm verify:static\` runs it. Add { name, run: "pnpm ${script}" } to scripts/gates.mjs.`,
+      detail: `package.json script "${script}" is not a static gate, so neither CI nor \`pnpm verify:static\` runs it. Add { name, run: "pnpm ${script}" } to scripts/gates.mjs, or, if it needs \`pnpm build\` first, add "${script}" to POST_BUILD_CHECKS in scripts/check-checks-coverage.ts and run it after the build step in ${WORKFLOW}.`,
     });
   }
 }

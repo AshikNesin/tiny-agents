@@ -35,7 +35,7 @@
     "sandbox:logs": "tsx scripts/sandbox.ts logs",
     "sandbox:shell": "tsx scripts/sandbox.ts shell",
     "sandbox:reset": "tsx scripts/sandbox.ts reset",
-    "prepare": "vp config || [ ! -x node_modules/.bin/vp ]",
+    "prepare": "node scripts/relative-hooks-path.mjs; vp config || [ ! -x node_modules/.bin/vp ]",
     "groot:setup": "bash .groot/setup-boilerplate.sh",
     "groot:check": "tsx .groot/sync.ts check",
     "groot:sync": "tsx .groot/sync.ts apply",
