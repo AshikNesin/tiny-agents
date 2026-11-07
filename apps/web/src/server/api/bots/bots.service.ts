@@ -7,7 +7,7 @@
  * list through `bots.list.ts`. This module adds the row bookkeeping around
  * them. Every action takes the runtime it acts on (`rt`), the test seam.
  */
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { AgentRuntime, authoredText, type OwnerAnswer } from "@tiny-agents/agent";
@@ -19,13 +19,10 @@ import {
   botSkills,
   connections,
   promptRevisions,
-  routines,
   skills,
 } from "../../db";
 import { getAgentRuntime } from "./bots.runtime";
-import { browserTargetForBot } from "./browser.targets";
-import { getBrowserSessions } from "./browser.sessions";
-import { computerProfileForBot, getComputerSessions } from "./computer.sessions";
+import { releaseBot } from "./bot-resources";
 import {
   findBotRow,
   startBotConversation,
@@ -36,7 +33,7 @@ import {
 } from "./bots.conversation";
 import { openBotChat } from "./bots.chat";
 import type { ChatHistoryDTO, CreateBotDTO, UpdateBotDTO } from "./bots.schema";
-import { findPastChat, leaveChat, retireConversation } from "./chats.history";
+import { findPastChat, leaveChat } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
 import { publishBotChatEvent } from "./bots.events";
 import { listBots as listBotEntries, previewText } from "./bots.list";
@@ -227,54 +224,8 @@ async function updateRow(id: string, data: Partial<typeof bots.$inferInsert>): P
   if (!updated) throw Boom.notFound("Record not found");
 }
 
-/**
- * A deleted bot's browser goes with it (issue #88): its tab in the shared
- * browser closes, and a browser of its own closes with its profile (cookies,
- * logins) wiped. Best effort: a browser hiccup never fails the delete.
- */
-async function releaseBrowser(bot: { id: string; browserProfile: string }): Promise<void> {
-  const target = browserTargetForBot(bot);
-  try {
-    const sessions = getBrowserSessions();
-    if (bot.browserProfile === "own") await sessions.close(target, { wipeProfile: true });
-    else await sessions.closeTab(target);
-  } catch (error) {
-    logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's browser");
-  }
-}
-
-/**
- * A deleted bot's own desktop goes with it, like its own browser: otherwise
- * Xtigervnc and XFCE ran on until the idle close, its profile stayed on the
- * sandbox, and /computer no longer listed it, so nobody could reset it. A
- * shared desktop belongs to the other bots on it and is left alone.
- */
-async function releaseComputer(bot: { id: string; browserProfile: string }): Promise<void> {
-  if (bot.browserProfile !== "own") return;
-  const sessions = getComputerSessions();
-  if (!sessions) return;
-  try {
-    await sessions.close(computerProfileForBot(bot), { wipe: true });
-  } catch (error) {
-    logger.warn({ error, botId: bot.id }, "Failed to close a deleted bot's computer");
-  }
-}
-
 export async function deleteBot(id: string, rt: BotAgentRuntime = runtime()) {
-  const bot = await findBotRow(id);
-  // Its routines go with it (cascade), and their conversations (issue #63).
-  const routineRows = await db
-    .select({ conversationId: routines.conversationId })
-    .from(routines)
-    .where(and(eq(routines.botId, bot.id), isNotNull(routines.conversationId)));
-  // The durable conversation's history stays orphaned in agent.db (PRD §5.1;
-  // Phase 2 adds cleanup), but its in-flight work stops once the row is gone.
-  const [deleted] = await db.delete(bots).where(eq(bots.id, bot.id)).returning();
-  if (!deleted) throw Boom.notFound("Record not found");
-  await retireConversation(rt, bot.conversationId);
-  await Promise.all(routineRows.map((routine) => retireConversation(rt, routine.conversationId!)));
-  await Promise.all([releaseBrowser(bot), releaseComputer(bot)]);
-  return toBot(deleted);
+  return toBot(await releaseBot(id, rt));
 }
 
 export async function sendMessage(

@@ -88,10 +88,9 @@ describe("computer routes", () => {
 
   it("deleting a bot on the shared desktop leaves that desktop to the others", async () => {
     await sessions.acquire("shared");
-    const close = vi.spyOn(sessions, "close");
     expect((await call(`/api/v1/bots/${botId}`, { method: "DELETE" })).status).toBe(200);
-    expect(close).not.toHaveBeenCalled();
     expect(sessions.get("shared")).toBeDefined();
+    expect(fake.wiped).not.toContain("shared");
   });
 
   it("says why there is no computer without a sandbox VM", async () => {

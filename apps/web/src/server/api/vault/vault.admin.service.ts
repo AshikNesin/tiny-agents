@@ -5,7 +5,7 @@
  * toolkit. Values pass through in the request scope only: nothing here stores
  * one, and every reveal is registered with the redactor and audited.
  */
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
@@ -503,6 +503,19 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
     `${row.label} (${row.handle}) was ${options.purge ? "deleted" : "unlinked"} in the Vault UI.`,
   );
   return { deleted: true };
+}
+
+/**
+ * Drop a deleted bot from every item's bot list. A list it leaves empty
+ * stays `[]` (no bot may use the item), never null (every bot may).
+ */
+export async function forgetBotInVault(botId: string): Promise<void> {
+  await db
+    .update(vaultItems)
+    .set({
+      botsJson: sql`(select json_group_array(value) from json_each(${vaultItems.botsJson}) where value <> ${botId})`,
+    })
+    .where(sql`exists (select 1 from json_each(${vaultItems.botsJson}) where value = ${botId})`);
 }
 
 /** One value for the owner's browser. Registered with the redactor and audited. */
