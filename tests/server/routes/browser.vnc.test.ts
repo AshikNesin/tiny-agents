@@ -19,6 +19,10 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
+import { authToken } from "../fixtures";
+
+// Tickets are held as live access, which needs their accounts to exist.
+await authToken("ticket-owner-1@example.com", 1);
 
 /** The manager the bridge reads through; a fresh one per live fake. */
 let sessions: BrowserSessions | undefined;

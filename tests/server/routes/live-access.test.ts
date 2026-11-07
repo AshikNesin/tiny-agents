@@ -7,7 +7,9 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Duplex } from "node:stream";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { Hono } from "hono";
+import type { AppEnv } from "@groot/core/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { db, users } from "../../../apps/web/src/server/db";
 import {
   attachBrowserVnc,
@@ -16,6 +18,8 @@ import {
   resetVncTicketsForTests,
 } from "../../../apps/web/src/server/api/bots/browser.vnc";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
+import { holdLiveAccess } from "../../../apps/web/src/server/api/people/live-access";
+import { openSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import {
   createBrowserSessions,
   type BrowserSession,
@@ -229,5 +233,74 @@ describe("revoking a guest's access", () => {
     expect(keptChat.isEnded, "the still-shared bot's stream").toBe(false);
     expect(events.isEnded, "the guest's events stream").toBe(false);
     expect(redeemVncTicket(keptTicket, kept)).toMatchObject({ userId: guest.id, botId: kept });
+  });
+
+  it("refuses a ticket minted after an unshare that landed while the route was past its check", async () => {
+    const guest = await addGuest();
+    made.push(guest.id);
+    const bot = await createBot("Racing helper", [guest.id]);
+    await liveBrowser(bot);
+
+    let entered!: () => void;
+    const inRoute = new Promise<void>((resolve) => (entered = resolve));
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.spyOn(sessions!, "start").mockImplementation(async () => {
+      entered();
+      await held;
+    });
+
+    const minting = api<Data>(app, `/api/v1/bots/${bot}/browser/vnc-ticket`, {
+      method: "POST",
+      token: guest.token,
+    });
+    await inRoute;
+    const patched = await asOwner(`/api/v1/bots/${bot}`, {
+      method: "PATCH",
+      json: { guestIds: [] },
+    });
+    expect(patched.status).toBe(200);
+    release();
+
+    const minted = await minting;
+    const ticket =
+      minted.status === 200
+        ? new URL(minted.body.data.path, "http://x").searchParams.get("ticket")
+        : null;
+    if (ticket)
+      expect(redeemVncTicket(ticket, bot), "ticket minted after the unshare").toBeUndefined();
+  });
+
+  it("closes a live connection registered after its access is gone", async () => {
+    const guest = await addGuest();
+    const bot = await createBot("Gone helper", [guest.id]);
+    const other = await createBot("Other helper", [guest.id]);
+    await asOwner(`/api/v1/bots/${bot}`, { method: "PATCH", json: { guestIds: [] } });
+
+    const unsharedClosed = vi.fn();
+    holdLiveAccess({ userId: guest.id, botId: bot }, unsharedClosed);
+    expect(unsharedClosed).toHaveBeenCalledOnce();
+    const sharedClosed = vi.fn();
+    holdLiveAccess({ userId: guest.id, botId: other }, sharedClosed);
+    expect(sharedClosed).not.toHaveBeenCalled();
+
+    expect((await asOwner(`/api/v1/people/${guest.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(sharedClosed).toHaveBeenCalledOnce();
+    const removedClosed = vi.fn();
+    holdLiveAccess({ userId: guest.id }, removedClosed);
+    expect(removedClosed).toHaveBeenCalledOnce();
+
+    // A stream whose request passed the guard before the removal ends empty.
+    const late = new Hono<AppEnv>().get("/late", (c) => {
+      c.set("user", { userId: guest.id, email: "gone@example.com" } as never);
+      return openSse(c, (sse) => sse.write({ type: "ping" }));
+    });
+    const response = await late.request("/late");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+
+    const ownerClosed = vi.fn();
+    holdLiveAccess({ userId: 990_101, botId: bot }, ownerClosed);
+    expect(ownerClosed).not.toHaveBeenCalled();
   });
 });

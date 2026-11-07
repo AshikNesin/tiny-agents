@@ -18,6 +18,10 @@ import {
 } from "../../../apps/web/src/server/api/terminal/terminal.ws";
 import { setTerminalServiceForTests } from "../../../apps/web/src/server/api/terminal/terminal.instance";
 import type { PtyStream, TerminalService } from "../../../packages/agent/src/terminal/terminal";
+import { authToken } from "../fixtures";
+
+// Tickets are held as live access, which needs their accounts to exist.
+await authToken("ticket-owner-1@example.com", 1);
 
 /** An in-memory pty: records writes, echoes on demand, resizable. */
 function fakePtyStream() {

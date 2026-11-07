@@ -20,6 +20,10 @@ import {
   type ComputerSessions,
 } from "../../../packages/agent/src/toolkits/computer";
 import { fakeComputer } from "../app/agent/computer-fakes";
+import { authToken } from "../fixtures";
+
+// Tickets are held as live access, which needs their accounts to exist.
+await authToken("ticket-owner-1@example.com", 1);
 
 function fakeVm() {
   const received: Buffer[] = [];
