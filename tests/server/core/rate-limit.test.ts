@@ -143,6 +143,19 @@ describe("rateLimit middleware", () => {
     expect((await fromPeer(app, "fd00::1", "198.51.100.5")).status).toBe(429);
   });
 
+  it("reads an IPv4-mapped range's prefix in IPv6 terms and never trusts one with host bits set", async () => {
+    setConfig({ trustedProxies: ["::ffff:10.0.0.0/104"] });
+    const app = buildApp();
+    for (let i = 0; i < 2; i++) {
+      expect((await fromPeer(app, "10.9.9.9", "198.51.100.1")).status).toBe(200);
+    }
+    expect((await fromPeer(app, "10.9.9.9", "198.51.100.2")).status).toBe(200);
+    setConfig({ trustedProxies: ["::ffff:10.0.0.0/8", "fd00::1/0"] });
+    expect((await fromPeer(app, "203.0.113.9", "6.6.6.1")).status).toBe(200);
+    expect((await fromPeer(app, "203.0.113.9", "6.6.6.2")).status).toBe(200);
+    expect((await fromPeer(app, "203.0.113.9", "6.6.6.3")).status).toBe(429);
+  });
+
   it("serves requests without a socket (the Hono test client) under one shared key", async () => {
     const app = buildApp();
     const plain = (forwardedFor: string) =>

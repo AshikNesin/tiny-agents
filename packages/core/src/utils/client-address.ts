@@ -18,8 +18,9 @@ export const PRIVATE_NETWORKS = [
   "fc00::/7",
 ] as const;
 
-export function isProxyEntry(entry: string): boolean {
-  return parseRange(entry) !== undefined;
+export function proxyEntryProblem(entry: string): string | undefined {
+  const range = parseRange(entry);
+  return typeof range === "string" ? range : undefined;
 }
 
 export function clientAddress(
@@ -29,7 +30,7 @@ export function clientAddress(
 ): string | undefined {
   if (peer === undefined) return undefined;
   const address = unmapIpv4(peer);
-  const ranges = trustedProxies.map(parseRange).filter((range) => range !== undefined);
+  const ranges = trustedRanges(trustedProxies);
   if (!forwardedFor || !isTrusted(address, ranges)) return address;
   const hops = forwardedFor
     .split(",")
@@ -67,15 +68,39 @@ function isTrusted(address: string, ranges: readonly Range[]): boolean {
   });
 }
 
-function parseRange(entry: string): Range | undefined {
+const parsedRanges = new WeakMap<readonly string[], readonly Range[]>();
+
+function trustedRanges(entries: readonly string[]): readonly Range[] {
+  let ranges = parsedRanges.get(entries);
+  if (ranges === undefined) {
+    ranges = entries.map(parseRange).filter((range) => typeof range !== "string");
+    parsedRanges.set(entries, ranges);
+  }
+  return ranges;
+}
+
+/**
+ * A prefix applies to the notation it is written in, so `::ffff:10.0.0.0/8`
+ * is `::/8`, not `10.0.0.0/8`. Rejecting set host bits catches that slip and
+ * any other entry that would trust more than it names.
+ */
+function parseRange(entry: string): Range | string {
   const [address = "", prefix, extra] = entry.split("/");
-  if (extra !== undefined) return undefined;
-  const network = parseAsIpv6(address);
-  if (network === undefined) return undefined;
+  const network = extra === undefined ? parseAsIpv6(address) : undefined;
+  if (network === undefined) {
+    return `"${entry}" is not an IPv4 or IPv6 address or range; write none, or a list such as 10.0.0.0/8,fd00::/8`;
+  }
   if (prefix === undefined) return { network, ipv6Prefix: 128 };
   const width = IPV4.test(address) ? 32 : 128;
-  if (!PREFIX_LENGTH.test(prefix) || Number(prefix) > width) return undefined;
-  return { network, ipv6Prefix: 128 - width + Number(prefix) };
+  if (!PREFIX_LENGTH.test(prefix) || Number(prefix) > width) {
+    return `"${entry}" needs a prefix length from 0 to ${width}`;
+  }
+  const ipv6Prefix = 128 - width + Number(prefix);
+  const hostMask = (1n << BigInt(128 - ipv6Prefix)) - 1n;
+  if ((network & hostMask) !== 0n) {
+    return `"${entry}" has bits set past its /${prefix} prefix, so it trusts more than it names; write the range's first address, and IPv4 ranges in IPv4 form (10.0.0.0/8)`;
+  }
+  return { network, ipv6Prefix };
 }
 
 function parseAsIpv6(address: string): bigint | undefined {

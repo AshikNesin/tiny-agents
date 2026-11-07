@@ -81,6 +81,20 @@ describe("env", () => {
     }
   });
 
+  it("rejects a TRUSTED_PROXIES range with bits set past its prefix, naming the entry and the fix", () => {
+    for (const bad of ["::ffff:10.0.0.0/8", "::ffff:192.168.0.0/16", "fd00::1/0", "10.0.0.1/0"]) {
+      expect(() => parseEnv({ TRUSTED_PROXIES: `127.0.0.1,${bad}` })).toThrow(
+        `TRUSTED_PROXIES: "${bad}" has bits set past its /${bad.split("/")[1]} prefix`,
+      );
+    }
+    expect(() => parseEnv({ TRUSTED_PROXIES: "::ffff:10.0.0.0/8" })).toThrow(
+      /write the range's first address, and IPv4 ranges in IPv4 form/,
+    );
+    expect(parseEnv({ TRUSTED_PROXIES: "::ffff:10.0.0.0/104" }).TRUSTED_PROXIES).toEqual([
+      "::ffff:10.0.0.0/104",
+    ]);
+  });
+
   it("drops variables outside the schema", () => {
     const env = parseEnv({ SOURCE_COMMIT: "abc", OPENAI_API_KEY: "sk-test" });
     expect(env).not.toHaveProperty("SOURCE_COMMIT");
