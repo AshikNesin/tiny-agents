@@ -130,7 +130,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   await step("Claude plan tab: engine off, no account line, no sign-in button", async () => {
     await page.getByRole("tab", { name: "Claude plan" }).click();
     const panel = page.getByRole("tabpanel", { name: "Claude plan" });
-    await expect(panel).toContainText("The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1");
+    await expect(panel).toContainText("The engine is off. Add or enable the Claude plan account");
     // With the engine off the account line says nothing true either way (#171).
     await expect(panel.getByTestId("claude-plan-account")).toHaveCount(0);
     await expect(panel.getByTestId("claude-plan-sign-in")).toHaveCount(0);

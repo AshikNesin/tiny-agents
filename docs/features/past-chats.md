@@ -31,12 +31,9 @@ Chats retired before this feature shipped have no link back to their bot
 
 `bots/chats.title.ts` names a past chat with one side-call off the reset path:
 
-- The model is `CHAT_TITLE_MODEL`, defaulting to the lightweight
-  `custom:custom-zai-coding-plan/glm-5.3-flash`, a custom gateway provider
-  (`GATEWAY_CUSTOM_PROVIDERS`). Custom models take the `custom:<provider>/<model>`
-  form, so a bare `<provider>/<model>` value is not recognised. A model the
-  runtime doesn't have (unknown, not configured on the deployment, or left out
-  by `GATEWAY_MODEL_ALLOWLIST`) falls back to the bot's own model.
+- The model is the `chat_title` model role (Settings → Models): the model set
+  there, else the bot's own model when it runs on pi, else the default model.
+  See [Models](./models.md#model-roles).
 - The input is an excerpt (≤ 4,000 characters) from the start of the chat.
   The output is cleaned to one line of at most 80 characters.
 - The call goes through the side-caller (`side-call.ts`, see Side-call in

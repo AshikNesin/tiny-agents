@@ -118,7 +118,7 @@ These steps caught real bugs in the 2026-11 pass; the bugs are fixed and the ste
 
 - Real model behaviour: tools the faux model can't call (`run_command`, `computer_*`, MCP tools, `remember`/`forget`, vault fill, `message_bot`), background memory capture, model-written chat titles, vision input. Needs a real provider.
 - Auto-review approvals: a Cloudflare AI Gateway classifier, and the faux runtime passes no reviewer.
-- Claude Code sign-in and harness: `CLAUDE_CODE_ENGINE_ENABLED=1` plus a real Claude Pro/Max login.
+- Claude Code sign-in and harness: a Claude plan account (Settings → Models) plus a real Claude Pro/Max login.
 - Real push delivery, Send test, delivery log: Pushover keys (never in a verification run).
 - Connection OAuth sign-in, skill import from GitHub, 1Password vault items: external services.
 - Feedback submission: an external service.

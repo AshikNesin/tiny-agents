@@ -46,26 +46,25 @@ never reviews the same call twice.
 
 ## Setup
 
-The classifier is TypeSafe's [Jev](https://developers.cloudflare.com/ai/models/typesafe/jev/)
-on Workers AI, called through your Cloudflare AI Gateway with the same settings
-as chat models: `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_GATEWAY_ID`. Calls go to Workers AI's
-`/accounts/{account}/ai/run` with the `cf-aig-gateway-id` header (Cloudflare's
-recommended gateway route), so every review shows up in the gateway's logs.
-`CLOUDFLARE_API_KEY` is sent as `Authorization` and as `cf-aig-authorization`.
-A failed review logs `Auto-review failed; asking the owner` with the error.
-
-| Var                | Default        | What it is                                                                         |
-| ------------------ | -------------- | ---------------------------------------------------------------------------------- |
-| `CLASSIFIER_MODEL` | `typesafe/jev` | Any Workers AI classifier: `typesafe/jev-1.14.0`, `@cf/cloudflare/clef`, `…-flash` |
+The classifier is the `classifier` model role (Settings → Models,
+[Models](./models.md#model-roles)): a classifier model of a Cloudflare AI
+Gateway account, such as TypeSafe's
+[Jev](https://developers.cloudflare.com/ai/models/typesafe/jev/) (`typesafe/jev`)
+on Workers AI. Adding a gateway account lists its Workers AI classifiers next
+to its chat models; pick one under Default models → Auto-review. Calls go to
+Workers AI's `/accounts/{account}/ai/run` with the `cf-aig-gateway-id` header
+(Cloudflare's recommended gateway route), so every review shows up in the
+gateway's logs. The account's key is sent as `Authorization` and as
+`cf-aig-authorization`. A failed review logs
+`Auto-review failed; asking the owner` with the error.
 
 Through the gateway, Cloudflare's own `@cf/cloudflare/clef*` models bill
 against the gateway's **Unified Billing** credits. Without credits every call
 answers `402 Insufficient unified billing credits` and every call gets a card,
 so use them only on a gateway with credits.
 
-Without the gateway settings, bots with auto-review on keep every card. An
-unknown `CLASSIFIER_MODEL` logs a warning at boot and turns it off.
+With no classifier role set, every review fails and bots with auto-review on
+keep every card.
 
 ## Cost
 
@@ -78,6 +77,6 @@ roughly 300–2k tokens, so about $0.0001 per review, charged to the gateway.
 Callers depend on the `Classifier` interface in
 `packages/agent/src/classifier.ts`, not on Jev. pi-ai already speaks the
 System One formats of every Workers AI classifier, so switching to Clef is
-`CLASSIFIER_MODEL=@cf/cloudflare/clef`. Its probabilities may sit differently
+picking `@cf/cloudflare/clef` as the classifier role. Its probabilities may sit differently
 from Jev's, so check the thresholds before relying on it. A classifier on
-another provider is a new `Classifier` built with `classifierFromModels`.
+another provider is a new provider kind whose classifier models the catalog routes.

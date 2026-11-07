@@ -1,6 +1,6 @@
 // Feature: claude-plan (features/claude-plan.md). Settings → Claude plan and the
 // Claude Code harness on /code. A verify run cannot sign in to a Claude account and
-// `ta-verify up` blanks CLAUDE_CODE_ENGINE_ENABLED, so this proves the engine-off
+// Verify runs have no Claude plan account, so this proves the engine-off
 // state the owner sees and that nothing Claude-Code-only is offered; the signed-in
 // paths are recorded as unreachable in the feature file.
 import { journey, expect, caps } from "../scripts/lib.mjs";
@@ -11,14 +11,11 @@ const LOADED = { waitUntil: "domcontentloaded" };
 await journey(
   "claude-plan",
   async ({ page, step, proof, api }) => {
-    await step(
-      "engine status reads off (verify runs blank CLAUDE_CODE_ENGINE_ENABLED)",
-      async () => {
-        const status = await api.get("/claude-code/status");
-        expect(status.enabled).toBe(false);
-        expect(status.fallback).toBe("pause");
-      },
-    );
+    await step("engine status reads off (verify runs have no Claude plan account)", async () => {
+      const status = await api.get("/claude-code/status");
+      expect(status.enabled).toBe(false);
+      expect(status.fallback).toBe("pause");
+    });
 
     await step("Settings → Claude plan explains how to turn the engine on", async () => {
       await page.goto("/settings", LOADED);
@@ -26,7 +23,7 @@ await journey(
       const card = page.getByRole("tabpanel", { name: "Claude plan" });
       await expect(card.getByText("Claude plan", { exact: true })).toBeVisible();
       await expect(
-        card.getByText(/The engine is off\. Set CLAUDE_CODE_ENGINE_ENABLED=1/),
+        card.getByText(/The engine is off\. Add or enable the Claude plan account/),
       ).toBeVisible();
       await expect(card.getByText(/turns pause\./)).toBeVisible();
       // With the engine off no worker is wired: no account line, nothing to sign in to.

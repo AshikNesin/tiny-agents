@@ -20,12 +20,6 @@ for (const key of [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "SENTRY_DSN",
-  // Model selection and other providers' credentials change what the runtime
-  // lists (an allowlist of gateway models leaves none without gateway keys).
-  "GATEWAY_MODEL_ALLOWLIST",
-  "GATEWAY_CUSTOM_PROVIDERS",
-  "AI_PROVIDERS",
-  "DEFAULT_MODEL",
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",

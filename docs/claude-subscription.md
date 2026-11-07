@@ -10,22 +10,24 @@ tiny-agents never reads, stores or refreshes it.
 restrict how subscription access is used, and they have blocked
 third-party apps that impersonate Claude Code or relay its requests.
 Read [what this project will not do](#what-this-project-will-not-do)
-before you turn the engine on. If you are unsure, leave
-`CLAUDE_CODE_ENGINE_ENABLED` unset and use the gateway.
+before you turn the engine on. If you are unsure, don't add a Claude plan
+account; use an API-key provider instead.
 
 ## Turn it on
 
 You need a sandbox: `SANDBOX_HOST` (the Tailscale VM) or the local
 container from `pnpm sandbox:up` ([local sandbox](guides/local-sandbox.md)).
 
-1. Set `CLAUDE_CODE_ENGINE_ENABLED=1` and restart tiny-agents.
+1. In **Settings → Models**, choose **Add models**, kind **Claude plan**,
+   **Check models** and **Connect**. No key and no restart.
 2. Open **Settings → Claude plan**. On first use the app installs Node,
    the Agent SDK and Claude Code on the sandbox (a minute or two; the
    local container has them preinstalled). The card shows the progress.
 3. Choose **Sign in to Claude**. A terminal tab opens and types
    `claude auth login`. Open the link it prints, approve, and paste the
    code back into the tab. The card then shows "Signed in to Claude (max)".
-4. Give a bot a model labelled "uses your Claude plan".
+4. Give a bot one of the Claude plan account's models (labelled "uses your
+   Claude plan").
 
 That's all. There is no URL, token, unit file or Tailscale serve to set
 up. The login survives restarts of the app and of the sandbox.
@@ -117,41 +119,41 @@ A turn sent before you sign in pauses with the sign-in hint.
 
 ## Kill switch
 
-`CLAUDE_CODE_ENGINE_ENABLED` is read on each turn, in tiny-agents. Set it
-to `1` to allow turns. Unset it, or set `0`, and the app stops sending
-turns. The worker can keep running.
+The Claude plan account is the switch ([ADR 0016](adr/0016-models-are-owner-data.md)).
+Its state is read on each turn: **Disable** it in Settings → Models and the
+app stops sending turns; **Enable** it and they resume. The worker can keep
+running.
 
-`CLAUDE_CODE_ENGINE_FALLBACK` chooses what a refused or unreachable turn
+The account's **Fallback model** chooses what a refused or unreachable turn
 does:
 
-| Value     | Behaviour                                                            |
-| --------- | -------------------------------------------------------------------- |
-| `pause`   | Default. The chat shows an error and nothing is sent.                |
-| `gateway` | The turn is sent through Cloudflare AI Gateway on the bare model id. |
+| Fallback   | Behaviour                                                   |
+| ---------- | ----------------------------------------------------------- |
+| None       | Default. The chat shows an error and nothing is sent.       |
+| A pi model | The turn is sent to that model, on its own account and key. |
 
-Gateway fallback spends the gateway's Anthropic key (API credits or
-extra usage), not the subscription. The conversation then stays on the
+A fallback spends that account's key, not the subscription. The conversation then stays on the
 pi transcript. Turns already completed on the subscription remain in the
 worker's session and are not replayed into that transcript.
 
 ## Max plan, without this engine
 
-If you only want Claude models through the gateway, do not use this
+If you only want Claude models on API keys, do not use this
 engine and do not paste a Claude Code token anywhere. Create a normal
 console API key that spends Max-plan API credits or usage credits, and
-store that key only as the Anthropic BYOK secret in Cloudflare AI
-Gateway. Details are in [Model providers](features/models.md).
+add it as an Anthropic account (or as the Anthropic BYOK secret in
+Cloudflare AI Gateway). Details are in [Models](features/models.md).
 
 ## Manual smoke test
 
 CI does not call Anthropic. Run this once on a fresh sandbox before you
 point a real bot at it.
 
-1. With `CLAUDE_CODE_ENGINE_ENABLED` unset, pick a "uses your Claude
-   plan" model and send. The turn pauses (or uses the gateway, if you set
-   that fallback). Nothing is installed on the sandbox.
-2. Set `CLAUDE_CODE_ENGINE_ENABLED=1` and restart. Settings → Claude plan
-   shows "Installing", then "not signed in".
+1. Add the Claude plan account and **Disable** it, give a bot one of its
+   models and send. The turn pauses (or goes to the fallback model, if you
+   set one). Nothing is installed on the sandbox.
+2. **Enable** the account. Settings → Claude plan shows "Installing", then
+   "not signed in".
 3. Sign in from the card. The terminal tab runs `claude auth login`; after
    it, the card shows the plan.
 4. On the sandbox, `ss -ltnp | grep 8765` shows `127.0.0.1:8765` only.

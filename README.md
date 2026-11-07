@@ -4,9 +4,9 @@ A messenger-style app where every contact is an AI bot you chat with — built
 on [pi-durable](https://earendil.com/posts/pi-durable/) for durable
 conversations (survive refreshes, crashes, redeploys) and the
 [groot](https://github.com/AshikNesin/groot) boilerplate (Hono + React 19 +
-Drizzle/SQLite + JWT/passkey auth, Node only). Inference goes through
-Cloudflare AI Gateway by default (provider keys live only in the gateway), or
-straight to any pi-ai provider such as OpenAI (`AI_PROVIDERS`).
+Drizzle/SQLite + JWT/passkey auth, Node only). Models are set up in the app
+(Settings → Models): Anthropic, OpenAI, Gemini, any OpenAI-compatible host,
+Cloudflare AI Gateway or your Claude plan, with keys kept in the vault.
 
 See `PRD.md` for the full spec. Phase 1: create bots, chat with streamed
 replies, durability as a first-class property.
@@ -39,16 +39,12 @@ pnpm dev          # http://localhost:3000 (demo@example.com / demo@example.com)
 
 No `.env` is needed for development; `.env.example` lists every variable.
 
-Set `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`
-(and optionally `DEFAULT_MODEL`) for real inference. To call a provider
-directly instead, list pi-ai provider ids in `AI_PROVIDERS` and set that
-provider's key, e.g. `AI_PROVIDERS=openai` with `OPENAI_API_KEY`
-(`AI_PROVIDERS=cloudflare-ai-gateway,openai` keeps both; see
-[`docs/features/models.md`](docs/features/models.md)).
-With no provider configured the app runs but shows a banner and disables
-sending. For UI/flow work without the
-gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model (send
-`/ask` to see a bot's questions for you).
+For real inference, sign in and add a provider in **Settings → Models**
+(set `SECRETS_KEY` first: keys are kept in the vault). No restart; see
+[`docs/features/models.md`](docs/features/models.md). With no model set up
+the app runs but shows a banner and disables sending. For UI/flow work
+without a provider: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model
+(send `/ask` to see a bot's questions for you).
 
 Web search and page reading use
 [TinyFish](https://www.tinyfish.ai/blog/search-and-fetch-are-now-free-for-every-agent-everywhere)
@@ -58,8 +54,8 @@ Search and Fetch are free; without the key those tools stay hidden.
 ## Use your Claude subscription (experimental)
 
 A bot can answer on a Claude Pro or Max plan. tiny-agents installs and
-runs Claude Code on your sandbox; you set `CLAUDE_CODE_ENGINE_ENABLED=1`
-and sign in once from Settings → Claude plan. Claude Code holds the
+runs Claude Code on your sandbox; you add the Claude plan account in
+Settings → Models and sign in once from Settings → Claude plan. Claude Code holds the
 login on the sandbox. tiny-agents does not: it will not read, store, or
 refresh that credential, and it will not proxy Anthropic.
 
@@ -68,11 +64,11 @@ Anthropic has restricted third-party use of subscription access. Read
 [docs/claude-subscription.md](docs/claude-subscription.md) before enabling
 it. Short version:
 
-- Leave `CLAUDE_CODE_ENGINE_ENABLED` unset until you have read that page.
-- Do not paste an `sk-ant-oat` token anywhere in this app. Boot refuses it.
+- Don't add the Claude plan account until you have read that page.
+- Do not paste an `sk-ant-oat` token anywhere in this app. It is refused.
 - The worker listens on the sandbox's `127.0.0.1` and the app reaches it
   through its SSH tunnel; nothing is published.
-- Pick a model labelled "uses your Claude plan", or keep using the gateway.
+- Pick a model labelled "uses your Claude plan", or keep using API-key providers.
 - To spend Max-plan API credits without this engine, put a normal console
   API key in Cloudflare AI Gateway BYOK only. See
   [docs/features/models.md](docs/features/models.md).

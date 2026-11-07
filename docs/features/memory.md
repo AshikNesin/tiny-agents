@@ -49,9 +49,9 @@ of the settled pipeline (`bots.settled.ts`): each settled Turn of a bot's own
 chat with memory on arms a per-conversation debounce; 2 minutes quiet or 6
 settled Turns (any reply completing, including peer deliveries — extraction
 still filters to owner-authored turns) fires one side-call through the
-side-caller (`side-call.ts`: `MEMORY_CAPTURE_MODEL` when set and known to the
-registry, else the bot's own `modelId`, including custom providers; aborted
-after 60 seconds). The override is read at boot, not lazily from `process.env`.
+side-caller (`side-call.ts`, on the `memory_capture` model role: the model set
+in Settings → Models, else the bot's own model when it runs on pi, else the
+default model; aborted after 60 seconds). See [Models](./models.md#model-roles).
 Captures never overlap per conversation. Skip rules run
 before any model call: no side-caller (faux mode disables capture), memory
 off, no owner turns since the watermark, trivial window (advances the

@@ -32,41 +32,41 @@ schema reads `process.env`. Empty strings count
 as unset. In production (`NODE_ENV=production`) the variables marked
 **required** must be set and the development fallbacks are refused.
 
-| Variable                                                                                | Dev default                                     | Production                    | Notes                                                                                                                                    |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                                              | `development`                                   | `production`                  | `test` is set by the test setup                                                                                                          |
-| `DATABASE_URL`                                                                          | `file:./data/dev.db`                            | `file:/data/app.db` (default) | `:memory:` is accepted. Unset in production, it is `app.db` under `DATA_DIR`                                                             |
-| `UPLOADS_DIR`                                                                           | `./local/uploads`                               | `/data/uploads` (default)     | Uploads folder. Production default sits beside the database                                                                              |
-| `DATA_DIR`                                                                              | unused                                          | `/data` (default)             | Production folder for `app.db`, `agent.db` and `uploads/` when their own variables are unset                                             |
-| `PORT`                                                                                  | `3000`                                          | injected by the host          | Node only                                                                                                                                |
-| `JWT_SECRET_KEY`                                                                        | dev-only fallback                               | **required**, ≥ 32 characters | HS256 signing key                                                                                                                        |
-| `ADMIN_AUTH_KEY`                                                                        | dev-only fallback                               | **required**                  | Value of the `X-Admin-Auth-Key` header                                                                                                   |
-| `RP_NAME`                                                                               | `Groot`                                         | optional                      | Passkey display name                                                                                                                     |
-| `RP_ID`                                                                                 | `localhost`                                     | **required**, your domain     | Passkey relying party id; under portless see [Portless & HTTPS](./guides/portless-https.md)                                              |
-| `ORIGIN`                                                                                | `http://localhost:3000`                         | **required**, `https://…`     | Passkey origin; must be a URL                                                                                                            |
-| `CORS_ALLOWED_ORIGINS`                                                                  | empty (reflects the requesting origin)          | comma-separated list          | Only needed for cross-origin callers                                                                                                     |
-| `TRUSTED_PROXIES`                                                                       | loopback and private networks                   | optional; `none` trusts none  | Proxies whose `X-Forwarded-For` names the client for rate limits and logs: IPv4 or IPv6 addresses or ranges. A list replaces the default |
-| `LOG_LEVEL`                                                                             | `debug` (dev) / `info` (prod) / `silent` (test) | optional                      | `trace` `debug` `info` `warn` `error` `fatal` `silent`                                                                                   |
-| `SENTRY_DSN`, `SENTRY_RELEASE`                                                          | unset                                           | optional                      | Error reporting through `config.sentry`; see [Sentry source maps](./guides/sentry-source-maps.md)                                        |
-| `SENTRY_ORG`, `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT`, `SOURCE_COMMIT`                    | unset                                           | build-time only               | Source map upload and the release name; not part of `envSchema`                                                                          |
-| `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`, `DEFAULT_MODEL` | unset                                           | optional                      | Cloudflare AI Gateway credentials and the default chat model; see [Model providers](./features/models.md)                                |
-| `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`                                               | unset                                           | optional                      | Push notification when the Node server starts in production                                                                              |
+| Variable                                                             | Dev default                                     | Production                    | Notes                                                                                                                                    |
+| -------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                           | `development`                                   | `production`                  | `test` is set by the test setup                                                                                                          |
+| `DATABASE_URL`                                                       | `file:./data/dev.db`                            | `file:/data/app.db` (default) | `:memory:` is accepted. Unset in production, it is `app.db` under `DATA_DIR`                                                             |
+| `UPLOADS_DIR`                                                        | `./local/uploads`                               | `/data/uploads` (default)     | Uploads folder. Production default sits beside the database                                                                              |
+| `DATA_DIR`                                                           | unused                                          | `/data` (default)             | Production folder for `app.db`, `agent.db` and `uploads/` when their own variables are unset                                             |
+| `PORT`                                                               | `3000`                                          | injected by the host          | Node only                                                                                                                                |
+| `JWT_SECRET_KEY`                                                     | dev-only fallback                               | **required**, ≥ 32 characters | HS256 signing key                                                                                                                        |
+| `ADMIN_AUTH_KEY`                                                     | dev-only fallback                               | **required**                  | Value of the `X-Admin-Auth-Key` header                                                                                                   |
+| `RP_NAME`                                                            | `Groot`                                         | optional                      | Passkey display name                                                                                                                     |
+| `RP_ID`                                                              | `localhost`                                     | **required**, your domain     | Passkey relying party id; under portless see [Portless & HTTPS](./guides/portless-https.md)                                              |
+| `ORIGIN`                                                             | `http://localhost:3000`                         | **required**, `https://…`     | Passkey origin; must be a URL                                                                                                            |
+| `CORS_ALLOWED_ORIGINS`                                               | empty (reflects the requesting origin)          | comma-separated list          | Only needed for cross-origin callers                                                                                                     |
+| `TRUSTED_PROXIES`                                                    | loopback and private networks                   | optional; `none` trusts none  | Proxies whose `X-Forwarded-For` names the client for rate limits and logs: IPv4 or IPv6 addresses or ranges. A list replaces the default |
+| `LOG_LEVEL`                                                          | `debug` (dev) / `info` (prod) / `silent` (test) | optional                      | `trace` `debug` `info` `warn` `error` `fatal` `silent`                                                                                   |
+| `SENTRY_DSN`, `SENTRY_RELEASE`                                       | unset                                           | optional                      | Error reporting through `config.sentry`; see [Sentry source maps](./guides/sentry-source-maps.md)                                        |
+| `SENTRY_ORG`, `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT`, `SOURCE_COMMIT` | unset                                           | build-time only               | Source map upload and the release name; not part of `envSchema`                                                                          |
+| `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`                            | unset                                           | optional                      | Push notification when the Node server starts in production                                                                              |
 
 Non-secret settings (rate limits, job tuning, ...) are derived from these in
 `packages/core/src/config.ts` and overridden in `apps/web/src/server/config.ts`;
 [Config](./reference/config.md#env-vs-config) covers that split and what adding
-a variable involves. LLM provider keys such as `OPENAI_API_KEY` are not in the
-schema: pi-ai reads them from the environment for the providers `AI_PROVIDERS`
-names (see [Model providers](./features/models.md)).
+a variable involves.
+
+Models are not env: add provider accounts and their keys in **Settings →
+Models** after first sign-in, with no restart. Keys are kept in the vault, so
+set `SECRETS_KEY` first. See [Models](./features/models.md).
 
 Coding agents (optional): `SHELLEY_URL` adds Shelley to the Code page;
-`CLAUDE_CODE_ENGINE_ENABLED` with a sandbox adds Claude Code. Without either,
+a Claude plan account (Settings → Models) with a sandbox adds Claude Code. Without either,
 the Code page and the bots' `code_*` tools stay off. See [Code](./features/code.md).
 
-Claude plan (experimental, off by default): `CLAUDE_CODE_ENGINE_ENABLED`
-is the only setting; the app sets Claude Code up on the sandbox and you
-sign in from Settings → Claude plan. `CLAUDE_CODE_ENGINE_FALLBACK` is
-optional.
+Claude plan (experimental, off by default): add a Claude plan account in
+Settings → Models; the app sets Claude Code up on the sandbox and you sign
+in from Settings → Claude plan. Its fallback model is optional.
 The token is the worker's bearer, not a Claude credential. See
 [Use your Claude subscription](./claude-subscription.md).
 

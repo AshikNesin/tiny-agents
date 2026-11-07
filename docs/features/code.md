@@ -21,8 +21,8 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   - Every request sends `X-Exedev-Userid`: exe.dev's `-require-header`
     guard needs it when you reach Shelley directly over Tailscale.
   - "Open in Shelley" links to the same address.
-- **Claude Code:** turn on the Claude plan: `CLAUDE_CODE_ENGINE_ENABLED=1`
-  with a sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
+- **Claude Code:** add the Claude plan account in Settings → Models, with a
+  sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
   from Settings → Claude plan. The app sets up the worker on the sandbox
   ([Claude subscription](../claude-subscription.md)).
 

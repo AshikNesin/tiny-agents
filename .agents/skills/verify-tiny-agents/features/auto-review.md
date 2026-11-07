@@ -28,6 +28,6 @@ Preconditions:
 
 ## Gotchas
 
-- Unreachable: an actual auto-approval. It needs the classifier (`CLASSIFIER_MODEL`, default `typesafe/jev`) reached through a Cloudflare AI Gateway with `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_GATEWAY_ID` (credits for `@cf/cloudflare/clef*`), and a real chat model whose request the classifier can judge. The faux runtime wires no reviewer at all, so even with the gateway keys a `TINY_AGENTS_FAUX=1` run never reviews.
+- Unreachable: an actual auto-approval. It needs a classifier model role (a Cloudflare AI Gateway account with network and a key; credits for `@cf/cloudflare/clef*`), and a real chat model whose request the classifier can judge. The faux runtime wires no reviewer at all, so even with the gateway keys a `TINY_AGENTS_FAUX=1` run never reviews.
 - The server logs one `Auto-review` line per review; a verify run has none, which is expected.
 - The switch is hidden while the Tools search box has text.

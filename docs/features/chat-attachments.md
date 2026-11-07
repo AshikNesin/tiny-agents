@@ -13,7 +13,7 @@ Composer (paperclip/paste) → POST /api/v1/uploads (validate, prepare, store)
       text-only model → see_image note lines + chat.user entry
   → transcript (deriveChat) → ChatMessage.attachments → JWT-cookie content URLs
 see_image (tool) → VisionStore (attachmentIds + model variant bytes)
-  → transcriber: VISION_MODEL | first gateway vision model | VISION_BASE_URL
+  → transcriber: the `vision` model role | first model that sees images
 ```
 
 Two storage copies per image, one consumer each:
@@ -67,13 +67,12 @@ The split is per send, from the model catalog's `input` modality
   side-calls a vision-capable transcriber and returns the text. Fail-open:
   upstream errors return `isError` with the reason; the bot keeps its turn.
 
-Transcriber selection order: `VISION_MODEL` (if it resolves), the owner's
-custom glm-5.3-flash (any custom provider serving it; custom providers
-register `input:["text"]` while the upstream model accepts images, and
-pi-ai sends image blocks through the same OpenAI-compat wire path), the
-first gateway vision model (workers-ai first), then `VISION_BASE_URL` +
-`VISION_API_KEY`. Empty answers retry once. None available: the tool errors
-and the bot says so.
+The transcriber is the `vision` model role (Settings → Models): the model set
+there, else the first available model on pi that takes images. A direct
+vision endpoint is just another provider account. The call declares image
+input on its copy of the model, so a model marked text-only still gets the
+image. Empty answers retry once. None available: the tool errors and the
+bot says so.
 
 Every submit path (send, mention delivery, bot-to-bot message and relay,
 routine fire into the routine's own conversation) goes through `submitToBot`
