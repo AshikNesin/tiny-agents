@@ -14,6 +14,7 @@ import {
   type GatewayCustomProvider,
   secretRedactor,
   SecretValue,
+  testClassifierCall,
   testModelCall,
   testUnsavedModel,
   type ProviderAccount,
@@ -906,6 +907,17 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
           ? {}
           : { error: "Claude Code is not signed in on the sandbox (Settings → Claude plan)." }),
       };
+    }
+    if (model.type === "classifier") {
+      const classifier = rt.catalog.classifierModel(input.modelId);
+      if (!classifier) {
+        return {
+          ok: false,
+          latencyMs: 0,
+          error: `The model can't run (${model.unavailableReason ?? "missing"}).`,
+        };
+      }
+      return redacted(await testClassifierCall(rt.models, classifier));
     }
     const pi = rt.catalog.piModel(input.modelId);
     if (!pi) {
