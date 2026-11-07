@@ -113,6 +113,10 @@ _Avoid_: provider (alone: ambiguous with pi-ai's), integration
 What a Provider account speaks (`PROVIDER_KINDS`, `providers/kinds.ts`): `anthropic`, `openai-chat`, `openai-responses`, `gemini`, `cloudflare-ai-gateway`, `claude-plan` or `faux`. It fixes the wire API, how the key is sent, the defaults and the engine.
 _Avoid_: provider type
 
+**Gateway custom provider**:
+A provider configured in Cloudflare AI Gateway itself (BYOK custom provider), listed on the gateway Provider account by its slug and base path. Its models are the account's rows named `<slug>/<model>`, served from the provider's own gateway URL on the gateway's token.
+_Avoid_: custom model, BYOK provider
+
 **Gateway route**:
 An `openai-chat` Provider account that goes through a `cloudflare-ai-gateway` account (`viaProviderId`) to one of the gateway's BYOK upstreams, on the gateway's token.
 _Avoid_: custom provider

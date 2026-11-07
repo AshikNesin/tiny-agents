@@ -45,7 +45,7 @@ await journey("routine-schedule", async ({ page, step, proof, cleanup, api, stam
       }
     });
     const models = await api.get("/models");
-    botId = (await api.post("/bots", { name: botName, modelId: models.defaultModel })).id;
+    botId = (await api.post("/bots", { name: botName, modelId: models.defaultModelId })).id;
     cleanup(() => api.delete(`/bots/${botId}`));
   });
 

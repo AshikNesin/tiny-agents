@@ -37,7 +37,7 @@ const sharedPages = () => {
 await journey(
   "bot-delete",
   async ({ page, step, proof, cleanup, api, stamp }) => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     const make = async (name, extra = {}) => {
       const id = (await api.post("/bots", { name, modelId: defaultModel, ...extra })).id;
       cleanup(async () => {

@@ -25,7 +25,7 @@ await journey("message-steering", async ({ page, step, proof, cleanup, api, stam
   const idle = () => expect(sendButton).toBeVisible({ timeout: 90_000 });
 
   await step("setup: a bot of its own via the API", async () => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     botId = (await api.post("/bots", { name, modelId: defaultModel })).id;
     cleanup(async () => {
       await api.delete(`/bots/${botId}`);

@@ -32,6 +32,11 @@ import {
   type DiscoveredModel,
   type ProviderTemplate,
 } from "../../../lib/models-api";
+import {
+  cleanCustomProviders,
+  CustomProvidersEditor,
+  type CustomProvider,
+} from "./CustomProvidersEditor";
 import { formatTokens, KIND_LABEL, KINDS } from "./model-labels";
 
 type Kind = Connection["kind"];
@@ -44,9 +49,7 @@ interface Draft {
   name: string;
   accountId: string;
   gatewayId: string;
-  viaProviderId: string;
-  upstream: string;
-  basePath: string;
+  customProviders: CustomProvider[];
   allowPrivateNetwork: boolean;
 }
 
@@ -57,9 +60,7 @@ const EMPTY: Draft = {
   name: "",
   accountId: "",
   gatewayId: "",
-  viaProviderId: "",
-  upstream: "",
-  basePath: "",
+  customProviders: [],
   allowPrivateNetwork: false,
 };
 
@@ -76,40 +77,62 @@ function fromTemplate(template: ProviderTemplate | undefined): Draft {
 
 /** The connection a draft describes, as the API takes it. */
 function connectionOf(draft: Draft): Connection {
-  const via = draft.kind === "openai-chat" && draft.viaProviderId ? draft.viaProviderId : null;
   return {
     kind: draft.kind,
-    ...(via || draft.kind === "claude-plan" || !draft.baseUrl.trim()
+    ...(draft.kind === "claude-plan" || !draft.baseUrl.trim()
       ? {}
       : { baseUrl: draft.baseUrl.trim() }),
-    ...(draft.apiKey.trim() && !via ? { apiKey: draft.apiKey.trim() } : {}),
+    ...(draft.apiKey.trim() ? { apiKey: draft.apiKey.trim() } : {}),
     allowPrivateNetwork: draft.allowPrivateNetwork,
-    ...(via ? { viaProviderId: via } : {}),
     settings:
       draft.kind === "cloudflare-ai-gateway"
-        ? { accountId: draft.accountId.trim(), gatewayId: draft.gatewayId.trim() }
-        : via
-          ? {
-              upstream: draft.upstream.trim(),
-              ...(draft.basePath.trim() ? { basePath: draft.basePath.trim() } : {}),
-            }
-          : {},
+        ? {
+            accountId: draft.accountId.trim(),
+            gatewayId: draft.gatewayId.trim(),
+            customProviders: cleanCustomProviders(draft.customProviders),
+          }
+        : {},
   };
+}
+
+function GatewayFields({ draft, set }: { draft: Draft; set: (patch: Partial<Draft>) => void }) {
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Account ID" htmlFor="model-account-id">
+          <Input
+            id="model-account-id"
+            value={draft.accountId}
+            onChange={(e) => set({ accountId: e.target.value })}
+          />
+        </Field>
+        <Field label="Gateway ID" htmlFor="model-gateway-id">
+          <Input
+            id="model-gateway-id"
+            value={draft.gatewayId}
+            onChange={(e) => set({ gatewayId: e.target.value })}
+          />
+        </Field>
+      </div>
+      <CustomProvidersEditor
+        value={draft.customProviders}
+        onChange={(customProviders) => set({ customProviders })}
+      />
+    </>
+  );
 }
 
 function ConnectionFields({
   draft,
   set,
   templates,
-  gateways,
 }: {
   draft: Draft;
   set: (patch: Partial<Draft>) => void;
   templates: ProviderTemplate[];
-  gateways: Account[];
 }) {
-  const routed = draft.kind === "openai-chat" && draft.viaProviderId !== "";
   const presets = templates.filter((t) => t.kind === draft.kind && t.baseUrl);
+  const gateway = draft.kind === "cloudflare-ai-gateway";
   return (
     <div className="space-y-4">
       <Field label="Kind" htmlFor="model-kind">
@@ -126,75 +149,15 @@ function ConnectionFields({
           </SelectContent>
         </Select>
       </Field>
-      {draft.kind === "openai-chat" && gateways.length > 0 && (
-        <Field label="Route" htmlFor="model-route">
-          <Select
-            value={draft.viaProviderId || "direct"}
-            onValueChange={(value) => set({ viaProviderId: value === "direct" ? "" : value })}
-          >
-            <SelectTrigger id="model-route" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="direct">Its own endpoint and key</SelectItem>
-              {gateways.map((gateway) => (
-                <SelectItem key={gateway.id} value={gateway.id}>
-                  Route through gateway: {gateway.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      )}
-      {routed ? (
-        <>
-          <Field
-            label="Upstream provider"
-            htmlFor="model-upstream"
-            hint="The gateway's name for it, e.g. custom-zai-coding-plan."
-          >
-            <Input
-              id="model-upstream"
-              value={draft.upstream}
-              onChange={(e) => set({ upstream: e.target.value })}
-            />
-          </Field>
-          <Field
-            label="Base path"
-            htmlFor="model-base-path"
-            hint="Optional, e.g. /api/coding/paas/v4."
-          >
-            <Input
-              id="model-base-path"
-              value={draft.basePath}
-              onChange={(e) => set({ basePath: e.target.value })}
-            />
-          </Field>
-        </>
-      ) : draft.kind === "claude-plan" ? (
+      {draft.kind === "claude-plan" ? (
         <Text variant="meta" className="block">
           The Claude plan needs no key here: Claude Code signs in on the sandbox (Settings → Claude
           plan).
         </Text>
       ) : (
         <>
-          {draft.kind === "cloudflare-ai-gateway" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Account ID" htmlFor="model-account-id">
-                <Input
-                  id="model-account-id"
-                  value={draft.accountId}
-                  onChange={(e) => set({ accountId: e.target.value })}
-                />
-              </Field>
-              <Field label="Gateway ID" htmlFor="model-gateway-id">
-                <Input
-                  id="model-gateway-id"
-                  value={draft.gatewayId}
-                  onChange={(e) => set({ gatewayId: e.target.value })}
-                />
-              </Field>
-            </div>
+          {gateway ? (
+            <GatewayFields draft={draft} set={set} />
           ) : (
             <Field label="Endpoint" htmlFor="model-endpoint">
               <Input
@@ -213,7 +176,15 @@ function ConnectionFields({
               </datalist>
             </Field>
           )}
-          <Field label="API key" htmlFor="model-key">
+          <Field
+            label={gateway ? "Gateway token" : "API key"}
+            htmlFor="model-key"
+            {...(gateway
+              ? {
+                  hint: "The provider keys you stored in the gateway (Anthropic, TypeSafe, custom providers) stay there.",
+                }
+              : {})}
+          >
             <Input
               id="model-key"
               type="password"
@@ -222,7 +193,7 @@ function ConnectionFields({
               onChange={(e) => set({ apiKey: e.target.value })}
             />
           </Field>
-          {draft.kind !== "cloudflare-ai-gateway" && (
+          {!gateway && (
             <div className="flex items-center gap-2">
               <Checkbox
                 id="model-private"
@@ -240,7 +211,7 @@ function ConnectionFields({
   );
 }
 
-function ModelChecklist({
+export function ModelChecklist({
   models,
   chosen,
   setChosen,
@@ -426,26 +397,22 @@ function SingleModelFields({
 /** The dialog's buttons: what the current tab and step can do next. */
 function Actions({
   tab,
-  routed,
   checked,
   canConnect,
   canAdd,
   canTest,
   busy,
-  onAddById,
   onCheck,
   onConnect,
   onTest,
   onAdd,
 }: {
   tab: "connect" | "single";
-  routed: boolean;
   checked: boolean;
   canConnect: boolean;
   canAdd: boolean;
   canTest: boolean;
   busy: boolean;
-  onAddById: () => void;
   onCheck: () => void;
   onConnect: () => void;
   onTest: () => void;
@@ -463,13 +430,6 @@ function Actions({
       </>
     );
   }
-  if (routed) {
-    return (
-      <Button variant="outline" onClick={onAddById}>
-        Add its models by id
-      </Button>
-    );
-  }
   return checked ? (
     <Button onClick={onConnect} disabled={busy || !canConnect}>
       Connect
@@ -484,12 +444,11 @@ function Actions({
 interface FormProps {
   templates: ProviderTemplate[];
   template?: ProviderTemplate;
-  accounts: Account[];
   onDone: () => void;
 }
 
 /** One pass through the dialog: mounted on open, so each open starts fresh. */
-function AddModelsForm({ templates, template, accounts, onDone }: FormProps) {
+function AddModelsForm({ templates, template, onDone }: FormProps) {
   const { run } = useStepUp();
   const [tab, setTab] = useState<"connect" | "single">("connect");
   const [draft, setDraft] = useState<Draft>(() => fromTemplate(template));
@@ -498,8 +457,6 @@ function AddModelsForm({ templates, template, accounts, onDone }: FormProps) {
   const [busy, setBusy] = useState(false);
   const [single, setSingleState] = useState<SingleModel>(EMPTY_SINGLE);
   const [tested, setTested] = useState<string | null>(null);
-  const gateways = accounts.filter((a) => a.kind === "cloudflare-ai-gateway");
-  const routed = draft.kind === "openai-chat" && draft.viaProviderId !== "";
 
   const set = (patch: Partial<Draft>) => {
     setDraft((current) => ({ ...current, ...patch }));
@@ -591,9 +548,7 @@ function AddModelsForm({ templates, template, accounts, onDone }: FormProps) {
       />
     </Field>
   );
-  const fields = (
-    <ConnectionFields draft={draft} set={set} templates={templates} gateways={gateways} />
-  );
+  const fields = <ConnectionFields draft={draft} set={set} templates={templates} />;
 
   return (
     <>
@@ -629,13 +584,11 @@ function AddModelsForm({ templates, template, accounts, onDone }: FormProps) {
       <DialogFooter>
         <Actions
           tab={tab}
-          routed={routed}
           checked={found !== null}
           canConnect={chosen.size > 0}
           canAdd={single.upstreamId.trim() !== ""}
           canTest={single.upstreamId.trim() !== "" && draft.kind !== "claude-plan"}
           busy={busy}
-          onAddById={() => setTab("single")}
           onCheck={check}
           onConnect={connect}
           onTest={test}

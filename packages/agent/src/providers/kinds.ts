@@ -134,7 +134,22 @@ function chatModel(
     maxTokens: row.maxOutputTokens,
     cost: base?.cost ?? ZERO_COST,
     ...(row.compat ? { compat: row.compat } : {}),
+    ...thinkingMap(base, row.compat),
   } as Model<Api>;
+}
+
+/**
+ * Models that always think adaptively (Claude Sonnet 5.5, Opus 5.5) refuse
+ * `thinking: {type: "disabled"}`, which pi-ai sends for a call with no
+ * thinking level (a Test, a chat title, a memory capture) unless the model
+ * says "off" is unsupported. Saying so leaves the thinking setting out, so
+ * the model uses its own default.
+ */
+function thinkingMap(base: Model<Api> | undefined, compat: Record<string, unknown> | null) {
+  const adaptive =
+    compat?.forceAdaptiveThinking === true ||
+    (base?.compat as { forceAdaptiveThinking?: boolean } | undefined)?.forceAdaptiveThinking;
+  return adaptive ? { thinkingLevelMap: { ...base?.thinkingLevelMap, off: null } } : {};
 }
 
 interface GatewaySettings {
@@ -147,6 +162,61 @@ function gatewaySettings(account: ProviderAccount): GatewaySettings | undefined 
   return typeof accountId === "string" && accountId && typeof gatewayId === "string" && gatewayId
     ? { accountId, gatewayId }
     : undefined;
+}
+
+/**
+ * A provider the owner configured in the gateway itself (BYOK "custom
+ * provider", e.g. Z.AI's coding plan): its slug, and the path the gateway
+ * appends after it.
+ */
+export interface GatewayCustomProvider {
+  /** `custom-<name>`, as the gateway names it. */
+  slug: string;
+  /** Appended to the provider's base URL (`api/coding/paas/v4`). */
+  basePath?: string;
+}
+
+function gatewayCustomProviders(settings: Record<string, unknown>): GatewayCustomProvider[] {
+  const list = Array.isArray(settings.customProviders) ? settings.customProviders : [];
+  return list.flatMap((entry) => {
+    const { slug, basePath } = (entry ?? {}) as Partial<GatewayCustomProvider>;
+    return typeof slug === "string" && slug
+      ? [{ slug, ...(typeof basePath === "string" && basePath ? { basePath } : {}) }]
+      : [];
+  });
+}
+
+/** Where a gateway account's custom provider is registered (its own base URL). */
+const customProviderId = (accountId: string, slug: string) => `${accountId}:${slug}`;
+
+/**
+ * How a gateway account's model is called. A model of one of its custom
+ * providers (`custom-zai-coding-plan/glm-5.3-flash`) goes to that provider's
+ * own gateway URL under its bare id: the gateway's unified endpoint can't add
+ * the provider's base path. Every other model is the account's own.
+ */
+export function gatewayModelRoute(
+  account: Pick<ProviderAccount, "id" | "settings">,
+  upstreamId: string,
+): { providerId: string; upstreamId: string } {
+  const slash = upstreamId.indexOf("/");
+  const slug = slash > 0 ? upstreamId.slice(0, slash) : "";
+  const custom = gatewayCustomProviders(account.settings).find((p) => p.slug === slug);
+  return custom
+    ? { providerId: customProviderId(account.id, slug), upstreamId: upstreamId.slice(slash + 1) }
+    : { providerId: account.id, upstreamId };
+}
+
+/** A custom provider's base URL through the gateway. */
+export function gatewayCustomBaseUrl(
+  frontDoor: string,
+  settings: GatewaySettings,
+  provider: GatewayCustomProvider,
+): string {
+  const basePath = provider.basePath?.replace(/^\/+|\/+$/g, "");
+  return [trimSlash(frontDoor), "v1", settings.accountId, settings.gatewayId, provider.slug]
+    .concat(basePath ? [basePath] : [])
+    .join("/");
 }
 
 /** The gateway's own host, or the account's front door when it set one. */
@@ -207,8 +277,10 @@ function gatewayProviders(
   if (!settings) return [];
   const frontDoor = gatewayFrontDoor(account);
   const placeholderBase = (url: string) => url.replace(GATEWAY_HOST, frontDoor).replace(/\/+$/, "");
+  const custom = gatewayCustomProviders(account.settings);
+  const customOf = (row: ModelRow) => gatewayModelRoute(account, row.upstreamId);
   const chat = rows
-    .filter((row) => row.type === "chat")
+    .filter((row) => row.type === "chat" && customOf(row).providerId === account.id)
     .map((row) => {
       const base = GATEWAY_CATALOG.get(row.upstreamId);
       const api = (base?.api as ChatApi | undefined) ?? "openai-completions";
@@ -230,6 +302,33 @@ function gatewayProviders(
       },
     }) as Provider,
   ];
+  // Each custom provider: its own pi-ai provider on its own gateway URL,
+  // models under their bare ids, on the gateway's token.
+  for (const provider of custom) {
+    const baseUrl = gatewayCustomBaseUrl(frontDoor, settings, provider);
+    const id = customProviderId(account.id, provider.slug);
+    const models = rows
+      .filter((row) => row.type === "chat" && customOf(row).providerId === id)
+      .map((row) =>
+        chatModel(
+          { ...row, upstreamId: customOf(row).upstreamId },
+          id,
+          "openai-completions",
+          baseUrl,
+        ),
+      );
+    if (models.length === 0) continue;
+    providers.push(
+      createProvider({
+        id,
+        name: `${account.name} (${provider.slug})`,
+        baseUrl,
+        auth: gatewayAuth(account, settings, credentials),
+        models,
+        api: openAICompletionsApi(),
+      }) as Provider,
+    );
+  }
   const classifiers = rows
     .filter((row) => row.type === "classifier")
     .flatMap((row): ClassifierModel<ClassifierApi>[] => {

@@ -21,9 +21,13 @@ which seeds a `Faux` account with one model, `Test Model (faux)`.
 ## Driving it with ta-verify
 
 - **Catalog.** `GET /api/v1/models`: `canAnswer: true`, `defaultModelId: "test-model"`, one `Faux` provider.
-- **Picker.** Open the New bot dialog; button `Test Model (faux)` → menu group `Faux`.
+- **Picker.** Open the New bot dialog; button `Test Model (faux)` → a searchable list (`Search models…`), options grouped by account (`Faux`).
 - **Configured.** No banner; send `model <stamp>` → `Echo: model <stamp>`.
 - **Settings.** `ta-verify drive $S/journeys/models.mjs` → `models-tab`, `models-checked`, `models-plan-added`, `models-plan-card`, `models-picker`. With the plan added and no default set, New bot preselects `Claude Haiku 4.5` (the first available chat model by account name).
+
+## Against a real gateway
+
+`ta-verify drive $S/journeys/models-gateway.mjs` with `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` and `CLOUDFLARE_API_KEY` in the shell that drives (never the server's env; without them it reports unreachable). It adds one gateway account with the custom provider `custom-zai-coding-plan` (`api/coding/paas/v4`), keeps Claude Sonnet 5.5, the custom GLM 5.3 models and Jev, Tests Sonnet and GLM-5.3-Flash, sets New bots and Auto-review, and chats with a bot on Sonnet 5.5 (`pong`) and then GLM-5.3-Flash (`ping`). Proofs: `gateway-checked`, `gateway-tested`, `gateway-defaults`, `gateway-sonnet-reply`, `gateway-glm-reply`. Real model calls, a few tokens each.
 
 ## Gotchas
 

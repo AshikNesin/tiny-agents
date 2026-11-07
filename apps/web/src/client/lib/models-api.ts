@@ -82,8 +82,8 @@ export interface Connection {
   settings?: {
     accountId?: string;
     gatewayId?: string;
-    upstream?: string;
-    basePath?: string;
+    /** Providers configured in the gateway itself (BYOK custom providers). */
+    customProviders?: { slug: string; basePath?: string }[];
   };
   allowPrivateNetwork?: boolean;
   viaProviderId?: string | null;

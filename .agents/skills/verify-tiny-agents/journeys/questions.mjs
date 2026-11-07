@@ -20,7 +20,7 @@ await journey("questions", async ({ page, step, proof, cleanup, api, stamp }) =>
   };
 
   await step("setup: a bot of its own via the API", async () => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     botId = (await api.post("/bots", { name, modelId: defaultModel })).id;
     cleanup(async () => {
       await api.delete(`/bots/${botId}`);

@@ -116,7 +116,11 @@ export type {
   ModelRow,
   ProviderAccount,
 } from "./providers/config";
-export { PROVIDER_KINDS } from "./providers/kinds";
+export {
+  gatewayCustomBaseUrl,
+  PROVIDER_KINDS,
+  type GatewayCustomProvider,
+} from "./providers/kinds";
 export { testModelCall, testUnsavedModel, type TestResult } from "./providers/test-call";
 export {
   discoverModels,

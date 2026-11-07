@@ -75,7 +75,7 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
   await proof("saved");
   await step("setup: a faux bot (API)", async () => {
     const models = await api.get("/models");
-    const bot = await api.post("/bots", { name: botName, modelId: models.defaultModel });
+    const bot = await api.post("/bots", { name: botName, modelId: models.defaultModelId });
     botId = bot.id;
     cleanup(() => api.delete(`/bots/${botId}`));
   });

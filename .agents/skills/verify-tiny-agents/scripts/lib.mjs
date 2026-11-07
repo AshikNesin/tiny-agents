@@ -98,8 +98,10 @@ export const caps = new Set((process.env.TA_VERIFY_CAPS ?? "").split(",").filter
 export const adminKey = process.env.TA_VERIFY_ADMIN_KEY;
 
 /**
- * `requires`: launch options the journey needs, e.g. ["sandbox"]. Without them
- * the journey records itself as unreachable (exit 3) instead of failing.
+ * `requires`: launch options the journey needs, e.g. ["sandbox"], or
+ * `env:NAME` for a variable the journey itself reads (real provider
+ * credentials). Without them the journey records itself as unreachable
+ * (exit 3) instead of failing.
  */
 export async function journey(feature, fn, { signIn = true, requires = [] } = {}) {
   if (!BASE || !EVIDENCE) {
@@ -110,9 +112,19 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
   }
   const dir = path.join(EVIDENCE, feature);
   mkdirSync(dir, { recursive: true });
-  const missing = requires.filter((cap) => !caps.has(cap));
+  const missing = requires.filter((cap) =>
+    cap.startsWith("env:") ? !process.env[cap.slice(4)] : !caps.has(cap),
+  );
   if (missing.length) {
-    const reason = `needs \`ta-verify up ${missing.map((m) => `--${m}`).join(" ")}\``;
+    const flags = missing.filter((m) => !m.startsWith("env:"));
+    const vars = missing.filter((m) => m.startsWith("env:")).map((m) => m.slice(4));
+    const reason = [
+      flags.length ? `\`ta-verify up ${flags.map((m) => `--${m}`).join(" ")}\`` : "",
+      vars.length ? `${vars.join(", ")} in the environment` : "",
+    ]
+      .filter(Boolean)
+      .join(" and ")
+      .replace(/^/, "needs ");
     writeFileSync(
       path.join(dir, "result.json"),
       JSON.stringify({ feature, ok: false, unreachable: reason, base: BASE }, null, 2),

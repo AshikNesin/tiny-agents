@@ -29,7 +29,7 @@ await journey("chat-attachments", async ({ page, step, proof, cleanup, api, stam
   const sendButton = page.getByRole("button", { name: "Send message" });
 
   await step("setup: a bot of its own via the API", async () => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     botId = (await api.post("/bots", { name, modelId: defaultModel })).id;
     cleanup(async () => {
       await api.delete(`/bots/${botId}`);

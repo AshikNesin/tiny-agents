@@ -23,10 +23,28 @@ endpoint and capabilities, and the engine
 | `claude-plan`           | none: the Claude Code worker | claude-code | none (signed in on the sandbox)      |
 | `faux`                  | none: the host's faux model  | pi          | none (dev, e2e and tests)            |
 
-- **Gateway route.** An `openai-chat` account can go through a gateway
-  account instead of an endpoint of its own, as the gateway's BYOK upstreams
-  do: its URL is `gateway/v1/<account>/<gateway>/<upstream>[/<basePath>]` and
-  it uses the gateway's token (`viaProviderId`, `settings.upstream`).
+- **Cloudflare AI Gateway.** One account serves everything the gateway
+  holds, on the gateway's token: the providers whose keys are stored in it
+  (BYOK: Anthropic, TypeSafe's Jev classifier), its Unified Billing
+  catalog, and its **custom providers** (issue #216). A custom provider is
+  listed in the account's `settings.customProviders` by its gateway slug and
+  the path the gateway appends (`custom-zai-coding-plan`,
+  `api/coding/paas/v4`). Its models are rows named `<slug>/<model>`
+  (`custom-zai-coding-plan/glm-5.3-flash`), served from
+  `gateway/v1/<account>/<gateway>/<slug>/<basePath>` under their bare id;
+  the gateway's unified `/compat` endpoint can't add the provider's path.
+  Discovery lists each custom provider's `/models` beside the catalog, and
+  a model it doesn't list can be added by id. Cloudflare's API to list
+  custom providers needs a token with AI Gateway edit rights, so the slugs
+  are entered by hand.
+- **Gateway route.** An `openai-chat` account can also go through a gateway
+  account instead of an endpoint of its own (`viaProviderId`,
+  `settings.upstream`, `settings.basePath`). The API keeps it; the dialog
+  offers custom providers on the gateway account instead.
+- **Thinking.** Models that always think adaptively (Claude Sonnet 5.5,
+  Opus 5.5) refuse `thinking: {type: "disabled"}`, which pi-ai sends for a
+  call with no thinking level. Their "off" level is marked unsupported, so a
+  Test, a title or a memory capture leaves thinking to the model.
 - **Claude plan.** Adding the account opts in; turning it off is the kill
   switch, read on every turn. `settings.fallbackModelId` names a pi model a
   turn moves to when the plan is off or the worker is unreachable; without
@@ -126,6 +144,15 @@ connects (private addresses refused unless allowed), no redirects, 15 s and
 4 MB per request, at most 50 pages and 5,000 models. Test resolves the host
 the same way before its call. Inference itself goes through pi-ai's clients,
 so the endpoint is checked when it is saved, not on each request.
+
+### Account limits
+
+A model that fails on the provider's side says why. The gateway answers
+402 (code 2021) for a provider whose key it doesn't hold and that has no
+Unified Billing credits, and Workers AI answers 403 (internal code 5035) for
+a model the Workers Free plan doesn't include. Test explains both before the
+raw error. The gateway's Workers AI models are named `… (Workers AI)` so they
+aren't mistaken for the owner's own providers.
 
 ## The runtime
 

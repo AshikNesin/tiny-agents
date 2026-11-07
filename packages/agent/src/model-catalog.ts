@@ -7,7 +7,12 @@
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ModelConfig, ModelRow, ProviderAccount } from "./providers/config";
-import { CLAUDE_PLAN_NOTE, classifierProviderId, PROVIDER_KINDS } from "./providers/kinds";
+import {
+  CLAUDE_PLAN_NOTE,
+  classifierProviderId,
+  gatewayModelRoute,
+  PROVIDER_KINDS,
+} from "./providers/kinds";
 import type {
   CatalogModel,
   ModelRole,
@@ -99,12 +104,20 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
   const route = (id: string): ModelRoute | undefined => {
     const model = byId.get(id);
     if (!model?.available) return undefined;
-    return {
-      engine: model.engine,
-      providerId:
-        model.type === "classifier" ? classifierProviderId(model.providerId) : model.providerId,
-      upstreamId: model.upstreamId,
-    };
+    if (model.type === "classifier") {
+      return {
+        engine: model.engine,
+        providerId: classifierProviderId(model.providerId),
+        upstreamId: model.upstreamId,
+      };
+    }
+    const account = accounts.get(model.providerId);
+    // A gateway's custom-provider model is served by that provider's own entry.
+    const target =
+      account?.kind === "cloudflare-ai-gateway"
+        ? gatewayModelRoute(account, model.upstreamId)
+        : { providerId: model.providerId, upstreamId: model.upstreamId };
+    return { engine: model.engine, ...target };
   };
   const usable = (id: string | undefined, type: CatalogModel["type"] = "chat") => {
     const model = id ? byId.get(id) : undefined;
