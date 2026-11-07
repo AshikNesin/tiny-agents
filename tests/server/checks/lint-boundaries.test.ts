@@ -349,7 +349,7 @@ const FIXTURES: Record<string, Fixture> = {
   },
   "packages/jobs/src/server/r7-getter-local-fail.ts": {
     source:
-      'import { getDb } from "./context";\nexport const run = () => {\n  const handle = getDb();\n  return handle.transaction(() => 1);\n};\n',
+      'import { getDb } from "@groot/core/database";\nexport const run = () => {\n  const handle = getDb();\n  return handle.transaction(() => 1);\n};\n',
     rules: ["R7"],
   },
   "packages/core/src/auth/r7-assigned-fail.ts": {
@@ -360,6 +360,16 @@ const FIXTURES: Record<string, Fixture> = {
   "packages/jobs/src/server/r7-destructured-fail.ts": {
     source:
       "export const run = (deps: { db: any }) => {\n  const { db: handle } = deps;\n  return handle.transaction(() => 1);\n};\n",
+    rules: ["R7"],
+  },
+  "packages/ui/src/r7-indexeddb-pass.ts": {
+    source:
+      'const getDatabase = (): IDBDatabase => indexedDB.open("app").result;\nexport const read = () => getDatabase().transaction("store");\nexport const viaLocal = () => {\n  const handle = getDatabase();\n  return handle.transaction("store");\n};\n',
+    rules: [],
+  },
+  "packages/core/src/auth/r7-getter-function-fail.ts": {
+    source:
+      'import { db } from "../database";\nfunction database() {\n  return db;\n}\nexport const run = () => database().transaction(() => 1);\n',
     rules: ["R7"],
   },
   "packages/agent/src/r7-other-call-pass.ts": {
@@ -491,6 +501,11 @@ const FIXTURES: Record<string, Fixture> = {
       'const PREFIX = "SESSION_";\nexport const code = `${PREFIX}EXPIRED`;\nexport const label = (name: string) => "SESSION_" + name;\n',
     rules: [],
   },
+  "apps/web/src/server/api/vault/r9-shadowed-pass.ts": {
+    source:
+      'export const a = () => {\n  const kind = "INVALID";\n  return kind;\n};\nexport const b = (kind: string) => "SESSION_" + kind;\n',
+    rules: [],
+  },
   "packages/core/src/utils/jwt.utils.ts": {
     source:
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',
@@ -525,6 +540,31 @@ const FIXTURES: Record<string, Fixture> = {
   "tests/server/r10-pass.ts": {
     source:
       "type Row = { at: number };\nexport const at = Date.now() + 1_000;\nexport function expired(rows: Row[]) {\n  const out: Row[] = [];\n  for (const row of rows) if (row.at < Date.now()) out.push(row);\n  while (out.length > 10) out.splice(out.findIndex((r) => r.at < Date.now()), 1);\n  return out;\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-spin-fail.ts": {
+    source:
+      "export function spin(ms: number) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline);\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-expect-pass.ts": {
+    source:
+      'import { expect } from "vite-plus/test";\nexport function check(rows: { expiresAt: number }[]) {\n  for (let i = 0; i < rows.length; i++) expect(rows[i].expiresAt > Date.now()).toBe(true);\n}\n',
+    rules: [],
+  },
+  "tests/server/r10-drain-pass.ts": {
+    source:
+      "type Job = { runAt: number; run(): void };\nexport function drain(queue: Job[]) {\n  while (queue.length) {\n    const job = queue.shift();\n    if (job && job.runAt <= Date.now()) job.run();\n  }\n}\n",
+    rules: [],
+  },
+  "tests/client/r10-days-pass.ts": {
+    source:
+      "const DAY = 86_400_000;\nexport function lastWeek() {\n  const days: number[] = [];\n  for (let at = Date.now() - 7 * DAY; at < Date.now(); at += DAY) days.push(at);\n  return days;\n}\n",
+    rules: [],
+  },
+  "tests/e2e/r10-real-clock-pass.ts": {
+    source:
+      "export async function waitFor(check: () => Promise<boolean>, ms = 5_000) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline) {\n    if (await check()) return;\n    await new Promise((r) => setTimeout(r, 100));\n  }\n}\n",
     rules: [],
   },
   "packages/agent/src/r10-outside-tests-pass.ts": {

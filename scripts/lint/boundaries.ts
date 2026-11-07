@@ -241,6 +241,8 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "tests/**",
     rule: "repo/no-date-now-deadline-loop",
+    // Playwright runs on the real clock.
+    except: ["tests/e2e/**"],
     enabled: true,
   },
 ];

@@ -65,9 +65,8 @@ const TRANSACTION_MESSAGE =
   "R7: no transactions in packages/ (AGENTS.md). Use one statement with RETURNING, a compare-and-set update (WHERE on the expected old value), or an idempotent retry. An app that needs a transaction runs a sync db.transaction() in apps/ and passes the tx in.";
 
 // `db` and `tx` by name, plus anything imported from the database module or
-// drizzle, or typed with a type from there.
+// drizzle, typed with a type from there, or a function that returns one.
 const DB_NAMES = ["db", "tx"];
-const DB_GETTERS = new Set(["getDb", "getDatabase"]);
 const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\/|$)/;
 
 const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
@@ -109,12 +108,15 @@ const WAIT_LOOPS = new Set(["WhileStatement", "DoWhileStatement", "ForStatement"
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
 const COMPARISONS = new Set(["<", "<=", ">", ">="]);
 
-const inWaitLoop = (node) => {
+const enclosingLoop = (node) => {
   for (let p = node.parent; p && !FUNCTIONS.has(p.type); p = p.parent) {
-    if (WAIT_LOOPS.has(p.type)) return true;
+    if (WAIT_LOOPS.has(p.type)) return p;
   }
-  return false;
+  return null;
 };
+
+const isEmptyStatement = (node) =>
+  node.type === "EmptyStatement" || (node.type === "BlockStatement" && node.body.length === 0);
 
 const isDateNow = (node) =>
   node.type === "CallExpression" &&
@@ -156,11 +158,8 @@ export default {
               return dbNames.has(target.name);
             case "MemberExpression":
               return !target.computed && DB_NAMES.includes(target.property.name);
-            case "CallExpression": {
-              const callee = unparenthesized(target.callee);
-              const name = callee.type === "MemberExpression" ? callee.property.name : callee.name;
-              return DB_GETTERS.has(name) || isDb(callee);
-            }
+            case "CallExpression":
+              return isDb(target.callee);
             default:
               return false;
           }
@@ -170,6 +169,12 @@ export default {
             type.typeName.type === "Identifier" &&
             dbNames.has(type.typeName.name)) ||
           (type?.type === "TSTypeQuery" && isDb(type.exprName));
+        const returnsDb = (fn) =>
+          fn.body.type === "BlockStatement"
+            ? fn.body.body.some(
+                (s) => s.type === "ReturnStatement" && s.argument && isDb(s.argument),
+              )
+            : isDb(fn.body);
         return {
           ImportDeclaration(node) {
             if (!DATABASE_MODULE.test(node.source.value)) return;
@@ -179,7 +184,11 @@ export default {
             if (isDbType(node.typeAnnotation?.typeAnnotation)) dbNames.add(node.name);
           },
           VariableDeclarator(node) {
-            if (node.id.type === "Identifier" && node.init && isDb(node.init)) {
+            if (
+              node.id.type === "Identifier" &&
+              node.init &&
+              (isDb(node.init) || (FUNCTIONS.has(node.init.type) && returnsDb(node.init)))
+            ) {
               dbNames.add(node.id.name);
             }
             if (node.id.type !== "ObjectPattern") return;
@@ -195,6 +204,9 @@ export default {
           },
           AssignmentExpression(node) {
             if (node.left.type === "Identifier" && isDb(node.right)) dbNames.add(node.left.name);
+          },
+          FunctionDeclaration(node) {
+            if (node.id && returnsDb(node)) dbNames.add(node.id.name);
           },
           CallExpression(node) {
             const callee = node.callee;
@@ -224,7 +236,12 @@ export default {
             if (SESSION_INVALID_NAMES.has(node.name)) report(node);
           },
           VariableDeclarator(node) {
-            if (node.parent.kind !== "const" || node.id.type !== "Identifier" || !node.init) return;
+            const declaration = node.parent;
+            const topLevel =
+              declaration.parent.type === "Program" ||
+              declaration.parent.type === "ExportNamedDeclaration";
+            if (declaration.kind !== "const" || !topLevel) return;
+            if (node.id.type !== "Identifier" || !node.init) return;
             const value = staticString(node.init, consts);
             if (value !== null) consts.set(node.id.name, value);
           },
@@ -245,24 +262,35 @@ export default {
           }
           return isDateNow(target);
         };
+        const awaitingLoops = new Set();
+        const comparisons = [];
         return {
           VariableDeclarator(node) {
             if (
               node.id.type === "Identifier" &&
               node.init &&
               readsClock(node.init) &&
-              inWaitLoop(node)
+              enclosingLoop(node)
             ) {
               clockNames.add(node.id.name);
             }
           },
+          AwaitExpression(node) {
+            const loop = enclosingLoop(node);
+            if (loop) awaitingLoops.add(loop);
+          },
           BinaryExpression(node) {
-            if (
-              COMPARISONS.has(node.operator) &&
-              (readsClock(node.left) || readsClock(node.right)) &&
-              inWaitLoop(node)
-            )
-              context.report({ node, message: DEADLINE_LOOP_MESSAGE });
+            if (!COMPARISONS.has(node.operator)) return;
+            if (!readsClock(node.left) && !readsClock(node.right)) return;
+            const loop = enclosingLoop(node);
+            if (loop) comparisons.push({ node, loop });
+          },
+          "Program:exit"() {
+            for (const { node, loop } of comparisons) {
+              if (awaitingLoops.has(loop) || isEmptyStatement(loop.body)) {
+                context.report({ node, message: DEADLINE_LOOP_MESSAGE });
+              }
+            }
           },
         };
       },
