@@ -515,7 +515,9 @@ export async function forgetBotInVault(botId: string): Promise<void> {
     .set({
       botsJson: sql`(select json_group_array(value) from json_each(${vaultItems.botsJson}) where value <> ${botId})`,
     })
-    .where(sql`exists (select 1 from json_each(${vaultItems.botsJson}) where value = ${botId})`);
+    .where(
+      sql`json_valid(${vaultItems.botsJson}) and exists (select 1 from json_each(${vaultItems.botsJson}) where value = ${botId})`,
+    );
 }
 
 /** One value for the owner's browser. Registered with the redactor and audited. */

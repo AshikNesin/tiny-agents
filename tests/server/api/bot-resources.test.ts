@@ -261,7 +261,13 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
       label: handle,
       botsJson: JSON.stringify(bots),
     });
-    await db.insert(vaultItems).values([item("both", [bot.id, other.id]), item("only", [bot.id])]);
+    await db
+      .insert(vaultItems)
+      .values([
+        item("both", [bot.id, other.id]),
+        item("only", [bot.id]),
+        { ...item("broken", []), botsJson: "not json" },
+      ]);
     return async () => {
       const grants = await db
         .select({ handle: vaultItems.handle, bots: vaultItems.botsJson })
@@ -269,6 +275,7 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
       expect(Object.fromEntries(grants.map((row) => [row.handle, row.bots]))).toEqual({
         both: JSON.stringify([other.id]),
         only: "[]",
+        broken: "not json",
       });
     };
   },
@@ -323,7 +330,7 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
 
 async function holds(column: AnySQLiteColumn, botId: string): Promise<boolean> {
   const where = column.name.endsWith("_json")
-    ? sql`exists (select 1 from json_each(${column}) where value = ${botId})`
+    ? sql`json_valid(${column}) and exists (select 1 from json_each(${column}) where value = ${botId})`
     : sql`${column} = ${botId}`;
   const [row] = await db
     .select({ count: sql<number>`count(*)` })
