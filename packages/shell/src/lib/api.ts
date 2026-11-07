@@ -48,7 +48,10 @@ export class ApiError extends Error {
   }
 }
 
-/** A 401 response, with when its request was sent (a `performance.now()` timestamp). */
+/**
+ * A 401 from the session guard (`SESSION_INVALID`), with when its request was
+ * sent (a `performance.now()` timestamp).
+ */
 export interface UnauthorizedEvent {
   path: string;
   sentAt: number;
