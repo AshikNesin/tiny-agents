@@ -53,6 +53,7 @@ describe("env", () => {
       "172.16.0.0/12",
       "192.168.0.0/16",
       "::1",
+      "fc00::/7",
     ]);
     expect(parseEnv({ TRUSTED_PROXIES: " 10.0.0.0/8, 127.0.0.1,::1 " }).TRUSTED_PROXIES).toEqual([
       "10.0.0.0/8",
@@ -61,7 +62,21 @@ describe("env", () => {
     ]);
     expect(parseEnv({ TRUSTED_PROXIES: "none" }).TRUSTED_PROXIES).toEqual([]);
     expect(parseEnv({ TRUSTED_PROXIES: " NONE " }).TRUSTED_PROXIES).toEqual([]);
-    for (const bad of ["proxy.internal", "10.0.0.0/33", "10.0.0.256", "::1/64", "*", "none,::1"]) {
+    expect(parseEnv({ TRUSTED_PROXIES: "2001:db8::/32,fd00::1/128,::/0" }).TRUSTED_PROXIES).toEqual(
+      ["2001:db8::/32", "fd00::1/128", "::/0"],
+    );
+    for (const bad of [
+      "proxy.internal",
+      "10.0.0.0/33",
+      "10.0.0.0/08",
+      "10.0.0.256",
+      "::1/129",
+      "::1/064",
+      "fe80::1%eth0",
+      "[::1]",
+      "*",
+      "none,::1",
+    ]) {
       expect(() => parseEnv({ TRUSTED_PROXIES: bad })).toThrow(/TRUSTED_PROXIES/);
     }
   });

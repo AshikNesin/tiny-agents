@@ -5,6 +5,7 @@ import { setConfig } from "@groot/core/config";
 import { rateLimit } from "@groot/core/middlewares/rate-limit.middleware";
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { AppEnv } from "@groot/core/types";
+import { createTestApp } from "../helpers";
 
 function buildApp() {
   return createApp({
@@ -104,6 +105,44 @@ describe("rateLimit middleware", () => {
     expect((await fromPeer(app, "::ffff:10.0.0.2", "198.51.100.2")).status).toBe(200);
   });
 
+  it("keys an IPv6 client by its /64, so rotating addresses inside it shares one limit", async () => {
+    const app = buildApp();
+    expect((await fromPeer(app, "2001:db8:1:2::1")).status).toBe(200);
+    expect((await fromPeer(app, "2001:db8:1:2:ffff::2")).status).toBe(200);
+    expect((await fromPeer(app, "2001:0db8:0001:0002::3")).status).toBe(429);
+    expect((await fromPeer(app, "2001:db8:1:3::1")).status).toBe(200);
+  });
+
+  it("keeps the IPv4 key for an IPv4-mapped address in either notation", async () => {
+    const app = buildApp();
+    expect((await fromPeer(app, "127.0.0.1", "::ffff:c633:6401")).status).toBe(200);
+    expect((await fromPeer(app, "127.0.0.1", "198.51.100.1")).status).toBe(200);
+    expect((await fromPeer(app, "127.0.0.1", "::ffff:198.51.100.1")).status).toBe(429);
+    expect((await fromPeer(app, "127.0.0.1", "::ffff:c633:6402")).status).toBe(200);
+  });
+
+  it("trusts a unique-local IPv6 proxy under the default trust", async () => {
+    const app = buildApp();
+    for (let i = 0; i < 2; i++) {
+      expect((await fromPeer(app, "fd00::1", "2001:db8:7::1")).status).toBe(200);
+    }
+    expect((await fromPeer(app, "fd00::1", "2001:db8:7::1")).status).toBe(429);
+    expect((await fromPeer(app, "fd00::1", "2001:db8:8::1")).status).toBe(200);
+  });
+
+  it("trusts a proxy inside an IPv6 range in an explicit proxy list", async () => {
+    setConfig({ trustedProxies: ["2001:db8:ffff::/48"] });
+    const app = buildApp();
+    for (let i = 0; i < 2; i++) {
+      expect((await fromPeer(app, "2001:db8:ffff:1::5", "198.51.100.1")).status).toBe(200);
+    }
+    expect((await fromPeer(app, "2001:db8:ffff:1::5", "198.51.100.1")).status).toBe(429);
+    expect((await fromPeer(app, "2001:db8:ffff:1::5", "198.51.100.2")).status).toBe(200);
+    expect((await fromPeer(app, "fd00::1", "198.51.100.3")).status).toBe(200);
+    expect((await fromPeer(app, "fd00::1", "198.51.100.4")).status).toBe(200);
+    expect((await fromPeer(app, "fd00::1", "198.51.100.5")).status).toBe(429);
+  });
+
   it("serves requests without a socket (the Hono test client) under one shared key", async () => {
     const app = buildApp();
     const plain = (forwardedFor: string) =>
@@ -127,5 +166,25 @@ describe("rateLimit middleware", () => {
     expect((await fromPeer(app, "203.0.113.5", "198.51.100.1", bindings)).status).toBe(200);
     expect((await fromPeer(app, "203.0.113.5", "198.51.100.2", bindings)).status).toBe(429);
     expect(calls).toEqual(["203.0.113.5", "203.0.113.5"]);
+  });
+});
+
+describe("sign-in rate limit", () => {
+  it("limits a client that rotates addresses inside one IPv6 /64", async () => {
+    const app = createTestApp();
+    const statuses: number[] = [];
+    for (let i = 1; i <= 25; i++) {
+      const response = await app.request(
+        "/api/v1/auth/login",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "nobody@example.com", password: "wrong-password" }),
+        },
+        { incoming: { socket: { remoteAddress: `2001:db8:5:6::${i.toString(16)}` } } },
+      );
+      statuses.push(response.status);
+    }
+    expect(statuses).toEqual([...Array<number>(20).fill(401), ...Array<number>(5).fill(429)]);
   });
 });
