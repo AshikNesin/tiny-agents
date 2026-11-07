@@ -5,7 +5,7 @@ returns. Responses use the envelope `{ success: true, data }`; errors are
 `{ success: false, error: { code, message, details } }`.
 
 ```bash
-BASE=https://groot.localhost      # http://localhost:3000 under PORTLESS=0
+BASE=https://tiny-agents.localhost   # http://localhost:3000 under PORTLESS=0
 ADMIN_KEY=dev-only-admin-key      # ADMIN_AUTH_KEY (the dev default)
 ```
 

@@ -21,6 +21,10 @@ const TREE: Record<string, string> = {
     "Run `pnpm dev`, then `pnpm nope`.",
     "Pages import `src/pages/Home` and `./pages/Home`.",
   ].join("\n"),
+  "docs/nested/page.md": [
+    "Back to [the guide](/docs/guide.md).",
+    'Read [the old page](/docs/gone.md "Gone").',
+  ].join("\n"),
 };
 
 let root: string;
@@ -43,13 +47,14 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("check-doc-refs", () => {
-  it("fails on exactly the dead link and the unknown script, naming file and line", () => {
+  it("fails on exactly the dead links and the unknown script, naming file and line", () => {
     const { status, lines } = runChecker();
     expect(status).toBe(1);
     expect(lines).toEqual([
       "docs/guide.md:2  missing link docs/missing.md. Fix the path or delete the sentence.",
       "docs/guide.md:4  missing script pnpm nope. Fix the path or delete the sentence.",
-      "2 dangling references in 3 docs",
+      "docs/nested/page.md:2  missing link docs/gone.md. Fix the path or delete the sentence.",
+      "3 dangling references in 4 docs",
     ]);
   });
 
@@ -58,8 +63,9 @@ describe("check-doc-refs", () => {
       path.join(root, "docs/guide.md"),
       "Start in [the app](../src/app.ts).\nRun `pnpm dev`.\n",
     );
+    writeFileSync(path.join(root, "docs/nested/page.md"), "Back to [the guide](/docs/guide.md).\n");
     const { status, lines } = runChecker();
     expect(status).toBe(0);
-    expect(lines).toEqual(["0 dangling references in 3 docs"]);
+    expect(lines).toEqual(["0 dangling references in 4 docs"]);
   });
 });

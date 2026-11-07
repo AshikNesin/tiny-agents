@@ -182,8 +182,8 @@ packages/agent  (only module that touches pi-durable)
   - `apps/web/src/server/api/bots/**`, SSE routes, `apps/web/src/server/app.ts`
   - `apps/web/src/client/pages/**` (+ app components), `apps/web/src/client/App.tsx` (routes, nav items:
     replace groot's demo `Todos` nav with `Chats`), app-level CSS (accent token overrides)
-  - `apps/web/prisma/**` — `Bot` model added to **both** `schema.sqlite.prisma` and `schema.postgres.prisma`
-    with migrations (groot convention)
+  - `apps/web/src/server/db/schema.ts` (the app tables, starting with `bots`) and the migrations
+    `pnpm db:generate` writes to `apps/web/drizzle/`
   - `packages/agent/**` — new workspace package, child-only
   - `config.yml`, `README.md`, `tests/server/{app,routes}/**`, `tests/e2e/**`
 
@@ -227,10 +227,10 @@ packages/agent  (only module that touches pi-durable)
 
 | File                         | Owner                                 | Contents                            |
 | ---------------------------- | ------------------------------------- | ----------------------------------- |
-| `app.db` (`DATABASE_URL`)    | groot / Prisma (better-sqlite3)       | users, passkeys, KV, jobs, **bots** |
+| `app.db` (`DATABASE_URL`)    | groot / Drizzle (better-sqlite3)      | users, passkeys, KV, jobs, **bots** |
 | `agent.db` (`AGENT_DB_PATH`) | pi-durable (Node SQLite storage, WAL) | conversations, transcripts, tasks   |
 
-Kept as separate files so the two drivers never contend for locks and Prisma migrations never see foreign
+Kept as separate files so the two drivers never contend for locks and Drizzle migrations never see foreign
 tables. The link between them is `Bot.conversationId`.
 
 ### 7.5 Streaming
@@ -244,27 +244,12 @@ tables. The link between them is `Bot.conversationId`.
   get re-snapshotted (pi-durable behaviour).
 - Frontend renders the stream with AI Elements patterns directly (no Vercel AI SDK required on the backend).
 
-## 8. Data model (`app.db`, Prisma)
+## 8. Data model (`app.db`, Drizzle)
 
-groot's existing `User`, `Passkey`, KV and job tables are unchanged. New:
-
-```prisma
-model Bot {
-  id                 String    @id @default(cuid())
-  name               String    // max 100
-  description        String    @default("") // one line, max 200
-  systemPrompt       String    @default("") // persona, max ~24 KB
-  modelId            String    // id from the cloudflare-ai-gateway catalog
-  conversationId     String    @unique // current pi-durable conversation
-  lastReadAt         DateTime?
-  lastActivityAt     DateTime  @default(now())
-  lastMessagePreview String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  @@map("bots")
-}
-```
+groot's `users`, `passkeys`, `kv` and job tables are unchanged. The app's tables, starting with `bots`
+(name, description, system prompt, model id, the current pi-durable `conversationId`, `lastReadAt`,
+`lastActivityAt`, `lastMessagePreview`), are defined in `apps/web/src/server/db/schema.ts`, which is the
+source of truth for their columns.
 
 Unread = latest assistant entry newer than `lastReadAt` (server-side, so it is consistent across devices).
 
@@ -291,14 +276,15 @@ Request bodies validated with zod (groot `parseBody`).
 
 ## 10. Configuration
 
-All env vars are declared in `.env.schema` (varlock). No new keys in the synced `config.yml` schema.
+Env vars are validated with Zod at boot: groot's in `packages/core/src/env.ts`, tiny-agents' own in
+`apps/web/src/server/env.ts` (`appEnv()`). No new keys in the synced `config.yml` schema.
 
-| Variable                                                                                            | Source                                    | Notes                                            |
-| --------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
-| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, `STORAGE_DRIVER`, … | groot                                     | unchanged                                        |
-| `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`                 | groot (upstreamed, §12)                   | gateway auth                                     |
-| `DEFAULT_MODEL`                                                                                     | groot (upstreamed, §12)                   | default model id for new bots                    |
-| `AGENT_DB_PATH`                                                                                     | tiny-agents block at end of `.env.schema` | `./data/agent.db` (dev), `/data/agent.db` (prod) |
+| Variable                                                                          | Source                   | Notes                                            |
+| --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------ |
+| `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, … | groot                    | unchanged                                        |
+| `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`            | groot (upstreamed, §12)  | gateway auth                                     |
+| `DEFAULT_MODEL`                                                                   | groot (upstreamed, §12)  | default model id for new bots                    |
+| `AGENT_DB_PATH`, `DATA_DIR`                                                       | tiny-agents (`appEnv()`) | `./data/agent.db` (dev), `/data/agent.db` (prod) |
 
 ## 11. Deployment
 
@@ -312,8 +298,8 @@ All env vars are declared in `.env.schema` (varlock). No new keys in the synced 
     which pi-durable does not support. Accept a few seconds of downtime per deploy; in-flight replies are
     resumed by pi-durable.
   - **Stop Grace Period:** default 30 s (graceful Harness close).
-  - Full production env (incl. gateway vars) must be set **before the first deploy** — varlock validates it at
-    build time.
+  - Full production env (incl. gateway vars) must be set **before the first deploy**: the server validates
+    it at boot and refuses to start without the required secrets.
 - **Development:** this exe.dev VM, `pnpm dev` (Vite in middleware mode, single process).
 
 ## 12. Prerequisite changes in groot (upstream first, then sync)
@@ -324,8 +310,8 @@ These are generic improvements made in the groot repo, then pulled in with `pnpm
    `cloudflare-ai-gateway` provider, replacing the hand-rolled `CF_AI_GATEWAY_BASE_URL` /
    `CF_AI_GATEWAY_AUTH_KEY` setup (and its hardcoded 128k context / reasoning-off defaults). tiny-agents
    has since deleted that package and calls pi-ai from `packages/agent`.
-2. **Env schema:** add `CLOUDFLARE_API_KEY` (@sensitive), `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`,
-   `DEFAULT_MODEL` to `.env.schema`.
+2. **Env schema:** add `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` and
+   `DEFAULT_MODEL` to groot's env schema (`packages/core/src/env.ts`).
 3. **SSE-safe compression:** `compression()` filter skips `text/event-stream`.
 4. **Auth hardening:** rate-limit `auth/login` and passkey login routes; compare `X-Admin-Auth-Key` with
    `crypto.timingSafeEqual`.

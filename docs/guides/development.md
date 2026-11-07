@@ -26,18 +26,18 @@ The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't instal
 
 ## Conventions
 
-| Convention           | Detail                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Validate first       | `await parseBody(c, schema)`, `parseQuery`, `parseId` — never read `c.req.json()` directly                                                                   |
-| Return the envelope  | `ok(c, data, status?)` / `noContent(c)`; the client unwraps `data`                                                                                           |
-| Throw Boom           | `Boom.notFound()`, `Boom.badRequest()`, …; never build error JSON by hand                                                                                    |
-| Query builder only   | `db.select() / insert() / update() / delete()`; no transactions; raw `sql` only where Drizzle cannot express it                                              |
-| Timestamps           | `integer({ mode: "timestamp_ms" })`; reuse `timestamps` from `@groot/core/database/schema`                                                                   |
-| Logging              | `logger.info({ data }, "message")` from `@groot/core/logger`; no `console.log`                                                                               |
-| Runtime-neutral core | Web APIs in `packages/core`; `node:` only in `database/node.ts`, `storage/node.ts`, `node:async_hooks`, `node:buffer`                                        |
-| Config and env       | Tunables from `config.*`, secrets from the validated `env`, never `process.env`; adding one: [Configuration](../reference/config.md#env-vs-config)           |
-| Imports              | `vite-plus/test` in tests; `@groot/core/<path>` to the module itself (`@groot/core/auth/auth.service`; feature folders have no barrel); `@groot/jobs/server` |
-| Auth guard           | Mount under the protected sub-app in `createWebApp()`; `requireUser(c)` for the caller                                                                       |
+| Convention           | Detail                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Validate first       | `await parseBody(c, schema)`, `parseQuery`, `parseId` — never read `c.req.json()` directly                                                                                |
+| Return the envelope  | `ok(c, data, status?)` / `noContent(c)`; the client unwraps `data`                                                                                                        |
+| Throw Boom           | `Boom.notFound()`, `Boom.badRequest()`, …; never build error JSON by hand                                                                                                 |
+| Query builder only   | `db.select() / insert() / update() / delete()`; no transactions in `packages/`, synchronous `db.transaction()` in `apps/`; raw `sql` only where Drizzle cannot express it |
+| Timestamps           | `integer({ mode: "timestamp_ms" })`; reuse `timestamps` from `@groot/core/database/schema`                                                                                |
+| Logging              | `logger.info({ data }, "message")` from `@groot/core/logger`; no `console.log`                                                                                            |
+| Runtime-neutral core | Web APIs in `packages/core`; `node:` only in `database/node.ts`, `storage/node.ts`, `node:async_hooks`, `node:buffer`                                                     |
+| Config and env       | Tunables from `config.*`, secrets from the validated `env`, never `process.env`; adding one: [Configuration](../reference/config.md#env-vs-config)                        |
+| Imports              | `vite-plus/test` in tests; `@groot/core/<path>` to the module itself (`@groot/core/auth/auth.service`; feature folders have no barrel); `@groot/jobs/server`              |
+| Auth guard           | Mount under the protected sub-app in `createWebApp()`; `requireUser(c)` for the caller                                                                                    |
 
 ## Adding a feature end to end
 
@@ -81,7 +81,7 @@ export type UpdatePostDTO = z.infer<typeof updatePostSchema>;
 ```ts
 // apps/web/src/server/api/post/post.service.ts
 import { desc, eq } from "drizzle-orm";
-import { db } from "@groot/core/database";
+import { db } from "../../db";
 import { Boom } from "@groot/core/errors";
 import { posts, type Post } from "../../db/schema";
 import type { CreatePostDTO, UpdatePostDTO } from "./post.schema";
@@ -186,7 +186,7 @@ Every test file gets its own in-memory database with migrations applied; see
 ```ts
 // apps/web/src/server/api/post/post.jobs.ts
 import { count } from "drizzle-orm";
-import { db } from "@groot/core/database";
+import { db } from "../../db";
 import { registerJobHandler, type JobContext } from "@groot/jobs/server";
 import { posts } from "../../db/schema";
 

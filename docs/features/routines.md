@@ -14,12 +14,13 @@ apps/web/src/server/api/routines/
 ├── routines.schema.ts    # Zod schemas
 ├── routines.service.ts   # Drizzle queries + Boom errors
 ├── routines.routes.ts    # Hono router, mounted by createWebApp() in app.ts
-└── routines.jobs.ts      # the routine-fire job, registered by registerRoutineJobs()
+├── routines.jobs.ts      # the routine-fire job, registered by registerRoutineJobs()
+└── routines.*.ts         # helpers: arming, cards, runs, schedule, toolkit-store, watcher
 apps/web/src/server/db/schema.ts           # the `routines` and `routine_runs` tables
 apps/web/src/client/pages/routines/        # the Routines page
 apps/web/src/client/lib/routines-api.ts    # typed client for the API
 tests/server/routes/routines.routes.test.ts  # the HTTP API through createTestApp()
-tests/server/api/routines/                 # service, schedule and job tests
+tests/server/api/routines/                 # arming, engine, once, rearm, schedule, toolkit-store
 tests/client/pages/routines.test.tsx       # the page
 ```
 

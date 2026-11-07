@@ -126,8 +126,9 @@ const missingScripts = (span) =>
 
 function missingLink(target, md) {
   if (/^(https?:|mailto:|#)/.test(target)) return null;
+  const file = decodeURI(target.replace(/#.*$/, ""));
   const resolved = path.posix.normalize(
-    path.posix.join(path.posix.dirname(md), decodeURI(target.replace(/#.*$/, ""))),
+    file.startsWith("/") ? file.slice(1) : path.posix.join(path.posix.dirname(md), file),
   );
   return exists(resolved) ? null : { kind: "link", target: resolved, anchors: [resolved] };
 }
@@ -153,7 +154,8 @@ for (const md of scanned) {
         }
       }
       if (!inFence)
-        for (const m of line.matchAll(/\]\(([^)\s]+)\)/g)) reportOnce(missingLink(m[1], md));
+        for (const m of line.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g))
+          reportOnce(missingLink(m[1], md));
     });
 }
 

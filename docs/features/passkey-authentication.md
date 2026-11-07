@@ -34,8 +34,8 @@ The relying party comes from `RP_NAME`, `RP_ID` and `ORIGIN` through
 `config.passkey`; defaults are in the [setup guide](../setup-guide.md).
 `RP_ID` is the bare domain (no scheme or port) and `ORIGIN` the full origin
 the browser shows (`https://your-domain`); production refuses to boot without
-both. Under portless set `RP_ID=groot.localhost` and
-`ORIGIN=https://groot.localhost` in `.env` (see
+both. Under portless set `RP_ID=tiny-agents.localhost` and
+`ORIGIN=https://tiny-agents.localhost` in `.env` (see
 [portless](../guides/portless-https.md)). WebAuthn needs HTTPS everywhere except `localhost`.
 
 ## API (`/api/v1/passkey`)

@@ -4,7 +4,7 @@
 # Run after cloning groot to customize it for your project:
 #   1. Verify / install the portless CLI (`pnpm dev` runs through it)
 #   2. Ask for an app name and propagate it to package.json,
-#      apps/web/src/server/config.ts, wrangler.jsonc and .env.example
+#      apps/web/src/server/config.ts and .env.example
 #   3. Install dependencies (also installs the Vite+ git hooks)
 #
 # Usage:  pnpm groot:setup
@@ -70,7 +70,7 @@ update_app_name() {
     local slug_name
     slug_name=$(to_slug "$app_name")
     if [[ ! "$slug_name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
-        print_error "'$app_name' gives no usable package/Worker name (needs ASCII letters or digits). Nothing changed."
+        print_error "'$app_name' gives no usable package name (needs ASCII letters or digits). Nothing changed."
         return 1
     fi
     echo
@@ -87,23 +87,15 @@ const edit = (file, fn) => fs.writeFileSync(file, fn(fs.readFileSync(file, "utf8
 edit("apps/web/src/server/config.ts", (s) => s.replace(/name: "[^"]*"/, () => `name: ${JSON.stringify(name)}`));
 edit(".env.example", (s) => s.replace(/^RP_NAME=.*$/m, () => `RP_NAME=${name}`));
 
-// Slug: package name and the Cloudflare Worker name.
+// Slug: the package name.
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 pkg.name = slug;
 if (pkg.repository?.url) pkg.repository.url = pkg.repository.url.replace(/\/[a-z0-9_-]+\.git$/, `/${slug}.git`);
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-
-// wrangler.jsonc: the top-level Worker name (whatever it currently is) and RP_NAME.
-edit("wrangler.jsonc", (s) =>
-  s
-    .replace(/^  "name": "[^"]*"/m, () => `  "name": ${JSON.stringify(slug)}`)
-    .replace(/"RP_NAME": "[^"]*"/, () => `"RP_NAME": ${JSON.stringify(name)}`),
-);
 '
     print_success "apps/web/src/server/config.ts: app.name → '$app_name'"
     print_success ".env.example: RP_NAME → '$app_name'"
     print_success "package.json: name → '$slug_name'"
-    print_success "wrangler.jsonc: name → '$slug_name'"
 }
 
 install_dependencies() {

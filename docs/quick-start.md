@@ -28,8 +28,8 @@ the same port). Nothing to configure: every environment variable has a
 development default. Copy `.env.example` to `.env` only when you want to
 override something.
 
-The app is served at **`https://groot.localhost`** via portless, which must be
-installed globally (`https://groot.localhost:8888` when no portless proxy is
+The app is served at **`https://tiny-agents.localhost`** via portless, which must be
+installed globally (`https://tiny-agents.localhost:8888` when no portless proxy is
 already running; first run asks to trust a local certificate, see
 [Portless & HTTPS](./guides/portless-https.md)). Bypass its proxy with
 `PORTLESS=0 pnpm dev` → `http://localhost:3000`.
@@ -45,7 +45,7 @@ To create another user, call the admin endpoint with the development admin key:
 
 ```bash
 # http://localhost:3000 under PORTLESS=0
-curl -X POST https://groot.localhost/api/v1/auth/users \
+curl -X POST https://tiny-agents.localhost/api/v1/auth/users \
   -H "Content-Type: application/json" \
   -H "X-Admin-Auth-Key: dev-only-admin-key" \
   -d '{"email":"you@example.com","password":"a-long-password"}'
@@ -119,7 +119,7 @@ Every `pnpm` script is listed in
 - [ ] `NODE_ENV=production`
 - [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — in production the server will not start without them
 - [ ] `RP_ID` and `ORIGIN` set to your public domain (also required in production; passkeys use them)
-- [ ] Node: a persistent volume at `/data` (the production default is `file:/data/prod.db`) or `DATABASE_URL` pointing at one, and one replica
+- [ ] Node: a persistent volume at `/data` (the production default is `file:/data/app.db`; `DATA_DIR` moves it) or `DATABASE_URL` pointing at one, and one replica
 - [ ] `CORS_ALLOWED_ORIGINS` set if the API is called from another origin
 - [ ] `SENTRY_DSN` (optional)
 - [ ] `pnpm build` and `pnpm test` pass
