@@ -14,7 +14,10 @@ export const gates = [
   { name: "Typecheck (client)", run: "pnpm typecheck:client" },
   { name: "Typecheck coverage", run: "pnpm exec tsx scripts/check-typecheck-coverage.ts" },
   { name: "Typecheck kit consumers", run: "pnpm typecheck:kit" },
-  { name: "Kit export guard", run: "pnpm exec tsx scripts/check-kit-exports.ts" },
+  {
+    name: "Kit export guard",
+    run: "pnpm exec tsx scripts/check-kit-exports.ts --base origin/${GITHUB_BASE_REF:-main}",
+  },
   { name: "Changeset gate", run: "pnpm check:changesets --base origin/${GITHUB_BASE_REF:-main}" },
   { name: "Checks coverage", run: "pnpm check:coverage" },
   { name: "Lint & format check", run: "pnpm check" },
@@ -22,6 +25,10 @@ export const gates = [
   { name: "Dead code", run: "pnpm check:dead" },
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
+  {
+    name: "Applied migrations unchanged",
+    run: "pnpm check:migrations-immutable --base origin/${GITHUB_BASE_REF:-main}",
+  },
 ];
 
 function sh(command) {

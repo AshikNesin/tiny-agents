@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -17,13 +17,22 @@ import { withRepoCopy } from "./repo-copy";
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-kit-exports.ts");
 const TIMEOUT = 60_000;
+const GIT_IDENTITY = [
+  ["-c", "user.name=Dev"],
+  ["-c", "user.email=dev@example.com"],
+  ["-c", "commit.gpgsign=false"],
+  ["-c", "core.hooksPath=/dev/null"],
+].flat();
 
-function runGuard(checkedRepo = repoRoot): {
+function runGuard(
+  checkedRepo = repoRoot,
+  args: string[] = [],
+): {
   status: number | null;
   stdout: string;
   stderr: string;
 } {
-  const result = spawnSync("pnpm", ["exec", "tsx", path.join(checkedRepo, SCRIPT)], {
+  const result = spawnSync("pnpm", ["exec", "tsx", path.join(checkedRepo, SCRIPT), ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: TIMEOUT,
@@ -74,6 +83,36 @@ describe("kit exports guard", () => {
         const run = runGuard(root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("kit-guard-probe");
+      }),
+    TIMEOUT,
+  );
+
+  it(
+    "fails when a named export on the merge base is removed, unless the removal is approved",
+    () =>
+      withRepoCopy((root) => {
+        const git = (...args: string[]) =>
+          execFileSync("git", [...GIT_IDENTITY, ...args], { cwd: root, encoding: "utf8" });
+        fs.writeFileSync(path.join(root, ".gitignore"), "node_modules\n");
+        git("init", "-q");
+        git("add", "-A");
+        git("commit", "-q", "-m", "main");
+        const breadcrumb = path.join(root, "packages/ui/src/breadcrumb.tsx");
+        const original = fs.readFileSync(breadcrumb, "utf8");
+        const removed = original.replace(/^ {2}BreadcrumbEllipsis,\n/m, "");
+        expect(removed).not.toBe(original);
+        fs.writeFileSync(breadcrumb, removed);
+
+        const run = runGuard(root, ["--base", "HEAD"]);
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain('@groot/ui/breadcrumb: export "BreadcrumbEllipsis"');
+        expect(run.stderr).toContain("deprecate it in a minor release");
+
+        fs.writeFileSync(
+          path.join(root, "scripts/kit-export-removals.json"),
+          JSON.stringify([{ package: "@groot/ui", name: "BreadcrumbEllipsis", reason: "test" }]),
+        );
+        expect(runGuard(root, ["--base", "HEAD"]).status).toBe(0);
       }),
     TIMEOUT,
   );

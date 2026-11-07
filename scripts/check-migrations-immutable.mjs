@@ -1,0 +1,52 @@
+// A database that already ran a migration never runs it again, so an edit to
+// one on main changes nothing there and splits fresh databases from old ones.
+
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { parseArgs } from "node:util";
+
+const MIGRATIONS_DIR = "apps/web/drizzle";
+const JOURNAL = `${MIGRATIONS_DIR}/meta/_journal.json`;
+
+const { values } = parseArgs({
+  options: { base: { type: "string", default: "origin/main" }, root: { type: "string" } },
+});
+const root = values.root ?? process.cwd();
+const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+
+const base = git("merge-base", values.base, "HEAD");
+const changed = git("diff", "--name-status", "--no-renames", base, "--", MIGRATIONS_DIR)
+  .split("\n")
+  .filter(Boolean)
+  .map((line) => line.split("\t"))
+  .filter(([status]) => status !== "A");
+
+const entries = (json) => JSON.parse(json).entries.map((entry) => JSON.stringify(entry));
+
+function journalOnlyAppends() {
+  const before = entries(git("show", `${base}:${JOURNAL}`));
+  const after = entries(readFileSync(path.join(root, JOURNAL), "utf8"));
+  return before.every((entry, i) => entry === after[i]);
+}
+
+const problems = changed.filter(([status, file]) => {
+  if (file === JOURNAL && status === "M") return !journalOnlyAppends();
+  return true;
+});
+
+if (problems.length === 0) {
+  console.log(`migrations: no applied migration changed since ${base.slice(0, 7)}`);
+  process.exit(0);
+}
+const restore = (status, file) =>
+  file === JOURNAL && status === "M"
+    ? "Restore the edited entries and keep the appended ones"
+    : `Restore it with \`git checkout ${base.slice(0, 7)} -- ${file}\``;
+for (const [status, file] of problems) {
+  console.error(
+    `${file} ${status === "D" ? "deleted" : "edited"} after it was applied. ${restore(status, file)}, and add a new migration with \`pnpm db:generate\` instead.`,
+  );
+}
+process.exit(1);

@@ -286,7 +286,9 @@ export function evaluate(state) {
   if (state.managedPackages.length === 0) {
     return {
       status: 0,
-      out: "changesets: no managed package surface changed; nothing to cover\n",
+      out:
+        "changesets: no managed package surface changed; nothing to cover\n" +
+        `  managed: packages/*/src and packages/*/package.json (that package), apps/web/drizzle and .groot ("${state.workspacePackages[0] ?? "the root package"}")\n`,
     };
   }
   if (state.reason) {
