@@ -3,7 +3,7 @@
  * them in. An SSE stream, a desktop viewer's socket and a viewer ticket not
  * yet redeemed were each checked once, when they opened; the guard never
  * sees them again. Each registers here, and taking access away (removing a
- * guest, unsharing a bot) closes what it covers at once.
+ * guest, unsharing a bot, deleting it) closes what it covers at once.
  *
  * Registration re-checks the grant against the database synchronously, so a
  * revocation that lands between a request's guard and its registration (the
@@ -61,11 +61,16 @@ export function holdLiveAccess(grant: LiveGrant, close: () => void): () => void 
   return () => held.delete(entry);
 }
 
-/** Close every live connection of this person, or, given a bot, only those showing it. */
-export function revokeLiveAccess(userId: number, botId?: string): void {
+type Revocation = { userId: number; botId?: string } | { botId: string };
+
+/**
+ * Close every live connection of this person (given a bot, only those
+ * showing it), or, given only a bot, everyone's showing it.
+ */
+export function revokeLiveAccess(revoked: Revocation): void {
   for (const entry of [...held]) {
-    if (entry.grant.userId !== userId) continue;
-    if (botId !== undefined && entry.grant.botId !== botId) continue;
+    if ("userId" in revoked && entry.grant.userId !== revoked.userId) continue;
+    if (revoked.botId !== undefined && entry.grant.botId !== revoked.botId) continue;
     held.delete(entry);
     entry.close();
   }

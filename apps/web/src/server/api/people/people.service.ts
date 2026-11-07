@@ -93,7 +93,7 @@ export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
 export async function removeGuest(userId: number): Promise<{ removed: true }> {
   if (!(await isGuest(userId))) throw Boom.notFound("Guest not found");
   await db.delete(users).where(eq(users.id, userId));
-  revokeLiveAccess(userId);
+  revokeLiveAccess({ userId });
   return { removed: true };
 }
 
@@ -129,7 +129,7 @@ export async function setBotGuests(botId: string, userIds: number[]): Promise<vo
     }
     return removed;
   });
-  for (const { userId } of dropped) revokeLiveAccess(userId, botId);
+  for (const { userId } of dropped) revokeLiveAccess({ userId, botId });
 }
 
 /** Whether this viewer may open the bot: the owner always, a guest when it is shared with them. */
