@@ -27,7 +27,6 @@ How to work on and ship the app.
 | [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format             |
 | [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars    |
 | [`guides/local-sandbox.md`](./guides/local-sandbox.md)             | The sandbox VM as a Docker container, for machines off Tailscale |
-| [`guides/deploy-cloudflare.md`](./guides/deploy-cloudflare.md)     | groot's Workers target (not used: tiny-agents is Node only)      |
 | [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                    |
 | [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate              |
 
@@ -39,10 +38,9 @@ What ships in the box and how to use or extend it.
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [`features/todos.md`](./features/todos.md)                                   | The reference feature module (table, routes, service, jobs)                       |
 | [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI                       |
-| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, R2, memory                       |
+| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, memory                           |
 | [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                                                 |
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                                                 |
-| [`features/ai-inference.md`](./features/ai-inference.md)                     | Unified LLM API with Zod structured output                                        |
 | [`claude-subscription.md`](./claude-subscription.md)                         | Claude Pro/Max through Claude Code: enable, sign in, use                          |
 | [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client                             |
 | [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                                        |

@@ -4,8 +4,6 @@
     "outDir": "./dist",
     "rootDir": ".",
     "paths": {
-      "@groot/ai": ["./packages/ai/src/index.ts"],
-      "@groot/ai/*": ["./packages/ai/src/*"],
       "@groot/ui/*": ["./packages/ui/src/*"],
       "@groot/shell/*": ["./packages/shell/src/*"],
       "@groot/core/*": ["./packages/core/src/*"],
@@ -30,7 +28,6 @@
   },
   "include": [
     "apps/web/src/server/**/*",
-    "packages/ai/src/**/*",
     "packages/core/src/**/*",
     "packages/jobs/src/server/**/*",
     "packages/agent/src/**/*",

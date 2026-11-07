@@ -140,30 +140,6 @@ import { kv } from "@groot/core/kv";
 import { getContentType, sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { FileInfo } from "@groot/core/storage/storage.service";
 
-// @groot/ai: the barrel and every explicit subpath.
-import {
-  AI,
-  AIClient,
-  definePrompt,
-  getModelCapabilities,
-  maxReasoningEffort,
-  resolveModel,
-  toPiContext,
-  zodToTypeBox,
-  type PromptDefinition,
-  type PromptMessage,
-} from "@groot/ai";
-import { AIClient as AIClientFromModule, type CompleteParams } from "@groot/ai/client";
-import {
-  getModelCapabilities as capabilitiesFromModule,
-  type ModelCapabilities,
-} from "@groot/ai/capabilities";
-import { toPiContext as toPiContextFromModule } from "@groot/ai/messages";
-import { resolveModel as resolveModelFromModule } from "@groot/ai/model";
-import { definePrompt as definePromptFromModule } from "@groot/ai/prompt";
-import { zodToTypeBox as zodToTypeBoxFromModule } from "@groot/ai/schema";
-import { Type, type AIConfig, type AnyModel } from "@groot/ai/types";
-
 // typeof checks: the imported values carry the shapes downstream code relies on.
 const checks = {
   restoredKit: [Alert, Pagination, Select, Tooltip, addBreadcrumb, logPerformance, copyFile],
@@ -270,23 +246,6 @@ const checks = {
     useAppSettings,
   ],
   core: [db, users, HttpError, config, defineConfig, kv, getContentType, sanitizeFileName, logger],
-  ai: [
-    AI,
-    AIClient,
-    AIClientFromModule,
-    definePrompt,
-    definePromptFromModule,
-    getModelCapabilities,
-    capabilitiesFromModule,
-    maxReasoningEffort,
-    resolveModel,
-    resolveModelFromModule,
-    toPiContext,
-    toPiContextFromModule,
-    zodToTypeBox,
-    zodToTypeBoxFromModule,
-    Type,
-  ],
 };
 export { checks };
 
@@ -367,12 +326,6 @@ const commandGroups: CommandGroupEntry[] = [
 
 // Signature and type baselines a child project relies on. Exported so the
 // compiler and linter both treat each as used kit surface.
-export type JobHandlerPrompt = PromptDefinition<string, JobStats>;
-export type AiMessage = PromptMessage;
-export type AiConfigShape = AIConfig;
-export type AiModel = AnyModel;
-export type AiCapabilities = ModelCapabilities;
-export type AiComplete = CompleteParams;
 export type ErrorShape = HttpErrorOutput["code"];
 export const jobStates: typeof JOB_STATES = JOB_STATES;
 export const failedJobActions: JobAction[] = allowedJobActions("failed");

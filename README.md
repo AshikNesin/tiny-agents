@@ -75,7 +75,7 @@ it. Short version:
 - Pick a model labelled "uses your Claude plan", or keep using the gateway.
 - To spend Max-plan API credits without this engine, put a normal console
   API key in Cloudflare AI Gateway BYOK only. See
-  [docs/features/ai-inference.md](docs/features/ai-inference.md).
+  [docs/features/model-providers.md](docs/features/model-providers.md).
 
 ## Layout
 

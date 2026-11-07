@@ -16,9 +16,15 @@
  */
 import { readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
+import micromatch from "micromatch";
+import { loadConfig } from "../.groot/lib/config";
 import { ownedSourceRootsForTests, TEST_AREA_OWNERSHIP } from "../.groot/lib/patterns";
 
 const ROOT = new URL("..", import.meta.url).pathname;
+
+const { additional_exclusions } = await loadConfig(ROOT);
+const excludedFromSync = (dirOrRoot: string) =>
+  micromatch.isMatch(dirOrRoot.replace(/\/\*\*$/, ""), additional_exclusions);
 
 /** Expand a root pattern (may contain one `*` segment) to the dirs that exist. */
 function expandRoot(root: string): string[] {
@@ -41,7 +47,7 @@ interface Failure {
 const failures: Failure[] = [];
 
 // --- 1. Owned source roots (what the synced test areas own) exist. --------
-const ownedRoots = ownedSourceRootsForTests();
+const ownedRoots = ownedSourceRootsForTests().filter((root) => !excludedFromSync(root));
 for (const root of ownedRoots) {
   const dir = root.replace(/\/\*\*$/, "");
   if (expandRoot(dir).length === 0) {
@@ -67,7 +73,8 @@ function countTestFiles(dir: string): number {
   return count;
 }
 
-for (const area of Object.keys(TEST_AREA_OWNERSHIP)) {
+const areas = Object.keys(TEST_AREA_OWNERSHIP).filter((area) => !excludedFromSync(area));
+for (const area of areas) {
   if (!existsSync(join(ROOT, area))) {
     failures.push({
       kind: "area-missing",
@@ -96,7 +103,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `✓ Checks covered: ${Object.keys(TEST_AREA_OWNERSHIP).length} declared test areas ` +
+  `✓ Checks covered: ${areas.length} declared test areas ` +
     `owning ${ownedRoots.length} source roots, all present on disk.`,
 );
 process.exit(0);
