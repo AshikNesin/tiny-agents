@@ -122,13 +122,15 @@ function modelView(row: ModelRowRecord, usedBy: number) {
 }
 
 async function accountView(row: ProviderRow, usage: Map<string, number>) {
-  const rows = await db.select().from(models).where(eq(models.providerId, row.id));
-  const item = row.credentialItemId
-    ? await db.query.vaultItems.findFirst({
-        where: eq(vaultItems.id, row.credentialItemId),
-        columns: { backend: true },
-      })
-    : undefined;
+  const [rows, item] = await Promise.all([
+    db.select().from(models).where(eq(models.providerId, row.id)),
+    row.credentialItemId
+      ? db.query.vaultItems.findFirst({
+          where: eq(vaultItems.id, row.credentialItemId),
+          columns: { backend: true },
+        })
+      : undefined,
+  ]);
   return {
     id: row.id,
     name: row.name,
@@ -161,8 +163,7 @@ async function botUsage(): Promise<Map<string, number>> {
 }
 
 export async function listAccounts() {
-  const usage = await botUsage();
-  const rows = await db.select().from(providers);
+  const [usage, rows] = await Promise.all([botUsage(), db.select().from(providers)]);
   return {
     accounts: await Promise.all(
       rows
@@ -330,6 +331,7 @@ export async function createAccount(input: CreateAccountDTO) {
     !input.allowPrivateNetwork;
   if (keyNeeded && !input.apiKey) throw Boom.badRequest("Enter the API key.");
 
+  if (input.discovery === "manual" && !input.model) throw Boom.badRequest("Add a model.");
   // Discover again with what will be saved, so the stored models are real.
   const found =
     input.discovery === "auto"
@@ -344,9 +346,8 @@ export async function createAccount(input: CreateAccountDTO) {
             ),
           ]
         : [];
-  const chosen =
-    input.discovery === "auto" ? found.filter((m) => input.models.includes(m.upstreamId)) : found;
-  if (input.discovery === "manual" && !input.model) throw Boom.badRequest("Add a model.");
+  const wanted = new Set(input.models);
+  const chosen = input.discovery === "auto" ? found.filter((m) => wanted.has(m.upstreamId)) : found;
 
   const name =
     input.name ??
@@ -432,13 +433,15 @@ async function storedKey(row: ProviderRow): Promise<string | undefined> {
 async function markListed(providerId: string, found: readonly DiscoveredModel[]) {
   const listed = new Set(found.map((m) => m.upstreamId));
   const rows = await db.select().from(models).where(eq(models.providerId, providerId));
-  for (const row of rows) {
-    const missing = !listed.has(row.upstreamId);
-    if (missing === (row.missingSince !== null)) continue;
-    await db
-      .update(models)
-      .set({ missingSince: missing ? new Date() : null })
-      .where(eq(models.id, row.id));
+  const now = new Date();
+  const changed = rows.filter((row) => !listed.has(row.upstreamId) !== (row.missingSince !== null));
+  const gone = changed.filter((row) => !listed.has(row.upstreamId)).map((row) => row.id);
+  const back = changed.filter((row) => listed.has(row.upstreamId)).map((row) => row.id);
+  if (gone.length > 0) {
+    await db.update(models).set({ missingSince: now }).where(inArray(models.id, gone));
+  }
+  if (back.length > 0) {
+    await db.update(models).set({ missingSince: null }).where(inArray(models.id, back));
   }
 }
 
@@ -573,9 +576,11 @@ async function usage(modelIds: readonly string[]) {
 
 /** Move what uses `from` onto `moveTo`, or refuse with who uses it. */
 async function moveOrRefuse(from: readonly string[], moveTo: string | undefined) {
-  const users = await usage(from);
-  // The Claude plan's fallback may point here too.
-  const plan = await db.query.providers.findFirst({ where: eq(providers.kind, "claude-plan") });
+  // Bots and roles, and the Claude plan's fallback, may point here.
+  const [users, plan] = await Promise.all([
+    usage(from),
+    db.query.providers.findFirst({ where: eq(providers.kind, "claude-plan") }),
+  ]);
   const fallback = parseObject(plan?.settingsJson).fallbackModelId;
   const fallsBack = typeof fallback === "string" && from.includes(fallback);
   if (users.bots.length === 0 && users.roles.length === 0 && !fallsBack) return;
@@ -604,11 +609,10 @@ async function moveOrRefuse(from: readonly string[], moveTo: string | undefined)
 }
 
 export async function deleteAccount(id: string, moveTo: string | undefined) {
-  const row = await accountOrThrow(id);
-  const routes = await db
-    .select({ id: providers.id })
-    .from(providers)
-    .where(eq(providers.viaProviderId, id));
+  const [row, routes] = await Promise.all([
+    accountOrThrow(id),
+    db.select({ id: providers.id }).from(providers).where(eq(providers.viaProviderId, id)),
+  ]);
   if (routes.length > 0) {
     throw Boom.conflict("Accounts route through this gateway. Delete them first.");
   }
@@ -633,10 +637,12 @@ export async function addModel(
     compat?: Record<string, unknown> | null;
   },
 ) {
-  const row = await accountOrThrow(providerId);
-  const existing = await db.query.models.findFirst({
-    where: and(eq(models.providerId, providerId), eq(models.upstreamId, input.upstreamId)),
-  });
+  const [row, existing] = await Promise.all([
+    accountOrThrow(providerId),
+    db.query.models.findFirst({
+      where: and(eq(models.providerId, providerId), eq(models.upstreamId, input.upstreamId)),
+    }),
+  ]);
   if (existing) throw Boom.conflict("The account already has that model.");
   const kind = row.kind as Kind;
   const found =
@@ -725,23 +731,28 @@ export async function getRoles() {
 }
 
 export async function putRoles(input: Partial<Record<(typeof ROLES)[number], string | null>>) {
-  for (const [role, modelId] of Object.entries(input)) {
-    if (modelId === null || modelId === undefined) {
-      await db.delete(modelRoles).where(eq(modelRoles.role, role));
-      continue;
-    }
-    const model = await modelOrThrow(modelId);
+  const entries = Object.entries(input);
+  const cleared = entries.filter(([, modelId]) => !modelId).map(([role]) => role);
+  const set = entries.filter((entry): entry is [string, string] => Boolean(entry[1]));
+  // Check every role before writing any, so a bad one changes nothing.
+  const targets = await Promise.all(set.map(([, modelId]) => modelOrThrow(modelId)));
+  set.forEach(([role], index) => {
     const wantsClassifier = role === "classifier";
-    if ((model.type === "classifier") !== wantsClassifier) {
+    if ((targets[index]!.type === "classifier") !== wantsClassifier) {
       throw Boom.badRequest(
         wantsClassifier ? "The classifier role needs a classifier model." : "Pick a chat model.",
       );
     }
-    await db
-      .insert(modelRoles)
-      .values({ role, modelId })
-      .onConflictDoUpdate({ target: modelRoles.role, set: { modelId, updatedAt: new Date() } });
-  }
+  });
+  if (cleared.length > 0) await db.delete(modelRoles).where(inArray(modelRoles.role, cleared));
+  await Promise.all(
+    set.map(([role, modelId]) =>
+      db
+        .insert(modelRoles)
+        .values({ role, modelId })
+        .onConflictDoUpdate({ target: modelRoles.role, set: { modelId, updatedAt: new Date() } }),
+    ),
+  );
   await reloadModels();
   return getRoles();
 }

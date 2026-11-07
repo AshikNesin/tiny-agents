@@ -44,7 +44,7 @@ import {
   TOOL_SEARCH_TOOLKIT,
 } from "../bots/bot-toolkits";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
-import { SecretLockedError } from "../../secrets/secret-box";
+import { SecretLockedError } from "../../crypto/secret-box";
 import { openHeaderSecret } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
 

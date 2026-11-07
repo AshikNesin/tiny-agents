@@ -14,18 +14,16 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
   let planId;
   cleanup(async () => {
     if (!planId) return;
-    // Deleting needs step-up; the journey's token is in page memory, so do it through the UI path's API.
-    const token = await page.evaluate(async (password) => {
-      const r = await fetch("/api/v1/vault/step-up", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      return (await r.json()).data.token;
-    }, DEMO.password);
-    await page.request.delete(`/api/v1/models/providers/${planId}`, {
+    // Deleting needs step-up: confirm with the demo password, then delete.
+    const stepUp = await page.request.post("/api/v1/vault/step-up", {
+      data: { password: DEMO.password },
+    });
+    if (!stepUp.ok()) throw new Error(`step-up ${stepUp.status()}`);
+    const { token } = (await stepUp.json()).data;
+    const removed = await page.request.delete(`/api/v1/models/providers/${planId}`, {
       headers: { "X-Vault-Step-Up": token },
     });
+    if (!removed.ok()) throw new Error(`delete ${removed.status()}`);
   });
 
   await step("add a Claude plan account through the dialog", async () => {

@@ -4,7 +4,7 @@
  * model" adds one model by id, with its capabilities set by hand. Saving asks
  * for step-up: the account's key goes straight into the vault.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@groot/ui/button";
 import { Checkbox } from "@groot/ui/checkbox";
@@ -316,156 +316,271 @@ function ModelChecklist({
   );
 }
 
-export function AddModelsDialog({
-  open,
-  onOpenChange,
-  templates,
-  template,
-  accounts,
-  onAdded,
+interface SingleModel {
+  upstreamId: string;
+  name: string;
+  maxOutputTokens: string;
+  contextWindow: string;
+  imageInput: ImageInput;
+  reasoning: boolean;
+}
+
+const EMPTY_SINGLE: SingleModel = {
+  upstreamId: "",
+  name: "",
+  maxOutputTokens: "",
+  contextWindow: "",
+  imageInput: "auto",
+  reasoning: false,
+};
+
+/** Capability overrides the owner typed for a single model. */
+function overridesOf(single: SingleModel) {
+  return {
+    ...(single.maxOutputTokens ? { maxOutputTokens: Number(single.maxOutputTokens) } : {}),
+    ...(single.contextWindow ? { contextWindow: Number(single.contextWindow) } : {}),
+    ...(single.imageInput !== "auto" ? { imageInput: single.imageInput === "yes" } : {}),
+    ...(single.reasoning ? { reasoning: true } : {}),
+  };
+}
+
+const digits = (value: string) => value.replace(/\D/g, "");
+
+function SingleModelFields({
+  single,
+  setSingle,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  single: SingleModel;
+  setSingle: (patch: Partial<SingleModel>) => void;
+}) {
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Model ID" htmlFor="single-id">
+          <Input
+            id="single-id"
+            value={single.upstreamId}
+            onChange={(e) => setSingle({ upstreamId: e.target.value })}
+          />
+        </Field>
+        <Field label="Display name" htmlFor="single-name">
+          <Input
+            id="single-name"
+            value={single.name}
+            onChange={(e) => setSingle({ name: e.target.value })}
+          />
+        </Field>
+        <Field label="Max output tokens" htmlFor="single-max">
+          <Input
+            id="single-max"
+            inputMode="numeric"
+            placeholder="Auto"
+            value={single.maxOutputTokens}
+            onChange={(e) => setSingle({ maxOutputTokens: digits(e.target.value) })}
+          />
+        </Field>
+        <Field label="Image input" htmlFor="single-image">
+          <Select
+            value={single.imageInput}
+            onValueChange={(value) => setSingle({ imageInput: value as ImageInput })}
+          >
+            <SelectTrigger id="single-image" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Auto</SelectItem>
+              <SelectItem value="yes">Supported</SelectItem>
+              <SelectItem value="no">Not supported</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      <details className="space-y-3">
+        <summary className="cursor-pointer text-sm">Advanced</summary>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <Field label="Context window" htmlFor="single-context">
+            <Input
+              id="single-context"
+              inputMode="numeric"
+              placeholder="Auto"
+              value={single.contextWindow}
+              onChange={(e) => setSingle({ contextWindow: digits(e.target.value) })}
+            />
+          </Field>
+          <div className="flex items-center gap-2 pt-6">
+            <Checkbox
+              id="single-reasoning"
+              checked={single.reasoning}
+              onCheckedChange={(checked) => setSingle({ reasoning: checked === true })}
+            />
+            <Label htmlFor="single-reasoning" className="font-normal">
+              Reasoning model
+            </Label>
+          </div>
+        </div>
+      </details>
+    </>
+  );
+}
+
+/** The dialog's buttons: what the current tab and step can do next. */
+function Actions({
+  tab,
+  routed,
+  checked,
+  canConnect,
+  canAdd,
+  canTest,
+  busy,
+  onAddById,
+  onCheck,
+  onConnect,
+  onTest,
+  onAdd,
+}: {
+  tab: "connect" | "single";
+  routed: boolean;
+  checked: boolean;
+  canConnect: boolean;
+  canAdd: boolean;
+  canTest: boolean;
+  busy: boolean;
+  onAddById: () => void;
+  onCheck: () => void;
+  onConnect: () => void;
+  onTest: () => void;
+  onAdd: () => void;
+}) {
+  if (tab === "single") {
+    return (
+      <>
+        <Button variant="outline" onClick={onTest} disabled={busy || !canTest}>
+          Test
+        </Button>
+        <Button onClick={onAdd} disabled={busy || !canAdd}>
+          Add
+        </Button>
+      </>
+    );
+  }
+  if (routed) {
+    return (
+      <Button variant="outline" onClick={onAddById}>
+        Add its models by id
+      </Button>
+    );
+  }
+  return checked ? (
+    <Button onClick={onConnect} disabled={busy || !canConnect}>
+      Connect
+    </Button>
+  ) : (
+    <Button onClick={onCheck} disabled={busy}>
+      Check models
+    </Button>
+  );
+}
+
+interface FormProps {
   templates: ProviderTemplate[];
   template?: ProviderTemplate;
   accounts: Account[];
-  onAdded: () => void;
-}) {
+  onDone: () => void;
+}
+
+/** One pass through the dialog: mounted on open, so each open starts fresh. */
+function AddModelsForm({ templates, template, accounts, onDone }: FormProps) {
   const { run } = useStepUp();
   const [tab, setTab] = useState<"connect" | "single">("connect");
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [draft, setDraft] = useState<Draft>(() => fromTemplate(template));
   const [found, setFound] = useState<DiscoveredModel[] | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [single, setSingle] = useState({
-    upstreamId: "",
-    name: "",
-    maxOutputTokens: "",
-    contextWindow: "",
-    imageInput: "auto" as ImageInput,
-    reasoning: false,
-  });
+  const [single, setSingleState] = useState<SingleModel>(EMPTY_SINGLE);
   const [tested, setTested] = useState<string | null>(null);
   const gateways = accounts.filter((a) => a.kind === "cloudflare-ai-gateway");
-
-  useEffect(() => {
-    if (!open) return;
-    setTab("connect");
-    setDraft(fromTemplate(template));
-    setFound(null);
-    setChosen(new Set());
-    setTested(null);
-    setSingle({
-      upstreamId: "",
-      name: "",
-      maxOutputTokens: "",
-      contextWindow: "",
-      imageInput: "auto",
-      reasoning: false,
-    });
-  }, [open, template]);
+  const routed = draft.kind === "openai-chat" && draft.viaProviderId !== "";
 
   const set = (patch: Partial<Draft>) => {
     setDraft((current) => ({ ...current, ...patch }));
     setFound(null);
     setTested(null);
   };
+  const setSingle = (patch: Partial<SingleModel>) => {
+    setSingleState((current) => ({ ...current, ...patch }));
+    if (patch.upstreamId !== undefined) setTested(null);
+  };
 
   const aggregator = templates.some(
     (t) => t.aggregator && t.kind === draft.kind && (t.baseUrl ?? "") === draft.baseUrl,
   );
 
-  const check = async () => {
+  /** Run `work` with the buttons off; a failure becomes a toast. */
+  const busyWith = async (work: () => Promise<void>, failed: string) => {
     setBusy(true);
     try {
+      await work();
+    } catch (error) {
+      toast.error(errorMessage(error, failed));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const check = () =>
+    busyWith(async () => {
       const { models } = await modelsApi.discover(connectionOf(draft));
       setFound(models);
       // Aggregators list hundreds: start with none.
       setChosen(new Set(aggregator ? [] : models.map((m) => m.upstreamId)));
       if (models.length === 0) toast.info("The endpoint lists no models. Add one by id instead.");
-    } catch (error) {
-      toast.error(errorMessage(error, "Couldn't check the endpoint"));
-    } finally {
-      setBusy(false);
-    }
-  };
+    }, "Couldn't check the endpoint");
 
-  const connect = async () => {
-    setBusy(true);
-    try {
-      const created = await run(() =>
-        modelsApi.create({
-          ...connectionOf(draft),
-          ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
-          discovery: "auto",
-          models: [...chosen],
-        }),
-      );
+  const save = (
+    input: Parameters<typeof modelsApi.create>[0],
+    done: (account: Account) => string,
+    failed: string,
+  ) =>
+    busyWith(async () => {
+      const created = await run(() => modelsApi.create(input));
       if (!created) return;
-      toast.success(`Connected ${created.name}`);
-      onOpenChange(false);
-      onAdded();
-    } catch (error) {
-      toast.error(errorMessage(error, "Couldn't connect"));
-    } finally {
-      setBusy(false);
-    }
-  };
+      toast.success(done(created));
+      onDone();
+    }, failed);
 
-  const overrides = () => ({
-    ...(single.maxOutputTokens ? { maxOutputTokens: Number(single.maxOutputTokens) } : {}),
-    ...(single.contextWindow ? { contextWindow: Number(single.contextWindow) } : {}),
-    ...(single.imageInput !== "auto" ? { imageInput: single.imageInput === "yes" } : {}),
-    ...(single.reasoning ? { reasoning: true } : {}),
-  });
-
-  const test = async () => {
-    setBusy(true);
-    try {
+  const name = draft.name.trim() ? { name: draft.name.trim() } : {};
+  const connect = () =>
+    save(
+      { ...connectionOf(draft), ...name, discovery: "auto", models: [...chosen] },
+      (account) => `Connected ${account.name}`,
+      "Couldn't connect",
+    );
+  const addSingle = () =>
+    save(
+      {
+        ...connectionOf(draft),
+        ...name,
+        discovery: "manual",
+        model: {
+          upstreamId: single.upstreamId.trim(),
+          ...(single.name.trim() ? { name: single.name.trim() } : {}),
+          overrides: overridesOf(single),
+        },
+      },
+      () => `Added ${single.name.trim() || single.upstreamId.trim()}`,
+      "Couldn't add the model",
+    );
+  const test = () =>
+    busyWith(async () => {
       const result = await modelsApi.test({
         ...connectionOf(draft),
         upstreamId: single.upstreamId.trim(),
         image: single.imageInput === "yes",
       });
-      if (result.ok) {
-        setTested(`Works (${result.latencyMs} ms)`);
-        toast.success(`The model answered in ${result.latencyMs} ms`);
-      } else {
-        setTested(null);
-        toast.error(result.error ?? "The model didn't answer");
-      }
-    } catch (error) {
-      toast.error(errorMessage(error, "Couldn't test the model"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addSingle = async () => {
-    setBusy(true);
-    try {
-      const created = await run(() =>
-        modelsApi.create({
-          ...connectionOf(draft),
-          ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
-          discovery: "manual",
-          model: {
-            upstreamId: single.upstreamId.trim(),
-            ...(single.name.trim() ? { name: single.name.trim() } : {}),
-            overrides: overrides(),
-          },
-        }),
-      );
-      if (!created) return;
-      toast.success(`Added ${single.name.trim() || single.upstreamId.trim()}`);
-      onOpenChange(false);
-      onAdded();
-    } catch (error) {
-      toast.error(errorMessage(error, "Couldn't add the model"));
-    } finally {
-      setBusy(false);
-    }
-  };
+      setTested(result.ok ? `Works (${result.latencyMs} ms)` : null);
+      if (result.ok) toast.success(`The model answered in ${result.latencyMs} ms`);
+      else toast.error(result.error ?? "The model didn't answer");
+    }, "Couldn't test the model");
 
   const nameField = (
     <Field label="Account name" htmlFor="model-account-name" hint="How pickers name it.">
@@ -476,151 +591,85 @@ export function AddModelsDialog({
       />
     </Field>
   );
+  const fields = (
+    <ConnectionFields draft={draft} set={set} templates={templates} gateways={gateways} />
+  );
 
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Add models</DialogTitle>
+        <DialogDescription>Keys go straight into the vault. Bots never see them.</DialogDescription>
+      </DialogHeader>
+      <DialogBody>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="connect">Connect a provider</TabsTrigger>
+            <TabsTrigger value="single">Add a single model</TabsTrigger>
+          </TabsList>
+          <TabsContent value="connect" className="space-y-4">
+            {fields}
+            {nameField}
+            {found && found.length > 0 && (
+              <ModelChecklist models={found} chosen={chosen} setChosen={setChosen} />
+            )}
+          </TabsContent>
+          <TabsContent value="single" className="space-y-4">
+            {fields}
+            <SingleModelFields single={single} setSingle={setSingle} />
+            {nameField}
+            {tested && (
+              <Text variant="meta" tone="success" className="block">
+                {tested}
+              </Text>
+            )}
+          </TabsContent>
+        </Tabs>
+      </DialogBody>
+      <DialogFooter>
+        <Actions
+          tab={tab}
+          routed={routed}
+          checked={found !== null}
+          canConnect={chosen.size > 0}
+          canAdd={single.upstreamId.trim() !== ""}
+          canTest={single.upstreamId.trim() !== "" && draft.kind !== "claude-plan"}
+          busy={busy}
+          onAddById={() => setTab("single")}
+          onCheck={check}
+          onConnect={connect}
+          onTest={test}
+          onAdd={addSingle}
+        />
+      </DialogFooter>
+    </>
+  );
+}
+
+export function AddModelsDialog({
+  open,
+  onOpenChange,
+  ...form
+}: Omit<FormProps, "onDone"> & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdded: () => void;
+}) {
+  const { onAdded, ...rest } = form;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Add models</DialogTitle>
-          <DialogDescription>
-            Keys go straight into the vault. Bots never see them.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="connect">Connect a provider</TabsTrigger>
-              <TabsTrigger value="single">Add a single model</TabsTrigger>
-            </TabsList>
-            <TabsContent value="connect" className="space-y-4">
-              <ConnectionFields draft={draft} set={set} templates={templates} gateways={gateways} />
-              {nameField}
-              {found && found.length > 0 && (
-                <ModelChecklist models={found} chosen={chosen} setChosen={setChosen} />
-              )}
-            </TabsContent>
-            <TabsContent value="single" className="space-y-4">
-              <ConnectionFields draft={draft} set={set} templates={templates} gateways={gateways} />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Model ID" htmlFor="single-id">
-                  <Input
-                    id="single-id"
-                    value={single.upstreamId}
-                    onChange={(e) => {
-                      setSingle((s) => ({ ...s, upstreamId: e.target.value }));
-                      setTested(null);
-                    }}
-                  />
-                </Field>
-                <Field label="Display name" htmlFor="single-name">
-                  <Input
-                    id="single-name"
-                    value={single.name}
-                    onChange={(e) => setSingle((s) => ({ ...s, name: e.target.value }))}
-                  />
-                </Field>
-                <Field label="Max output tokens" htmlFor="single-max">
-                  <Input
-                    id="single-max"
-                    inputMode="numeric"
-                    placeholder="Auto"
-                    value={single.maxOutputTokens}
-                    onChange={(e) =>
-                      setSingle((s) => ({
-                        ...s,
-                        maxOutputTokens: e.target.value.replace(/\D/g, ""),
-                      }))
-                    }
-                  />
-                </Field>
-                <Field label="Image input" htmlFor="single-image">
-                  <Select
-                    value={single.imageInput}
-                    onValueChange={(value) =>
-                      setSingle((s) => ({ ...s, imageInput: value as ImageInput }))
-                    }
-                  >
-                    <SelectTrigger id="single-image" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Auto</SelectItem>
-                      <SelectItem value="yes">Supported</SelectItem>
-                      <SelectItem value="no">Not supported</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              <details className="space-y-3">
-                <summary className="cursor-pointer text-sm">Advanced</summary>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <Field label="Context window" htmlFor="single-context">
-                    <Input
-                      id="single-context"
-                      inputMode="numeric"
-                      placeholder="Auto"
-                      value={single.contextWindow}
-                      onChange={(e) =>
-                        setSingle((s) => ({
-                          ...s,
-                          contextWindow: e.target.value.replace(/\D/g, ""),
-                        }))
-                      }
-                    />
-                  </Field>
-                  <div className="flex items-center gap-2 pt-6">
-                    <Checkbox
-                      id="single-reasoning"
-                      checked={single.reasoning}
-                      onCheckedChange={(checked) =>
-                        setSingle((s) => ({ ...s, reasoning: checked === true }))
-                      }
-                    />
-                    <Label htmlFor="single-reasoning" className="font-normal">
-                      Reasoning model
-                    </Label>
-                  </div>
-                </div>
-              </details>
-              {nameField}
-              {tested && (
-                <Text variant="meta" tone="success" className="block">
-                  {tested}
-                </Text>
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogBody>
-        <DialogFooter>
-          {tab === "connect" ? (
-            draft.kind === "openai-chat" && draft.viaProviderId ? (
-              <Button variant="outline" onClick={() => setTab("single")}>
-                Add its models by id
-              </Button>
-            ) : found === null ? (
-              <Button onClick={check} disabled={busy}>
-                Check models
-              </Button>
-            ) : (
-              <Button onClick={connect} disabled={busy || chosen.size === 0}>
-                Connect
-              </Button>
-            )
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                onClick={test}
-                disabled={busy || !single.upstreamId.trim() || draft.kind === "claude-plan"}
-              >
-                Test
-              </Button>
-              <Button onClick={addSingle} disabled={busy || !single.upstreamId.trim()}>
-                Add
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+        {/* Mounted per open (and per template), so every open starts from a clean form. */}
+        {open && (
+          <AddModelsForm
+            key={rest.template?.id ?? "blank"}
+            {...rest}
+            onDone={() => {
+              onOpenChange(false);
+              onAdded();
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

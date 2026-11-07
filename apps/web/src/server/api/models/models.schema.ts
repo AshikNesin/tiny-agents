@@ -27,33 +27,29 @@ const baseUrl = z.string().trim().min(1).max(500);
 const id = z.string().trim().min(1).max(100);
 
 /** Kind-specific, non-secret settings. */
-const settings = z
-  .object({
-    /** cloudflare-ai-gateway */
-    accountId: z.string().trim().min(1).max(100).optional(),
-    gatewayId: z.string().trim().min(1).max(100).optional(),
-    /** gateway route */
-    upstream: z
-      .string()
-      .trim()
-      .regex(/^[a-z0-9-]+$/, "Lowercase letters, digits and dashes")
-      .max(100)
-      .optional(),
-    basePath: z.string().trim().max(200).optional(),
-    /** claude-plan: a pi model a turn moves to when the plan is off or unreachable */
-    fallbackModelId: id.nullable().optional(),
-  })
-  .strict();
+const settings = z.strictObject({
+  /** cloudflare-ai-gateway */
+  accountId: z.string().trim().min(1).max(100).optional(),
+  gatewayId: z.string().trim().min(1).max(100).optional(),
+  /** gateway route */
+  upstream: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9-]+$/, "Lowercase letters, digits and dashes")
+    .max(100)
+    .optional(),
+  basePath: z.string().trim().max(200).optional(),
+  /** claude-plan: a pi model a turn moves to when the plan is off or unreachable */
+  fallbackModelId: id.nullable().optional(),
+});
 
 /** Capability overrides: a key present wins over the catalog. */
-const overridesSchema = z
-  .object({
-    contextWindow: z.number().int().min(1_000).max(10_000_000).optional(),
-    maxOutputTokens: z.number().int().min(1).max(1_000_000).optional(),
-    imageInput: z.boolean().optional(),
-    reasoning: z.boolean().optional(),
-  })
-  .strict();
+const overridesSchema = z.strictObject({
+  contextWindow: z.number().int().min(1_000).max(10_000_000).optional(),
+  maxOutputTokens: z.number().int().min(1).max(1_000_000).optional(),
+  imageInput: z.boolean().optional(),
+  reasoning: z.boolean().optional(),
+});
 
 const compat = z.record(z.string(), z.unknown()).nullable();
 
@@ -68,78 +64,65 @@ const connection = {
   viaProviderId: id.nullable().optional(),
 };
 
-export const discoverSchema = z.object(connection).strict();
+export const discoverSchema = z.strictObject(connection);
 
-export const createAccountSchema = z
-  .object({
-    ...connection,
-    name: name.optional(),
-    /** auto: models come from discovery; manual: the "single model" tab adds one. */
-    discovery: z.enum(["auto", "manual"]).default("auto"),
-    /** auto: the upstream ids to add (enabled). */
-    models: z.array(z.string().min(1).max(300)).max(5_000).default([]),
-    /** manual: the one model to add. */
-    model: z
-      .object({
-        upstreamId: z.string().trim().min(1).max(300),
-        name: name.optional(),
-        overrides: overridesSchema.default({}),
-        compat: compat.optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
+export const createAccountSchema = z.strictObject({
+  ...connection,
+  name: name.optional(),
+  /** auto: models come from discovery; manual: the "single model" tab adds one. */
+  discovery: z.enum(["auto", "manual"]).default("auto"),
+  /** auto: the upstream ids to add (enabled). */
+  models: z.array(z.string().min(1).max(300)).max(5_000).default([]),
+  /** manual: the one model to add. */
+  model: z
+    .strictObject({
+      upstreamId: z.string().trim().min(1).max(300),
+      name: name.optional(),
+      overrides: overridesSchema.default({}),
+      compat: compat.optional(),
+    })
+    .optional(),
+});
 
-export const patchAccountSchema = z
-  .object({
-    name: name.optional(),
-    enabled: z.boolean().optional(),
-    /** Only the Claude plan's fallback can change without step-up. */
-    fallbackModelId: id.nullable().optional(),
-  })
-  .strict();
+export const patchAccountSchema = z.strictObject({
+  name: name.optional(),
+  enabled: z.boolean().optional(),
+  /** Only the Claude plan's fallback can change without step-up. */
+  fallbackModelId: id.nullable().optional(),
+});
 
-export const updateConnectionSchema = z
-  .object({
-    baseUrl: baseUrl.nullable().optional(),
-    /** Blank keeps the saved key; a new origin needs a new key. */
-    apiKey: apiKey.optional(),
-    settings: settings.optional(),
-    allowPrivateNetwork: z.boolean().optional(),
-  })
-  .strict();
+export const updateConnectionSchema = z.strictObject({
+  baseUrl: baseUrl.nullable().optional(),
+  /** Blank keeps the saved key; a new origin needs a new key. */
+  apiKey: apiKey.optional(),
+  settings: settings.optional(),
+  allowPrivateNetwork: z.boolean().optional(),
+});
 
-export const addModelSchema = z
-  .object({
-    upstreamId: z.string().trim().min(1).max(300),
-    name: name.optional(),
-    overrides: overridesSchema.default({}),
-    compat: compat.optional(),
-  })
-  .strict();
+export const addModelSchema = z.strictObject({
+  upstreamId: z.string().trim().min(1).max(300),
+  name: name.optional(),
+  overrides: overridesSchema.default({}),
+  compat: compat.optional(),
+});
 
-export const patchModelSchema = z
-  .object({
-    name: name.optional(),
-    enabled: z.boolean().optional(),
-    overrides: overridesSchema.optional(),
-    compat: compat.optional(),
-  })
-  .strict();
+export const patchModelSchema = z.strictObject({
+  name: name.optional(),
+  enabled: z.boolean().optional(),
+  overrides: overridesSchema.optional(),
+  compat: compat.optional(),
+});
 
-export const moveToSchema = z.object({ moveTo: id.optional() }).strict();
+export const moveToSchema = z.strictObject({ moveTo: id.optional() });
 
 export const testSchema = z.union([
-  z.object({ modelId: id }).strict(),
-  z
-    .object({
-      ...connection,
-      upstreamId: z.string().trim().min(1).max(300),
-      /** Also send a 1×1 image, to check image input. */
-      image: z.boolean().default(false),
-    })
-    .strict(),
+  z.strictObject({ modelId: id }),
+  z.strictObject({
+    ...connection,
+    upstreamId: z.string().trim().min(1).max(300),
+    /** Also send a 1×1 image, to check image input. */
+    image: z.boolean().default(false),
+  }),
 ]);
 
 export const rolesSchema = z.partialRecord(z.enum(ROLES), id.nullable());

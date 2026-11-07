@@ -29,7 +29,7 @@ import {
 } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
-import { policyDigest } from "../../secrets/secret-box";
+import { policyDigest } from "../../crypto/secret-box";
 import { readBackends } from "./backends";
 import {
   BackendError,

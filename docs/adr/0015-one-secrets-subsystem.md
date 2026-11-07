@@ -29,7 +29,7 @@ rotation.
   successful uses are not (one row per model call would bury the log). A
   resolved value is kept in memory for up to five minutes, keyed by item and
   host, and dropped when the item is edited or deleted.
-- **Local encryption v2** (`apps/web/src/server/secrets/secret-box.ts`), for
+- **Local encryption v2** (`apps/web/src/server/crypto/secret-box.ts`), for
   the local backend and connection columns alike: a key per purpose derived
   from `SECRETS_KEY` with HKDF, AES-256-GCM, and the purpose, record and field
   as AAD. A local item is also bound to a digest of its row's policy

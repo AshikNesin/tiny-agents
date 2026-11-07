@@ -309,7 +309,7 @@ same way; the credentials file and the tokens then sit on one host.
 ### Local (fallback)
 
 Without `OP_CONNECT_HOST`, new items go to the `local` backend: values sealed
-in the app's KV store by `apps/web/src/server/secrets/secret-box.ts`. It's
+in the app's KV store by `apps/web/src/server/crypto/secret-box.ts`. It's
 fully writable from the Vault UI.
 
 - **Keys.** Each purpose (`vault-local`, `connection`) gets its own AES-256-GCM

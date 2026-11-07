@@ -180,10 +180,11 @@ export async function seedFauxModels(
     .insert(providers)
     .values({ id: FAUX_PROVIDER_ID, name: "Faux", kind: "faux", status: "ok" })
     .onConflictDoNothing();
-  for (const row of rows) {
-    await db
-      .insert(models)
-      .values({
+  if (rows.length === 0) return;
+  await db
+    .insert(models)
+    .values(
+      rows.map((row) => ({
         id: row.id,
         providerId: FAUX_PROVIDER_ID,
         upstreamId: row.id,
@@ -193,7 +194,7 @@ export async function seedFauxModels(
         maxOutputTokens: 16_384,
         imageInput: row.imageInput ?? false,
         reasoning: row.reasoning ?? false,
-      })
-      .onConflictDoNothing();
-  }
+      })),
+    )
+    .onConflictDoNothing();
 }

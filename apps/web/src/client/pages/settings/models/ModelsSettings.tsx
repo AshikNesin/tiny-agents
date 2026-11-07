@@ -57,16 +57,14 @@ function modelOptions(accounts: Account[], type: "chat" | "classifier" = "chat")
   );
 }
 
-/** Pick the model that takes over from a deleted one. */
+/** Pick the model that takes over. Mounted only while asking, so it opens empty. */
 function MoveDialog({
-  open,
   what,
   users,
   options,
   onCancel,
   onMove,
 }: {
-  open: boolean;
   what: string;
   users: string;
   options: { id: string; label: string }[];
@@ -74,9 +72,8 @@ function MoveDialog({
   onMove: (modelId: string) => void;
 }) {
   const [target, setTarget] = useState("");
-  useEffect(() => setTarget(""), [open]);
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+    <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{what} is in use</DialogTitle>
@@ -133,26 +130,21 @@ function inUseText(error: unknown): string | undefined {
   return `Used by ${parts.join(" and ")}.`;
 }
 
+/** Edit an account's endpoint and key. Mounted per account, so it starts from what is saved. */
 function EditConnectionDialog({
   account,
   onClose,
   onSaved,
 }: {
-  account: Account | null;
+  account: Account;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { run } = useStepUp();
-  const [baseUrl, setBaseUrl] = useState("");
+  const [baseUrl, setBaseUrl] = useState(account.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
-  const [allowPrivate, setAllowPrivate] = useState(false);
+  const [allowPrivate, setAllowPrivate] = useState(account.allowPrivateNetwork);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    setBaseUrl(account?.baseUrl ?? "");
-    setApiKey("");
-    setAllowPrivate(account?.allowPrivateNetwork ?? false);
-  }, [account]);
-  if (!account) return null;
   const save = async () => {
     setBusy(true);
     try {
@@ -277,6 +269,129 @@ function ModelRow({
   );
 }
 
+/** The account's one-line summary: kind, where it goes, its key, models, last check. */
+function accountSummary(account: Account, accounts: Account[]): string {
+  const via = account.viaProviderId
+    ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
+    : hostOf(account.baseUrl);
+  const key = account.credential
+    ? `${account.credential.hint ?? "key"} · ${account.credential.backend === "local" ? "local" : "1Password"}`
+    : undefined;
+  const count = `${account.models.length} model${account.models.length === 1 ? "" : "s"}`;
+  const checked = account.checkedAt
+    ? `checked ${new Date(account.checkedAt).toLocaleString()}`
+    : undefined;
+  return [KIND_LABEL[account.kind], via, key, count, checked].filter(Boolean).join(" · ");
+}
+
+function ClaudePlanFallback({
+  account,
+  options,
+  onSet,
+}: {
+  account: Account;
+  options: { id: string; label: string }[];
+  onSet: (modelId: string | null) => void;
+}) {
+  const current =
+    typeof account.settings.fallbackModelId === "string"
+      ? account.settings.fallbackModelId
+      : "none";
+  return (
+    <Field
+      label="Fallback model"
+      htmlFor={`fallback-${account.id}`}
+      hint="Where a turn goes when the plan is off or the sandbox is unreachable. None: the turn pauses."
+    >
+      <Select value={current} onValueChange={(value) => onSet(value === "none" ? null : value)}>
+        <SelectTrigger id={`fallback-${account.id}`} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">None: pause the turn</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+function AddModelById({ onAdd }: { onAdd: (upstreamId: string) => Promise<boolean> }) {
+  const [adding, setAdding] = useState("");
+  return (
+    <form
+      className="flex gap-2"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const upstreamId = adding.trim();
+        if (upstreamId && (await onAdd(upstreamId))) setAdding("");
+      }}
+    >
+      <Input
+        aria-label="Model ID to add"
+        placeholder="Add a model by id"
+        value={adding}
+        onChange={(e) => setAdding(e.target.value)}
+      />
+      <Button type="submit" variant="outline" disabled={!adding.trim()}>
+        Add
+      </Button>
+    </form>
+  );
+}
+
+function AccountActions({
+  account,
+  onToggle,
+  onRefresh,
+  onEdit,
+  onDelete,
+}: {
+  account: Account;
+  onToggle: () => void;
+  onRefresh: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  // A Claude plan or faux account has no endpoint to check or edit.
+  const editable = account.kind !== "claude-plan" && account.kind !== "faux";
+  return (
+    <CardAction className="flex flex-wrap gap-1">
+      <Button variant="ghost" size="sm" onClick={onToggle}>
+        {account.enabled ? "Disable" : "Enable"}
+      </Button>
+      {editable && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Check ${account.name} again`}
+            onClick={onRefresh}
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            Edit
+          </Button>
+        </>
+      )}
+      <Button variant="ghost" size="icon" aria-label={`Delete ${account.name}`} onClick={onDelete}>
+        <Trash2 className="size-4" />
+      </Button>
+    </CardAction>
+  );
+}
+
+interface Moving {
+  what: string;
+  users: string;
+  act: (to: string) => Promise<unknown>;
+}
+
 function AccountCard({
   account,
   accounts,
@@ -291,24 +406,36 @@ function AccountCard({
   const { run } = useStepUp();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
-  const [adding, setAdding] = useState("");
-  const [moving, setMoving] = useState<{
-    what: string;
-    users: string;
-    act: (to: string) => Promise<unknown>;
-  } | null>(null);
+  const [moving, setMoving] = useState<Moving | null>(null);
   const status = accountStatus(account);
-  const host = hostOf(account.baseUrl);
   const others = modelOptions(
     accounts.filter((a) => a.id !== account.id && a.kind !== "claude-plan"),
   );
 
-  const act = async (work: () => Promise<unknown>, failed: string) => {
+  /** Run a change, then reload; a failure becomes a toast. Resolves whether it worked. */
+  const act = async (work: () => Promise<unknown>, failed: string): Promise<boolean> => {
     try {
       await work();
       onChanged();
+      return true;
     } catch (error) {
       toast.error(errorMessage(error, failed));
+      return false;
+    }
+  };
+
+  /** Delete, or on 409 `in_use` ask which model takes over. */
+  const deleteOrMove = async (
+    what: string,
+    attempt: (moveTo?: string) => Promise<unknown>,
+    failed: string,
+  ) => {
+    try {
+      if (await attempt()) onChanged();
+    } catch (error) {
+      const users = inUseText(error);
+      if (!users) return toast.error(errorMessage(error, failed));
+      setMoving({ what, users, act: (to) => attempt(to) });
     }
   };
 
@@ -319,29 +446,12 @@ function AccountCard({
       confirmLabel: "Delete",
       destructive: true,
     });
-    if (!ok) return;
-    try {
-      const done = await run(() => modelsApi.remove(account.id));
-      if (done) onChanged();
-    } catch (error) {
-      const users = inUseText(error);
-      if (!users) return toast.error(errorMessage(error, "Couldn't delete the account"));
-      setMoving({
-        what: account.name,
-        users,
-        act: (to) => run(() => modelsApi.remove(account.id, to)),
-      });
-    }
-  };
-
-  const removeModel = async (model: AccountModel) => {
-    try {
-      await modelsApi.removeModel(model.id);
-      onChanged();
-    } catch (error) {
-      const users = inUseText(error);
-      if (!users) return toast.error(errorMessage(error, "Couldn't delete the model"));
-      setMoving({ what: model.name, users, act: (to) => modelsApi.removeModel(model.id, to) });
+    if (ok) {
+      await deleteOrMove(
+        account.name,
+        (to) => run(() => modelsApi.remove(account.id, to)),
+        "Couldn't delete the account",
+      );
     }
   };
 
@@ -354,11 +464,6 @@ function AccountCard({
       toast.error(errorMessage(error, "Couldn't test the model"));
     }
   };
-
-  const fallback =
-    typeof account.settings.fallbackModelId === "string"
-      ? account.settings.fallbackModelId
-      : "none";
 
   return (
     <Card>
@@ -376,98 +481,37 @@ function AccountCard({
           <StatusBadge status={status.variant} label={status.label} />
         </CardTitle>
         <CardDescription>
-          {[
-            KIND_LABEL[account.kind],
-            account.viaProviderId
-              ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
-              : host,
-            account.credential
-              ? `${account.credential.hint ?? "key"} · ${account.credential.backend === "local" ? "local" : "1Password"}`
-              : undefined,
-            `${account.models.length} model${account.models.length === 1 ? "" : "s"}`,
-            account.checkedAt
-              ? `checked ${new Date(account.checkedAt).toLocaleString()}`
-              : undefined,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          {accountSummary(account, accounts)}
           {account.statusDetail && account.status !== "ok" && (
             <span className="text-destructive block">{account.statusDetail}</span>
           )}
         </CardDescription>
-        <CardAction className="flex flex-wrap gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              act(
-                () => modelsApi.patch(account, { enabled: !account.enabled }),
-                "Couldn't switch the account",
-              )
-            }
-          >
-            {account.enabled ? "Disable" : "Enable"}
-          </Button>
-          {account.kind !== "claude-plan" && account.kind !== "faux" && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Check ${account.name} again`}
-                onClick={() =>
-                  act(() => modelsApi.refresh(account.id), "Couldn't check the account")
-                }
-              >
-                <RefreshCw className="size-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onEdit}>
-                Edit
-              </Button>
-            </>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Delete ${account.name}`}
-            onClick={remove}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </CardAction>
+        <AccountActions
+          account={account}
+          onToggle={() =>
+            act(
+              () => modelsApi.patch(account, { enabled: !account.enabled }),
+              "Couldn't switch the account",
+            )
+          }
+          onRefresh={() => act(() => modelsApi.refresh(account.id), "Couldn't check the account")}
+          onEdit={onEdit}
+          onDelete={remove}
+        />
       </CardHeader>
       {open && (
         <CardContent className="space-y-4">
           {account.kind === "claude-plan" && (
-            <Field
-              label="Fallback model"
-              htmlFor={`fallback-${account.id}`}
-              hint="Where a turn goes when the plan is off or the sandbox is unreachable. None: the turn pauses."
-            >
-              <Select
-                value={fallback}
-                onValueChange={(value) =>
-                  act(
-                    () =>
-                      modelsApi.patch(account, {
-                        fallbackModelId: value === "none" ? null : value,
-                      }),
-                    "Couldn't set the fallback",
-                  )
-                }
-              >
-                <SelectTrigger id={`fallback-${account.id}`} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None: pause the turn</SelectItem>
-                  {others.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            <ClaudePlanFallback
+              account={account}
+              options={others}
+              onSet={(fallbackModelId) =>
+                act(
+                  () => modelsApi.patch(account, { fallbackModelId }),
+                  "Couldn't set the fallback",
+                )
+              }
+            />
           )}
           <ul className="divide-y rounded-md border">
             {account.models.map((model) => (
@@ -478,7 +522,13 @@ function AccountCard({
                   act(() => modelsApi.patchModel(model.id, input), "Couldn't change the model")
                 }
                 onTest={() => test(model)}
-                onDelete={() => removeModel(model)}
+                onDelete={() =>
+                  deleteOrMove(
+                    model.name,
+                    (to) => modelsApi.removeModel(model.id, to),
+                    "Couldn't delete the model",
+                  )
+                }
               />
             ))}
             {account.models.length === 0 && (
@@ -488,43 +538,26 @@ function AccountCard({
             )}
           </ul>
           {account.kind !== "claude-plan" && (
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const upstreamId = adding.trim();
-                if (!upstreamId) return;
-                void act(async () => {
-                  await modelsApi.addModel(account.id, { upstreamId });
-                  setAdding("");
-                }, "Couldn't add the model");
-              }}
-            >
-              <Input
-                aria-label="Model ID to add"
-                placeholder="Add a model by id"
-                value={adding}
-                onChange={(e) => setAdding(e.target.value)}
-              />
-              <Button type="submit" variant="outline" disabled={!adding.trim()}>
-                Add
-              </Button>
-            </form>
+            <AddModelById
+              onAdd={(upstreamId) =>
+                act(() => modelsApi.addModel(account.id, { upstreamId }), "Couldn't add the model")
+              }
+            />
           )}
         </CardContent>
       )}
-      <MoveDialog
-        open={moving !== null}
-        what={moving?.what ?? ""}
-        users={moving?.users ?? ""}
-        options={moving ? others : []}
-        onCancel={() => setMoving(null)}
-        onMove={(to) => {
-          const current = moving;
-          setMoving(null);
-          if (current) void act(() => current.act(to), "Couldn't move and delete");
-        }}
-      />
+      {moving && (
+        <MoveDialog
+          what={moving.what}
+          users={moving.users}
+          options={others}
+          onCancel={() => setMoving(null)}
+          onMove={(to) => {
+            setMoving(null);
+            void act(() => moving.act(to), "Couldn't move and delete");
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -699,11 +732,14 @@ function ModelsSettingsBody() {
         accounts={accounts ?? []}
         onAdded={() => void reload()}
       />
-      <EditConnectionDialog
-        account={editing}
-        onClose={() => setEditing(null)}
-        onSaved={() => void reload()}
-      />
+      {editing && (
+        <EditConnectionDialog
+          key={editing.id}
+          account={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => void reload()}
+        />
+      )}
     </div>
   );
 }

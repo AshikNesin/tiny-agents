@@ -12,7 +12,7 @@ import {
   seal,
   sealJson,
   type SecretBinding,
-} from "../../secrets/secret-box";
+} from "../../crypto/secret-box";
 
 const binding = (connectionId: string, field: "secret_enc" | "oauth_enc"): SecretBinding => ({
   purpose: "connection",
@@ -53,26 +53,26 @@ export async function resealConnectionSecrets(): Promise<number> {
       oauthEnc: connections.oauthEnc,
     })
     .from(connections);
-  let count = 0;
-  for (const row of rows) {
-    if (row.secretEnc && needsReseal(row.secretEnc, "connection")) {
-      const next = sealHeaderSecret(row.id, openHeaderSecret(row.id, row.secretEnc));
-      const done = await db
-        .update(connections)
-        .set({ secretEnc: next })
-        .where(and(eq(connections.id, row.id), eq(connections.secretEnc, row.secretEnc)))
-        .returning({ id: connections.id });
-      count += done.length;
-    }
-    if (row.oauthEnc && needsReseal(row.oauthEnc, "connection")) {
-      const next = sealOAuthState(row.id, openOAuthState(row.id, row.oauthEnc));
-      const done = await db
-        .update(connections)
-        .set({ oauthEnc: next })
-        .where(and(eq(connections.id, row.id), eq(connections.oauthEnc, row.oauthEnc)))
-        .returning({ id: connections.id });
-      count += done.length;
-    }
-  }
-  return count;
+  // Each write is its own compare-and-set, so they can run together.
+  const writes = rows.flatMap((row) => [
+    ...(row.secretEnc && needsReseal(row.secretEnc, "connection")
+      ? [
+          db
+            .update(connections)
+            .set({ secretEnc: sealHeaderSecret(row.id, openHeaderSecret(row.id, row.secretEnc)) })
+            .where(and(eq(connections.id, row.id), eq(connections.secretEnc, row.secretEnc)))
+            .returning({ id: connections.id }),
+        ]
+      : []),
+    ...(row.oauthEnc && needsReseal(row.oauthEnc, "connection")
+      ? [
+          db
+            .update(connections)
+            .set({ oauthEnc: sealOAuthState(row.id, openOAuthState(row.id, row.oauthEnc)) })
+            .where(and(eq(connections.id, row.id), eq(connections.oauthEnc, row.oauthEnc)))
+            .returning({ id: connections.id }),
+        ]
+      : []),
+  ]);
+  return (await Promise.all(writes)).reduce((sum, done) => sum + done.length, 0);
 }

@@ -1,6 +1,6 @@
 /**
  * The `local` vault backend (issue #56): values sealed with SECRETS_KEY
- * (`secrets/secret-box.ts`, purpose `vault-local`) in the app's KV store.
+ * (`crypto/secret-box.ts`, purpose `vault-local`) in the app's KV store.
  * The fallback when no external manager is configured, and where connection
  * header secrets move when the owner turns them into vault items.
  *
@@ -20,7 +20,7 @@ import {
   SecretLockedError,
   sealJson,
   type SecretBinding,
-} from "../../../secrets/secret-box";
+} from "../../../crypto/secret-box";
 import { parseTotp, totpCode } from "../vault.totp";
 import { cardBrand } from "./onepassword-mapping";
 import {
@@ -210,17 +210,18 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
  */
 export async function resealLocalItems(store: LocalStore = kvStore()): Promise<number> {
   const ids: string[] = JSON.parse((await store.get(INDEX_KEY)) ?? "[]");
-  let count = 0;
-  for (const id of ids) {
-    const raw = await store.get(id);
-    if (!raw) continue;
-    const entry = parseEntry(raw);
-    if (!needsReseal(entry.sealed, "vault-local")) continue;
-    const item = openJson<StoredItem>(entry.sealed, binding(id, entry.policy))!;
-    // Skip an item the owner changed meanwhile: its new value is already current.
-    if ((await store.get(id)) !== raw) continue;
-    await store.set(id, seal(id, item, entry.policy));
-    count++;
-  }
-  return count;
+  const resealed = await Promise.all(
+    ids.map(async (id) => {
+      const raw = await store.get(id);
+      if (!raw) return false;
+      const entry = parseEntry(raw);
+      if (!needsReseal(entry.sealed, "vault-local")) return false;
+      const item = openJson<StoredItem>(entry.sealed, binding(id, entry.policy))!;
+      // Skip an item the owner changed meanwhile: its new value is already current.
+      if ((await store.get(id)) !== raw) return false;
+      await store.set(id, seal(id, item, entry.policy));
+      return true;
+    }),
+  );
+  return resealed.filter(Boolean).length;
 }

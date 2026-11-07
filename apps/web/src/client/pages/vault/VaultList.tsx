@@ -158,7 +158,7 @@ function LinkDialog({
 }) {
   const { run } = useStepUp();
   const kind: VaultKind = candidate && candidate.kind !== "other" ? candidate.kind : "login";
-  const [policy, setPolicy] = useState<VaultPolicy>(defaultPolicy(kind));
+  const [policy, setPolicy] = useState<VaultPolicy>(() => defaultPolicy(kind));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -212,6 +212,21 @@ function LinkDialog({
   );
 }
 
+/** Keys the server uses itself (audience `app`): listed read-only, changed where they are used. */
+function AppItemsSection({ items }: { items: VaultItem[] }) {
+  const appItems = items.filter((item) => item.audience === "app");
+  if (appItems.length === 0) return null;
+  return (
+    <Section
+      title="Used by the app"
+      meta={String(appItems.length)}
+      description="Keys the server uses itself, such as model providers'. Bots never see them; change them in Settings → Models."
+    >
+      <ItemRows items={appItems} />
+    </Section>
+  );
+}
+
 export function VaultList() {
   const navigate = useNavigate();
   const [overview, setOverview] = useState<VaultOverview | null>(null);
@@ -260,10 +275,6 @@ export function VaultList() {
     }
     return groups;
   }, [overview]);
-  const appItems = useMemo(
-    () => (overview?.items ?? []).filter((item) => item.audience === "app"),
-    [overview],
-  );
 
   return (
     <PageLayout
@@ -333,15 +344,7 @@ export function VaultList() {
             ) : null,
           )}
 
-          {appItems.length > 0 && (
-            <Section
-              title="Used by the app"
-              meta={String(appItems.length)}
-              description="Keys the server uses itself, such as model providers'. Bots never see them; change them in Settings → Models."
-            >
-              <ItemRows items={appItems} />
-            </Section>
-          )}
+          <AppItemsSection items={overview.items} />
 
           {overview.unlinked.length > 0 && (
             <Section

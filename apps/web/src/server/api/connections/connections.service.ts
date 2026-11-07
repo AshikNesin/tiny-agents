@@ -26,7 +26,7 @@ import {
 import { getConnectionManager, type ConnectionStatus } from "./connections.manager";
 import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
 import { createId } from "@groot/core/utils/id.utils";
-import { hasSecretsKey } from "../../secrets/secret-box";
+import { hasSecretsKey } from "../../crypto/secret-box";
 import { sealHeaderSecret, sealOAuthState } from "./connection-secrets";
 import type {
   CallToolDTO,
