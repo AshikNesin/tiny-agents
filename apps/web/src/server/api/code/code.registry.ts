@@ -63,7 +63,7 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
           account.state === "ready" && !account.subscription
             ? {
                 state: "reconnecting",
-                detail: "Sign Claude Code in: Settings → Claude plan → Sign in.",
+                detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
               }
             : account.state === "installing"
               ? { state: "connecting", detail: "Setting up Claude Code on the sandbox…" }

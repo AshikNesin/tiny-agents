@@ -905,7 +905,10 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
         latencyMs: Date.now() - started,
         ...(ok
           ? {}
-          : { error: "Claude Code is not signed in on the sandbox (Settings → Claude plan)." }),
+          : {
+              error:
+                "Claude Code is not signed in on the sandbox (Settings → Models → Claude plan).",
+            }),
       };
     }
     if (model.type === "classifier") {

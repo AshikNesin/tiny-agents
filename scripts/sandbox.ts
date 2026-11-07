@@ -129,7 +129,7 @@ async function up(): Promise<number> {
           `  SANDBOX_HOST=127.0.0.1\n  SANDBOX_PORT=${port}\n  SANDBOX_USER=exedev\n` +
           `  SANDBOX_SSH_KEY_FILE=${path.relative(root, keyFile)}\n`) +
       "\nClaude Code is preinstalled. To let bots answer on your Claude plan, add the\n" +
-      "Claude plan account in Settings → Models and sign in from Settings → Claude plan.\n" +
+      "Claude plan account in Settings → Models and sign in from Settings → Models → Claude plan.\n" +
       (process.env.SANDBOX_SHELLEY === "0"
         ? ""
         : `\nShelley runs at http://127.0.0.1:${process.env.SANDBOX_SHELLEY_PORT || 9000} (add a model provider there,\n` +

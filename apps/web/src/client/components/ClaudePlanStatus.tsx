@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@groot/ui/card";
 import { Button, Text } from "@groot/ui";
 import { claudeCodeApi, type ClaudeCodeAccount, type ClaudeCodeStatus } from "../lib/bots-api";
 import { terminalApi } from "../lib/terminal-api";
@@ -30,7 +29,7 @@ function engineLine(status: ClaudeCodeStatus | undefined): string {
   if (!status) return "Checking the Claude plan engine.";
   return status.enabled
     ? "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
-    : "The engine is off. Add or enable the Claude plan account in Settings → Models to turn it on.";
+    : "The engine is off. Enable this account to turn it on.";
 }
 
 function fallbackLine(status: ClaudeCodeStatus): string {
@@ -139,51 +138,49 @@ function AccountActions({
 }
 
 /**
- * Settings card for the Claude plan engine. The app sets Claude Code up on
- * the sandbox by itself; the one step left to the owner is the login, which
- * runs in Claude Code's own prompt in a terminal tab. There is no field for
- * a Claude credential: Claude Code keeps the login on the sandbox.
+ * The Claude plan engine's state, inside the Claude plan account's card in
+ * Settings → Models. The app sets Claude Code up on the sandbox by itself;
+ * the one step left to the owner is the login, which runs in Claude Code's
+ * own prompt in a terminal tab. There is no field for a Claude credential:
+ * Claude Code keeps the login on the sandbox.
  */
-export function ClaudePlanStatusCard() {
+export function ClaudePlanStatus() {
   const { status, error } = useClaudeStatus();
   const { account, check } = useClaudeAccount();
   const onSandbox = status?.mode === "sandbox" || account?.state === "ready";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Claude plan</CardTitle>
-        <CardDescription>
-          Experimental. Bots can answer on your Claude Pro or Max subscription through Claude Code,
+    <section aria-label="Claude plan engine" className="space-y-3 rounded-md border p-4">
+      <p>
+        <Text variant="meta">
+          Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code,
           which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+        </Text>
+      </p>
+      <p>
+        <Text>{error ?? engineLine(status)}</Text>
+      </p>
+      {/* With the engine off there is no worker, so the account check reports
+          "unconfigured" even when a sandbox is set up: saying "No sandbox is
+          configured" then is wrong (#171). The line only means something with
+          the engine on. */}
+      {status?.enabled === false ? null : (
         <p>
-          <Text>{error ?? engineLine(status)}</Text>
+          <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
         </p>
-        {/* With the engine off there is no worker, so the account check reports
-            "unconfigured" even when a sandbox is set up: saying "No sandbox is
-            configured" then is wrong (#171). The line only means something with
-            the engine on. */}
-        {status?.enabled === false ? null : (
-          <p>
-            <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
-          </p>
-        )}
-        {onSandbox ? <AccountActions account={account} onCheck={() => void check()} /> : null}
-        {status ? (
-          <p>
-            <Text variant="meta">{fallbackLine(status)}</Text>
-          </p>
-        ) : null}
+      )}
+      {onSandbox ? <AccountActions account={account} onCheck={() => void check()} /> : null}
+      {status ? (
         <p>
-          <Text variant="meta">
-            Sign in opens a terminal tab running claude auth login: follow its link, then paste the
-            code back into the tab. Never paste a Claude token into tiny-agents.
-          </Text>
+          <Text variant="meta">{fallbackLine(status)}</Text>
         </p>
-      </CardContent>
-    </Card>
+      ) : null}
+      <p>
+        <Text variant="meta">
+          Sign in opens a terminal tab running claude auth login: follow its link, then paste the
+          code back into the tab. Never paste a Claude token into tiny-agents.
+        </Text>
+      </p>
+    </section>
   );
 }

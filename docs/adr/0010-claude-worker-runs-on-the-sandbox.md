@@ -40,7 +40,7 @@ agent.
      connection.)
 - The local sandbox image preinstalls step 1 in `/opt/tiny-agents/claude-worker`
   so a container never waits on npm. A test keeps its pins equal to the app's.
-- The owner's only step is the login. **Settings → Claude plan → Sign in**
+- The owner's only step is the login. **Settings → Models → Claude plan → Sign in**
   opens a terminal tab that types `claude auth login`; the owner finishes it
   in Claude Code's own prompt. The app never sees the URL, the code or the
   token, and Claude Code keeps the login on the sandbox (`~/.claude`).

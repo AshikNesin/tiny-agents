@@ -53,7 +53,7 @@ You need Docker (Docker Desktop, OrbStack, Colima or Docker Engine) and about
 
 4. Optional: to let bots answer on your Claude plan, also set
    add the Claude plan account in Settings → Models and sign in from
-   Settings → Claude plan.
+   Settings → Models → Claude plan.
    Claude Code is already in the image; the login is kept in the `home`
    volume. See [Claude subscription](../claude-subscription.md).
 

@@ -44,6 +44,7 @@ import {
   type Roles,
 } from "../../../lib/models-api";
 import { useBotsStore } from "../../../store/bots";
+import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
 import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";
 import { AddModelsDialog } from "./AddModelsDialog";
 import { GatewayCustomProvidersDialog } from "./GatewayCustomProvidersDialog";
@@ -506,6 +507,7 @@ function AccountCard({
       </CardHeader>
       {open && (
         <CardContent className="space-y-4">
+          {account.kind === "claude-plan" && <ClaudePlanStatus key={String(account.enabled)} />}
           {account.kind === "claude-plan" && (
             <ClaudePlanFallback
               account={account}

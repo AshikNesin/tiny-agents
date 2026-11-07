@@ -23,7 +23,7 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   - "Open in Shelley" links to the same address.
 - **Claude Code:** add the Claude plan account in Settings → Models, with a
   sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
-  from Settings → Claude plan. The app sets up the worker on the sandbox
+  from Settings → Models → Claude plan. The app sets up the worker on the sandbox
   ([Claude subscription](../claude-subscription.md)).
 
 With neither configured, the sidebar has no **Code** and bots have no

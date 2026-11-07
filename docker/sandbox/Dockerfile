@@ -114,7 +114,7 @@ RUN su exedev -c "mkdir -p ~/.tiny-agents \
 # Claude Code for the Claude plan engine (packages/agent/src/engines/claude-code/
 # sandbox-setup.ts): Node, the Agent SDK and the Claude Code CLI, pinned, in
 # the directory the app looks in first. The app uploads and starts the
-# worker itself; the owner only signs Claude Code in (Settings → Claude plan).
+# worker itself; the owner only signs Claude Code in (Settings → Models → Claude plan).
 # Outside the home volume, so a rebuild brings new pins even to an old volume.
 ARG CLAUDE_WORKER_STACK_VERSION=v1
 ARG CLAUDE_WORKER_NODE_VERSION=24.22.2
