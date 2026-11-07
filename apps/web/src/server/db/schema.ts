@@ -87,6 +87,23 @@ export const bots = sqliteTable("bots", {
   ...timestamps,
 });
 
+/**
+ * Releases a deleted bot still owes (bot-resources.ts): written in the
+ * transaction that deletes the bot row, each removed once its release
+ * succeeds. What a crash or a sandbox outage left here runs again at boot.
+ */
+export const botReleases = sqliteTable(
+  "bot_releases",
+  {
+    botId: text("bot_id").notNull(),
+    resource: text("resource").notNull(),
+    /** JSON, parsed by its entry's shape on every read: a later build may read it. */
+    captured: text("captured").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.botId, t.resource] })],
+);
+
 /** Conversations a bot ran on before a "New chat" (past chats, issue #101). */
 export const botChats = sqliteTable(
   "bot_chats",

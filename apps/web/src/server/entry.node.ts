@@ -33,6 +33,7 @@ import {
 import { endAllSse } from "./api/bots/bots.sse";
 import { getConnectionManager } from "./api/connections/connections.manager";
 import { startSettledPipeline } from "./api/bots/bots.settled";
+import { sweepBotReleases } from "./api/bots/bot-resources";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
 import { setChatTitler } from "./api/bots/chats.title";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
@@ -211,6 +212,15 @@ async function main(): Promise<void> {
     start: () =>
       void extractionSweep().catch((error: unknown) =>
         logger.warn({ error }, "Upload extraction sweep failed"),
+      ),
+  });
+
+  // After the agent runtime: it stops a deleted bot's chat that resume() picked back up.
+  add({
+    name: "bot release sweep",
+    start: () =>
+      void sweepBotReleases(runtime).catch((error: unknown) =>
+        logger.warn({ error }, "Bot release sweep failed"),
       ),
   });
 
