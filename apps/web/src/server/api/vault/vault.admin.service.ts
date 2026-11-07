@@ -9,6 +9,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
+import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems } from "../../db";
 import { appEnv } from "../../env";
 import { connectConfig, primaryBackend, readBackends } from "./backends";
@@ -30,7 +31,6 @@ import {
   clearStatusCache,
   effectiveApproval,
   effectiveTools,
-  KIND_DEFAULT_TOOLS,
   normalizeOrigin,
   toMeta,
   type VaultItemRow,

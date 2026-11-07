@@ -24,6 +24,7 @@ import {
   type VaultTargetKind,
   type VaultUse,
 } from "@tiny-agents/agent";
+import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
 import { readBackends } from "./backends";
 import {
@@ -34,14 +35,6 @@ import {
 } from "./backends/types";
 
 export type VaultItemRow = VaultItem;
-
-/** Tools an item may be used by when its row names none. */
-export const KIND_DEFAULT_TOOLS: Record<VaultKind, string[]> = {
-  login: ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
-  card: ["browser_fill_secret"],
-  identity: [],
-  api_key: ["http_request", "mcp"],
-};
 
 const UNKNOWN_HANDLE = (handle: string) => `No vault item \`${handle}\`. Call vault_list.`;
 

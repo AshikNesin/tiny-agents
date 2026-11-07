@@ -22,6 +22,7 @@ import {
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { SecretInput } from "../../components/vault/SecretInput";
 import { useStepUp } from "../../components/vault/StepUp";
+import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 
 /** Browser autocomplete hints, so the owner's own password manager can help. */
 const AUTOCOMPLETE: Partial<Record<ValueField, string>> = {
@@ -38,13 +39,6 @@ const AUTOCOMPLETE: Partial<Record<ValueField, string>> = {
 const PLACEHOLDER: Partial<Record<ValueField, string>> = {
   totp: "otpauth://totp/… or the setup key",
   card_expiry: "MM/YYYY",
-};
-
-const DEFAULT_TOOLS: Record<VaultKind, string[]> = {
-  login: ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
-  card: ["browser_fill_secret"],
-  identity: [],
-  api_key: ["http_request", "mcp"],
 };
 
 export function ValueFieldInput({
@@ -183,7 +177,7 @@ export function NewVaultItem({ kind }: { kind: VaultKind }) {
                 if (next.handle !== policy.handle) setHandleTouched(true);
                 setPolicy(next);
               }}
-              defaultTools={DEFAULT_TOOLS[kind]}
+              defaultTools={KIND_DEFAULT_TOOLS[kind]}
               idPrefix="new-policy"
             />
           </CardContent>

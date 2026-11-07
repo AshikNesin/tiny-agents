@@ -1,12 +1,12 @@
 import {
   Navigate,
   Outlet,
-  Route,
   RouterProvider,
+  useLocation,
   createBrowserRouter,
-  createRoutesFromElements,
+  type RouteObject,
 } from "react-router-dom";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react-router";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
@@ -31,7 +31,8 @@ import { BrowserPage } from "./pages/browser";
 import { CodePage } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
-import { APP_NAV, GUEST_PAGES, guestNav } from "./components/shell/nav";
+import { APP_NAV, guestNav } from "./components/shell/nav";
+import { isGuestPage } from "../shared/guest-access";
 import { useUiStore } from "./store/ui";
 import { usePeopleStore, useIsGuest } from "./store/people";
 
@@ -96,75 +97,74 @@ function Root() {
   );
 }
 
-/**
- * The owner's pages: a guest (issue #145) is sent to their chats instead.
- * The server refuses a guest everything here anyway; this keeps the shell
- * from showing a page full of errors.
- */
-function OwnerOnly({ children }: { children: ReactNode }) {
+/** The server refuses a guest anyway; this keeps the shell from showing a page full of errors. */
+function GuestGate() {
   const guest = usePeopleStore((s) => s.guest);
-  if (guest === true) return <Navigate to="/chats" replace />;
-  return children;
+  const { pathname } = useLocation();
+  if (guest === true && !isGuestPage(pathname)) return <Navigate to="/chats" replace />;
+  return <Outlet />;
 }
 
-/** Wrap a page element as owner-only unless guests may open it. */
-function page(path: string, element: ReactNode) {
-  const open = GUEST_PAGES.some((to) => path === to || path.startsWith(`${to}/`));
-  return (
-    <Route key={path} path={path} element={open ? element : <OwnerOnly>{element}</OwnerOnly>} />
-  );
-}
-
-// A data router, so pages can hold navigation while they have unsaved edits
-// (useBlocker).
-const router = createBrowserRouter(
-  createRoutesFromElements(
-    <Route element={<Root />}>
-      <Route path="/login" element={<Login />} />
-      <Route path="/setup" element={<Setup />} />
-      <Route
-        element={
+export const appRoutes: RouteObject[] = [
+  {
+    element: <Root />,
+    children: [
+      { path: "/login", element: <Login /> },
+      { path: "/setup", element: <Setup /> },
+      {
+        element: (
           <ProtectedRoute>
             <AppShell />
           </ProtectedRoute>
-        }
-      >
-        <Route path="/" element={<Navigate to="/chats" replace />} />
-        <Route path="/chats" element={<ChatWorkspace />} />
-        <Route path="/chats/:botId" element={<ChatWorkspace />} />
-        <Route path="/chats/:botId/history/:chatId" element={<ChatWorkspace />} />
-        {page("/tasks", <Tasks />)}
-        {page("/terminal", <TerminalPage />)}
-        {page("/computer", <ComputerPage />)}
-        {page("/browser", <BrowserPage />)}
-        {page("/code", <CodePage />)}
-        {page("/code/new", <CodePage />)}
-        {page("/code/s/:slug", <CodePage />)}
-        {page("/code/:conversationId", <CodePage />)}
-        {page("/code/:conversationId/changes", <CodePage />)}
-        {page("/routines", <Routines />)}
-        {page("/skills", <SkillsPage />)}
-        {page("/skills/:id", <SkillsPage />)}
-        {page("/memory", <MemoryPage />)}
-        {page("/connections", <ConnectionsPage />)}
-        {page("/connections/:id", <ConnectionsPage />)}
-        {page("/connections/:id/tools/:tool", <ConnectionsPage />)}
-        {page("/vault", <VaultPage />)}
-        {page("/vault/new/:kind", <VaultPage />)}
-        {page("/vault/items/:handle", <VaultPage />)}
-        {page("/vault/requests/:taskId", <VaultPage />)}
-        {page("/storage", <Storage />)}
-        {page("/jobs", <Jobs />)}
-        {/* The jobs kit links to /jobs/:jobId (its documented route, #169); the
-            older two-segment form keeps working for existing links. */}
-        {page("/jobs/:jobId", <JobDetail />)}
-        {page("/jobs/:queueName/:jobId", <JobDetail />)}
-        <Route path="/settings" element={<SettingsPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Route>,
-  ),
-);
+        ),
+        children: [
+          {
+            id: "guest-gate",
+            element: <GuestGate />,
+            children: [
+              { path: "/", element: <Navigate to="/chats" replace /> },
+              { path: "/chats", element: <ChatWorkspace /> },
+              { path: "/chats/:botId", element: <ChatWorkspace /> },
+              { path: "/chats/:botId/history/:chatId", element: <ChatWorkspace /> },
+              { path: "/tasks", element: <Tasks /> },
+              { path: "/terminal", element: <TerminalPage /> },
+              { path: "/computer", element: <ComputerPage /> },
+              { path: "/browser", element: <BrowserPage /> },
+              { path: "/code", element: <CodePage /> },
+              { path: "/code/new", element: <CodePage /> },
+              { path: "/code/s/:slug", element: <CodePage /> },
+              { path: "/code/:conversationId", element: <CodePage /> },
+              { path: "/code/:conversationId/changes", element: <CodePage /> },
+              { path: "/routines", element: <Routines /> },
+              { path: "/skills", element: <SkillsPage /> },
+              { path: "/skills/:id", element: <SkillsPage /> },
+              { path: "/memory", element: <MemoryPage /> },
+              { path: "/connections", element: <ConnectionsPage /> },
+              { path: "/connections/:id", element: <ConnectionsPage /> },
+              { path: "/connections/:id/tools/:tool", element: <ConnectionsPage /> },
+              { path: "/vault", element: <VaultPage /> },
+              { path: "/vault/new/:kind", element: <VaultPage /> },
+              { path: "/vault/items/:handle", element: <VaultPage /> },
+              { path: "/vault/requests/:taskId", element: <VaultPage /> },
+              { path: "/storage", element: <Storage /> },
+              { path: "/jobs", element: <Jobs /> },
+              // The jobs kit links to /jobs/:jobId (its documented route, #169); the
+              // older two-segment form keeps working for existing links.
+              { path: "/jobs/:jobId", element: <JobDetail /> },
+              { path: "/jobs/:queueName/:jobId", element: <JobDetail /> },
+              { path: "/settings", element: <SettingsPage /> },
+            ],
+          },
+        ],
+      },
+      { path: "*", element: <Navigate to="/" replace /> },
+    ],
+  },
+];
+
+// A data router, so pages can hold navigation while they have unsaved edits
+// (useBlocker).
+const router = createBrowserRouter(appRoutes);
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
