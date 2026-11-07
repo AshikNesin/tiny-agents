@@ -1,8 +1,10 @@
-type GuestApiRule = {
-  methods: readonly string[] | "*";
-  /** Matched against the path under `/api/v1`. A `(?<bot>…)` group must be a bot shared with the guest. */
-  path: RegExp;
-};
+type Methods = readonly string[] | "*";
+
+type GuestApiRule =
+  /** `path` is matched against the path under `/api/v1`, and never admits a `/bots/<id>` path. */
+  | { methods: Methods; path: RegExp }
+  /** `bot` is matched against what follows `/bots/<id>`; the bot must be shared with the guest. */
+  | { methods: Methods; bot: RegExp };
 
 interface GuestFeature {
   page?: `/${string}`;
@@ -12,7 +14,7 @@ interface GuestFeature {
 const READ: readonly string[] = ["GET", "HEAD"];
 
 /** Default-deny (issue #145): a page or API route is the owner's until a feature here lists it. */
-export const GUEST_ACCESS = {
+export const GUEST_ACCESS: Record<string, GuestFeature> = {
   account: { page: "/settings", api: [{ methods: READ, path: /^\/people\/me$/ }] },
   app: {
     api: [{ methods: READ, path: /^\/(models|capabilities|claude-code\/status|events)$/ }],
@@ -21,10 +23,10 @@ export const GUEST_ACCESS = {
     page: "/chats",
     api: [
       { methods: READ, path: /^\/bots$/ },
-      { methods: READ, path: /^\/bots\/(?<bot>[^/]+)$/ },
+      { methods: READ, bot: /^$/ },
       {
         methods: "*",
-        path: /^\/bots\/(?<bot>[^/]+)\/(stream|messages(\/[^/]+)?|abort|read|approvals\/\d+|questions\/\d+)$/,
+        bot: /^\/(stream|messages(\/[^/]+)?|abort|read|approvals\/\d+|questions\/\d+)$/,
       },
     ],
   },
@@ -32,15 +34,18 @@ export const GUEST_ACCESS = {
     api: [
       {
         methods: [...READ, "POST"],
-        path: /^\/bots\/(?<bot>[^/]+)\/(browser|computer)(\/(start|vnc-ticket|resize|driver))?$/,
+        bot: /^\/(browser|computer)(\/(start|vnc-ticket|resize|driver))?$/,
       },
     ],
   },
   uploads: { api: [{ methods: "*", path: /^\/uploads(\/.*)?$/ }] },
   code: { page: "/code", api: [{ methods: "*", path: /^\/code(\/.*)?$/ }] },
-} satisfies Record<string, GuestFeature>;
+};
 
-const GUEST_PAGES = Object.values(GUEST_ACCESS).flatMap((feature: GuestFeature) =>
+/** A `/bots/<id>` path: the bot id, then the rest of the path. */
+export const BOT_PATH = /^\/bots\/([^/]+)(\/.*)?$/;
+
+const GUEST_PAGES = Object.values(GUEST_ACCESS).flatMap((feature) =>
   feature.page ? [feature.page] : [],
 );
 

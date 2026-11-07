@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
-import { GUEST_ACCESS } from "../../../shared/guest-access";
+import { BOT_PATH, GUEST_ACCESS } from "../../../shared/guest-access";
 import { canOpenBot, viewerOf, type Viewer } from "./people.service";
 
 declare module "hono" {
@@ -15,10 +15,14 @@ const GUEST_API = Object.values(GUEST_ACCESS).flatMap((feature) => feature.api);
 
 /** The rule a guest's request matches, with the bot it names; undefined = owner only. */
 export function matchGuestRoute(method: string, path: string): { botId?: string } | undefined {
+  const bot = BOT_PATH.exec(path);
   for (const rule of GUEST_API) {
     if (rule.methods !== "*" && !rule.methods.includes(method)) continue;
-    const match = rule.path.exec(path);
-    if (match) return match.groups?.bot ? { botId: decodeURIComponent(match.groups.bot) } : {};
+    if ("bot" in rule) {
+      if (bot && rule.bot.test(bot[2] ?? "")) return { botId: decodeURIComponent(bot[1]) };
+    } else if (!bot && rule.path.test(path)) {
+      return {};
+    }
   }
   return undefined;
 }

@@ -31,7 +31,7 @@ describe("guest access table", () => {
 
   it("names a real page for every guest feature", () => {
     for (const [name, feature] of Object.entries(GUEST_ACCESS)) {
-      if (!("page" in feature)) continue;
+      if (!feature.page) continue;
       expect(
         gatedPaths,
         `${TABLE} gives ${name} the page "${feature.page}", which no route under the guest gate in App.tsx serves.`,
