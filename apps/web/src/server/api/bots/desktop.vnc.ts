@@ -8,12 +8,15 @@
  * The viewer first calls an authenticated ticket route and presents the
  * ticket here; tickets and the Origin check are shared with the terminal
  * bridge (../ws/upgrade.ts). Each kind caps its viewers per bot, pings, and
- * stops reading the VM while a slow viewer has 4 MB queued.
+ * stops reading the VM while a slow viewer has 4 MB queued. An open viewer is
+ * held as its ticket's live access (../people/live-access.ts): removing the
+ * guest, or unsharing the bot, closes it with 1008.
  */
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
+import { holdLiveAccess, type LiveGrant } from "../people/live-access";
 import { isOriginAllowed, onUpgrade, rejectUpgrade, type TicketStore } from "../ws/upgrade";
 
 const MAX_VIEWERS_PER_BOT = 4;
@@ -28,7 +31,7 @@ export interface VncTarget {
   touch(): void;
 }
 
-export interface VncBridgeOptions<T extends { userId: number }> {
+export interface VncBridgeOptions<T extends LiveGrant> {
   /**
    * The upgrade path; its first capture group is the scope the ticket must
    * be bound to (a bot id, or a desktop profile on the Computer page).
@@ -49,7 +52,7 @@ export interface VncBridgeOptions<T extends { userId: number }> {
  * every other upgrade to its own listener. Returns a function that closes
  * every open viewer (graceful shutdown).
  */
-export function attachVncBridge<T extends { userId: number }>(
+export function attachVncBridge<T extends LiveGrant>(
   httpServer: Server,
   options: VncBridgeOptions<T>,
 ): { close(): void } {
@@ -73,7 +76,9 @@ export function attachVncBridge<T extends { userId: number }>(
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       viewers.set(botId, (viewers.get(botId) ?? 0) + 1);
+      const release = holdLiveAccess(ticket, () => revoke(ws));
       void bridge(ws, target, botId, options.kind).finally(() => {
+        release();
         const left = (viewers.get(botId) ?? 1) - 1;
         if (left > 0) viewers.set(botId, left);
         else viewers.delete(botId);
@@ -89,6 +94,14 @@ export function attachVncBridge<T extends { userId: number }>(
   };
 }
 
+/** How long a revoked viewer gets to answer the close before the socket is cut. */
+const REVOKE_CLOSE_GRACE_MS = 1_000;
+
+function revoke(ws: WebSocket): void {
+  ws.close(1008, "Access removed");
+  setTimeout(() => ws.terminate(), REVOKE_CLOSE_GRACE_MS).unref();
+}
+
 async function bridge(
   ws: WebSocket,
   target: VncTarget,
@@ -101,6 +114,12 @@ async function bridge(
   } catch (error) {
     logger.warn({ err: error, botId }, `${kind} VNC stream failed to open`);
     ws.close(1011, `Could not reach the ${kind} display`);
+    return;
+  }
+  // The viewer left (or was revoked) while the stream opened: its close
+  // event has already fired, so nothing below would ever end this bridge.
+  if (ws.readyState !== ws.OPEN) {
+    stream.destroy();
     return;
   }
 
@@ -127,6 +146,8 @@ async function bridge(
       if (ws.bufferedAmount >= MAX_BUFFERED_BYTES) stream.pause();
     });
     ws.on("message", (data) => {
+      // A closing viewer (revoked, say) no longer reaches the desktop.
+      if (ws.readyState !== ws.OPEN) return;
       const bytes = Array.isArray(data)
         ? Buffer.concat(data)
         : Buffer.isBuffer(data)

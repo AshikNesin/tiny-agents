@@ -7,8 +7,12 @@
  * A stream is a `ReadableStream` response: the Node adapter cancels it when
  * the client disconnects (and aborts the request signal), which ends the
  * stream and runs its close listeners, so watches never outlive their viewer.
+ * Each stream is held as its viewer's live access (../people/live-access.ts),
+ * so removing a guest or unsharing the bot it shows ends it at once.
  */
 import type { AppContext } from "@groot/core/types";
+import { requireUser } from "@groot/core/utils/controller.utils";
+import { holdLiveAccess } from "../people/live-access";
 import type { PingEvent, StreamErrorEvent } from "../../../shared/bot-stream";
 
 const HEARTBEAT_MS = 25_000;
@@ -48,15 +52,19 @@ const encoder = new TextEncoder();
  * cleanups with `onClose`. A throw (or rejection) in `start` ends the stream
  * with an error event: by then the response has started, so it can no longer
  * become an API error. Do anything that should fail as an API error (an
- * unknown bot's 404) before calling this.
+ * unknown bot's 404) before calling this. A stream that shows one bot names
+ * it as `botId`, so unsharing that bot ends the stream.
  */
 export function openSse<E>(
   c: AppContext,
   start: (sse: SseStream<E>) => void | Promise<void>,
+  options: { botId?: string } = {},
 ): Response {
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const listeners: (() => void)[] = [];
   let closed = false;
+  // Set once the stream is held; a refused hold ends the stream before then.
+  let release = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   const signal = c.req.raw.signal;
@@ -65,6 +73,7 @@ export function openSse<E>(
     closed = true;
     clearInterval(heartbeat);
     openStreams.delete(sse);
+    release();
     signal?.removeEventListener("abort", finish);
     for (const listener of listeners.splice(0)) {
       try {
@@ -117,6 +126,9 @@ export function openSse<E>(
     sse.write({ type: "ping" });
   }, HEARTBEAT_MS);
   openStreams.add(sse);
+  release = holdLiveAccess({ userId: requireUser(c).userId, botId: options.botId }, () =>
+    sse.end(),
+  );
   signal?.addEventListener("abort", finish, { once: true });
 
   void (async () => start(sse))().catch((error: unknown) => endSseOnError(sse, error));

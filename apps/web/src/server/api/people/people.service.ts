@@ -11,6 +11,7 @@ import * as authService from "@groot/core/auth/auth.service";
 import type { CreateUserDTO } from "@groot/core/auth/auth.schema";
 import type { UploadReach } from "../../../shared/guest-access";
 import { db, botGuests, bots, guests, uploads, users } from "../../db";
+import { revokeLiveAccess } from "./live-access";
 
 /** Who is signed in, as sharing sees it. */
 export interface Viewer {
@@ -85,17 +86,21 @@ export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
   };
 }
 
-/** Remove a guest's account (their shares and passkeys go with it). Owners are never removed here. */
+/**
+ * Remove a guest's account (their shares and passkeys go with it), and end
+ * what they hold open. Owners are never removed here.
+ */
 export async function removeGuest(userId: number): Promise<{ removed: true }> {
   if (!(await isGuest(userId))) throw Boom.notFound("Guest not found");
   await db.delete(users).where(eq(users.id, userId));
+  revokeLiveAccess(userId);
   return { removed: true };
 }
 
 /**
  * Share a bot with exactly these guests. Unknown ids and owners are refused
  * (400), so a typo never shares with the wrong person. Kept guests keep their
- * read marker.
+ * read marker; a dropped guest's open views of the bot end.
  */
 export async function setBotGuests(botId: string, userIds: number[]): Promise<void> {
   const wanted = [...new Set(userIds)];
@@ -106,21 +111,25 @@ export async function setBotGuests(botId: string, userIds: number[]): Promise<vo
       .where(inArray(guests.userId, wanted));
     if (known.length !== wanted.length) throw Boom.badRequest("Unknown guest");
   }
-  db.transaction((tx) => {
-    tx.delete(botGuests)
+  const dropped = db.transaction((tx) => {
+    const removed = tx
+      .delete(botGuests)
       .where(
         wanted.length > 0
           ? and(eq(botGuests.botId, botId), notInArray(botGuests.userId, wanted))
           : eq(botGuests.botId, botId),
       )
-      .run();
+      .returning({ userId: botGuests.userId })
+      .all();
     if (wanted.length > 0) {
       tx.insert(botGuests)
         .values(wanted.map((userId) => ({ botId, userId })))
         .onConflictDoNothing()
         .run();
     }
+    return removed;
   });
+  for (const { userId } of dropped) revokeLiveAccess(userId, botId);
 }
 
 /** Whether this viewer may open the bot: the owner always, a guest when it is shared with them. */

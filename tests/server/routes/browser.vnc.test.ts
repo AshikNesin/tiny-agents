@@ -19,6 +19,10 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
+import { authToken } from "../fixtures";
+
+// Tickets are held as live access, which needs their accounts to exist.
+await authToken("ticket-owner-1@example.com", 1);
 
 /** The manager the bridge reads through; a fresh one per live fake. */
 let sessions: BrowserSessions | undefined;
@@ -302,6 +306,34 @@ describe("VNC WebSocket bridge", () => {
     await vi.waitFor(async () => {
       expect((await rawUpgrade(port, ticketPath(mint()))).status).toBe(101);
     });
+  });
+
+  it("releases the slot and the VM stream of a viewer that closes while its stream opens", async () => {
+    const vms: ReturnType<typeof fakeVm>[] = [];
+    let opening: (() => void) | undefined;
+    await openLive(async () => {
+      const vm = fakeVm();
+      vms.push(vm);
+      await new Promise<void>((resolve) => (opening = resolve));
+      return vm.stream;
+    });
+    await listen();
+
+    for (let i = 0; i < 4; i++) {
+      opening = undefined;
+      const ws = connect(port, ticketPath(mint()));
+      await opened(ws);
+      await vi.waitFor(() => expect(opening).toBeDefined());
+      ws.close();
+      await closed(ws);
+      // The server side of the socket closes too, still inside openStream.
+      await vi.waitFor(async () =>
+        expect(await new Promise((r) => server.getConnections((_e, n) => r(n)))).toBe(0),
+      );
+      opening!();
+      await vi.waitFor(() => expect(vms[i]!.destroyed, `VM stream ${i}`).toBe(true));
+    }
+    expect((await rawUpgrade(port, ticketPath(mint()))).status).toBe(101);
   });
 
   it("leaves other upgrade paths to their own listeners", async () => {

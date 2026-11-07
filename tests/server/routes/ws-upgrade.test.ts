@@ -7,6 +7,11 @@ import {
   isOriginAllowed,
   TICKET_TTL_MS,
 } from "../../../apps/web/src/server/api/ws/upgrade";
+import { authToken } from "../fixtures";
+
+// Tickets are held as live access, which needs their accounts to exist.
+await authToken("ticket-owner-1@example.com", 1);
+await authToken("ticket-owner-2@example.com", 2);
 
 describe("ticket store", () => {
   afterEach(() => vi.useRealTimers());

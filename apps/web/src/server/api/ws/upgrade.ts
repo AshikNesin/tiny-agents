@@ -7,6 +7,8 @@
  * presents the ticket on the socket URL. Tickets are opaque random strings
  * (never a JWT: the session secret would also verify them as login
  * tokens), single-use, bound to one target, and expire after a minute.
+ * An unredeemed ticket is held as live access (../people/live-access.ts):
+ * removing its guest, or unsharing its bot, spends it.
  */
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
@@ -14,6 +16,7 @@ import type { Duplex } from "node:stream";
 import { Boom } from "@groot/core/errors";
 import { config } from "@groot/core/config";
 import { env } from "@groot/core/env";
+import { holdLiveAccess, type LiveGrant } from "../people/live-access";
 
 export const TICKET_TTL_MS = 60_000;
 
@@ -24,7 +27,7 @@ export interface TicketStoreOptions {
   limitMessage?: string;
 }
 
-export interface TicketStore<T extends { userId: number }> {
+export interface TicketStore<T extends LiveGrant> {
   issue(data: T): string;
   /** Single use: a redeemed (or expired, or mismatched) ticket is gone either way. */
   redeem(ticket: string, bound: (data: T) => boolean): T | undefined;
@@ -32,20 +35,24 @@ export interface TicketStore<T extends { userId: number }> {
   reset(): void;
 }
 
-export function createTicketStore<T extends { userId: number }>(
+export function createTicketStore<T extends LiveGrant>(
   options: TicketStoreOptions = {},
 ): TicketStore<T> {
   const ttl = options.ttlMs ?? TICKET_TTL_MS;
-  const tickets = new Map<string, T & { expiresAt: number }>();
+  const tickets = new Map<string, { data: T; expiresAt: number; release(): void }>();
+  const spend = (key: string) => {
+    tickets.get(key)?.release();
+    tickets.delete(key);
+  };
   const sweep = (now: number) => {
-    for (const [key, ticket] of tickets) if (ticket.expiresAt <= now) tickets.delete(key);
+    for (const [key, ticket] of tickets) if (ticket.expiresAt <= now) spend(key);
   };
   return {
     issue(data) {
       const now = Date.now();
       sweep(now);
       if (options.perUserLimit !== undefined) {
-        const held = [...tickets.values()].filter((t) => t.userId === data.userId).length;
+        const held = [...tickets.values()].filter((t) => t.data.userId === data.userId).length;
         if (held >= options.perUserLimit) {
           // 429, not 409: clients read 409 as "target gone, stop forever".
           throw Boom.tooManyRequests(
@@ -54,18 +61,19 @@ export function createTicketStore<T extends { userId: number }>(
         }
       }
       const ticket = randomBytes(24).toString("base64url");
-      tickets.set(ticket, { ...data, expiresAt: now + ttl });
+      const entry = { data, expiresAt: now + ttl, release: () => {} };
+      tickets.set(ticket, entry);
+      entry.release = holdLiveAccess(data, () => tickets.delete(ticket));
       return ticket;
     },
     redeem(ticket, bound) {
       const found = tickets.get(ticket);
-      tickets.delete(ticket);
-      if (!found || found.expiresAt <= Date.now() || !bound(found)) return undefined;
-      const { expiresAt: _spent, ...data } = found;
-      return data as unknown as T;
+      spend(ticket);
+      if (!found || found.expiresAt <= Date.now() || !bound(found.data)) return undefined;
+      return found.data;
     },
     reset() {
-      tickets.clear();
+      for (const key of [...tickets.keys()]) spend(key);
     },
   };
 }
