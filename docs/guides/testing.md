@@ -155,9 +155,18 @@ such as a token minted at the top of the file. Only `Date` is faked:
   (`tests/server/app/agent/computer-toolkit.test.ts`). Reset with
   `vi.useRealTimers()` in `afterEach`.
 - `vi.useFakeTimers({ toFake: [...] })` without `"Date"` in the list puts the
-  real clock back for the rest of that test
+  real `Date` back until `vi.useRealTimers()`, and `vi.setSystemTime(...)`
+  then moves only the fake timers' clock, not `Date`
   (`tests/server/api/notifications/notifications.wiring.test.ts`). List
-  `"Date"` when the test writes or compares dates.
+  `"Date"` when the test writes or compares dates. The setup's `beforeEach`
+  calls `vi.useRealTimers()` before it pins `FIXED_NOW`, so the next test
+  starts frozen even if this one never restored its timers.
+- Wait for asynchronous work with `until(check, what, ms)` or
+  `eventually(check, ms)` from `tests/server/fixtures/until.ts`, never a
+  `Date.now()` deadline loop, which never ends on the frozen clock. Their
+  deadlines read real time and stop just before the test's own timeout, so a
+  stuck wait fails with `Timed out waiting for <what>` rather than vitest's
+  generic timeout.
 - Do not call `vi.useRealTimers()` to opt a test out of the frozen clock. A row
   written at the real time is later read against `FIXED_NOW`, and the result
   depends on the day the suite runs. Call it only to undo `vi.useFakeTimers()`.

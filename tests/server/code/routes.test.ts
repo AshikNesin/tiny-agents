@@ -9,10 +9,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
 import { api, createTestApp } from "../helpers";
-import { authToken, resetAppTables } from "../fixtures";
+import { authToken, eventually, resetAppTables } from "../fixtures";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { isFollowed, markSeen } from "../../../apps/web/src/server/api/code/code.store";
-import { eventually, startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
+import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
 
 const token = await authToken("code-routes@example.com");

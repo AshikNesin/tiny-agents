@@ -6,6 +6,7 @@
  * the Owner wait's bookkeeping and result redaction must not differ.
  */
 import { mkdtemp, rm } from "node:fs/promises";
+import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -19,7 +20,6 @@ import {
   VAULT_VALUE,
   mailCapability,
   openEngine,
-  until,
   watch,
   type EngineKind,
 } from "./engine-harness";

@@ -8,6 +8,7 @@
  * and every other bot's launch waits on it.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { until } from "../../fixtures/until";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -96,13 +97,6 @@ while True:
         time.sleep(0.05)
 `,
 };
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function waitUntil(predicate: () => boolean, ms = 5_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate() && Date.now() < deadline) await sleep(50);
-}
 
 /** Running, and not a zombie: orphans of the script may sit under an init that never reaps. */
 function alive(pid: number): boolean {
@@ -313,7 +307,7 @@ runIfPython("browser stack launch script", () => {
     const again = await launch("a");
     expect(again.timedOut).toBe(false);
     expect(again.code).toBe(0);
-    await waitUntil(() => stale.every((pid) => !alive(pid)));
+    await until(() => stale.every((pid) => !alive(pid)), "the stale stack to exit", 5_000);
     expect(stale.some(alive)).toBe(false);
     expect(stackPids(again.profile).every(alive)).toBe(true);
   }, 60_000);
@@ -334,7 +328,7 @@ runIfPython("browser stack launch script", () => {
     const pidsA = stackPids(a.profile);
     expect(pidsA).toHaveLength(3);
     execFileSync("sh", ["-c", teardownStackCommand(a.profile)], { env });
-    await waitUntil(() => pidsA.every((pid) => !alive(pid)));
+    await until(() => pidsA.every((pid) => !alive(pid)), "profile a's stack to exit", 5_000);
     expect(pidsA.some(alive)).toBe(false);
     expect(stackPids(b.profile)).toHaveLength(3);
     expect(stackPids(b.profile).every(alive)).toBe(true);

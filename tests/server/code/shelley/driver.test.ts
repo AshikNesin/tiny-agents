@@ -12,7 +12,8 @@ import {
   testHost,
   threadEventProblems,
 } from "@tiny-agents/code/testing";
-import { eventually, startFakeShelley, type FakeShelley } from "./fake-shelley";
+import { eventually } from "../../fixtures/until";
+import { startFakeShelley, type FakeShelley } from "./fake-shelley";
 import { describeTurnOutcomeRule, type TurnCase } from "../turn-outcome-conformance";
 
 let shelley: FakeShelley;

@@ -5,6 +5,7 @@
  * the window-bound secret typing script against stand-in X tools.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { until } from "../../fixtures/until";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -103,13 +104,6 @@ while True:
         time.sleep(0.05)
 `,
 };
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function waitUntil(predicate: () => boolean, ms = 5_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate() && Date.now() < deadline) await sleep(50);
-}
 
 function alive(pid: number): boolean {
   try {
@@ -276,7 +270,7 @@ runIfPython("desktop launch script", () => {
     expect(envFile).toContain(`XDG_CONFIG_HOME="${a.profile}/config"`);
     const panel = join(a.profile, "config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml");
     expect(readFileSync(panel, "utf8")).toContain('channel name="xfce4-panel"');
-    await waitUntil(() => existsSync(join(a.profile, ".session-env")));
+    await until(() => existsSync(join(a.profile, ".session-env")), "the .session-env file", 5_000);
     expect(readFileSync(join(a.profile, ".session-env"), "utf8").trim()).toBe(
       `:${launched.display} ${a.profile}/config`,
     );
@@ -298,7 +292,7 @@ runIfPython("desktop launch script", () => {
     const again = await launch("a", { width: 1024, height: 768 });
     expect(again.code).toBe(0);
     expect(parseDesktopLaunch(again.stdout).reused).toBe(false);
-    await waitUntil(() => stale.every((pid) => !alive(pid)));
+    await until(() => stale.every((pid) => !alive(pid)), "the stale stack to exit", 5_000);
     expect(stale.some(alive)).toBe(false);
     expect(desktopPids(again.profile).every(alive)).toBe(true);
   }, 60_000);
@@ -307,7 +301,7 @@ runIfPython("desktop launch script", () => {
     const first = await launch("a");
     const [xpid] = desktopPids(first.profile);
     process.kill(xpid, "SIGTERM");
-    await waitUntil(() => !alive(xpid));
+    await until(() => !alive(xpid), "the X server to exit", 5_000);
     const again = await launch("a");
     expect(again.code).toBe(0);
     expect(parseDesktopLaunch(again.stdout).reused).toBe(false);
@@ -327,7 +321,7 @@ runIfPython("desktop launch script", () => {
     const b = await launch("b");
     const pidsA = desktopPids(a.profile);
     execFileSync("sh", ["-c", teardownDesktopCommand(a.profile)], { env });
-    await waitUntil(() => pidsA.every((pid) => !alive(pid)));
+    await until(() => pidsA.every((pid) => !alive(pid)), "profile a's stack to exit", 5_000);
     expect(pidsA.some(alive)).toBe(false);
     expect(existsSync(join(a.profile, DESKTOP_ENV_FILE))).toBe(false);
     expect(desktopPids(b.profile).every(alive)).toBe(true);
@@ -401,7 +395,7 @@ echo "0x00004000 -1 xfce4-panel.Xfce4-panel  vm xfce4-panel"
       const a = await launch("a");
       const [xpid] = desktopPids(a.profile);
       process.kill(xpid, "SIGTERM");
-      await waitUntil(() => !alive(xpid));
+      await until(() => !alive(xpid), "the X server to exit", 5_000);
       const gone = await run(aimAtFakeX(desktopCommand(a.profile, "echo hi")), env, 10_000);
       expect(gone.code).toBe(DESKTOP_GONE_EXIT);
     }, 60_000);

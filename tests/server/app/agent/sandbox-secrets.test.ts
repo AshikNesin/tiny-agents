@@ -6,6 +6,7 @@
  * scrubbed.
  */
 import { execFileSync, spawnSync } from "node:child_process";
+import { until } from "../../fixtures/until";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -270,16 +271,6 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
     } else if (state && event.type === "busy") state.busy = event.busy;
   }
   return state;
-}
-
-async function until<T>(read: () => T | undefined, what: string, ms = 10_000): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = read();
-    if (value !== undefined && value !== false) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 20));
-  }
 }
 
 const lastCall = (events: ChatEvent[]): ChatToolCall | undefined =>

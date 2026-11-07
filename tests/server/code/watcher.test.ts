@@ -17,7 +17,7 @@ import {
   startCodeWatcher,
 } from "../../../apps/web/src/server/api/code/code.watcher";
 import { resetAppTables, TEST_MODEL } from "../fixtures";
-import { eventually } from "./shelley/fake-shelley";
+import { eventually } from "../fixtures/until";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
 
 let harness: FakeHarness;

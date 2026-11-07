@@ -5,6 +5,7 @@
  * holds no value, and resumes with the outcome.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -152,16 +153,6 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
     } else if (state && event.type === "busy") state.busy = event.busy;
   }
   return state;
-}
-
-async function until<T>(read: () => T | undefined, what: string, ms = 10_000): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = read();
-    if (value !== undefined && value !== false) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 20));
-  }
 }
 
 const lastCall = (events: ChatEvent[], name: string): ChatToolCall | undefined =>

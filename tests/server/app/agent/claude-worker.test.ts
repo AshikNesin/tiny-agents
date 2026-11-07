@@ -5,6 +5,7 @@
  * tested once, in claude-worker-connection.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { until } from "../../fixtures/until";
 import { WebSocket } from "ws";
 import {
   ClaudeWorkerClient,
@@ -12,7 +13,7 @@ import {
 } from "../../../../packages/agent/src/engines/claude-code/client";
 import { WORKER_RESTARTED } from "../../../../packages/agent/src/engines/claude-code/engine";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
-import { mailCapability, openEngine, until } from "./engine-harness";
+import { mailCapability, openEngine } from "./engine-harness";
 import {
   DEFAULT_TIMINGS,
   OverrideRefusal,

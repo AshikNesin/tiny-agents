@@ -6,6 +6,7 @@
  * activity, Finished replies) must not depend on which one runs.
  */
 import { Type } from "@earendil-works/pi-ai";
+import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
@@ -18,7 +19,6 @@ import {
   ENGINES,
   mailCapability,
   openEngine,
-  until,
   watch,
   type EngineKind,
 } from "./engine-harness";

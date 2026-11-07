@@ -19,7 +19,7 @@ import {
 import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
-import { authToken } from "../fixtures";
+import { authToken, until } from "../fixtures";
 
 let token: string;
 beforeAll(async () => {
@@ -389,11 +389,12 @@ describe("MCP connections (header auth, streamable http)", () => {
       catalog: { info: () => undefined, has: () => true },
     } as never);
     try {
-      const deadline = Date.now() + 15_000;
-      while (fresh.status((await db.query.connections.findFirst())!.id).status !== "connected") {
-        if (Date.now() > deadline) throw new Error("boot connect timed out");
-        await new Promise((r) => setTimeout(r, 50));
-      }
+      await until(
+        async () =>
+          fresh.status((await db.query.connections.findFirst())!.id).status === "connected",
+        "the boot connect",
+        15_000,
+      );
       expect(installed).toContain("mcp:demo");
     } finally {
       await fresh.close();

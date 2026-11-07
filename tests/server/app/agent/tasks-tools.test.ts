@@ -21,6 +21,7 @@ import {
   fauxAssistantMessage,
 } from "../../../../packages/agent/src/testing";
 import type { ChatEvent, ChatState } from "../../../../packages/agent/src/types";
+import { until } from "../../fixtures/until";
 
 interface MemoryStore extends TaskStore {
   calls: string[];
@@ -92,16 +93,14 @@ async function settled(store: MemoryStore, replies0: ReturnType<typeof fauxAssis
   const sub = await runtime.watchChat(ref, (batch) => events.push(...batch));
   await runtime.submit(ref, { requestId: "r1", text: "please" });
 
-  const deadline = Date.now() + 10_000;
-  let state: ChatState | undefined;
-  while (Date.now() < deadline) {
-    state = reduce(events);
-    if (state && !state.busy && state.messages.some((m) => m.role === "assistant" && m.text)) break;
-    await new Promise((r) => setTimeout(r, 25));
-  }
+  const state = await until(() => {
+    const latest = reduce(events);
+    const replied = latest?.messages.some((m) => m.role === "assistant" && m.text);
+    return latest && !latest.busy && replied && latest;
+  }, "an assistant reply");
   await sub.stop();
   await runtime.close();
-  return { state: state!, events };
+  return { state, events };
 }
 
 function reduce(events: ChatEvent[]): ChatState | undefined {
@@ -249,11 +248,7 @@ async function interruptAndResume(
     });
     const ref = await first.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
     await first.submit(ref, { requestId: "r1", text: "do it" });
-    const deadline = Date.now() + 10_000;
-    while (effects === 0) {
-      if (Date.now() > deadline) throw new Error(`${call.name} never ran`);
-      await new Promise((r) => setTimeout(r, 20));
-    }
+    await until(() => effects > 0, `${call.name} to run`);
     // Close while the tool is mid-call: its result is never committed.
     // Release only once close has reached the harness. A release that lands
     // first commits the failure, and the always-calling model then loops and
@@ -279,19 +274,14 @@ async function interruptAndResume(
     try {
       const events: ChatEvent[] = [];
       const sub = await second.watchChat(ref, (batch) => events.push(...batch));
-      const until = Date.now() + 10_000;
-      const done = () => {
+      const done = await until(() => {
         const state = reduce(events);
         return state && !state.busy
           ? state.messages.find((m) => m.text.startsWith("RESULT:"))
           : undefined;
-      };
-      while (!done()) {
-        if (Date.now() > until) throw new Error("resumed run never finished");
-        await new Promise((r) => setTimeout(r, 25));
-      }
+      }, "the resumed run to finish");
       await sub.stop();
-      return done()!.text.slice("RESULT:".length);
+      return done.text.slice("RESULT:".length);
     } finally {
       await second.close();
     }
