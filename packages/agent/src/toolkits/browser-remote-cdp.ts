@@ -190,7 +190,10 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     throw new Error(`VM exec failed (${result.exitCode}): ${label}${detail ? `\n${detail}` : ""}`);
   };
 
-  return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
+  const openBrowser = async (
+    profileDir: string,
+    open: OpenBrowserOptions,
+  ): Promise<BrowserSession> => {
     const scale = open.scale === 1 ? 1 : 2;
 
     const ready = await exec(stackReadyCommand(), 15_000, "check the browser stack");
@@ -290,9 +293,6 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
           await browser.close().catch(() => {});
           await cleanup().catch(() => {});
         },
-        wipeProfile: async () => {
-          await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile").catch(() => {});
-        },
       });
     } catch (error) {
       // Setup failed after the stack launched and/or the tunnel bound —
@@ -301,4 +301,10 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       throw error;
     }
   };
+
+  return Object.assign(openBrowser, {
+    wipe: async (profileDir: string) => {
+      await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile").catch(() => {});
+    },
+  });
 }

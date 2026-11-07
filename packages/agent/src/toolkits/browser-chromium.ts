@@ -86,7 +86,6 @@ export function pageSession(
     /** Subscribe to the browser dying; see `BrowserSession.onDisconnect`. */
     onDisconnect?: (listener: () => void) => void;
     vnc?: BrowserVnc;
-    wipeProfile?: () => Promise<void>;
   },
   claimed: Set<Page> = new Set(),
 ): BrowserSession {
@@ -124,7 +123,6 @@ export function pageSession(
 
   const session: BrowserSession = {
     vnc: teardown.vnc,
-    wipeProfile: teardown.wipeProfile,
     onDisconnect: (listener) =>
       teardown.onDisconnect?.(() => {
         if (!closing) listener();

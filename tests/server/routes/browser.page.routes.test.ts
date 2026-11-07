@@ -94,7 +94,6 @@ function fakeBrowser(options: { vnc?: boolean } = {}) {
             },
           },
     onDisconnect: () => {},
-    wipeProfile: async () => {},
     openTab: async () => page(`tab-${tabs.length}`),
   };
   return {

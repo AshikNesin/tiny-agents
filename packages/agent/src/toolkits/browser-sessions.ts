@@ -74,8 +74,6 @@ export interface BrowserSession {
   openTab?(): Promise<BrowserSession>;
   /** Bring this tab to the front, where the live view (and the owner) sees it. */
   focus?(): Promise<void>;
-  /** Delete the persisted profile; called after `close()` on reset. */
-  wipeProfile?(): Promise<void>;
   /**
    * Call `listener` once if the browser dies under the app (a dropped link to
    * a remote Chrome, Chrome exiting), never after `close()`. Transports that
@@ -101,10 +99,14 @@ export interface BrowserSession {
   close(): Promise<void>;
 }
 
-export type BrowserTransport = (
-  profileDir: string,
-  open: OpenBrowserOptions,
-) => Promise<BrowserSession>;
+export interface BrowserTransport {
+  (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession>;
+  /**
+   * Delete the copy of a profile the transport keeps elsewhere (the sandbox
+   * VM's). The manager removes the local `profileDir` itself.
+   */
+  wipe?(profileDir: string): Promise<void>;
+}
 
 export type BrowserDriver = "agent" | "human";
 
@@ -204,7 +206,7 @@ export interface BrowserSessions {
   /**
    * Close and remove the target's browser (every tab in it), including one
    * still opening; later calls open fresh. With `wipeProfile` the persisted
-   * profile (cookies, logins) goes too.
+   * profile (cookies, logins) goes too, whether or not a browser was live.
    */
   close(target: BrowserTarget, options?: { wipeProfile?: boolean }): Promise<void>;
   /** Release one agent's tab, leaving the other agents in the browser alone. */
@@ -239,8 +241,8 @@ export function describeBrowserError(error: unknown): string {
 interface Opening {
   promise: Promise<LiveBrowserSession>;
   readonly phase: BrowserPhase;
-  /** A close arrived meanwhile: the opened browser closes at once, and is wiped if asked. */
-  cancel(wipe: boolean): void;
+  /** A close arrived meanwhile: the opened browser closes at once. */
+  cancel(): void;
 }
 
 export function createBrowserSessions(options: BrowserSessionsOptions = {}): BrowserSessions {
@@ -274,17 +276,25 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     }, IDLE_SWEEP_MS);
   }
 
+  function profileDir(key: string): string {
+    if (!/^[\w-]+$/.test(key)) throw new Error(`Invalid browser profile "${key}".`);
+    return `${profilesDir}/${key}`;
+  }
+
+  async function transport(): Promise<BrowserTransport> {
+    return options.transport ?? (await import("./browser-chromium")).createChromiumTransport();
+  }
+
   async function openSession(
     key: string,
     onPhase: (phase: BrowserPhase) => void,
   ): Promise<LiveBrowserSession> {
-    if (!/^[\w-]+$/.test(key)) throw new Error(`Invalid browser profile "${key}".`);
-    const dir = `${profilesDir}/${key}`;
+    const dir = profileDir(key);
     const { mkdirSync } = await import("node:fs");
     mkdirSync(dir, { recursive: true });
-    const transport =
-      options.transport ?? (await import("./browser-chromium")).createChromiumTransport();
-    const session = await transport(dir, {
+    const session = await (
+      await transport()
+    )(dir, {
       viewportWidth: options.viewportWidth ?? 1280,
       viewportHeight: options.viewportHeight ?? 800,
       allowedPrivateHosts: options.allowedPrivateHosts,
@@ -322,7 +332,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     let pending = opening.get(profile);
     if (!pending) {
       let phase: BrowserPhase = "starting";
-      let cancelled: { wipe: boolean } | undefined;
+      let cancelled = false;
       const promise = openSession(profile, (next) => {
         phase = next;
       })
@@ -330,7 +340,6 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
           if (cancelled) {
             // Closed while opening: the browser never becomes live.
             await opened.session.close().catch(() => {});
-            if (cancelled.wipe) await opened.session.wipeProfile?.().catch(() => {});
             throw new Error("The browser was closed while it was opening.");
           }
           live.set(profile, opened);
@@ -349,8 +358,8 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
         get phase() {
           return phase;
         },
-        cancel(wipe) {
-          cancelled = { wipe: wipe || cancelled?.wipe === true };
+        cancel() {
+          cancelled = true;
         },
       };
       opening.set(profile, pending);
@@ -430,16 +439,18 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     });
   }
 
-  async function closeEntry(
-    profile: string,
-    entry: LiveBrowserSession,
-    wipe: boolean,
-  ): Promise<void> {
+  async function closeEntry(profile: string, entry: LiveBrowserSession): Promise<void> {
     entry.driver = "agent";
     release(entry);
     if (live.get(profile) === entry) live.delete(profile);
     await entry.session.close();
-    if (wipe) await entry.session.wipeProfile?.();
+  }
+
+  async function wipe(profile: string): Promise<void> {
+    const dir = profileDir(profile);
+    const { rmSync } = await import("node:fs");
+    rmSync(dir, { recursive: true, force: true });
+    await (await transport()).wipe?.(dir);
   }
 
   const manager: BrowserSessions = {
@@ -505,11 +516,12 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     async close(target, { wipeProfile = false } = {}) {
       const pending = opening.get(target.profile);
       if (pending) {
-        pending.cancel(wipeProfile);
+        pending.cancel();
         await pending.promise.catch(() => undefined);
       }
       const entry = live.get(target.profile);
-      if (entry) await closeEntry(target.profile, entry, wipeProfile);
+      if (entry) await closeEntry(target.profile, entry);
+      if (wipeProfile) await wipe(target.profile);
     },
     async closeTab(target) {
       const entry = live.get(target.profile);
@@ -518,7 +530,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       entry.tabs.delete(target.tab);
       if (entry.front === target.tab) entry.front = undefined;
       if (entry.tabs.size === 0) {
-        await closeEntry(target.profile, entry, false);
+        await closeEntry(target.profile, entry);
         return;
       }
       // A transport without openTab shares one tab between agents: keep it.
@@ -532,11 +544,11 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       await tab.close().catch(() => undefined);
     },
     async closeAll() {
-      for (const pending of opening.values()) pending.cancel(false);
+      for (const pending of opening.values()) pending.cancel();
       await Promise.allSettled([...opening.values()].map((pending) => pending.promise));
       const entries = [...live.entries()];
       live.clear();
-      await Promise.allSettled(entries.map(([, entry]) => closeEntry("", entry, false)));
+      await Promise.allSettled(entries.map(([, entry]) => closeEntry("", entry)));
       openErrors.clear();
       if (sweeper !== undefined) {
         clock.clearInterval(sweeper);

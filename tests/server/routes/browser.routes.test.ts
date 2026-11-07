@@ -17,6 +17,7 @@ import {
   type BrowserTarget,
   type BrowserTransport,
   type BrowserVnc,
+  type OpenBrowserOptions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 
@@ -27,10 +28,20 @@ import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bot
  */
 let sessions: BrowserSessions | undefined;
 let currentTransport: BrowserTransport = async () => fakeSession().session;
+/** Profile dirs the transport was asked to wipe, oldest first. */
+let wiped: string[] = [];
 function freshManager(): BrowserSessions {
+  wiped = [];
   sessions = createBrowserSessions({
     profilesDir: "/tmp/ta-route-profiles",
-    transport: (dir, open) => currentTransport(dir, open),
+    transport: Object.assign(
+      (dir: string, open: OpenBrowserOptions) => currentTransport(dir, open),
+      {
+        wipe: async (dir: string) => {
+          wiped.push(dir);
+        },
+      },
+    ),
   });
   setBrowserSessionsForTests(sessions);
   return sessions;
@@ -66,7 +77,6 @@ function call(
 
 function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
   const resizes: { width: number; height: number }[] = [];
-  const wipes: string[] = [];
   const disconnects: (() => void)[] = [];
   let driver: "agent" | "human" = "agent";
   const vnc: BrowserVnc | undefined = options.vnc
@@ -86,9 +96,6 @@ function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
     onDisconnect: (listener) => {
       disconnects.push(listener);
     },
-    wipeProfile: async () => {
-      wipes.push("wipe");
-    },
     url: () => "https://example.com/page",
     navigate: async () => ({ url: "https://example.com/page", status: 200 }),
     snapshot: async () => "- body [ref=e1]",
@@ -102,7 +109,6 @@ function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
   return {
     session,
     resizes,
-    wipes,
     /** The browser dies under the app (a dropped link, Chrome exiting). */
     die: () => disconnects.forEach((listener) => listener()),
     get driver() {
@@ -334,7 +340,7 @@ describe("browser routes", () => {
     const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
     expect(reset.status).toBe(200);
     expect(getLiveBrowserSession(target)).toBeUndefined();
-    expect(fake.wipes).toEqual(["wipe"]);
+    expect(wiped).toEqual(["/tmp/ta-route-profiles/shared"]);
   });
 
   it("gives bots on the shared profile one browser, each with its own tab", async () => {
@@ -398,8 +404,7 @@ describe("browser routes", () => {
     // Resetting it wipes only its own profile; the shared browser stays up.
     const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
     expect(reset.status).toBe(200);
-    expect(ownFake.wipes).toEqual(["wipe"]);
-    expect(fake.wipes).toEqual([]);
+    expect(wiped).toEqual([`/tmp/ta-route-profiles/bot-${botId}`]);
     expect(getLiveBrowserSession(own)).toBeUndefined();
     expect(getLiveBrowserSession(target)).toBeDefined();
   });
