@@ -87,8 +87,6 @@ export const bots = sqliteTable("bots", {
   ...timestamps,
 });
 
-export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
 /**
  * Releases a deleted bot still owes (bot-resources.ts): written in the
  * transaction that deletes the bot row, each removed once its release
@@ -99,7 +97,8 @@ export const botReleases = sqliteTable(
   {
     botId: text("bot_id").notNull(),
     resource: text("resource").notNull(),
-    captured: text("captured", { mode: "json" }).$type<Json>(),
+    /** JSON, parsed by its entry's shape on every read: a later build may read it. */
+    captured: text("captured").notNull(),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.botId, t.resource] })],

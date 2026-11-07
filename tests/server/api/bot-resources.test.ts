@@ -506,7 +506,14 @@ describe("deleting a bot", () => {
     const checks = await seedThenSwitchToShared();
     const releases = entries.flatMap(([kind, entry]) =>
       entry.how === "release"
-        ? [{ kind, release: vi.spyOn(entry, "release").mockRejectedValueOnce(new Error("crash")) }]
+        ? [
+            {
+              kind,
+              prepare: vi
+                .spyOn(entry, "prepare")
+                .mockReturnValueOnce(() => Promise.reject(new Error("crash"))),
+            },
+          ]
         : [],
     );
 
@@ -520,7 +527,57 @@ describe("deleting a bot", () => {
     expect(await owed()).toEqual([]);
     for (const check of checks.values()) await check();
     await sweepBotReleases(world.rt);
-    for (const { kind, release } of releases) expect(release, kind).toHaveBeenCalledTimes(2);
+    for (const { kind, prepare } of releases) expect(prepare, kind).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a record that no longer parses and still runs the others", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    const ownDir = join(world.profilesDir, `bot-${world.bot.id}`);
+    mkdirSync(ownDir, { recursive: true });
+    await db.delete(schema.bots).where(eq(schema.bots.id, world.bot.id));
+    await db.insert(botReleases).values([
+      { botId: world.bot.id, resource: "chat", captured: "{not json" },
+      { botId: world.bot.id, resource: "routines", captured: JSON.stringify("oops") },
+      { botId: world.bot.id, resource: "browser", captured: "null" },
+    ]);
+
+    await sweepBotReleases(world.rt);
+
+    expect(existsSync(ownDir), "browser released beside the bad records").toBe(false);
+    expect(await owed()).toEqual([]);
+    for (const resource of ["chat", "routines"]) {
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ botId: world.bot.id, resource }),
+        "Dropping an owed release whose record does not parse",
+      );
+    }
+  });
+
+  it("keeps the desktop owed while the sandbox's desktop config is wrong", async () => {
+    vi.stubEnv("SANDBOX_HOST", "sandbox.test");
+    vi.stubEnv("COMPUTER_DESKTOP_SIZE", "huge");
+    setComputerSessionsForTests(undefined);
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
+    expect(await owed()).toEqual(["desktop"]);
+
+    vi.unstubAllEnvs();
+    setComputerSessionsForTests(world.computer);
+    await sweepBotReleases(world.rt);
+
+    expect(world.desktops.wiped).toContain(`bot-${world.bot.id}`);
+    expect(await owed()).toEqual([]);
+  });
+
+  it("owes no desktop when no sandbox is configured", async () => {
+    vi.stubEnv("SANDBOX_HOST", "");
+    setComputerSessionsForTests(undefined);
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
+
+    expect(await owed()).toEqual([]);
   });
 
   it("wipes the desktop at the next boot when the sandbox failed the wipe", async () => {

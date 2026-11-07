@@ -14,4 +14,7 @@ release needs. A release that succeeds removes its row. At boot,
 recorded, so a deleted bot's chat that resumed after a crash is stopped and
 its own browser profile and desktop are wiped once the sandbox answers.
 A release in `BOT_RESOURCES` now gets the bot id and what its `capture`
-read, which must be JSON, in place of the bot row.
+read in place of the bot row. Each capture names a zod shape, and every
+read parses the stored JSON with it. A record that no longer parses is
+logged and dropped. The desktop stays owed while `SANDBOX_HOST` is set but
+the desktop config is wrong.

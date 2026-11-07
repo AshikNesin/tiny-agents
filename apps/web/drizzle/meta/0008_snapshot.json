@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8fb0486c-0e97-4986-8e91-5ccf6b703540",
+  "id": "4ef98720-695f-40bb-aed5-3c7fb1a4b5ec",
   "prevId": "52aa0f3b-becd-49f4-a254-0c05b587d9f0",
   "tables": {
     "bot_chats": {
@@ -392,7 +392,7 @@
           "name": "captured",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {
