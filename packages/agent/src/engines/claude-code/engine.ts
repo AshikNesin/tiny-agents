@@ -18,10 +18,9 @@ import type { ToolResultPayload, ToolSpec, WorkerMessage } from "@tiny-agents/cl
 import { gateHooksOf } from "../../approvals";
 import type { ToolPermission } from "../../capabilities";
 import {
-  claudeCodeEngineEnabled,
-  claudeCodeFallback,
   type AgentEngine,
   type ClaudeEngineFallback,
+  type ClaudePlanState,
   type CompiledConversation,
   type EngineSubmission,
 } from "../../engine";
@@ -70,7 +69,8 @@ export interface ClaudeSessionSync {
 }
 
 export interface ClaudeCodeEngineOptions {
-  env?: () => Readonly<Record<string, string | undefined>>;
+  /** The Claude plan account's switch and fallback, read on each turn. Default: off, pause. */
+  plan?: () => ClaudePlanState;
   /** JSON file for session ids and transcripts. Omitted for `:memory:` stores. */
   persistPath?: string;
   onBusy?: (ref: ConversationRef, busy: boolean) => void;
@@ -119,12 +119,12 @@ export class ClaudeCodeEngine implements AgentEngine {
   private readonly sessions = new Map<ConversationRef, ClaudeSession>();
   private readonly listeners = new Set<Listener>();
   private client: ClaudeWorkerClient | undefined;
-  private readonly env: () => Readonly<Record<string, string | undefined>>;
+  private readonly plan: () => ClaudePlanState;
   private loaded = false;
   private readonly gate: ToolGate;
 
   constructor(private readonly options: ClaudeCodeEngineOptions) {
-    this.env = options.env ?? (() => ({}));
+    this.plan = options.plan ?? (() => ({ enabled: false, fallback: "pause" }));
     this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 
@@ -177,14 +177,13 @@ export class ClaudeCodeEngine implements AgentEngine {
     await this.restore();
     const session = this.sessions.get(ref);
     if (!session || session.surface !== "claude") return "unavailable";
-    const env = this.env();
-    const fallback = claudeCodeFallback(env);
-    if (!claudeCodeEngineEnabled(env)) {
+    const { enabled, fallback } = this.plan();
+    if (!enabled) {
       return this.unavailable(
         ref,
         session,
         fallback,
-        "Claude subscription engine is off (CLAUDE_CODE_ENGINE_ENABLED).",
+        "The Claude plan is turned off (Settings → Models).",
       );
     }
     try {
@@ -215,7 +214,7 @@ export class ClaudeCodeEngine implements AgentEngine {
       role: "assistant",
       text: "",
       status: "streaming",
-      model: `claude-code/${session.model}`,
+      model: session.model,
       createdAt: Date.now(),
     };
     session.messages.push(user, assistant);
@@ -317,11 +316,11 @@ export class ClaudeCodeEngine implements AgentEngine {
     mode: ClaudeWorkerMode;
     workerHost?: string;
   } {
-    const env = this.env();
+    const plan = this.plan();
     const locator = this.locator();
     return {
-      enabled: claudeCodeEngineEnabled(env),
-      fallback: claudeCodeFallback(env),
+      enabled: plan.enabled,
+      fallback: plan.fallback,
       configured: locator.mode !== "none",
       mode: locator.mode,
       ...(locator.host ? { workerHost: locator.host } : {}),
@@ -335,7 +334,7 @@ export class ClaudeCodeEngine implements AgentEngine {
 
   /** Set the worker up ahead of the first turn when the engine is on. */
   prepare(): void {
-    if (claudeCodeEngineEnabled(this.env())) this.locator().prepare();
+    if (this.plan().enabled) this.locator().prepare();
   }
 
   /** The sandbox worker, or none when no sandbox is configured. */

@@ -1,144 +1,234 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
+/**
+ * The Model catalog as a projection of the owner's accounts and model rows
+ * (issue #179): availability, routing, roles and their fallbacks, and the
+ * pi-ai providers each kind builds.
+ */
+import { createModels } from "@earendil-works/pi-ai/models";
 import { describe, expect, it } from "vite-plus/test";
+import { createModelCatalog } from "../../../../packages/agent/src/model-catalog";
+import type {
+  ModelConfig,
+  ModelRow,
+  ProviderAccount,
+} from "../../../../packages/agent/src/providers/config";
 import {
-  createModelCatalog,
-  formatModelId,
-  parseModelId,
-  toModelInfo,
-  type CatalogModels,
-} from "../../../../packages/agent/src/model-catalog";
+  buildProviders,
+  classifierProviderId,
+} from "../../../../packages/agent/src/providers/kinds";
 
-const model = (id: string, extra: Partial<Model<Api>> = {}): Model<Api> =>
+const account = (overrides: Partial<ProviderAccount> & Pick<ProviderAccount, "id" | "kind">) =>
   ({
-    id,
-    name: id.toUpperCase(),
-    api: "openai-completions",
-    provider: "",
-    reasoning: false,
-    contextWindow: 8_192,
-    input: ["text"],
-    ...extra,
-  }) as unknown as Model<Api>;
+    name: overrides.id,
+    baseUrl: null,
+    hasCredential: true,
+    viaProviderId: null,
+    settings: {},
+    enabled: true,
+    status: "ok",
+    statusDetail: null,
+    ...overrides,
+  }) satisfies ProviderAccount;
 
-/** A registry: provider id → its display name and models. */
-function registry(
-  providers: Record<string, { name: string; models: Model<Api>[] }>,
-): CatalogModels {
-  return {
-    getProvider: (id: string) => (providers[id] ? { id, name: providers[id].name } : undefined),
-    getProviders: () => Object.keys(providers).map((id) => ({ id, name: providers[id].name })),
-    getModels: (id: string) => providers[id]?.models ?? [],
-    getModel: (provider: string, id: string) =>
-      providers[provider]?.models.find((m) => m.id === id),
-  } as unknown as CatalogModels;
+const row = (overrides: Partial<ModelRow> & Pick<ModelRow, "id" | "providerId">): ModelRow => ({
+  upstreamId: overrides.id,
+  name: overrides.id,
+  type: "chat",
+  enabled: true,
+  contextWindow: 100_000,
+  maxOutputTokens: 8_000,
+  imageInput: false,
+  reasoning: false,
+  compat: null,
+  missing: false,
+  ...overrides,
+});
+
+const credentials = { resolve: async (id: string) => `key-${id}` };
+
+function catalogOf(config: ModelConfig) {
+  const models = createModels();
+  for (const provider of buildProviders(config, credentials)) models.setProvider(provider);
+  return { catalog: createModelCatalog(config, models), models };
 }
 
-const models = registry({
-  gw: { name: "Gateway", models: [model("glm"), model("claude-sonnet-4-6")] },
-  acme: { name: "Acme", models: [model("eye", { input: ["text", "image"] })] },
-  idle: { name: "Idle", models: [model("never")] },
-});
-const catalog = (env: Record<string, string> = {}, configured = ["gw", "acme"]) =>
-  createModelCatalog(models, { primary: "gw", configured: new Set(configured), env });
+const base: ModelConfig = {
+  providers: [
+    account({ id: "anth", name: "Anthropic · Work", kind: "anthropic" }),
+    account({ id: "oai", name: "OpenAI", kind: "openai-responses" }),
+    account({ id: "plan", name: "Claude plan", kind: "claude-plan", hasCredential: false }),
+  ],
+  models: [
+    row({ id: "sonnet", providerId: "anth", upstreamId: "claude-sonnet-4-6", imageInput: true }),
+    row({ id: "gpt", providerId: "oai", upstreamId: "gpt-5" }),
+    row({ id: "gpt-old", providerId: "oai", upstreamId: "gpt-4", missing: true }),
+    row({ id: "plan-sonnet", providerId: "plan", upstreamId: "claude-sonnet-4-6" }),
+  ],
+  roles: {},
+};
 
-describe("model ids", () => {
-  it("reads the three forms and formats registry ids back", () => {
-    expect(parseModelId("glm", "gw")).toEqual({ engine: "pi", provider: "gw", model: "glm" });
-    expect(parseModelId("custom:acme/a/b", "gw")).toEqual({
+describe("Model catalog", () => {
+  it("lists models by account name and routes each to its account's pi provider", () => {
+    const { catalog } = catalogOf(base);
+    expect(catalog.list().map((m) => m.id)).toEqual(["sonnet", "plan-sonnet", "gpt", "gpt-old"]);
+    expect(catalog.get("sonnet")).toMatchObject({
+      providerName: "Anthropic · Work",
+      providerKind: "anthropic",
       engine: "pi",
-      provider: "acme",
-      model: "a/b",
+      vision: true,
+      available: true,
     });
-    expect(parseModelId("claude-code/claude-opus-4-6", "gw")).toEqual({
-      engine: "claude-code",
-      bare: "claude-opus-4-6",
+    expect(catalog.route("gpt")).toEqual({ engine: "pi", providerId: "oai", upstreamId: "gpt-5" });
+    expect(catalog.piModel("sonnet")).toMatchObject({
+      id: "claude-sonnet-4-6",
+      provider: "anth",
+      api: "anthropic-messages",
+      baseUrl: "https://api.anthropic.com",
+      input: ["text", "image"],
     });
-    for (const bad of ["", "custom:/glm", "custom:acme/", "custom:acme", "claude-code/a/b"]) {
-      expect(parseModelId(bad, "gw")).toBeUndefined();
-    }
-    expect(formatModelId({ provider: "gw", model: "glm" }, "gw")).toBe("glm");
-    expect(formatModelId({ provider: "acme", model: "a/b" }, "gw")).toBe("custom:acme/a/b");
   });
 
-  it("puts a custom provider's models in the 'other' family", () => {
-    const glm = model("glm");
-    expect(toModelInfo(glm, { provider: "acme", primary: "gw" })).toMatchObject({
-      id: "custom:acme/glm",
-      family: "other",
+  it("takes the engine from the provider kind: a Claude plan model runs on claude-code", () => {
+    const { catalog } = catalogOf(base);
+    expect(catalog.get("plan-sonnet")).toMatchObject({
+      engine: "claude-code",
+      note: "uses your Claude plan",
     });
-    expect(toModelInfo(glm, { provider: "gw", primary: "gw" })).toMatchObject({
-      id: "glm",
-      family: "openai",
+    expect(catalog.route("plan-sonnet")).toMatchObject({ engine: "claude-code" });
+    // Not a pi model: nothing pi-ai serves for it.
+    expect(catalog.piModel("plan-sonnet")).toBeUndefined();
+    expect(catalog.claudePlan()).toEqual({ enabled: true });
+  });
+
+  it("says why a model can't run, and routes nothing for it", () => {
+    const { catalog } = catalogOf({
+      ...base,
+      providers: base.providers.map((p) =>
+        p.id === "anth"
+          ? { ...p, status: "locked" as const }
+          : p.id === "oai"
+            ? { ...p, enabled: false }
+            : p,
+      ),
     });
+    expect(catalog.get("sonnet")).toMatchObject({ available: false, unavailableReason: "locked" });
+    expect(catalog.get("gpt")).toMatchObject({ unavailableReason: "disabled" });
+    expect(catalog.route("sonnet")).toBeUndefined();
+    expect(catalogOf(base).catalog.get("gpt-old")).toMatchObject({ unavailableReason: "missing" });
+  });
+
+  it("resolves roles with their documented fallbacks", () => {
+    const { catalog } = catalogOf(base);
+    // Unset: the first available chat model; vision: the first that sees images.
+    expect(catalog.forRole("bot_default")?.id).toBe("sonnet");
+    expect(catalog.forRole("vision")?.id).toBe("sonnet");
+    // Titles and capture: the bot's model when it runs on pi, else bot_default.
+    expect(catalog.forRole("chat_title", { bot: "gpt" })?.id).toBe("gpt");
+    expect(catalog.forRole("memory_capture", { bot: "plan-sonnet" })?.id).toBe("sonnet");
+    // No classifier unless one is set.
+    expect(catalog.forRole("classifier")).toBeUndefined();
+
+    const set = catalogOf({ ...base, roles: { bot_default: "gpt", chat_title: "gpt" } }).catalog;
+    expect(set.forRole("bot_default")?.id).toBe("gpt");
+    expect(set.forRole("chat_title", { bot: "sonnet" })?.id).toBe("gpt");
+    expect(set.roleIsSet("chat_title")).toBe(true);
+    expect(set.roleIsSet("vision")).toBe(false);
+  });
+
+  it("skips a role whose model can't run", () => {
+    const { catalog } = catalogOf({ ...base, roles: { bot_default: "gpt-old" } });
+    expect(catalog.forRole("bot_default")?.id).toBe("sonnet");
+  });
+
+  it("can answer once some chat model can run", () => {
+    expect(catalogOf(base).catalog.canAnswer()).toBe(true);
+    expect(catalogOf({ providers: [], models: [], roles: {} }).catalog.canAnswer()).toBe(false);
+  });
+
+  it("lists accounts with their status and model count, never a key", () => {
+    const summaries = catalogOf(base).catalog.providers();
+    expect(summaries.find((p) => p.id === "oai")).toEqual({
+      id: "oai",
+      name: "OpenAI",
+      kind: "openai-responses",
+      status: "ok",
+      enabled: true,
+      modelCount: 2,
+    });
+    expect(JSON.stringify(summaries)).not.toContain("key-");
   });
 });
 
-describe("createModelCatalog", () => {
-  it("lists configured providers, the primary's ids bare, then the Claude plan models", () => {
-    const list = catalog().list();
-    const ids = list.map((m) => m.id);
-    expect(ids.slice(0, 3)).toEqual(["glm", "claude-sonnet-4-6", "custom:acme/eye"]);
-    expect(ids).not.toContain("custom:idle/never");
-    expect(ids).toContain("claude-code/claude-opus-4-6");
-    expect(list.find((m) => m.id === "custom:acme/eye")).toMatchObject({
-      provider: "Acme",
-      vision: true,
+describe("Provider kinds", () => {
+  it("builds nothing for a disabled account or a Claude plan", () => {
+    const ids = buildProviders(
+      {
+        ...base,
+        providers: base.providers.map((p) => (p.id === "oai" ? { ...p, enabled: false } : p)),
+      },
+      credentials,
+    ).map((p) => p.id);
+    expect(ids).toEqual(["anth"]);
+  });
+
+  it("resolves an account's key through the resolver, per request", async () => {
+    const models = createModels();
+    for (const provider of buildProviders(base, credentials)) models.setProvider(provider);
+    const auth = await models.getAuth("anth");
+    expect(auth).toMatchObject({ auth: { apiKey: "key-anth" } });
+  });
+
+  it("routes a gateway route's models through its gateway account, on the gateway's key", async () => {
+    const config: ModelConfig = {
+      providers: [
+        account({
+          id: "gw",
+          kind: "cloudflare-ai-gateway",
+          settings: { accountId: "acc", gatewayId: "gate" },
+        }),
+        account({
+          id: "zai",
+          kind: "openai-chat",
+          hasCredential: false,
+          viaProviderId: "gw",
+          settings: { upstream: "custom-zai", basePath: "/api/coding/paas/v4/" },
+        }),
+      ],
+      models: [
+        row({ id: "glm", providerId: "zai", upstreamId: "glm-5.3-flash" }),
+        row({ id: "jev", providerId: "gw", upstreamId: "typesafe/jev", type: "classifier" }),
+      ],
+      roles: { classifier: "jev" },
+    };
+    const { catalog, models } = catalogOf(config);
+    expect(catalog.piModel("glm")?.baseUrl).toBe(
+      "https://gateway.ai.cloudflare.com/v1/acc/gate/custom-zai/api/coding/paas/v4",
+    );
+    expect(await models.getAuth("zai")).toMatchObject({
+      auth: { headers: { "cf-aig-authorization": "Bearer key-gw", Authorization: null } },
+    });
+    // Classifiers go to Workers AI under their own provider and auth.
+    expect(catalog.route("jev")?.providerId).toBe(classifierProviderId("gw"));
+    expect(catalog.classifierModel("jev")).toMatchObject({
+      id: "typesafe/jev",
+      baseUrl: "https://api.cloudflare.com/client/v4/accounts/acc/ai",
     });
   });
 
-  it("lists every provider while none is configured", () => {
-    expect(
-      catalog({}, [])
-        .list()
-        .map((m) => m.id),
-    ).toContain("custom:idle/never");
-  });
-
-  it("trims only the picker with the allowlist (quote-wrapped is fine)", () => {
-    const allowed = catalog({ GATEWAY_MODEL_ALLOWLIST: '" glm , custom:acme/eye "' });
-    expect(allowed.list().map((m) => m.id)).toEqual(["glm", "custom:acme/eye"]);
-    // A bot saved on a model the allowlist hides keeps running and stays editable.
-    expect(allowed.has("claude-sonnet-4-6")).toBe(true);
-    expect(allowed.info("claude-sonnet-4-6")).toMatchObject({ id: "claude-sonnet-4-6" });
-  });
-
-  it("knows served registry ids and any well-formed Claude plan id", () => {
-    const c = catalog();
-    expect(c.has("glm")).toBe(true);
-    expect(c.has("custom:acme/eye")).toBe(true);
-    expect(c.has("custom:acme/glm")).toBe(false);
-    expect(c.has("nope")).toBe(false);
-    expect(c.has("claude-code/claude-future-9")).toBe(true);
-    expect(c.has("claude-code/a b")).toBe(false);
-  });
-
-  it("resolves a Claude plan id to the same model on a provider that serves it", () => {
-    const c = catalog();
-    expect(c.resolve("claude-code/claude-sonnet-4-6")).toEqual({
-      provider: "gw",
-      model: "claude-sonnet-4-6",
-    });
-    expect(c.resolve("claude-code/claude-opus-4-6")).toBeUndefined();
-    expect(c.resolve("custom:acme/eye")).toEqual({ provider: "acme", model: "eye" });
-    expect(c.model("custom:acme/eye")?.id).toBe("eye");
-  });
-
-  it("says whether a model sees images, wherever it is served", () => {
-    const c = catalog();
-    expect(c.info("custom:acme/eye")?.vision).toBe(true);
-    expect(c.info("glm")?.vision).toBe(false);
-    expect(c.info("claude-code/claude-opus-4-6")?.vision).toBe(true);
-    expect(c.info("custom:idle/missing")).toBeUndefined();
-  });
-
-  it("reports its providers, primary first, and whether one can answer", () => {
-    expect(catalog().providers()).toEqual([
-      expect.objectContaining({ id: "gw", name: "Gateway", configured: true }),
-    ]);
-    expect(catalog().canAnswer()).toBe(true);
-    expect(catalog({}, []).canAnswer()).toBe(false);
-    // The faux provider (dev, E2E) answers without credentials.
-    const faux = createModelCatalog(models, { primary: "faux", configured: new Set(), env: {} });
-    expect(faux.canAnswer()).toBe(true);
+  it("sends a keyless account's requests without a key", async () => {
+    const models = createModels();
+    const config: ModelConfig = {
+      providers: [
+        account({
+          id: "ollama",
+          kind: "openai-chat",
+          baseUrl: "http://localhost:11434/v1",
+          hasCredential: false,
+        }),
+      ],
+      models: [row({ id: "llama", providerId: "ollama" })],
+      roles: {},
+    };
+    for (const provider of buildProviders(config, credentials)) models.setProvider(provider);
+    expect(await models.getAuth("ollama")).toMatchObject({ auth: { apiKey: "no-key" } });
   });
 });

@@ -16,6 +16,7 @@ export {
   AgentRuntime,
   ApprovalNotPendingError,
   CredentialRequestNotPendingError,
+  ModelUnavailableError,
   QuestionNotPendingError,
 } from "./runtime";
 export { finishedReplyOf, finishedReplyTo } from "./replies";
@@ -108,9 +109,14 @@ export {
   type OAuthClientProvider,
   type OAuthTokens,
 } from "./mcp";
-export { GATEWAY_PROVIDER } from "./models";
-export type { ModelCatalog, ModelRef } from "./model-catalog";
-export { claudeCodeEngineEnabled } from "./engine";
+export type { ModelCatalog } from "./model-catalog";
+export type {
+  CredentialResolver,
+  ModelConfig,
+  ModelRow,
+  ProviderAccount,
+} from "./providers/config";
+export { PROVIDER_KINDS } from "./providers/kinds";
 export {
   windowChat,
   pageBefore,

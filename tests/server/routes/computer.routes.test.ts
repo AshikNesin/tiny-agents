@@ -4,6 +4,7 @@
  * desktop manager injected through the same seam the toolkit uses.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { fakeCatalog, fakeModel } from "../fixtures";
 import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
@@ -32,13 +33,7 @@ const agentRuntime = {
   watchChat: vi.fn(async () => ({ stop: async () => undefined })),
   onActivity: vi.fn(() => () => undefined),
   isBusy: vi.fn(() => false),
-  catalog: {
-    has: vi.fn(() => true),
-    list: vi.fn(() => [
-      { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
-    ]),
-    info: vi.fn(() => undefined),
-  },
+  catalog: fakeCatalog([fakeModel("m", { name: "M" })]),
   busyConversations: vi.fn(() => []),
   listCapabilities: vi.fn(() => []),
 };

@@ -5,6 +5,7 @@
  * toolkit uses).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { fakeCatalog, fakeModel } from "../fixtures";
 import { api, createTestApp } from "../helpers";
 import { db, bots } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
@@ -128,13 +129,7 @@ const agentRuntime = {
   watchChat: vi.fn(async () => ({ stop: async () => undefined })),
   onActivity: vi.fn(() => () => undefined),
   isBusy: vi.fn(() => false),
-  catalog: {
-    has: vi.fn(() => true),
-    list: vi.fn(() => [
-      { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
-    ]),
-    info: vi.fn(() => undefined),
-  },
+  catalog: fakeCatalog([fakeModel("m", { name: "M" })]),
   busyConversations: vi.fn(() => []),
   listCapabilities: vi.fn(() => []),
 };

@@ -167,8 +167,9 @@ describe("Bots API routes", () => {
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        models: rt.catalog.list(),
-        gatewayConfigured: expect.any(Boolean),
+        models: rt.catalog.list({ type: "chat" }),
+        defaultModelId: "test-model",
+        canAnswer: true,
       },
     });
   });

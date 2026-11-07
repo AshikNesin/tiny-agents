@@ -25,3 +25,23 @@ bootstrap({
   db: asCoreDatabase(createAppDb(":memory:", { migrationsFolder: "apps/web/drizzle" })),
   storage: memoryStorage(),
 });
+
+// Bots reference model rows (issue #179): the faux account and the model
+// ids tests name exist in every test database. Unknown-model tests use ids
+// that aren't here.
+const { seedFauxModels } = await import("../../apps/web/src/server/api/models/models.config");
+await seedFauxModels(
+  [
+    ["test-model", "Test Model"],
+    ["test-model-2", "Test Model 2"],
+    ["m", "M"],
+    ["m1", "M1"],
+    ["m2", "M2"],
+    ["m-1", "M 1"],
+    ["m-2", "M 2"],
+    ["known-model", "Known Model"],
+    ["vision-model", "Vision Model"],
+    ["text-model", "Text Model"],
+    ["bot-model", "Bot Model"],
+  ].map(([id, name]) => ({ id: id!, name: name!, imageInput: id === "vision-model" })),
+);

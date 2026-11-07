@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
-import type { Bot, ModelInfo } from "@/lib/bots-api";
+import type { Bot, CatalogModel } from "@/lib/bots-api";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 
@@ -32,10 +32,18 @@ vi.mock("@/lib/sse", () => ({
   subscribeSse: vi.fn(() => ({ close: () => undefined })),
 }));
 
-const model: ModelInfo = {
+const model: CatalogModel = {
   id: "test-model",
   name: "Test Model",
-  family: "other",
+  providerId: "faux",
+  providerName: "Faux",
+  providerKind: "faux",
+  upstreamId: "test-model",
+  type: "chat",
+  engine: "pi",
+  maxOutputTokens: 16_384,
+  enabled: true,
+  available: true,
   reasoning: false,
   contextWindow: 128000,
   vision: false,
@@ -78,14 +86,14 @@ function seedStore(bots: Array<{ id: string; name: string; description: string }
       questions: 0,
       pinnedAt: null,
     })),
-    gatewayConfigured: true,
+    canAnswer: true,
   });
 }
 
 function renderPane() {
   render(
     <BrowserRouter>
-      <ChatPane bot={HOST} models={[model]} gatewayConfigured onEditBot={() => {}} />
+      <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={() => {}} />
     </BrowserRouter>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;

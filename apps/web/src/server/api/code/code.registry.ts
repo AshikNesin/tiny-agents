@@ -4,11 +4,10 @@
  *
  * - `shelley`: the owner's Shelley, when `SHELLEY_URL` is set (ADR 0009).
  * - `claude-code`: Claude Code on the sandbox, through the Claude worker's
- *   coding mode, when `CLAUDE_CODE_ENGINE_ENABLED` is on and a sandbox is
- *   configured (ADR 0010, ADR 0012).
+ *   coding mode, when the owner's Claude plan account is on (Settings →
+ *   Models) and a sandbox is configured (ADR 0010, ADR 0012).
  */
 import { logger } from "@groot/core/logger";
-import { claudeCodeEngineEnabled } from "@tiny-agents/agent";
 import {
   createClaudeCodeHarness,
   createShelleyHarness,
@@ -19,6 +18,7 @@ import {
 } from "@tiny-agents/code/server";
 import { appEnv, type AppEnv } from "../../env";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
+import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { threadIndex } from "./code.store";
 
 function harnessHost(): HarnessHost {
@@ -51,7 +51,7 @@ export interface RegistryOptions {
  * (read in the background) explains a harness that cannot run yet.
  */
 function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
-  if (!claudeCodeEngineEnabled(env)) return undefined;
+  if (!agentRuntimeReady() || !getAgentRuntime().catalog.claudePlan()?.enabled) return undefined;
   const locator = sharedClaudeWorkerLocator(env);
   if (!locator) return undefined;
   let hint: InstanceStatus | undefined;

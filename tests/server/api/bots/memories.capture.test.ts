@@ -183,13 +183,12 @@ describe("captureConversation", () => {
     ];
     await captureConversation(conversationId, {
       sideCaller: caller,
-      model: "custom:test/light",
       readTranscript: async () => messages,
     });
     expect(caller.complete).toHaveBeenCalledOnce();
     expect(caller.complete.mock.calls[0]![0]).toMatchObject({
+      role: "memory_capture",
       botModelId: "m",
-      override: "custom:test/light",
       user: "Extract now.",
       label: "Memory capture",
       system: expect.stringContaining("Owner: I prefer TypeScript, never JavaScript"),

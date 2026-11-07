@@ -11,13 +11,6 @@ import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, botChats } from "../../db";
 import type { SideCaller } from "./side-call";
 
-/**
- * Lightweight custom gateway model (GATEWAY_CUSTOM_PROVIDERS), in the
- * "custom:<provider>/<model>" form the runtime resolves. A deployment without
- * that provider falls back to the bot's own model.
- */
-export const DEFAULT_CHAT_TITLE_MODEL = "custom:custom-zai-coding-plan/glm-5.3-flash";
-
 /** Longest stored title; also the provisional (first message) title's cap. */
 export const CHAT_TITLE_MAX = 80;
 
@@ -31,11 +24,9 @@ export interface TitleMessage {
   status?: string;
 }
 
-/** What naming a chat needs: the side-caller, and the title model setting. */
+/** What naming a chat needs: the side-caller (on the `chat_title` model role). */
 export interface ChatTitler {
   sideCaller: SideCaller;
-  /** CHAT_TITLE_MODEL; the default lightweight model when unset. */
-  model?: string;
 }
 
 let titler: ChatTitler | undefined;
@@ -104,7 +95,7 @@ export function cleanTitle(raw: string): string | null {
  */
 export async function titlePastChat(
   chatId: string,
-  input: { botName: string; botModelId: string; messages: ReadonlyArray<TitleMessage> },
+  input: { botName: string; botModelId: string | null; messages: ReadonlyArray<TitleMessage> },
   deps: ChatTitler | undefined = titler,
 ): Promise<void> {
   if (!deps) return;
@@ -112,8 +103,8 @@ export async function titlePastChat(
     const excerpt = titleExcerpt(input.messages, input.botName);
     if (!excerpt) return;
     const text = await deps.sideCaller.complete({
-      botModelId: input.botModelId,
-      override: deps.model?.trim() || DEFAULT_CHAT_TITLE_MODEL,
+      role: "chat_title",
+      ...(input.botModelId ? { botModelId: input.botModelId } : {}),
       system:
         "You name chat conversations. Reply with a title of at most 6 words that says what " +
         "the conversation is about. Plain text only: no quotes, no trailing period, no preamble.",

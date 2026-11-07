@@ -15,7 +15,7 @@ import { TEST_MODEL } from "../../../../packages/agent/src/testing";
 import type { ActivityChange, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
   awaitingApproval,
-  CLAUDE_MODEL,
+  engineModelConfig,
   ENGINES,
   mailCapability,
   openEngine,
@@ -314,18 +314,16 @@ describe("choosing the engine", () => {
 
   it("pauses a Claude plan turn when the engine is off, without opening a socket", async () => {
     const { runtime, worker, ref } = await setup("claude-code");
-    vi.stubEnv("CLAUDE_CODE_ENGINE_ENABLED", "0");
-    vi.stubEnv("CLAUDE_CODE_ENGINE_FALLBACK", "pause");
+    runtime.applyModelConfig(engineModelConfig({ enabled: false }));
     await runtime.submit(ref, { requestId: "r1", text: "hi" });
     const state = await runtime.readChat(ref);
-    expect(state.messages.at(-1)?.error).toMatch(/CLAUDE_CODE_ENGINE_ENABLED/);
+    expect(state.messages.at(-1)?.error).toMatch(/Claude plan is turned off/);
     expect(worker.turns).toEqual([]);
   }, 15_000);
 
   it("falls back to the gateway once and stays there", async () => {
     const { runtime, worker, ref, config } = await setup("claude-code");
-    vi.stubEnv("CLAUDE_CODE_ENGINE_ENABLED", "0");
-    vi.stubEnv("CLAUDE_CODE_ENGINE_FALLBACK", "gateway");
+    runtime.applyModelConfig(engineModelConfig({ enabled: false, fallback: true }));
     await runtime.submit(ref, { requestId: "r1", text: "first" });
     await until(async () => {
       const state = await runtime.readChat(ref);
@@ -333,7 +331,7 @@ describe("choosing the engine", () => {
     }, "the gateway reply");
 
     // The latch holds even once the engine is back and the bot is reconfigured.
-    vi.stubEnv("CLAUDE_CODE_ENGINE_ENABLED", "1");
+    runtime.applyModelConfig(engineModelConfig({ fallback: true }));
     await runtime.configure(ref, config());
     await runtime.submit(ref, { requestId: "r2", text: "second" });
     await until(async () => {
@@ -353,6 +351,5 @@ describe("choosing the engine", () => {
       return !state.busy && state.messages.at(-1)?.text === "Echo: on pi";
     }, "the pi reply");
     expect(worker.turns.map((turn) => turn.text)).toEqual(["on the plan"]);
-    expect(CLAUDE_MODEL).toMatch(/^claude-code\//);
   }, 15_000);
 });

@@ -72,7 +72,7 @@ Work
 - [Connections (MCP)](./connections.md): against a real local MCP server the journey starts.
 - [Vault](./vault.md): every item kind, step-up, masking, reveal, policy, delete.
 - [Vault step-up with a passkey](./vault-passkey.md): Use a passkey, refused foreign and unknown passkeys, edit in the same window.
-- [Model providers](./model-providers.md): catalog and picker with no provider keys.
+- [Models](./models.md): catalog, picker and chip on the faux account.
 - [Storage](./storage.md): folders, byte-exact upload/download, rename, bulk delete.
 - [Jobs](./jobs.md): list, filters, detail, cancel/resume, re-run, delete.
 - [Jobs admin](./jobs-admin.md): retry, bulk re-run, schedule/edit/cancel a job, purge by state.

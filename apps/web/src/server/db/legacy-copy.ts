@@ -156,6 +156,9 @@ function copyRows(source: Database.Database, target: AppDatabase, report: Legacy
       const converted = rows.map((row) => convertRow(table, row));
       // Old job ids point at the retired queue; routines re-arm on boot.
       if (table === schema.routines) for (const row of converted) row.pendingJobId = null;
+      // Old model ids were strings; models are now rows (issue #179). A
+      // copied bot runs on the default model until the owner picks one.
+      if (table === schema.bots) for (const row of converted) row.modelId = null;
       for (let i = 0; i < converted.length; i += 200) {
         tx.insert(table)
           .values(converted.slice(i, i + 200) as never)

@@ -13,7 +13,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import type { Bot, ModelInfo } from "@/lib/bots-api";
+import type { Bot, CatalogModel } from "@/lib/bots-api";
 import type { RoutineRunCard } from "@/lib/chat-types";
 import { botStream } from "../fakes/sse";
 
@@ -30,10 +30,18 @@ vi.mock("@/lib/bots-api", () => ({
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-const model: ModelInfo = {
+const model: CatalogModel = {
   id: "test-model",
   name: "Test Model",
-  family: "other",
+  providerId: "faux",
+  providerName: "Faux",
+  providerKind: "faux",
+  upstreamId: "test-model",
+  type: "chat",
+  engine: "pi",
+  maxOutputTokens: 16_384,
+  enabled: true,
+  available: true,
   reasoning: false,
   contextWindow: 128000,
   vision: false,
@@ -82,12 +90,12 @@ afterEach(cleanup);
 function renderWith(runs: RoutineRunCard[]) {
   useBotsStore.setState({
     bots: [{ ...BOT, unread: false, replying: false, approvals: 0, questions: 0 }],
-    gatewayConfigured: true,
+    canAnswer: true,
   });
   chatSessions.store.setState({ sessions: {} });
   render(
     <BrowserRouter>
-      <ChatPane bot={BOT} models={[model]} gatewayConfigured onEditBot={() => {}} />
+      <ChatPane bot={BOT} models={[model]} canAnswer onEditBot={() => {}} />
     </BrowserRouter>,
   );
   botStream("host").send(

@@ -71,6 +71,13 @@
       "when": 1794070947322,
       "tag": "0009_flashy_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794072074513,
+      "tag": "0010_gorgeous_gladiator",
+      "breakpoints": true
     }
   ]
 }

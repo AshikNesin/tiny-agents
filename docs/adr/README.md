@@ -24,14 +24,15 @@ that the code alone cannot show.
 | 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                         | accepted (amended by 0015)              |
 | 0006 | [The computer is a desktop on the sandbox VM](0006-computer-is-a-desktop-on-the-sandbox-vm.md)        | accepted                                |
 | 0007 | [A local sandbox container for machines off the tailnet](0007-local-sandbox-container.md)             | accepted                                |
-| 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                  | accepted (amended by 0010, 0014)        |
+| 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                  | accepted (amended by 0010, 0014, 0016)  |
 | 0009 | [Coding goes to Shelley; tiny-agents is a client of its API](0009-shelley-is-the-coding-agent.md)     | accepted (generalized by 0011)          |
 | 0010 | [The Claude worker runs on the sandbox, set up by the app](0010-claude-worker-runs-on-the-sandbox.md) | accepted (amends 0008; amended by 0013) |
 | 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)        | accepted (generalizes 0009)             |
 | 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                    | accepted (amends 0008)                  |
 | 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                              | accepted (amends 0010)                  |
-| 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)   | accepted (amends 0008)                  |
+| 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)   | accepted (amends 0008; amended by 0016) |
 | 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md) | accepted (amends 0005)                  |
+| 0016 | [Models are owner data](0016-models-are-owner-data.md)                                                | accepted (amends 0008, 0014)            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)      | accepted (groot)                        |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

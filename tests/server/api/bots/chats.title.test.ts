@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   CHAT_TITLE_MAX,
-  DEFAULT_CHAT_TITLE_MODEL,
   cleanTitle,
   firstMessageTitle,
   titleExcerpt,
@@ -58,18 +57,14 @@ describe("past-chat titles (issue #101)", () => {
   it("asks the side-caller for the title model, falling back to the bot's own", async () => {
     const complete = vi.fn<SideCaller["complete"]>().mockResolvedValue(undefined);
     await titlePastChat("chat-1", input, { sideCaller: { complete } });
-    expect(DEFAULT_CHAT_TITLE_MODEL).toBe("custom:custom-zai-coding-plan/glm-5.3-flash");
     expect(complete).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        role: "chat_title",
         botModelId: "bot-model",
-        override: DEFAULT_CHAT_TITLE_MODEL,
         user: "Conversation:\nOwner: Find flights to Goa\nTravel: Here are three.\n\nTitle:",
         label: "Chat title",
       }),
     );
-
-    await titlePastChat("chat-1", input, { sideCaller: { complete }, model: " custom:x/y " });
-    expect(complete).toHaveBeenLastCalledWith(expect.objectContaining({ override: "custom:x/y" }));
   });
 
   it("makes no call for a chat with nothing said, and never throws", async () => {

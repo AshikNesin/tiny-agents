@@ -13,9 +13,7 @@ vi.mock("../../../apps/web/src/client/lib/bots-api", () => ({
     list: vi.fn().mockResolvedValue([]),
     get: vi.fn(),
     read: vi.fn().mockResolvedValue(undefined),
-    models: vi
-      .fn()
-      .mockResolvedValue({ models: [], defaultModel: undefined, gatewayConfigured: true }),
+    models: vi.fn().mockResolvedValue({ models: [], defaultModel: undefined, canAnswer: true }),
     send: vi.fn().mockResolvedValue(undefined),
   },
 }));

@@ -233,7 +233,7 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
       true,
     );
     const conversation = String(
-      await rt.createConversation({ modelId: bot.modelId, systemPrompt: "" }),
+      await rt.createConversation({ modelId: bot.modelId ?? "test-model", systemPrompt: "" }),
     );
     await claimConversation(id, conversation);
     const routine = await db.query.routines.findFirst({ where: eq(schema.routines.id, id) });

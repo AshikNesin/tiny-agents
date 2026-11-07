@@ -47,7 +47,7 @@ describe("see_image", () => {
   it("returns the transcription for a known upload", async () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn().mockResolvedValue("A screenshot of a settings page."),
-      availableModelIds: () => ["vision-model"],
+      modelId: () => "vision-model",
     };
     const { capability, seen } = toolkit(transcriber);
     const result = await run(capability, { uploadId: "u1" });
@@ -60,7 +60,7 @@ describe("see_image", () => {
   it("passes a focused question through", async () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn().mockResolvedValue("An error dialog."),
-      availableModelIds: () => [],
+      modelId: () => undefined,
     };
     const { capability } = toolkit(transcriber);
     await run(capability, { uploadId: "u1", question: "what error is shown?" });
@@ -72,7 +72,7 @@ describe("see_image", () => {
   it("fails open with the reason when the transcriber errors", async () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn().mockRejectedValue(new Error("no vision model is configured")),
-      availableModelIds: () => [],
+      modelId: () => undefined,
     };
     const { capability } = toolkit(transcriber);
     const result = await run(capability, { uploadId: "u1" });
@@ -84,7 +84,7 @@ describe("see_image", () => {
   it("reports unknown attachment ids as an error, not a crash", async () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn(),
-      availableModelIds: () => [],
+      modelId: () => undefined,
     };
     const { capability } = toolkit(transcriber);
     const result = await run(capability, { uploadId: "missing" });
@@ -96,7 +96,7 @@ describe("see_image", () => {
   it("is a read-only toolkit so see_image defaults to allow", () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn(),
-      availableModelIds: () => [],
+      modelId: () => undefined,
     };
     const { capability } = toolkit(transcriber);
     const tool = capability.tools.find((t) => t.name === "see_image")!;

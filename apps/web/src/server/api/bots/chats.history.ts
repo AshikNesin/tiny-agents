@@ -56,7 +56,7 @@ const pastChatFields = {
 interface EndingChat {
   botId: string;
   botName: string;
-  botModelId: string;
+  botModelId: string | null;
   conversationId: string;
   startedAt: Date;
   lastMessagePreview: string | null;

@@ -4,17 +4,13 @@
  * (`~/dotfiles/bin/vision`): same system prompt, same default question,
  * one retry on 429/5xx, fail by throwing (the tool converts to fail-open).
  *
- * Transcriber selection, in order:
- * 1. VISION_MODEL env (gateway catalog id, or "custom:<provider>/<model>").
- * 2. The owner's custom gateway model glm-5.3-flash (any custom provider
- *    serving it; same OpenAI-compat path the bots use).
- * 3. The first vision-capable gateway model, workers-ai first (cheap).
- * 4. VISION_BASE_URL + VISION_API_KEY (OpenAI-compatible direct backend,
- *    for setups with no vision model on the gateway).
- * None available throws "no vision model is configured".
+ * The model is the `vision` model role (issue #179): the one set in
+ * Settings → Models, else the first available model that sees images. A
+ * direct vision endpoint is just another provider account. None available
+ * throws "no vision model is configured".
  */
 import type { Api, AssistantMessage, Context, Model, UserMessage } from "@earendil-works/pi-ai";
-import { formatModelId, parseModelId } from "../model-catalog";
+import type { ModelCatalog } from "../model-catalog";
 
 /** Transcription prompts, reused verbatim from the dotfiles CLI. */
 const VISION_SYSTEM =
@@ -42,163 +38,71 @@ export interface Transcriber {
     image: TranscribeImage,
     options?: { question?: string; timeoutMs?: number },
   ): Promise<string>;
-  /** The transcriber model ids available right now (first is the default). */
-  availableModelIds(): string[];
+  /** The vision model the transcriber uses right now (row id), if any. */
+  modelId(): string | undefined;
 }
 
-/** The minimum the transcriber needs from a pi-ai model registry. */
-export type TranscriberModels = {
-  getModel(provider: string, id: string): Model<Api> | undefined;
-  getProviders(): readonly { id: string }[];
-  getModels(provider: string): readonly Model<Api>[];
-  completeSimple(
-    model: Model<Api>,
-    context: Context,
-    options?: { maxTokens?: number },
-  ): Promise<AssistantMessage>;
-};
+/** The minimum the transcriber needs: the runtime's catalog and registry. */
+export interface TranscriberSource {
+  catalog(): Pick<ModelCatalog, "forRole" | "piModel">;
+  models: {
+    completeSimple(
+      model: Model<Api>,
+      context: Context,
+      options?: { maxTokens?: number },
+    ): Promise<AssistantMessage>;
+  };
+}
 
-const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 90_000;
 
-export function createTranscriber(
-  models: TranscriberModels,
-  options: {
-    providerId: string;
-    env: Readonly<Record<string, string | undefined>>;
-  },
-): Transcriber {
-  const { env } = options;
-  const directBase = env.VISION_BASE_URL?.trim();
-  const directKey = env.VISION_API_KEY?.trim();
-
-  const resolveCatalog = (modelId: string): Model<Api> | undefined => {
-    const parsed = parseModelId(modelId, options.providerId);
-    return parsed?.engine === "pi" ? models.getModel(parsed.provider, parsed.model) : undefined;
-  };
-  const idOf = (provider: string, model: string) =>
-    formatModelId({ provider, model }, options.providerId);
-
-  const catalogVisionIds = (): string[] => {
-    const ids: string[] = [];
-    for (const provider of models.getProviders()) {
-      for (const model of models.getModels(provider.id)) {
-        if (!(model.input ?? []).includes("image")) continue;
-        ids.push(idOf(provider.id, model.id));
-      }
-    }
-    // workers-ai image models are the cheap gateway-served default; first.
-    return ids.sort(
-      (a, b) => Number(b.startsWith("workers-ai/")) - Number(a.startsWith("workers-ai/")),
-    );
-  };
-
-  // Custom providers register input:["text"] even when the upstream model
-  // accepts images (pi-ai sends image blocks through the same OpenAI-compat
-  // wire path regardless of the declared modality), so the flash pick
-  // searches all custom providers, not catalogVisionIds.
-  const ownerFlashId = (): string | undefined => {
-    for (const provider of models.getProviders()) {
-      if (provider.id === options.providerId) continue; // gateway-native ids, not custom
-      for (const model of models.getModels(provider.id)) {
-        if (model.id.includes("glm-5.3-flash")) return idOf(provider.id, model.id);
-      }
-    }
-    return undefined;
-  };
-
-  const chosenModelId = (): string | undefined => {
-    const explicit = env.VISION_MODEL?.trim();
-    if (explicit && resolveCatalog(explicit)) return explicit;
-    if (explicit && !directBase) return undefined; // configured but gone: do not silently pick another
-    const ownerFlash = ownerFlashId();
-    if (ownerFlash) return ownerFlash;
-    return catalogVisionIds()[0];
-  };
-
+export function createTranscriber(source: TranscriberSource): Transcriber {
+  const chosen = () => source.catalog().forRole("vision");
   return {
+    modelId: () => chosen()?.id,
     transcribe: async (image, call = {}) => {
       const question = call.question?.trim() || DEFAULT_QUESTION;
       const timeoutMs = call.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const modelId = chosenModelId();
-      if (modelId) {
-        const resolved = resolveCatalog(modelId);
-        if (resolved) {
-          // The side-call exists to send an image; if the registry declared
-          // the model text-only, pi-ai's transform would strip the image
-          // block ("image omitted: model does not support images") before
-          // the wire. Declare it on the call's copy so the image survives.
-          const model: Model<Api> = (resolved.input ?? []).includes("image")
-            ? resolved
-            : { ...resolved, input: [...(resolved.input ?? ["text"]), "image"] };
-          const answer = await retry(async () => {
-            const message = await withTimeout(
-              models.completeSimple(
-                model,
-                {
-                  systemPrompt: VISION_SYSTEM,
-                  messages: [
-                    {
-                      role: "user",
-                      content: [
-                        { type: "image", data: image.data, mimeType: image.mimeType },
-                        { type: "text", text: question },
-                      ],
-                      timestamp: Date.now(),
-                    } as UserMessage,
-                  ],
-                },
-                { maxTokens: 16_384 },
-              ),
-              timeoutMs,
-              `vision model ${modelId}`,
-            );
-            const text = textOf(message);
-            // Empty answers can be a transient upstream quirk: retry once.
-            if (!text) throw new UpstreamError(`empty answer from ${modelId}`, true);
-            return text;
-          });
-          return answer;
-        }
+      const role = chosen();
+      const resolved = role ? source.catalog().piModel(role.id) : undefined;
+      if (!role || !resolved) {
+        throw new Error(
+          "no vision model is configured (set the vision model in Settings → Models)",
+        );
       }
-      if (directBase) {
-        const body = {
-          model: env.VISION_MODEL?.trim() || "gpt-5.6-luna",
-          messages: [
-            { role: "system", content: VISION_SYSTEM },
+      // The side-call exists to send an image; if the registry declared the
+      // model text-only, pi-ai's transform would strip the image block
+      // before the wire. Declare it on the call's copy so the image survives.
+      const model: Model<Api> = (resolved.input ?? []).includes("image")
+        ? resolved
+        : { ...resolved, input: [...(resolved.input ?? ["text"]), "image"] };
+      return retry(async () => {
+        const message = await withTimeout(
+          source.models.completeSimple(
+            model,
             {
-              role: "user",
-              content: [
+              systemPrompt: VISION_SYSTEM,
+              messages: [
                 {
-                  type: "image_url",
-                  image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-                },
-                { type: "text", text: question },
+                  role: "user",
+                  content: [
+                    { type: "image", data: image.data, mimeType: image.mimeType },
+                    { type: "text", text: question },
+                  ],
+                  timestamp: Date.now(),
+                } as UserMessage,
               ],
             },
-          ],
-          max_completion_tokens: 16_384,
-        };
-        return retry(async () => {
-          const text = await withTimeout(
-            directChat(directBase, directKey, body),
-            timeoutMs,
-            "vision backend",
-          );
-          if (!text) throw new UpstreamError("empty answer from vision backend", false);
-          return text;
-        });
-      }
-      throw new Error(
-        "no vision model is configured (set VISION_MODEL, or add a vision model to the gateway, or set VISION_BASE_URL)",
-      );
-    },
-    availableModelIds: () => {
-      const chosen = chosenModelId();
-      const ids = chosen
-        ? [chosen, ...catalogVisionIds().filter((id) => id !== chosen)]
-        : catalogVisionIds();
-      return directBase ? [...ids, `${directBase} (direct)`] : ids;
+            { maxTokens: 16_384 },
+          ),
+          timeoutMs,
+          `vision model ${role.name}`,
+        );
+        const text = textOf(message);
+        // Empty answers can be a transient upstream quirk: retry once.
+        if (!text) throw new UpstreamError(`empty answer from ${role.name}`, true);
+        return text;
+      });
     },
   };
 }
@@ -223,37 +127,6 @@ async function retry<T>(work: () => Promise<T>): Promise<T> {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     return work();
   }
-}
-
-async function directChat(
-  baseUrl: string,
-  apiKey: string | undefined,
-  body: unknown,
-): Promise<string> {
-  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).slice(0, 200);
-    throw new UpstreamError(
-      `HTTP ${response.status} from vision backend: ${detail}`,
-      RETRYABLE.has(response.status),
-    );
-  }
-  const payload = (await response.json()) as {
-    choices?: { message?: { content?: string | { text?: string }[] } }[];
-  };
-  const content = payload.choices?.[0]?.message?.content;
-  return typeof content === "string"
-    ? content
-    : Array.isArray(content)
-      ? content.map((block) => block.text ?? "").join("")
-      : "";
 }
 
 function textOf(message: AssistantMessage): string {

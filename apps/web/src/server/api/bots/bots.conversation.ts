@@ -26,7 +26,7 @@ import { db, bots } from "../../db";
 import { resolveAttachments } from "../uploads/uploads.attach";
 import { sentInBot } from "../uploads/uploads.service";
 import { participantNames } from "../people/people.service";
-import { botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
+import { botModelId, botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
 
 /** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
 export interface BotRow {
@@ -34,7 +34,8 @@ export interface BotRow {
   name: string;
   description: string;
   systemPrompt: string;
-  modelId: string;
+  /** Null: the bot runs on the `bot_default` model role. */
+  modelId: string | null;
   conversationId: string;
   /** When the current chat conversation started; routine cards older than it stay out. */
   chatStartedAt: Date;
@@ -136,7 +137,7 @@ export type BotConversationRuntime = Pick<
 
 /** A bot that does not exist yet: the fields its first conversation is created from. */
 export interface BotDraft {
-  modelId: string;
+  modelId: string | null;
   systemPrompt: string;
   toolPermissions: Record<string, ToolPermission>;
   autoReview?: boolean;
@@ -183,7 +184,7 @@ function agentConfig(
   participants: string[] = [],
 ): BotAgentConfig {
   return {
-    modelId: bot.modelId,
+    modelId: botModelId(rt.catalog, bot.modelId),
     systemPrompt: unattended
       ? [bot.systemPrompt.trim(), ROUTINE_RUN_GUIDANCE].filter(Boolean).join("\n\n")
       : participants.length > 0

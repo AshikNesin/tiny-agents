@@ -44,7 +44,7 @@ Set `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`
 directly instead, list pi-ai provider ids in `AI_PROVIDERS` and set that
 provider's key, e.g. `AI_PROVIDERS=openai` with `OPENAI_API_KEY`
 (`AI_PROVIDERS=cloudflare-ai-gateway,openai` keeps both; see
-[`docs/features/model-providers.md`](docs/features/model-providers.md)).
+[`docs/features/models.md`](docs/features/models.md)).
 With no provider configured the app runs but shows a banner and disables
 sending. For UI/flow work without the
 gateway: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model (send
@@ -75,7 +75,7 @@ it. Short version:
 - Pick a model labelled "uses your Claude plan", or keep using the gateway.
 - To spend Max-plan API credits without this engine, put a normal console
   API key in Cloudflare AI Gateway BYOK only. See
-  [docs/features/model-providers.md](docs/features/model-providers.md).
+  [docs/features/models.md](docs/features/models.md).
 
 ## Layout
 

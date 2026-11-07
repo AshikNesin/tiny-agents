@@ -81,8 +81,6 @@ export function captureWindow(
 export interface CaptureDeps {
   /** The side-caller; undefined (faux mode) means no capture. */
   sideCaller: SideCaller | undefined;
-  /** MEMORY_CAPTURE_MODEL; otherwise capture uses the bot's own model. */
-  model?: string;
   readTranscript: (conversationId: number) => Promise<ReadonlyArray<CaptureMessage>>;
 }
 
@@ -119,8 +117,8 @@ export async function captureConversation(
     // back reworded; the ledger's exact-text dedupe stays the hard rail.
     const context = await ledger.promptContext();
     const reply = await deps.sideCaller.complete({
-      botModelId: bot.modelId,
-      override: deps.model,
+      role: "memory_capture",
+      ...(bot.modelId ? { botModelId: bot.modelId } : {}),
       system: buildCapturePrompt({
         botName: bot.name,
         transcript: window.lines.join("\n"),

@@ -5,6 +5,7 @@
  * fake desktop manager.
  */
 import { eq } from "drizzle-orm";
+import { fakeCatalog, fakeModel } from "../fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
@@ -33,13 +34,7 @@ const agentRuntime = {
   watchChat: vi.fn(async () => ({ stop: async () => undefined })),
   onActivity: vi.fn(() => () => undefined),
   isBusy: vi.fn(() => false),
-  catalog: {
-    has: vi.fn(() => true),
-    list: vi.fn(() => [
-      { id: "m", name: "M", family: "other", reasoning: false, contextWindow: 8192, vision: false },
-    ]),
-    info: vi.fn(() => undefined),
-  },
+  catalog: fakeCatalog([fakeModel("m", { name: "M" })]),
   busyConversations: vi.fn(() => []),
   listCapabilities: vi.fn(() => []),
 };

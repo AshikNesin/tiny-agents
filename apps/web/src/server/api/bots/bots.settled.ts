@@ -81,9 +81,8 @@ export interface SettledPipelineOptions {
   notifier?: Notifier;
   /** Memory capture's side-call; without one (faux mode) nothing is captured. */
   memoryCapture?: {
+    /** Runs on the `memory_capture` model role. */
     sideCaller: SideCaller;
-    /** MEMORY_CAPTURE_MODEL; otherwise capture uses the bot's own model. */
-    model?: string;
   };
 }
 
@@ -103,7 +102,6 @@ export function startSettledPipeline(
         captureNow: (conversationId) =>
           captureConversation(conversationId, {
             sideCaller: capture.sideCaller,
-            model: capture.model,
             readTranscript: async (id) => (await runtime.readChat(id)).messages,
           }),
       })

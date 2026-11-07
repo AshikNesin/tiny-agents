@@ -17,7 +17,7 @@ import { AgentRuntime } from "@tiny-agents/agent";
 import { closeAllBrowserSessions } from "@tiny-agents/agent/browser";
 import { closeAllComputerSessions } from "@tiny-agents/agent/computer";
 import { appConfig } from "./config";
-import { agentDbPath, appEnv, fauxMode } from "./env";
+import { agentDbPath, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
 import { applyDatabaseDefaults, openNodeAppDatabase } from "./db/open";
 import { createLifecycle } from "./lifecycle";
@@ -235,7 +235,7 @@ async function main(): Promise<void> {
     start: () => {
       stopSettled = startSettledPipeline(
         runtime,
-        sideCaller ? { memoryCapture: { sideCaller, model: appEnv().MEMORY_CAPTURE_MODEL } } : {},
+        sideCaller ? { memoryCapture: { sideCaller } } : {},
       );
     },
     stop: () => stopSettled(),
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
   add({
     name: "chat titles",
     start: () => {
-      setChatTitler(sideCaller && { sideCaller, model: appEnv().CHAT_TITLE_MODEL });
+      setChatTitler(sideCaller && { sideCaller });
     },
   });
 

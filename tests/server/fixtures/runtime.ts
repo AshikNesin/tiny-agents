@@ -24,7 +24,7 @@ import {
   type ChatState,
   type FinishedReply,
   type ModelCatalog,
-  type ModelInfo,
+  type CatalogModel,
   type WaitEvent,
 } from "../../../packages/agent/src/index";
 import { openTestRuntime, type TestRuntimeOptions } from "../../../packages/agent/src/testing";
@@ -107,6 +107,7 @@ const FAKE_METHODS = [
   "dismissQuestions",
   "attachmentIds",
   "settleCredentialRequest",
+  "applyModelConfig",
   "close",
 ] as const;
 
@@ -115,13 +116,10 @@ type FakeMethod = (typeof FAKE_METHODS)[number];
 type Procedure = (...args: any[]) => any;
 type MockOf<F> = F extends Procedure ? ReturnType<typeof vi.fn<F>> : never;
 
-type CatalogMethod = Exclude<keyof ModelCatalog, "primary">;
-
 /** A Model catalog fake: every method a mock, typed against `ModelCatalog`. */
-export type FakeCatalog = { [K in CatalogMethod]: MockOf<ModelCatalog[K]> } & { primary: string };
+export type FakeCatalog = { [K in keyof ModelCatalog]: MockOf<ModelCatalog[K]> };
 
 export type FakeRuntime = { [K in FakeMethod]: MockOf<AgentRuntime[K]> } & {
-  provider: string;
   catalog: FakeCatalog;
   /** The transcript the fake shows, scripted by request id. */
   script: TranscriptScript;
@@ -136,23 +134,30 @@ export type FakeRuntime = { [K in FakeMethod]: MockOf<AgentRuntime[K]> } & {
 };
 
 /** The catalog the fake lists: a text model and one that sees images. */
-const FAKE_MODELS: ModelInfo[] = [
-  {
-    id: "known-model",
-    name: "Known Model",
-    family: "other",
-    reasoning: false,
+/** A fake catalog entry: a faux chat model on pi, available. */
+export function fakeModel(id: string, overrides: Partial<CatalogModel> = {}): CatalogModel {
+  return {
+    id,
+    name: id,
+    providerId: "fake",
+    providerName: "Fake",
+    providerKind: "faux",
+    upstreamId: id,
+    type: "chat",
+    engine: "pi",
     contextWindow: 8_192,
+    maxOutputTokens: 4_096,
     vision: false,
-  },
-  {
-    id: "vision-model",
-    name: "Vision Model",
-    family: "other",
     reasoning: false,
-    contextWindow: 8_192,
-    vision: true,
-  },
+    enabled: true,
+    available: true,
+    ...overrides,
+  };
+}
+
+const FAKE_MODELS: CatalogModel[] = [
+  fakeModel("known-model", { name: "Known Model" }),
+  fakeModel("vision-model", { name: "Vision Model", vision: true }),
 ];
 
 /**
@@ -273,19 +278,23 @@ function createScript(): Script {
 
 /**
  * A catalog listing `models` (`FAKE_MODELS` by default) that knows every id
- * (`has`), reads `info` from what `list` returns, resolves nothing to a
- * registry model and can answer. Override per test through the mocks
- * (`catalog.has.mockReturnValue(false)`).
+ * (`get` answers a listed model, else a text model of that id), routes
+ * nothing to a registry model and can answer. Override per test through the
+ * mocks (`catalog.get.mockReturnValue(undefined)`).
  */
-export function fakeCatalog(models: ModelInfo[] = FAKE_MODELS): FakeCatalog {
+export function fakeCatalog(models: CatalogModel[] = FAKE_MODELS): FakeCatalog {
   const catalog: FakeCatalog = {
-    primary: "fake",
     list: vi.fn<ModelCatalog["list"]>(() => models),
-    info: vi.fn<ModelCatalog["info"]>((id) => catalog.list().find((m) => m.id === id)),
-    has: vi.fn<ModelCatalog["has"]>(() => true),
-    resolve: vi.fn<ModelCatalog["resolve"]>(() => undefined),
-    model: vi.fn<ModelCatalog["model"]>(() => undefined),
+    get: vi.fn<ModelCatalog["get"]>(
+      (id) => catalog.list().find((m) => m.id === id) ?? fakeModel(id),
+    ),
+    route: vi.fn<ModelCatalog["route"]>(() => undefined),
+    piModel: vi.fn<ModelCatalog["piModel"]>(() => undefined),
+    classifierModel: vi.fn<ModelCatalog["classifierModel"]>(() => undefined),
+    forRole: vi.fn<ModelCatalog["forRole"]>(() => models[0]),
+    roleIsSet: vi.fn<ModelCatalog["roleIsSet"]>(() => false),
     providers: vi.fn<ModelCatalog["providers"]>(() => []),
+    claudePlan: vi.fn<ModelCatalog["claudePlan"]>(() => undefined),
     canAnswer: vi.fn<ModelCatalog["canAnswer"]>(() => true),
   };
   return catalog;
@@ -295,7 +304,7 @@ export function fakeCatalog(models: ModelInfo[] = FAKE_MODELS): FakeCatalog {
  * A fake with every method defaulted: conversations number from 100,
  * submits land in the script, nothing is busy or waiting, the catalog is
  * `fakeCatalog()`. Override per test through the mocks
- * (`fake.catalog.has.mockReturnValue(false)`).
+ * (`fake.catalog.get.mockReturnValue(undefined)`).
  */
 export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRuntime {
   const script = createScript();
@@ -305,7 +314,6 @@ export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRun
   const waits = new Set<(event: WaitEvent) => void>();
 
   const fake: FakeRuntime = {
-    provider: "fake",
     catalog: fakeCatalog(),
     script,
     activityListeners: activity,
@@ -359,6 +367,7 @@ export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRun
     dismissQuestions: vi.fn<AgentRuntime["dismissQuestions"]>(async () => undefined),
     attachmentIds: vi.fn<AgentRuntime["attachmentIds"]>(async () => []),
     settleCredentialRequest: vi.fn<AgentRuntime["settleCredentialRequest"]>(async () => undefined),
+    applyModelConfig: vi.fn<AgentRuntime["applyModelConfig"]>(() => undefined),
     close: vi.fn<AgentRuntime["close"]>(async () => undefined),
     ...overrides,
   };

@@ -49,7 +49,7 @@ as unset. In production (`NODE_ENV=production`) the variables marked
 | `LOG_LEVEL`                                                                             | `debug` (dev) / `info` (prod) / `silent` (test) | optional                      | `trace` `debug` `info` `warn` `error` `fatal` `silent`                                                                                   |
 | `SENTRY_DSN`, `SENTRY_RELEASE`                                                          | unset                                           | optional                      | Error reporting through `config.sentry`; see [Sentry source maps](./guides/sentry-source-maps.md)                                        |
 | `SENTRY_ORG`, `SENTRY_AUTH_TOKEN`, `SENTRY_PROJECT`, `SOURCE_COMMIT`                    | unset                                           | build-time only               | Source map upload and the release name; not part of `envSchema`                                                                          |
-| `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`, `DEFAULT_MODEL` | unset                                           | optional                      | Cloudflare AI Gateway credentials and the default chat model; see [Model providers](./features/model-providers.md)                       |
+| `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`, `DEFAULT_MODEL` | unset                                           | optional                      | Cloudflare AI Gateway credentials and the default chat model; see [Model providers](./features/models.md)                                |
 | `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`                                               | unset                                           | optional                      | Push notification when the Node server starts in production                                                                              |
 
 Non-secret settings (rate limits, job tuning, ...) are derived from these in
@@ -57,7 +57,7 @@ Non-secret settings (rate limits, job tuning, ...) are derived from these in
 [Config](./reference/config.md#env-vs-config) covers that split and what adding
 a variable involves. LLM provider keys such as `OPENAI_API_KEY` are not in the
 schema: pi-ai reads them from the environment for the providers `AI_PROVIDERS`
-names (see [Model providers](./features/model-providers.md)).
+names (see [Model providers](./features/models.md)).
 
 Coding agents (optional): `SHELLEY_URL` adds Shelley to the Code page;
 `CLAUDE_CODE_ENGINE_ENABLED` with a sandbox adds Claude Code. Without either,

@@ -93,8 +93,8 @@ async function assertNameFree(name: string, selfId?: string): Promise<void> {
 }
 
 export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
-  if (!rt.catalog.has(data.modelId)) {
-    throw Boom.badRequest(`Unknown model "${data.modelId}"`);
+  if (!rt.catalog.get(data.modelId)) {
+    throw Boom.badRequest("Unknown model. Pick one set up in Settings → Models.");
   }
   // Before the conversation exists, so a refused name leaves nothing behind.
   await assertNameFree(data.name);
@@ -171,8 +171,8 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
   // Turning memory back on starts capture from now: what was said while it
   // was off is never remembered.
   const memoryResumed = data.memoryEnabled === true && !before.memoryEnabled;
-  if (data.modelId !== undefined && !rt.catalog.has(data.modelId)) {
-    throw Boom.badRequest(`Unknown model "${data.modelId}"`);
+  if (data.modelId !== undefined && !rt.catalog.get(data.modelId)) {
+    throw Boom.badRequest("Unknown model. Pick one set up in Settings → Models.");
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
   await setLinks(id, data.skillIds, data.connectionIds);

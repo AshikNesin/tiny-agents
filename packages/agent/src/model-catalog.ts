@@ -1,232 +1,184 @@
 /**
- * The Model catalog: the one module that knows what a model id means.
- *
- * An app model id has three forms:
- *
- * - bare (`gpt-5`): a model of the primary provider (the first of AI_PROVIDERS);
- * - `custom:<provider>/<model>`: a model of any other registered provider
- *   (AI_PROVIDERS extras and the gateway's BYOK providers); the provider
- *   segment never holds a slash, so the first "/" splits;
- * - `claude-code/<model>`: a Claude plan model, run by the Claude plan engine
- *   and not by any pi-ai provider.
- *
- * Every caller (the runtime's compile, the models endpoint, bot validation,
- * Side-calls, the vision transcriber) asks the catalog instead of parsing or
- * building ids itself, so the grammar, the allowlist and the provider status
- * hold in one place.
+ * The Model catalog (issue #179): a projection of the owner's provider
+ * accounts and model rows. A bot names a model by its row id, so there is no
+ * id grammar to parse: the catalog answers what a row is, whether it can run
+ * now, how to route it, and which model a role resolves to.
  */
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type { MutableModels } from "@earendil-works/pi-ai/models";
-import { CLAUDE_CODE_MODEL_PREFIX, claudeCodeBareModel } from "./engine";
-import { claudePlanModels } from "./engines/claude-code/catalog";
-import {
-  aiProviderIds,
-  builtinProviderIds,
-  providerSetupHint,
-  unquote,
-  type ProviderStatus,
-} from "./models";
-import type { ModelInfo } from "./types";
-
-const CUSTOM_PREFIX = "custom:";
-
-/** A model as the pi-ai registry addresses it. */
-export interface ModelRef {
-  provider: string;
-  model: string;
-}
-
-/** What an app model id names, before asking whether anything serves it. */
-export type ParsedModelId = { engine: "claude-code"; bare: string } | ({ engine: "pi" } & ModelRef);
-
-/**
- * Read an app model id. `primary` is the provider bare ids belong to.
- * Undefined when the id is malformed (`custom:/x`, `claude-code/a/b`).
- */
-export function parseModelId(id: string, primary: string): ParsedModelId | undefined {
-  if (id.startsWith(CLAUDE_CODE_MODEL_PREFIX)) {
-    const bare = claudeCodeBareModel(id);
-    return bare ? { engine: "claude-code", bare } : undefined;
-  }
-  if (id.startsWith(CUSTOM_PREFIX)) {
-    const rest = id.slice(CUSTOM_PREFIX.length);
-    const slash = rest.indexOf("/");
-    if (slash <= 0 || slash === rest.length - 1) return undefined;
-    return { engine: "pi", provider: rest.slice(0, slash), model: rest.slice(slash + 1) };
-  }
-  return id ? { engine: "pi", provider: primary, model: id } : undefined;
-}
-
-/** The app model id of a registry model: bare on the primary provider, `custom:` elsewhere. */
-export function formatModelId(ref: ModelRef, primary: string): string {
-  return ref.provider === primary ? ref.model : `${CUSTOM_PREFIX}${ref.provider}/${ref.model}`;
-}
+import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
+import type { Models } from "@earendil-works/pi-ai/models";
+import type { ModelConfig, ModelRow, ProviderAccount } from "./providers/config";
+import { CLAUDE_PLAN_NOTE, classifierProviderId, PROVIDER_KINDS } from "./providers/kinds";
+import type {
+  CatalogModel,
+  ModelRole,
+  ModelRoute,
+  ModelUnavailableReason,
+  ProviderSummary,
+} from "./types";
 
 /** What the catalog reads from the pi-ai registry. */
-export type CatalogModels = Pick<
-  MutableModels,
-  "getModel" | "getModels" | "getProviders" | "getProvider"
->;
-
-export interface ModelCatalogOptions {
-  /** The provider bare ids belong to. */
-  primary: string;
-  /** Providers whose auth resolved (checked once, at open). */
-  configured: ReadonlySet<string>;
-  /** The env snapshot: AI_PROVIDERS (provider order) and GATEWAY_MODEL_ALLOWLIST. */
-  env: Readonly<Record<string, string | undefined>>;
-}
+export type CatalogModels = Pick<Models, "getModel" | "getModelOfType">;
 
 export interface ModelCatalog {
-  /** The provider bare ids belong to. */
-  readonly primary: string;
+  /** Models, picker order (accounts by name, then models by name). */
+  list(filter?: { type?: CatalogModel["type"]; enabledOnly?: boolean }): CatalogModel[];
+  get(id: string): CatalogModel | undefined;
+  /** How to call the model, when it can run now. */
+  route(id: string): ModelRoute | undefined;
+  /** The registry chat model behind a pi model, when it can run now. */
+  piModel(id: string): Model<Api> | undefined;
+  /** The registry classifier model behind a classifier row, when it can run now. */
+  classifierModel(id: string): ClassifierModel<ClassifierApi> | undefined;
   /**
-   * What the model picker offers: the primary provider's models, every other
-   * provider's as `custom:` ids, then the Claude plan models. Once any
-   * provider is configured, unconfigured providers are left out (they could
-   * not answer). GATEWAY_MODEL_ALLOWLIST, when set, keeps only the ids it names.
+   * The model a role resolves to, with its documented fallback:
+   * - `bot_default`: the role, else the first available chat model;
+   * - `memory_capture`, `chat_title`: the role, else the bot's model when it
+   *   runs on pi, else `bot_default`;
+   * - `vision`: the role, else the first available model that sees images;
+   * - `classifier`: the role only.
    */
-  list(): ModelInfo[];
-  /**
-   * The picker entry for one id, whether or not `list()` offers it today
-   * (the allowlist and configured filters do not apply). Undefined when no
-   * provider serves it.
-   */
-  info(id: string): ModelInfo | undefined;
-  /**
-   * Whether a bot can run on `id`: a registry model some provider serves,
-   * or any well-formed Claude plan id (the worker passes it through to
-   * Claude Code). Not narrowed by GATEWAY_MODEL_ALLOWLIST, which only trims
-   * the picker: a bot saved on a model the allowlist later hides keeps
-   * running and stays editable.
-   */
-  has(id: string): boolean;
-  /**
-   * The registry model a pi turn or a Side-call runs `id` on. A Claude plan
-   * id resolves to the same bare model on a provider that serves it (the
-   * primary first), and to nothing when none does.
-   */
-  resolve(id: string): ModelRef | undefined;
-  /** The registry model object behind `id`, as `resolve` finds it. */
-  model(id: string): Model<Api> | undefined;
-  /** The configured inference providers, primary first, and whether each has credentials. */
-  providers(): ProviderStatus[];
-  /** Whether some provider can answer: one has credentials, or the runtime runs on faux. */
+  forRole(role: ModelRole, options?: { bot?: string }): CatalogModel | undefined;
+  /** Whether a role is set explicitly (false: its value is the fallback). */
+  roleIsSet(role: ModelRole): boolean;
+  providers(): ProviderSummary[];
+  /** The Claude plan account's state, when there is one. */
+  claudePlan(): { enabled: boolean; fallbackModelId?: string } | undefined;
+  /** Some chat model can run now. */
   canAnswer(): boolean;
 }
 
-export function createModelCatalog(
-  models: CatalogModels,
-  options: ModelCatalogOptions,
-): ModelCatalog {
-  const { primary, configured } = options;
-  const allowlist = parseAllowlist(options.env.GATEWAY_MODEL_ALLOWLIST);
-  const providerIds = [primary, ...aiProviderIds(options.env)].filter(
-    (id, index, all) => all.indexOf(id) === index && models.getProvider(id) !== undefined,
+const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name);
+
+function unavailableReason(
+  account: ProviderAccount | undefined,
+  row: ModelRow,
+): ModelUnavailableReason | undefined {
+  if (!account || !account.enabled) return "disabled";
+  if (account.status === "locked") return "locked";
+  if (account.status === "key_rejected" || account.status === "unreachable") {
+    return "provider_failing";
+  }
+  if (row.missing) return "missing";
+  return undefined;
+}
+
+export function createModelCatalog(config: ModelConfig, registry: CatalogModels): ModelCatalog {
+  const accounts = new Map(config.providers.map((account) => [account.id, account]));
+  const toModel = (row: ModelRow): CatalogModel => {
+    const account = accounts.get(row.providerId);
+    const kind = account?.kind ?? "openai-chat";
+    const reason = unavailableReason(account, row);
+    return {
+      id: row.id,
+      name: row.name,
+      providerId: row.providerId,
+      providerName: account?.name ?? row.providerId,
+      providerKind: kind,
+      upstreamId: row.upstreamId,
+      type: row.type,
+      engine: PROVIDER_KINDS[kind].engine,
+      contextWindow: row.contextWindow,
+      maxOutputTokens: row.maxOutputTokens,
+      vision: row.imageInput,
+      reasoning: row.reasoning,
+      enabled: row.enabled,
+      available: reason === undefined,
+      ...(reason ? { unavailableReason: reason } : {}),
+      ...(kind === "claude-plan" ? { note: CLAUDE_PLAN_NOTE } : {}),
+    };
+  };
+  const sortedAccounts = [...config.providers].sort(byName);
+  const all = sortedAccounts.flatMap((account) =>
+    config.models
+      .filter((row) => row.providerId === account.id)
+      .map(toModel)
+      .sort(byName),
   );
-  const nameOf = (provider: string) => models.getProvider(provider)?.name ?? provider;
-  const served = (ref: ModelRef) => models.getModel(ref.provider, ref.model) !== undefined;
-  const infoOf = (model: Model<Api>, provider: string): ModelInfo =>
-    toModelInfo(model, { provider, primary, providerName: nameOf(provider) });
+  const byId = new Map(all.map((model) => [model.id, model]));
 
-  const resolve = (id: string): ModelRef | undefined => {
-    const parsed = parseModelId(id, primary);
-    if (!parsed) return undefined;
-    if (parsed.engine === "pi") {
-      const ref = { provider: parsed.provider, model: parsed.model };
-      return served(ref) ? ref : undefined;
-    }
-    const providers = [primary, ...models.getProviders().map((p) => p.id)];
-    return providers
-      .map((provider) => ({ provider, model: parsed.bare }))
-      .find((ref) => served(ref));
+  const route = (id: string): ModelRoute | undefined => {
+    const model = byId.get(id);
+    if (!model?.available) return undefined;
+    return {
+      engine: model.engine,
+      providerId:
+        model.type === "classifier" ? classifierProviderId(model.providerId) : model.providerId,
+      upstreamId: model.upstreamId,
+    };
   };
+  const usable = (id: string | undefined, type: CatalogModel["type"] = "chat") => {
+    const model = id ? byId.get(id) : undefined;
+    return model?.available && model.type === type ? model : undefined;
+  };
+  const firstChat = (predicate: (model: CatalogModel) => boolean = () => true) =>
+    all.find((m) => m.type === "chat" && m.enabled && m.available && predicate(m));
 
-  return {
-    primary,
-    list() {
-      const anyConfigured = configured.size > 0;
-      const listed = (provider: string) => !anyConfigured || configured.has(provider);
-      const providers = [
-        primary,
-        ...models
-          .getProviders()
-          .map((p) => p.id)
-          .filter((id) => id !== primary),
-      ].filter(listed);
-      const all = [
-        ...providers.flatMap((provider) =>
-          models.getModels(provider).map((model) => infoOf(model, provider)),
-        ),
-        ...claudePlanModels(),
-      ];
-      return allowlist ? all.filter((m) => allowlist.has(m.id)) : all;
+  const catalog: ModelCatalog = {
+    list(filter = {}) {
+      return all.filter(
+        (model) =>
+          (!filter.type || model.type === filter.type) && (!filter.enabledOnly || model.enabled),
+      );
     },
-    info(id) {
-      const parsed = parseModelId(id, primary);
-      if (!parsed) return undefined;
-      if (parsed.engine === "claude-code") return claudePlanModels().find((m) => m.id === id);
-      const model = models.getModel(parsed.provider, parsed.model);
-      return model ? infoOf(model, parsed.provider) : undefined;
+    get: (id) => byId.get(id),
+    route,
+    piModel(id) {
+      const r = route(id);
+      return r?.engine === "pi" && byId.get(id)?.type === "chat"
+        ? registry.getModel(r.providerId, r.upstreamId)
+        : undefined;
     },
-    has(id) {
-      const parsed = parseModelId(id, primary);
-      if (!parsed) return false;
-      return parsed.engine === "claude-code" || served(parsed);
+    classifierModel(id) {
+      const r = route(id);
+      return r && byId.get(id)?.type === "classifier"
+        ? (registry.getModelOfType("classifier", r.providerId, r.upstreamId) as
+            | ClassifierModel<ClassifierApi>
+            | undefined)
+        : undefined;
     },
-    resolve,
-    model(id) {
-      const ref = resolve(id);
-      return ref ? models.getModel(ref.provider, ref.model) : undefined;
+    forRole(role, options = {}) {
+      const set = config.roles[role];
+      switch (role) {
+        case "bot_default":
+          return usable(set) ?? firstChat();
+        case "memory_capture":
+        case "chat_title": {
+          const bot = usable(options.bot);
+          return (
+            usable(set) ??
+            (bot?.engine === "pi" ? bot : undefined) ??
+            catalog.forRole("bot_default")
+          );
+        }
+        case "vision":
+          return usable(set) ?? firstChat((m) => m.vision && m.engine === "pi");
+        case "classifier":
+          return usable(set, "classifier");
+      }
     },
+    roleIsSet: (role) =>
+      usable(config.roles[role], role === "classifier" ? "classifier" : "chat") !== undefined,
     providers() {
-      return providerIds.map((id) => {
-        const name = nameOf(id);
-        return {
-          id,
-          name,
-          configured: configured.has(id),
-          setupHint: providerSetupHint(id, name),
-        };
-      });
+      return sortedAccounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        kind: account.kind,
+        status: account.status,
+        ...(account.statusDetail ? { statusDetail: account.statusDetail } : {}),
+        enabled: account.enabled,
+        modelCount: config.models.filter((row) => row.providerId === account.id).length,
+      }));
     },
-    canAnswer() {
-      return primary === "faux" || providerIds.some((id) => configured.has(id));
+    claudePlan() {
+      const account = config.providers.find((p) => p.kind === "claude-plan");
+      if (!account) return undefined;
+      const fallback = account.settings.fallbackModelId;
+      return {
+        enabled: account.enabled,
+        ...(typeof fallback === "string" && fallback ? { fallbackModelId: fallback } : {}),
+      };
     },
+    canAnswer: () => firstChat() !== undefined,
   };
-}
-
-/** GATEWAY_MODEL_ALLOWLIST (comma-separated ids, the whole value may be quote-wrapped), or null. */
-function parseAllowlist(raw: string | undefined): Set<string> | null {
-  const ids = (unquote(raw) ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-  return ids.length > 0 ? new Set(ids) : null;
-}
-
-/** Gateway BYOK providers speak OpenAI-compat whatever the upstream is; built-ins keep their family. */
-function familyOf(model: Model<Api>, custom: boolean): ModelInfo["family"] {
-  if (custom && !builtinProviderIds().has(model.provider)) return "other";
-  if (model.id.startsWith("workers-ai/")) return "workers-ai";
-  if (model.api === "anthropic-messages") return "anthropic";
-  if (model.api === "openai-responses" || model.api === "openai-completions") return "openai";
-  return "other";
-}
-
-/** The picker entry for a registry model served by `provider`. */
-export function toModelInfo(
-  model: Model<Api>,
-  options: { provider: string; primary: string; providerName?: string },
-): ModelInfo {
-  const custom = options.provider !== options.primary;
-  return {
-    id: formatModelId({ provider: options.provider, model: model.id }, options.primary),
-    name: model.name,
-    family: familyOf(model, custom),
-    provider: options.providerName ?? model.provider,
-    reasoning: Boolean(model.reasoning),
-    contextWindow: model.contextWindow,
-    vision: (model.input ?? []).includes("image"),
-  };
+  return catalog;
 }
