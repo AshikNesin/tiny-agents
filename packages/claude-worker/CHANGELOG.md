@@ -1,5 +1,44 @@
 # @tiny-agents/claude-worker
 
+## 0.4.0
+
+### Minor Changes
+
+- [#187](https://github.com/AshikNesin/tiny-agents/pull/187) [`83ae1fd`](https://github.com/AshikNesin/tiny-agents/commit/83ae1fd3a967a9625171681c9d4059b3b3f65b47) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Every environment read goes through a validated env module, and lint rule R3
+  (`repo/no-raw-env`) fails any other `process.env` read with a message naming
+  `appEnv()`, core `env` and the schema.
+  
+  - `@tiny-agents/agent` no longer reads `process.env`. `AgentRuntime.open` and
+    `ClaudeCodeEngine` read the `env` they are given (default empty), and
+    `aiProviderIds`, `primaryProviderId`, `isGatewayConfigured`,
+    `createProviderModels`, `registerGatewayCustomProviders`,
+    `assertNoClaudeOauthToken`, `createClassifier` and `createTranscriber` take
+    `env` as a required argument. The Node entry passes `process.env`.
+  - `@tiny-agents/claude-worker`: `readClaudeAuth`, `requireSubscriptionLogin`
+    and `createSdkQueryFactory` take `env` as a required argument, and
+    `createClaudeWorkerServer` defaults it to empty. The worker's entry passes
+    `process.env`.
+  - `@groot/web`: the sandbox, browser, computer, TinyFish, TZ, SECRETS_KEY and
+    Claude plan variables join the `appEnv()` schema, and the app reads them,
+    SHELLEY_URL, ORIGIN and NODE_ENV only through `appEnv()` or core `env`.
+
+### Patch Changes
+
+- [#191](https://github.com/AshikNesin/tiny-agents/pull/191) [`ae0099b`](https://github.com/AshikNesin/tiny-agents/commit/ae0099bfe7b438b19fd865ea839c73948afa41f9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Delete dead code, and fail CI on new dead code. `pnpm check:dead` runs knip
+  and fails on any unused file, export or unresolved import. Its message says
+  to add a file loaded by path to `entry` in `knip.json`, and otherwise to run
+  `scripts/codemods/remove-dead-code.ts`, which deletes unused files only with
+  `--remove-files`. Oxlint's `no-unused-vars` is now an error.
+  
+  - `@tiny-agents/agent`, `@tiny-agents/code`, `@tiny-agents/claude-worker`:
+    unused exports inside the packages lose `export` or are deleted, including
+    the deprecated `createGatewayModels` alias and `ClaudeEngineError`. No
+    export reachable from a package's `exports` map changes.
+  - `tiny-agents`: `pnpm db:generate` runs `drizzle-kit generate` alone.
+    `apps/web/drizzle/index.ts`, which only the deleted Workers entry read, and
+    `scripts/db-generate.ts`, which wrote it, are gone. The script is listed in
+    `additional_exclusions`, so `pnpm groot:sync` never restores it.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,51 @@
 # @groot/shell
 
+## 1.4.0
+
+### Minor Changes
+
+- [#192](https://github.com/AshikNesin/tiny-agents/pull/192) [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The client signs the owner out only when the session guard rejects the
+  session, never on a credential failure.
+  
+  - `@groot/core`: the session guard (`jwtAuthMiddleware` and `verifyToken`)
+    answers a missing, invalid or expired token with a 401 coded
+    `SESSION_INVALID` (`ErrorCode.SESSION_INVALID`, thrown by the new
+    `sessionInvalid()` in `utils/jwt.utils`). Before, it was coded
+    `UNAUTHORIZED`. Every other 401, such as a wrong password, an unknown
+    passkey or a missing admin key, keeps `UNAUTHORIZED`.
+  - `@groot/shell`: `apiClient.onUnauthorized` handlers run only for a
+    `SESSION_INVALID` response, not for every 401. A login form or step-up
+    dialog that gets a plain 401 shows the server's message and the owner stays
+    signed in. `UnauthorizedEvent` is unchanged.
+  - `@groot/web`: a refused vault step-up (wrong password or unknown passkey)
+    answers 401 with the server's message. The route no longer converts core's
+    401 to 403 by hand.
+
+### Patch Changes
+
+- [#189](https://github.com/AshikNesin/tiny-agents/pull/189) [`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Render every breadcrumb through one component, so a list item can't land
+  inside another one again (40a8092, e017985).
+  
+  - `@groot/ui`: new `Breadcrumbs` in `@groot/ui/breadcrumb`. Its children are
+    the ancestor crumbs, each a link or button element, and `page` is the
+    current page: `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`.
+    It places the list items and separators. Fragment children are flattened,
+    and a `false` page counts as no page. Every existing breadcrumb export
+    stays.
+  - Lint rule R5a now fails an import of `BreadcrumbItem` or
+    `BreadcrumbSeparator` from `@groot/ui`, `@groot/ui/breadcrumb` or the ui
+    source outside `packages/ui`, with a message naming `Breadcrumbs`. New rule
+    R5c fails an `<li>`, `BreadcrumbItem`, `BreadcrumbList` or
+    `BreadcrumbSeparator` passed as a crumb to `Breadcrumbs`.
+  - `@groot/shell` (Storage) and `@groot/jobs` (JobDetail) render their
+    breadcrumbs with `Breadcrumbs`. The markup is unchanged.
+  - `@groot/web`: the skill, connection and connection tool pages use
+    `Breadcrumbs`. The skill page's `Skills` crumb is now a real link with an
+    `href`, so it can be reached with Tab and opened in a new tab.
+- Updated dependencies [[`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48), [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b), [`2987d1a`](https://github.com/AshikNesin/tiny-agents/commit/2987d1ab228b638bf08f7f792b9fa6d5f8eae667), [`af45885`](https://github.com/AshikNesin/tiny-agents/commit/af4588573840d89af0ff193d302fe6272a8c90f0), [`f598340`](https://github.com/AshikNesin/tiny-agents/commit/f598340325e146ab91cc988b4a85ca01ee134ae6), [`4bd27ac`](https://github.com/AshikNesin/tiny-agents/commit/4bd27ac3c83f67f4b4ad8d757f08248ea3333160), [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7)]:
+  - @groot/ui@0.11.0
+  - @groot/core@2.0.0
+
 ## 1.3.0
 
 ### Minor Changes

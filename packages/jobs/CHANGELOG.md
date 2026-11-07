@@ -1,5 +1,35 @@
 # @groot/jobs
 
+## 1.1.2
+
+### Patch Changes
+
+- [#189](https://github.com/AshikNesin/tiny-agents/pull/189) [`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Render every breadcrumb through one component, so a list item can't land
+  inside another one again (40a8092, e017985).
+  
+  - `@groot/ui`: new `Breadcrumbs` in `@groot/ui/breadcrumb`. Its children are
+    the ancestor crumbs, each a link or button element, and `page` is the
+    current page: `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`.
+    It places the list items and separators. Fragment children are flattened,
+    and a `false` page counts as no page. Every existing breadcrumb export
+    stays.
+  - Lint rule R5a now fails an import of `BreadcrumbItem` or
+    `BreadcrumbSeparator` from `@groot/ui`, `@groot/ui/breadcrumb` or the ui
+    source outside `packages/ui`, with a message naming `Breadcrumbs`. New rule
+    R5c fails an `<li>`, `BreadcrumbItem`, `BreadcrumbList` or
+    `BreadcrumbSeparator` passed as a crumb to `Breadcrumbs`.
+  - `@groot/shell` (Storage) and `@groot/jobs` (JobDetail) render their
+    breadcrumbs with `Breadcrumbs`. The markup is unchanged.
+  - `@groot/web`: the skill, connection and connection tool pages use
+    `Breadcrumbs`. The skill page's `Skills` crumb is now a real link with an
+    `href`, so it can be reached with Tab and opened in a new tab.
+
+- [#190](https://github.com/AshikNesin/tiny-agents/pull/190) [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Comments in `@groot/core` (env, bootstrap, storage adapter), the `@groot/jobs` "no job handlers registered" log line and the setup script's deploy hint no longer describe the deleted Workers target, `@groot/ai` or a `startWebApp()` that does not exist.
+- Updated dependencies [[`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48), [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b), [`2987d1a`](https://github.com/AshikNesin/tiny-agents/commit/2987d1ab228b638bf08f7f792b9fa6d5f8eae667), [`af45885`](https://github.com/AshikNesin/tiny-agents/commit/af4588573840d89af0ff193d302fe6272a8c90f0), [`f598340`](https://github.com/AshikNesin/tiny-agents/commit/f598340325e146ab91cc988b4a85ca01ee134ae6), [`4bd27ac`](https://github.com/AshikNesin/tiny-agents/commit/4bd27ac3c83f67f4b4ad8d757f08248ea3333160), [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7)]:
+  - @groot/ui@0.11.0
+  - @groot/shell@1.4.0
+  - @groot/core@2.0.0
+
 ## 1.1.1
 
 ### Patch Changes
