@@ -245,9 +245,11 @@ describe("revoking a guest's access", () => {
     const inRoute = new Promise<void>((resolve) => (entered = resolve));
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
-    vi.spyOn(sessions!, "start").mockImplementation(async () => {
+    const start = sessions!.start.bind(sessions);
+    vi.spyOn(sessions!, "start").mockImplementation(async (target) => {
       entered();
       await held;
+      return start(target);
     });
 
     const minting = api<Data>(app, `/api/v1/bots/${bot}/browser/vnc-ticket`, {
