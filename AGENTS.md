@@ -1,73 +1,56 @@
-# groot agent index
+# tiny-agents agent index
 
-Use **pnpm** for everything: installs (`pnpm install`), scripts, and tests.
-Do **not** call `vp` directly — it's wrapped by pnpm scripts (`pnpm check`,
-`pnpm test`, `pnpm build`). Do not use npm or yarn.
+Use **pnpm** for everything, never npm, yarn or a bare `vp`. Run `pnpm install`
+in each new worktree, or its git hooks never run. Pre-commit runs gitleaks and
+staged lint, pre-push runs `pnpm typecheck`, and `pnpm verify:static` runs the
+gates CI runs. Guides start at [`docs/README.md`](./docs/README.md).
 
-This file is intentionally brief. Detailed guidance lives in `docs/` — start at
-[`docs/README.md`](./docs/README.md).
+## Rules and their enforcers
 
-## Non-negotiable rules
+R1 to R5c are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
-- **Packages never import from `apps/`.** Dependency direction is one-way:
-  `@groot/ui` → `@groot/shell` → `apps/web/.../pages/` on the client,
-  `@groot/core` → `@groot/jobs` → `apps/web/src/server/` on the server. Apps
-  import packages, never the reverse.
-- **Kit export removals are compatibility breaks.** Removing a public
-  `@groot/ui` or `@groot/jobs` export needs a minor-release deprecation notice
-  and lands no earlier than the next major. `pnpm typecheck:kit` compiles
-  `tests/kit-consumers/consumer.tsx`, which imports every public subpath, so a
-  removal breaks CI until the fixture and this policy are deliberately revised.
-- **Schema changes are Drizzle-only.** Edit a `schema.ts`
-  (`packages/core/src/database/schema.ts`, `packages/jobs/src/server/schema.ts`
-  or `apps/web/src/server/db/schema.ts`), run `pnpm db:generate`, and commit
-  the generated SQL in `apps/web/drizzle/`. Never hand-write a migration or
-  edit one that has been applied; CI fails when schema and migrations disagree.
-- **Only `bootstrap()` sets the database handle.** Import `db` from
-  `@groot/core/database` (packages) or `apps/web/src/server/db` (app code);
-  never construct a driver elsewhere (`openAppDatabase()` / `createAppDb()` are
-  for the Node entry, scripts and the test setup).
-- **Core stays runtime-neutral.** `packages/core/src` uses Web APIs
-  (`crypto.subtle`, `fetch`, `TextEncoder`). The only `node:` imports allowed
-  are in `database/node.ts` and `storage/node.ts`, plus `node:async_hooks` and
-  `node:buffer` (available on Workers under `nodejs_compat`). Node-only wiring
-  belongs in `apps/web/src/server/entry.node.ts`.
-- **No database transactions in `packages/`.** Core and jobs stay
-  driver-agnostic (D1 has none): single statements, `RETURNING`,
-  compare-and-set updates, idempotent retries.
-- **tiny-agents is Node only** (Chromium, ssh2 and the pi-durable store run
-  in-process), so groot's Workers target is not used here. App code imports
-  `db` from `apps/web/src/server/db`: the same connection, typed with the
-  app schema, so relational queries (`db.query.bots.findMany({ with })`) and
-  synchronous transactions (`db.transaction((tx) => …)`, no `await` inside)
-  are available to `apps/` code.
-- **The first boot on a pre-Drizzle database copies it.**
-  `apps/web/src/server/db/legacy-copy.ts` detects the old Prisma layout,
-  keeps the file as `<db>.prisma-backup-<time>` and copies every row into the
-  new layout. Keep its table list in step with the schema when adding app
-  tables that existed before the move.
-- **A change to a managed surface needs a changeset.** Edits under
-  `packages/*/src`, `packages/*/package.json`, `apps/web/drizzle`, or `.groot/`
-  must carry a changeset naming the affected package (`pnpm changeset`) or a
-  reviewed no-release reason under `.no-release/` for docs-only or
-  internal changes; `pnpm check:changesets` and CI enforce this, exempting the
-  release bot.
+| Rule                                                               | Enforcer                                          |
+| ------------------------------------------------------------------ | ------------------------------------------------- |
+| Packages never import from `apps/`.                                | R1                                                |
+| `packages/core/src` uses Web APIs, not `node:` modules.            | R2                                                |
+| Read env through `appEnv()` or core `env`, never `process.env`.    | R3                                                |
+| Import `cn` from `@groot/ui/lib/utils`.                            | R4                                                |
+| Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`. | R5a, R5b, R5c                                     |
+| No unused file or export.                                          | `pnpm check:dead`                                 |
+| Every path, link and `pnpm` script a doc names exists.             | `pnpm check:doc-refs`                             |
+| UI colors come from design tokens.                                 | `pnpm check:tokens`                               |
+| A new check is one line in `scripts/gates.mjs`.                    | `pnpm check:coverage`                             |
+| Change a `schema.ts`, then commit `pnpm db:generate`'s SQL.        | Migrations gate in `scripts/gates.mjs`            |
+| Never edit an applied migration.                                   | None yet                                          |
+| A managed-path change adds a changeset or `.no-release/` reason.   | `pnpm check:changesets`                           |
+| Every public `@groot/ui` and `@groot/jobs` subpath stays exported. | `scripts/check-kit-exports.ts`                    |
+| Remove a kit export only in a major, after a deprecation.          | Judgment past `pnpm typecheck:kit`                |
+| No transactions in `packages/`; sync ones are fine in `apps/`.     | None yet                                          |
+| Only `bootstrap()` sets `db`; never open a driver.                 | None yet                                          |
+| Test dates derive from `FIXED_NOW` in `tests/test-clock.ts`.       | `tests/server/setup.ts` freezes `Date`            |
+| A page or route guests reach is in `GUEST_ACCESS`.                 | `tests/server/routes/guest-access.routes.test.ts` |
+| Each kind of resource a bot owns is in `BOT_RESOURCES`.            | `tests/server/api/bot-resources.test.ts`          |
+| Only the session guard throws `sessionInvalid()`.                  | `tests/server/api/auth.test.ts`                   |
+| Turn each operator correction into a row here.                     | Judgment, see below                               |
 
-## Everyday commands
+An `apps/` transaction is a sync `db.transaction()` with no `await` inside.
+Import `db` from `apps/web/src/server/db` or `@groot/core/database`. A wrong
+password or passkey is a plain 401, so it never signs the owner out. No check
+covers a kit export that `tests/kit-consumers/consumer.tsx` does not import,
+and groot f191f76 broke downstream apps that way. "None yet" rows are open
+follow-ups.
 
-`pnpm dev` · `pnpm test` · `pnpm check` · `pnpm build` · `pnpm db:generate` ·
-`pnpm db:migrate` · `pnpm groot:sync` (apply boilerplate updates) · `pnpm groot:check` (dry run)
+When the operator corrects an agent, fix the mistake and add its row. If the
+row was already here with no enforcer, fix it higher (structure, type, lint,
+test) in the same change. The breadcrumb `<li>` nesting was fixed twice (#76,
+#172) before a lint made it fail.
 
 ## Where to look
 
-- Architecture & request flow: [`docs/guides/architecture.md`](./docs/guides/architecture.md)
-- Commands & conventions: [`docs/guides/development.md`](./docs/guides/development.md)
-- Migrations (Drizzle, SQLite only): [`docs/guides/database-migrations.md`](./docs/guides/database-migrations.md)
-- Testing: [`docs/guides/testing.md`](./docs/guides/testing.md)
-- Deploying: [`docs/guides/deploy.md`](./docs/guides/deploy.md) (Node)
-- Config (`config.ts`, `defineConfig()`): [`docs/reference/config.md`](./docs/reference/config.md)
-- Feature modules (reference): [`docs/features/routines.md`](./docs/features/routines.md); jobs: [`docs/features/jobs.md`](./docs/features/jobs.md)
-- Design system rules: [`docs/features/dls.md`](./docs/features/dls.md)
-- Architecture decisions & rationale: [`docs/adr/`](./docs/adr/README.md) — check here for _why_ before reversing a past decision
-- Syncing downstream projects: [`docs/guides/sync.md`](./docs/guides/sync.md)
-- Env vars & setup: [`docs/setup-guide.md`](./docs/setup-guide.md), [`.env.example`](./.env.example), [`packages/core/src/env.ts`](./packages/core/src/env.ts) (core), [`apps/web/src/server/env.ts`](./apps/web/src/server/env.ts) (tiny-agents)
+[Architecture](./docs/guides/architecture.md) ·
+[Development](./docs/guides/development.md) ·
+[Migrations](./docs/guides/database-migrations.md) ·
+[Testing](./docs/guides/testing.md) · [Config](./docs/reference/config.md) ·
+[Routines, the reference feature](./docs/features/routines.md) ·
+[Design system](./docs/features/dls.md) · [Decisions](./docs/adr/README.md),
+read before reversing one · [groot sync](./docs/guides/sync.md)

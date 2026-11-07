@@ -23,22 +23,21 @@ feature end to end.
 | `pnpm check:dead`                                                             | Unused files and exports (knip)                                                                                 |
 | `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
 
-The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR. The pre-push hook runs `pnpm typecheck`. A new gate is one line in `scripts/gates.mjs`. `pnpm check:coverage` fails when a workflow step, or a `check:*` or `typecheck:*` script, runs a check outside that list.
+The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR. The pre-push hook runs `pnpm typecheck`. [AGENTS.md](../../AGENTS.md) pairs each rule with the gate that enforces it.
 
 ## Conventions
 
-| Convention           | Detail                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Validate first       | `await parseBody(c, schema)`, `parseQuery`, `parseId` — never read `c.req.json()` directly                                                                                |
-| Return the envelope  | `ok(c, data, status?)` / `noContent(c)`; the client unwraps `data`                                                                                                        |
-| Throw Boom           | `Boom.notFound()`, `Boom.badRequest()`, …; never build error JSON by hand                                                                                                 |
-| Query builder only   | `db.select() / insert() / update() / delete()`; no transactions in `packages/`, synchronous `db.transaction()` in `apps/`; raw `sql` only where Drizzle cannot express it |
-| Timestamps           | `integer({ mode: "timestamp_ms" })`; reuse `timestamps` from `@groot/core/database/schema`                                                                                |
-| Logging              | `logger.info({ data }, "message")` from `@groot/core/logger`; no `console.log`                                                                                            |
-| Runtime-neutral core | Web APIs in `packages/core`; `node:` only in `database/node.ts`, `storage/node.ts`, `node:async_hooks`, `node:buffer`                                                     |
-| Config and env       | Tunables from `config.*`, secrets from the validated `env`, never `process.env`; adding one: [Configuration](../reference/config.md#env-vs-config)                        |
-| Imports              | `vite-plus/test` in tests; `@groot/core/<path>` to the module itself (`@groot/core/auth/auth.service`; feature folders have no barrel); `@groot/jobs/server`              |
-| Auth guard           | Mount under the protected sub-app in `createWebApp()`; `requireUser(c)` for the caller                                                                                    |
+| Convention          | Detail                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Validate first      | `await parseBody(c, schema)`, `parseQuery`, `parseId` — never read `c.req.json()` directly                                                                   |
+| Return the envelope | `ok(c, data, status?)` / `noContent(c)`; the client unwraps `data`                                                                                           |
+| Throw Boom          | `Boom.notFound()`, `Boom.badRequest()`, …; never build error JSON by hand                                                                                    |
+| Query builder only  | `db.select() / insert() / update() / delete()`; raw `sql` only where Drizzle cannot express it                                                               |
+| Timestamps          | `integer({ mode: "timestamp_ms" })`; reuse `timestamps` from `@groot/core/database/schema`                                                                   |
+| Logging             | `logger.info({ data }, "message")` from `@groot/core/logger`; no `console.log`                                                                               |
+| Config and env      | Tunables from `config.*`, secrets from the validated env; adding one: [Configuration](../reference/config.md#env-vs-config)                                  |
+| Imports             | `vite-plus/test` in tests; `@groot/core/<path>` to the module itself (`@groot/core/auth/auth.service`; feature folders have no barrel); `@groot/jobs/server` |
+| Auth guard          | Mount under the protected sub-app in `createWebApp()`; `requireUser(c)` for the caller                                                                       |
 
 ## Adding a feature end to end
 
@@ -226,5 +225,5 @@ model is in [Background jobs](../features/jobs.md).
 2. Change code
 3. `pnpm test` (or `pnpm test:watch`) and `pnpm check`
 4. Schema changed? `pnpm db:generate` and commit `apps/web/drizzle/`
-5. Touched `packages/*/src`, `packages/*/package.json`, `apps/web/drizzle` or `.groot/`? `pnpm changeset`, or a no-release reason under `.no-release/` for internal changes. The branch must add the changeset or reason itself; ones already on `main` don't count
+5. `pnpm changeset`, or a `.no-release/` reason for an internal change; `pnpm check:changesets` names what is missing
 6. Update docs if behaviour changed
