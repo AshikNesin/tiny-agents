@@ -188,6 +188,42 @@ export function threadEventProblems(events: readonly ThreadEvent[]): string[] {
   return problems;
 }
 
+interface ShownTurn {
+  thread: ThreadSnapshot["thread"];
+  answer: ReturnType<typeof turnAnswer>;
+}
+
+function sameAsThread(key: "working" | "title" | "cwd" | "cursor") {
+  return (outcome: TurnOutcome, { thread }: ShownTurn) =>
+    outcome[key] === thread[key]
+      ? undefined
+      : `${key} is ${JSON.stringify(outcome[key])}, the thread's is ${JSON.stringify(thread[key])}`;
+}
+
+const OUTCOME_FIELDS: {
+  [K in keyof TurnOutcome]-?: (outcome: TurnOutcome, shown: ShownTurn) => string | undefined;
+} = {
+  working: sameAsThread("working"),
+  title: sameAsThread("title"),
+  cwd: sameAsThread("cwd"),
+  cursor: sameAsThread("cursor"),
+  text: (outcome, { answer }) =>
+    outcome.text === answer.text
+      ? undefined
+      : `text is ${JSON.stringify(outcome.text)}, the rule answers ${JSON.stringify(answer.text)}`,
+  failed: (outcome, { answer }) =>
+    outcome.failed === answer.failed
+      ? undefined
+      : `failed is ${outcome.failed}, the rule answers ${answer.failed}`,
+  endedAt: ({ endedAt, working, text }) => {
+    if (endedAt === undefined) {
+      return !working && text ? "endedAt is missing for an answered turn" : undefined;
+    }
+    if (!Number.isFinite(endedAt)) return "endedAt is not a time";
+    return working ? "endedAt is set while the thread works" : undefined;
+  },
+};
+
 /**
  * Problems with what a driver says a thread's turn came to, read against the
  * thread it shows (`getThread`) with nothing changing in between. Empty when
@@ -198,6 +234,7 @@ export function threadEventProblems(events: readonly ThreadEvent[]): string[] {
  *   (`turnAnswer`), so chat-sized and the same for every harness;
  * - `endedAt` is a time, absent while the thread works and present once an
  *   idle thread has an answer;
+ * - it has no other field;
  * - a `turn_ended` event's outcome (`ended`) is what `outcome()` answers.
  */
 export function turnOutcomeProblems(
@@ -205,32 +242,15 @@ export function turnOutcomeProblems(
   outcome: TurnOutcome,
   ended?: TurnOutcome,
 ): string[] {
+  const shown = { thread: snapshot.thread, answer: turnAnswer(snapshot.items) };
   const problems: string[] = [];
-  const { thread } = snapshot;
-  for (const key of ["working", "title", "cwd", "cursor"] as const) {
-    if (outcome[key] !== thread[key]) {
-      problems.push(
-        `${key} is ${JSON.stringify(outcome[key])}, the thread's is ${JSON.stringify(thread[key])}`,
-      );
-    }
+  for (const check of Object.values(OUTCOME_FIELDS)) {
+    const problem = check(outcome, shown);
+    if (problem) problems.push(problem);
   }
-  const answer = turnAnswer(snapshot.items);
-  if (outcome.text !== answer.text) {
-    problems.push(
-      `text is ${JSON.stringify(outcome.text)}, the rule answers ${JSON.stringify(answer.text)}`,
-    );
-  }
-  if (outcome.failed !== answer.failed) {
-    problems.push(`failed is ${outcome.failed}, the rule answers ${answer.failed}`);
-  }
-  if (outcome.endedAt !== undefined && !Number.isFinite(outcome.endedAt)) {
-    problems.push("endedAt is not a time");
-  }
-  if (outcome.working && outcome.endedAt !== undefined) {
-    problems.push("endedAt is set while the thread works");
-  }
-  if (!outcome.working && outcome.text && outcome.endedAt === undefined) {
-    problems.push("endedAt is missing for an answered turn");
+  const unknown = Object.keys(outcome).filter((key) => !Object.hasOwn(OUTCOME_FIELDS, key));
+  if (unknown.length > 0) {
+    problems.push(`outcome has fields the rule does not answer: ${unknown.join(", ")}`);
   }
   if (ended) {
     const keys = new Set([...Object.keys(ended), ...Object.keys(outcome)]);
