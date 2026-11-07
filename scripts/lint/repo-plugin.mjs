@@ -64,6 +64,15 @@ const RAW_ENV_MESSAGE =
 const TRANSACTION_MESSAGE =
   "R7: no transactions in packages/ (AGENTS.md). Use one statement with RETURNING, a compare-and-set update (WHERE on the expected old value), or an idempotent retry. An app that needs a transaction runs a sync db.transaction() in apps/ and passes the tx in.";
 
+// `db` and `tx` by name, plus anything imported from the database module or
+// drizzle, or typed with a type from there.
+const DB_NAMES = ["db", "tx"];
+const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\/|$)/;
+
+const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
+const SESSION_INVALID_MESSAGE =
+  "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
+
 export default {
   meta: { name: "repo" },
   rules: {
@@ -88,12 +97,59 @@ export default {
     },
     "no-package-transaction": {
       create(context) {
+        const dbNames = new Set(DB_NAMES);
+        const isDb = (node) => {
+          const target = unparenthesized(node);
+          if (target.type === "Identifier") return dbNames.has(target.name);
+          return (
+            target.type === "MemberExpression" &&
+            !target.computed &&
+            DB_NAMES.includes(target.property.name)
+          );
+        };
+        const isDbType = (type) =>
+          (type?.type === "TSTypeReference" &&
+            type.typeName.type === "Identifier" &&
+            dbNames.has(type.typeName.name)) ||
+          (type?.type === "TSTypeQuery" && isDb(type.exprName));
         return {
+          ImportDeclaration(node) {
+            if (!DATABASE_MODULE.test(node.source.value)) return;
+            for (const s of node.specifiers) dbNames.add(s.local.name);
+          },
+          Identifier(node) {
+            if (isDbType(node.typeAnnotation?.typeAnnotation)) dbNames.add(node.name);
+          },
+          VariableDeclarator(node) {
+            if (node.id.type === "Identifier" && node.init && isDb(node.init)) {
+              dbNames.add(node.id.name);
+            }
+          },
           CallExpression(node) {
             const callee = node.callee;
             if (callee.type !== "MemberExpression") return;
             const name = callee.computed ? callee.property.value : callee.property.name;
-            if (name === "transaction") context.report({ node, message: TRANSACTION_MESSAGE });
+            if (name === "transaction" && isDb(callee.object)) {
+              context.report({ node, message: TRANSACTION_MESSAGE });
+            }
+          },
+        };
+      },
+    },
+    "no-session-invalid": {
+      create(context) {
+        const reported = new Set();
+        const report = (node) => {
+          if (reported.has(node.start)) return;
+          reported.add(node.start);
+          context.report({ node, message: SESSION_INVALID_MESSAGE });
+        };
+        return {
+          Identifier(node) {
+            if (SESSION_INVALID_NAMES.has(node.name)) report(node);
+          },
+          Literal(node) {
+            if (SESSION_INVALID_NAMES.has(node.value)) report(node);
           },
         };
       },

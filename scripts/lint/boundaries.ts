@@ -15,6 +15,7 @@ type ImportRestriction = {
 };
 
 type BoundaryRule = {
+  /** The AGENTS.md rule table id this entry enforces. Two entries may share one. */
   id: string;
   except?: string[];
   enabled: boolean;
@@ -189,7 +190,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     restrict: { patterns: [{ regex: DRIVER_SPECIFIER, message: DRIVER_MESSAGE }] },
   },
   {
-    id: "R8a-require",
+    id: "R8a",
     kind: "plugin",
     scope: "**",
     rule: "repo/no-restricted-require",
@@ -220,22 +221,25 @@ const BOUNDARY_RULES: BoundaryRule[] = [
   },
   {
     id: "R9",
-    kind: "import",
+    kind: "plugin",
     scope: "**",
-    except: ["packages/core/src/middlewares/jwt-auth.middleware.ts"],
+    rule: "repo/no-session-invalid",
+    except: [
+      "packages/core/src/middlewares/jwt-auth.middleware.ts",
+      "packages/core/src/utils/jwt.utils.ts",
+      // Defines the code.
+      "packages/core/src/errors/index.ts",
+      // The client, which signs the owner out on the code.
+      "packages/shell/src/lib/api.ts",
+      "scripts/lint/repo-plugin.mjs",
+      "tests/**",
+    ],
     enabled: true,
-    restrict: {
-      patterns: [
-        {
-          regex: `(^|/)jwt\\.utils${JS_EXTENSION}$`,
-          importNames: ["sessionInvalid"],
-          message:
-            "R9: only the session guard throws sessionInvalid(), because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.",
-        },
-      ],
-    },
   },
 ];
+
+/** The AGENTS.md rule ids the enabled rules enforce. */
+export const enforcedRuleIds = new Set(BOUNDARY_RULES.filter((r) => r.enabled).map((r) => r.id));
 
 const covers = (glob: string, zone: string) =>
   glob === "**" || glob === zone || (glob.endsWith("/**") && zone.startsWith(glob.slice(0, -2)));

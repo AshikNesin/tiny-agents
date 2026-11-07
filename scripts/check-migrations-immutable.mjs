@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
+import { mergeBase } from "./lib/merge-base.mjs";
 
 const MIGRATIONS_DIR = "apps/web/drizzle";
 const JOURNAL = `${MIGRATIONS_DIR}/meta/_journal.json`;
@@ -16,7 +17,7 @@ const { values } = parseArgs({
 const root = values.root ?? process.cwd();
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
-const base = git("merge-base", values.base, "HEAD");
+const base = mergeBase(values.base, root);
 const changed = git("diff", "--name-status", "--no-renames", base, "--", MIGRATIONS_DIR)
   .split("\n")
   .filter(Boolean)

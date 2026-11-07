@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import ts from "typescript";
+import { mergeBase } from "./lib/merge-base.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_EXTENSION = /\.(ts|tsx)$/;
@@ -241,11 +242,66 @@ function entryTargets(read: Reader, manifest: string): Map<string, string> {
   );
 }
 
-type ApprovedRemoval = { package: string; name: string; reason: string };
+/**
+ * One approved removal: export `name` of `subpath` (such as
+ * "@groot/ui/breadcrumb"). `until` is the package version ("2.0.0") or the
+ * date ("2027-01-31") from which the entry fails, so it is deleted once the
+ * removal has shipped.
+ */
+type ApprovedRemoval = { subpath: string; name: string; reason: string; until?: string };
 
-function checkRemovedExports(base: string): void {
-  const readBase = readerAt(base);
+const VERSION = /^\d+\.\d+\.\d+$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const versionParts = (version: string) => version.split(/[.+-]/).slice(0, 3).map(Number);
+
+function versionReached(current: string, until: string): boolean {
+  const [now, end] = [versionParts(current), versionParts(until)];
+  const differs = now.findIndex((part, i) => part !== end[i]);
+  return differs === -1 || now[differs] > end[differs];
+}
+
+function readApprovedRemovals(): ApprovedRemoval[] {
   const approved: ApprovedRemoval[] = JSON.parse(readHead(REMOVALS_FILE) ?? "[]");
+  const today = new Date().toISOString().slice(0, 10);
+  const fail = (message: string) => {
+    console.error(message);
+    failed = true;
+  };
+  for (const entry of approved) {
+    const label = `${REMOVALS_FILE}: entry "${entry.name}" of ${entry.subpath}`;
+    const rule = PACKAGES.find(
+      (p) => entry.subpath === p.name || entry.subpath?.startsWith(`${p.name}/`),
+    );
+    if (!rule) {
+      fail(
+        `${label} names no kit subpath. Key it by the public subpath that lost the export, such as "@groot/ui/breadcrumb".`,
+      );
+      continue;
+    }
+    const { until } = entry;
+    if (until === undefined) continue;
+    const version: string = JSON.parse(readHead(rule.manifest)!).version;
+    let reached: string | null = null;
+    if (VERSION.test(until)) {
+      if (versionReached(version, until)) reached = `${rule.name} is at ${version}`;
+    } else if (DATE.test(until)) {
+      if (today >= until) reached = `today is ${today}`;
+    } else {
+      fail(`${label} has "until": "${until}". Use a version (2.0.0) or a date (2027-01-31).`);
+      continue;
+    }
+    if (reached) {
+      fail(
+        `${label} expired at ${until} (${reached}). The removal it approved has shipped: delete the entry from ${REMOVALS_FILE}.`,
+      );
+    }
+  }
+  return approved;
+}
+
+function checkRemovedExports(base: string, approved: ApprovedRemoval[]): void {
+  const readBase = readerAt(base);
   for (const rule of PACKAGES) {
     const headTargets = entryTargets(readHead, rule.manifest);
     for (const [key, baseTarget] of entryTargets(readBase, rule.manifest)) {
@@ -254,9 +310,9 @@ function checkRemovedExports(base: string): void {
       const subpath = `${rule.name}${key.slice(1)}`;
       for (const name of exportedNames(readBase, baseTarget)) {
         if (now.has(name)) continue;
-        if (approved.some((a) => a.package === rule.name && a.name === name)) continue;
+        if (approved.some((a) => a.subpath === subpath && a.name === name)) continue;
         console.error(
-          `${subpath}: export "${name}" is on ${base.slice(0, 7)} but gone now. Removing a kit export is a compatibility break (AGENTS.md): deprecate it in a minor release and remove it in the next major. For an approved removal add {"package": "${rule.name}", "name": "${name}", "reason": "..."} to ${REMOVALS_FILE}.`,
+          `${subpath}: export "${name}" is on ${base.slice(0, 7)} but gone now. Removing a kit export is a compatibility break (AGENTS.md): deprecate it in a minor release and remove it in the next major. For an approved removal add {"subpath": "${subpath}", "name": "${name}", "reason": "...", "until": "<the next major version>"} to ${REMOVALS_FILE}.`,
         );
         failed = true;
       }
@@ -270,7 +326,8 @@ try {
 } catch {
   console.log("kit exports: not a git checkout, so removed exports are not checked");
 }
-if (insideGit) checkRemovedExports(git("merge-base", args.base!, "HEAD").trim());
+const approved = readApprovedRemovals();
+if (insideGit) checkRemovedExports(mergeBase(args.base!, repoRoot), approved);
 
 if (failed) process.exit(1);
 console.log("kit exports and consumer fixture agree");

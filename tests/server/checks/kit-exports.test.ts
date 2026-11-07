@@ -108,13 +108,50 @@ describe("kit exports guard", () => {
         expect(run.stderr).toContain('@groot/ui/breadcrumb: export "BreadcrumbEllipsis"');
         expect(run.stderr).toContain("deprecate it in a minor release");
 
-        fs.writeFileSync(
-          path.join(root, "scripts/kit-export-removals.json"),
-          JSON.stringify([{ package: "@groot/ui", name: "BreadcrumbEllipsis", reason: "test" }]),
+        const approve = (...entries: Record<string, string>[]) => {
+          fs.writeFileSync(
+            path.join(root, "scripts/kit-export-removals.json"),
+            JSON.stringify(entries.map((e) => ({ name: "BreadcrumbEllipsis", reason: "t", ...e }))),
+          );
+          return runGuard(root, ["--base", "HEAD"]);
+        };
+        const barrel = { subpath: "@groot/ui" };
+
+        const barrelOnly = approve(barrel);
+        expect(barrelOnly.status).toBe(1);
+        expect(barrelOnly.stderr).toContain('"subpath": "@groot/ui/breadcrumb"');
+
+        const packageKeyed = approve(barrel, { package: "@groot/ui" });
+        expect(packageKeyed.status).toBe(1);
+        expect(packageKeyed.stderr).toContain("names no kit subpath");
+
+        expect(approve(barrel, { subpath: "@groot/ui/breadcrumb" }).status).toBe(0);
+        expect(approve(barrel, { subpath: "@groot/ui/breadcrumb", until: "99.0.0" }).status).toBe(
+          0,
         );
-        expect(runGuard(root, ["--base", "HEAD"]).status).toBe(0);
+        expect(
+          approve(barrel, { subpath: "@groot/ui/breadcrumb", until: "2999-01-01" }).status,
+        ).toBe(0);
+
+        const shipped = approve(barrel, { subpath: "@groot/ui/breadcrumb", until: "0.1.0" });
+        expect(shipped.status).toBe(1);
+        expect(shipped.stderr).toContain(
+          'entry "BreadcrumbEllipsis" of @groot/ui/breadcrumb expired at 0.1.0',
+        );
+        expect(shipped.stderr).toContain("delete the entry from scripts/kit-export-removals.json");
+
+        const pastDate = approve(barrel, { subpath: "@groot/ui/breadcrumb", until: "2000-01-01" });
+        expect(pastDate.status).toBe(1);
+        expect(pastDate.stderr).toContain("expired at 2000-01-01 (today is");
+
+        fs.writeFileSync(path.join(root, "scripts/kit-export-removals.json"), "[]");
+        const missingBase = runGuard(root, ["--base", "origin/main"]);
+        expect(missingBase.status).toBe(1);
+        expect(missingBase.stderr).toBe(
+          "Base ref origin/main is not in this clone. Fetch the base: `git fetch origin main` or set fetch-depth: 0 in CI.\n",
+        );
       }),
-    TIMEOUT,
+    TIMEOUT * 4,
   );
 
   it(

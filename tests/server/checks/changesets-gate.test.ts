@@ -411,6 +411,19 @@ describe("changesets gate", () => {
     }
   }, 20_000);
 
+  it("fails in one line naming the fetch when the base ref is not in the clone", () => {
+    const { dir } = branchFromMain(MIGRATION);
+    try {
+      const run = runGate(["--root", dir, "--base", "origin/main"]);
+      expect(run.status).toBe(1);
+      expect(`${run.stdout}${run.stderr}`).toBe(
+        "Base ref origin/main is not in this clone. Fetch the base: `git fetch origin main` or set fetch-depth: 0 in CI.\n",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("exits 0 when the branch touches no managed surface", () => {
     const run = runGate(["--base", "HEAD"]);
     expect(run.stderr).toBe("");
