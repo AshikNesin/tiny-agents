@@ -1,15 +1,13 @@
 // Feature: bot-builder (features/bot-builder.md). "/newbot NAME" makes the faux
-// bot call create_bot: the approval card, Deny (no bot), Approve (the bot exists,
-// opens and carries the proposed instructions), and the tool offers no Allow.
+// bot call create_bot: the approval card shows the whole new bot (short
+// instructions included), Deny (no bot), Approve (the bot exists, opens and
+// carries the proposed instructions), and the tool offers no Allow.
 import { journey, expect } from "../scripts/lib.mjs";
 
 await journey("bot-builder", async ({ page, step, proof, cleanup, api, stamp }) => {
   const name = `Builder Bot ${stamp}`;
   const child = `Built Bot ${stamp}`;
-  const instructions =
-    "You help the owner with the bot-builder e2e.\n" +
-    "The owner reads these instructions on the approval card before the bot exists.";
-  const tail = "The owner reads these instructions on the approval card before the bot exists.";
+  const instructions = "You help the owner with the bot-builder e2e.";
   const composer = page.getByRole("textbox", { name: `Message ${name}` });
   const card = page.getByText(`${name} wants to create a new bot`);
   const dialog = page.getByRole("dialog", { name: `Edit ${name}` });
@@ -54,13 +52,21 @@ await journey("bot-builder", async ({ page, step, proof, cleanup, api, stamp }) 
     await expect(dialog).not.toBeVisible();
   });
 
-  await step("/newbot shows the approval card; Read more reveals the instructions", async () => {
-    await send(`/newbot ${child}`);
-    await expect(card).toBeVisible({ timeout: 30_000 });
-    await expect(card).toContainText(child);
-    await page.getByRole("button", { name: "Read more" }).click();
-    await expect(page.getByText(tail)).toBeVisible();
-  });
+  await step(
+    "/newbot shows the whole new bot on the card, short instructions included",
+    async () => {
+      await send(`/newbot ${child}`);
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await expect(card).toContainText(child);
+      const pending = page.locator("[data-waiting]").filter({ has: card });
+      await expect(pending.getByRole("definition")).toHaveText([
+        "Made by the bot-builder e2e",
+        "default model",
+        instructions,
+      ]);
+      await expect(pending.getByRole("button", { name: "Read more" })).toHaveCount(0);
+    },
+  );
   await proof("card");
 
   await step("Deny: no bot is created", async () => {

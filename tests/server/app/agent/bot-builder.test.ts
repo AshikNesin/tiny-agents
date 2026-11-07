@@ -151,4 +151,14 @@ describe("bot-builder capability", () => {
     expect(results[0]).toContain('Unknown model "nope"');
     expect(results[0]).toContain("m1, m2");
   });
+
+  it("tells the model why an invalid bot was refused", async () => {
+    const store: BotCreationStore = {
+      create: async () => ({ status: "invalid", reason: "Name is required" }),
+    };
+    const { runtime, ref, call, results } = await openBuilder(store, { ...ARGS, name: "   " });
+    await runtime.decideApproval(ref, call.taskId!, "approved");
+    await until(() => results.length === 1, "refusal");
+    expect(results[0]).toBe("Invalid bot: Name is required. Nothing was created.");
+  });
 });

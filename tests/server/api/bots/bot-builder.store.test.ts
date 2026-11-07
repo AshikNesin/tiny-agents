@@ -111,6 +111,18 @@ describe("createBotCreationStore", () => {
     expect(await db.$count(bots, eq(bots.name, input.name))).toBe(0);
   });
 
+  it("refuses a blank name with the New bot dialog's message, creating nothing", async () => {
+    const { conversationId } = await chief();
+    const before = await db.$count(bots);
+    const conversations = fake.createConversation.mock.calls.length;
+    await expect(store.create(conversationId, { ...input, name: "   " })).resolves.toEqual({
+      status: "invalid",
+      reason: "Name is required",
+    });
+    expect(await db.$count(bots)).toBe(before);
+    expect(fake.createConversation.mock.calls.length).toBe(conversations);
+  });
+
   it("refuses for a conversation that has no bot", async () => {
     await expect(store.create(999_999, input)).resolves.toEqual({ status: "disabled" });
   });

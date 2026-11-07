@@ -2,8 +2,8 @@
  * Bot builder (issue #149): a bot can create a new bot through `create_bot`
  * when the owner asks it to ("make a bot for my Limitless project"). The
  * tool is `askOnly`, like `update_instructions`: the owner approves every
- * new bot in chat (instructions past 120 characters fold behind Read more
- * on the card), and the app's store adapter refuses unattended turns
+ * new bot in chat, with its name, description, model and full instructions
+ * on the approval card, and the app's store adapter refuses unattended turns
  * (routine runs, peer deliveries) and chats shared with guests (managing
  * bots is the owner's), so nobody but the owner can spawn bots.
  *
@@ -21,7 +21,8 @@ export type BotCreationRefusal =
   | "unattended"
   | "shared"
   | "name_taken"
-  | "unknown_model";
+  | "unknown_model"
+  | "invalid";
 
 /** What `create_bot` asks the app for. */
 export interface NewBotInput {
@@ -47,6 +48,8 @@ export interface BotCreationStore {
         status: BotCreationRefusal;
         /** `unknown_model`: the model ids that are available. */
         models?: string[];
+        /** `invalid`: what is wrong with the input, as the New bot dialog says it. */
+        reason?: string;
       }
   >;
 }
@@ -59,8 +62,9 @@ const fail = (text: string): ToolExecutionResult => ({
 function refusal(
   status: BotCreationRefusal,
   input: NewBotInput,
-  models: string[] = [],
+  details: { models?: string[]; reason?: string },
 ): ToolExecutionResult {
+  const models = details.models ?? [];
   switch (status) {
     case "disabled":
       return fail("Creating bots is not available here. Nothing was created.");
@@ -80,6 +84,10 @@ function refusal(
       return fail(
         `Unknown model "${input.model ?? ""}". Nothing was created.` +
           (models.length > 0 ? ` Available models: ${models.join(", ")}.` : ""),
+      );
+    case "invalid":
+      return fail(
+        `Invalid bot: ${details.reason ?? "check the name and instructions"}. Nothing was created.`,
       );
   }
 }
@@ -124,7 +132,7 @@ export function createBotBuilderCapability(store: BotCreationStore): Capability 
         ...(args.model?.trim() ? { model: args.model.trim() } : {}),
       };
       const result = await store.create(Number(api.conversationId), input);
-      if (result.status !== "created") return refusal(result.status, input, result.models);
+      if (result.status !== "created") return refusal(result.status, input, result);
       const { bot } = result;
       return {
         output: [

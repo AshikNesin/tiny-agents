@@ -56,7 +56,7 @@ Chats
 - [Tool permissions](./tool-permissions.md): Allow/Ask/Off, approval cards, always allow.
 - [YOLO mode](./yolo.md): confirm, banner, auto-approval, off on New chat.
 - [Self-improvement](./self-improve.md): `/improve` approval, Read more, the prompt really changes.
-- [Bot builder](./bot-builder.md): `/newbot` approval, deny creates nothing, approve creates the bot.
+- [Bot builder](./bot-builder.md): `/newbot` approval card with the whole new bot, deny creates nothing, approve creates the bot.
 - [Auto-review](./auto-review.md): the switch and its no-classifier behaviour.
 - [Bot-to-bot](./bot-to-bot.md): `@` mentions and relayed peer replies.
 - [Shared bots and guests](./shared-bots.md): guests, sharing, what a guest can and can't reach.

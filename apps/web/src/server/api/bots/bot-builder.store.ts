@@ -14,6 +14,7 @@ import { HttpError } from "@groot/core/errors";
 import type { BotCreationStore } from "@tiny-agents/agent";
 import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
 import { getAgentRuntime } from "./bots.runtime";
+import { createBotSchema } from "./bots.schema";
 import { createBot, type BotAgentRuntime } from "./bots.service";
 
 export function createBotCreationStore(
@@ -28,21 +29,22 @@ export function createBotCreationStore(
       if (await isUnattended(conversationId, reader, owner)) return { status: "unattended" };
       if (owner.bot.shared) return { status: "shared" };
 
+      // The New bot dialog's own validation, so the tool and the dialog can't drift.
+      const parsed = createBotSchema.safeParse({
+        name: input.name,
+        description: input.description,
+        systemPrompt: input.instructions,
+        modelId: input.model ?? owner.bot.modelId,
+      });
+      if (!parsed.success) {
+        return { status: "invalid", reason: parsed.error.issues.map((i) => i.message).join("; ") };
+      }
       const rt = runtime();
-      const modelId = input.model ?? owner.bot.modelId;
-      if (!rt.catalog.has(modelId)) {
+      if (!rt.catalog.has(parsed.data.modelId)) {
         return { status: "unknown_model", models: rt.catalog.list().map((model) => model.id) };
       }
       try {
-        const bot = await createBot(
-          {
-            name: input.name,
-            description: input.description ?? "",
-            systemPrompt: input.instructions,
-            modelId,
-          },
-          rt,
-        );
+        const bot = await createBot(parsed.data, rt);
         return {
           status: "created",
           bot: { id: bot.id, name: bot.name, modelId: bot.modelId, url: `/chats/${bot.id}` },

@@ -388,9 +388,7 @@ export async function openFauxAgentRuntime(
         fauxToolCall("create_bot", {
           name: newBot[1],
           description: "Made by the bot-builder e2e",
-          instructions:
-            "You help the owner with the bot-builder e2e.\n" +
-            "The owner reads these instructions on the approval card before the bot exists.",
+          instructions: "You help the owner with the bot-builder e2e.",
         }),
       );
       return { ...call, stopReason: "toolUse" as const };

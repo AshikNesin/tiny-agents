@@ -26,14 +26,20 @@ straight away.
 1. **The owner approves every new bot.** The tool is `askOnly` (like
    `update_instructions`): it waits in chat even when its permission says
    `allow`. The approval card reads "<bot> wants to create a new bot —
-   “<name>”" and shows instructions longer than 120 characters behind Read
-   more; shorter ones are not on the card.
+   “<name>”" and lists the description, the model ("default model" when
+   the bot names none) and the full instructions; instructions longer than
+   120 characters fold behind Read more. In YOLO mode
+   ([`yolo-mode.md`](./yolo-mode.md)) the chat approves Ask (always) tools
+   too, so `create_bot` runs without a card there.
 2. **Only the owner's own turns.** The store adapter
    (`apps/web/src/server/api/bots/bot-builder.store.ts`) refuses a routine
    run or a turn started by another bot's message (`isUnattended`), so a peer
    can never spawn bots.
 3. **Not from a shared chat.** Managing bots is the owner's, and guests can
    answer approval cards in a shared bot's chat, so a shared bot refuses.
+4. **The dialog's validation.** The adapter parses the input with
+   `createBotSchema`, the New bot dialog's own schema, so a blank name or an
+   over-long description is refused with the dialog's message.
 
 An interrupted `create_bot` is not re-run after a restart (`replay:
 "unsafe"`): the model sees the interruption instead of a duplicate bot.
