@@ -109,7 +109,7 @@ export function approvalPayload(call: ChatToolCall): string {
 }
 
 /** A labelled line under an approval card's title. */
-export interface ApprovalFact {
+interface ApprovalFact {
   label: string;
   value: string;
 }
