@@ -164,6 +164,28 @@ describe("browser sessions", () => {
     rmSync(profilesDir, { recursive: true, force: true });
   });
 
+  it("a failed wipe of the transport's copy fails the close, and a close clears the last open error", async () => {
+    const profilesDir = mkdtempSync(join(tmpdir(), "ta-bs-fail-"));
+    const failing: BrowserTransport = Object.assign(
+      async (): Promise<BrowserSession> => {
+        throw new Error("no display");
+      },
+      {
+        wipe: async () => {
+          throw new Error("VM unreachable");
+        },
+      },
+    );
+    const sessions = createBrowserSessions({ transport: failing, profilesDir });
+    await expect(sessions.acquire(TARGET)).rejects.toThrow("no display");
+    expect(sessions.openState(TARGET).error).toMatch(/no display/);
+
+    await expect(sessions.close(TARGET, { wipeProfile: true })).rejects.toThrow("VM unreachable");
+
+    expect(sessions.openState(TARGET).error).toBeUndefined();
+    rmSync(profilesDir, { recursive: true, force: true });
+  });
+
   it("sweeps idle browsers on the clock, and never one the owner drives", async () => {
     const { clock, advance } = fakeClock();
     const fake = fakeTransport();

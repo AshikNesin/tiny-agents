@@ -9,7 +9,7 @@ import { asc, eq } from "drizzle-orm";
 import { parseStringParam } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
 import { db, bots } from "../../db";
-import { SHARED_BROWSER_PROFILE } from "./browser.targets";
+import { ownBrowserProfile, SHARED_BROWSER_PROFILE } from "./browser.targets";
 
 /** One profile a page lists: who uses it. */
 export interface ProfileEntry {
@@ -36,7 +36,7 @@ export async function listProfiles(): Promise<ProfileEntry[]> {
     ...rows
       .filter((row) => row.browserProfile === "own")
       .map((row) => ({
-        profile: `bot-${row.id}`,
+        profile: ownBrowserProfile(row.id),
         label: row.name,
         bots: [{ id: row.id, name: row.name }],
       })),

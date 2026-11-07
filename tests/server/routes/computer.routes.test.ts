@@ -9,6 +9,7 @@ import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
+import { settleBotReleases } from "../../../apps/web/src/server/api/bots/bot-resources";
 import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
 import {
   createComputerSessions,
@@ -82,6 +83,7 @@ describe("computer routes", () => {
     await sessions.acquire(profile);
     const close = vi.spyOn(sessions, "close");
     expect((await call(`/api/v1/bots/${ownId}`, { method: "DELETE" })).status).toBe(200);
+    await settleBotReleases();
     expect(close).toHaveBeenCalledWith(profile, { wipe: true });
     expect(sessions.get(profile)).toBeUndefined();
   });
@@ -89,6 +91,7 @@ describe("computer routes", () => {
   it("deleting a bot on the shared desktop leaves that desktop to the others", async () => {
     await sessions.acquire("shared");
     expect((await call(`/api/v1/bots/${botId}`, { method: "DELETE" })).status).toBe(200);
+    await settleBotReleases();
     expect(sessions.get("shared")).toBeDefined();
     expect(fake.wiped).not.toContain("shared");
   });

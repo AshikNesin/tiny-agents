@@ -55,6 +55,8 @@ interface Released {
   how: "release";
   columns?: Columns;
   keyedBy?: (...args: never[]) => unknown;
+  /** Waits on the sandbox VM, so the delete answers without it. */
+  background?: true;
   prepare(bot: BotRow): Promise<(context: ReleaseContext) => Promise<void>>;
 }
 
@@ -71,6 +73,7 @@ function retained(reason: string, columns?: Columns): Retained {
 function released<Captured = undefined>(entry: {
   columns?: Columns;
   keyedBy?: Released["keyedBy"];
+  background?: true;
   capture?: (bot: BotRow) => Promise<Captured>;
   release: (bot: BotRow, captured: Captured, context: ReleaseContext) => Promise<void>;
 }): Released {
@@ -121,6 +124,7 @@ export const BOT_RESOURCES = {
   // By bot id, not browserProfile: a bot switched to the shared browser left its own behind.
   browser: released({
     keyedBy: browserTargetForBot,
+    background: true,
     release: async (bot) => {
       const sessions = getBrowserSessions();
       await Promise.all([
@@ -131,6 +135,7 @@ export const BOT_RESOURCES = {
   }),
   desktop: released({
     keyedBy: computerProfileForBot,
+    background: true,
     release: async (bot) => {
       await getComputerSessions()?.close(ownBrowserProfile(bot.id), { wipe: true });
     },
@@ -151,25 +156,46 @@ export const BOT_RESOURCES = {
   ),
 } satisfies Record<string, BotResource>;
 
-/** The loser of two concurrent deletes gets the 404 and releases nothing. */
+const backgroundReleases = new Set<Promise<void>>();
+
+/** Resolves once every background release started so far has settled. */
+export async function settleBotReleases(): Promise<void> {
+  await Promise.all(backgroundReleases);
+}
+
+/**
+ * The loser of two concurrent deletes gets the 404 and releases nothing.
+ * Background releases are still running when this returns.
+ */
 export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<BotRow> {
   const bot = await findBotRow(id);
   const entries: [string, BotResource][] = Object.entries(BOT_RESOURCES);
   const releases = await Promise.all(
     entries.flatMap(([resource, entry]) =>
       entry.how === "release"
-        ? [entry.prepare(bot).then((release) => ({ resource, release }))]
+        ? [
+            entry
+              .prepare(bot)
+              .then((release) => ({ resource, release, background: entry.background === true })),
+          ]
         : [],
     ),
   );
   const [deleted] = await db.delete(bots).where(eq(bots.id, bot.id)).returning();
   if (!deleted) throw Boom.notFound("Record not found");
+  const run = (resource: string, release: (context: ReleaseContext) => Promise<void>) =>
+    release({ rt }).catch((error: unknown) => {
+      logger.warn({ error, botId: id, resource }, "Failed to release a deleted bot's resource");
+    });
+  for (const { resource, release, background } of releases) {
+    if (!background) continue;
+    const pending = run(resource, release).finally(() => backgroundReleases.delete(pending));
+    backgroundReleases.add(pending);
+  }
   await Promise.all(
-    releases.map(({ resource, release }) =>
-      release({ rt }).catch((error: unknown) => {
-        logger.warn({ error, botId: id, resource }, "Failed to release a deleted bot's resource");
-      }),
-    ),
+    releases
+      .filter(({ background }) => !background)
+      .map(({ resource, release }) => run(resource, release)),
   );
   return deleted;
 }

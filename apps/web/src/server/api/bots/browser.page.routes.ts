@@ -138,9 +138,11 @@ router.post("/browser/:profile/driver", async (c) => {
 router.delete("/browser/:profile", async (c) => {
   const target = await ownerTarget(c.req.param("profile"));
   const sessions = getBrowserSessions();
-  await sessions.close(target, { wipeProfile: true });
-  const { rmSync } = await import("node:fs");
-  rmSync(`${sessions.profilesDir}/${target.profile}`, { recursive: true, force: true });
+  try {
+    await sessions.close(target, { wipeProfile: true });
+  } catch (error) {
+    throw Boom.badGateway(error instanceof Error ? error.message : "Could not reset the browser.");
+  }
   return ok(c, { reset: true });
 });
 

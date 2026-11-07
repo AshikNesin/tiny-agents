@@ -20,7 +20,10 @@ import {
   vaultAuditEvents,
   vaultItems,
 } from "../../../apps/web/src/server/db";
-import { BOT_RESOURCES } from "../../../apps/web/src/server/api/bots/bot-resources";
+import {
+  BOT_RESOURCES,
+  settleBotReleases,
+} from "../../../apps/web/src/server/api/bots/bot-resources";
 import { conversationRef } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import {
   onBotChatEvent,
@@ -417,6 +420,7 @@ describe("deleting a bot", () => {
     }
 
     expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
 
     for (const { column, how } of claimed) {
       expect(await holds(column, world.bot.id), columnName(column)).toBe(how === "retained");
@@ -430,6 +434,7 @@ describe("deleting a bot", () => {
     vi.spyOn(world.browser, "closeTab").mockRejectedValue(new Error("browser gone"));
 
     expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
 
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ botId: world.bot.id, resource: "browser" }),
@@ -438,8 +443,26 @@ describe("deleting a bot", () => {
     for (const [kind, check] of checks) if (kind !== "browser") await check();
   });
 
+  it("answers before the releases that wait on the sandbox VM finish", async () => {
+    let finish!: () => void;
+    const hung = new Promise<void>((resolve) => (finish = resolve));
+    vi.spyOn(world.browser, "close").mockReturnValue(hung);
+    vi.spyOn(world.computer, "close").mockReturnValue(hung);
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+
+    expect(world.spied.abort).toHaveBeenCalledWith(conversationRef(world.bot.conversationId));
+    let settled = false;
+    const settling = settleBotReleases().then(() => (settled = true));
+    for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+    expect(settled).toBe(false);
+    finish();
+    await settling;
+  });
+
   it("answers 404 for a bot already deleted and releases nothing again", async () => {
     expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
     vi.clearAllMocks();
     const closeTab = vi.spyOn(world.browser, "closeTab");
     const closeDesktop = vi.spyOn(world.computer, "close");

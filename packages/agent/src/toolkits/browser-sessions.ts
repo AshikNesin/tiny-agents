@@ -528,6 +528,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
         }
         const entry = live.get(profile);
         if (entry) await closeEntry(profile, entry);
+        openErrors.delete(profile);
         if (wipeProfile) await wipe(profile);
       })();
       const settled = done.catch(() => undefined);

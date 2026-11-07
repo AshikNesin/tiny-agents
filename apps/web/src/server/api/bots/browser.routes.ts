@@ -133,9 +133,11 @@ router.delete("/bots/:id/browser/profile", async (c) => {
   const target = await botTarget(id);
   // On the shared profile this signs every bot that uses it out.
   const sessions = getBrowserSessions();
-  await sessions.close(target, { wipeProfile: true });
-  const { rmSync } = await import("node:fs");
-  rmSync(`${sessions.profilesDir}/${target.profile}`, { recursive: true, force: true });
+  try {
+    await sessions.close(target, { wipeProfile: true });
+  } catch (error) {
+    throw Boom.badGateway(error instanceof Error ? error.message : "Could not reset the browser.");
+  }
   return ok(c, { reset: true });
 });
 

@@ -304,7 +304,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
 
   return Object.assign(openBrowser, {
     wipe: async (profileDir: string) => {
-      await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile").catch(() => {});
+      await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile");
     },
   });
 }
