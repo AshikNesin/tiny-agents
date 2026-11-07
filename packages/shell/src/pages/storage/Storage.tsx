@@ -1,14 +1,6 @@
-import { Fragment } from "react";
 import { Folder, FolderPlus, Home, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@groot/ui/breadcrumb";
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import { EmptyState } from "@groot/ui/empty-state";
 import { SkeletonCard, SkeletonTable } from "@groot/ui/loading-skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@groot/ui/table";
@@ -43,41 +35,17 @@ export function Storage({ onView }: StorageProps = {}) {
     </Button>
   );
 
-  const lastCrumbIndex = s.breadcrumbs.length - 1;
-
   const breadcrumb = (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <button
-              type="button"
-              onClick={() => s.navigateToFolder("")}
-              aria-label="Go to root folder"
-            >
-              <Home className="size-4" />
-            </button>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        {/* The separator is an <li> itself: a sibling of the items, never inside one. */}
-        {s.breadcrumbs.map((crumb, index) => (
-          <Fragment key={crumb.path}>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              {index === lastCrumbIndex ? (
-                <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
-              ) : (
-                <BreadcrumbLink asChild>
-                  <button type="button" onClick={() => s.navigateToFolder(crumb.path)}>
-                    {crumb.name}
-                  </button>
-                </BreadcrumbLink>
-              )}
-            </BreadcrumbItem>
-          </Fragment>
-        ))}
-      </BreadcrumbList>
-    </Breadcrumb>
+    <Breadcrumbs page={s.breadcrumbs.at(-1)?.name}>
+      <button type="button" onClick={() => s.navigateToFolder("")} aria-label="Go to root folder">
+        <Home className="size-4" />
+      </button>
+      {s.breadcrumbs.slice(0, -1).map((crumb) => (
+        <button key={crumb.path} type="button" onClick={() => s.navigateToFolder(crumb.path)}>
+          {crumb.name}
+        </button>
+      ))}
+    </Breadcrumbs>
   );
 
   return (

@@ -57,6 +57,46 @@ export const Crumbs = ({ name }: { name: string }) => (
 );
 `;
 
+const LI_IN_BREADCRUMBS = `
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
+export const Crumbs = () => (
+  <Breadcrumbs page="B">
+    <li>
+      <a href="/a">A</a>
+    </li>
+  </Breadcrumbs>
+);
+`;
+
+const MAPPED_LI_IN_BREADCRUMBS = `
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
+export const Crumbs = ({ names }: { names: string[] }) => (
+  <Breadcrumbs page="Here">
+    <>
+      {names.map((name) => (
+        <li key={name}>
+          <a href={name}>{name}</a>
+        </li>
+      ))}
+    </>
+  </Breadcrumbs>
+);
+`;
+
+const BUTTONS_IN_BREADCRUMBS = `
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
+export const Crumbs = ({ names, go }: { names: string[]; go: (n: string) => void }) => (
+  <Breadcrumbs page={names.at(-1)}>
+    <a href="/">Root</a>
+    {names.slice(0, -1).map((name) => (
+      <button key={name} type="button" onClick={() => go(name)}>
+        {name}
+      </button>
+    ))}
+  </Breadcrumbs>
+);
+`;
+
 type Fixture = { source: string; rules: string[]; mentions?: string };
 
 const FIXTURES: Record<string, Fixture> = {
@@ -181,13 +221,52 @@ const FIXTURES: Record<string, Fixture> = {
       'import { cn } from "@groot/ui/lib/utils";\nimport { formatBytes } from "@groot/shell/lib/utils";\nexport const x = cn(formatBytes(1));\n',
     rules: [],
   },
+  "apps/web/src/client/r5a-separator-fail.tsx": {
+    source:
+      'import { BreadcrumbSeparator } from "@groot/ui/breadcrumb";\nexport const S = BreadcrumbSeparator;\n',
+    rules: ["R5a"],
+    mentions: "<Breadcrumbs",
+  },
+  "packages/jobs/src/client/r5a-barrel-item-fail.tsx": {
+    source: 'import { BreadcrumbItem } from "@groot/ui";\nexport const I = BreadcrumbItem;\n',
+    rules: ["R5a"],
+  },
+  "apps/web/src/client/r5a-pass.tsx": {
+    source:
+      'import { Link } from "react-router-dom";\nimport { Breadcrumbs } from "@groot/ui/breadcrumb";\nexport const C = () => (\n  <Breadcrumbs page="Job">\n    <Link to="/jobs">Jobs</Link>\n  </Breadcrumbs>\n);\n',
+    rules: [],
+  },
+  "apps/web/src/client/r5a-tsx-suffix-fail.tsx": {
+    source:
+      'import { BreadcrumbSeparator } from "@groot/ui/breadcrumb.tsx";\nexport const S = BreadcrumbSeparator;\n',
+    rules: ["R5a"],
+  },
+  "apps/web/src/client/r5a-index-fail.tsx": {
+    source: 'import { BreadcrumbItem } from "@groot/ui/index";\nexport const I = BreadcrumbItem;\n',
+    rules: ["R5a"],
+  },
+  "packages/shell/src/pages/r5a-relative-fail.tsx": {
+    source:
+      'import { BreadcrumbSeparator } from "../../../ui/src/breadcrumb";\nexport const S = BreadcrumbSeparator;\n',
+    rules: ["R5a"],
+  },
+  "apps/web/src/client/r5c-li-fail.tsx": {
+    source: LI_IN_BREADCRUMBS,
+    rules: ["R5c"],
+    mentions: "Pass the link or button itself",
+  },
+  "packages/shell/src/r5c-mapped-li-fail.tsx": { source: MAPPED_LI_IN_BREADCRUMBS, rules: ["R5c"] },
+  "packages/shell/src/r5c-pass.tsx": { source: BUTTONS_IN_BREADCRUMBS, rules: [] },
   "apps/web/src/client/r5b-fail.tsx": {
     source: NESTED_SEPARATOR,
-    rules: ["R5b"],
+    rules: ["R5a", "R5a", "R5b"],
     mentions: "Make it a sibling of the items",
   },
-  "packages/shell/src/r5b-mapped-fail.tsx": { source: MAPPED_NESTED_SEPARATOR, rules: ["R5b"] },
-  "apps/web/src/client/r5b-pass.tsx": { source: SIBLING_SEPARATOR, rules: [] },
+  "packages/shell/src/r5b-mapped-fail.tsx": {
+    source: MAPPED_NESTED_SEPARATOR,
+    rules: ["R5a", "R5a", "R5b"],
+  },
+  "packages/ui/src/r5b-pass.tsx": { source: SIBLING_SEPARATOR, rules: [] },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };
@@ -221,7 +300,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe("boundary lint rules", () => {
   it.each(Object.entries(FIXTURES))("%s", (file, { rules, mentions }) => {
     const texts = findings.get(file) ?? [];
-    const fired = texts.map((t) => /\b(R\d[ab]?): /.exec(t)?.[1]).toSorted();
+    const fired = texts.map((t) => /\b(R\d[a-z]?): /.exec(t)?.[1]).toSorted();
     expect(fired, texts.join("\n")).toEqual(rules);
     if (mentions) expect(texts.join("\n")).toContain(mentions);
   });

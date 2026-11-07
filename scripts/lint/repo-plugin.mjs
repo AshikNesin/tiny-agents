@@ -16,6 +16,37 @@ const isEnvKey = (key, computed) =>
     ? key.type === "Literal" && key.value === "env"
     : key.type === "Identifier" && key.name === "env";
 
+const LIST_PARTS = new Set(["li", "BreadcrumbItem", "BreadcrumbList", "BreadcrumbSeparator"]);
+
+const renderedElements = (node) => {
+  switch (node?.type) {
+    case "JSXElement":
+      return [node];
+    case "JSXFragment":
+      return node.children.flatMap(renderedElements);
+    case "JSXExpressionContainer":
+    case "ParenthesizedExpression":
+      return renderedElements(node.expression);
+    case "LogicalExpression":
+      return renderedElements(node.right);
+    case "ConditionalExpression":
+      return [...renderedElements(node.consequent), ...renderedElements(node.alternate)];
+    case "ArrayExpression":
+      return node.elements.flatMap(renderedElements);
+    case "CallExpression":
+      return node.arguments.flatMap(renderedElements);
+    case "ArrowFunctionExpression":
+    case "FunctionExpression":
+      return node.body.type === "BlockStatement"
+        ? node.body.body.flatMap((s) =>
+            s.type === "ReturnStatement" ? renderedElements(s.argument) : [],
+          )
+        : renderedElements(node.body);
+    default:
+      return [];
+  }
+};
+
 const RAW_ENV_MESSAGE =
   "R3: read the validated env, not process.env. In the app call `appEnv()` from apps/web/src/server/env.ts, or read `env` from @groot/core/env, and add the key to that schema if it is missing. Packages take the env as a parameter from the app.";
 
@@ -42,6 +73,25 @@ export default {
             if (node.source.value !== "node:process" && node.source.value !== "process") return;
             for (const s of node.specifiers) {
               if (s.type === "ImportSpecifier" && s.imported.name === "env") report(s);
+            }
+          },
+        };
+      },
+    },
+    "breadcrumbs-children": {
+      create(context) {
+        return {
+          JSXElement(node) {
+            if (jsxName(node) !== "Breadcrumbs") return;
+            const page = node.openingElement.attributes.find(
+              (a) => a.type === "JSXAttribute" && a.name.name === "page",
+            );
+            for (const el of [...node.children, page?.value].flatMap(renderedElements)) {
+              if (!LIST_PARTS.has(jsxName(el))) continue;
+              context.report({
+                node: el,
+                message: `R5c: Breadcrumbs renders each crumb in its own <li> and places the separators, so <${jsxName(el)}> inside it nests an <li> in an <li>. Pass the link or button itself: <Breadcrumbs page="Current"><Link to="/parent">Parent</Link></Breadcrumbs>.`,
+              });
             }
           },
         };
