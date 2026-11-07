@@ -20,7 +20,7 @@ await journey("bot-settings", async ({ page, step, proof, cleanup, api, stamp })
   };
 
   await step("setup: two bots via the API (one only to take a name)", async () => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     botId = (await api.post("/bots", { name: original, modelId: defaultModel })).id;
     cleanup(async () => {
       if (await read(botId)) await api.delete(`/bots/${botId}`);

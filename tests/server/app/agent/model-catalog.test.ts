@@ -6,6 +6,10 @@
 import { createModels } from "@earendil-works/pi-ai/models";
 import { describe, expect, it } from "vite-plus/test";
 import { createModelCatalog } from "../../../../packages/agent/src/model-catalog";
+import {
+  discoverModels,
+  resolveCapabilities,
+} from "../../../../packages/agent/src/providers/discovery";
 import type {
   ModelConfig,
   ModelRow,
@@ -230,5 +234,81 @@ describe("Provider kinds", () => {
     };
     for (const provider of buildProviders(config, credentials)) models.setProvider(provider);
     expect(await models.getAuth("ollama")).toMatchObject({ auth: { apiKey: "no-key" } });
+  });
+});
+
+describe("Cloudflare AI Gateway accounts (issue #216)", () => {
+  const gateway = account({
+    id: "gw",
+    kind: "cloudflare-ai-gateway",
+    settings: {
+      accountId: "acc",
+      gatewayId: "gate",
+      customProviders: [{ slug: "custom-zai-coding-plan", basePath: "api/coding/paas/v4" }],
+    },
+  });
+  const config: ModelConfig = {
+    providers: [gateway],
+    models: [
+      row({ id: "sonnet", providerId: "gw", upstreamId: "claude-sonnet-5-5", reasoning: true }),
+      row({ id: "glm", providerId: "gw", upstreamId: "custom-zai-coding-plan/glm-5.3-flash" }),
+      row({ id: "jev", providerId: "gw", upstreamId: "typesafe/jev-1.14.0", type: "classifier" }),
+    ],
+    roles: {},
+  };
+
+  it("serves a custom provider's model from its own gateway URL, under its bare id", () => {
+    const { catalog } = catalogOf(config);
+    expect(catalog.route("glm")).toEqual({
+      engine: "pi",
+      providerId: "gw:custom-zai-coding-plan",
+      upstreamId: "glm-5.3-flash",
+    });
+    expect(catalog.piModel("glm")).toMatchObject({
+      id: "glm-5.3-flash",
+      api: "openai-completions",
+      baseUrl:
+        "https://gateway.ai.cloudflare.com/v1/acc/gate/custom-zai-coding-plan/api/coding/paas/v4",
+    });
+    // The gateway's own models stay on the account.
+    expect(catalog.route("sonnet")).toMatchObject({
+      providerId: "gw",
+      upstreamId: "claude-sonnet-5-5",
+    });
+  });
+
+  it("sends a custom provider's requests on the gateway's token", async () => {
+    const { models } = catalogOf(config);
+    expect(await models.getAuth("gw:custom-zai-coding-plan")).toMatchObject({
+      auth: { headers: { "cf-aig-authorization": "Bearer key-gw", Authorization: null } },
+    });
+  });
+
+  it("never sends thinking 'disabled' to a model that always thinks adaptively", () => {
+    // Claude Sonnet 5.5 refuses `thinking: {type: "disabled"}`; pi-ai sends it for a
+    // call with no thinking level unless "off" is marked unsupported.
+    const sonnet = catalogOf(config).catalog.piModel("sonnet")!;
+    expect(sonnet.thinkingLevelMap).toMatchObject({ off: null });
+  });
+
+  it("takes a custom model's capabilities from what pi-ai knows of its name", () => {
+    expect(
+      resolveCapabilities("cloudflare-ai-gateway", null, "custom-zai-coding-plan/glm-5.3-flash"),
+    ).toMatchObject({
+      known: true,
+      reasoning: true,
+      compat: expect.objectContaining({ thinkingFormat: "zai" }),
+    });
+  });
+
+  it("names the gateway's Workers AI models so they aren't mistaken for the owner's", async () => {
+    const found = await discoverModels({
+      kind: "cloudflare-ai-gateway",
+      baseUrl: null,
+      get: async () => ({ status: 500, body: "" }),
+    });
+    expect(
+      found.find((m) => m.upstreamId === "workers-ai/@cf/zai-org/glm-5.3-flash")?.name,
+    ).toMatch(/\(Workers AI\)$/);
   });
 });

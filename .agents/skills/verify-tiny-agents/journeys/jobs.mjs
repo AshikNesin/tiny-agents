@@ -50,7 +50,7 @@ await journey("jobs", async ({ page, step, proof, cleanup, api, stamp }) => {
         for (const j of ours) await api.delete(`/jobs/${j.id}`);
       });
       const models = await api.get("/models");
-      const bot = await api.post("/bots", { name: botName, modelId: models.defaultModel });
+      const bot = await api.post("/bots", { name: botName, modelId: models.defaultModelId });
       cleanup(() => api.delete(`/bots/${bot.id}`));
       const routine = await api.post("/routines", {
         botId: bot.id,

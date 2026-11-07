@@ -17,7 +17,7 @@ await journey("skills", async ({ page, step, proof, cleanup, api, stamp }) => {
 
   await step("setup: a faux bot to attach the skill to (API)", async () => {
     const models = await api.get("/models");
-    botId = (await api.post("/bots", { name: botName, modelId: models.defaultModel })).id;
+    botId = (await api.post("/bots", { name: botName, modelId: models.defaultModelId })).id;
     cleanup(() => api.delete(`/bots/${botId}`));
   });
 

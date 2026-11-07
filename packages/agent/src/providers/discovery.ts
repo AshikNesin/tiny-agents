@@ -51,6 +51,11 @@ export interface DiscoverInput {
   kind: ProviderKind;
   baseUrl: string | null;
   apiKey?: string;
+  /**
+   * Headers that authenticate the listing instead of the kind's own (a
+   * gateway route lists through its gateway, on the gateway's token).
+   */
+  headers?: Record<string, string>;
   get: DiscoveryGet;
 }
 
@@ -117,14 +122,18 @@ const hostOf = (url: string | null) => {
 
 /** The catalog entry describing `upstreamId` at this endpoint, if any. */
 function catalogEntry(kind: ProviderKind, baseUrl: string | null, upstreamId: string) {
-  if (kind === "cloudflare-ai-gateway") return GATEWAY_CHAT.find((m) => m.id === upstreamId);
+  const anywhere = (id: string) =>
+    CATALOGS_BY_HOST.flatMap(([, models]) => models).find((m) => m.id === id);
+  if (kind === "cloudflare-ai-gateway") {
+    // A gateway id is `<provider>/<model>` (`custom-zai-coding-plan/glm-5.3-flash`
+    // for a custom provider): unknown to the gateway's catalog, the model part
+    // may still be known.
+    return GATEWAY_CHAT.find((m) => m.id === upstreamId) ?? anywhere(upstreamId.split("/").at(-1)!);
+  }
   const host = hostOf(baseUrl ?? PROVIDER_KINDS[kind].defaultBaseUrl ?? null);
   const own = CATALOGS_BY_HOST.find(([h]) => host === h || host.endsWith(`.${h}`))?.[1];
   const bare = upstreamId.replace(/^models\//, "");
-  return (
-    own?.find((m) => m.id === bare) ??
-    CATALOGS_BY_HOST.flatMap(([, models]) => models).find((m) => m.id === bare)
-  );
+  return own?.find((m) => m.id === bare) ?? anywhere(bare);
 }
 
 /**
@@ -209,7 +218,7 @@ async function listOpenAi(input: DiscoverInput, base: string) {
   const body = await getJson(
     input,
     `${base}/models`,
-    input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {},
+    input.headers ?? (input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}),
   );
   const data = Array.isArray(body.data) ? body.data : [];
   return (data as { id?: unknown; name?: unknown }[]).flatMap((item) =>
@@ -245,6 +254,18 @@ async function listGemini(input: DiscoverInput, base: string) {
 }
 
 /**
+ * A gateway catalog model, named so it can't be mistaken for one of the
+ * owner's own providers: Workers AI models run on Cloudflare's plan, not on
+ * a key the owner stored in the gateway.
+ */
+function gatewayModel(baseUrl: string | null, model: Model<Api>): DiscoveredModel {
+  const resolved = resolveCapabilities("cloudflare-ai-gateway", baseUrl, model.id);
+  return model.id.startsWith("workers-ai/")
+    ? { ...resolved, name: `${resolved.name} (Workers AI)` }
+    : resolved;
+}
+
+/**
  * The models an account's endpoint offers, capabilities resolved. Throws a
  * `DiscoveryError` the account's status can show.
  */
@@ -254,7 +275,7 @@ export async function discoverModels(input: DiscoverInput): Promise<DiscoveredMo
   if (kind === "faux") return [];
   if (kind === "cloudflare-ai-gateway") {
     return [
-      ...GATEWAY_CHAT.map((m) => resolveCapabilities(kind, input.baseUrl, m.id)),
+      ...GATEWAY_CHAT.map((m) => gatewayModel(input.baseUrl, m)),
       ...WORKERS_AI_CLASSIFIERS.map((m) => ({
         upstreamId: m.id,
         name: m.name,

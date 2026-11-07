@@ -64,8 +64,8 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
     // Unset, the default role is the first available chat model: the plan's sorts first.
     const dialog = page.getByRole("dialog", { name: "New bot" });
     await dialog.getByRole("button", { name: "Claude Haiku 4.5" }).click();
-    await expect(page.getByRole("menuitem", { name: /Claude Sonnet 4\.6/ })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: /Test Model \(faux\)/ })).toBeVisible();
+    await expect(page.getByRole("option", { name: /Claude Sonnet 4\.6/ })).toBeVisible();
+    await expect(page.getByRole("option", { name: /Test Model \(faux\)/ })).toBeVisible();
   });
   await proof("models-picker");
 });

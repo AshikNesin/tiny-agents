@@ -30,7 +30,6 @@ import { Field } from "@groot/ui/form";
 import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { useConfirm } from "@groot/ui/primitives";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { StatusBadge } from "@groot/ui/status-badge";
 import { monoClass, Text } from "@groot/ui/typography";
 import { StepUpProvider, useStepUp } from "../../../components/vault/StepUp";
@@ -45,15 +44,25 @@ import {
   type Roles,
 } from "../../../lib/models-api";
 import { useBotsStore } from "../../../store/bots";
+import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";
 import { AddModelsDialog } from "./AddModelsDialog";
+import { GatewayCustomProvidersDialog } from "./GatewayCustomProvidersDialog";
 import { accountStatus, formatTokens, hostOf, KIND_LABEL, ROLE_LABEL, ROLES } from "./model-labels";
 
-/** Every model the owner could pick, as "<account> / <model>". */
-function modelOptions(accounts: Account[], type: "chat" | "classifier" = "chat") {
+/** Every model the owner could pick, grouped by account. */
+function modelOptions(
+  accounts: Account[],
+  type: "chat" | "classifier" = "chat",
+): ModelPickerOption[] {
   return accounts.flatMap((account) =>
     account.models
-      .filter((model) => model.type === type)
-      .map((model) => ({ id: model.id, label: `${account.name} / ${model.name}`, account })),
+      .filter((model) => model.type === type && model.enabled)
+      .map((model) => ({
+        id: model.id,
+        label: model.name,
+        group: account.name,
+        keywords: [model.upstreamId],
+      })),
   );
 }
 
@@ -67,7 +76,7 @@ function MoveDialog({
 }: {
   what: string;
   users: string;
-  options: { id: string; label: string }[];
+  options: ModelPickerOption[];
   onCancel: () => void;
   onMove: (modelId: string) => void;
 }) {
@@ -82,19 +91,8 @@ function MoveDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <Field label="Move to" htmlFor="move-to">
-            <Select value={target} onValueChange={setTarget}>
-              <SelectTrigger id="move-to" className="w-full">
-                <SelectValue placeholder="Choose a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <Field label="Move to">
+            <ModelPicker value={target} options={options} onChange={setTarget} label="Move to" />
           </Field>
         </DialogBody>
         <DialogFooter>
@@ -290,7 +288,7 @@ function ClaudePlanFallback({
   onSet,
 }: {
   account: Account;
-  options: { id: string; label: string }[];
+  options: ModelPickerOption[];
   onSet: (modelId: string | null) => void;
 }) {
   const current =
@@ -300,27 +298,25 @@ function ClaudePlanFallback({
   return (
     <Field
       label="Fallback model"
-      htmlFor={`fallback-${account.id}`}
       hint="Where a turn goes when the plan is off or the sandbox is unreachable. None: the turn pauses."
     >
-      <Select value={current} onValueChange={(value) => onSet(value === "none" ? null : value)}>
-        <SelectTrigger id={`fallback-${account.id}`} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">None: pause the turn</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option.id} value={option.id}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ModelPicker
+        value={current}
+        options={[{ id: "none", label: "None: pause the turn" }, ...options]}
+        onChange={(value) => onSet(value === "none" ? null : value)}
+        label="Fallback model"
+      />
     </Field>
   );
 }
 
-function AddModelById({ onAdd }: { onAdd: (upstreamId: string) => Promise<boolean> }) {
+function AddModelById({
+  onAdd,
+  placeholder = "Add a model by id",
+}: {
+  onAdd: (upstreamId: string) => Promise<boolean>;
+  placeholder?: string;
+}) {
   const [adding, setAdding] = useState("");
   return (
     <form
@@ -333,7 +329,7 @@ function AddModelById({ onAdd }: { onAdd: (upstreamId: string) => Promise<boolea
     >
       <Input
         aria-label="Model ID to add"
-        placeholder="Add a model by id"
+        placeholder={placeholder}
         value={adding}
         onChange={(e) => setAdding(e.target.value)}
       />
@@ -349,12 +345,14 @@ function AccountActions({
   onToggle,
   onRefresh,
   onEdit,
+  onCustomProviders,
   onDelete,
 }: {
   account: Account;
   onToggle: () => void;
   onRefresh: () => void;
   onEdit: () => void;
+  onCustomProviders: () => void;
   onDelete: () => void;
 }) {
   // A Claude plan or faux account has no endpoint to check or edit.
@@ -378,6 +376,11 @@ function AccountActions({
             Edit
           </Button>
         </>
+      )}
+      {account.kind === "cloudflare-ai-gateway" && (
+        <Button variant="ghost" size="sm" onClick={onCustomProviders}>
+          Custom providers
+        </Button>
       )}
       <Button variant="ghost" size="icon" aria-label={`Delete ${account.name}`} onClick={onDelete}>
         <Trash2 className="size-4" />
@@ -407,6 +410,7 @@ function AccountCard({
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [moving, setMoving] = useState<Moving | null>(null);
+  const [customizing, setCustomizing] = useState(false);
   const status = accountStatus(account);
   const others = modelOptions(
     accounts.filter((a) => a.id !== account.id && a.kind !== "claude-plan"),
@@ -496,6 +500,7 @@ function AccountCard({
           }
           onRefresh={() => act(() => modelsApi.refresh(account.id), "Couldn't check the account")}
           onEdit={onEdit}
+          onCustomProviders={() => setCustomizing(true)}
           onDelete={remove}
         />
       </CardHeader>
@@ -539,12 +544,22 @@ function AccountCard({
           </ul>
           {account.kind !== "claude-plan" && (
             <AddModelById
+              {...(account.kind === "cloudflare-ai-gateway"
+                ? { placeholder: "Add a model by id, e.g. custom-zai-coding-plan/glm-5.3" }
+                : {})}
               onAdd={(upstreamId) =>
                 act(() => modelsApi.addModel(account.id, { upstreamId }), "Couldn't add the model")
               }
             />
           )}
         </CardContent>
+      )}
+      {customizing && (
+        <GatewayCustomProvidersDialog
+          account={account}
+          onClose={() => setCustomizing(false)}
+          onChanged={onChanged}
+        />
       )}
       {moving && (
         <MoveDialog
@@ -562,6 +577,13 @@ function AccountCard({
   );
 }
 
+/** What an unset role shows: the model its fallback picks, or none. */
+function fallbackLabel(options: ModelPickerOption[], modelId: string | null): string {
+  const option = modelId ? options.find((o) => o.id === modelId) : undefined;
+  if (!option) return modelId ? "Default (fallback)" : "None";
+  return `${option.group ? `${option.group} / ` : ""}${option.label} (fallback)`;
+}
+
 function DefaultModels({
   accounts,
   roles,
@@ -571,8 +593,8 @@ function DefaultModels({
   roles: Roles | null;
   onChanged: () => void;
 }) {
-  const chat = modelOptions(accounts);
-  const classifiers = modelOptions(accounts, "classifier");
+  const chat = useMemo(() => modelOptions(accounts), [accounts]);
+  const classifiers = useMemo(() => modelOptions(accounts, "classifier"), [accounts]);
   const setRole = async (role: ModelRole, modelId: string | null) => {
     try {
       await modelsApi.setRoles({ [role]: modelId });
@@ -598,38 +620,33 @@ function DefaultModels({
           return (
             <div
               key={role}
-              className="grid gap-2 sm:grid-cols-[1fr_minmax(0,18rem)] sm:items-center"
+              className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
             >
-              <div>
-                <Label htmlFor={`role-${role}`}>{label.title}</Label>
+              <div className="min-w-0">
+                <Text variant="body" className="block font-medium">
+                  {label.title}
+                </Text>
                 <Text variant="meta" className="block">
                   {label.description}
                 </Text>
               </div>
-              <div className="flex items-center gap-2">
-                <Select
+              {/* The picker shrinks so Reset always fits inside the card. */}
+              <div className="flex min-w-0 items-center gap-2">
+                <ModelPicker
+                  className="min-w-0 flex-1"
                   value={current.fallback ? "" : (current.modelId ?? "")}
-                  onValueChange={(value) => setRole(role, value)}
-                >
-                  <SelectTrigger id={`role-${role}`} className="w-full">
-                    <SelectValue
-                      placeholder={
-                        current.modelId
-                          ? `${options.find((o) => o.id === current.modelId)?.label ?? "Default"} (fallback)`
-                          : "None"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={options}
+                  onChange={(value) => setRole(role, value)}
+                  label={label.title}
+                  placeholder={fallbackLabel(options, current.modelId)}
+                />
                 {!current.fallback && (
-                  <Button variant="ghost" size="sm" onClick={() => setRole(role, null)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setRole(role, null)}
+                  >
                     Reset
                   </Button>
                 )}
@@ -729,7 +746,6 @@ function ModelsSettingsBody() {
         onOpenChange={(open) => !open && setAdding(null)}
         templates={templates}
         {...(adding?.template ? { template: adding.template } : {})}
-        accounts={accounts ?? []}
         onAdded={() => void reload()}
       />
       {editing && (

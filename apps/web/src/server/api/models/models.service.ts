@@ -10,6 +10,8 @@ import { Boom, HttpError } from "@groot/core/errors";
 import {
   discoverModels,
   DiscoveryError,
+  gatewayCustomBaseUrl,
+  type GatewayCustomProvider,
   secretRedactor,
   SecretValue,
   testModelCall,
@@ -195,6 +197,14 @@ interface Endpoint {
   apiKey?: string;
   allowPrivateNetwork: boolean;
   viaProviderId?: string | null;
+  /** A gateway's ids and custom providers; a gateway route's `upstream` and `basePath`. */
+  settings?: {
+    accountId?: string;
+    gatewayId?: string;
+    customProviders?: GatewayCustomProvider[];
+    upstream?: string;
+    basePath?: string;
+  };
 }
 
 /** The canonical endpoint of a new or edited account; throws 400 with what to fix. */
@@ -212,9 +222,94 @@ function canonicalEndpoint(input: Endpoint): string | null {
   }
 }
 
+/**
+ * A gateway route's models: `GET <gateway>/v1/<account>/<gateway>/<upstream>[/<basePath>]/models`
+ * on the gateway's token. Many upstreams list no models there; that is not
+ * an error, the owner adds models by id instead.
+ */
+async function discoverThroughGateway(input: Endpoint): Promise<DiscoveredModel[]> {
+  const gateway = await accountOrThrow(input.viaProviderId!);
+  const settings = parseObject(gateway.settingsJson);
+  const upstream = input.settings?.upstream?.trim();
+  if (
+    !upstream ||
+    typeof settings.accountId !== "string" ||
+    typeof settings.gatewayId !== "string"
+  ) {
+    return [];
+  }
+  const basePath = input.settings?.basePath?.replace(/^\/+|\/+$/g, "");
+  const routeBase = [
+    (gateway.baseUrl ?? "https://gateway.ai.cloudflare.com").replace(/\/+$/, ""),
+    "v1",
+    settings.accountId,
+    settings.gatewayId,
+    upstream,
+    ...(basePath ? [basePath] : []),
+  ].join("/");
+  const key = await storedKey(gateway);
+  try {
+    return await discoverModels({
+      kind: "openai-chat",
+      baseUrl: routeBase,
+      headers: key ? { "cf-aig-authorization": `Bearer ${key}` } : {},
+      get: (url, headers) => guardedGet(url, headers, { allowPrivateNetwork: false }),
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The models of a gateway's custom providers, listed through the gateway
+ * (`…/<slug>/<basePath>/models`) and named `<slug>/<model>`. A provider that
+ * lists none still works: the owner adds its models by id.
+ */
+async function discoverCustomProviders(input: Endpoint): Promise<DiscoveredModel[]> {
+  const { accountId, gatewayId } = input.settings ?? {};
+  const custom = input.settings?.customProviders ?? [];
+  if (!accountId || !gatewayId || custom.length === 0) return [];
+  const frontDoor = input.baseUrl ?? "https://gateway.ai.cloudflare.com";
+  const lists = await Promise.all(
+    custom.map(async (provider) => {
+      try {
+        const listed = await discoverModels({
+          kind: "openai-chat",
+          baseUrl: gatewayCustomBaseUrl(frontDoor, { accountId, gatewayId }, provider),
+          headers: input.apiKey ? { "cf-aig-authorization": `Bearer ${input.apiKey}` } : {},
+          get: (url, headers) => guardedGet(url, headers, { allowPrivateNetwork: false }),
+        });
+        return listed.map((model) => {
+          const resolved = resolveCapabilities(
+            "cloudflare-ai-gateway",
+            input.baseUrl,
+            `${provider.slug}/${model.upstreamId}`,
+          );
+          // Unknown to pi-ai's catalogs, a model is named by its own id, not the prefixed one.
+          const name = resolved.known ? resolved.name : model.name;
+          return { ...resolved, name: `${name} (${provider.slug})` };
+        });
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return lists.flat();
+}
+
 async function discoverAt(input: Endpoint): Promise<DiscoveredModel[]> {
-  // A gateway route lists nothing itself: the owner adds models by id.
-  if (input.viaProviderId) return [];
+  if (input.viaProviderId) return discoverThroughGateway(input);
+  if (input.kind === "cloudflare-ai-gateway") {
+    const [custom, catalog] = await Promise.all([
+      discoverCustomProviders(input),
+      discoverDirect(input),
+    ]);
+    return [...custom, ...catalog];
+  }
+  return discoverDirect(input);
+}
+
+async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
   const baseUrl = canonicalEndpoint(input);
   try {
     return await discoverModels({
@@ -291,11 +386,21 @@ function modelValues(
 function settingsFor(input: CreateAccountDTO): Record<string, unknown> {
   const s = input.settings;
   switch (input.kind) {
-    case "cloudflare-ai-gateway":
+    case "cloudflare-ai-gateway": {
       if (!s.accountId || !s.gatewayId) {
         throw Boom.badRequest("A gateway account needs its Account ID and Gateway ID.");
       }
-      return { accountId: s.accountId, gatewayId: s.gatewayId };
+      const trimPath = (path?: string) => path?.replace(/^\/+|\/+$/g, "") || undefined;
+      const custom = (s.customProviders ?? []).map((p) => {
+        const basePath = trimPath(p.basePath);
+        return { slug: p.slug, ...(basePath ? { basePath } : {}) };
+      });
+      return {
+        accountId: s.accountId,
+        gatewayId: s.gatewayId,
+        ...(custom.length > 0 ? { customProviders: custom } : {}),
+      };
+    }
     case "claude-plan":
       return s.fallbackModelId ? { fallbackModelId: s.fallbackModelId } : {};
     default:
@@ -331,7 +436,9 @@ export async function createAccount(input: CreateAccountDTO) {
     !input.allowPrivateNetwork;
   if (keyNeeded && !input.apiKey) throw Boom.badRequest("Enter the API key.");
 
-  if (input.discovery === "manual" && !input.model) throw Boom.badRequest("Add a model.");
+  if (input.discovery === "manual" && !input.model && input.models.length === 0) {
+    throw Boom.badRequest("Add a model.");
+  }
   // Discover again with what will be saved, so the stored models are real.
   const found =
     input.discovery === "auto"
@@ -345,7 +452,8 @@ export async function createAccount(input: CreateAccountDTO) {
               input.model.name ?? input.model.upstreamId,
             ),
           ]
-        : [];
+        : // Model ids typed by hand (a gateway route whose upstream lists none).
+          input.models.map((upstreamId) => resolveCapabilities(kind, baseUrl, upstreamId));
   const wanted = new Set(input.models);
   const chosen = input.discovery === "auto" ? found.filter((m) => wanted.has(m.upstreamId)) : found;
 
@@ -483,6 +591,7 @@ export async function updateConnection(id: string, input: UpdateConnectionDTO) {
           ...(key ? { apiKey: key } : {}),
           allowPrivateNetwork,
           viaProviderId: row.viaProviderId,
+          settings: settings as Endpoint["settings"],
         })
       : undefined;
   const item = input.apiKey ? await storeKey(kind, row.name, baseUrl, input.apiKey) : undefined;
@@ -524,6 +633,7 @@ export async function refreshAccount(id: string) {
       ...(key ? { apiKey: key } : {}),
       allowPrivateNetwork: row.allowPrivateNetwork,
       viaProviderId: row.viaProviderId,
+      settings: parseObject(row.settingsJson) as Endpoint["settings"],
     });
   } catch (error) {
     const code = error instanceof HttpError ? error.code : undefined;
@@ -761,7 +871,23 @@ export async function putRoles(input: Partial<Record<(typeof ROLES)[number], str
 
 /** A provider's error, cut and with any key scrubbed, before it reaches the UI. */
 const redacted = (result: TestResult): TestResult =>
-  result.error ? { ...result, error: secretRedactor.scrub(result.error).slice(0, 500) } : result;
+  result.error
+    ? { ...result, error: explained(secretRedactor.scrub(result.error)).slice(0, 600) }
+    : result;
+
+/**
+ * Cloudflare account limits read as JSON: say what they mean first. Neither
+ * is a fault of the model or of tiny-agents.
+ */
+function explained(error: string): string {
+  if (/"code":\s*2021|unified billing credits/i.test(error)) {
+    return `The gateway has no key for this provider and no Unified Billing credits: add the provider's key to the gateway (BYOK), or credits in Cloudflare. ${error}`;
+  }
+  if (/"internalCode":\s*5035|not available on the Workers Free plan/i.test(error)) {
+    return `This Workers AI model needs the Workers Paid plan. ${error}`;
+  }
+  return error;
+}
 
 /** One real, minimal completion: a saved model, or one of an unsaved account. */
 export async function testModel(input: TestDTO): Promise<TestResult> {

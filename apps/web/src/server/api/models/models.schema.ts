@@ -39,6 +39,22 @@ const settings = z.strictObject({
     .max(100)
     .optional(),
   basePath: z.string().trim().max(200).optional(),
+  /**
+   * cloudflare-ai-gateway: providers configured in the gateway itself (BYOK
+   * custom providers), by slug, with the path the gateway appends.
+   */
+  customProviders: z
+    .array(
+      z.strictObject({
+        slug: z
+          .string()
+          .trim()
+          .regex(/^custom-[a-z0-9-]+$/, "The gateway's slug, like custom-zai-coding-plan"),
+        basePath: z.string().trim().max(200).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
   /** claude-plan: a pi model a turn moves to when the plan is off or unreachable */
   fallbackModelId: id.nullable().optional(),
 });

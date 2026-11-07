@@ -80,7 +80,7 @@ await journey("message-paging", async ({ page, step, proof, cleanup, api, stamp 
   };
 
   await step(`setup: a bot with ${EXCHANGES} faux exchanges, sent through the API`, async () => {
-    const { defaultModel } = await api.get("/models");
+    const { defaultModelId: defaultModel } = await api.get("/models");
     botId = (await api.post("/bots", { name, modelId: defaultModel })).id;
     cleanup(async () => {
       await api.delete(`/bots/${botId}`);
