@@ -39,4 +39,4 @@ Preconditions:
 - A folder is a `.keep` marker: it is listed as a file inside the folder, `Select All Files` selects it, and deleting it removes the (now empty) folder.
 - Upload through the `Upload` button's file chooser (`page.waitForEvent("filechooser")`), not the hidden input: the FeedbackBee embed adds another file input to the page.
 - Storage is per instance, not per user; stamp every name.
-- The breadcrumb renders `<li>` inside `<li>` (React logs a hydration warning in `server.log`); harmless for driving.
+- The breadcrumb is `Breadcrumbs` from `@groot/ui/breadcrumb`: the root crumb is the button `Go to root folder`, each parent folder is a button named after the folder, and the current folder is plain text.

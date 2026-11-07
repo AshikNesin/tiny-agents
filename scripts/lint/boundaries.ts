@@ -10,7 +10,7 @@ import { builtinModules } from "node:module";
 type Scope = "**" | `${string}/**`;
 
 type ImportRestriction = {
-  patterns?: { group?: string[]; regex?: string; message: string }[];
+  patterns?: { group?: string[]; regex?: string; importNames?: string[]; message: string }[];
   paths?: { name: string; importNames?: string[]; message: string }[];
 };
 
@@ -110,12 +110,15 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     except: ["packages/ui/**"],
     enabled: true,
     restrict: {
-      paths: ["@groot/ui/breadcrumb", "@groot/ui"].map((name) => ({
-        name,
-        importNames: ["BreadcrumbItem", "BreadcrumbSeparator"],
-        message:
-          'R5a: render breadcrumbs with <Breadcrumbs page="Current">{links}</Breadcrumbs> from @groot/ui/breadcrumb, which places the list items and separators.',
-      })),
+      patterns: [
+        {
+          regex:
+            "^@groot/ui(/(breadcrumb|index)(\\.tsx?)?)?$|(^|/)ui/src(/(breadcrumb|index)(\\.tsx?)?)?$",
+          importNames: ["BreadcrumbItem", "BreadcrumbSeparator"],
+          message:
+            'R5a: render breadcrumbs with <Breadcrumbs page="Current">{links}</Breadcrumbs> from @groot/ui/breadcrumb, which places the list items and separators.',
+        },
+      ],
     },
   },
   {
@@ -123,6 +126,13 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "**/*.tsx",
     rule: "repo/no-nested-breadcrumb-separator",
+    enabled: true,
+  },
+  {
+    id: "R5c",
+    kind: "plugin",
+    scope: "**/*.tsx",
+    rule: "repo/breadcrumbs-children",
     enabled: true,
   },
 ];

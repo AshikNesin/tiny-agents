@@ -93,19 +93,28 @@ function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span"
 
 type BreadcrumbLinks = React.ReactElement | false | null | undefined | readonly BreadcrumbLinks[];
 
+function crumbLinks(children: BreadcrumbLinks, prefix = ""): React.ReactElement[] {
+  return React.Children.toArray(children)
+    .filter(React.isValidElement<{ children?: BreadcrumbLinks }>)
+    .flatMap((link) =>
+      link.type === React.Fragment
+        ? crumbLinks(link.props.children, `${prefix}${link.key}`)
+        : [
+            <BreadcrumbItem key={`${prefix}${link.key}`}>
+              <BreadcrumbLink asChild>{link}</BreadcrumbLink>
+            </BreadcrumbItem>,
+          ],
+    );
+}
+
 /**
  * A breadcrumb trail. Each child is one ancestor crumb, a link or button
  * element (`<Link to="/jobs">Jobs</Link>`), and `page` is the current page.
  * It places the list items and separators.
  */
 function Breadcrumbs({ children, page }: { children?: BreadcrumbLinks; page?: React.ReactNode }) {
-  const links = React.Children.toArray(children).filter(React.isValidElement);
-  const items = links.map((link) => (
-    <BreadcrumbItem key={link.key}>
-      <BreadcrumbLink asChild>{link}</BreadcrumbLink>
-    </BreadcrumbItem>
-  ));
-  if (page != null) {
+  const items = crumbLinks(children);
+  if (page != null && typeof page !== "boolean") {
     items.push(
       <BreadcrumbItem key="page">
         <BreadcrumbPage>{page}</BreadcrumbPage>

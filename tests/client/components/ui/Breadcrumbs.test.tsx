@@ -37,4 +37,41 @@ describe("Breadcrumbs", () => {
     expect(nav.querySelectorAll('li[role="presentation"]')).toHaveLength(0);
     expect(nav.querySelector("[aria-current]")).toBeNull();
   });
+
+  it("treats page={false} as no page: no empty current crumb, no trailing separator", () => {
+    const hasPage = false;
+    render(
+      <Breadcrumbs page={hasPage && "never"}>
+        <a href="/jobs">Jobs</a>
+      </Breadcrumbs>,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "breadcrumb" });
+    expect(within(nav).getAllByRole("listitem")).toHaveLength(1);
+    expect(nav.querySelectorAll('li[role="presentation"]')).toHaveLength(0);
+    expect(nav.querySelector("[aria-current]")).toBeNull();
+  });
+
+  it("flattens fragment children into one crumb per link", () => {
+    const { container } = render(
+      <Breadcrumbs page="inner">
+        <a href="/">Root</a>
+        <>
+          <a href="/a">A</a>
+          <a href="/a/b">B</a>
+        </>
+      </Breadcrumbs>,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "breadcrumb" });
+    const items = within(nav).getAllByRole("listitem");
+    expect(items.map((li) => li.textContent)).toEqual(["Root", "A", "B", "inner"]);
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("href")),
+    ).toEqual(["/", "/a", "/a/b"]);
+    expect(nav.querySelectorAll('li[role="presentation"]')).toHaveLength(3);
+    expect(container.querySelectorAll("li li")).toHaveLength(0);
+  });
 });
