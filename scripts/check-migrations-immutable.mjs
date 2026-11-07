@@ -40,9 +40,13 @@ if (problems.length === 0) {
   console.log(`migrations: no applied migration changed since ${base.slice(0, 7)}`);
   process.exit(0);
 }
+const restore = (status, file) =>
+  file === JOURNAL && status === "M"
+    ? "Restore the edited entries and keep the appended ones"
+    : `Restore it with \`git checkout ${base.slice(0, 7)} -- ${file}\``;
 for (const [status, file] of problems) {
   console.error(
-    `${file} ${status === "D" ? "deleted" : "edited"} after it was applied. Restore it with \`git checkout ${base.slice(0, 7)} -- ${file}\` and add a new migration with \`pnpm db:generate\` instead.`,
+    `${file} ${status === "D" ? "deleted" : "edited"} after it was applied. ${restore(status, file)}, and add a new migration with \`pnpm db:generate\` instead.`,
   );
 }
 process.exit(1);

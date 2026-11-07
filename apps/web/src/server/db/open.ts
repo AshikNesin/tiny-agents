@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { uploadsRoot } from "@groot/core/storage/node";
-import type * as core from "@groot/core/database";
+import type { Database } from "@groot/core/database";
 import { asCoreDatabase } from "./index";
 import { openAppDatabase } from "./legacy-copy";
 import { productionDataDir } from "../env";
@@ -54,7 +54,7 @@ type ValidatedEnv = Parameters<typeof uploadsRoot>[0] & { DATABASE_URL: string }
 export function openNodeAppDatabase(
   validated: ValidatedEnv,
   options: { besideBundle?: string } = {},
-): core.Database {
+): Database {
   return asCoreDatabase(
     openAppDatabase(validated.DATABASE_URL, {
       migrationsFolder: findMigrationsFolder(options.besideBundle),

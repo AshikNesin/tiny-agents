@@ -360,6 +360,50 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'import { setDb } from "./database";\nexport const s = setDb;\n',
     rules: [],
   },
+  "apps/web/src/server/r8a-require-fail.ts": {
+    source: 'const Database = require("better-sqlite3");\nexport const d = Database;\n',
+    rules: ["R8a"],
+  },
+  "apps/web/src/server/r8a-dynamic-fail.ts": {
+    source: 'export const load = () => import("drizzle-orm/better-sqlite3");\n',
+    rules: ["R8a"],
+  },
+  "apps/web/src/server/db/r8a-require-pass.ts": {
+    source: 'const Database = require("better-sqlite3");\nexport const d = Database;\n',
+    rules: [],
+  },
+  "packages/core/src/auth/r8b-index-js-fail.ts": {
+    source: 'export { setDb } from "../database/index.js";\n',
+    rules: ["R8b"],
+  },
+  "apps/web/src/server/db/r8b-fail.ts": {
+    source: 'import { setDb } from "@groot/core/database";\nexport const s = setDb;\n',
+    rules: ["R8b"],
+  },
+  "apps/web/src/server/db/index.ts": {
+    source: 'import * as core from "@groot/core/database";\nexport const d = core.db;\n',
+    rules: [],
+  },
+  "apps/web/src/server/api/vault/r9-fail.ts": {
+    source:
+      'import { sessionInvalid } from "@groot/core/utils/jwt.utils";\nexport const refuse = () => {\n  throw sessionInvalid("Wrong password");\n};\n',
+    rules: ["R9"],
+    mentions: "throw a plain Boom.unauthorized",
+  },
+  "packages/core/src/auth/r9-relative-fail.ts": {
+    source: 'export { sessionInvalid } from "../utils/jwt.utils.js";\n',
+    rules: ["R9"],
+  },
+  "packages/core/src/middlewares/jwt-auth.middleware.ts": {
+    source:
+      'import { sessionInvalid } from "../utils/jwt.utils";\nexport const s = sessionInvalid;\n',
+    rules: [],
+  },
+  "apps/web/src/server/r9-pass.ts": {
+    source:
+      'import { generateToken } from "@groot/core/utils/jwt.utils";\nexport const g = generateToken;\n',
+    rules: [],
+  },
   "apps/web/src/server/r8b-pass.ts": {
     source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
     rules: [],

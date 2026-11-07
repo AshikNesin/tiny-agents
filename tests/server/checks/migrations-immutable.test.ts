@@ -94,5 +94,7 @@ describe("check-migrations-immutable", () => {
     });
     expect(status).toBe(1);
     expect(out).toContain("_journal.json edited");
+    expect(out).toContain("keep the appended ones");
+    expect(out).not.toContain("git checkout");
   });
 });

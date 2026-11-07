@@ -67,6 +67,25 @@ const TRANSACTION_MESSAGE =
 export default {
   meta: { name: "repo" },
   rules: {
+    "no-restricted-require": {
+      meta: { schema: [{ type: "object" }] },
+      create(context) {
+        const { regex, message } = context.options[0];
+        const restricted = new RegExp(regex);
+        return {
+          CallExpression(node) {
+            const [source] = node.arguments;
+            if (
+              node.callee.type === "Identifier" &&
+              node.callee.name === "require" &&
+              source?.type === "Literal" &&
+              restricted.test(String(source.value))
+            )
+              context.report({ node, message });
+          },
+        };
+      },
+    },
     "no-package-transaction": {
       create(context) {
         return {

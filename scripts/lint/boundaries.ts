@@ -20,7 +20,7 @@ type BoundaryRule = {
   enabled: boolean;
 } & (
   | { kind: "import"; scope: Scope; restrict: ImportRestriction }
-  | { kind: "plugin"; scope: string; rule: `repo/${string}` }
+  | { kind: "plugin"; scope: string; rule: `repo/${string}`; options?: Record<string, string> }
 );
 
 const R2_ALLOWED = ["async_hooks", "buffer"];
@@ -40,6 +40,18 @@ const DRIZZLE_DRIVERS = [
   "node-sqlite",
   "sqlite-proxy",
 ].join("|");
+
+const JS_EXTENSION = "(\\.[cm]?[jt]sx?)?";
+const DRIVER_SPECIFIER = `^(better-sqlite3|node:sqlite|@libsql/.*|drizzle-orm/(${DRIZZLE_DRIVERS}))(/|$)`;
+const DRIVER_MESSAGE =
+  "R8a: open no second database driver. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package; bootstrap() sets it.";
+const DRIVER_HOMES = [
+  "packages/core/src/database/node.ts",
+  "apps/web/src/server/db/**",
+  "tests/**",
+  // A file lock for the agent store, not the app database.
+  "packages/agent/src/lock.ts",
+];
 
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
@@ -172,23 +184,18 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     id: "R8a",
     kind: "import",
     scope: "**",
-    except: [
-      "packages/core/src/database/node.ts",
-      "apps/web/src/server/db/**",
-      "tests/**",
-      // A file lock for the agent store, not the app database.
-      "packages/agent/src/lock.ts",
-    ],
+    except: DRIVER_HOMES,
     enabled: true,
-    restrict: {
-      patterns: [
-        {
-          regex: `^(better-sqlite3|node:sqlite|@libsql/.*|drizzle-orm/(${DRIZZLE_DRIVERS}))(/|$)`,
-          message:
-            "R8a: open no second database driver. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package; bootstrap() sets it.",
-        },
-      ],
-    },
+    restrict: { patterns: [{ regex: DRIVER_SPECIFIER, message: DRIVER_MESSAGE }] },
+  },
+  {
+    id: "R8a-require",
+    kind: "plugin",
+    scope: "**",
+    rule: "repo/no-restricted-require",
+    options: { regex: DRIVER_SPECIFIER, message: DRIVER_MESSAGE },
+    except: DRIVER_HOMES,
+    enabled: true,
   },
   {
     id: "R8b",
@@ -196,17 +203,34 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**",
     except: [
       "packages/core/src/bootstrap.ts",
-      // The app's database module reads core.db through a namespace import.
-      "apps/web/src/server/db/**",
+      // Reads core.db through a namespace import, which the rule can't tell from a setDb import.
+      "apps/web/src/server/db/index.ts",
     ],
     enabled: true,
     restrict: {
       patterns: [
         {
-          regex: "(^|/)database(/index(\\.ts)?)?$",
+          regex: `(^|/)database${JS_EXTENSION}(/index${JS_EXTENSION})?$`,
           importNames: ["setDb"],
           message:
             "R8b: only bootstrap() calls setDb. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package.",
+        },
+      ],
+    },
+  },
+  {
+    id: "R9",
+    kind: "import",
+    scope: "**",
+    except: ["packages/core/src/middlewares/jwt-auth.middleware.ts"],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: `(^|/)jwt\\.utils${JS_EXTENSION}$`,
+          importNames: ["sessionInvalid"],
+          message:
+            "R9: only the session guard throws sessionInvalid(), because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.",
         },
       ],
     },
@@ -259,7 +283,7 @@ export function boundaryOverrides(pluginPath: string): Override[] {
       files: [r.scope],
       ...(r.except && { excludeFiles: r.except }),
       jsPlugins: [pluginPath],
-      rules: { [r.rule]: "error" },
+      rules: { [r.rule]: r.options ? ["error", r.options] : "error" },
     }));
 
   return [...importOverrides, ...pluginOverrides];

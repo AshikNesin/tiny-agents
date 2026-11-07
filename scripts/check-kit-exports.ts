@@ -15,14 +15,23 @@
  * - A subpath the fixture never imports is unexercised. The fixture is the
  *   gate for the removal policy in AGENTS.md, so an unexercised subpath
  *   fails rather than shipping untested surface.
+ * - A named export of a public subpath on the merge base that is gone now is
+ *   a removal, which AGENTS.md allows only in a major, after a deprecation.
  */
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import ts from "typescript";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_EXTENSION = /\.(ts|tsx)$/;
+const REMOVALS_FILE = "scripts/kit-export-removals.json";
+const { values: args } = parseArgs({
+  options: { base: { type: "string", default: "origin/main" } },
+});
 
 interface PackageRule {
   name: string;
@@ -145,6 +154,123 @@ for (const rule of PACKAGES) {
     `${rule.name}: ${targets.size} entrypoints, ${exercisedKeys.size} exercised by the fixture`,
   );
 }
+
+type Reader = (file: string) => string | null;
+
+const readHead: Reader = (file) => {
+  const absolute = path.join(repoRoot, file);
+  return fs.existsSync(absolute) && fs.statSync(absolute).isFile()
+    ? fs.readFileSync(absolute, "utf8")
+    : null;
+};
+
+function git(...gitArgs: string[]): string {
+  return execFileSync("git", gitArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+}
+
+function readerAt(revision: string): Reader {
+  return (file) => {
+    try {
+      return git("cat-file", "-t", `${revision}:${file}`).trim() === "blob"
+        ? git("show", `${revision}:${file}`)
+        : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+function resolveModule(read: Reader, file: string): string | null {
+  const stem = file.replace(/\.[cm]?[jt]sx?$/, "");
+  const candidates = [file, `${stem}.ts`, `${stem}.tsx`, `${stem}/index.ts`, `${stem}/index.tsx`];
+  return candidates.find((candidate) => read(candidate) !== null) ?? null;
+}
+
+const hasModifier = (node: ts.Node, kind: ts.SyntaxKind) =>
+  ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === kind);
+
+function exportedNames(read: Reader, file: string, seen = new Set<string>()): Set<string> {
+  const names = new Set<string>();
+  const resolved = resolveModule(read, file);
+  if (!resolved || seen.has(resolved)) return names;
+  seen.add(resolved);
+  const source = ts.createSourceFile(resolved, read(resolved)!, ts.ScriptTarget.Latest);
+  for (const statement of source.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause;
+      const from = statement.moduleSpecifier as ts.StringLiteral | undefined;
+      if (clause && ts.isNamedExports(clause)) {
+        for (const element of clause.elements) names.add(element.name.text);
+      } else if (clause) {
+        names.add(clause.name.text);
+      } else if (from?.text.startsWith(".")) {
+        const target = path.posix.join(path.posix.dirname(resolved), from.text);
+        for (const name of exportedNames(read, target, seen)) names.add(name);
+      } else if (from) {
+        names.add(`* from "${from.text}"`);
+      }
+    } else if (ts.isExportAssignment(statement)) {
+      names.add("default");
+    } else if (hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      if (hasModifier(statement, ts.SyntaxKind.DefaultKeyword)) {
+        names.add("default");
+      } else if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
+        }
+      } else {
+        const name = (statement as ts.DeclarationStatement).name;
+        if (name && ts.isIdentifier(name)) names.add(name.text);
+      }
+    }
+  }
+  return names;
+}
+
+function entryTargets(read: Reader, manifest: string): Map<string, string> {
+  const text = read(manifest);
+  const exports: Record<string, string> = text ? (JSON.parse(text).exports ?? {}) : {};
+  return new Map(
+    Object.entries(exports)
+      .filter(([key]) => !key.includes("*"))
+      .map(([key, target]) => [key, path.posix.join(path.posix.dirname(manifest), target)]),
+  );
+}
+
+type ApprovedRemoval = { package: string; name: string; reason: string };
+
+function checkRemovedExports(base: string): void {
+  const readBase = readerAt(base);
+  const approved: ApprovedRemoval[] = JSON.parse(readHead(REMOVALS_FILE) ?? "[]");
+  for (const rule of PACKAGES) {
+    const headTargets = entryTargets(readHead, rule.manifest);
+    for (const [key, baseTarget] of entryTargets(readBase, rule.manifest)) {
+      const headTarget = headTargets.get(key);
+      const now = headTarget ? exportedNames(readHead, headTarget) : new Set<string>();
+      const subpath = `${rule.name}${key.slice(1)}`;
+      for (const name of exportedNames(readBase, baseTarget)) {
+        if (now.has(name)) continue;
+        if (approved.some((a) => a.package === rule.name && a.name === name)) continue;
+        console.error(
+          `${subpath}: export "${name}" is on ${base.slice(0, 7)} but gone now. Removing a kit export is a compatibility break (AGENTS.md): deprecate it in a minor release and remove it in the next major. For an approved removal add {"package": "${rule.name}", "name": "${name}", "reason": "..."} to ${REMOVALS_FILE}.`,
+        );
+        failed = true;
+      }
+    }
+  }
+}
+
+let insideGit = false;
+try {
+  insideGit = git("rev-parse", "--is-inside-work-tree").trim() === "true";
+} catch {
+  console.log("kit exports: not a git checkout, so removed exports are not checked");
+}
+if (insideGit) checkRemovedExports(git("merge-base", args.base!, "HEAD").trim());
 
 if (failed) process.exit(1);
 console.log("kit exports and consumer fixture agree");
