@@ -69,7 +69,7 @@ const fade: Transition = { duration: 0.08 };
 const snap: Transition = { duration: 0 };
 
 /** A measured rect as animation targets: position as a transform, size as
- *  layout. Exported for the unit test. */
+ *  layout. */
 function toTarget(rect: ItemRect) {
   return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
 }
@@ -77,7 +77,7 @@ function toTarget(rect: ItemRect) {
 /**
  * Resolves the positional transition. Reduced motion keeps the opacity fade
  * and drops the travel, per the motion guidelines: fewer and gentler, not
- * none. Exported for the unit test.
+ * none.
  */
 function resolveHighlightTransition(
   transition: Transition | false | undefined,
@@ -87,7 +87,7 @@ function resolveHighlightTransition(
   return { ...positional, opacity: fade };
 }
 
-/** The rect and session a set of props resolves to. Exported for the test. */
+/** The rect and session a set of props resolves to. */
 function resolveHighlightSource(props: FluidHoverHighlightProps): {
   rect: ItemRect | null;
   session: number;

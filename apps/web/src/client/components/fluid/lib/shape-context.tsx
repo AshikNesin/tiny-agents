@@ -64,10 +64,8 @@ interface ShapeContextValue {
 
 const ShapeContext = createContext<ShapeContextValue | null>(null);
 
-// Rounded is the default on every path: the site demos render under
-// <ShapeProvider defaultShape="rounded">, the shipped :focus-visible fallback
-// ring assumes its 8px radius, and the preset generators only emit a provider
-// for pill. A consumer with no provider gets the corners the docs show.
+// Rounded is the default: the shipped :focus-visible fallback ring assumes
+// its 8px radius.
 function useShape(): ShapeClasses {
   const ctx = useContext(ShapeContext);
   if (!ctx) return shapeMap.rounded;
