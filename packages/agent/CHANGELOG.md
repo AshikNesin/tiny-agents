@@ -1,5 +1,18 @@
 # @tiny-agents/agent
 
+## 0.5.0
+
+### Minor Changes
+
+- [#180](https://github.com/AshikNesin/tiny-agents/pull/180) [`1c4f612`](https://github.com/AshikNesin/tiny-agents/commit/1c4f612e91ce5e9aebc0eee5c2d28157b9d01800) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bots can create a new bot when the owner asks (issue [#149](https://github.com/AshikNesin/tiny-agents/issues/149)): `create_bot` in the
+  new `bot-builder` capability takes a name, a description, instructions and an
+  optional model (the creating bot's by default). It always waits for the
+  owner's approval, and is refused in routine runs, in turns started by another
+  bot and in chats shared with guests. The approval card lists the new bot's
+  description, model and full instructions. The input is checked with the New
+  bot dialog's own schema, so a blank name is refused (`invalid`) with the
+  dialog's message.
+
 ## 0.4.0
 
 ### Minor Changes
