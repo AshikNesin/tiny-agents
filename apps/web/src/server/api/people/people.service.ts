@@ -9,7 +9,8 @@ import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import * as authService from "@groot/core/auth/auth.service";
 import type { CreateUserDTO } from "@groot/core/auth/auth.schema";
-import { db, botGuests, guests, users } from "../../db";
+import type { UploadReach } from "../../../shared/guest-access";
+import { db, botGuests, bots, guests, uploads, users } from "../../db";
 
 /** Who is signed in, as sharing sees it. */
 export interface Viewer {
@@ -130,6 +131,42 @@ export async function canOpenBot(viewer: Viewer, botId: string): Promise<boolean
     columns: { botId: true },
   });
   return row !== undefined;
+}
+
+/**
+ * Whether this viewer follows a conversation's live activity: the owner every
+ * one, a guest the chat of a bot shared with them.
+ */
+export function followsConversation(viewer: Viewer, conversationId: string): boolean {
+  if (!viewer.guest) return true;
+  const row = db
+    .select({ botId: bots.id })
+    .from(bots)
+    .innerJoin(botGuests, eq(botGuests.botId, bots.id))
+    .where(and(eq(bots.conversationId, conversationId), eq(botGuests.userId, viewer.userId)))
+    .get();
+  return row !== undefined;
+}
+
+/**
+ * Whether this viewer may use an upload: the owner always, a guest when they
+ * uploaded it or, for "uploadedOrShared", it was sent in a bot shared with them.
+ */
+export async function canReachUpload(
+  viewer: Viewer,
+  uploadId: string,
+  reach: UploadReach,
+): Promise<boolean> {
+  if (!viewer.guest) return true;
+  const row = await db.query.uploads.findFirst({
+    where: eq(uploads.id, uploadId),
+    columns: { uploadedBy: true, botId: true },
+  });
+  if (!row) return false;
+  if (row.uploadedBy === viewer.userId) return true;
+  return (
+    reach === "uploadedOrShared" && row.botId !== null && (await canOpenBot(viewer, row.botId))
+  );
 }
 
 /** A guest's read marker on a shared bot. */

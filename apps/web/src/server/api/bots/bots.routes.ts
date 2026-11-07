@@ -10,6 +10,7 @@ import * as botsService from "./bots.service";
 import * as pastChats from "./chats.history";
 import { openSse } from "./bots.sse";
 import { followBotChat } from "./bots.stream";
+import { canReachUpload, followsConversation } from "../people/people.service";
 import type { BotStreamEvent, EventsFeedEvent } from "../../../shared/bot-stream";
 import {
   answerQuestionsSchema,
@@ -64,34 +65,37 @@ router.get("/capabilities", (c) => {
 
 // ── Chat + activity streams (SSE) ─────────────────────────────────────
 
-router.get("/events", (c) =>
-  openSse<EventsFeedEvent>(c, (sse) => {
+router.get("/events", (c) => {
+  const viewer = c.get("viewer");
+  const follows = (conversation: string) => followsConversation(viewer, conversation);
+  return openSse<EventsFeedEvent>(c, (sse) => {
     const runtime = getAgentRuntime();
     // Snapshot of current busy conversations first, then live changes.
     sse.write({
       type: "activity",
-      busy: runtime.busyConversations().map(String),
+      busy: runtime.busyConversations().map(String).filter(follows),
     });
     sse.onClose(
       runtime.onActivity((change) => {
+        const conversation = String(change.conversation);
+        if (!follows(conversation)) return;
         sse.write({
           type: "activity",
-          conversation: String(change.conversation),
+          conversation,
           busy: change.busy,
           approvals: change.approvals,
           questions: change.questions,
         });
       }),
     );
-    // Connection status (connected / needs sign-in / error) for the
-    // Connections page and the chat banner.
+    if (viewer.guest) return;
     sse.onClose(
       getConnectionManager().onChange((id, state) => {
         sse.write({ type: "connection", id, ...state });
       }),
     );
-  }),
-);
+  });
+});
 
 router.get("/bots/:id/stream", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
@@ -139,7 +143,13 @@ router.get("/bots/:id/messages", async (c) => {
 router.post("/bots/:id/messages", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, sendMessageSchema);
-  await botsService.sendMessage(id, payload, undefined, c.get("viewer").userId);
+  const viewer = c.get("viewer");
+  for (const uploadId of payload.attachments ?? []) {
+    if (!(await canReachUpload(viewer, uploadId, "uploadedOrShared"))) {
+      throw Boom.notFound(`Unknown attachment "${uploadId}"`);
+    }
+  }
+  await botsService.sendMessage(id, payload, undefined, viewer.userId);
   return ok(c, { submitted: true });
 });
 

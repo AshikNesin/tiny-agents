@@ -24,6 +24,7 @@ import {
 } from "@tiny-agents/agent";
 import { db, bots } from "../../db";
 import { resolveAttachments } from "../uploads/uploads.attach";
+import { sentInBot } from "../uploads/uploads.service";
 import { participantNames } from "../people/people.service";
 import { botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
 
@@ -276,6 +277,7 @@ export async function submitToBot(
 ): Promise<{ bot: Bot; attachments?: AttachmentRef[] }> {
   const row = await findBotRow(id);
   const resolved = await resolveAttachments(submission, modelSeesImages(rt.catalog, row.modelId));
+  await sentInBot(submission.attachments ?? [], row.id);
   const conversation = conversationRef(target?.routineConversationId ?? row.conversationId);
   await rt.configure(conversation, await rowConfig(row, rt, target !== undefined));
   await rt.submit(conversation, {

@@ -50,6 +50,13 @@
       "when": 1793878112811,
       "tag": "0006_eminent_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794035964014,
+      "tag": "0007_bored_mauler",
+      "breakpoints": true
     }
   ]
 }

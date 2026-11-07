@@ -10,7 +10,7 @@
  * from there.
  */
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { storageService } from "@groot/core/storage";
 import type { AttachmentRef } from "@tiny-agents/agent";
@@ -99,7 +99,7 @@ function checkExtension(name: string): void {
 }
 
 export async function createUpload(
-  input: { name: string; mimeType: string; bytes: Buffer },
+  input: { name: string; mimeType: string; bytes: Buffer; uploadedBy: number },
   prepare: { image: typeof prepareImage } = { image: prepareImage },
 ): Promise<StoredUpload> {
   const name = sanitizeName(input.name);
@@ -176,6 +176,7 @@ export async function createUpload(
       ...(width !== undefined && height !== undefined ? { width, height } : {}),
       modelKey,
       storageKey: originalKey,
+      uploadedBy: input.uploadedBy,
       sha256: createHash("sha256").update(input.bytes).digest("hex"),
       ...(await initialExtraction(sniffedFile, name)),
     })
@@ -228,6 +229,15 @@ async function getUpload(id: string): Promise<AttachmentRef> {
 
 function findUpload(id: string) {
   return db.query.uploads.findFirst({ where: eq(uploads.id, id) });
+}
+
+/** Mark uploads as sent in a bot's chat; one already sent elsewhere keeps its first bot. */
+export async function sentInBot(ids: string[], botId: string): Promise<void> {
+  if (ids.length === 0) return;
+  await db
+    .update(uploads)
+    .set({ botId })
+    .where(and(inArray(uploads.id, ids), isNull(uploads.botId)));
 }
 
 /** Original bytes for the UI/download endpoint. */

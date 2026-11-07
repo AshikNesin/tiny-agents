@@ -414,6 +414,12 @@ describe("matchGuestRoute", () => {
     expect(matchGuestRoute("POST", "/bots/b1/browser/vnc-ticket")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/code/threads")).toEqual({});
     expect(matchGuestRoute("POST", "/uploads")).toEqual({});
+    expect(matchGuestRoute("GET", "/uploads/u1/content")).toEqual({
+      upload: { id: "u1", reach: "uploadedOrShared" },
+    });
+    expect(matchGuestRoute("DELETE", "/uploads/u1")).toEqual({
+      upload: { id: "u1", reach: "uploaded" },
+    });
 
     expect(matchGuestRoute("PATCH", "/bots/b1")).toBeUndefined();
     // YOLO mode is the owner's switch (issue #151).
