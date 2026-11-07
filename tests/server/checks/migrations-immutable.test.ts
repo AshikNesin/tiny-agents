@@ -36,7 +36,7 @@ function write(dir: string, files: Files) {
   }
 }
 
-function runGate(branch: Files, { commit = true } = {}) {
+function runGate(branch: Files, { commit = true, base }: { commit?: boolean; base?: string } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "migrations-immutable-"));
   const git = (...args: string[]) =>
     execFileSync("git", [...GIT_IDENTITY, ...args], { cwd: dir, encoding: "utf8" }).trim();
@@ -45,13 +45,15 @@ function runGate(branch: Files, { commit = true } = {}) {
     git("init", "-q");
     git("add", ".");
     git("commit", "-q", "-m", "main");
-    const base = git("rev-parse", "HEAD");
+    const main = git("rev-parse", "HEAD");
     write(dir, branch);
     if (commit) {
       git("add", "-A");
       git("commit", "-q", "-m", "branch");
     }
-    const run = spawnSync("node", [SCRIPT, "--root", dir, "--base", base], { encoding: "utf8" });
+    const run = spawnSync("node", [SCRIPT, "--root", dir, "--base", base ?? main], {
+      encoding: "utf8",
+    });
     return { status: run.status, out: `${run.stdout}${run.stderr}` };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -86,6 +88,44 @@ describe("check-migrations-immutable", () => {
     const { status, out } = runGate({ [`${DIR}/meta/0000_snapshot.json`]: null });
     expect(status).toBe(1);
     expect(out).toContain("0000_snapshot.json deleted");
+  });
+
+  it("fails in one line naming the fetch when the base ref is not in the clone", () => {
+    const { status, out } = runGate({}, { commit: false, base: "origin/main" });
+    expect(status).toBe(1);
+    expect(out).toBe(
+      "Base ref origin/main is not in this clone. Fetch the base: `git fetch origin main:refs/remotes/origin/main` or set fetch-depth: 0 in CI.\n",
+    );
+  });
+
+  it("fails in one line naming the unshallow when a shallow clone holds no shared commit", () => {
+    const origin = mkdtempSync(path.join(tmpdir(), "migrations-origin-"));
+    const clone = mkdtempSync(path.join(tmpdir(), "migrations-shallow-"));
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync("git", [...GIT_IDENTITY, ...args], { cwd, encoding: "utf8" });
+    try {
+      write(origin, APPLIED);
+      git(origin, "init", "-q", "-b", "main");
+      git(origin, "add", ".");
+      git(origin, "commit", "-q", "-m", "main");
+      git(origin, "checkout", "-q", "-b", "branch");
+      git(origin, "commit", "-q", "--allow-empty", "-m", "branch");
+      git(origin, "checkout", "-q", "main");
+      git(origin, "commit", "-q", "--allow-empty", "-m", "main moves on");
+      git(clone, "clone", "-q", "--depth", "1", "--branch", "branch", `file://${origin}`, ".");
+      git(clone, "fetch", "-q", "--depth", "1", "origin", "main:refs/remotes/origin/main");
+
+      const run = spawnSync("node", [SCRIPT, "--root", clone, "--base", "origin/main"], {
+        encoding: "utf8",
+      });
+      expect(run.status).toBe(1);
+      expect(`${run.stdout}${run.stderr}`).toBe(
+        "This shallow clone holds no commit shared by HEAD and origin/main. Fetch the history: `git fetch --unshallow` or set fetch-depth: 0 in CI.\n",
+      );
+    } finally {
+      rmSync(origin, { recursive: true, force: true });
+      rmSync(clone, { recursive: true, force: true });
+    }
   });
 
   it("fails a journal that rewrites an applied entry", () => {

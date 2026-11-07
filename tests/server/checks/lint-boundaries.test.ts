@@ -322,6 +322,31 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export const run = (db: any) => db["transaction"](() => 1);\n',
     rules: ["R7"],
   },
+  "packages/core/src/auth/r7-alias-fail.ts": {
+    source:
+      'import { db as appDb } from "@groot/core/database";\nconst handle = appDb;\nexport const run = () => handle.transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/core/src/auth/r7-typed-fail.ts": {
+    source:
+      'import type { Database } from "../database";\nexport const run = (database: Database) => database.transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-typeof-fail.ts": {
+    source:
+      'import { db } from "@groot/core/database";\nexport const run = (handle: typeof db) => handle.transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-member-fail.ts": {
+    source:
+      "export const run = (ctx: { db: { transaction(f: () => void): void } }) => ctx.db.transaction(() => {});\n",
+    rules: ["R7"],
+  },
+  "packages/agent/src/r7-other-receiver-pass.ts": {
+    source:
+      "type Store = { transaction<T>(f: () => T): T };\nexport const run = (store: Store) => store.transaction(() => 1);\n",
+    rules: [],
+  },
   "apps/web/src/server/r7-app-pass.ts": {
     source: 'import { db } from "./db";\nexport const run = () => db.transaction(() => 1);\n',
     rules: [],
@@ -387,12 +412,38 @@ const FIXTURES: Record<string, Fixture> = {
   "apps/web/src/server/api/vault/r9-fail.ts": {
     source:
       'import { sessionInvalid } from "@groot/core/utils/jwt.utils";\nexport const refuse = () => {\n  throw sessionInvalid("Wrong password");\n};\n',
-    rules: ["R9"],
+    rules: ["R9", "R9"],
     mentions: "throw a plain Boom.unauthorized",
   },
   "packages/core/src/auth/r9-relative-fail.ts": {
     source: 'export { sessionInvalid } from "../utils/jwt.utils.js";\n',
     rules: ["R9"],
+  },
+  "packages/core/src/auth/r9-dynamic-import-fail.ts": {
+    source:
+      'export const refuse = async () => {\n  const jwt = await import("../utils/jwt.utils");\n  throw jwt.sessionInvalid("Wrong passkey");\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-hand-built-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nimport { ErrorCode } from "@groot/core/errors";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, ErrorCode.SESSION_INVALID.code);\n};\n',
+    rules: ["R9"],
+    mentions: "sets the SESSION_INVALID code",
+  },
+  "apps/web/src/server/api/vault/r9-literal-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, "SESSION_INVALID");\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-template-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_INVALID`);\n};\n',
+    rules: ["R9"],
+  },
+  "packages/core/src/utils/jwt.utils.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',
+    rules: [],
   },
   "packages/core/src/middlewares/jwt-auth.middleware.ts": {
     source:

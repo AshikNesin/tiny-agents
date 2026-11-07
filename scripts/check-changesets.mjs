@@ -33,6 +33,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
 import { load as loadYaml } from "js-yaml";
+import { mergeBase } from "./lib/merge-base.mjs";
 
 const RELEASE_BOTS = ["github-actions[bot]", "renovate[bot]"];
 const BOT_EMAIL_SUFFIX = "@users.noreply.github.com";
@@ -331,7 +332,7 @@ function showBlob(root, revision, file) {
 
 export function run({ base, root }) {
   const repoRoot = root ?? process.cwd();
-  const diffBase = base ?? git(["merge-base", "origin/main", "HEAD"], repoRoot);
+  const diffBase = mergeBase(base ?? "origin/main", repoRoot);
   const diffNames = (...args) =>
     git(["diff", "--name-only", ...args, `${diffBase}...HEAD`], repoRoot)
       .split("\n")
