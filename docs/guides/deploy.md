@@ -61,6 +61,14 @@ Set these on the host; defaults and the full list are in the
   [Sentry source maps](./sentry-source-maps.md); in production `SENTRY_DSN`
   defaults to the tiny-agents project DSN, and the SDK costs ~50 MB of
   RSS — see [Memory](#memory)).
+- **Behind a reverse proxy** (Coolify's Traefik, Railway's edge, the exe.dev
+  HTTPS proxy): the server reads `X-Forwarded-For` only from a trusted proxy.
+  By default that is loopback and the private networks, which covers a proxy
+  on the same host or Docker network. If the request log shows one `ip` for
+  every client, that address is your proxy and is not trusted: add it to
+  `TRUSTED_PROXIES`. Setting the variable replaces the default. If clients
+  can reach the port directly from a private network, set the proxy's exact
+  address, or `none` when there is no proxy.
 
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.

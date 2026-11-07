@@ -46,6 +46,26 @@ describe("env", () => {
     expect(defaultDatabaseUrl("production")).toBe("file:/data/prod.db");
   });
 
+  it("trusts loopback and private networks unless TRUSTED_PROXIES replaces them", () => {
+    expect(parseEnv({}).TRUSTED_PROXIES).toEqual([
+      "127.0.0.0/8",
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16",
+      "::1",
+    ]);
+    expect(parseEnv({ TRUSTED_PROXIES: " 10.0.0.0/8, 127.0.0.1,::1 " }).TRUSTED_PROXIES).toEqual([
+      "10.0.0.0/8",
+      "127.0.0.1",
+      "::1",
+    ]);
+    expect(parseEnv({ TRUSTED_PROXIES: "none" }).TRUSTED_PROXIES).toEqual([]);
+    expect(parseEnv({ TRUSTED_PROXIES: " NONE " }).TRUSTED_PROXIES).toEqual([]);
+    for (const bad of ["proxy.internal", "10.0.0.0/33", "10.0.0.256", "::1/64", "*", "none,::1"]) {
+      expect(() => parseEnv({ TRUSTED_PROXIES: bad })).toThrow(/TRUSTED_PROXIES/);
+    }
+  });
+
   it("drops variables outside the schema", () => {
     const env = parseEnv({ SOURCE_COMMIT: "abc", OPENAI_API_KEY: "sk-test" });
     expect(env).not.toHaveProperty("SOURCE_COMMIT");

@@ -66,7 +66,7 @@ Handlers use these helpers:
 | `await parseForm(c, schema)`                      | Multipart / urlencoded body through Zod (repeated fields are arrays)   |
 | `parseId(value)`, `parseStringParam(value)`       | Positive integer id / required string param, else 400                  |
 | `requireUser(c)`                                  | The JWT user (`{ userId, email }`), else 401                           |
-| `clientIp(c)`                                     | `cf-connecting-ip`, `x-forwarded-for`, `x-real-ip`, or `unknown`       |
+| `clientIp(c)`                                     | Socket peer, or its `x-forwarded-for` hop if it is a trusted proxy     |
 | `ok(c, data, status = 200)`                       | `{ success: true, data }`                                              |
 | `noContent(c)`                                    | 204                                                                    |
 | `fail(c, error, status)`                          | `{ success: false, error }` (used by the error handler)                |
