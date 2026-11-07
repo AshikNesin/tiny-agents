@@ -4,6 +4,7 @@
  * always waits for the owner's approval.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import { createSkillsCapability, type SkillStore } from "../../../../packages/agent/src/skills";
@@ -58,16 +59,6 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
     } else if (state && event.type === "busy") state.busy = event.busy;
   }
   return state;
-}
-
-async function until<T>(read: () => T | undefined | false, what: string): Promise<T> {
-  const deadline = Date.now() + 10_000;
-  for (;;) {
-    const value = read();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 20));
-  }
 }
 
 const runtimes: AgentRuntime[] = [];

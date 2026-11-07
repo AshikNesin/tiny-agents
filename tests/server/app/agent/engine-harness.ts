@@ -6,6 +6,7 @@
  * `RESULT:<text>`; any other message is echoed as `Echo: <text>`.
  */
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
+import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { vi } from "vite-plus/test";
 import { withGatePlan } from "../../../../packages/agent/src/approvals";
@@ -433,20 +434,6 @@ export async function watch(runtime: AgentRuntime, ref: ConversationRef): Promis
     },
     stop: () => subscription.stop(),
   };
-}
-
-export async function until<T>(
-  read: () => T | undefined | false | Promise<T | undefined | false>,
-  what: string,
-  ms = 10_000,
-): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = await read();
-    if (value !== undefined && value !== false) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 /** The tool call once it shows its approval card. */

@@ -4,6 +4,7 @@
  * Real pi-durable turns on the faux model.
  */
 import { mkdtemp, rm } from "node:fs/promises";
+import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
@@ -95,16 +96,6 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
     } else if (state && event.type === "busy") state.busy = event.busy;
   }
   return state;
-}
-
-async function until<T>(read: () => T | undefined, what: string, ms = 10_000): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = read();
-    if (value !== undefined && value !== false) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 20));
-  }
 }
 
 function toolCall(events: ChatEvent[], name: string): ChatToolCall | undefined {

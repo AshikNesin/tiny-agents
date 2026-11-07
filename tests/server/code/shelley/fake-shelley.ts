@@ -6,6 +6,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { until } from "../../fixtures/until";
 
 interface Seen {
   method: string;
@@ -157,32 +158,11 @@ export async function startFakeShelley(): Promise<FakeShelley> {
     },
     openStreams: () => streams.size,
     async waitForStreams(n, timeoutMs = 5000) {
-      const start = Date.now();
-      while (streams.size < n) {
-        if (Date.now() - start > timeoutMs) throw new Error(`only ${streams.size} streams open`);
-        await new Promise((r) => setTimeout(r, 10));
-      }
+      await until(() => streams.size >= n, `${n} open streams`, timeoutMs);
     },
     close() {
       for (const res of streams) res.end();
       return new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
-}
-
-/** Poll until `check` passes (or throw after `timeoutMs`). */
-export async function eventually(
-  check: () => void | Promise<void>,
-  timeoutMs = 3000,
-): Promise<void> {
-  const start = Date.now();
-  for (;;) {
-    try {
-      await check();
-      return;
-    } catch (error) {
-      if (Date.now() - start > timeoutMs) throw error;
-      await new Promise((r) => setTimeout(r, 20));
-    }
-  }
 }

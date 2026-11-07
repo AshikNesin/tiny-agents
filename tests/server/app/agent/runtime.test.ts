@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -27,20 +28,6 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
-
-const TEST_TIMEOUT_MS = 8_000;
-
-async function waitUntil(
-  check: () => boolean | Promise<boolean>,
-  description: string,
-  timeoutMs = TEST_TIMEOUT_MS,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!(await check())) {
-    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${description}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatState {
   let state = structuredClone(previous);
@@ -188,7 +175,7 @@ describe("AgentRuntime", () => {
 
       await runtime.submit(ref, { requestId: "retry-safe", text: "only once" });
       await runtime.submit(ref, { requestId: "retry-safe", text: "only once" });
-      await waitUntil(() => !chat.state().busy && chat.state().messages.length === 2, "one reply");
+      await until(() => !chat.state().busy && chat.state().messages.length === 2, "one reply");
 
       expect(chat.state().messages.filter((message) => message.role === "user")).toHaveLength(1);
       expect(chat.state().messages.filter((message) => message.role === "assistant")).toHaveLength(
@@ -220,7 +207,7 @@ describe("AgentRuntime", () => {
         const chat = await observeChat(runtime, ref);
 
         await runtime.submit(ref, { requestId: "steer-1", text: "start a slow reply" });
-        await waitUntil(() => chat.state().busy, "the run to start");
+        await until(() => chat.state().busy, "the run to start");
 
         // Sent while busy: the message is durably held, not lost.
         await runtime.submit(ref, {
@@ -228,7 +215,7 @@ describe("AgentRuntime", () => {
           text: "steer me",
           whenBusy: "steer",
         });
-        await waitUntil(
+        await until(
           () => chat.state().queued.some((item) => item.requestId === "steer-2"),
           "the steer to appear in the queue",
         );
@@ -245,7 +232,7 @@ describe("AgentRuntime", () => {
 
         // The steer joins the reply: placed as a user message and answered
         // in the same run, then the queue empties.
-        await waitUntil(
+        await until(
           () =>
             chat
               .state()
@@ -259,7 +246,7 @@ describe("AgentRuntime", () => {
               ),
           "the steered reply",
         );
-        await waitUntil(() => !chat.state().busy, "the run to end");
+        await until(() => !chat.state().busy, "the run to end");
         expect(chat.state().queued).toEqual([]);
 
         await chat.stop();
@@ -284,14 +271,14 @@ describe("AgentRuntime", () => {
         const chat = await observeChat(runtime, ref);
 
         await runtime.submit(ref, { requestId: "follow-1", text: "first" });
-        await waitUntil(() => chat.state().busy, "the run to start");
+        await until(() => chat.state().busy, "the run to start");
 
         await runtime.submit(ref, {
           requestId: "follow-2",
           text: "after this",
           whenBusy: "followUp",
         });
-        await waitUntil(
+        await until(
           () => chat.state().queued.some((item) => item.requestId === "follow-2"),
           "the follow-up to appear in the queue",
         );
@@ -299,7 +286,7 @@ describe("AgentRuntime", () => {
 
         // The first run answers, then the follow-up places and starts the
         // next one — both messages end up answered in order.
-        await waitUntil(
+        await until(
           () =>
             !chat.state().busy &&
             chat
@@ -341,32 +328,32 @@ describe("AgentRuntime", () => {
         const chat = await observeChat(runtime, ref);
 
         await runtime.submit(ref, { requestId: "withdraw-1", text: "keep this one busy" });
-        await waitUntil(() => chat.state().busy, "the run to start");
+        await until(() => chat.state().busy, "the run to start");
 
         await runtime.submit(ref, {
           requestId: "withdraw-2",
           text: "withdraw me",
           whenBusy: "followUp",
         });
-        await waitUntil(
+        await until(
           () => chat.state().queued.some((item) => item.requestId === "withdraw-2"),
           "the message to queue",
         );
 
         // Withdrawn while queued: gone from the stream, never answered.
         expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
-        await waitUntil(() => chat.state().queued.length === 0, "the queue to clear");
+        await until(() => chat.state().queued.length === 0, "the queue to clear");
         // Re-withdrawing the same input is idempotent, not a conflict.
         expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
         expect(await runtime.withdraw(ref, "never-submitted")).toBe("not_found");
 
         // The run ends and answers "withdraw-1": its input is settled.
-        await waitUntil(() => !chat.state().busy, "the run to end");
+        await until(() => !chat.state().busy, "the run to end");
         expect(await runtime.withdraw(ref, "withdraw-1")).toBe("settled");
 
         // A placed input belongs to its run: withdrawal is refused with 409.
         await runtime.submit(ref, { requestId: "withdraw-3", text: "place me" });
-        await waitUntil(() => chat.state().busy, "the placed run to start");
+        await until(() => chat.state().busy, "the placed run to start");
         expect(await runtime.withdraw(ref, "withdraw-3")).toBe("already_placed");
 
         await chat.stop();
@@ -390,13 +377,13 @@ describe("AgentRuntime", () => {
         const chat = await observeChat(runtime, ref);
 
         await runtime.submit(ref, { requestId: "abort-me", text: "start slowly" });
-        await waitUntil(
+        await until(
           () => chat.state().messages.some((message) => message.status === "streaming"),
           "the assistant to begin streaming",
         );
 
         await expect(runtime.abort(ref)).resolves.toBeUndefined();
-        await waitUntil(() => !chat.state().busy, "the abort to settle");
+        await until(() => !chat.state().busy, "the abort to settle");
 
         expect(
           chat
@@ -421,7 +408,7 @@ describe("AgentRuntime", () => {
       const oldRef = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       const oldChat = await observeChat(runtime, oldRef);
       await runtime.submit(oldRef, { requestId: "old-message", text: "history survives" });
-      await waitUntil(
+      await until(
         () => !oldChat.state().busy && oldChat.state().messages.length === 2,
         "old reply",
       );
@@ -450,10 +437,7 @@ describe("AgentRuntime", () => {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       const first = await observeChat(runtime, ref);
       await runtime.submit(ref, { requestId: "history", text: "persist this history" });
-      await waitUntil(
-        () => !first.state().busy && first.state().messages.length === 2,
-        "first reply",
-      );
+      await until(() => !first.state().busy && first.state().messages.length === 2, "first reply");
 
       const second = await observeChat(runtime, ref);
       expect(second.batches).toHaveLength(1);
@@ -490,7 +474,7 @@ describe("AgentRuntime", () => {
         const ref = await first.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
         const before = await observeChat(first, ref);
         await first.submit(ref, { requestId: "survive-restart", text: "keep going" });
-        await waitUntil(
+        await until(
           () => before.state().messages.some((message) => message.status === "streaming"),
           "the reply to begin streaming",
         );
@@ -501,7 +485,7 @@ describe("AgentRuntime", () => {
         const second = await openTestRuntime({ storePath, reply: () => "finished after restart" });
         try {
           const after = await observeChat(second, ref);
-          await waitUntil(
+          await until(
             () =>
               !after.state().busy &&
               after
@@ -541,7 +525,7 @@ describe("AgentRuntime", () => {
       for (let i = 0; i < turns; i++) {
         await runtime.submit(ref, { requestId: `long-${i}`, text: `message ${i}` });
       }
-      await waitUntil(
+      await until(
         async () => (await runtime.lastMessage(ref))?.text === `Echo: message ${turns - 1}`,
         "every queued message to be answered",
         50_000,
@@ -567,7 +551,7 @@ describe("AgentRuntime", () => {
       for (let i = 0; i < 4; i++) {
         await runtime.submit(ref, { requestId: `window-${i}`, text: `message ${i}` });
       }
-      await waitUntil(
+      await until(
         async () => (await runtime.lastMessage(ref))?.text === "Echo: message 3",
         "every message to be answered",
       );
@@ -582,7 +566,7 @@ describe("AgentRuntime", () => {
 
       // New messages extend the window: nothing older is removed from it.
       await runtime.submit(ref, { requestId: "window-4", text: "message 4" });
-      await waitUntil(
+      await until(
         () =>
           !chat.state().busy &&
           chat.state().messages.at(-1)?.text === "Echo: message 4" &&
@@ -628,10 +612,10 @@ describe("AgentRuntime", () => {
     try {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       await runtime.submit(ref, { requestId: "finished-1", text: "slow one" });
-      await waitUntil(() => runtime.isBusy(ref), "the reply to start");
+      await until(() => runtime.isBusy(ref), "the reply to start");
       expect(await runtime.finishedReplies(ref)).toEqual([]);
 
-      await waitUntil(() => !runtime.isBusy(ref), "the reply to finish");
+      await until(() => !runtime.isBusy(ref), "the reply to finish");
       const replies = await runtime.finishedReplies(ref);
       expect(replies).toEqual([{ text: "Echo: slow one", createdAt: expect.any(Number) }]);
     } finally {
@@ -651,7 +635,7 @@ describe("AgentRuntime", () => {
     try {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       await runtime.submit(ref, { requestId: "error-1", text: "hello" });
-      await waitUntil(
+      await until(
         async () => (await runtime.finishedReplies(ref)).length > 0,
         "the failed reply to settle",
       );
@@ -669,7 +653,7 @@ describe("AgentRuntime", () => {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       await runtime.submit(ref, { requestId: "turn-1", text: "one" });
       await runtime.submit(ref, { requestId: "turn-2", text: "two" });
-      await waitUntil(
+      await until(
         async () => finishedReplyTo(await runtime.readChat(ref), "turn-2").status === "answered",
         "both turns to finish",
       );
@@ -702,7 +686,7 @@ describe("AgentRuntime", () => {
         ],
       });
       await runtime.submit(ref, { requestId: "plain", text: "and this" });
-      await waitUntil(
+      await until(
         () => chat.state().messages.filter((m) => m.role === "user").length === 2,
         "both sends to land",
       );

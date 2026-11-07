@@ -101,17 +101,21 @@ it(
         requestId: "remember",
         text: "Remember my preference for TypeScript.",
       });
-      const call = await until(() =>
-        [...messages.values()]
-          .flatMap((m) => m.toolCalls ?? [])
-          .find((tool) => tool.status === "awaiting_approval"),
+      const call = await until(
+        () =>
+          [...messages.values()]
+            .flatMap((m) => m.toolCalls ?? [])
+            .find((tool) => tool.status === "awaiting_approval"),
+        "the remember approval card",
       );
       expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
       await rt.decideApproval(conv, call.taskId!, "approved");
-      await until(() =>
-        [...messages.values()].find(
-          (m) => m.role === "assistant" && m.text.length > 0 && m.status === "done",
-        ),
+      await until(
+        () =>
+          [...messages.values()].find(
+            (m) => m.role === "assistant" && m.text.length > 0 && m.status === "done",
+          ),
+        "the reply after remembering",
       );
       expect(await memoryStore.list(conv)).toMatchObject([{ text }]);
       await first.stop();
@@ -123,23 +127,28 @@ it(
         .where(eq(bots.id, botId));
       const next = await watch(fresh);
       await rt.submit(fresh, { requestId: "recall", text: "What do you know about me?" });
-      const reply = await until(() =>
-        [...messages.values()].find((m) => m.role === "assistant" && m.status === "done"),
+      const reply = await until(
+        () => [...messages.values()].find((m) => m.role === "assistant" && m.status === "done"),
+        "the recall reply",
       );
       expect(reply.text).toContain(text);
 
       // "Forget …" in chat: the tool asks, tombstones, and the fact leaves the prompt.
       await rt.submit(fresh, { requestId: "forget", text: "Forget my TypeScript preference." });
-      const forgetCall = await until(() =>
-        [...messages.values()]
-          .flatMap((m) => m.toolCalls ?? [])
-          .find((tool) => tool.name === "forget" && tool.status === "awaiting_approval"),
+      const forgetCall = await until(
+        () =>
+          [...messages.values()]
+            .flatMap((m) => m.toolCalls ?? [])
+            .find((tool) => tool.name === "forget" && tool.status === "awaiting_approval"),
+        "the forget approval card",
       );
       await rt.decideApproval(fresh, forgetCall.taskId!, "approved");
-      const done = await until(() =>
-        [...messages.values()]
-          .flatMap((m) => m.toolCalls ?? [])
-          .find((tool) => tool.name === "forget" && tool.status === "done"),
+      const done = await until(
+        () =>
+          [...messages.values()]
+            .flatMap((m) => m.toolCalls ?? [])
+            .find((tool) => tool.name === "forget" && tool.status === "done"),
+        "the forget call to finish",
       );
       expect(done.output).toContain(text);
       expect(await db.query.memories.findFirst({ where: eq(memories.botId, botId) })).toMatchObject(
@@ -149,10 +158,12 @@ it(
       );
       const before = messages.size;
       await rt.submit(fresh, { requestId: "recall-2", text: "And now?" });
-      const after = await until(() =>
-        [...messages.values()]
-          .slice(before)
-          .find((m) => m.role === "assistant" && m.status === "done"),
+      const after = await until(
+        () =>
+          [...messages.values()]
+            .slice(before)
+            .find((m) => m.role === "assistant" && m.status === "done"),
+        "the reply after forgetting",
       );
       expect(after.text).toBe("No memories.");
       await next.stop();
