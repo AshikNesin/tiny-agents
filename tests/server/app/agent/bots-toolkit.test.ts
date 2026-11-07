@@ -6,7 +6,7 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ProviderState } from "@earendil-works/pi-durable";
 import { ProviderDoc } from "@earendil-works/pi-durable";
-import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { TaskId, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import {
@@ -106,7 +106,7 @@ describe("bots toolkit", () => {
       "botmsg-pi:sess-abc:7",
     ]);
     // A different task (a later tool call) gets its own keys.
-    await run(bots, { to: "Researcher", text: "three" }, api({ taskId: 8 }));
+    await run(bots, { to: "Researcher", text: "three" }, api({ taskId: 8 as TaskId }));
     expect(store.invocations[2]).toMatchObject({ requestId: "botmsg-pi:sess-abc:8" });
   });
 

@@ -100,7 +100,9 @@ describe("skills capability", () => {
       new Map([["weekly-report", { description: "Write the weekly report", body: "STEP 1" }]]),
     );
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "weekly report please" });
     const reply = await until(() => {
       const state = reduce(events);
@@ -141,7 +143,9 @@ describe("skills capability", () => {
       capabilities: { enabled: ["skills"], permissions: { save_skill: "allow" } },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "remember how I triage" });
     const call = await until(
       () =>

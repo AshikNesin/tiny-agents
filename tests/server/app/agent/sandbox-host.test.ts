@@ -9,6 +9,7 @@ import {
   sandboxHost,
   sandboxPrivateKey,
 } from "../../../../apps/web/src/server/api/bots/sandbox-host";
+import { appEnv } from "../../../../apps/web/src/server/env";
 
 describe("sandboxHost", () => {
   it("uses an explicit host anywhere, unquoted", () => {
@@ -32,12 +33,12 @@ describe("sandboxHost", () => {
 describe("sandboxEndpoint", () => {
   it("is one endpoint with one host-key store for every SSH user", () => {
     resetSandboxHostKeysForTests();
-    const env = {
+    const env = appEnv({
       SANDBOX_HOST: "vm",
       SANDBOX_PORT: "2222",
       SANDBOX_USER: '"ops"',
       NODE_ENV: "test",
-    };
+    });
     const first = sandboxEndpoint(env);
     const second = sandboxEndpoint(env);
     expect(first).toMatchObject({ host: "vm", port: 2222, user: "ops" });
@@ -50,7 +51,7 @@ describe("sandboxEndpoint", () => {
 describe("sandboxConnection", () => {
   it("is one connection per endpoint, shared by every SSH user, and none without a host", () => {
     resetSandboxHostKeysForTests();
-    const env = { SANDBOX_HOST: "vm", SANDBOX_PORT: "2222", NODE_ENV: "test" };
+    const env = appEnv({ SANDBOX_HOST: "vm", SANDBOX_PORT: "2222", NODE_ENV: "test" });
     const first = sandboxConnection(env);
     expect(first?.host).toBe("vm");
     // The toolkits, the terminal, the browser, the computer and the worker all get this one.
@@ -66,13 +67,13 @@ describe("sandboxPrivateKey", () => {
     "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----\n";
 
   it("is unset by default: keyless Tailscale SSH", () => {
-    expect(sandboxPrivateKey({ SANDBOX_HOST: "vm" })).toBeUndefined();
-    expect(sandboxEndpoint({ SANDBOX_HOST: "vm" })?.privateKey).toBeUndefined();
+    expect(sandboxPrivateKey(appEnv({ SANDBOX_HOST: "vm" }))).toBeUndefined();
+    expect(sandboxEndpoint(appEnv({ SANDBOX_HOST: "vm" }))?.privateKey).toBeUndefined();
   });
 
   it("takes an inline key, with \\n escapes from a one-line env file", () => {
     const oneLine = PEM.trim().replaceAll("\n", "\\n");
-    expect(sandboxPrivateKey({ SANDBOX_SSH_KEY: `"${oneLine}"` })).toBe(PEM);
+    expect(sandboxPrivateKey(appEnv({ SANDBOX_SSH_KEY: `"${oneLine}"` }))).toBe(PEM);
   });
 
   it("reads a key file, and the endpoint carries it to every SSH user", () => {
@@ -81,7 +82,11 @@ describe("sandboxPrivateKey", () => {
     try {
       const file = join(dir, "id_ed25519");
       writeFileSync(file, PEM);
-      const env = { SANDBOX_HOST: "127.0.0.1", SANDBOX_PORT: "2222", SANDBOX_SSH_KEY_FILE: file };
+      const env = appEnv({
+        SANDBOX_HOST: "127.0.0.1",
+        SANDBOX_PORT: "2222",
+        SANDBOX_SSH_KEY_FILE: file,
+      });
       expect(sandboxEndpoint(env)).toMatchObject({
         host: "127.0.0.1",
         port: 2222,
@@ -96,7 +101,7 @@ describe("sandboxPrivateKey", () => {
     resetSandboxHostKeysForTests();
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const env = { SANDBOX_SSH_KEY_FILE: join(tmpdir(), "no-such-sandbox-key") };
+      const env = appEnv({ SANDBOX_SSH_KEY_FILE: join(tmpdir(), "no-such-sandbox-key") });
       expect(sandboxPrivateKey(env)).toBeUndefined();
       expect(sandboxPrivateKey(env)).toBeUndefined();
       expect(error).toHaveBeenCalledTimes(1);

@@ -136,7 +136,9 @@ describe("MCP connections", () => {
       capabilities: { enabled: ["mcp:demo"], permissions: {} },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "file it" });
 
     const waiting = await until(

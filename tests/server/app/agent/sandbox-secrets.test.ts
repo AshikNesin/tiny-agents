@@ -10,7 +10,7 @@ import { until } from "../../fixtures/until";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Context as PiContext } from "@earendil-works/pi-ai";
+import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -244,7 +244,7 @@ function fakeVm(reply: (command: string, stdin?: string) => { output: string; ex
   return { connection, execs: connection.execs };
 }
 
-function callThenReport(args: Record<string, unknown>) {
+function callThenReport(args: JsonObject) {
   return (context: PiContext) => {
     const last = context.messages.at(-1);
     if (last?.role === "toolResult") {
@@ -290,7 +290,7 @@ afterEach(async () => {
 });
 
 async function open(
-  args: Record<string, unknown>,
+  args: JsonObject,
   vm: ReturnType<typeof fakeVm>,
   options: { egressAllowlist?: string; broker?: VaultBroker } = {},
 ) {
@@ -312,7 +312,9 @@ async function open(
     capabilities: { enabled: ["sandbox"], permissions: { run_command: "allow" } },
   });
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   await runtime.submit(ref, { requestId: "r1", text: "go" });
   return { runtime, ref, events };
 }

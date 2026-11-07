@@ -34,6 +34,7 @@ const models: ModelInfo[] = [
     family: "other",
     reasoning: true,
     contextWindow: 128000,
+    vision: false,
   },
 ];
 

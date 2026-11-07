@@ -5,7 +5,7 @@
  * names ("send_email ana@x.dev") and reports its result as
  * `RESULT:<text>`; any other message is echoed as `Echo: <text>`.
  */
-import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
+import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { vi } from "vite-plus/test";
@@ -143,11 +143,11 @@ export function mailCapability(sent: string[]): Capability {
 }
 
 /** The tool a message names and its arguments, or undefined for plain chat. */
-function toolRequest(said: string): { tool: string; args: Record<string, unknown> } | undefined {
+function toolRequest(said: string): { tool: string; args: JsonObject } | undefined {
   const match = /(\w+_\w+)(?: (\S+))?/.exec(said);
   if (!match) return undefined;
   const [, tool = "", arg = ""] = match;
-  const args =
+  const args: JsonObject =
     tool === "send_email"
       ? { to: arg }
       : tool === "save_rule"

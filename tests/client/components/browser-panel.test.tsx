@@ -427,9 +427,9 @@ describe("BrowserPanel", () => {
     // The panel docks (and resizes) only on wide screens.
     const innerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
-    onTestFinished(() =>
-      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth }),
-    );
+    onTestFinished(() => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth });
+    });
     mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();

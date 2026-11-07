@@ -7,7 +7,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Type, type Context as PiContext, type Message } from "@earendil-works/pi-ai";
+import {
+  Type,
+  type Context as PiContext,
+  type JsonObject,
+  type JsonValue,
+  type Message,
+} from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
@@ -29,7 +35,7 @@ import type {
   WaitEvent,
 } from "../../../../packages/agent/src/types";
 
-const QUESTIONS = [
+const QUESTIONS: JsonValue = [
   {
     question: " Which database? ",
     options: [{ label: " Postgres " }, { label: "Postgres" }, { label: "SQLite" }],
@@ -53,7 +59,7 @@ function textOf(message: Message | undefined): string {
  * Faux model: asks `questions` once, then reports the tool result it got —
  * and the owner's message placed after it, if any.
  */
-function askThenReport(questions: unknown = QUESTIONS, tool = "ask_owner") {
+function askThenReport(questions: JsonValue = QUESTIONS, tool = "ask_owner") {
   return (context: PiContext) => {
     const index = context.messages.findLastIndex((m) => m.role === "toolResult");
     if (index >= 0) {
@@ -61,7 +67,7 @@ function askThenReport(questions: unknown = QUESTIONS, tool = "ask_owner") {
       const reply = `RESULT:${textOf(context.messages[index])}${then ? `|THEN:${textOf(then)}` : ""}`;
       return fauxAssistantMessage([fauxText(reply)]);
     }
-    const args = tool === "ask_owner" ? { questions } : { to: "ana@x.dev" };
+    const args: JsonObject = tool === "ask_owner" ? { questions } : { to: "ana@x.dev" };
     return { ...fauxAssistantMessage([fauxToolCall(tool, args)]), stopReason: "toolUse" as const };
   };
 }
@@ -145,7 +151,9 @@ async function start(runtime: AgentRuntime, enabled = ["questions"]) {
     capabilities: { enabled, permissions: {} },
   });
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
   return { ref, events };
 }
@@ -237,7 +245,9 @@ describe("ask_owner", () => {
       capabilities: { enabled: ["questions"], permissions: {}, unattended: true },
     });
     const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => events.push(...batch));
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
     await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
     expect(await until(() => finalText(events), "reply")).toMatch(/Nobody can answer questions/);
     expect(runtime.pendingQuestions(ref)).toBe(0);
@@ -375,7 +385,9 @@ describe("ask_owner across restarts", () => {
 
     const second = await open(askThenReport(), { storePath });
     const after: ChatEvent[] = [];
-    await second.watchChat(ref, (batch) => after.push(...batch));
+    await second.watchChat(ref, (batch) => {
+      after.push(...batch);
+    });
     const waiting = await waitingCall(after);
     // The call re-runs on resume and re-registers its wait.
     await until(() => second.pendingQuestions(ref) === 1, "wait re-registered");

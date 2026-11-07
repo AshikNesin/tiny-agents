@@ -58,6 +58,7 @@ vi.mock("@/lib/terminal-ws", async (importOriginal) => {
       const connection: TerminalConnection = {
         sendInput: vi.fn(),
         sendResize: vi.fn(),
+        written: vi.fn(),
         close: vi.fn(),
       };
       connections.push({ handlers, connection });

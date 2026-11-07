@@ -64,13 +64,9 @@ describe("viewOf: plain trace lines by status", () => {
 
   it("counts pending, running and waiting calls as the bot visibly at work", () => {
     const active = (status: ChatToolStatus) => isActive(call(status));
-    expect(["pending", "running", "awaiting_approval", "awaiting_takeover"].map(active)).toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
-    expect(["done", "error", "denied"].map(active)).toEqual([false, false, false]);
+    const working = ["pending", "running", "awaiting_approval", "awaiting_takeover"] as const;
+    expect(working.map(active)).toEqual([true, true, true, true]);
+    expect((["done", "error", "denied"] as const).map(active)).toEqual([false, false, false]);
   });
 });
 

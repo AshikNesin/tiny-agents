@@ -85,9 +85,12 @@ describe("a connection's tools", () => {
   it("installs the cached (or live) tools minus those turned off", () => {
     const row = { toolsCache: '[{"name":"a"},{"name":"b"}]', disabledTools: '["a"]' };
     expect(connectionTools(row).map((tool) => tool.name)).toEqual(["b"]);
-    expect(connectionTools(row, [{ name: "a" }, { name: "c" }]).map((tool) => tool.name)).toEqual([
-      "c",
-    ]);
+    expect(
+      connectionTools(row, [
+        { name: "a", inputSchema: {} },
+        { name: "c", inputSchema: {} },
+      ]).map((tool) => tool.name),
+    ).toEqual(["c"]);
   });
 
   it("reads unreadable columns as no tools and nothing turned off", () => {

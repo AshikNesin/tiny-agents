@@ -28,13 +28,10 @@ import {
   type ToolLabelCatalog,
 } from "@/lib/tool-call-text";
 
-const call = (name: string, extra: Partial<ChatToolCall> = {}): ChatToolCall => ({
-  id: name,
-  name,
-  args: {},
-  status: "done",
-  ...extra,
-});
+const call = <Extra extends Partial<ChatToolCall>>(name: string, extra = {} as Extra) => {
+  const base: ChatToolCall = { id: name, name, args: {}, status: "done" };
+  return { ...base, ...extra };
+};
 
 const labels: ToolLabelCatalog = toolLabelCatalog([
   {

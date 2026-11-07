@@ -170,7 +170,7 @@ describe("Memory page", () => {
     await user.click(within(dialog).getByRole("combobox", { name: "Category" }));
     await user.click(await screen.findByRole("option", { name: "Habits" }));
 
-    await user.click(within(dialog).getByRole("button", { name: "Add", exact: true }));
+    await user.click(within(dialog).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
     expect(createMock).toHaveBeenCalledWith("b1", {
       text: "Prefers dark mode",
@@ -196,7 +196,7 @@ describe("Memory page", () => {
     const field = within(dialog).getByLabelText("Memory");
     await user.clear(field);
     await user.type(field, "Prefers TypeScript strictly");
-    await user.click(within(dialog).getByRole("button", { name: "Save", exact: true }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(updateMemoryMock).toHaveBeenCalledTimes(1));
     expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
@@ -214,8 +214,8 @@ describe("Memory page", () => {
 
     await user.click(await screen.findByRole("button", { name: /Edit memory/ }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByRole("checkbox", { name: "Restore to active" }).checked).toBe(true);
-    await user.click(within(dialog).getByRole("button", { name: "Save", exact: true }));
+    expect(within(dialog).getByRole("checkbox", { name: "Restore to active" })).toBeChecked();
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
@@ -237,7 +237,7 @@ describe("Memory page", () => {
     await user.click(await screen.findByRole("button", { name: /Edit memory/ }));
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("checkbox", { name: "Restore to active" }));
-    await user.click(within(dialog).getByRole("button", { name: "Save", exact: true }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
@@ -258,7 +258,7 @@ describe("Memory page", () => {
       }),
     );
     expect(await screen.findByText("Delete this memory?")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteMemoryMock).toHaveBeenCalledWith("m1"));
   });

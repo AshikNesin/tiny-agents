@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   parseThreadId,
+  type ThreadSummary,
   type TranscriptItem,
   type TurnOutcome,
 } from "../../../packages/code/src/contracts";
@@ -35,7 +36,21 @@ const notice = (level: "error" | "info", text: string): TranscriptItem => ({
 });
 const turn = (): TranscriptItem => ({ kind: "turn", id: id() });
 
-const thread = { title: "fix", cwd: "/repo", working: false, cursor: 3 };
+const thread: ThreadSummary = {
+  id: "fake:t1",
+  instanceId: "fake",
+  kind: "fake",
+  nativeId: "t1",
+  title: "fix",
+  cwd: "/repo",
+  model: null,
+  parentId: null,
+  createdAt: "2026-11-05T00:00:00Z",
+  updatedAt: "2026-11-05T00:00:00Z",
+  working: false,
+  archived: false,
+  cursor: 3,
+};
 
 describe("turnAnswer", () => {
   it("is the newest turn's last assistant text", () => {

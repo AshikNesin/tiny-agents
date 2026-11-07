@@ -20,11 +20,12 @@
       "@groot/shell/*": ["../../packages/shell/src/*"],
       "@groot/jobs/client": ["../../packages/jobs/src/client/index.ts"],
       "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"],
+      "@tiny-agents/agent/peer-envelope": ["../../packages/agent/src/toolkits/peer-envelope.ts"],
       "@tiny-agents/code/contracts": ["../../packages/code/src/contracts/index.ts"]
     },
-    "types": ["vite/client"]
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"]
   },
-  "include": ["src", "../../packages/shell/src"],
+  "include": ["src", "../../packages/shell/src", "../../tests/client", "../../tests/test-clock.ts"],
   "exclude": ["src/server"],
   "references": []
 }

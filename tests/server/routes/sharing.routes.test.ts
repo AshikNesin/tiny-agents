@@ -10,7 +10,10 @@ import { matchGuestRoute } from "../../../apps/web/src/server/api/people/guest.g
 import { conversationOwner } from "../../../apps/web/src/server/api/bots/bots.owner";
 import { sharedChatGuidance } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { botListStep } from "../../../apps/web/src/server/api/bots/bots.list";
-import { getConnectionManager } from "../../../apps/web/src/server/api/connections/connections.manager";
+import {
+  getConnectionManager,
+  type ConnectionLiveState,
+} from "../../../apps/web/src/server/api/connections/connections.manager";
 import { isSkipReply, type AgentRuntime } from "../../../packages/agent/src/index";
 import { api, createTestApp } from "../helpers";
 import {
@@ -242,7 +245,7 @@ describe("shared bots", () => {
       Number(other.conversationId),
       Number(shared.conversationId),
     ]);
-    const connections = new Set<(id: string, state: { status: string }) => void>();
+    const connections = new Set<(id: string, state: ConnectionLiveState) => void>();
     vi.spyOn(getConnectionManager(), "onChange").mockImplementation((listener) => {
       connections.add(listener);
       return () => connections.delete(listener);
@@ -466,7 +469,8 @@ describe("shared chat replies", () => {
           busy: false,
           queued: [],
         }),
-      } as Parameters<ReturnType<typeof botListStep>["run"]>[0]);
+        owner: async () => undefined,
+      });
       const after = (await asOwner(`/api/v1/bots/${bot.id}`)).body.data;
       expect(after.lastMessagePreview).toBe(before.lastMessagePreview);
       expect(after.lastActivityAt).toBe(before.lastActivityAt);

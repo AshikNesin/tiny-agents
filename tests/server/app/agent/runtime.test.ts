@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import type { InboxItem, SubmissionRecord } from "@earendil-works/pi-durable";
-import type { EntryRecord } from "@earendil-works/pi-durable";
+import type { ConversationId, EntryId, EntryRecord } from "@earendil-works/pi-durable";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
   chatState,
@@ -99,8 +99,8 @@ async function observeChat(
 
 function userEntry(id: number, text: string): EntryRecord {
   return {
-    id,
-    conversationId: 1,
+    id: id as EntryId,
+    conversationId: 1 as ConversationId,
     kind: "pi.user",
     model: [{ role: "user", content: text, timestamp: id * 1_000 }],
   } as EntryRecord;
@@ -112,8 +112,8 @@ function assistantEntry(
   stopReason: "stop" | "aborted" = "stop",
 ): EntryRecord {
   return {
-    id,
-    conversationId: 1,
+    id: id as EntryId,
+    conversationId: 1 as ConversationId,
     kind: "pi.assistant",
     model: [
       {
