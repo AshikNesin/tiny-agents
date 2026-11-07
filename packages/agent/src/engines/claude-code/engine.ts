@@ -459,7 +459,7 @@ export class ClaudeCodeEngine implements AgentEngine {
         async () => {
           row(liveToolRow({ status: "running", taskId }));
           if (!runner) return unavailable(call.name);
-          return runner.execute(args as never, api, ctx);
+          return runner.execute(args, api, ctx);
         },
       );
       const content = resultText(result);

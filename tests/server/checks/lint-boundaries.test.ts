@@ -289,6 +289,25 @@ const FIXTURES: Record<string, Fixture> = {
     source: "export const f = (x: string) => x as unknown as number;\n",
     rules: [],
   },
+  "packages/agent/src/gate-r6b-fail.ts": {
+    source:
+      "type Hooks = { plan(args: { id: string }): void };\nexport const run = (hooks: Hooks, args: unknown) => hooks.plan(args as never);\n",
+    rules: ["R6b"],
+    mentions: "durable-json.ts",
+  },
+  "packages/agent/src/toolkits/r6b-angle-fail.ts": {
+    source: "export const f = (x: string) => <never>x;\n",
+    rules: ["R6b"],
+  },
+  "packages/agent/src/r6b-pass.ts": {
+    source:
+      'export const block = { type: "image", data: "", mimeType: "image/jpeg" } as const;\nexport const id = (n: number) => n as number & { brand: true };\n',
+    rules: [],
+  },
+  "packages/agent/src/testing-r6b.ts": {
+    source: "export const f = (x: string) => x as never;\n",
+    rules: [],
+  },
   "packages/claude-worker/src/r6-elsewhere-pass.ts": {
     source: "export const f = (x: string) => x as unknown as number;\n",
     rules: [],

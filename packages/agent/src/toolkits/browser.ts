@@ -298,7 +298,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               return {
                 output: [
                   { type: "text", text: "Screenshot captured as an attachment." },
-                  { type: "image", data: shot.data, mimeType: "image/jpeg" } as never,
+                  { type: "image", data: shot.data, mimeType: "image/jpeg" },
                 ],
                 details: { screenshot: true },
               };

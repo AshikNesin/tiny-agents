@@ -190,7 +190,7 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
   };
 
   const image = (shot: Buffer) =>
-    ({ type: "image", data: shot.toString("base64"), mimeType: "image/jpeg" }) as never;
+    ({ type: "image", data: shot.toString("base64"), mimeType: "image/jpeg" }) as const;
 
   /**
    * A read: the desktop, refused while the owner drives. A desktop found

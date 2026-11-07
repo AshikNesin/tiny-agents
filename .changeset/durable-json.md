@@ -13,7 +13,9 @@ once with an error naming its key. Writes copy the value to JSON with
 
 - `@tiny-agents/agent`: no public export changes. `zod` is a new dependency.
   A pending vault card in a call's details shows only when it fits the
-  `ChatVaultUse` shape, and fields outside that shape are dropped.
+  `ChatVaultUse` shape, fields outside that shape are dropped, and a card
+  that does not fit logs a warning naming `vault`.
 - `tiny-agents`: lint rule R6 (`repo/no-double-cast`) fails any `as unknown as`
   or `as any as` in `packages/agent/src` outside test helpers, with a message
-  naming `durable-json.ts`.
+  naming `durable-json.ts`. Rule R6b (`repo/no-never-cast`) fails `as never`
+  there too; the gate now carries its hooks as `GateHooks<unknown>`.

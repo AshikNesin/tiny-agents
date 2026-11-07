@@ -47,7 +47,7 @@ export interface GateCall {
   /** The tool may run again after a restart (pi's `replay: "safe"`). */
   readonly replaySafe: boolean;
   /** The tool's own say in its gate (`withGatePlan`), if any. */
-  readonly hooks: GateHooks<never> | undefined;
+  readonly hooks: GateHooks<unknown> | undefined;
   /**
    * The call's tool api: its decided-once memos, the conversation's
    * documents (permissions, YOLO, grants) and the details the chat shows.
@@ -170,12 +170,12 @@ export class ToolGate {
       const decision = await this.#waitForOwner(call, plan);
       waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
       if (decision !== "approved") {
-        await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
+        await hooks?.settled?.(args, api, context, decision).catch(() => undefined);
         return declinedResult(name, decision, waitedMs);
       }
       await api.memo("gate:approved", true, context);
     }
-    const replaySafe = call.replaySafe || hooks?.replaySafe?.(args as never) === true;
+    const replaySafe = call.replaySafe || hooks?.replaySafe?.(args) === true;
     if (!replaySafe) {
       if (await api.memo<boolean>("gate:effect", context)) {
         return {
@@ -345,12 +345,12 @@ const planMemo = durableMemo<GatePlan>(
   }),
 );
 
-async function planOnce(call: GateCall, hooks: GateHooks<never>): Promise<GatePlan> {
+async function planOnce(call: GateCall, hooks: GateHooks<unknown>): Promise<GatePlan> {
   const { api, context } = call;
   const stored = await planMemo.read(api, context);
   if (stored) return stored;
   const toolAsks = await mustAsk(call.name, api, context);
-  return planMemo.keep(api, await hooks.plan(call.args as never, api, context, toolAsks), context);
+  return planMemo.keep(api, await hooks.plan(call.args, api, context, toolAsks), context);
 }
 
 /**
