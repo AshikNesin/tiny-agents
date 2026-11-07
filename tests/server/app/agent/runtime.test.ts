@@ -1,5 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
+import { applyChatEvents } from "../../fixtures/chat-events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -29,52 +30,6 @@ import {
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
 
-function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatState {
-  let state = structuredClone(previous);
-  for (const event of events) {
-    switch (event.type) {
-      case "snapshot":
-        state = structuredClone(event.state);
-        break;
-      case "upsert":
-        state = {
-          ...state,
-          messages: [
-            ...state.messages.filter((message) => message.id !== event.message.id),
-            event.message,
-          ],
-        };
-        break;
-      case "remove":
-        state = { ...state, messages: state.messages.filter((message) => message.id !== event.id) };
-        break;
-      case "delta":
-        state = {
-          ...state,
-          messages: state.messages.map((message) =>
-            message.id === event.id
-              ? {
-                  ...message,
-                  text: message.text + (event.text ?? ""),
-                  ...(event.reasoning
-                    ? { reasoning: (message.reasoning ?? "") + event.reasoning }
-                    : {}),
-                }
-              : message,
-          ),
-        };
-        break;
-      case "busy":
-        state = { ...state, busy: event.busy };
-        break;
-      case "queued":
-        state = { ...state, queued: event.items };
-        break;
-    }
-  }
-  return state;
-}
-
 async function observeChat(
   runtime: Awaited<ReturnType<typeof openTestRuntime>>,
   ref: number,
@@ -90,7 +45,7 @@ async function observeChat(
     ref,
     (events) => {
       batches.push([...events]);
-      current = applyEvents(current, events);
+      current = applyChatEvents(current, events);
     },
     options,
   );
