@@ -617,6 +617,31 @@ const FIXTURES: Record<string, Fixture> = {
       'import { vi } from "vite-plus/test";\nexport async function elapse(ms: number) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline) await vi.advanceTimersByTimeAsync(100);\n}\n',
     rules: [],
   },
+  "tests/server/r10-other-test-moves-clock-fail.ts": {
+    source:
+      'import { it, vi } from "vite-plus/test";\nexport async function waitFor(ready: () => boolean, ms = 1_000) {\n  const deadline = Date.now() + ms;\n  while (!ready()) {\n    if (Date.now() > deadline) throw new Error("timed out");\n    await new Promise((r) => setTimeout(r, 10));\n  }\n}\nit("moves the clock", () => {\n  vi.setSystemTime(Date.now() + 400);\n});\n',
+    rules: ["R10"],
+  },
+  "tests/server/r10-derived-remaining-fail.ts": {
+    source:
+      'export async function waitFor(ready: () => Promise<boolean>) {\n  const timeoutAt = Date.now() + 2_000;\n  const limit = timeoutAt;\n  do {\n    const now = Date.now();\n    const remaining = limit - now;\n    if (remaining <= 0) throw new Error("timed out");\n  } while (!(await ready()));\n}\n',
+    rules: ["R10"],
+  },
+  "tests/server/r10-fake-timer-helpers-pass.ts": {
+    source:
+      'import { vi } from "vite-plus/test";\nasync function tick(ms: number) {\n  await vi.advanceTimersByTimeAsync(ms);\n}\nexport async function runFor(ms: number) {\n  vi.useFakeTimers();\n  const end = Date.now() + ms;\n  while (Date.now() < end) await tick(100);\n}\nexport async function runPending(ms: number) {\n  vi.useFakeTimers();\n  const end = Date.now() + ms;\n  while (Date.now() < end) await vi.runOnlyPendingTimersAsync();\n}\nexport async function runNextFrame(ms: number) {\n  vi.useFakeTimers();\n  const end = Date.now() + ms;\n  while (Date.now() < end) vi.advanceTimersToNextFrame();\n}\n',
+    rules: [],
+  },
+  "tests/server/r10-fake-timer-helper-call-pass.ts": {
+    source:
+      'import { vi } from "vite-plus/test";\nasync function tick(ms: number) {\n  await vi.advanceTimersByTimeAsync(ms);\n}\nexport async function runFor(ms: number) {\n  const end = Date.now() + ms;\n  while (Date.now() < end) await tick(100);\n}\n',
+    rules: [],
+  },
+  "tests/server/r10-loop-varies-pass.test.ts": {
+    source:
+      'import { expect, it } from "vite-plus/test";\nconst DAY = 86_400_000;\ndeclare function insertRow(row: { createdAt: number }): Promise<void>;\nit("lists rows from the last week", async () => {\n  const cutoff = Date.now() - 7 * DAY;\n  for (const ageDays of [1, 6, 8, 30]) {\n    const createdAt = Date.now() - ageDays * DAY;\n    await insertRow({ createdAt });\n    if (createdAt >= cutoff) expect(createdAt).toBeGreaterThan(0);\n  }\n});\nit("schedules within the window", () => {\n  const start = Date.now();\n  for (let i = 0; i < 5; i++) {\n    const at = start + i * 60_000;\n    expect(at <= Date.now() + 10 * 60_000).toBe(true);\n  }\n});\n',
+    rules: [],
+  },
   "tests/server/r10-expect-pass.ts": {
     source:
       'import { expect } from "vite-plus/test";\nexport function check(rows: { expiresAt: number }[]) {\n  for (let i = 0; i < rows.length; i++) expect(rows[i].expiresAt > Date.now()).toBe(true);\n}\n',
