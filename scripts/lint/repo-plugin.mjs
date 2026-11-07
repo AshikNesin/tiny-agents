@@ -67,11 +67,65 @@ const TRANSACTION_MESSAGE =
 // `db` and `tx` by name, plus anything imported from the database module or
 // drizzle, or typed with a type from there.
 const DB_NAMES = ["db", "tx"];
+const DB_GETTERS = new Set(["getDb", "getDatabase"]);
 const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\/|$)/;
 
 const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
+
+// The string an expression always evaluates to, or null. Follows `+`,
+// template pieces and file-level string consts, so a name built from pieces
+// still reads as the name.
+const staticString = (node, consts) => {
+  switch (node.type) {
+    case "Literal":
+      return typeof node.value === "string" ? node.value : null;
+    case "Identifier":
+      return consts.get(node.name) ?? null;
+    case "ParenthesizedExpression":
+      return staticString(node.expression, consts);
+    case "BinaryExpression": {
+      if (node.operator !== "+") return null;
+      const left = staticString(node.left, consts);
+      const right = staticString(node.right, consts);
+      return left === null || right === null ? null : left + right;
+    }
+    case "TemplateLiteral": {
+      let text = node.quasis[0].value.cooked;
+      for (const [i, expression] of node.expressions.entries()) {
+        const piece = staticString(expression, consts);
+        if (piece === null) return null;
+        text += piece + node.quasis[i + 1].value.cooked;
+      }
+      return text;
+    }
+    default:
+      return null;
+  }
+};
+
+const DEADLINE_LOOP_MESSAGE =
+  "R10: tests freeze Date (tests/test-clock.ts), so a loop that waits for Date.now() to pass a deadline never ends. Wait with `until(check, what, ms)` or `eventually(check, ms)` from tests/server/fixtures/until.ts, which time out on the real clock.";
+
+const WAIT_LOOPS = new Set(["WhileStatement", "DoWhileStatement", "ForStatement"]);
+const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
+const COMPARISONS = new Set(["<", "<=", ">", ">="]);
+
+const inWaitLoop = (node) => {
+  for (let p = node.parent; p && !FUNCTIONS.has(p.type); p = p.parent) {
+    if (WAIT_LOOPS.has(p.type)) return true;
+  }
+  return false;
+};
+
+const isDateNow = (node) =>
+  node.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  !node.callee.computed &&
+  node.callee.object.type === "Identifier" &&
+  node.callee.object.name === "Date" &&
+  node.callee.property.name === "now";
 
 export default {
   meta: { name: "repo" },
@@ -100,12 +154,19 @@ export default {
         const dbNames = new Set(DB_NAMES);
         const isDb = (node) => {
           const target = unparenthesized(node);
-          if (target.type === "Identifier") return dbNames.has(target.name);
-          return (
-            target.type === "MemberExpression" &&
-            !target.computed &&
-            DB_NAMES.includes(target.property.name)
-          );
+          switch (target.type) {
+            case "Identifier":
+              return dbNames.has(target.name);
+            case "MemberExpression":
+              return !target.computed && DB_NAMES.includes(target.property.name);
+            case "CallExpression": {
+              const callee = unparenthesized(target.callee);
+              const name = callee.type === "MemberExpression" ? callee.property.name : callee.name;
+              return DB_GETTERS.has(name) || isDb(callee);
+            }
+            default:
+              return false;
+          }
         };
         const isDbType = (type) =>
           (type?.type === "TSTypeReference" &&
@@ -124,6 +185,19 @@ export default {
             if (node.id.type === "Identifier" && node.init && isDb(node.init)) {
               dbNames.add(node.id.name);
             }
+            if (node.id.type !== "ObjectPattern") return;
+            for (const p of node.id.properties) {
+              if (
+                p.type === "Property" &&
+                !p.computed &&
+                DB_NAMES.includes(p.key.name) &&
+                p.value.type === "Identifier"
+              )
+                dbNames.add(p.value.name);
+            }
+          },
+          AssignmentExpression(node) {
+            if (node.left.type === "Identifier" && isDb(node.right)) dbNames.add(node.left.name);
           },
           CallExpression(node) {
             const callee = node.callee;
@@ -144,15 +218,55 @@ export default {
           reported.add(node.start);
           context.report({ node, message: SESSION_INVALID_MESSAGE });
         };
+        const consts = new Map();
+        const check = (node) => {
+          if (SESSION_INVALID_NAMES.has(staticString(node, consts))) report(node);
+        };
         return {
           Identifier(node) {
             if (SESSION_INVALID_NAMES.has(node.name)) report(node);
           },
-          Literal(node) {
-            if (SESSION_INVALID_NAMES.has(node.value)) report(node);
+          VariableDeclarator(node) {
+            if (node.parent.kind !== "const" || node.id.type !== "Identifier" || !node.init) return;
+            const value = staticString(node.init, consts);
+            if (value !== null) consts.set(node.id.name, value);
           },
-          TemplateElement(node) {
-            if (SESSION_INVALID_NAMES.has(node.value.cooked)) report(node);
+          Literal: check,
+          TemplateLiteral: check,
+          BinaryExpression: check,
+        };
+      },
+    },
+    "no-date-now-deadline-loop": {
+      create(context) {
+        // Locals a wait loop sets from the clock on each pass: `const now = Date.now()`.
+        const clockNames = new Set();
+        const readsClock = (node) => {
+          const target = unparenthesized(node);
+          if (target.type === "Identifier") return clockNames.has(target.name);
+          if (target.type === "BinaryExpression") {
+            return readsClock(target.left) || readsClock(target.right);
+          }
+          return isDateNow(target);
+        };
+        return {
+          VariableDeclarator(node) {
+            if (
+              node.id.type === "Identifier" &&
+              node.init &&
+              readsClock(node.init) &&
+              inWaitLoop(node)
+            ) {
+              clockNames.add(node.id.name);
+            }
+          },
+          BinaryExpression(node) {
+            if (
+              COMPARISONS.has(node.operator) &&
+              (readsClock(node.left) || readsClock(node.right)) &&
+              inWaitLoop(node)
+            )
+              context.report({ node, message: DEADLINE_LOOP_MESSAGE });
           },
         };
       },

@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R10 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                               | Enforcer                                          |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
@@ -29,6 +29,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | No transactions in `packages/`; sync ones are fine in `apps/`.     | R7                                                |
 | Only `bootstrap()` sets `db`; never open a driver.                 | R8a, R8b                                          |
 | Test dates derive from `FIXED_NOW` in `tests/test-clock.ts`.       | `tests/server/setup.ts` freezes `Date`            |
+| Tests wait with `until()`, never a `Date.now()` loop.              | R10                                               |
 | A page or route guests reach is in `GUEST_ACCESS`.                 | `tests/server/routes/guest-access.routes.test.ts` |
 | Each kind of resource a bot owns is in `BOT_RESOURCES`.            | `tests/server/api/bot-resources.test.ts`          |
 | Only the session guard throws `sessionInvalid()`.                  | R9                                                |

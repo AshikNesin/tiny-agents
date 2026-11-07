@@ -342,6 +342,31 @@ const FIXTURES: Record<string, Fixture> = {
       "export const run = (ctx: { db: { transaction(f: () => void): void } }) => ctx.db.transaction(() => {});\n",
     rules: ["R7"],
   },
+  "packages/core/src/auth/r7-getter-fail.ts": {
+    source:
+      'import { db } from "../database";\nconst getDb = () => db;\nexport const run = () => getDb().transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-getter-local-fail.ts": {
+    source:
+      'import { getDb } from "./context";\nexport const run = () => {\n  const handle = getDb();\n  return handle.transaction(() => 1);\n};\n',
+    rules: ["R7"],
+  },
+  "packages/core/src/auth/r7-assigned-fail.ts": {
+    source:
+      'import { db } from "../database";\nexport const run = () => {\n  let handle;\n  handle = db;\n  return handle.transaction(() => 1);\n};\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-destructured-fail.ts": {
+    source:
+      "export const run = (deps: { db: any }) => {\n  const { db: handle } = deps;\n  return handle.transaction(() => 1);\n};\n",
+    rules: ["R7"],
+  },
+  "packages/agent/src/r7-other-call-pass.ts": {
+    source:
+      'import { openStore } from "./store";\nexport const run = () => openStore().transaction(() => 1);\n',
+    rules: [],
+  },
   "packages/agent/src/r7-other-receiver-pass.ts": {
     source:
       "type Store = { transaction<T>(f: () => T): T };\nexport const run = (store: Store) => store.transaction(() => 1);\n",
@@ -440,6 +465,32 @@ const FIXTURES: Record<string, Fixture> = {
       'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_INVALID`);\n};\n',
     rules: ["R9"],
   },
+  "apps/web/src/server/api/vault/r9-concat-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, "SESSION_" + "INVALID");\n};\n',
+    rules: ["R9"],
+    mentions: "throw a plain Boom.unauthorized",
+  },
+  "apps/web/src/server/api/vault/r9-template-piece-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_${"INVALID"}`);\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-const-piece-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nconst PREFIX = "SESSION_";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `${PREFIX}INVALID`);\n};\n',
+    rules: ["R9"],
+  },
+  "packages/core/src/auth/r9-name-pieces-fail.ts": {
+    source:
+      'import * as jwt from "../utils/jwt.utils";\nexport const refuse = () => {\n  throw jwt["session" + "Invalid"]("Wrong passkey");\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-pieces-pass.ts": {
+    source:
+      'const PREFIX = "SESSION_";\nexport const code = `${PREFIX}EXPIRED`;\nexport const label = (name: string) => "SESSION_" + name;\n',
+    rules: [],
+  },
   "packages/core/src/utils/jwt.utils.ts": {
     source:
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',
@@ -453,6 +504,32 @@ const FIXTURES: Record<string, Fixture> = {
   "apps/web/src/server/r9-pass.ts": {
     source:
       'import { generateToken } from "@groot/core/utils/jwt.utils";\nexport const g = generateToken;\n',
+    rules: [],
+  },
+  "tests/server/r10-condition-fail.ts": {
+    source:
+      "const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));\nexport async function waitUntil(predicate: () => boolean, ms = 5_000) {\n  const deadline = Date.now() + ms;\n  while (!predicate() && Date.now() < deadline) await sleep(50);\n}\n",
+    rules: ["R10"],
+    mentions: "`until(check, what, ms)`",
+  },
+  "tests/client/r10-body-fail.ts": {
+    source:
+      "export async function waitFor(read: () => boolean, what: string, ms = 10_000) {\n  const deadline = Date.now() + ms;\n  for (;;) {\n    if (read()) return;\n    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);\n    await new Promise((r) => setTimeout(r, 20));\n  }\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-local-fail.ts": {
+    source:
+      "export async function waitFor(read: () => boolean, ms = 10_000) {\n  const start = Date.now();\n  do {\n    const elapsed = Date.now() - start;\n    if (elapsed >= ms) throw new Error('timed out');\n    await new Promise((r) => setTimeout(r, 20));\n  } while (!read());\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-pass.ts": {
+    source:
+      "type Row = { at: number };\nexport const at = Date.now() + 1_000;\nexport function expired(rows: Row[]) {\n  const out: Row[] = [];\n  for (const row of rows) if (row.at < Date.now()) out.push(row);\n  while (out.length > 10) out.splice(out.findIndex((r) => r.at < Date.now()), 1);\n  return out;\n}\n",
+    rules: [],
+  },
+  "packages/agent/src/r10-outside-tests-pass.ts": {
+    source:
+      "export function spin(ms: number) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline);\n}\n",
     rules: [],
   },
   "apps/web/src/server/r8b-pass.ts": {
@@ -492,7 +569,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe("boundary lint rules", () => {
   it.each(Object.entries(FIXTURES))("%s", (file, { rules, mentions }) => {
     const texts = findings.get(file) ?? [];
-    const fired = texts.map((t) => /\b(R\d[a-z]?): /.exec(t)?.[1]).toSorted();
+    const fired = texts.map((t) => /\b(R\d+[a-z]?): /.exec(t)?.[1]).toSorted();
     expect(fired, texts.join("\n")).toEqual(rules);
     if (mentions) expect(texts.join("\n")).toContain(mentions);
   });
