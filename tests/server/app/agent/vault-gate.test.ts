@@ -508,6 +508,17 @@ describe("the vault use sequence", () => {
     ]);
   });
 
+  it("fails a malformed vault:use memo naming its key, and audits nothing", async () => {
+    const { broker, recorded } = sequenceBroker([keyItem("github")]);
+    const hooks = vaultGatePlan(broker, true, async () => commandUse("github"));
+    const api = fakeApi();
+    await api.memo("vault:use", { handle: "github", targetKind: "planet" }, context);
+    await expect(hooks.settled!(undefined as never, api, context, "denied")).rejects.toThrow(
+      'Stored "vault:use" does not fit its shape',
+    );
+    expect(recorded).toEqual([]);
+  });
+
   it("refuses every item when one is refused, and audits the sink's own rule against each", async () => {
     const { broker, recorded } = sequenceBroker([keyItem("github"), keyItem("npm")]);
     const refusedItem = vaultGatePlan(broker, true, async () => ({

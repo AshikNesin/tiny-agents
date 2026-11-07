@@ -24,6 +24,7 @@
  */
 import type { Context } from "@earendil-works/chord";
 import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import { z } from "zod";
 import {
   ApprovalNotPendingError,
   approvalWaitInfo,
@@ -33,6 +34,7 @@ import {
   type GateHooks,
   type GatePlan,
 } from "./approvals";
+import { durableMemo, toJson } from "./durable-json";
 import { mayAutoReview, mustAsk, ownerTurn, yoloOf, type GateUserMessage } from "./policy";
 import { secretRedactor } from "./redact";
 import { ownerMessages, type Reviewer, type ReviewVerdict } from "./reviewer";
@@ -45,7 +47,7 @@ export interface GateCall {
   /** The tool may run again after a restart (pi's `replay: "safe"`). */
   readonly replaySafe: boolean;
   /** The tool's own say in its gate (`withGatePlan`), if any. */
-  readonly hooks: GateHooks<never> | undefined;
+  readonly hooks: GateHooks<unknown> | undefined;
   /**
    * The call's tool api: its decided-once memos, the conversation's
    * documents (permissions, YOLO, grants) and the details the chat shows.
@@ -168,12 +170,12 @@ export class ToolGate {
       const decision = await this.#waitForOwner(call, plan);
       waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
       if (decision !== "approved") {
-        await hooks?.settled?.(args as never, api, context, decision).catch(() => undefined);
+        await hooks?.settled?.(args, api, context, decision).catch(() => undefined);
         return declinedResult(name, decision, waitedMs);
       }
       await api.memo("gate:approved", true, context);
     }
-    const replaySafe = call.replaySafe || hooks?.replaySafe?.(args as never) === true;
+    const replaySafe = call.replaySafe || hooks?.replaySafe?.(args) === true;
     if (!replaySafe) {
       if (await api.memo<boolean>("gate:effect", context)) {
         return {
@@ -198,7 +200,7 @@ export class ToolGate {
         : auto
           ? {
               approval: "auto",
-              review: verdict as unknown as JsonObject,
+              review: toJson(verdict),
               result: result.details ?? null,
             }
           : { approval: "approved", waitedMs: waitedMs ?? 0, result: result.details ?? null },
@@ -332,14 +334,23 @@ function scrubResult(result: ToolExecutionResult): ToolExecutionResult {
   };
 }
 
-async function planOnce(call: GateCall, hooks: GateHooks<never>): Promise<GatePlan> {
+const planMemo = durableMemo<GatePlan>(
+  "gate:plan",
+  z.object({
+    refuse: z.string().optional(),
+    ask: z.boolean(),
+    details: z.record(z.string(), z.json()).optional(),
+    grant: z.string().optional(),
+    expiresInMs: z.number().optional(),
+  }),
+);
+
+async function planOnce(call: GateCall, hooks: GateHooks<unknown>): Promise<GatePlan> {
   const { api, context } = call;
-  const stored = await api.memo<JsonObject>("gate:plan", context);
-  if (stored) return stored as unknown as GatePlan;
+  const stored = await planMemo.read(api, context);
+  if (stored) return stored;
   const toolAsks = await mustAsk(call.name, api, context);
-  const plan = await hooks.plan(call.args as never, api, context, toolAsks);
-  const json = JSON.parse(JSON.stringify(plan)) as JsonObject;
-  return (await api.memo("gate:plan", json, context)) as unknown as GatePlan;
+  return planMemo.keep(api, await hooks.plan(call.args, api, context, toolAsks), context);
 }
 
 /**
@@ -355,6 +366,17 @@ async function yoloOnce(call: GateCall): Promise<boolean> {
   return api.memo("gate:yolo", decided, context);
 }
 
+const reviewMemo = durableMemo<ReviewVerdict>(
+  "gate:review",
+  z.object({
+    approve: z.boolean(),
+    classifier: z.string(),
+    requested: z.number().optional(),
+    risk: z.number().optional(),
+    error: z.string().optional(),
+  }),
+);
+
 /**
  * Auto-review a call that would ask, once: `undefined` when the conversation
  * does not let auto-review approve this tool or no owner message is in reach
@@ -362,8 +384,8 @@ async function yoloOnce(call: GateCall): Promise<boolean> {
  */
 async function reviewOnce(call: GateCall, reviewer: Reviewer): Promise<ReviewVerdict | undefined> {
   const { api, context } = call;
-  const stored = await api.memo<JsonObject>("gate:review", context);
-  if (stored) return stored as unknown as ReviewVerdict;
+  const stored = await reviewMemo.read(api, context);
+  if (stored) return stored;
   if (!(await mayAutoReview(call.name, api, context))) return undefined;
   const messages = ownerMessages(await call.userMessages());
   if (!messages) return undefined;
@@ -373,9 +395,5 @@ async function reviewOnce(call: GateCall, reviewer: Reviewer): Promise<ReviewVer
     instructions: await call.instructions(),
     ownerMessages: messages,
   });
-  // A verdict is flat JSON; only its unset fields must go before it is stored.
-  const json = Object.fromEntries(
-    Object.entries(verdict).filter(([, value]) => value !== undefined),
-  ) as JsonObject;
-  return (await api.memo("gate:review", json, context)) as unknown as ReviewVerdict;
+  return reviewMemo.keep(api, verdict, context);
 }

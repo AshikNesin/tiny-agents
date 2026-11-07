@@ -267,6 +267,51 @@ const FIXTURES: Record<string, Fixture> = {
     rules: ["R5a", "R5a", "R5b"],
   },
   "packages/ui/src/r5b-pass.tsx": { source: SIBLING_SEPARATOR, rules: [] },
+  "packages/agent/src/toolkits/r6-fail.ts": {
+    source:
+      'import type { JsonObject } from "@earendil-works/pi-durable";\ninterface Foo { a: string }\nexport const f = (x: Foo) => x as unknown as JsonObject;\n',
+    rules: ["R6"],
+    mentions: "durable-json.ts",
+  },
+  "packages/agent/src/r6-any-paren-fail.ts": {
+    source: "export const f = (x: string) => (x as any) as number;\n",
+    rules: ["R6"],
+  },
+  "packages/agent/src/r6-angle-fail.ts": {
+    source: "export const f = (x: string) => <number>(<unknown>x);\n",
+    rules: ["R6"],
+  },
+  "packages/agent/src/r6-pass.ts": {
+    source: "export const f = (x: unknown) => x as string;\n",
+    rules: [],
+  },
+  "packages/agent/src/testing-r6.ts": {
+    source: "export const f = (x: string) => x as unknown as number;\n",
+    rules: [],
+  },
+  "packages/agent/src/gate-r6b-fail.ts": {
+    source:
+      "type Hooks = { plan(args: { id: string }): void };\nexport const run = (hooks: Hooks, args: unknown) => hooks.plan(args as never);\n",
+    rules: ["R6b"],
+    mentions: "durable-json.ts",
+  },
+  "packages/agent/src/toolkits/r6b-angle-fail.ts": {
+    source: "export const f = (x: string) => <never>x;\n",
+    rules: ["R6b"],
+  },
+  "packages/agent/src/r6b-pass.ts": {
+    source:
+      'export const block = { type: "image", data: "", mimeType: "image/jpeg" } as const;\nexport const id = (n: number) => n as number & { brand: true };\n',
+    rules: [],
+  },
+  "packages/agent/src/testing-r6b.ts": {
+    source: "export const f = (x: string) => x as never;\n",
+    rules: [],
+  },
+  "packages/claude-worker/src/r6-elsewhere-pass.ts": {
+    source: "export const f = (x: string) => x as unknown as number;\n",
+    rules: [],
+  },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };

@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { approvalOf } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { ApprovalNotPendingError, type AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
@@ -485,4 +486,17 @@ describe("approvals across restarts", () => {
     expect(mailer.sent).toEqual(["ed@x.dev"]);
     expect(toolCall(after, "send_email")).toMatchObject({ status: "interrupted" });
   }, 30_000);
+});
+
+describe("the pending card's vault details", () => {
+  it("drops a vault card that does not fit, and logs the key", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const view = approvalOf({ approval: "pending", vault: { handle: "github", kind: "planet" } });
+      expect(view).toEqual({ state: "pending" });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('details "vault" does not fit'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });

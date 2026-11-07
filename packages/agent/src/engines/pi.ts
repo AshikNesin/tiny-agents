@@ -4,7 +4,7 @@
  * chat is their projection. The runtime opens the harness (it is also the
  * durable store every conversation's documents live in) and hands it here.
  */
-import type { Context, JsonValue } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   configure as configureAgent,
@@ -26,6 +26,7 @@ import {
   type CompiledConversation,
   type EngineSubmission,
 } from "../engine";
+import { toJson } from "../durable-json";
 import type { ToolGate } from "../gate";
 import { applyPermissions, PermissionsDoc, type GateUserMessage } from "../policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "../projection";
@@ -157,7 +158,7 @@ export class PiEngine implements AgentEngine {
         // client can confirm its Echo by id instead of by text.
         entry: {
           kind: CHAT_USER_ENTRY,
-          data: {
+          data: toJson({
             requestId: input.requestId,
             ...(input.peer ? { peer: input.peer } : {}),
             ...(input.author ? { author: { id: input.author.id, name: input.author.name } } : {}),
@@ -174,7 +175,7 @@ export class PiEngine implements AgentEngine {
                   })),
                 }
               : {}),
-          } as unknown as JsonValue,
+          }),
         },
       },
       ctx,

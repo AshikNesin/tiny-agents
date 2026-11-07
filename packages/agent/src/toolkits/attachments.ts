@@ -11,7 +11,12 @@
  */
 import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import {
+  defineExtension,
+  defineTool,
+  type ToolExecutionResult,
+  type ToolRegistration,
+} from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import type { SandboxConnection } from "../ssh/sandbox-connection";
 
@@ -411,7 +416,7 @@ export function createAttachmentsToolkit(
     },
   });
 
-  const tools = [listAttachments, readAttachment, searchAttachment];
+  const tools: ToolRegistration[] = [listAttachments, readAttachment, searchAttachment];
   const toolInfo = [
     {
       name: "list_attachments",
@@ -480,7 +485,7 @@ export function createAttachmentsToolkit(
         };
       },
     });
-    tools.push(copy as unknown as (typeof tools)[number]);
+    tools.push(copy);
     toolInfo.push({
       name: "copy_attachment_to_sandbox",
       label: "Copied an attachment to the sandbox",

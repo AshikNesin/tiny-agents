@@ -135,6 +135,22 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     rule: "repo/breadcrumbs-children",
     enabled: true,
   },
+  {
+    id: "R6",
+    kind: "plugin",
+    scope: "packages/agent/src/**",
+    rule: "repo/no-double-cast",
+    except: ["**/*.test.ts", "packages/agent/src/testing*.ts"],
+    enabled: true,
+  },
+  {
+    id: "R6b",
+    kind: "plugin",
+    scope: "packages/agent/src/**",
+    rule: "repo/no-never-cast",
+    except: ["**/*.test.ts", "packages/agent/src/testing*.ts"],
+    enabled: true,
+  },
 ];
 
 const covers = (glob: string, zone: string) =>

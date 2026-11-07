@@ -10,19 +10,24 @@
  */
 import type { JsonValue } from "@earendil-works/chord";
 import { defineDoc, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
+import { z } from "zod";
 import { innerDetails } from "./approvals";
+import { parseStored, toJson } from "./durable-json";
 import type { ChatCredentialRequest } from "./types";
 import { pendingToolTask, sealedAsNotPending, type HostTx } from "./waiting";
 
-export type CredentialFieldType =
-  | "text"
-  | "email"
-  | "password"
-  | "otp"
-  | "card_number"
-  | "expiry"
-  | "cvc"
-  | "select";
+const CREDENTIAL_FIELD_TYPES = [
+  "text",
+  "email",
+  "password",
+  "otp",
+  "card_number",
+  "expiry",
+  "cvc",
+  "select",
+] as const;
+
+export type CredentialFieldType = (typeof CREDENTIAL_FIELD_TYPES)[number];
 
 export interface CredentialField {
   key: string;
@@ -85,7 +90,7 @@ export function pendingCredentialDetails(
   request: CredentialRequest,
   expiresAt: number,
 ): JsonObject {
-  return { credentials: "pending", request: request as unknown as JsonObject, expiresAt };
+  return { credentials: "pending", request: toJson(request), expiresAt };
 }
 
 /** The details a `request_credentials` call ends with. */
@@ -95,7 +100,7 @@ export function credentialResultDetails(
 ): JsonObject {
   return {
     credentials: doc.status,
-    request: request as unknown as JsonObject,
+    request: toJson(request),
     filled: doc.filled,
     ...(doc.savedHandle ? { savedHandle: doc.savedHandle } : {}),
   };
@@ -147,14 +152,11 @@ export async function readPendingRequest(
   // Another tool's task has no request (and the throw rolls back the
   // document this read would create).
   const doc = await tx.doc(CredentialRequestDoc, id);
-  if (doc.status !== "pending" || !doc.request) throw notPending();
+  // A plain copy: parsing builds new objects from the draft proxy.
+  const request = storedRequest(doc);
+  if (doc.status !== "pending" || !request) throw notPending();
   if (doc.expiresAt <= Date.now()) throw notPending();
-  return {
-    conversation,
-    // A plain copy: the draft is a proxy that structuredClone can't copy.
-    request: JSON.parse(JSON.stringify(storedRequest(doc))) as CredentialRequest,
-    expiresAt: doc.expiresAt,
-  };
+  return { conversation, request, expiresAt: doc.expiresAt };
 }
 
 /** Settle a waiting request with the owner's outcome (never values), in the host's transaction. */
@@ -203,5 +205,23 @@ export function credentialSubject(request: Pick<CredentialRequest, "origin" | "t
   return `${request.title} on ${host}`;
 }
 
+const credentialRequest: z.ZodType<CredentialRequest> = z.object({
+  origin: z.string(),
+  title: z.string(),
+  purpose: z.string(),
+  fields: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      type: z.enum(CREDENTIAL_FIELD_TYPES),
+      required: z.boolean(),
+      autocomplete: z.string(),
+      options: z.array(z.string()).optional(),
+      ref: z.string().optional(),
+    }),
+  ),
+  savedHandle: z.string().optional(),
+});
+
 export const storedRequest = (doc: { request: JsonValue }) =>
-  doc.request as unknown as CredentialRequest | null;
+  parseStored("tiny.credential-request.request", doc.request, credentialRequest.nullable());

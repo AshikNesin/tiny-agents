@@ -15,11 +15,14 @@ import {
   type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
+import { z } from "zod";
 import { gateApproved, type GateHooks, type GatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
+import { durableMemo, toJson } from "../durable-json";
 import {
   hasGrant,
   VAULT_RULE,
+  VAULT_TARGET_KINDS,
   vaultGrant,
   VaultError,
   VaultTargetMovedError,
@@ -81,13 +84,23 @@ export interface IntendedUses {
 /** Where a card's target is cut: a command can be long. */
 const CARD_TARGET_CHARS = 2000;
 
+const vaultUse = z.object({
+  handle: z.string(),
+  tool: z.string(),
+  targetKind: z.enum(VAULT_TARGET_KINDS),
+  target: z.string(),
+  conversation: z.number(),
+  granted: z.boolean(),
+});
+
 /** What a call's plan memoizes: one use, or `{ uses }` for several. */
-type PlannedMemo = VaultUse | { uses: VaultUse[] };
+const plannedMemo = durableMemo<VaultUse | { uses: VaultUse[] }>(
+  "vault:use",
+  z.union([vaultUse, z.object({ uses: z.array(vaultUse) })]),
+);
 
 async function plannedUses(api: ToolExecutionApi, context: Context): Promise<VaultUse[]> {
-  const memo = (await api.memo<JsonObject>("vault:use", context)) as unknown as
-    | PlannedMemo
-    | undefined;
+  const memo = await plannedMemo.read(api, context);
   return !memo ? [] : "uses" in memo ? memo.uses : [memo];
 }
 
@@ -163,8 +176,7 @@ export function vaultGatePlan<TArgs>(
       if (intended && "refuse" in intended) return { refuse: intended.refuse, ask: false };
       if (!intended || uses.length === 0) return { ask: askWithoutUse && toolAsks };
       // The uses this call was planned for: what a denial is audited against.
-      const memo: PlannedMemo = uses.length === 1 ? uses[0] : { uses };
-      await api.memo("vault:use", memo as unknown as JsonObject, context);
+      await plannedMemo.keep(api, uses.length === 1 ? uses[0] : { uses }, context);
       const plans: Exclude<VaultPlan, { refused: string }>[] = [];
       for (const use of uses) {
         const plan = await broker.plan(use);
@@ -186,11 +198,7 @@ export function vaultGatePlan<TArgs>(
       return {
         ask: true,
         details: {
-          vault: {
-            ...cardOf(plans.map((plan) => plan.card)),
-            ...intended.card,
-            grantable,
-          } as unknown as JsonObject,
+          vault: toJson({ ...cardOf(plans.map((plan) => plan.card)), ...intended.card, grantable }),
         },
         ...(grantable ? { grant: vaultGrant(uses[0].handle) } : {}),
         expiresInMs: VAULT_APPROVAL_TTL_MS,

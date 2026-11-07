@@ -21,8 +21,10 @@ import {
   type TaskId,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
+import { z } from "zod";
 import { innerDetails } from "../approvals";
 import type { Capability } from "../capabilities";
+import { parseStored, toJson } from "../durable-json";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
 import {
   pendingToolTask,
@@ -71,11 +73,23 @@ export class InvalidAnswersError extends Error {
   }
 }
 
-// Normalized questions and answers never carry undefined fields, so they are
-// JSON as they are; the document and the details store them as such.
-const toJson = (value: OwnerQuestion[] | OwnerAnswer[]) => value as unknown as JsonValue[];
+const ownerQuestions: z.ZodType<OwnerQuestion[]> = z.array(
+  z.object({
+    question: z.string(),
+    description: z.string().optional(),
+    options: z
+      .array(z.object({ label: z.string(), description: z.string().optional() }))
+      .optional(),
+    multiple: z.boolean().optional(),
+  }),
+);
+
+const ownerAnswers: z.ZodType<OwnerAnswer[]> = z.array(
+  z.object({ selected: z.array(z.string()), text: z.string().optional() }),
+);
+
 const storedQuestions = (doc: { questions: JsonValue[] }) =>
-  doc.questions as unknown as OwnerQuestion[];
+  parseStored("tiny.questions.questions", doc.questions, ownerQuestions);
 
 // ── The card's details: one shape, produced and parsed here ─────────────
 
@@ -123,7 +137,7 @@ export async function recordAnswers(
   const doc = await tx.doc(QuestionsDoc, id);
   if (doc.status !== "pending" || doc.questions.length === 0) throw notPending();
   if (answers) {
-    doc.answers = checkAnswers(storedQuestions(doc), answers) as unknown as JsonValue[];
+    doc.answers = checkAnswers(storedQuestions(doc), answers).map(toJson);
     doc.status = "answered";
   } else {
     doc.status = "dismissed";
@@ -257,7 +271,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
         pendingDetails(asked),
         context,
         (value) => {
-          if (value.questions.length === 0) value.questions = toJson(asked);
+          if (value.questions.length === 0) value.questions = asked.map(toJson);
         },
         { tool: ASK_OWNER, preview: asked[0]?.question },
       );
@@ -268,7 +282,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
           details: { question: "dismissed", questions: toJson(questions) },
         };
       }
-      const answers = doc.answers as unknown as OwnerAnswer[];
+      const answers = parseStored("tiny.questions.answers", doc.answers, ownerAnswers);
       return {
         output: [{ type: "text", text: formatAnswers(questions, answers) }],
         details: { question: "answered", questions: toJson(questions), answers: toJson(answers) },

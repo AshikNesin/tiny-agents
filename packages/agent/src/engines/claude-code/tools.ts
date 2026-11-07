@@ -3,7 +3,7 @@
  * Claude Code as MCP proxy tools. Execution stays in tiny-agents, behind the
  * Tool gate. Claude Code's own tools stay empty.
  */
-import type { JsonValue } from "@earendil-works/chord";
+import type { Context, JsonValue } from "@earendil-works/chord";
 import type {
   ConversationId,
   DocumentReader,
@@ -18,6 +18,7 @@ import {
   type CapabilitySelection,
   type ToolPermission,
 } from "../../capabilities";
+import { toJson } from "../../durable-json";
 
 export interface ClaudeToolSurface {
   tools: ToolSpec[];
@@ -83,29 +84,29 @@ export function claudeToolApi(options: {
   details?: (value: JsonValue) => void;
 }): ToolExecutionApi {
   const memos = new Map<string, JsonValue>();
-  const own: Record<string, unknown> = {
-    conversationId: options.conversation as ConversationId,
-    taskId: options.task as TaskId,
-    memo: async (name: string, ...rest: unknown[]) => {
-      // memo(name, context) reads; memo(name, candidate, context) keeps the first value.
-      if (rest.length >= 2 && !memos.has(name)) memos.set(name, rest[0] as JsonValue);
-      return memos.get(name);
-    },
-    snapshot: (...args: unknown[]) =>
-      options.docs
-        ? (options.docs.snapshot as (...a: unknown[]) => Promise<unknown>)(...args)
-        : Promise.resolve(undefined),
-    details: async (value: JsonValue) => {
-      options.details?.(value);
-    },
-  };
+  function memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
+  function memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
+  async function memo(name: string, ...rest: unknown[]) {
+    if (rest.length >= 2 && !memos.has(name)) memos.set(name, toJson(rest[0]));
+    return memos.get(name);
+  }
+  const own: Pick<ToolExecutionApi, "conversationId" | "taskId" | "memo" | "snapshot" | "details"> =
+    {
+      conversationId: options.conversation as ConversationId,
+      taskId: options.task as TaskId,
+      memo,
+      snapshot: options.docs ? options.docs.snapshot.bind(options.docs) : async () => undefined,
+      details: async (value) => {
+        options.details?.(value);
+      },
+    };
   return new Proxy(own, {
     get(target, prop) {
       if (typeof prop === "symbol" || prop === "then") return undefined;
-      if (prop in target) return target[prop];
+      if (prop in target) return Reflect.get(target, prop);
       throw new Error(
         `${options.name} needs the pi runtime (${prop}). The Claude plan engine does not run that tool.`,
       );
     },
-  }) as unknown as ToolExecutionApi;
+  }) as ToolExecutionApi;
 }
