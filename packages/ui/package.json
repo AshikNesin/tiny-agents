@@ -12,6 +12,7 @@
     "./card": "./src/card.tsx",
     "./checkbox": "./src/checkbox.tsx",
     "./command": "./src/command.tsx",
+    "./command-menu": "./src/command-menu.tsx",
     "./dialog": "./src/dialog.tsx",
     "./display": "./src/display.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",

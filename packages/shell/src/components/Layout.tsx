@@ -1,8 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@groot/shell/store/auth";
-import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import {
   CommandPaletteTrigger,
   CommandPaletteDialog,
@@ -69,7 +68,6 @@ export function Layout({
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const location = useLocation();
-  const toggleCommandPalette = useCommandPaletteStore((state) => state.toggle);
   const { brand, nav } = useShellConfig();
   const signOut = useSignOut();
 
@@ -91,19 +89,6 @@ export function Layout({
     setCollapsed(next);
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
   };
-
-  // Global ⌘K / Ctrl+K handler for the command palette.
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        if (e.repeat) return;
-        e.preventDefault();
-        toggleCommandPalette();
-      }
-    };
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, [toggleCommandPalette]);
 
   const menuNav = nav.filter((item) => !item.primary);
 

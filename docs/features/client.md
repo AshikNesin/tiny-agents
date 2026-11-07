@@ -24,6 +24,11 @@ it creates the first account (`POST /auth/setup`) and signs in. Once a user
 exists it redirects to `/login`. `useSetupStatus()`
 (`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
 
+`/setup` is first-run setup: while no user exists, `Login` redirects there and
+it creates the first account (`POST /auth/setup`) and signs in. Once a user
+exists it redirects to `/login`. `useSetupStatus()`
+(`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
+
 Any other path redirects to `/`. The router sits inside nuqs's `NuqsAdapter`
 (URL state) and `GrootUIProvider` (`@groot/ui/provider`), which mounts the
 toaster and the `ConfirmProvider` that `useConfirm()` needs.
@@ -49,6 +54,14 @@ session, toast, go to `/login`) to the account menu, and Theme and Account
 groups to ⌘K. `Layout` takes `commandGroups` for app-specific ⌘K groups
 (listed between Navigation and Theme), `header` to replace the sidebar and
 mobile bar with your own, and `padded`, `mainClassName`, `className`.
+
+The ⌘K palette is the Fluid Functionalism command menu
+(`@groot/ui/command-menu`): type to filter, ↑/↓ to move, ←/→ to switch the
+group tabs, Enter to run. A `CommandItemEntry` takes `label`, `icon` and
+`onSelect`, plus optional `description` (muted text, also searched),
+`shortcut` (display-only caps, e.g. `"mod+shift+n"`), `keywords`, `action`
+(what the footer calls Enter, e.g. "Go to Settings"), `suggested` (listed
+under Suggestions while the query is empty) and `variant: "destructive"`.
 
 `App.tsx` keeps a `PAGES` list of `NavDestination & { element }`: it is both
 `ShellConfig.nav` and the routes, so a page with a place in the navigation is

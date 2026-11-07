@@ -1,18 +1,8 @@
 {
-  "fromVersion": "3.0.0",
-  "toVersion": "3.0.0",
-  "fromCommit": "a4b4a7683fda7e71fc238cea99f2b05e3c15e637",
-  "toCommit": "29c96e120320efe5da8d04bfa75caaeb97a9409a",
-  "generatedAt": "2026-10-31T16:46:18.785Z",
-  "conflicts": [
-    {
-      "file": "packages/core/src/app.ts",
-      "conflicts": 2,
-      "commits": [
-        "29c96e1 core: createApp({ uploadPaths }) exempts app upload endpoints from the JSON body limit",
-        "1f59d1b Address code comments",
-        "869db96 chore: enhance cors"
-      ]
-    }
-  ]
+  "fromVersion": "3.1.0",
+  "toVersion": "3.1.0",
+  "fromCommit": "1faa7639c5a63dbb75f53b7006b9d551d78f845c",
+  "toCommit": "b1661dd7e885d4a1ba3f64f6297032f6a2516c85",
+  "generatedAt": "2026-11-07T16:09:31.000Z",
+  "conflicts": []
 }

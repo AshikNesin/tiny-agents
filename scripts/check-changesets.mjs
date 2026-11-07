@@ -44,6 +44,7 @@ const BOT_EMAIL_SUFFIX = "@users.noreply.github.com";
 // manifest edit needs coverage even when no source file changed.
 const MANAGED_PREFIXES = [
   "packages/*/src",
+  "packages/*/vendor",
   "packages/*/package.json",
   "apps/web/drizzle",
   ".groot",
@@ -94,7 +95,7 @@ function readPkgJsonAt(rootDir, file) {
   return existsSync(absolute) ? readFileSync(absolute, "utf8") : "";
 }
 
-// Map a packages/[pkg]/src path to its npm package name from package.json.
+// Map a packages/[pkg]/src (or vendor) path to its npm package name from package.json.
 // Files under apps/web/drizzle or .groot map to the root package.
 function packageNameFor(file, rootDir) {
   if (file.startsWith("apps/web/drizzle") || file.startsWith(".groot/")) {

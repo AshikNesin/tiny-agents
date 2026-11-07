@@ -5,16 +5,18 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
 import { useSignOut } from "@groot/shell/hooks/useSignOut";
-import { Dialog, DialogContent, DialogTitle } from "@groot/ui/dialog";
 import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandFooter,
-} from "@groot/ui/command";
+  CommandMenu,
+  CommandMenuDialog,
+  CommandMenuEmpty,
+  CommandMenuFooter,
+  CommandMenuInput,
+  CommandMenuItem,
+  CommandMenuList,
+  CommandMenuTabs,
+  type CommandMenuItemData,
+  type CommandMenuTab,
+} from "@groot/ui/command-menu";
 
 /** A single selectable entry inside a command-palette group. */
 export interface CommandItemEntry {
@@ -24,6 +26,18 @@ export interface CommandItemEntry {
   variant?: "default" | "destructive";
   /** Stable React key. Defaults to `label`; set when labels may duplicate. */
   id?: string;
+  /** What the footer names Enter while the row is highlighted, e.g.
+   *  "Go to Settings". Defaults to the label. */
+  action?: string;
+  /** Muted text after the label. Also matched by the search. */
+  description?: string;
+  /** Keys shown at the row's trailing edge, e.g. `"mod+shift+n"`. Display
+   *  only: bind the combo yourself. */
+  shortcut?: string;
+  /** Extra search terms besides the label and description. */
+  keywords?: string[];
+  /** List the entry under "Suggestions" while nothing is typed. */
+  suggested?: boolean;
 }
 
 /** A labeled group of commands in the palette. */
@@ -33,6 +47,10 @@ export interface CommandGroupEntry {
   /** Stable React key. Defaults to `heading`; set when headings may duplicate. */
   id?: string;
 }
+
+const ALL_TAB = "all";
+// Stable default so the item memos below hold when no groups are passed.
+const NO_GROUPS: CommandGroupEntry[] = [];
 
 /** Icon button that opens the shared command palette dialog. */
 export function CommandPaletteTrigger() {
@@ -52,12 +70,12 @@ export function CommandPaletteTrigger() {
 /**
  * The command palette dialog: render once at the app root. It lists the
  * `ShellConfig.nav` destinations, then the app's own `groups`, then the
- * built-in Theme and Account (log out) commands. An app that builds its own
- * Navigation, Theme and Account groups passes `builtIns={false}` so they are
- * not listed twice.
+ * built-in Theme and Account (log out) commands. ⌘K / Ctrl+K toggles it. An
+ * app that builds its own Navigation, Theme and Account groups passes
+ * `builtIns={false}` so they are not listed twice.
  */
 export function CommandPaletteDialog({
-  groups = [],
+  groups = NO_GROUPS,
   builtIns = true,
 }: {
   groups?: CommandGroupEntry[];
@@ -70,88 +88,114 @@ export function CommandPaletteDialog({
   const { nav } = useShellConfig();
   const { setTheme } = useTheme();
   const signOut = useSignOut();
+  const [tab, setTab] = React.useState(ALL_TAB);
 
-  const runCommand = React.useCallback(
-    (command: () => unknown) => {
-      setOpen(false);
-      command();
-    },
-    [setOpen],
+  // Every time the palette opens it starts on "All".
+  React.useEffect(() => {
+    if (open) setTab(ALL_TAB);
+  }, [open]);
+
+  const resolvedGroups = React.useMemo<CommandGroupEntry[]>(
+    () =>
+      !builtIns
+        ? groups
+        : [
+            ...(nav.length > 0
+              ? [
+                  {
+                    id: "shell-navigation",
+                    heading: "Navigation",
+                    items: nav.map((item) => ({
+                      id: item.to,
+                      label: item.label,
+                      icon: item.icon,
+                      action: `Go to ${item.label}`,
+                      onSelect: () => navigate(item.to),
+                    })),
+                  },
+                ]
+              : []),
+            ...groups,
+            {
+              id: "shell-theme",
+              heading: "Theme",
+              items: THEME_OPTIONS.map(({ value, label, icon }) => ({
+                id: `theme-${value}`,
+                label: `${label} theme`,
+                icon,
+                onSelect: () => setTheme(value),
+              })),
+            },
+            {
+              id: "shell-account",
+              heading: "Account",
+              items: [
+                {
+                  label: "Log out",
+                  icon: LogOut,
+                  onSelect: signOut,
+                  variant: "destructive" as const,
+                },
+              ],
+            },
+          ],
+    [builtIns, nav, groups, navigate, setTheme, signOut],
   );
 
-  const resolvedGroups: CommandGroupEntry[] = builtIns
-    ? [
-        ...(nav.length > 0
-          ? [
-              {
-                id: "shell-navigation",
-                heading: "Navigation",
-                items: nav.map((item) => ({
-                  id: item.to,
-                  label: item.label,
-                  icon: item.icon,
-                  onSelect: () => navigate(item.to),
-                })),
-              },
-            ]
-          : []),
-        ...groups,
-        {
-          id: "shell-theme",
-          heading: "Theme",
-          items: THEME_OPTIONS.map(({ value, label, icon }) => ({
-            id: `theme-${value}`,
-            label: `${label} theme`,
-            icon,
-            onSelect: () => setTheme(value),
-          })),
-        },
-        {
-          id: "shell-account",
-          heading: "Account",
-          items: [{ label: "Log out", icon: LogOut, onSelect: signOut, variant: "destructive" }],
-        },
-      ]
-    : groups;
+  const { items, destructive, suggestions, tabs } = React.useMemo(() => {
+    const items: CommandMenuItemData[] = [];
+    const destructive = new Set<string>();
+    const suggestions: string[] = [];
+    const tabs: CommandMenuTab[] = [{ value: ALL_TAB, label: "All" }];
+    for (const group of resolvedGroups) {
+      const groupKey = group.id ?? group.heading;
+      tabs.push({ value: groupKey, label: group.heading });
+      for (const entry of group.items) {
+        const value = `${groupKey}::${entry.id ?? entry.label}`;
+        items.push({
+          value,
+          label: entry.label,
+          action: entry.action,
+          description: entry.description,
+          icon: entry.icon,
+          shortcut: entry.shortcut,
+          keywords: [group.heading, ...(entry.keywords ?? [])],
+          group: group.heading,
+          onSelect: entry.onSelect,
+        });
+        if (entry.variant === "destructive") destructive.add(value);
+        if (entry.suggested) suggestions.push(value);
+      }
+    }
+    return { items, destructive, suggestions, tabs };
+  }, [resolvedGroups]);
+
+  const visibleItems = React.useMemo(() => {
+    if (tab === ALL_TAB) return items;
+    const heading = tabs.find((t) => t.value === tab)?.label;
+    return items.filter((item) => item.group === heading);
+  }, [items, tabs, tab]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        size="lg"
-        position="top"
-        showCloseButton={false}
-        className="flex max-h-[min(440px,76dvh)] flex-col gap-0 overflow-hidden p-0"
+    <CommandMenuDialog open={open} onOpenChange={setOpen} shortcut="mod+k">
+      <CommandMenu
+        items={visibleItems}
+        suggestions={tab === ALL_TAB && suggestions.length > 0 ? suggestions : undefined}
       >
-        <DialogTitle className="sr-only">Command Menu</DialogTitle>
-        <Command className="min-h-0 flex-1 rounded-none! p-0">
-          <CommandInput placeholder="Type a command or search..." />
-          <CommandList className="max-h-none min-h-0 flex-1 px-1.5 pb-1.5">
-            <CommandEmpty className="text-muted-foreground">No results found.</CommandEmpty>
-            {resolvedGroups.map((group) => (
-              <CommandGroup key={group.id ?? group.heading} heading={group.heading}>
-                {group.items.map((entry) => {
-                  const Icon = entry.icon;
-                  return (
-                    <CommandItem
-                      key={entry.id ?? entry.label}
-                      onSelect={() => runCommand(entry.onSelect)}
-                      className={
-                        entry.variant === "destructive"
-                          ? "text-destructive data-[selected=true]:text-destructive"
-                          : undefined
-                      }
-                    >
-                      {Icon ? <Icon /> : null}
-                      <span>{entry.label}</span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ))}
-          </CommandList>
-          <CommandFooter />
-        </Command>
-      </DialogContent>
-    </Dialog>
+        <CommandMenuInput placeholder="Type a command or search…" />
+        {tabs.length > 2 && <CommandMenuTabs tabs={tabs} value={tab} onValueChange={setTab} />}
+        <CommandMenuList
+          renderItem={(item) => (
+            <CommandMenuItem
+              value={item.value}
+              className={destructive.has(item.value) ? "text-destructive" : undefined}
+            />
+          )}
+        >
+          <CommandMenuEmpty>No results found.</CommandMenuEmpty>
+        </CommandMenuList>
+        <CommandMenuFooter />
+      </CommandMenu>
+    </CommandMenuDialog>
   );
 }
