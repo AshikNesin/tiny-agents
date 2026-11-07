@@ -52,49 +52,63 @@ curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/auth/logout
 
 Missing admin header → `401`; wrong key → `403`.
 
-## Todos (JWT)
+## Routines (JWT)
 
 ```bash
+# A bot to run the routine; take an id from the list → 200
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/bots
+
 # List → 200
-curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/todos
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/routines
 
-# Create → 201; empty title → 400 with error.details.title
-curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/todos \
-  -H "Content-Type: application/json" -d '{"title":"Draft documentation"}'
+# Create → 201 with nextFireTimes; empty name, bad schedule or unknown bot → 400
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/routines \
+  -H "Content-Type: application/json" \
+  -d '{"botId":"'$BOT_ID'","name":"weekday-digest","prompt":"Summarize HN, only new things.","schedule":{"kind":"cron","expr":"0 9 * * 1-5"}}'
 
-# Read → 200; unknown id → 404; non-numeric id → 400
-curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/todos/1
+# Read → 200; unknown id → 404
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/routines/$ROUTINE_ID
 
 # Update → 200
-curl -H "Authorization: Bearer $TOKEN" -X PUT $BASE/api/v1/todos/1 \
-  -H "Content-Type: application/json" -d '{"completed":true}'
+curl -H "Authorization: Bearer $TOKEN" -X PATCH $BASE/api/v1/routines/$ROUTINE_ID \
+  -H "Content-Type: application/json" -d '{"name":"weekday-news"}'
 
-# Delete → 204
-curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/todos/1
+# Pause, resume, run now → 200
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/routines/$ROUTINE_ID/pause
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/routines/$ROUTINE_ID/resume
+curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/routines/$ROUTINE_ID/run
+
+# Runs of one routine, and the newest across all → 200 { runs }
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/routines/$ROUTINE_ID/runs?limit=5"
+curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/routines/runs/recent
+
+# Delete → 200 { deleted: true }; cancels the pending job
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/routines/$ROUTINE_ID
 ```
 
 ## Jobs (JWT)
 
 ```bash
-# Queue a job → 201 { jobId, jobName, data }
+# Queue a job → 201 { jobId, jobName, data }. It runs once a handler is
+# registered for its name (registerJobHandler); "nightly-report" stands for yours.
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs \
   -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-summary","data":{},"options":{"retryLimit":1,"delaySeconds":0}}'
+  -d '{"jobName":"nightly-report","data":{},"options":{"retryLimit":1,"delaySeconds":0}}'
 
 # Schedule with cron (nightly at 3am, optional timezone) → 201.
 # Posting again for the same jobName replaces that schedule (this is how you edit one).
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/jobs/schedule \
   -H "Content-Type: application/json" \
-  -d '{"jobName":"todo-cleanup","cron":"0 3 * * *","data":{"daysToKeep":45},"options":{"timezone":"UTC"}}'
+  -d '{"jobName":"nightly-report","cron":"0 3 * * *","data":{"days":45},"options":{"timezone":"UTC"}}'
 
 # Schedules: list → 200, remove → 200 (unknown name → 404)
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/schedule
-curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/schedule/todo-cleanup
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/jobs/schedule/nightly-report
 
 # Dashboard queries → 200
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/stats
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/available
-curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs?state=completed&name=todo-summary&limit=20"
+curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/jobs?state=completed&name=routine-fire&limit=20"
 
 # One job by id → 200; unknown → 404 JOB_NOT_FOUND
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/jobs/$JOB_ID
@@ -184,8 +198,8 @@ Passkey flows need the browser (`navigator.credentials`), so drive them from
 
 ## Combined workflow
 
-1. Create a few todos.
-2. Queue `todo-summary`; a moment later `GET /api/v1/jobs/<id>`
-   shows `state: "completed"` with the counts in `output`.
-3. Schedule `todo-cleanup` nightly.
-4. Open `/todos` and `/jobs` in the client to verify.
+1. Create a routine for a bot.
+2. Run it now with `POST /api/v1/routines/<id>/run`; a moment later
+   `GET /api/v1/routines/<id>/runs` lists the run and its status.
+3. `GET /api/v1/jobs?name=routine-fire` shows the job that fires it on schedule.
+4. Open `/routines` and `/jobs` in the client to verify.

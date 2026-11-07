@@ -80,6 +80,7 @@ const KNOWN_ABSENT_PATHS = new Set([
   "apps/web/drizzle/0001_add_posts.sql",
   "post.routes.ts",
   "migrate-layout.ts",
+  ".vite-hooks/_",
 ]);
 const SYNC_DOC_ONLY_PATHS = new Set([
   "postcss.config.js",
