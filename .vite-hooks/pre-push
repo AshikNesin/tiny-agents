@@ -1,3 +1,5 @@
+command -v vp >/dev/null || { echo "vp not found: this worktree has no node_modules. Run pnpm install here, then push again."; exit 1; }
+
 # Git passes one line per ref: <local ref> <local sha> <remote ref> <remote sha>.
 # A deletion has an all-zero local sha.
 while read -r local_ref local_sha _; do

@@ -1,5 +1,7 @@
 # The hook wrapper runs this with `sh -e`.
 
+command -v vp >/dev/null || { echo "vp not found: this worktree has no node_modules. Run pnpm install here, then commit again."; exit 1; }
+
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks protect --staged --verbose --redact --config .gitleaks.toml
 else
