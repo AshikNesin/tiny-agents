@@ -12,7 +12,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { BotDialog } from "@/components/BotDialog";
-import { botsApi, type Bot, type ModelInfo } from "@/lib/bots-api";
+import { botsApi, type Bot, type CatalogModel } from "@/lib/bots-api";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -59,11 +59,19 @@ vi.mock("@/lib/connections-api", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const models: ModelInfo[] = [
+const models: CatalogModel[] = [
   {
     id: "m1",
     name: "Model 1",
-    family: "other",
+    providerId: "faux",
+    providerName: "Faux",
+    providerKind: "faux",
+    upstreamId: "test-model",
+    type: "chat",
+    engine: "pi",
+    maxOutputTokens: 16_384,
+    enabled: true,
+    available: true,
     reasoning: false,
     contextWindow: 128000,
     vision: false,

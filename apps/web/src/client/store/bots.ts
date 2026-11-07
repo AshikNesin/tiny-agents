@@ -20,8 +20,8 @@ import {
   botsApi,
   type Bot,
   type BotListEntry,
-  type ModelInfo,
-  type ProviderStatus,
+  type CatalogModel,
+  type ProviderSummary,
 } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { EventsFeedEvent } from "../lib/chat-types";
@@ -38,11 +38,11 @@ interface BotsState {
   bots: BotListEntry[];
   loading: boolean;
   error: string | null;
-  gatewayConfigured: boolean;
+  canAnswer: boolean;
   /** Inference providers and their setup state (the not-configured banner). */
-  providers: ProviderStatus[];
+  providers: ProviderSummary[];
   defaultModel?: string;
-  models: ModelInfo[];
+  models: CatalogModel[];
   /** Full rows by id, fetched on demand (the chat, the edit dialog). */
   fullBots: Record<string, Bot>;
   /** Live MCP connection status by id (the Connections pages' badges). */
@@ -226,7 +226,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
     bots: [],
     loading: false,
     error: null,
-    gatewayConfigured: false,
+    canAnswer: false,
     providers: [],
     defaultModel: undefined,
     models: [],
@@ -281,12 +281,12 @@ export const useBotsStore = create<BotsState>((set, get) => {
 
     loadModels: async () => {
       try {
-        const { models, defaultModel, gatewayConfigured, providers } = await botsApi.models();
+        const { models, defaultModelId, canAnswer, providers } = await botsApi.models();
         set({
-          gatewayConfigured,
-          providers: providers ?? [],
+          canAnswer,
+          providers,
           models,
-          defaultModel: defaultModel ?? models[0]?.id,
+          defaultModel: defaultModelId ?? undefined,
         });
       } catch {
         // Banner state stays as-is; the chat pane shows its own error.
@@ -349,6 +349,10 @@ export const useBotsStore = create<BotsState>((set, get) => {
       if (activityConnection) return;
       activityConnection = subscribeSse("/api/v1/events", (event) => {
         const typed = event as EventsFeedEvent;
+        if (typed.type === "models.changed") {
+          void get().loadModels();
+          return;
+        }
         if (typed.type === "connection") {
           const { id, status, error } = typed;
           set((state) => ({

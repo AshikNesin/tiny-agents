@@ -72,7 +72,7 @@ Work
 - [Connections (MCP)](./connections.md): against a real local MCP server the journey starts.
 - [Vault](./vault.md): every item kind, step-up, masking, reveal, policy, delete.
 - [Vault step-up with a passkey](./vault-passkey.md): Use a passkey, refused foreign and unknown passkeys, edit in the same window.
-- [Model providers](./model-providers.md): catalog and picker with no provider keys.
+- [Models](./models.md): catalog, picker and chip on the faux account.
 - [Storage](./storage.md): folders, byte-exact upload/download, rename, bulk delete.
 - [Jobs](./jobs.md): list, filters, detail, cancel/resume, re-run, delete.
 - [Jobs admin](./jobs-admin.md): retry, bulk re-run, schedule/edit/cancel a job, purge by state.
@@ -118,7 +118,7 @@ These steps caught real bugs in the 2026-11 pass; the bugs are fixed and the ste
 
 - Real model behaviour: tools the faux model can't call (`run_command`, `computer_*`, MCP tools, `remember`/`forget`, vault fill, `message_bot`), background memory capture, model-written chat titles, vision input. Needs a real provider.
 - Auto-review approvals: a Cloudflare AI Gateway classifier, and the faux runtime passes no reviewer.
-- Claude Code sign-in and harness: `CLAUDE_CODE_ENGINE_ENABLED=1` plus a real Claude Pro/Max login.
+- Claude Code sign-in and harness: a Claude plan account (Settings → Models) plus a real Claude Pro/Max login.
 - Real push delivery, Send test, delivery log: Pushover keys (never in a verification run).
 - Connection OAuth sign-in, skill import from GitHub, 1Password vault items: external services.
 - Feedback submission: an external service.

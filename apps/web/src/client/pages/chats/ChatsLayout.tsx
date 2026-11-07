@@ -36,7 +36,7 @@ export function ChatWorkspace() {
   const bots = useBotsStore((s) => s.bots);
   const loading = useBotsStore((s) => s.loading);
   const models = useBotsStore((s) => s.models);
-  const gatewayConfigured = useBotsStore((s) => s.gatewayConfigured);
+  const canAnswer = useBotsStore((s) => s.canAnswer);
   const openCreateBot = useUiStore((s) => s.openCreateBot);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
@@ -93,7 +93,7 @@ export function ChatWorkspace() {
           key={fullBot.id}
           bot={fullBot}
           models={models}
-          gatewayConfigured={gatewayConfigured}
+          canAnswer={canAnswer}
           onEditBot={() => void openEditBot(fullBot.id)}
         />
       ) : (

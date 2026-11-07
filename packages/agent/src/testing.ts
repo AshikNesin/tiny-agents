@@ -18,10 +18,62 @@ export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";
+import type { ModelConfig, ModelRow } from "./providers/config";
 
 export const TEST_PROVIDER = "faux";
 export const TEST_MODEL = "test-model";
 export const TEST_MODEL_2 = "test-model-2";
+
+/**
+ * A faux model row: the row id is the upstream id, so tests and the faux dev
+ * boot name a model as `test-model` everywhere.
+ */
+export function fauxModelRow(
+  id: string,
+  name: string,
+  options: { reasoning?: boolean; provider?: string } = {},
+): ModelRow {
+  return {
+    id,
+    providerId: options.provider ?? TEST_PROVIDER,
+    upstreamId: id,
+    name,
+    type: "chat",
+    enabled: true,
+    contextWindow: 128_000,
+    maxOutputTokens: 16_384,
+    imageInput: false,
+    reasoning: options.reasoning ?? false,
+    compat: null,
+    missing: false,
+  };
+}
+
+/** A model config with one faux account holding `rows` (the host registers the faux provider). */
+export function fauxModelConfig(
+  rows: readonly ModelRow[],
+  extra: Partial<ModelConfig> = {},
+): ModelConfig {
+  return {
+    providers: [
+      {
+        id: TEST_PROVIDER,
+        name: "Faux",
+        kind: "faux",
+        baseUrl: null,
+        hasCredential: false,
+        viaProviderId: null,
+        settings: {},
+        enabled: true,
+        status: "ok",
+        statusDetail: null,
+      },
+      ...(extra.providers ?? []),
+    ],
+    models: [...rows, ...(extra.models ?? [])],
+    roles: extra.roles ?? {},
+  };
+}
 
 export interface TestRuntimeOptions extends Partial<AgentRuntimeOptions> {
   storePath: string;
@@ -77,9 +129,12 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
   models.setProvider(faux.provider);
   const { reply: _r, reasoning: _t, tokensPerSecond: _s, respondWith: _w, ...rest } = options;
   return AgentRuntime.open({
+    modelConfig: fauxModelConfig([
+      fauxModelRow(TEST_MODEL, "Test Model", { reasoning: true }),
+      fauxModelRow(TEST_MODEL_2, "Test Model 2"),
+    ]),
     ...rest,
     models,
-    provider: TEST_PROVIDER,
     settings: { retry: { enabled: false }, ...rest.settings },
   });
 }

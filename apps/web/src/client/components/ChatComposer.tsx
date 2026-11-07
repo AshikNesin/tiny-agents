@@ -1,3 +1,4 @@
+import { UNAVAILABLE_LABEL } from "./ai-elements/ModelSelector";
 import {
   forwardRef,
   type MouseEvent,
@@ -19,7 +20,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { toast } from "sonner";
-import { botsApi, type AttachmentRef, type Bot, type ModelInfo } from "../lib/bots-api";
+import { botsApi, type AttachmentRef, type Bot, type CatalogModel } from "../lib/bots-api";
 import {
   canSend as draftCanSend,
   editText,
@@ -68,12 +69,12 @@ export interface ChatComposerHandle {
 
 interface ChatComposerProps {
   bot: Bot;
-  model: ModelInfo | undefined;
+  model: CatalogModel | undefined;
   /** The catalog, for the model chip. */
-  models?: ModelInfo[];
+  models?: CatalogModel[];
   /** Switch the bot's model from the chip; leave out to show it read-only (a guest). */
   onModelChange?: (modelId: string) => Promise<void> | void;
-  gatewayConfigured: boolean;
+  canAnswer: boolean;
   busy: boolean;
   /**
    * Send one owner message (store/chats.ts). "restored": it was refused
@@ -98,20 +99,26 @@ function ModelChip({
   value,
   onChange,
 }: {
-  models: ModelInfo[];
+  models: CatalogModel[];
   value: string;
   onChange?: (modelId: string) => Promise<void> | void;
 }) {
   const current = models.find((m) => m.id === value);
-  const options: SearchSelectOption[] = models.map((m) => ({
-    value: m.id,
-    label: m.name,
-    group: m.provider,
-    description: [m.contextWindow ? `${formatContext(m.contextWindow)} context` : undefined, m.note]
-      .filter(Boolean)
-      .join(" · "),
-    keywords: [m.id, m.family],
-  }));
+  const options: SearchSelectOption[] = models
+    .filter((m) => m.enabled || m.id === value)
+    .map((m) => ({
+      value: m.id,
+      label: m.name,
+      group: m.providerName,
+      description: [
+        m.contextWindow ? `${formatContext(m.contextWindow)} context` : undefined,
+        m.unavailableReason ? UNAVAILABLE_LABEL[m.unavailableReason] : m.note,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      keywords: [m.upstreamId, m.providerName],
+      disabled: !m.available,
+    }));
   const label = (
     <>
       <Cpu className="opacity-70" />
@@ -153,7 +160,7 @@ function ModelChip({
  * while the bot replies with nothing typed, and Send (steer) otherwise.
  */
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { bot, model, models = [], onModelChange, gatewayConfigured, busy, onSend, onStop, onEditBot },
+  { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot },
   ref,
 ) {
   // The text, the mentions picked from the autocomplete (kept in step with
@@ -194,7 +201,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mentionOpen = mention !== null && !mentionClosed;
 
   const modelKnown = model !== undefined;
-  const enabled = gatewayConfigured && modelKnown;
+  const enabled = canAnswer && modelKnown;
   const canSend = enabled && draftCanSend(draft);
   // Busy no longer blocks sending (steering, issue #9): the server queues
   // the message. Whenever there is nothing sendable (nothing typed, or an
@@ -342,7 +349,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       }`}
     >
-      {gatewayConfigured && !modelKnown && (
+      {canAnswer && !modelKnown && (
         <div className="mx-auto mb-2 flex max-w-[752px] items-center justify-center gap-2">
           <p className="text-muted-foreground truncate text-center text-xs">
             {bot.modelId} is no longer in the model catalog

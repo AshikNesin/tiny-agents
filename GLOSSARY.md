@@ -82,24 +82,48 @@ A message sent to a harness while its turn runs: it goes into that turn. Queue h
 _Avoid_: interrupt (Stop interrupts)
 
 **Vault use**:
-One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem` and `resolveConnectionSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
+One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection, window, provider); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem`, `resolveConnectionSecret` and `resolveProviderSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
 _Avoid_: fill, lookup, secret access
 
 **Sink**:
-The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header. A sink declares its target kind; it never sees policy. A sink whose target moved (a page left its origin, a window lost focus) throws `VaultTargetMovedError`.
+The tool that receives a vault value: a browser field, a request header, a confined command's environment, an MCP connection's header, a model provider's requests. A sink declares its target kind; it never sees policy. A sink whose target moved (a page left its origin, a window lost focus) throws `VaultTargetMovedError`.
 _Avoid_: consumer, client
+
+**App credential**:
+A vault item with audience `app`: a secret the server uses itself, such as a model provider account's key. Bots never list or use it; only the `provider` sink resolves it, for a host the item lists. Shown on the Vault page under "Used by the app" and changed where it is used.
+_Avoid_: system secret, server key
 
 **Settled**:
 A conversation whose reply finished and went idle. Settling resets the sender's per-turn budget, then answers its Deliveries, resolves its awaiting routine runs, updates the bot list, pushes a failed or long reply to the owner and arms memory capture, in that order, from one read of the transcript, one lookup of who is behind the conversation and one record of when the reply started. `startSettledPipeline` (`bots.settled.ts`) builds every step from the opened runtime, subscribes once, then runs each step's boot sweep. Nothing else listens for idle.
 _Avoid_: done, finished (for the conversation)
 
 **Side-call**:
-A one-shot model call the app makes off the reply path: memory capture, Past chat titles. `createSideCaller(runtime).complete` (`side-call.ts`) picks the model (an override the runtime knows, else the bot's own), aborts it at its deadline, and turns any failure into no answer, logged. Callers take it as a port; faux mode has none, so it makes no side-calls.
+A one-shot model call the app makes off the reply path: memory capture, Past chat titles. `createSideCaller(runtime).complete` (`side-call.ts`) runs on the call's Model role (`memory_capture`, `chat_title`), aborts it at its deadline, and turns any failure into no answer, logged. Callers take it as a port; faux mode has none, so it makes no side-calls.
 _Avoid_: background call, LLM call
 
 **Model catalog**:
-What every model id means (`ModelCatalog`, `model-catalog.ts`, `runtime.catalog`): the id grammar (bare for the primary provider, `custom:<provider>/<model>`, `claude-code/<model>`), what the picker lists (configured providers, then GATEWAY_MODEL_ALLOWLIST), which ids a bot can run on, the registry model an id resolves to, whether a model sees images, and the providers' status. Nothing else parses or builds a model id.
+A projection of the owner's Provider accounts, model rows and Model roles (`ModelCatalog`, `model-catalog.ts`, `runtime.catalog`): what each model row is, whether it can run now and why not, its Model route, the model a role resolves to, and the accounts' status. A model is named by its row id, so there is no id grammar.
 _Avoid_: model list, model registry (that is pi-ai's, which the catalog reads)
+
+**Provider account**:
+One way of reaching models, owned by the owner (`providers` row): a Provider kind, an endpoint, an App credential and a name. Its row id is its pi-ai provider id, so renaming it changes no stored reference.
+_Avoid_: provider (alone: ambiguous with pi-ai's), integration
+
+**Provider kind**:
+What a Provider account speaks (`PROVIDER_KINDS`, `providers/kinds.ts`): `anthropic`, `openai-chat`, `openai-responses`, `gemini`, `cloudflare-ai-gateway`, `claude-plan` or `faux`. It fixes the wire API, how the key is sent, the defaults and the engine.
+_Avoid_: provider type
+
+**Gateway route**:
+An `openai-chat` Provider account that goes through a `cloudflare-ai-gateway` account (`viaProviderId`) to one of the gateway's BYOK upstreams, on the gateway's token.
+_Avoid_: custom provider
+
+**Model role**:
+A named slot a feature reads its model from (`model_roles`): `bot_default`, `memory_capture`, `chat_title`, `vision`, `classifier`. Unset, each has a documented fallback (`ModelCatalog.forRole`).
+_Avoid_: default model (say which role), model setting
+
+**Model route**:
+What the runtime needs to call a model: `{ engine, providerId, upstreamId }`. Only the Model catalog builds one, and only for a model that can run.
+_Avoid_: model ref, parsed id
 
 **Memory ledger**:
 One bot's memories and the rules every write follows, whether a memory comes from capture, the `remember` tool or the Memory page: one row per text (a tombstone is never re-added, except by the owner on the Memory page), supersession of the same bot's active memories only, expiry, the active budget, and the capture watermark, each write one transaction (`memoryLedger(botId)`, `memories.ledger.ts`).

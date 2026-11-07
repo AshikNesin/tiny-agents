@@ -8,7 +8,6 @@
 import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { vi } from "vite-plus/test";
 import { withGatePlan } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import type { WebSocketLike } from "../../../../packages/agent/src/engines/claude-code/client";
@@ -19,8 +18,12 @@ import {
   fauxText,
   fauxToolCall,
   openTestRuntime,
+  fauxModelConfig,
+  fauxModelRow,
   TEST_MODEL,
+  TEST_MODEL_2,
 } from "../../../../packages/agent/src/testing";
+import type { ModelConfig } from "../../../../packages/agent/src/providers/config";
 import type {
   ChatEvent,
   ChatState,
@@ -31,7 +34,45 @@ import type {
 export type EngineKind = "pi" | "claude-code";
 export const ENGINES: EngineKind[] = ["pi", "claude-code"];
 
-export const CLAUDE_MODEL = "claude-code/claude-sonnet-4-6";
+/** The Claude plan model row (a `claude-plan` account's model). */
+const CLAUDE_MODEL = "claude-sonnet";
+
+/**
+ * The faux account plus a Claude plan account holding `CLAUDE_MODEL`. The
+ * plan is on, and falls back to `TEST_MODEL` on pi when `fallback` is set.
+ */
+export function engineModelConfig(
+  plan: { enabled?: boolean; fallback?: boolean } = {},
+): ModelConfig {
+  return fauxModelConfig(
+    [
+      fauxModelRow(TEST_MODEL, "Test Model", { reasoning: true }),
+      fauxModelRow(TEST_MODEL_2, "Test Model 2"),
+    ],
+    {
+      providers: [
+        {
+          id: "claude",
+          name: "Claude plan",
+          kind: "claude-plan",
+          baseUrl: null,
+          hasCredential: false,
+          viaProviderId: null,
+          settings: plan.fallback ? { fallbackModelId: TEST_MODEL } : {},
+          enabled: plan.enabled ?? true,
+          status: "ok",
+          statusDetail: null,
+        },
+      ],
+      models: [
+        {
+          ...fauxModelRow(CLAUDE_MODEL, "Claude Sonnet 4.6", { provider: "claude" }),
+          upstreamId: "claude-sonnet-4-6",
+        },
+      ],
+    },
+  );
+}
 
 /** The value the redaction tests register: it must never leave the gate. */
 export const VAULT_VALUE = "correct-horse-battery-staple";
@@ -354,11 +395,10 @@ export async function openEngine(
   kind: EngineKind,
   options: Partial<AgentRuntimeOptions> & { storePath?: string } = {},
 ): Promise<EngineUnderTest> {
-  if (kind === "claude-code") vi.stubEnv("CLAUDE_CODE_ENGINE_ENABLED", "1");
   const worker = fakeClaudeWorker();
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    env: process.env,
+    modelConfig: engineModelConfig(),
     respondWith: piScript,
     claudeWorker: worker.locator,
     claudeConnect: worker.connect,

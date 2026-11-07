@@ -18,7 +18,7 @@ Beyond a basic thread (`code.md`), the `/code` workspace lets the owner browse t
 - `code-queued-actions` on `code-queued`: `Send now` (interrupts the turn, runs the message) and `Cancel queued message`.
 - `code-recover` a refused turn (`[The model declined to continue …]`) offers `Try another model` (recover `continue`).
 - Not driven: `Retry` (needs a retryable error; the predictable model's `error:` and `fail` errors are not retryable), `Resume` (needs a turn interrupted by a Shelley restart), `Compact in Place`, `Kill job` (background jobs), subagents and `Stop subagent`, `Open in Shelley`, drag-and-drop and paste uploads, the harness pickers.
-- Unreachable here: `Permissions` chip and approval/question cards (`POST …/requests/:rid`) and the Claude Code side of `Kill job`: the Claude Code harness (`CLAUDE_CODE_ENGINE_ENABLED=1` and a signed-in Claude Pro/Max account). `Try another model` actually switching models needs a second model (a real provider in Shelley).
+- Unreachable here: `Permissions` chip and approval/question cards (`POST …/requests/:rid`) and the Claude Code side of `Kill job`: the Claude Code harness (a Claude plan account and a signed-in Claude Pro/Max account). `Try another model` actually switching models needs a second model (a real provider in Shelley).
 
 ## How to get to it (user POV)
 

@@ -47,6 +47,8 @@ export interface VaultBackendView {
 }
 
 export interface VaultItem {
+  /** `app`: a secret the server uses itself (a model provider's key); never a bot's. */
+  audience: "bots" | "app";
   id: string;
   handle: string;
   kind: VaultKind;
@@ -204,7 +206,7 @@ function requestWithStepUp<T>(
 }
 
 /** A request that needs a fresh step-up token. */
-async function stepped<T>(
+export async function stepped<T>(
   method: "post" | "put" | "patch" | "delete",
   url: string,
   data?: unknown,

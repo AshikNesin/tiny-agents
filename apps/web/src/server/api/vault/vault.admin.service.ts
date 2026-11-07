@@ -31,8 +31,10 @@ import {
   clearStatusCache,
   effectiveApproval,
   effectiveTools,
+  forgetAppCredential,
   normalizeOrigin,
   toMeta,
+  vaultPolicyDigest,
   type VaultItemRow,
 } from "./vault.service";
 
@@ -126,6 +128,7 @@ function itemView(row: VaultItemRow) {
     handle: row.handle,
     kind: row.kind,
     backend: row.backend,
+    audience: row.audience,
     label: row.label,
     username: row.username,
     origins: meta.origins,
@@ -220,7 +223,7 @@ async function syncMetadata(): Promise<void> {
     const backend = readBackends().get(row.backend as BackendName);
     if (!backend) continue;
     try {
-      const summary = await backend.describe(row.externalId);
+      const summary = await backend.describe(row.externalId, vaultPolicyDigest(row));
       await db.update(vaultItems).set(metadataOf(summary)).where(eq(vaultItems.id, row.id));
     } catch (error) {
       if (error instanceof BackendError && error.code === "not_found") {
@@ -255,7 +258,7 @@ export async function detail(handle: string) {
   let backendError: string | undefined;
   if (backend) {
     try {
-      const summary = await backend.describe(row.externalId);
+      const summary = await backend.describe(row.externalId, vaultPolicyDigest(row));
       fields = summary.fields;
       urls = summary.urls;
       title = summary.title;
@@ -345,15 +348,22 @@ export async function createItem(
     urls: input.urls,
     values: input.values,
   };
+  const origins = input.policy.origins.length > 0 ? input.policy.origins : originsFrom(input.urls);
+  const policy = policyData({ ...input.policy, origins }, input.kind);
+  const digest = vaultPolicyDigest({
+    audience: "bots",
+    originsJson: policy.originsJson ?? "[]",
+    hostsJson: policy.hostsJson ?? "[]",
+    injectJson: policy.injectJson ?? null,
+  });
   let externalId: string;
   let summary: BackendItemSummary;
   try {
-    externalId = await backend.create(draft);
-    summary = await backend.describe(externalId);
+    externalId = await backend.create(draft, digest);
+    summary = await backend.describe(externalId, digest);
   } catch (error) {
     backendFailure(error);
   }
-  const origins = input.policy.origins.length > 0 ? input.policy.origins : originsFrom(input.urls);
   const [inserted] = await db
     .insert(vaultItems)
     .values({
@@ -362,7 +372,7 @@ export async function createItem(
       backend: name,
       externalId,
       label: input.policy.label ?? input.title,
-      ...policyData({ ...input.policy, origins }, input.kind),
+      ...policy,
       ...metadataOf(summary),
     })
     .returning();
@@ -370,6 +380,65 @@ export async function createItem(
   candidatesCache = undefined;
   await audit({ item: row, handle: row.handle, tool: actor.via, target: name, outcome: "created" });
   return itemView(row);
+}
+
+/**
+ * A secret the server itself uses (audience `app`, issue #179): a model
+ * provider's key. Never listed to bots; usable only by the `provider` sink
+ * for the given hosts. Goes to the local backend unless `backend` says
+ * otherwise, so chatting never depends on an external manager being up.
+ */
+export async function createAppCredential(input: {
+  handle: string;
+  label: string;
+  value: string;
+  hosts: string[];
+  inject: { as: "header"; name: string; format: string };
+  backend?: BackendName;
+}): Promise<VaultItemRow> {
+  await assertHandleFree(input.handle);
+  const name = input.backend ?? "local";
+  const backend = backendFor(name);
+  if (!backend.create) throw Boom.badRequest(`The ${name} backend is read-only`);
+  const policy = {
+    audience: "app",
+    originsJson: "[]",
+    hostsJson: JSON.stringify(input.hosts.map((h) => h.toLowerCase())),
+    injectJson: JSON.stringify(input.inject),
+  };
+  let externalId: string;
+  try {
+    externalId = await backend.create(
+      { kind: "api_key", title: input.label, urls: [], values: { value: input.value } },
+      vaultPolicyDigest(policy),
+    );
+  } catch (error) {
+    backendFailure(error);
+  }
+  const [row] = await db
+    .insert(vaultItems)
+    .values({
+      handle: input.handle,
+      kind: "api_key",
+      backend: name,
+      externalId,
+      field: "value",
+      label: input.label,
+      ...policy,
+      toolsJson: JSON.stringify(["model"]),
+      botsJson: "[]",
+      approval: "allowed",
+    })
+    .returning();
+  candidatesCache = undefined;
+  await audit({
+    item: row!,
+    handle: row!.handle,
+    tool: "models",
+    target: name,
+    outcome: "created",
+  });
+  return row!;
 }
 
 export async function linkItem(input: {
@@ -403,6 +472,16 @@ export async function linkItem(input: {
     })
     .returning();
   const row = inserted!;
+  // A backend that seals values itself binds the item to its new row's policy.
+  const write = writeBackends().get(input.backend);
+  if (write?.rebind) {
+    try {
+      await write.rebind(row.externalId, undefined, vaultPolicyDigest(row));
+    } catch (error) {
+      await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
+      backendFailure(error);
+    }
+  }
   candidatesCache = undefined;
   await audit({
     item: row,
@@ -420,7 +499,27 @@ export async function updateItem(
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
 ) {
   const row = await findOrThrow(handle);
+  if (row.audience === "app") {
+    throw Boom.conflict(
+      "This item is used by the app; change it where it is used (Settings → Models).",
+    );
+  }
+  return updateItemRow(row, input, actor);
+}
+
+/**
+ * Apply an edit to a vault item: the backend's values, then the policy,
+ * re-sealing a self-sealed value when the policy digest changes. Also the
+ * write path for `app` items, whose owners (the models service) call it
+ * directly.
+ */
+async function updateItemRow(
+  row: VaultItemRow,
+  input: UpdateItemDTO & { audience?: "bots" | "app" },
+  actor: { via: "vault_ui" | "credential_request" | "models" } = { via: "vault_ui" },
+) {
   const kind = row.kind as VaultKind;
+  const before = vaultPolicyDigest(row);
   const touchesBackend =
     input.values !== undefined || input.title !== undefined || input.urls !== undefined;
   let metadata = {};
@@ -429,12 +528,16 @@ export async function updateItem(
     if (!backend.update)
       throw Boom.badRequest("This item's backend is read-only; edit it in the source app");
     try {
-      await backend.update(row.externalId, {
-        ...(input.title !== undefined ? { title: input.title } : {}),
-        ...(input.urls !== undefined ? { urls: input.urls } : {}),
-        values: input.values ?? {},
-      });
-      metadata = metadataOf(await backend.describe(row.externalId));
+      await backend.update(
+        row.externalId,
+        {
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.urls !== undefined ? { urls: input.urls } : {}),
+          values: input.values ?? {},
+        },
+        before,
+      );
+      metadata = metadataOf(await backend.describe(row.externalId, before));
     } catch (error) {
       backendFailure(error);
     }
@@ -444,9 +547,22 @@ export async function updateItem(
   }
   const data = {
     ...(input.policy?.handle ? { handle: input.policy.handle } : {}),
+    ...(input.audience ? { audience: input.audience } : {}),
     ...policyData(input.policy ?? {}, kind),
     ...metadata,
   };
+  // A new policy digest re-seals a self-sealed value first, so the value
+  // always opens under the row as stored.
+  const after = vaultPolicyDigest({ ...row, ...data });
+  const rebind =
+    after !== before ? writeBackends().get(row.backend as BackendName)?.rebind : undefined;
+  if (rebind) {
+    try {
+      await rebind(row.externalId, before, after);
+    } catch (error) {
+      backendFailure(error);
+    }
+  }
   // Drizzle refuses an empty SET; with nothing to change the row stands as it is.
   let updated = row;
   if (Object.keys(data).length > 0) {
@@ -456,9 +572,13 @@ export async function updateItem(
       .where(eq(vaultItems.id, row.id))
       .returning();
     // Deleted meanwhile (Prisma's P2025 → 404).
-    if (!changed) throw Boom.notFound("Record not found");
+    if (!changed) {
+      await rebind?.(row.externalId, after, before).catch(() => undefined);
+      throw Boom.notFound("Record not found");
+    }
     updated = changed;
   }
+  forgetAppCredential(row.handle);
   candidatesCache = undefined;
   await audit({
     item: updated,
@@ -478,6 +598,16 @@ export async function updateItem(
 
 export async function deleteItem(handle: string, options: { purge: boolean }) {
   const row = await findOrThrow(handle);
+  if (row.audience === "app") {
+    throw Boom.conflict(
+      "This item is used by the app; remove it where it is used (Settings → Models).",
+    );
+  }
+  return deleteItemRow(row, options);
+}
+
+/** Delete a vault item (and, with `purge`, its value in the backend). */
+export async function deleteItemRow(row: VaultItemRow, options: { purge: boolean }) {
   if (options.purge) {
     const backend = backendFor(row.backend);
     if (!backend.remove)
@@ -489,6 +619,7 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
     }
   }
   await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
+  forgetAppCredential(row.handle);
   candidatesCache = undefined;
   await audit({
     handle: row.handle,
@@ -527,7 +658,7 @@ export async function reveal(handle: string, field: ValueField, purpose: "reveal
   if (!backend.capabilities.reveal) throw Boom.badRequest("This backend can't reveal values");
   let value: string;
   try {
-    const secret = await backend.resolve(row.externalId, field);
+    const secret = await backend.resolve(row.externalId, field, vaultPolicyDigest(row));
     secretRedactor.register(secret);
     value = secret.reveal();
   } catch (error) {

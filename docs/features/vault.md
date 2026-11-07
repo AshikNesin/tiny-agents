@@ -97,6 +97,20 @@ A turn counts as **unattended** when it runs in a routine's own conversation
 user message is a delivery from another bot. When in doubt it counts as
 unattended, which only ever refuses more.
 
+## Audiences
+
+Every item has an audience (ADR 0015):
+
+- `bots` (the default): listed to bots and used through their tools, under
+  the policy and approvals above.
+- `app`: a secret the server uses itself, such as a model provider's key. It
+  is never listed to bots, and a bot's tool that names it is told there is no
+  such item. Only the `provider` sink resolves it, for a host the item lists,
+  with no approval. Refusals and failures are audited; successful uses only
+  update "last used", and the value is cached in memory for up to five
+  minutes. The Vault page lists these items under "Used by the app" and
+  refuses edits and deletes there with 409: they change where they are used.
+
 ## Sandbox commands and the egress allowlist
 
 `run_command` can hand a command vault values as env vars:
@@ -294,9 +308,26 @@ same way; the credentials file and the tokens then sit on one host.
 
 ### Local (fallback)
 
-Without `OP_CONNECT_HOST`, new items go to the `local` backend: values
-AES-256-GCM encrypted with `SECRETS_KEY` in the app's KV store. It's fully
-writable from the Vault UI. Losing `SECRETS_KEY` makes its values unreadable.
+Without `OP_CONNECT_HOST`, new items go to the `local` backend: values sealed
+in the app's KV store by `apps/web/src/server/crypto/secret-box.ts`. It's
+fully writable from the Vault UI.
+
+- **Keys.** Each purpose (`vault-local`, `connection`) gets its own AES-256-GCM
+  key, derived from `SECRETS_KEY` with HKDF-SHA256. Every write uses a fresh
+  IV. Values are stored as `v2:<kid>:<iv>:<tag>:<ciphertext>`, where `kid`
+  fingerprints the key.
+- **Binding.** The purpose, the record (the item's KV key, or the connection
+  row) and the field are the AAD. A value copied to another item, row or
+  column does not decrypt. A local item is also bound to a digest of its
+  row's policy (audience, origins, hosts, injection). Editing the policy in
+  the Vault UI re-seals the value; widening it in the database directly
+  leaves the value unreadable.
+- **Wrong key.** Losing or changing `SECRETS_KEY` makes stored values
+  unreadable: the item reports "stored under a different SECRETS_KEY" and has
+  to be re-entered. Boot is unaffected.
+- **Rotation.** Move the old key to `SECRETS_KEY_PREVIOUS`, set a new
+  `SECRETS_KEY` and run `pnpm secrets:rotate`. It re-seals local items and
+  connection secrets under the new key; then remove `SECRETS_KEY_PREVIOUS`.
 
 ### Field mapping (1Password)
 

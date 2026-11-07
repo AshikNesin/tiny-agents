@@ -6,14 +6,15 @@ import { env, envSchema } from "@groot/core/env";
  * passkeys, the gateway, Pushover, ...) are validated by `@groot/core/env`;
  * these are app-only and documented in `.env.example`. tiny-agents runs on
  * Node only, so they come straight from `process.env` (the Node entry loads
- * `.env` first). Model-provider settings (AI_PROVIDERS, GATEWAY_*, VISION_*,
- * CLASSIFIER_MODEL) are read by `@tiny-agents/agent` from the environment the
- * Node entry hands the runtime.
+ * `.env` first). Models are not configured here: they are owner data in the
+ * database (issue #179, Settings → Models).
  */
 const appEnvSchema = z.object({
   /** Core's validator, so `sandboxHost()` can read the production default from one env. */
   NODE_ENV: envSchema.shape.NODE_ENV,
   SECRETS_KEY: z.string().optional(),
+  /** Opens secrets written under the old key while `pnpm secrets:rotate` rewrites them. */
+  SECRETS_KEY_PREVIOUS: z.string().optional(),
   SANDBOX_HOST: z.string().optional(),
   SANDBOX_PORT: z.string().optional(),
   SANDBOX_USER: z.string().optional(),
@@ -30,7 +31,6 @@ const appEnvSchema = z.object({
   COMPUTER_EXTRA_PACKAGES: z.string().optional(),
   TINYFISH_API_KEY: z.string().optional(),
   TZ: z.string().optional(),
-  CLAUDE_CODE_ENGINE_ENABLED: z.string().optional(),
   TINY_AGENTS_FAUX_TOKENS_PER_SECOND: z.string().optional(),
   /** Set by Vitest, which cannot load the .ts upload-extraction worker. */
   VITEST: z.string().optional(),
@@ -38,10 +38,6 @@ const appEnvSchema = z.object({
   DATA_DIR: z.string().optional(),
   /** pi-durable agent store: a plain path or a `file:` URL. Default: see `agentDbPath()`. */
   AGENT_DB_PATH: z.string().optional(),
-  /** Model for memory capture side-calls (issue #22); unset = the bot's own model. */
-  MEMORY_CAPTURE_MODEL: z.string().optional(),
-  /** Model for past-chat titles (issue #101); unset = the titler's default. */
-  CHAT_TITLE_MODEL: z.string().optional(),
   /** 1Password Connect (issue #56). Without a host the vault uses the local backend only. */
   OP_CONNECT_HOST: z.string().optional(),
   OP_CONNECT_VAULT_ID: z.string().optional(),

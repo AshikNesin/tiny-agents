@@ -1,8 +1,8 @@
 /**
  * Inference engine seam (ADR 0014). `pi` is the pi-durable harness
  * (default). `claude-code` sends turns to the Claude Code worker, which
- * drives the official Agent SDK. The model id `claude-code/<model>` selects
- * it. Both are `AgentEngine`s: the runtime picks one per conversation and
+ * drives the official Agent SDK. A model of a `claude-plan` provider
+ * account selects it (issue #179). Both are `AgentEngine`s: the runtime picks one per conversation and
  * calls it; neither knows about the other. Tool calls of both go through
  * the one Tool gate (`gate.ts`).
  */
@@ -12,7 +12,6 @@ import type { GateUserMessage, Permissions } from "./policy";
 import type {
   AgentEngineKind,
   AttachmentRef,
-  BotAgentConfig,
   ChatEvent,
   ChatMessage,
   ChatPage,
@@ -21,13 +20,6 @@ import type {
   ConversationRef,
   LastMessage,
 } from "./types";
-
-export type { AgentEngineKind };
-
-export const CLAUDE_CODE_MODEL_PREFIX = "claude-code/";
-
-/** Picker note shown beside every Claude plan model. */
-export const CLAUDE_PLAN_NOTE = "uses your Claude plan";
 
 export class ConversationNotFoundError extends Error {
   constructor(ref: ConversationRef) {
@@ -110,50 +102,15 @@ export interface AgentEngine {
   close(): Promise<void>;
 }
 
-/** The engine a model id selects. Anything other than `claude-code/…` is pi. */
-function engineKindForModel(modelId: string): AgentEngineKind {
-  return claudeCodeBareModel(modelId) ? "claude-code" : "pi";
-}
-
 /**
- * The engine a bot config selects. An explicit `engine` must agree with the
- * model id so a saved bot cannot claim one engine and run the other.
+ * What a Claude plan turn does when the engine is off or the worker is
+ * unreachable: `gateway` hands it to the account's fallback model on pi,
+ * `pause` ends it with an error.
  */
-export function engineKindForConfig(
-  config: Pick<BotAgentConfig, "modelId" | "engine">,
-): AgentEngineKind {
-  const fromId = engineKindForModel(config.modelId);
-  if (config.engine && config.engine !== fromId) {
-    throw new Error(`Bot engine "${config.engine}" does not match model "${config.modelId}".`);
-  }
-  return fromId;
-}
-
-/**
- * Model id Claude Code should run (`claude-sonnet-4-6`), or undefined when
- * the id is not a Claude plan selection. Rejects empty, whitespace, and
- * extra slashes so the id cannot smuggle a path or a second provider.
- */
-export function claudeCodeBareModel(modelId: string): string | undefined {
-  if (!modelId.startsWith(CLAUDE_CODE_MODEL_PREFIX)) return undefined;
-  const bare = modelId.slice(CLAUDE_CODE_MODEL_PREFIX.length);
-  if (!bare || /\s/.test(bare) || bare.includes("/")) return undefined;
-  return bare;
-}
-
-/** Kill switch. Read on each turn so flipping it does not require a worker redeploy. */
-export function claudeCodeEngineEnabled(
-  env: Readonly<Record<string, string | undefined>>,
-): boolean {
-  const value = env.CLAUDE_CODE_ENGINE_ENABLED?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes" || value === "on";
-}
-
 export type ClaudeEngineFallback = "gateway" | "pause";
 
-/** What a turn does when the engine is off or the worker is unreachable. Default: pause. */
-export function claudeCodeFallback(
-  env: Readonly<Record<string, string | undefined>>,
-): ClaudeEngineFallback {
-  return env.CLAUDE_CODE_ENGINE_FALLBACK?.trim().toLowerCase() === "gateway" ? "gateway" : "pause";
+/** The Claude plan account's switch and fallback, read on each turn. */
+export interface ClaudePlanState {
+  enabled: boolean;
+  fallback: ClaudeEngineFallback;
 }

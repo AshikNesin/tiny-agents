@@ -16,6 +16,7 @@ import {
   authToken,
   createFakeRuntime,
   fakeCatalog,
+  fakeModel,
   installFakeRuntime,
   resetAppTables,
 } from "../fixtures";
@@ -52,22 +53,8 @@ const TINY_PNG = Buffer.from(
 );
 
 const models = [
-  {
-    id: "text-model",
-    name: "Text Model",
-    family: "other" as const,
-    reasoning: false,
-    contextWindow: 8_192,
-    vision: false,
-  },
-  {
-    id: "vision-model",
-    name: "Vision Model",
-    family: "other" as const,
-    reasoning: false,
-    contextWindow: 8_192,
-    vision: true,
-  },
+  fakeModel("text-model", { name: "Text Model" }),
+  fakeModel("vision-model", { name: "Vision Model", vision: true }),
 ];
 
 let nextConversationId = 100;

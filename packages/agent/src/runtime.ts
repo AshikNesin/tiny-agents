@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { MutableModels } from "@earendil-works/pi-ai/models";
+import { createModels, type MutableModels } from "@earendil-works/pi-ai/models";
 import {
   createRegistry,
   Harness,
@@ -30,19 +30,14 @@ import {
 } from "./credentials";
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
-import {
-  assertNoClaudeOauthToken,
-  configuredProviderIds,
-  createProviderModels,
-  primaryProviderId,
-} from "./models";
-import { createModelCatalog, type ModelCatalog, type ModelRef } from "./model-catalog";
+import { createModelCatalog, type ModelCatalog } from "./model-catalog";
+import { EMPTY_MODEL_CONFIG, type CredentialResolver, type ModelConfig } from "./providers/config";
+import { buildProviders } from "./providers/kinds";
 import { gateExtension, PiEngine } from "./engines/pi";
 import {
-  claudeCodeBareModel,
   ConversationNotFoundError,
-  engineKindForConfig,
   type AgentEngine,
+  type ClaudePlanState,
   type CompiledConversation,
   type EngineSubmission,
 } from "./engine";
@@ -65,6 +60,7 @@ import { finishedReplyOf } from "./replies";
 import type {
   ActivityChange,
   BotAgentConfig,
+  ModelUnavailableReason,
   ChatEvent,
   ChatPage,
   ChatState,
@@ -85,20 +81,40 @@ export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotP
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-class ModelNotFoundError extends Error {
-  constructor(modelId: string) {
-    super(`Unknown model "${modelId}"`);
-    this.name = "ModelNotFoundError";
+/** A bot's model can't run: unknown, or its account is disabled, locked or failing. */
+export class ModelUnavailableError extends Error {
+  constructor(
+    readonly modelId: string,
+    readonly reason: ModelUnavailableReason,
+  ) {
+    super(
+      reason === "missing"
+        ? `Model "${modelId}" is not set up. Pick another in the bot's settings.`
+        : `Model "${modelId}" can't run right now (${reason}). Check Settings → Models.`,
+    );
+    this.name = "ModelUnavailableError";
   }
 }
+
+const noCredentials: CredentialResolver = { resolve: async () => undefined };
 
 export interface AgentRuntimeOptions {
   /** Path of the pi-durable SQLite store, or ":memory:" (tests). */
   storePath: string;
-  /** Model registry; defaults to the AI_PROVIDERS providers (Cloudflare AI Gateway when unset). */
+  /**
+   * The owner's provider accounts, model rows and roles (issue #179). The
+   * runtime registers a pi-ai provider per account; `applyModelConfig`
+   * replaces it while running. Default: none.
+   */
+  modelConfig?: ModelConfig;
+  /** Resolves an account's key per request (the app's vault). */
+  credentials?: CredentialResolver;
+  /**
+   * A registry with providers the host built itself (the faux provider in
+   * tests and dev). The runtime adds the accounts' providers to it and never
+   * touches the others.
+   */
   models?: MutableModels;
-  /** Provider id bare model ids resolve against. Defaults to the first of AI_PROVIDERS. */
-  provider?: string;
   /** How long to wait for another process to release the store lock. */
   lockWaitMs?: number;
   /** pi-durable run policy overrides (compaction, retry, progress). */
@@ -126,11 +142,6 @@ export interface AgentRuntimeOptions {
   /** The Harness failed (storage error) and closed itself. The host should exit/restart. */
   onFatal?: (error: unknown) => void;
   /**
-   * The environment provider config and the Claude plan engine read: the
-   * host's `process.env`, or a literal in tests. Default: empty.
-   */
-  env?: Readonly<Record<string, string | undefined>>;
-  /**
    * Where Claude plan turns run: the sandbox worker the app sets up over SSH.
    */
   claudeWorker?: ClaudeWorkerLocator;
@@ -149,14 +160,16 @@ export interface AgentRuntimeOptions {
  * engine while it runs the conversation, pi otherwise.
  */
 export class AgentRuntime {
-  readonly provider: string;
   readonly #harness: Harness;
   readonly #pi: PiEngine;
   readonly #claude: ClaudeCodeEngine;
   readonly #engines: readonly AgentEngine[];
   readonly #gate: ToolGate;
   readonly #models: MutableModels;
-  readonly #catalog: ModelCatalog;
+  #catalog: ModelCatalog;
+  #credentials: CredentialResolver;
+  /** pi-ai provider ids the accounts built (the ones `applyModelConfig` may replace). */
+  #built = new Set<string>();
   readonly #lock: StoreLock | undefined;
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
   readonly #registry: Registry;
@@ -172,22 +185,47 @@ export class AgentRuntime {
     return this.#models;
   }
 
-  /** What every model id means: the picker list, validation, resolution, providers. */
+  /** What every model row is: the picker list, routing, roles, accounts. */
   get catalog(): ModelCatalog {
     return this.#catalog;
+  }
+
+  /**
+   * Replace the model configuration while running (the owner changed
+   * Settings → Models). Running turns keep the model they resolved; the next
+   * request sees the change. Providers the host passed in are left alone.
+   */
+  applyModelConfig(config: ModelConfig): void {
+    const providers = buildProviders(config, this.#credentials);
+    const next = new Set(providers.map((provider) => provider.id));
+    for (const id of this.#built) {
+      if (!next.has(id)) this.#models.deleteProvider(id);
+    }
+    for (const provider of providers) this.#models.setProvider(provider);
+    this.#built = next;
+    this.#catalog = createModelCatalog(config, this.#models);
+  }
+
+  /** The Claude plan account's switch and fallback, as the engine reads them per turn. */
+  #claudePlan(): ClaudePlanState {
+    const plan = this.#catalog.claudePlan();
+    return {
+      enabled: plan?.enabled ?? false,
+      fallback:
+        plan?.fallbackModelId && this.#catalog.route(plan.fallbackModelId) ? "gateway" : "pause",
+    };
   }
 
   private constructor(
     harness: Harness,
     models: MutableModels,
-    catalog: ModelCatalog,
+    credentials: CredentialResolver,
     lock: StoreLock | undefined,
     registry: Registry,
     gate: ToolGate,
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
-    env: Readonly<Record<string, string | undefined>>,
     persistPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
@@ -196,7 +234,7 @@ export class AgentRuntime {
     this.#gate = gate;
     this.#pi = new PiEngine(harness, { onBusy: (ref) => this.#busyChanged(ref) });
     this.#claude = new ClaudeCodeEngine({
-      env: () => env,
+      plan: () => this.#claudePlan(),
       persistPath,
       worker: claudeWorker,
       ...(claudeConnect ? { connect: claudeConnect } : {}),
@@ -206,8 +244,8 @@ export class AgentRuntime {
     });
     this.#engines = [this.#pi, this.#claude];
     this.#models = models;
-    this.#catalog = catalog;
-    this.provider = catalog.primary;
+    this.#credentials = credentials;
+    this.#catalog = createModelCatalog(EMPTY_MODEL_CONFIG, models);
     this.#lock = lock;
     this.#registry = registry;
     this.#approvals = approvals;
@@ -222,12 +260,6 @@ export class AgentRuntime {
    * `StoreLockedError` when another process owns the store.
    */
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {
-    // Snapshot the env at open, so later changes to the environment never shift
-    // the runtime's provider config. Callers that swap the provider (faux
-    // boot, tests) pass their own, e.g. without GATEWAY_MODEL_ALLOWLIST.
-    const env = options.env ?? {};
-    const envSource = { ...env };
-    assertNoClaudeOauthToken(envSource);
     const inMemory = options.storePath === ":memory:";
     const lock = inMemory
       ? undefined
@@ -237,8 +269,11 @@ export class AgentRuntime {
     let runtime: AgentRuntime | undefined;
     try {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
-      const models = options.models ?? createProviderModels(envSource);
-      const configured = await configuredProviderIds(models);
+      const models = options.models ?? createModels();
+      const credentials = options.credentials ?? noCredentials;
+      // Providers first: resume() below may re-run a turn on them.
+      const initial = buildProviders(options.modelConfig ?? EMPTY_MODEL_CONFIG, credentials);
+      for (const provider of initial) models.setProvider(provider);
       const registry = createRegistry();
       const approvals = options.approvalTracker ?? new WaitTracker();
       const questions = new WaitTracker();
@@ -290,26 +325,21 @@ export class AgentRuntime {
         },
         ctx,
       );
-      const catalog = createModelCatalog(models, {
-        primary: options.provider ?? primaryProviderId(envSource),
-        configured,
-        env: envSource,
-      });
       const opened = new AgentRuntime(
         harness,
         models,
-        catalog,
+        credentials,
         lock,
         registry,
         gate,
         approvals,
         questions,
         capabilities,
-        env,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
       );
+      opened.applyModelConfig(options.modelConfig ?? EMPTY_MODEL_CONFIG);
       runtime = opened;
       pi = opened.#pi;
       harness.closed.then((end) => {
@@ -343,12 +373,6 @@ export class AgentRuntime {
   /** Start setting up the sandbox worker (when the engine is on), so the first turn is quick. */
   prepareClaudeCode(): void {
     this.#claude.prepare();
-  }
-
-  /** Any model of the primary provider: a Claude plan conversation's last-resort stand-in. */
-  #anyPrimaryModel(): ModelRef | undefined {
-    const model = this.#models.getModels(this.provider)[0];
-    return model ? { provider: this.provider, model: model.id } : undefined;
   }
 
   /**
@@ -447,22 +471,31 @@ export class AgentRuntime {
    * capability selection the conversation keeps its tools.
    */
   #compile(config: BotAgentConfig): CompiledConversation {
-    const bare = claudeCodeBareModel(config.modelId);
-    if (engineKindForConfig(config) === "claude-code") {
-      if (!bare) throw new ModelNotFoundError(config.modelId);
-      // The harness stores a real catalog model so a gateway/provider fallback
-      // can run there. It is not called unless this turn is handed to pi.
-      // Prefer the same model id on any provider (the primary one first),
-      // then any model of the primary provider.
-      const resolved = this.#catalog.resolve(config.modelId) ?? this.#anyPrimaryModel();
-      if (!resolved) throw new ModelNotFoundError(config.modelId);
+    const route = this.#catalog.route(config.modelId);
+    if (!route) {
+      throw new ModelUnavailableError(
+        config.modelId,
+        this.#catalog.get(config.modelId)?.unavailableReason ?? "missing",
+      );
+    }
+    const instructions = config.systemPrompt.trim() ? config.systemPrompt : null;
+    if (route.engine === "claude-code") {
+      // pi-durable stores a pi model too: the stand-in a fallback turn runs
+      // on. The account's fallback model, else any pi model, else the Claude
+      // plan model itself (never called: without a fallback a turn pauses).
+      const fallbackId = this.#catalog.claudePlan()?.fallbackModelId;
+      const fallback = (fallbackId && this.#catalog.route(fallbackId)) || undefined;
+      const anyPi = this.#catalog
+        .list({ type: "chat" })
+        .find((m) => m.available && m.engine === "pi");
+      const standIn = fallback ?? (anyPi ? this.#catalog.route(anyPi.id) : undefined) ?? route;
       const surface = claudeToolSurface(this.#capabilities, config.capabilities);
       const change: AgentChange = {
-        model: { provider: resolved.provider, modelId: resolved.model },
-        instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
+        model: { provider: standIn.providerId, modelId: standIn.upstreamId },
+        instructions,
       };
       const claude: CompiledConversation["claude"] = {
-        model: bare,
+        model: route.upstreamId,
         system: config.systemPrompt,
         tools: surface.tools,
         permissions: surface.permissions,
@@ -481,11 +514,9 @@ export class AgentRuntime {
         claude,
       };
     }
-    const resolved = this.#catalog.resolve(config.modelId);
-    if (!resolved) throw new ModelNotFoundError(config.modelId);
     const change: AgentChange = {
-      model: { provider: resolved.provider, modelId: resolved.model },
-      instructions: config.systemPrompt.trim() ? config.systemPrompt : null,
+      model: { provider: route.providerId, modelId: route.upstreamId },
+      instructions,
     };
     if (!config.capabilities) return { change };
     const policy = compilePolicy(

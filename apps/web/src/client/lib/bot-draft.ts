@@ -3,7 +3,7 @@
  * nothing, with the default model), takes edits field by field, and turns
  * into the create/update payload once it is valid. The dialog is its view.
  */
-import type { Bot, BrowserProfile, ModelInfo, ToolPermission } from "./bots-api";
+import type { Bot, BrowserProfile, CatalogModel, ToolPermission } from "./bots-api";
 
 /** The server caps the persona at ~24 KB (bots.schema.ts). */
 export const SYSTEM_PROMPT_MAX = 24_576;
@@ -28,7 +28,7 @@ export type BotPayload = BotDraft;
 /** The model a new bot starts with: the owner's default, else the first in the catalog. */
 export function fallbackModelId(
   defaultModelId: string | undefined,
-  models: readonly Pick<ModelInfo, "id">[],
+  models: readonly Pick<CatalogModel, "id">[],
 ): string | undefined {
   return defaultModelId ?? models[0]?.id;
 }

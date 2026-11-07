@@ -5,27 +5,21 @@
  * { success, data } envelope.
  */
 import { apiClient } from "@groot/shell/lib/api";
-import type { ModelInfo } from "@tiny-agents/agent";
+import type { CatalogModel, ProviderSummary } from "@tiny-agents/agent";
 import type { BotListEntry as BotListRow } from "../../shared/bot-list";
 import type { Jsonified } from "../../shared/json";
 import type { AttachmentRef, ChatPage, OwnerAnswer, RoutineRunCard } from "./chat-types";
 
-export type { AttachmentRef, ModelInfo };
-
-/** One inference provider (AI_PROVIDERS) and whether it has credentials. */
-export interface ProviderStatus {
-  id: string;
-  name: string;
-  configured: boolean;
-  setupHint: string;
-}
+export type { AttachmentRef, CatalogModel, ProviderSummary };
 
 export interface ModelsResponse {
-  models: ModelInfo[];
-  defaultModel?: string;
-  /** Some provider can answer (the name predates providers other than the gateway). */
-  gatewayConfigured: boolean;
-  providers?: ProviderStatus[];
+  /** Chat models, picker order; unavailable ones carry the reason. */
+  models: CatalogModel[];
+  /** The `bot_default` role's model, pre-selected in New bot. */
+  defaultModelId: string | null;
+  /** Some chat model can run now. */
+  canAnswer: boolean;
+  providers: ProviderSummary[];
 }
 
 /** Claude plan engine status. Never includes a credential or the worker token. */

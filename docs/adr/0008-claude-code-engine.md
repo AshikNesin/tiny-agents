@@ -1,6 +1,10 @@
 # ADR 0008: Claude subscription inference goes through Claude Code
 
-- Status: **accepted**, amended by [0010](0010-claude-worker-runs-on-the-sandbox.md):
+- Status: **accepted**, amended by [0016](0016-models-are-owner-data.md): a
+  model of a `claude-plan` provider account selects the engine (no
+  `claude-code/` id prefix), and that account replaces
+  `CLAUDE_CODE_ENGINE_ENABLED` and `CLAUDE_CODE_ENGINE_FALLBACK`. Amended by
+  [0010](0010-claude-worker-runs-on-the-sandbox.md):
   the worker now runs on the sandbox, set up by the app and reached over
   SSH; the hand-run worker behind `tailscale serve` described below is gone.
   Amended by [0014](0014-tool-gate-and-engine-seam.md): "through the approval

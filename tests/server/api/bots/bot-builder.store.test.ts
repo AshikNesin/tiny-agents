@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { users } from "@groot/core/database/schema";
 import { createBotCreationStore } from "../../../../apps/web/src/server/api/bots/bot-builder.store";
 import { botGuests, bots, db, routines } from "../../../../apps/web/src/server/db";
-import { createFakeRuntime, resetAppTables, seedBot } from "../../fixtures";
+import { createFakeRuntime, fakeModel, resetAppTables, seedBot } from "../../fixtures";
 
 /** Who sent the conversation's latest user message (what `isUnattended` reads). */
 let latest: { text: string; peer?: unknown } = { text: "Make me a bot for my project." };
@@ -23,7 +23,7 @@ const store = createBotCreationStore(() => fake as never);
 const made: number[] = [];
 afterEach(async () => {
   latest = { text: "Make me a bot for my project." };
-  fake.catalog.has.mockReturnValue(true);
+  fake.catalog.get.mockImplementation((id) => fakeModel(id));
   await resetAppTables();
   for (const id of made.splice(0)) await db.delete(users).where(eq(users.id, id));
 });
@@ -64,7 +64,7 @@ describe("createBotCreationStore", () => {
     const named = await store.create(conversationId, { ...input, model: "m2" });
     expect(named.status === "created" && named.bot.modelId).toBe("m2");
 
-    fake.catalog.has.mockReturnValue(false);
+    fake.catalog.get.mockReturnValue(undefined);
     const unknown = await store.create(conversationId, { ...input, name: "Other", model: "nope" });
     expect(unknown.status).toBe("unknown_model");
     expect(unknown.status === "unknown_model" && unknown.models?.length).toBeGreaterThan(0);

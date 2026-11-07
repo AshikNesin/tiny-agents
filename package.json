@@ -32,6 +32,7 @@
     "test:e2e:ui": "playwright test --ui",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "secrets:rotate": "tsx scripts/secrets-rotate.ts",
     "sandbox:up": "tsx scripts/sandbox.ts up",
     "sandbox:down": "tsx scripts/sandbox.ts down",
     "sandbox:logs": "tsx scripts/sandbox.ts logs",

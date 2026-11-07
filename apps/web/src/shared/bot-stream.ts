@@ -60,8 +60,9 @@ export type BotStreamEvent =
 
 /**
  * The app-wide feed (`GET /events`): which conversations are replying (all
- * of them on open, then each change, with its waiting counts) and the live
- * state of MCP connections.
+ * of them on open, then each change, with its waiting counts), the live
+ * state of MCP connections, and `models.changed` after the owner changed
+ * Settings → Models (pickers refetch `/models`).
  */
 export type EventsFeedEvent =
   | { type: "activity"; busy: string[] }
@@ -75,5 +76,6 @@ export type EventsFeedEvent =
       questions: number;
     }
   | { type: "connection"; id: string; status: string; error?: string }
+  | { type: "models.changed" }
   | PingEvent
   | StreamErrorEvent;

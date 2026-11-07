@@ -5,6 +5,7 @@
  * authorization server.
  */
 import { createServer, type IncomingMessage, type RequestListener, type Server } from "node:http";
+import { fakeCatalog } from "../fixtures";
 import type { AddressInfo } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
@@ -159,7 +160,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     configured = [];
     setAgentRuntimeForTests({
       configure: async () => undefined,
-      catalog: { info: () => undefined, has: () => true },
+      catalog: fakeCatalog(),
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
     } as never);
@@ -173,7 +174,7 @@ describe("MCP connections (header auth, streamable http)", () => {
       },
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
       configure: async (conversationId: number) => void configured.push(conversationId),
-      catalog: { info: () => undefined },
+      catalog: fakeCatalog(),
     } as never);
   });
 
@@ -386,7 +387,7 @@ describe("MCP connections (header auth, streamable http)", () => {
       installCapability: (capability: { id: string }) => installed.push(capability.id),
       uninstallCapability: () => undefined,
       configure: async () => undefined,
-      catalog: { info: () => undefined, has: () => true },
+      catalog: fakeCatalog(),
     } as never);
     try {
       await until(
@@ -436,7 +437,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     changes = [];
     setAgentRuntimeForTests({
       configure: async () => undefined,
-      catalog: { info: () => undefined, has: () => true },
+      catalog: fakeCatalog(),
       installCapability: () => undefined,
       uninstallCapability: () => undefined,
     } as never);
@@ -447,7 +448,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
       uninstallCapability: (id: string) => runtimeCalls.uninstall.push(id),
       configure: async (conversationId: number) => void configured.push(conversationId),
-      catalog: { info: () => undefined },
+      catalog: fakeCatalog(),
     } as never);
   }
 
@@ -628,7 +629,7 @@ describe("MCP OAuth (fake authorization server)", () => {
       installCapability: () => undefined,
       uninstallCapability: (id: string) => uninstalled.push(id),
       configure: async () => undefined,
-      catalog: { info: () => undefined, has: () => true },
+      catalog: fakeCatalog(),
     } as never;
     await manager.start(runtime);
 

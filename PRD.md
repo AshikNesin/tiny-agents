@@ -72,12 +72,12 @@ Explicitly out of scope (see §15 Roadmap):
 
 ### 5.1 Bots
 
-| Story              | Behaviour                                                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model. The avatar is a DiceBear "gaze" illustration derived from the name. Model defaults to `DEFAULT_MODEL`. |
-| Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                                                       |
-| Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                                                           |
-| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one becomes a past chat under **Chat history** (issue #101).                |
+| Story              | Behaviour                                                                                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create bot         | "New bot" opens a single-page dialog: name, description, system prompt, model. The avatar is a DiceBear "gaze" illustration derived from the name. Model defaults to the `bot_default` model role. |
+| Edit bot           | Same dialog from the chat header menu. Prompt/model changes apply to the **next turn onward**; history is kept.                                                                                    |
+| Delete bot         | Confirm dialog → bot removed from the app. Its pi-durable conversations remain orphaned in `agent.db` (cleanup is Phase 2).                                                                        |
+| Reset conversation | **"New chat"** button in the chat header → confirm dialog → bot gets a fresh, empty conversation. The old one becomes a past chat under **Chat history** (issue #101).                             |
 
 ### 5.2 Chat
 
@@ -94,11 +94,12 @@ Explicitly out of scope (see §15 Roadmap):
 
 ### 5.3 Models
 
-- Model picker lists the static catalog of pi-ai's built-in **`cloudflare-ai-gateway`** provider (Claude,
-  OpenAI, Workers AI models).
-- If the gateway env vars are missing, a global banner is shown and sending is disabled.
-- If a bot's saved model is no longer in the catalog (e.g. after a pi-ai upgrade), its chat shows a warning
-  and sending is disabled until a new model is picked.
+- Models are owner data (issue #179, ADR 0016): the owner adds provider accounts (Anthropic, OpenAI,
+  Gemini, OpenAI-compatible hosts, Cloudflare AI Gateway, the Claude plan) and picks their models in
+  **Settings → Models**, with no restart. See `docs/features/models.md`.
+- The model picker lists those models, grouped by account; a model that can't run is greyed out with why.
+- With no model set up, a banner links to Settings → Models and sending is disabled.
+- A bot points at a model row; deleting a model in use asks which model takes over.
 
 ## 6. UX & screens
 
@@ -197,7 +198,8 @@ packages/agent  (only module that touches pi-durable)
 - **Lifecycle:**
   1. On server boot: acquire an **exclusive lock** on `agent.db` (retry briefly; if still held by another
      process, exit non-zero — never run two owners).
-  2. `Harness.open(openNodeSqliteStorage(AGENT_DB_PATH), { models, … })` with the gateway provider registered.
+  2. `Harness.open(openNodeSqliteStorage(AGENT_DB_PATH), { models, … })` with one pi-ai provider per
+     provider account (from the database).
   3. `harness.resume()` to continue interrupted work.
   4. Only then report healthy (`/health` returns 503 until resume completes).
   5. Close the Harness in groot's graceful shutdown (close-with-grace).
@@ -213,15 +215,16 @@ packages/agent  (only module that touches pi-durable)
 - **Activity feed:** the module maintains per-bot activity (replying / idle) and updates the bot's
   denormalised `lastActivityAt` and `lastMessagePreview` in `app.db` on commits, feeding the bot list.
 
-### 7.3 Inference: Cloudflare AI Gateway
+### 7.3 Inference: provider accounts
 
-- pi-ai v1.3's built-in provider `cloudflare-ai-gateway` (`cloudflareAIGatewayProvider()`), configured by
-  `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`. It sends only
-  `cf-aig-authorization`; no upstream provider key ever leaves the app.
-- No other providers are configured.
-- **Manual prerequisite (outside the app):** the owner configures the gateway in Cloudflare —
-  Authenticated Gateway on, provider keys (Anthropic, OpenAI) stored in the gateway (BYOK); "Require provider
-  credentials" recommended so it never silently falls back to Unified Billing.
+- Each provider account (a `providers` row) becomes one pi-ai provider whose id is the row id; its kind
+  fixes the wire API, the auth header and the engine (`claude-plan` runs on the Claude Code engine).
+- Keys are `app` vault items (ADR 0015), resolved per request for the account's host and cached for five
+  minutes. `packages/agent` takes a `ModelConfig` snapshot and a credential resolver; it reads no env or
+  database for models, and `applyModelConfig` swaps providers while running.
+- Features that call models on their own (memory capture, titles, vision, auto-review) read model roles.
+- Cloudflare AI Gateway is one kind among others: BYOK keys stay in the gateway, and an OpenAI-compatible
+  account can route through it.
 
 ### 7.4 Storage
 
@@ -255,22 +258,23 @@ Unread = latest assistant entry newer than `lastReadAt` (server-side, so it is c
 
 ## 9. API surface (`/api/v1`, groot `{ success, data }` envelope)
 
-| Method & path               | Purpose                                                        |
-| --------------------------- | -------------------------------------------------------------- |
-| groot `auth/*`, `passkey/*` | Login, logout, `me`, passkeys, admin user creation (unchanged) |
-| `GET /models`               | Gateway catalog, `DEFAULT_MODEL`, `gatewayConfigured` flag     |
-| `GET /bots`                 | List bots with bot-list fields (preview, activity, unread)     |
-| `POST /bots`                | Create bot (+ conversation)                                    |
-| `GET /bots/:id`             | Bot detail                                                     |
-| `PATCH /bots/:id`           | Update bot (re-configures conversation)                        |
-| `DELETE /bots/:id`          | Delete bot                                                     |
-| `POST /bots/:id/messages`   | `{ requestId, text }` → submit; idempotent on `requestId`      |
-| `POST /bots/:id/abort`      | Stop the in-flight reply                                       |
-| `POST /bots/:id/reset`      | Fresh conversation                                             |
-| `POST /bots/:id/read`       | Mark read (sets `lastReadAt`)                                  |
-| `GET /bots/:id/stream`      | SSE: snapshot + deltas for the open chat                       |
-| `GET /events`               | SSE: app-wide bot-list activity                                |
-| `GET /health` (no auth)     | 200 only after Harness is open and `resume()` done; else 503   |
+| Method & path                           | Purpose                                                        |
+| --------------------------------------- | -------------------------------------------------------------- |
+| groot `auth/*`, `passkey/*`             | Login, logout, `me`, passkeys, admin user creation (unchanged) |
+| `GET /models`                           | Chat models, `defaultModelId`, `canAnswer`, accounts           |
+| `/models/providers`, `/models/roles`, … | Settings → Models (owner only; see `docs/features/models.md`)  |
+| `GET /bots`                             | List bots with bot-list fields (preview, activity, unread)     |
+| `POST /bots`                            | Create bot (+ conversation)                                    |
+| `GET /bots/:id`                         | Bot detail                                                     |
+| `PATCH /bots/:id`                       | Update bot (re-configures conversation)                        |
+| `DELETE /bots/:id`                      | Delete bot                                                     |
+| `POST /bots/:id/messages`               | `{ requestId, text }` → submit; idempotent on `requestId`      |
+| `POST /bots/:id/abort`                  | Stop the in-flight reply                                       |
+| `POST /bots/:id/reset`                  | Fresh conversation                                             |
+| `POST /bots/:id/read`                   | Mark read (sets `lastReadAt`)                                  |
+| `GET /bots/:id/stream`                  | SSE: snapshot + deltas for the open chat                       |
+| `GET /events`                           | SSE: app-wide bot-list activity                                |
+| `GET /health` (no auth)                 | 200 only after Harness is open and `resume()` done; else 503   |
 
 Request bodies validated with zod (groot `parseBody`).
 
@@ -282,8 +286,7 @@ Env vars are validated with Zod at boot: groot's in `packages/core/src/env.ts`, 
 | Variable                                                                          | Source                   | Notes                                            |
 | --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------ |
 | `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_AUTH_KEY`, `RP_NAME`/`RP_ID`/`ORIGIN`, … | groot                    | unchanged                                        |
-| `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID`            | groot (upstreamed, §12)  | gateway auth                                     |
-| `DEFAULT_MODEL`                                                                   | groot (upstreamed, §12)  | default model id for new bots                    |
+| `SECRETS_KEY`                                                                     | tiny-agents (`appEnv()`) | seals vault items, provider keys included        |
 | `AGENT_DB_PATH`, `DATA_DIR`                                                       | tiny-agents (`appEnv()`) | `./data/agent.db` (dev), `/data/agent.db` (prod) |
 
 ## 11. Deployment
@@ -298,7 +301,7 @@ Env vars are validated with Zod at boot: groot's in `packages/core/src/env.ts`, 
     which pi-durable does not support. Accept a few seconds of downtime per deploy; in-flight replies are
     resumed by pi-durable.
   - **Stop Grace Period:** default 30 s (graceful Harness close).
-  - Full production env (incl. gateway vars) must be set **before the first deploy**: the server validates
+  - Full production env (incl. `SECRETS_KEY`) must be set **before the first deploy**: the server validates
     it at boot and refuses to start without the required secrets.
 - **Development:** this exe.dev VM, `pnpm dev` (Vite in middleware mode, single process).
 
@@ -342,7 +345,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 | pi-durable is experimental; API changes without notice                                        | Exact pins; all usage behind `packages/agent`; upgrade deliberately with tests.                  |
 | Two processes on one `agent.db` (rolling deploys, accidental second instance)                 | Rolling updates disabled; exclusive lock at boot; `/health` gated on resume.                     |
 | groot sync conflicts                                                                          | Never edit synced files; child-only `packages/agent` excluded from sync; upstream generic fixes. |
-| Gateway catalog lacks Grok/Gemini                                                             | Accepted for Phase 1; custom models in Phase 2.                                                  |
+| A provider's catalog lacks a model                                                            | Add any model by id in Settings → Models, with its capabilities set by hand.                     |
 | pnpm `minimumReleaseAge` (24h) / `trustPolicy` blocks very fresh `@earendil-works/*` releases | Pin to versions older than 24h; upgrade deliberately.                                            |
 | Orphaned conversations accumulate in `agent.db` on delete/reset                               | Accepted for Phase 1; cleanup in Phase 2.                                                        |
 

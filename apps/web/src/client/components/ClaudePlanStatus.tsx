@@ -30,12 +30,12 @@ function engineLine(status: ClaudeCodeStatus | undefined): string {
   if (!status) return "Checking the Claude plan engine.";
   return status.enabled
     ? "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
-    : "The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1 to turn it on; nothing else to configure.";
+    : "The engine is off. Add or enable the Claude plan account in Settings → Models to turn it on.";
 }
 
 function fallbackLine(status: ClaudeCodeStatus): string {
   const host = status.workerHost ? `Worker on ${status.workerHost}. ` : "";
-  const then = status.fallback === "gateway" ? "fall back to the AI gateway" : "pause";
+  const then = status.fallback === "gateway" ? "move to its fallback model" : "pause";
   return `${host}When the engine is off or Claude Code can't answer, turns ${then}.`;
 }
 

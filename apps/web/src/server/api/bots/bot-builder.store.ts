@@ -10,6 +10,7 @@
  * is refused even after the card was approved (`create_bot` is `askOnly`,
  * so there is no "always allow" in the first place).
  */
+import { botModelId } from "./bot-toolkits";
 import { HttpError } from "@groot/core/errors";
 import type { BotCreationStore } from "@tiny-agents/agent";
 import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
@@ -34,20 +35,25 @@ export function createBotCreationStore(
         name: input.name,
         description: input.description,
         systemPrompt: input.instructions,
-        modelId: input.model ?? owner.bot.modelId,
+        modelId: input.model ?? botModelId(runtime().catalog, owner.bot.modelId),
       });
       if (!parsed.success) {
         return { status: "invalid", reason: parsed.error.issues.map((i) => i.message).join("; ") };
       }
       const rt = runtime();
-      if (!rt.catalog.has(parsed.data.modelId)) {
-        return { status: "unknown_model", models: rt.catalog.list().map((model) => model.id) };
+      if (!rt.catalog.get(parsed.data.modelId)) {
+        return {
+          status: "unknown_model",
+          models: rt.catalog
+            .list({ type: "chat", enabledOnly: true })
+            .map((model) => `${model.id} (${model.providerName} / ${model.name})`),
+        };
       }
       try {
         const bot = await createBot(parsed.data, rt);
         return {
           status: "created",
-          bot: { id: bot.id, name: bot.name, modelId: bot.modelId, url: `/chats/${bot.id}` },
+          bot: { id: bot.id, name: bot.name, modelId: bot.modelId ?? "", url: `/chats/${bot.id}` },
         };
       } catch (error) {
         // createBot's 409: another bot already has the name.

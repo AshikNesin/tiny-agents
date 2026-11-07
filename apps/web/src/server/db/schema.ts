@@ -7,6 +7,8 @@ import {
   sqliteTable,
   text,
   unique,
+  uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { timestamps, users } from "@groot/core/database/schema";
 import { createId } from "@groot/core/utils/id.utils";
@@ -61,7 +63,13 @@ export const bots = sqliteTable("bots", {
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   systemPrompt: text("system_prompt").notNull().default(""),
-  modelId: text("model_id").notNull(),
+  /**
+   * The bot's model (issue #179): a reference, so a model in use can't be
+   * deleted. Null: the bot runs on the `bot_default` model role.
+   */
+  modelId: text("model_ref").references((): AnySQLiteColumn => models.id, {
+    onDelete: "restrict",
+  }),
   conversationId: text("conversation_id").notNull().unique(),
   /** When the current chat conversation started (bot create, "New chat"). Routine run cards older than it stay out of the chat. */
   chatStartedAt: ms("chat_started_at")
@@ -357,6 +365,12 @@ export const vaultItems = sqliteTable("vault_items", {
   kind: text("kind").notNull(),
   /** onepassword-connect | local */
   backend: text("backend").notNull(),
+  /**
+   * Who uses the value: `bots` (listed to bots, used through their tools,
+   * with approvals) or `app` (the server's own sinks, e.g. a model provider's
+   * key; never listed to bots or resolved through their tools).
+   */
+  audience: text("audience").notNull().default("bots"),
   /** Backend item id (Connect item id; the vault is pinned in env). */
   externalId: text("external_id").notNull(),
   /** api_key: which field holds the key (default: the credential/password field). */
@@ -384,6 +398,86 @@ export const vaultItems = sqliteTable("vault_items", {
   disabled: bool("disabled").notNull().default(false),
   lastUsedAt: ms("last_used_at"),
   lastUsedBy: text("last_used_by"),
+  ...timestamps,
+});
+
+/**
+ * A provider account (issue #179): one way of reaching models. Its id is
+ * also its pi-ai provider id. The key is an `app` vault item.
+ */
+export const providers = sqliteTable("providers", {
+  id: id(),
+  name: text("name").notNull(),
+  /** anthropic | openai-chat | openai-responses | gemini | cloudflare-ai-gateway | claude-plan | faux */
+  kind: text("kind").notNull(),
+  /** Canonical base URL; null for kinds that derive it (claude-plan, faux, gateway routes). */
+  baseUrl: text("base_url"),
+  /** The vault item holding the key (audience `app`); null: keyless or a gateway route. */
+  credentialItemId: text("credential_item_id").references(() => vaultItems.id, {
+    onDelete: "restrict",
+  }),
+  /** What the UI shows of the key ("sk-…a1B2"); never more. */
+  credentialHint: text("credential_hint"),
+  /** Gateway route: the cloudflare-ai-gateway account this one goes through. */
+  viaProviderId: text("via_provider_id").references((): AnySQLiteColumn => providers.id, {
+    onDelete: "restrict",
+  }),
+  /** Kind-specific, non-secret settings (JSON); see `ProviderAccount.settings`. */
+  settingsJson: text("settings_json").notNull().default("{}"),
+  /** auto: discovery lists models; manual: the owner adds them ("single model"). */
+  discovery: text("discovery").notNull().default("auto"),
+  /** The owner opted in to a private or LAN endpoint (Ollama, LM Studio). */
+  allowPrivateNetwork: bool("allow_private_network").notNull().default(false),
+  enabled: bool("enabled").notNull().default(true),
+  /** ok | unchecked | key_rejected | unreachable | locked */
+  status: text("status").notNull().default("unchecked"),
+  statusDetail: text("status_detail"),
+  checkedAt: ms("checked_at"),
+  /** Bumped on every write; `If-Match` on edits. */
+  version: integer("version").notNull().default(1),
+  ...timestamps,
+});
+
+/** A model row under a provider account (issue #179). */
+export const models = sqliteTable(
+  "models",
+  {
+    id: id(),
+    providerId: text("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    /** Wire id ("claude-sonnet-4-6"). */
+    upstreamId: text("upstream_id").notNull(),
+    name: text("name").notNull(),
+    /** chat | classifier */
+    type: text("type").notNull().default("chat"),
+    /** discovered | manual */
+    source: text("source").notNull(),
+    /** Offered in the picker. */
+    enabled: bool("enabled").notNull().default(true),
+    /** Resolved capabilities: override, else catalog, else the kind's default. */
+    contextWindow: integer("context_window").notNull(),
+    maxOutputTokens: integer("max_output_tokens").notNull(),
+    imageInput: bool("image_input").notNull(),
+    reasoning: bool("reasoning").notNull(),
+    /** Owner overrides (JSON); a key present wins over the catalog. */
+    overridesJson: text("overrides_json").notNull().default("{}"),
+    /** pi-ai compat flags (JSON), from the template or Advanced. */
+    compatJson: text("compat_json"),
+    /** The upstream stopped listing it; kept so references stay valid. */
+    missingSince: ms("missing_since"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("models_provider_upstream_idx").on(t.providerId, t.upstreamId)],
+);
+
+/** Which model a feature uses (issue #179). Unset roles use their documented fallback. */
+export const modelRoles = sqliteTable("model_roles", {
+  /** bot_default | memory_capture | chat_title | vision | classifier */
+  role: text("role").primaryKey(),
+  modelId: text("model_id")
+    .notNull()
+    .references(() => models.id, { onDelete: "restrict" }),
   ...timestamps,
 });
 
@@ -700,6 +794,8 @@ export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type BotGuest = typeof botGuests.$inferSelect;
+export type ProviderRow = typeof providers.$inferSelect;
+export type ModelRowRecord = typeof models.$inferSelect;
 
 export * from "@groot/core/database/schema";
 export * from "@groot/jobs/server/schema";

@@ -99,9 +99,23 @@ export function needsToolSearch(installedTools: readonly unknown[]): boolean {
   return installedTools.length > MCP_DEFER_THRESHOLD;
 }
 
+/**
+ * The model a bot runs on: its own, or the `bot_default` role when it has
+ * none (its model was never set, or the row predates models as data).
+ */
+export function botModelId(
+  catalog: Pick<ModelCatalog, "forRole">,
+  modelId: string | null | undefined,
+): string {
+  return modelId ?? catalog.forRole("bot_default")?.id ?? "";
+}
+
 /** Whether the model reads image blocks natively (else the see_image side-call). */
-export function modelSeesImages(catalog: Pick<ModelCatalog, "info">, modelId: string): boolean {
-  return Boolean(catalog.info(modelId)?.vision);
+export function modelSeesImages(
+  catalog: Pick<ModelCatalog, "get" | "forRole">,
+  modelId: string | null,
+): boolean {
+  return Boolean(catalog.get(botModelId(catalog, modelId))?.vision);
 }
 
 /** A connection linked to the bot, as the selection reads it. */
@@ -115,8 +129,8 @@ export interface BotConnectionTools extends ConnectionToolColumns {
  * search when one of them is large.
  */
 export function botToolkits(
-  bot: { modelId: string; connections?: readonly BotConnectionTools[] },
-  catalog: Pick<ModelCatalog, "info">,
+  bot: { modelId: string | null; connections?: readonly BotConnectionTools[] },
+  catalog: Pick<ModelCatalog, "get" | "forRole">,
 ): string[] {
   const connections = bot.connections ?? [];
   const large = connections.some((connection) => needsToolSearch(connectionTools(connection)));

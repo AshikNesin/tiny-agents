@@ -22,8 +22,8 @@ import {
   DialogTitle,
 } from "@groot/ui/dialog";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router-dom";
-import { botsApi, type Bot, type ModelInfo } from "../lib/bots-api";
+import { Link, useSearchParams } from "react-router-dom";
+import { botsApi, type Bot, type CatalogModel } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import type { OwnerSubmission } from "../store/chats";
 import { useChat } from "../store/use-chat";
@@ -77,8 +77,8 @@ const NEW_CHAT_SHORTCUT =
 
 interface ChatPaneProps {
   bot: Bot;
-  models: ModelInfo[];
-  gatewayConfigured: boolean;
+  models: CatalogModel[];
+  canAnswer: boolean;
   onEditBot: () => void;
 }
 
@@ -99,7 +99,7 @@ export function ChatPane(props: ChatPaneProps) {
   );
 }
 
-function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPaneProps) {
+function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const providers = useBotsStore((s) => s.providers);
   const adoptBot = useBotsStore((s) => s.adoptBot);
   // The chat, ready to render: the stream, Echoes and held messages,
@@ -224,8 +224,10 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPanePro
     };
   }, [anchoring, hasMessages]);
 
-  const model = models.find((m) => m.id === bot.modelId);
-  const composerEnabled = gatewayConfigured && model !== undefined;
+  // A bot without a model of its own runs on the default model.
+  const defaultModel = useBotsStore((s) => s.defaultModel);
+  const model = models.find((m) => m.id === (bot.modelId ?? defaultModel));
+  const composerEnabled = canAnswer && model !== undefined;
 
   const send = (submission: OwnerSubmission) => {
     // Keep the just-sent message visible: the reader may be scrolled up in
@@ -345,7 +347,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPanePro
                 </span>
               )}
               {model && (
-                <span className="flex shrink-0 items-center gap-1" title={model.provider}>
+                <span className="flex shrink-0 items-center gap-1" title={model.providerName}>
                   <Cpu className="size-3.5 shrink-0" />
                   {model.name}
                 </span>
@@ -459,19 +461,17 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPanePro
         </header>
 
         {/* Warnings */}
-        {!gatewayConfigured && (
+        {!canAnswer && (
           <div className="border-b bg-destructive/10 px-4 py-2 text-destructive text-xs">
-            {providers?.length ? (
-              <>
-                No model provider is configured.{" "}
-                {providers.map((provider) => provider.setupHint).join(" Or: ")} Sending is disabled.
-              </>
+            {providers?.some((provider) => provider.enabled) ? (
+              <>No model can run right now. Check the accounts in </>
             ) : (
-              <>
-                Cloudflare AI Gateway is not configured. Set CLOUDFLARE_API_KEY,
-                CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_GATEWAY_ID, then restart. Sending is disabled.
-              </>
+              <>No model is set up. Add one in </>
             )}
+            <Link to="/settings?tab=models" className="font-medium underline underline-offset-2">
+              Settings → Models
+            </Link>
+            . Sending is disabled.
           </div>
         )}
 
@@ -586,7 +586,7 @@ function ChatPaneBody({ bot, models, gatewayConfigured, onEditBot }: ChatPanePro
           onModelChange={guest ? undefined : changeModel}
           bot={bot}
           model={model}
-          gatewayConfigured={gatewayConfigured}
+          canAnswer={canAnswer}
           busy={busy}
           onSend={send}
           onStop={chat.stop}

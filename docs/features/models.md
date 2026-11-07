@@ -1,0 +1,150 @@
+# Models
+
+Models are owner data (issue #179, [ADR 0016](../adr/0016-models-are-owner-data.md)).
+The owner adds **provider accounts** and their **models** in the app, and
+features pick their model through **model roles**. Env vars do not configure
+models.
+
+## Provider accounts
+
+A provider account is a row in `providers`: a kind, an endpoint, a key and a
+name the owner chooses ("Anthropic · Work"). Its row id is also its pi-ai
+provider id. The kind fixes the wire API, how the key is sent, the default
+endpoint and capabilities, and the engine
+(`packages/agent/src/providers/kinds.ts`):
+
+| Kind                    | Wire API                     | Engine      | Key                                  |
+| ----------------------- | ---------------------------- | ----------- | ------------------------------------ |
+| `anthropic`             | Anthropic Messages           | pi          | API key                              |
+| `openai-chat`           | OpenAI Chat Completions      | pi          | API key, or none (Ollama, LM Studio) |
+| `openai-responses`      | OpenAI Responses             | pi          | API key                              |
+| `gemini`                | Google Generative AI         | pi          | API key                              |
+| `cloudflare-ai-gateway` | The gateway's catalog        | pi          | Gateway token                        |
+| `claude-plan`           | none: the Claude Code worker | claude-code | none (signed in on the sandbox)      |
+| `faux`                  | none: the host's faux model  | pi          | none (dev, e2e and tests)            |
+
+- **Gateway route.** An `openai-chat` account can go through a gateway
+  account instead of an endpoint of its own, as the gateway's BYOK upstreams
+  do: its URL is `gateway/v1/<account>/<gateway>/<upstream>[/<basePath>]` and
+  it uses the gateway's token (`viaProviderId`, `settings.upstream`).
+- **Claude plan.** Adding the account opts in; turning it off is the kill
+  switch, read on every turn. `settings.fallbackModelId` names a pi model a
+  turn moves to when the plan is off or the worker is unreachable; without
+  one the turn pauses. See [Claude subscription](../claude-subscription.md).
+
+## Keys
+
+Every key is a vault item with audience `app`
+([ADR 0015](../adr/0015-one-secrets-subsystem.md)), resolved per request
+through the `provider` sink for the account's own host. Bots never see it.
+Resolved keys are cached for five minutes. A key the vault can't open marks
+the account `locked`, and its models show "re-enter key".
+
+## Models
+
+A model is a row in `models` under an account: the upstream id, a display
+name, a type (`chat` or `classifier`), its capabilities (context window, max
+output, image input, reasoning), whether the picker offers it, and pi-ai
+compat flags. A model the upstream stopped listing keeps its row
+(`missingSince`), so bots that use it still point at something.
+
+A bot points at a model row (`bots.model_ref`), not at a string. The database
+refuses to delete a model a bot or a role uses. A bot with no model runs on
+the `bot_default` role. Every surface names a model as
+`<account name> / <model name>`; nobody reads or types the row ids.
+
+A model can run when its account is enabled and not `locked`, `key_rejected`
+or `unreachable`, and the model is still listed. The picker greys out the
+others with the reason.
+
+## Model roles
+
+Features that call a model on their own read a role (`model_roles`), with a
+documented fallback when it is unset (`ModelCatalog.forRole`):
+
+| Role             | Used by                                      | Unset                                      |
+| ---------------- | -------------------------------------------- | ------------------------------------------ |
+| `bot_default`    | New bot; bots without a model                | The first available chat model             |
+| `memory_capture` | [Memory](./memory.md) capture                | The bot's model on pi, else `bot_default`  |
+| `chat_title`     | [Past chat](./past-chats.md) titles          | The bot's model on pi, else `bot_default`  |
+| `vision`         | [Image transcription](./chat-attachments.md) | The first available model that sees images |
+| `classifier`     | [Auto-review](./auto-review.md)              | None: auto-review asks the owner           |
+
+## Settings → Models
+
+The owner manages all of this in **Settings → Models** (`?tab=models`), with
+no restart:
+
+- **Add models.** "Connect a provider": pick a kind or a template
+  (Anthropic, OpenAI, Gemini, OpenRouter, Cloudflare AI Gateway, Groq,
+  DeepSeek, Mistral, Together, z.ai, z.ai Coding Plan, Ollama, Claude plan),
+  enter the endpoint and key, **Check models**, keep the ones you want
+  (aggregators start with none checked), **Connect**. "Add a single model":
+  one model by id, with max output, image input and (Advanced) context
+  window and reasoning set by hand, and **Test** before **Add**.
+- **Accounts.** Each card shows the kind, host, key hint ("sk-…a1B2") and
+  where the key is kept, a status (Connected, Key rejected, Unreachable,
+  Locked: re-enter key, Disabled) and when it was checked. Expanded, it lists
+  its models with an enable box, capabilities, how many bots use each, Test
+  and delete, plus "Add a model by id". The Claude plan's card picks its
+  fallback model.
+- **Default models.** One row per role, showing its model and whether it is
+  the fallback; Reset clears a role.
+- **Delete in use.** Deleting an account or model that bots, roles or the
+  Claude plan's fallback use asks which model takes over, then moves them.
+
+Creating an account, changing its endpoint or key, and deleting it need the
+vault's step-up (password or passkey): a stolen session that could repoint an
+account would receive every prompt sent through it. A new host needs the key
+again. Changes reach open pickers through `models.changed` on `/events`.
+
+### API (owner only)
+
+| Route                                         | Step-up | Purpose                                                    |
+| --------------------------------------------- | ------- | ---------------------------------------------------------- |
+| `GET /api/v1/models/providers`                |         | Accounts, their models and key hints; templates            |
+| `POST /api/v1/models/discover`                |         | List an endpoint's models without saving                   |
+| `POST /api/v1/models/providers`               | yes     | Create an account (discovers again, stores the key)        |
+| `PATCH /api/v1/models/providers/:id`          |         | Name, enabled, Claude plan fallback; `If-Match: <version>` |
+| `PUT /api/v1/models/providers/:id/connection` | yes     | Endpoint, key, private network                             |
+| `POST /api/v1/models/providers/:id/refresh`   |         | Discover again; marks models no longer listed              |
+| `DELETE /api/v1/models/providers/:id`         | yes     | 409 `in_use` unless `?moveTo=<modelId>`                    |
+| `POST /api/v1/models/providers/:id/models`    |         | Add a model by id                                          |
+| `PATCH` / `DELETE /api/v1/models/:id`         |         | Name, enabled, overrides / delete (same in-use rule)       |
+| `POST /api/v1/models/test`                    |         | One 16-token completion, saved model or unsaved account    |
+| `GET` / `PUT /api/v1/models/roles`            |         | Roles and whether each is the fallback                     |
+
+Bodies are strict (unknown fields are refused) and capped at 64 KB. No
+response carries a key. A Claude.ai token (`sk-ant-oat…`) is refused.
+
+### Outbound guard
+
+Discovery goes through one guarded GET (`models.fetch.ts`): https only (http
+only for an account that allows a private endpoint), no credentials, query or
+fragment in the endpoint, the address checked after DNS when the socket
+connects (private addresses refused unless allowed), no redirects, 15 s and
+4 MB per request, at most 50 pages and 5,000 models. Test resolves the host
+the same way before its call. Inference itself goes through pi-ai's clients,
+so the endpoint is checked when it is saved, not on each request.
+
+## The runtime
+
+The app reads the tables into a `ModelConfig` snapshot
+(`apps/web/src/server/api/models/models.config.ts`) and hands it to
+`AgentRuntime` with a `CredentialResolver` that asks the vault.
+`packages/agent` never reads the database or env for models.
+`runtime.applyModelConfig` replaces the pi-ai providers in place, so a change
+applies from the next request without a restart; running turns keep the
+model they resolved. After every committed change the app calls
+`reloadModels()`.
+
+The Model catalog (`packages/agent/src/model-catalog.ts`) is a projection of
+the snapshot: `list`, `get`, `route` (engine, pi provider, upstream id),
+`piModel`, `forRole`, `providers` and `canAnswer`. `GET /api/v1/models`
+returns `{ models, defaultModelId, canAnswer, providers }`.
+
+## Dev and tests
+
+`TINY_AGENTS_FAUX=1` seeds a `faux` account with the model `test-model` and
+boots on pi-ai's faux provider. Tests seed the same account with the model
+ids they name (`tests/server/setup.ts`).

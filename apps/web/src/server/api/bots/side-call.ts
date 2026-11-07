@@ -3,9 +3,9 @@
  * the reply path (memory capture, Past chat titles). One module owns how
  * every one of them runs, so its rules hold in one place:
  *
- * - The model: an explicit override when the Model catalog can call it,
- *   else the bot's own model (a Claude plan bot's runs on the same model
- *   served by a registry provider, when one serves it).
+ * - The model: the call's model role (issue #179), set in Settings →
+ *   Models; unset, the bot's own model when it runs on pi, else the
+ *   `bot_default` role (`ModelCatalog.forRole`).
  * - The deadline: the call is aborted when it runs out (it must not keep
  *   spending tokens), and the caller gets its answer then even when the
  *   provider ignores the abort.
@@ -21,15 +21,15 @@ import type { ModelCatalog } from "@tiny-agents/agent";
 
 /** What a side-caller needs from the runtime: its Model catalog and the registry that calls models. */
 export interface SideCallRuntime {
-  catalog: Pick<ModelCatalog, "model">;
+  catalog: Pick<ModelCatalog, "forRole" | "piModel">;
   models: Pick<MutableModels, "completeSimple">;
 }
 
 export interface SideCallRequest {
-  /** The bot's model: the fallback when `override` is unset or unknown to the runtime. */
+  /** The model role the call reads its model from. */
+  role: "memory_capture" | "chat_title";
+  /** The bot's model: the role's fallback when it isn't set. */
   botModelId?: string;
-  /** An explicit model (an env setting), used when the runtime has it. Quotes are tolerated. */
-  override?: string;
   system: string;
   user: string;
   timeoutMs: number;
@@ -46,21 +46,14 @@ export interface SideCaller {
   complete(request: SideCallRequest): Promise<string | undefined>;
 }
 
-/** The model a call runs on: `override` when the catalog can call it, else the bot's model when it can. */
+/** The model a call runs on: its role's model, as the catalog resolves it. */
 function modelFor(
   catalog: SideCallRuntime["catalog"],
+  role: SideCallRequest["role"],
   botModelId: string | undefined,
-  override: string | undefined,
 ) {
-  const explicit = override
-    ?.trim()
-    .replace(/^(['"])([\s\S]*)\1$/, "$2")
-    .trim();
-  for (const modelId of [explicit, botModelId]) {
-    const model = modelId ? catalog.model(modelId) : undefined;
-    if (model) return { modelId, model };
-  }
-  return { modelId: explicit || botModelId, model: undefined };
+  const chosen = catalog.forRole(role, botModelId ? { bot: botModelId } : {});
+  return { modelId: chosen?.id, model: chosen ? catalog.piModel(chosen.id) : undefined };
 }
 
 const TIMED_OUT = Symbol("timed out");
@@ -69,7 +62,7 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
   return {
     async complete(request) {
       const { label } = request;
-      const { modelId, model } = modelFor(runtime.catalog, request.botModelId, request.override);
+      const { modelId, model } = modelFor(runtime.catalog, request.role, request.botModelId);
       const fields = { ...request.context, label, modelId };
       if (!model) {
         logger.warn(fields, `${label}: no model available; skipped`);

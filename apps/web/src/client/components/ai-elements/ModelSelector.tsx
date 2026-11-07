@@ -9,10 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import type { ModelInfo } from "../../lib/bots-api";
+import type { CatalogModel } from "../../lib/bots-api";
 
 interface ModelSelectorProps {
-  models: ModelInfo[];
+  models: CatalogModel[];
   value: string;
   onChange: (modelId: string) => void;
   /** Model id kept even though it left the catalog. */
@@ -20,26 +20,24 @@ interface ModelSelectorProps {
   id?: string;
 }
 
-const FAMILY_LABEL: Record<ModelInfo["family"], string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  "workers-ai": "Workers AI",
-  "claude-plan": "Claude plan",
-  other: "Other",
+/** Why a model can't run now, as the picker says it. */
+export const UNAVAILABLE_LABEL: Record<NonNullable<CatalogModel["unavailableReason"]>, string> = {
+  disabled: "account off",
+  locked: "re-enter key",
+  missing: "no longer listed",
+  provider_failing: "account failing",
 };
 
 /** AI Elements Model Selector: a grouped model picker (issue #1 D17). */
 export function ModelSelector({ models, value, onChange, unknownValue, id }: ModelSelectorProps) {
   const selected = models.find((m) => m.id === value);
-  // With more than one provider (e.g. the gateway and OpenAI direct) the
-  // same model can be listed twice; the group label names the provider.
-  const multiProvider = new Set(models.map((m) => m.provider ?? "")).size > 1;
-  const groups = new Map<string, ModelInfo[]>();
+  // Grouped by provider account (issue #179): the same model can be offered
+  // by two accounts, and the group names which. Disabled models stay only
+  // while selected.
+  const groups = new Map<string, CatalogModel[]>();
   for (const model of models) {
-    const label =
-      multiProvider && model.provider
-        ? `${FAMILY_LABEL[model.family]} · ${model.provider}`
-        : FAMILY_LABEL[model.family];
+    if (!model.enabled && model.id !== value) continue;
+    const label = model.providerName;
     const list = groups.get(label) ?? [];
     list.push(model);
     groups.set(label, list);
@@ -70,10 +68,18 @@ export function ModelSelector({ models, value, onChange, unknownValue, id }: Mod
             <DropdownMenuGroup key={label}>
               <DropdownMenuLabel>{label}</DropdownMenuLabel>
               {groupModels.map((model) => (
-                <DropdownMenuItem key={model.id} onSelect={() => onChange(model.id)}>
+                <DropdownMenuItem
+                  key={model.id}
+                  disabled={!model.available}
+                  onSelect={() => onChange(model.id)}
+                >
                   {model.id === value ? <Check className="size-4" /> : <span className="size-4" />}
                   <span className="truncate">{model.name}</span>
-                  {model.note ? (
+                  {model.unavailableReason ? (
+                    <span className="text-muted-foreground ml-auto text-xs">
+                      {UNAVAILABLE_LABEL[model.unavailableReason]}
+                    </span>
+                  ) : model.note ? (
                     <span className="text-muted-foreground ml-auto text-xs">{model.note}</span>
                   ) : model.reasoning ? (
                     <span className="text-muted-foreground ml-auto text-xs">reasoning</span>

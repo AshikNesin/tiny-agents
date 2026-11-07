@@ -1,0 +1,1 @@
+ALTER TABLE `vault_items` ADD `audience` text DEFAULT 'bots' NOT NULL;

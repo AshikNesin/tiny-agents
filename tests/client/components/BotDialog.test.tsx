@@ -6,7 +6,7 @@ import { ApiError } from "@groot/shell/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
-import type { Bot, ModelInfo } from "@/lib/bots-api";
+import type { Bot, CatalogModel } from "@/lib/bots-api";
 
 const removeMock = vi.fn().mockResolvedValue(undefined);
 const createMock = vi.fn();
@@ -27,11 +27,19 @@ vi.mock("@/lib/connections-api", () => ({
   connectionsApi: { list: vi.fn().mockResolvedValue([]) },
 }));
 
-const models: ModelInfo[] = [
+const models: CatalogModel[] = [
   {
     id: "test-model",
     name: "Test Model (faux)",
-    family: "other",
+    providerId: "faux",
+    providerName: "Faux",
+    providerKind: "faux",
+    upstreamId: "test-model",
+    type: "chat",
+    engine: "pi",
+    maxOutputTokens: 16_384,
+    enabled: true,
+    available: true,
     reasoning: true,
     contextWindow: 128000,
     vision: false,

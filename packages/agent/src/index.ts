@@ -16,6 +16,7 @@ export {
   AgentRuntime,
   ApprovalNotPendingError,
   CredentialRequestNotPendingError,
+  ModelUnavailableError,
   QuestionNotPendingError,
 } from "./runtime";
 export { finishedReplyOf, finishedReplyTo } from "./replies";
@@ -91,7 +92,7 @@ export {
   type NewBotInput,
 } from "./toolkits/bot-builder";
 export { createWebToolkit } from "./toolkits/web";
-export { checkPublicUrl } from "./toolkits/public-url";
+export { checkPublicUrl, isPrivateAddress } from "./toolkits/public-url";
 export {
   connectMcp,
   createMcpCapability,
@@ -108,9 +109,24 @@ export {
   type OAuthClientProvider,
   type OAuthTokens,
 } from "./mcp";
-export { GATEWAY_PROVIDER } from "./models";
-export type { ModelCatalog, ModelRef } from "./model-catalog";
-export { claudeCodeEngineEnabled } from "./engine";
+export type { ModelCatalog } from "./model-catalog";
+export type {
+  CredentialResolver,
+  ModelConfig,
+  ModelRow,
+  ProviderAccount,
+} from "./providers/config";
+export { PROVIDER_KINDS } from "./providers/kinds";
+export { testModelCall, testUnsavedModel, type TestResult } from "./providers/test-call";
+export {
+  discoverModels,
+  DiscoveryError,
+  PROVIDER_TEMPLATES,
+  resolveCapabilities,
+  type DiscoveredModel,
+  type DiscoveryGet,
+  type ProviderTemplate,
+} from "./providers/discovery";
 export {
   windowChat,
   pageBefore,

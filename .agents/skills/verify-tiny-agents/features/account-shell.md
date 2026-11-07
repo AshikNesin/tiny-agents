@@ -31,7 +31,7 @@ Preconditions:
 - **Palette.** Ctrl+K → dialog `Command Menu`; type `Tasks`; option `Tasks` → `/tasks`, palette closed. Expected exactly one `Tasks` option.
 - **Theme.** `/settings`, group `Theme` → `Light`: `aria-pressed=true`, no `dark` class, stored `light`; reload keeps it. `Search` → option `Dark` → `dark` class, stored `dark`, Settings shows `Dark` pressed; reopen palette: option `Dark ✓`.
 - **Collapse.** `Collapse sidebar` → `Expand sidebar` shown, `Demo User` hidden, link `Tasks` has `title="Tasks"`; reload: still collapsed; `Expand sidebar` restores.
-- **Claude plan.** Tab `Claude plan`: `The engine is off. Set CLAUDE_CODE_ENGINE_ENABLED=1…`; no `claude-plan-account` line (the engine is off, #171); no `claude-plan-sign-in`, no `Check again`.
+- **Claude plan.** Tab `Claude plan`: `The engine is off. Add or enable the Claude plan account…`; no `claude-plan-account` line (the engine is off, #171); no `claude-plan-sign-in`, no `Check again`.
 - **People.** Tab `People`: `Name`, `Email`, `Password` → `Add guest`; toast `Guest added`; `guest-row` with the email and `No bots shared`. `Remove <name>` → alertdialog `Remove` → row gone; `GET /api/v1/people` no longer has it.
 - **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Routines…Vault, no `Collapse sidebar`. Link `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: tabs `Claude plan` and `General` both selectable.
 - **Proof.** `ta-verify drive $S/journeys/account-shell.mjs` → `account-shell/account-menu`, `feedback-panel`, `theme-light`, `theme-dark`, `sidebar-rail`, `claude-plan`, `guest-added`, `phone-drawer`, `phone-back`, `phone-settings`.

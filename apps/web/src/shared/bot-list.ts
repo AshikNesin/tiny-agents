@@ -8,7 +8,8 @@ export interface BotListEntry {
   conversationId: string;
   name: string;
   description: string;
-  modelId: string;
+  /** Null: the bot runs on the default model (Settings → Models). */
+  modelId: string | null;
   lastMessagePreview: string | null;
   lastActivityAt: Date;
   /** Pre-open read marker; the client opens at the first message after it. */

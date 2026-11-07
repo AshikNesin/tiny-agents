@@ -31,8 +31,8 @@ import {
   WaitTracker,
   type BotMessagingStore,
   type Capability,
+  type ModelConfig,
   type Reviewer,
-  claudeCodeEngineEnabled,
 } from "@tiny-agents/agent";
 import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
 import {
@@ -63,9 +63,15 @@ import { sandboxConnection, unquoteEnv as unquote } from "./sandbox-host";
 import { sharedClaudeWorkerLocator } from "./claude-worker";
 import { missingToolkits } from "./bot-toolkits";
 import { appEnv, type AppEnv } from "../../env";
+import {
+  bindModelRuntime,
+  loadModelConfig,
+  seedFauxModels,
+  vaultCredentials,
+} from "../models/models.config";
 
 type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
-type RuntimeEnv = NonNullable<RuntimeOptions["env"]>;
+type RuntimeEnv = Readonly<Record<string, string | undefined>>;
 
 /**
  * Calls waiting on the owner's approval, shared by the runtime's approval
@@ -88,8 +94,13 @@ export function appStoreCapabilities(env: AppEnv = appEnv()) {
   } satisfies Record<string, Capability>;
 }
 
+/** Whether the owner's Claude plan account is on: Claude Code can take coding work. */
+function claudePlanOn(config: ModelConfig): boolean {
+  return config.providers.some((p) => p.kind === "claude-plan" && p.enabled);
+}
+
 /** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
-function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
+function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
   // Every value the vault resolves is scrubbed from logs and error reports too.
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
@@ -143,7 +154,7 @@ function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
     // agents (Shelley by default, Claude Code by name); finishes come back
     // into the chat. No tools without a configured harness.
     createCodeToolkit(
-      env.SHELLEY_URL?.trim() || claudeCodeEngineEnabled(env)
+      env.SHELLEY_URL?.trim() || claudePlanOn(config)
         ? { store: codeStore }
         : {
             setupHint:
@@ -168,15 +179,11 @@ export function botsCapability(rt: AgentRuntime): Capability {
   return createBotsToolkit(botMessagingStore(rt));
 }
 
-/** The vision side-call (issue #17): uploads bytes + a transcriber model. */
-function visionCapability(
-  rt: AgentRuntime,
-  models: Parameters<typeof createTranscriber>[0],
-  env: RuntimeEnv,
-): Capability {
+/** The vision side-call (issue #17): uploads bytes + the `vision` model role. */
+function visionCapability(rt: AgentRuntime): Capability {
   return createVisionToolkit(
     createVisionStore(rt),
-    createTranscriber(models, { providerId: rt.provider, env }),
+    createTranscriber({ catalog: () => rt.catalog, models: rt.models }),
   );
 }
 
@@ -208,13 +215,15 @@ export function agentRuntimeReady(): boolean {
 }
 
 /**
- * Auto-review's reviewer (issue #65): TypeSafe's Jev on Workers AI through the AI
- * Gateway unless CLASSIFIER_MODEL names another classifier. Without the
- * gateway settings bots that turn auto-review on keep every approval card.
+ * Auto-review's reviewer (issue #65): the `classifier` model role, resolved
+ * per call on the runtime `runtime()` returns. Without one set, every review
+ * fails and the owner gets the approval card.
  */
-function autoReviewer(env: RuntimeEnv): Reviewer | undefined {
-  const classifier = createClassifier(env);
-  if (!classifier) return undefined;
+function autoReviewer(runtime: () => AgentRuntime | undefined): Reviewer {
+  const classifier = createClassifier({
+    catalog: () => runtime()!.catalog,
+    models: { classify: (...args) => runtime()!.models.classify(...args) },
+  });
   return createReviewer(classifier, {
     // Scores and outcome only: never the call's arguments.
     // A failed review is a card the owner did not need: warn so it is noticed.
@@ -229,18 +238,24 @@ function autoReviewer(env: RuntimeEnv): Reviewer | undefined {
 export async function openAgentRuntime(
   options: RuntimeOptions & { env: RuntimeEnv },
 ): Promise<AgentRuntime> {
-  const appVars = appEnv(options.env);
+  const { env, ...rest } = options;
+  const appVars = appEnv(env);
+  const modelConfig = await loadModelConfig();
+  let opened: AgentRuntime | undefined;
   const instance = await AgentRuntime.open({
-    ...options,
+    ...rest,
+    modelConfig,
+    credentials: vaultCredentials,
     approvalTracker: ownerWaits,
-    reviewer: options.reviewer ?? autoReviewer(options.env),
-    capabilities: [...builtinCapabilities(appVars), ...(options.capabilities ?? [])],
-    claudeWorker: options.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
+    reviewer: rest.reviewer ?? autoReviewer(() => opened),
+    capabilities: [...builtinCapabilities(appVars, modelConfig), ...(rest.capabilities ?? [])],
+    claudeWorker: rest.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
   });
-  // With the Claude plan engine on, install and start its worker on the
-  // sandbox now, so the first turn doesn't wait on it.
+  opened = instance;
+  // With the Claude plan on, install and start its worker on the sandbox
+  // now, so the first turn doesn't wait on it.
   instance.prepareClaudeCode();
-  return finishOpen(instance, options.env);
+  return finishOpen(instance);
 }
 
 /**
@@ -250,9 +265,11 @@ export async function openAgentRuntime(
  * runtime opened with, so both install after open; bots select them by name
  * on their next configure.
  */
-function finishOpen(instance: AgentRuntime, env: RuntimeEnv): AgentRuntime {
+function finishOpen(instance: AgentRuntime): AgentRuntime {
   instance.installCapability(botsCapability(instance));
-  instance.installCapability(visionCapability(instance, instance.models, env));
+  instance.installCapability(visionCapability(instance));
+  // Settings → Models changes apply to this runtime from now on.
+  bindModelRuntime(instance);
   // A selected id the runtime lacks is silently ignored at configure: say so.
   const missing = missingToolkits(instance.listCapabilities().map((c) => c.id));
   if (missing.length > 0) {
@@ -266,6 +283,7 @@ function finishOpen(instance: AgentRuntime, env: RuntimeEnv): AgentRuntime {
 /** Shutdown: close the runtime and release the store lock. */
 export async function closeAgentRuntime(): Promise<void> {
   ready = false;
+  bindModelRuntime(undefined);
   const instance = runtime;
   runtime = undefined;
   await instance?.close();
@@ -408,19 +426,20 @@ export async function openFauxAgentRuntime(
   faux.setResponses(Array.from({ length: 1000 }, () => echo));
   models.setProvider(faux.provider);
 
+  // The faux account and its one model are rows like any other, so the
+  // pickers, bots and Settings → Models work the same way.
+  await seedFauxModels();
+  const modelConfig = await loadModelConfig();
   const instance = await AgentRuntime.open({
     ...handlers,
     storePath,
     models,
-    provider: "faux",
+    modelConfig,
+    credentials: vaultCredentials,
     lockWaitMs: 5_000,
     approvalTracker: ownerWaits,
-    capabilities: builtinCapabilities(appVars),
+    capabilities: builtinCapabilities(appVars, modelConfig),
     settings: { retry: { enabled: false } },
-    // The .env allowlist names real gateway custom models that don't exist
-    // in the faux registry — without this override /models returns an empty
-    // catalog and e2e cannot create bots.
-    env: { ...env, GATEWAY_MODEL_ALLOWLIST: "" },
   });
-  return finishOpen(instance, env);
+  return finishOpen(instance);
 }

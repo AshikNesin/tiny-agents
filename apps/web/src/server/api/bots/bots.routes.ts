@@ -1,8 +1,8 @@
+import { onModelsChanged } from "../models/models.config";
 import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
-import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
@@ -46,13 +46,11 @@ router.get("/claude-code/account", async (c) => {
 
 router.get("/models", (c) => {
   const catalog = getAgentRuntime().catalog;
-  const models = catalog.list();
-  const override = env.DEFAULT_MODEL?.trim();
   return ok(c, {
-    models,
-    defaultModel: override && catalog.has(override) ? override : models[0]?.id,
-    // Keeps its name for existing clients; it means "some provider can answer".
-    gatewayConfigured: catalog.canAnswer(),
+    // Chat models the picker offers, and any disabled one a bot still uses.
+    models: catalog.list({ type: "chat" }),
+    defaultModelId: catalog.forRole("bot_default")?.id ?? null,
+    canAnswer: catalog.canAnswer(),
     providers: catalog.providers(),
   });
 });
@@ -88,6 +86,8 @@ router.get("/events", (c) => {
         });
       }),
     );
+    // Guests see model names in the picker too, so they refetch as well.
+    sse.onClose(onModelsChanged(() => sse.write({ type: "models.changed" })));
     if (viewer.guest) return;
     sse.onClose(
       getConnectionManager().onChange((id, state) => {

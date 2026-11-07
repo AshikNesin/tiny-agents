@@ -158,7 +158,7 @@ function LinkDialog({
 }) {
   const { run } = useStepUp();
   const kind: VaultKind = candidate && candidate.kind !== "other" ? candidate.kind : "login";
-  const [policy, setPolicy] = useState<VaultPolicy>(defaultPolicy(kind));
+  const [policy, setPolicy] = useState<VaultPolicy>(() => defaultPolicy(kind));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -212,6 +212,21 @@ function LinkDialog({
   );
 }
 
+/** Keys the server uses itself (audience `app`): listed read-only, changed where they are used. */
+function AppItemsSection({ items }: { items: VaultItem[] }) {
+  const appItems = items.filter((item) => item.audience === "app");
+  if (appItems.length === 0) return null;
+  return (
+    <Section
+      title="Used by the app"
+      meta={String(appItems.length)}
+      description="Keys the server uses itself, such as model providers'. Bots never see them; change them in Settings → Models."
+    >
+      <ItemRows items={appItems} />
+    </Section>
+  );
+}
+
 export function VaultList() {
   const navigate = useNavigate();
   const [overview, setOverview] = useState<VaultOverview | null>(null);
@@ -255,7 +270,9 @@ export function VaultList() {
       identity: [],
       api_key: [],
     };
-    for (const item of overview?.items ?? []) groups[item.kind].push(item);
+    for (const item of overview?.items ?? []) {
+      if (item.audience === "bots") groups[item.kind].push(item);
+    }
     return groups;
   }, [overview]);
 
@@ -326,6 +343,8 @@ export function VaultList() {
               </Section>
             ) : null,
           )}
+
+          <AppItemsSection items={overview.items} />
 
           {overview.unlinked.length > 0 && (
             <Section

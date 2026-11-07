@@ -26,7 +26,7 @@ import {
   type Bot,
   type BrowserProfile,
   type CapabilityInfo,
-  type ModelInfo,
+  type CatalogModel,
   type ToolPermission,
 } from "../lib/bots-api";
 import { skillsApi, type SkillSummary } from "../lib/skills-api";
@@ -58,7 +58,7 @@ import {
 interface BotDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  models: ModelInfo[];
+  models: CatalogModel[];
   defaultModelId?: string;
   /** Existing bot to edit; omitted = create. */
   bot?: Bot | null;

@@ -4,10 +4,13 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
 import {
   createModelCatalog,
-  formatModelId,
   type CatalogModels,
 } from "../../../../packages/agent/src/model-catalog";
-import { GATEWAY_PROVIDER } from "../../../../packages/agent/src/models";
+import type {
+  ModelConfig,
+  ModelRow,
+  ProviderAccount,
+} from "../../../../packages/agent/src/providers/config";
 import {
   createSideCaller,
   type SideCallRequest,
@@ -25,36 +28,67 @@ afterEach(() => {
 
 type Completion = SideCallRuntime["models"]["completeSimple"];
 
+const account = (id: string, kind: ProviderAccount["kind"]): ProviderAccount => ({
+  id,
+  name: id,
+  kind,
+  baseUrl: null,
+  hasCredential: true,
+  viaProviderId: null,
+  settings: {},
+  enabled: true,
+  status: "ok",
+  statusDetail: null,
+});
+
+const row = (id: string, providerId: string): ModelRow => ({
+  id,
+  providerId,
+  upstreamId: `${id}-upstream`,
+  name: id,
+  type: "chat",
+  enabled: true,
+  contextWindow: 100_000,
+  maxOutputTokens: 8_000,
+  imageInput: false,
+  reasoning: false,
+  compat: null,
+  missing: false,
+});
+
 /**
- * A runtime whose registry serves `known` app model ids (bare on `primary`,
- * `custom:<provider>/<model>` elsewhere) and answers with `reply`. The
- * catalog is the real one over that registry.
+ * A runtime with two pi models (`bot-model`, `light`) and a Claude plan model
+ * (`plan-model`), answering with `reply`. The catalog is the real one; the
+ * registry serves every pi model it is asked for.
  */
 function fakeRuntime(
-  known: string[],
   reply: Completion = async () => fauxAssistantMessage([fauxText("answer")]),
-  primary = GATEWAY_PROVIDER,
+  roles: ModelConfig["roles"] = {},
+  config: Partial<ModelConfig> = {},
 ) {
-  const getModel = vi.fn((provider: string, id: string) =>
-    known.includes(formatModelId({ provider, model: id }, primary))
-      ? ({ id } as Model<Api>)
-      : undefined,
-  );
+  const getModel = vi.fn((provider: string, id: string) => ({ id, provider }) as Model<Api>);
   const completeSimple = vi.fn<Completion>(reply);
-  const registry = {
-    getModel,
-    getModels: () => [],
-    getProviders: () => [],
-    getProvider: () => undefined,
-  } as unknown as CatalogModels;
+  const registry = { getModel, getModelOfType: () => undefined } as unknown as CatalogModels;
   const runtime: SideCallRuntime = {
-    catalog: createModelCatalog(registry, { primary, configured: new Set(), env: {} }),
+    catalog: createModelCatalog(
+      {
+        providers: config.providers ?? [account("p", "anthropic"), account("plan", "claude-plan")],
+        models: config.models ?? [
+          row("bot-model", "p"),
+          row("light", "p"),
+          row("plan-model", "plan"),
+        ],
+        roles,
+      },
+      registry,
+    ),
     models: { completeSimple },
   };
   return { runtime, getModel, completeSimple };
 }
 
 const request = (overrides: Partial<SideCallRequest> = {}): SideCallRequest => ({
+  role: "chat_title",
   botModelId: "bot-model",
   system: "You are a test.",
   user: "Go.",
@@ -64,18 +98,28 @@ const request = (overrides: Partial<SideCallRequest> = {}): SideCallRequest => (
 });
 
 describe("createSideCaller: the model", () => {
-  it("prefers a known override (quotes tolerated), else the bot's model, else no call", async () => {
-    const { runtime, getModel, completeSimple } = fakeRuntime(["bot-model", "custom:test/light"]);
-    const caller = createSideCaller(runtime);
+  it("runs on the role's model when set, else the bot's own pi model", async () => {
+    const set = fakeRuntime(undefined, { chat_title: "light" });
+    await createSideCaller(set.runtime).complete(request());
+    expect(set.getModel).toHaveBeenLastCalledWith("p", "light-upstream");
 
-    await caller.complete(request({ override: '"custom:test/light"' }));
-    expect(getModel).toHaveBeenLastCalledWith("test", "light");
+    const unset = fakeRuntime();
+    await createSideCaller(unset.runtime).complete(request());
+    expect(unset.getModel).toHaveBeenLastCalledWith("p", "bot-model-upstream");
+  });
 
-    await caller.complete(request({ override: "unknown" }));
-    expect(getModel).toHaveBeenLastCalledWith("cloudflare-ai-gateway", "bot-model");
+  it("runs a Claude plan bot's call on the default model", async () => {
+    const { runtime, getModel, completeSimple } = fakeRuntime(undefined, {
+      bot_default: "light",
+    });
+    await createSideCaller(runtime).complete(request({ botModelId: "plan-model" }));
+    expect(getModel).toHaveBeenLastCalledWith("p", "light-upstream");
+    expect(completeSimple).toHaveBeenCalledOnce();
+  });
 
-    completeSimple.mockClear();
-    expect(await caller.complete(request({ botModelId: "missing" }))).toBeUndefined();
+  it("makes no call, and says so, when no model can run", async () => {
+    const { runtime, completeSimple } = fakeRuntime(undefined, {}, { providers: [], models: [] });
+    expect(await createSideCaller(runtime).complete(request())).toBeUndefined();
     expect(completeSimple).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ label: "Test call" }),
@@ -83,29 +127,8 @@ describe("createSideCaller: the model", () => {
     );
   });
 
-  it("runs a Claude plan bot's call on the same model a registry provider serves", async () => {
-    const { runtime, getModel, completeSimple } = fakeRuntime(["claude-sonnet-4-6"]);
-    const caller = createSideCaller(runtime);
-
-    await caller.complete(request({ botModelId: "claude-code/claude-sonnet-4-6" }));
-    expect(getModel).toHaveBeenLastCalledWith("cloudflare-ai-gateway", "claude-sonnet-4-6");
-    expect(completeSimple).toHaveBeenCalledOnce();
-
-    completeSimple.mockClear();
-    expect(
-      await caller.complete(request({ botModelId: "claude-code/claude-opus-4-6" })),
-    ).toBeUndefined();
-    expect(completeSimple).not.toHaveBeenCalled();
-  });
-
-  it("maps bare ids to the runtime's primary provider", async () => {
-    const { runtime, getModel } = fakeRuntime(["bot-model"], undefined, "openrouter");
-    await createSideCaller(runtime).complete(request());
-    expect(getModel).toHaveBeenCalledWith("openrouter", "bot-model");
-  });
-
   it("sends the system prompt and the user text, and joins the reply's text blocks", async () => {
-    const { runtime, completeSimple } = fakeRuntime(["bot-model"], async () =>
+    const { runtime, completeSimple } = fakeRuntime(async () =>
       fauxAssistantMessage([fauxText("one"), fauxText("two")]),
     );
     expect(await createSideCaller(runtime).complete(request())).toBe("one\ntwo");
@@ -119,7 +142,7 @@ describe("createSideCaller: the model", () => {
 
 describe("createSideCaller: failures", () => {
   it("reads an error or aborted stop as no answer, and logs it", async () => {
-    const { runtime } = fakeRuntime(["bot-model"], async () => ({
+    const { runtime } = fakeRuntime(async () => ({
       ...fauxAssistantMessage([fauxText("partial")]),
       stopReason: "error",
       errorMessage: "Provider unavailable",
@@ -139,7 +162,7 @@ describe("createSideCaller: failures", () => {
   });
 
   it("reads a thrown call as no answer", async () => {
-    const { runtime } = fakeRuntime(["bot-model"], async () => {
+    const { runtime } = fakeRuntime(async () => {
       throw new Error("gateway down");
     });
     await expect(createSideCaller(runtime).complete(request())).resolves.toBeUndefined();
@@ -148,7 +171,7 @@ describe("createSideCaller: failures", () => {
   it("aborts the call at the deadline and answers then, even when the provider ignores the abort", async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;
-    const { runtime } = fakeRuntime(["bot-model"], (_model, _context, options) => {
+    const { runtime } = fakeRuntime((_model, _context, options) => {
       signal = options?.signal;
       return new Promise(() => undefined); // never settles
     });
@@ -164,7 +187,7 @@ describe("createSideCaller: failures", () => {
 
   it("passes the caller's own cancel through", async () => {
     let signal: AbortSignal | undefined;
-    const { runtime } = fakeRuntime(["bot-model"], async (_model, _context, options) => {
+    const { runtime } = fakeRuntime(async (_model, _context, options) => {
       signal = options?.signal;
       return fauxAssistantMessage([fauxText("ok")]);
     });

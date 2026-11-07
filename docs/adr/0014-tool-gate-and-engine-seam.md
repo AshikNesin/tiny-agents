@@ -1,6 +1,8 @@
 # ADR 0014: One Tool gate for both engines, behind a real AgentEngine seam
 
-- Status: **accepted** (amends [0008](0008-claude-code-engine.md))
+- Status: **accepted** (amends [0008](0008-claude-code-engine.md); amended by
+  [0016](0016-models-are-owner-data.md): the engine comes from the model's
+  provider kind)
 - Date: 2026-11-05
 
 ## Context

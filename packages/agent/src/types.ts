@@ -8,19 +8,71 @@ import type { CapabilitySelection } from "./capabilities";
 /** Opaque id of a durable conversation (pi-durable's numeric conversation id). */
 export type ConversationRef = number;
 
-export interface ModelInfo {
+/**
+ * A model as the app shows and picks it (issue #179): a row the owner created
+ * or discovered under a provider account. `id` is the row id, the only thing
+ * a bot stores; nobody reads or types it.
+ */
+export interface CatalogModel {
   id: string;
+  /** Display name ("Claude Sonnet 4.6"). */
   name: string;
-  /** Upstream family, derived from the id: "anthropic", "openai", "workers-ai", or "claude-plan". */
-  family: "anthropic" | "openai" | "workers-ai" | "claude-plan" | "other";
-  /** Display name of the provider serving it ("Cloudflare AI Gateway", "OpenAI"). */
-  provider?: string;
-  reasoning: boolean;
+  providerId: string;
+  /** The account's owner-chosen name ("Anthropic · Work"). */
+  providerName: string;
+  providerKind: ProviderKind;
+  /** Wire id ("claude-sonnet-4-6"). */
+  upstreamId: string;
+  type: "chat" | "classifier";
+  engine: AgentEngineKind;
   contextWindow: number;
-  /** The model accepts image content natively. */
+  maxOutputTokens: number;
+  /** The model accepts image content. */
   vision: boolean;
+  reasoning: boolean;
+  /** Offered in the picker. */
+  enabled: boolean;
+  /** It can run now: its account is enabled and readable and the model is still listed. */
+  available: boolean;
+  unavailableReason?: ModelUnavailableReason;
   /** Short picker note, e.g. "uses your Claude plan". */
   note?: string;
+}
+
+export type ModelUnavailableReason = "disabled" | "locked" | "missing" | "provider_failing";
+
+/** How a provider account is reached; fixes the wire API, the auth header and the engine. */
+export type ProviderKind =
+  | "anthropic"
+  | "openai-chat"
+  | "openai-responses"
+  | "gemini"
+  | "cloudflare-ai-gateway"
+  | "claude-plan"
+  | "faux";
+
+export type ProviderStatus = "ok" | "unchecked" | "key_rejected" | "unreachable" | "locked";
+
+/** A provider account as the app lists it. No secret, ever. */
+export interface ProviderSummary {
+  id: string;
+  name: string;
+  kind: ProviderKind;
+  status: ProviderStatus;
+  statusDetail?: string;
+  enabled: boolean;
+  modelCount: number;
+}
+
+/** A named slot a feature reads its model from. */
+export type ModelRole = "bot_default" | "memory_capture" | "chat_title" | "vision" | "classifier";
+
+/** What the runtime needs to call a model. Only the catalog builds one. */
+export interface ModelRoute {
+  engine: AgentEngineKind;
+  /** The pi-ai provider id: the account's row id. */
+  providerId: string;
+  upstreamId: string;
 }
 
 export type AgentEngineKind = "pi" | "claude-code";
@@ -28,16 +80,8 @@ export type AgentEngineKind = "pi" | "claude-code";
 export interface BotAgentConfig {
   /** Persona / system prompt. Empty string means none. */
   systemPrompt: string;
-  /**
-   * Model id: bare for the primary provider, "custom:<provider>/<model>" for
-   * another provider, or `claude-code/<model>` for the subscription engine.
-   */
+  /** The model's row id (`CatalogModel.id`). The engine follows from its provider's kind. */
   modelId: string;
-  /**
-   * Inference engine. Omitted: `claude-code/…` model ids select the Claude
-   * plan engine and every other id stays on pi. Set only when it matches the id.
-   */
-  engine?: AgentEngineKind;
   /**
    * Capabilities the bot may use and per-tool permissions. Omitted: leave the
    * conversation's tool selection unchanged (every installed extension).

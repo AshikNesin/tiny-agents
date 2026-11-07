@@ -118,10 +118,8 @@ export function CodePage() {
           description={
             <>
               Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for example{" "}
-              <code className={monoClass}>http://my-vm:9000</code> over Tailscale), or turn on the
-              Claude plan on the sandbox (
-              <code className={monoClass}>CLAUDE_CODE_ENGINE_ENABLED</code>
-              ), and restart. See docs/features/code.md.
+              <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and restart, or
+              add the Claude plan in Settings → Models. See docs/features/code.md.
             </>
           }
         />

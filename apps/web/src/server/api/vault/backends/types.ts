@@ -67,13 +67,21 @@ export interface VaultBackend {
   };
   status(): Promise<BackendStatus>;
   listCandidates(): Promise<BackendItemSummary[]>;
-  describe(externalId: string): Promise<BackendItemSummary>;
+  /**
+   * `policy` is the digest of the linked row's policy (`vaultPolicyDigest`).
+   * A backend that seals values itself (local) binds them to it, so a value
+   * whose row's policy changed behind the service's back doesn't open;
+   * others ignore it. Omitted for an item no row links yet.
+   */
+  describe(externalId: string, policy?: string): Promise<BackendItemSummary>;
   /** One value; called only after policy passed (or by the owner's reveal). */
-  resolve(externalId: string, field: ValueField): Promise<SecretValue>;
-  create?(draft: ItemDraft): Promise<string>;
+  resolve(externalId: string, field: ValueField, policy?: string): Promise<SecretValue>;
+  create?(draft: ItemDraft, policy?: string): Promise<string>;
   /** Set the given values (and title/urls); fields not named are left as they are. */
-  update?(externalId: string, draft: Partial<ItemDraft>): Promise<void>;
+  update?(externalId: string, draft: Partial<ItemDraft>, policy?: string): Promise<void>;
   remove?(externalId: string): Promise<void>;
+  /** Re-seal an item from one policy digest to another (the owner changed its policy). */
+  rebind?(externalId: string, from: string | undefined, to: string): Promise<void>;
 }
 
 /** A backend failure with a code the owner sees and a fixed message bots see. */

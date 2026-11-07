@@ -17,7 +17,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import type { Bot, ModelInfo } from "@/lib/bots-api";
+import type { Bot, CatalogModel } from "@/lib/bots-api";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
 
@@ -43,10 +43,18 @@ vi.mock("@/lib/bots-api", () => ({
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-const model: ModelInfo = {
+const model: CatalogModel = {
   id: "test-model",
   name: "Test Model",
-  family: "other",
+  providerId: "faux",
+  providerName: "Faux",
+  providerKind: "faux",
+  upstreamId: "test-model",
+  type: "chat",
+  engine: "pi",
+  maxOutputTokens: 16_384,
+  enabled: true,
+  available: true,
   reasoning: false,
   contextWindow: 128000,
   vision: false,
@@ -87,7 +95,7 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
         lastReadAt: opts.lastReadAt ?? null,
       },
     ],
-    gatewayConfigured: true,
+    canAnswer: true,
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
@@ -104,7 +112,7 @@ function snapshot(messages: ChatMessage[], busy = false) {
 function renderPane(bot: Bot = HOST) {
   render(
     <BrowserRouter>
-      <ChatPane bot={bot} models={[model]} gatewayConfigured onEditBot={() => {}} />
+      <ChatPane bot={bot} models={[model]} canAnswer onEditBot={() => {}} />
     </BrowserRouter>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -317,7 +325,7 @@ describe("ChatPane header", () => {
     useBotsStore.setState({ fullBots: { host: HOST } });
     function Live() {
       const bot = useBotsStore((s) => s.fullBots.host) ?? HOST;
-      return <ChatPane bot={bot} models={[model]} gatewayConfigured onEditBot={() => {}} />;
+      return <ChatPane bot={bot} models={[model]} canAnswer onEditBot={() => {}} />;
     }
     render(
       <BrowserRouter>

@@ -15,7 +15,7 @@ import type {
   OAuthTokens,
 } from "@tiny-agents/agent";
 import { connections, db } from "../../db";
-import { decryptJson, encryptJson } from "./secrets";
+import { openOAuthState, sealOAuthState } from "./connection-secrets";
 
 /** What a connection stores about its OAuth sign-in (encrypted in `oauthEnc`). */
 export interface OAuthState {
@@ -58,7 +58,7 @@ export async function readOAuthState(connectionId: string): Promise<OAuthState> 
     where: eq(connections.id, connectionId),
     columns: { oauthEnc: true },
   });
-  return decryptJson<OAuthState>(row?.oauthEnc, {});
+  return openOAuthState<OAuthState>(connectionId, row?.oauthEnc) ?? {};
 }
 
 async function writeOAuthState(
@@ -68,7 +68,7 @@ async function writeOAuthState(
   const next = change(await readOAuthState(connectionId));
   const updated = await db
     .update(connections)
-    .set({ oauthEnc: encryptJson(next) })
+    .set({ oauthEnc: sealOAuthState(connectionId, next) })
     .where(eq(connections.id, connectionId))
     .returning({ id: connections.id });
   // The connection was removed (Prisma's update threw P2025 → 404).
@@ -83,7 +83,7 @@ export async function connectionForState(state: string): Promise<string | undefi
     .where(and(eq(connections.authType, "oauth"), isNotNull(connections.oauthEnc)));
   for (const row of rows) {
     try {
-      if (decryptJson<OAuthState>(row.oauthEnc, {}).state === state) return row.id;
+      if (openOAuthState<OAuthState>(row.id, row.oauthEnc)?.state === state) return row.id;
     } catch {
       // unreadable rows can't match
     }

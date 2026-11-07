@@ -11,6 +11,10 @@ import {
   type Classifier,
   type ClassifierAnswer,
 } from "../../../../packages/agent/src/classifier";
+import { createModels } from "@earendil-works/pi-ai/models";
+import { createModelCatalog } from "../../../../packages/agent/src/model-catalog";
+import type { ModelConfig } from "../../../../packages/agent/src/providers/config";
+import { buildProviders } from "../../../../packages/agent/src/providers/kinds";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import {
   createReviewer,
@@ -177,30 +181,57 @@ describe("ownerMessages", () => {
   });
 });
 
-describe("createClassifier (Workers AI through the AI Gateway)", () => {
+describe("createClassifier (the classifier role, on Workers AI through the AI Gateway)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  const env = {
-    CLOUDFLARE_API_KEY: "gateway-key",
-    CLOUDFLARE_ACCOUNT_ID: "acct",
-    CLOUDFLARE_GATEWAY_ID: "gw",
-  };
+  /** A gateway account with Clef and Jev classifier rows; `role` picks one. */
+  function classifierFor(role: "clef" | "jev" | undefined) {
+    const config: ModelConfig = {
+      providers: [
+        {
+          id: "gw",
+          name: "Gateway",
+          kind: "cloudflare-ai-gateway",
+          baseUrl: null,
+          hasCredential: true,
+          viaProviderId: null,
+          settings: { accountId: "acct", gatewayId: "gw" },
+          enabled: true,
+          status: "ok",
+          statusDetail: null,
+        },
+      ],
+      models: [
+        ["clef", "@cf/cloudflare/clef"],
+        ["jev", "typesafe/jev"],
+      ].map(([id, upstreamId]) => ({
+        id: id!,
+        providerId: "gw",
+        upstreamId: upstreamId!,
+        name: id!,
+        type: "classifier" as const,
+        enabled: true,
+        contextWindow: 32_000,
+        maxOutputTokens: 0,
+        imageInput: false,
+        reasoning: false,
+        compat: null,
+        missing: false,
+      })),
+      roles: role ? { classifier: role } : {},
+    };
+    const models = createModels();
+    const credentials = { resolve: async () => "gateway-key" };
+    for (const provider of buildProviders(config, credentials)) models.setProvider(provider);
+    const catalog = createModelCatalog(config, models);
+    return createClassifier({ catalog: () => catalog, models });
+  }
 
-  it("needs every AI Gateway setting", () => {
-    expect(createClassifier({})).toBeUndefined();
-    expect(createClassifier({ ...env, CLOUDFLARE_API_KEY: "" })).toBeUndefined();
-    expect(createClassifier({ ...env, CLOUDFLARE_ACCOUNT_ID: undefined })).toBeUndefined();
-    expect(createClassifier({ ...env, CLOUDFLARE_GATEWAY_ID: " " })).toBeUndefined();
-  });
-
-  it("defaults to Jev and turns off for a model Workers AI does not classify with", () => {
-    expect(createClassifier(env)?.id).toBe("cloudflare-ai-gateway/typesafe/jev");
-    expect(createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/cloudflare/clef" })?.id).toBe(
-      "cloudflare-ai-gateway/@cf/cloudflare/clef",
-    );
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/meta/llama" })).toBeUndefined();
-    warn.mockRestore();
+  it("is the classifier role's model, and refuses to run without one", async () => {
+    expect(classifierFor("jev").id).toBe("jev");
+    expect(classifierFor(undefined).id).toBe("none");
+    const verdict = await createReviewer(classifierFor(undefined))(input);
+    expect(verdict).toMatchObject({ approve: false, error: expect.stringMatching(/classifier/) });
   });
 
   it("speaks Clef's wire format on Workers AI's /ai/run through the gateway", async () => {
@@ -232,13 +263,11 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
         });
       }),
     );
-    const verdict = await createReviewer(
-      createClassifier({ ...env, CLASSIFIER_MODEL: "@cf/cloudflare/clef" })!,
-    )(input);
+    const verdict = await createReviewer(classifierFor("clef"))(input);
 
     expect(verdict).toEqual({
       approve: true,
-      classifier: "cloudflare-ai-gateway/@cf/cloudflare/clef",
+      classifier: "clef",
       requested: 0.95,
       risk: 0.5,
     });
@@ -267,7 +296,7 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
     });
   });
 
-  it("defaults to Jev and reads its completed-run envelope", async () => {
+  it("reads Jev's completed-run envelope", async () => {
     const requests: { url: string; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -295,11 +324,11 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
         });
       }),
     );
-    const verdict = await createReviewer(createClassifier(env)!)(input);
+    const verdict = await createReviewer(classifierFor("jev"))(input);
 
     expect(verdict).toEqual({
       approve: true,
-      classifier: "cloudflare-ai-gateway/typesafe/jev",
+      classifier: "jev",
       requested: 0.97,
       risk: 0.2,
     });
@@ -314,7 +343,7 @@ describe("createClassifier (Workers AI through the AI Gateway)", () => {
         Response.json({ success: false, errors: [{ message: "Unauthorized" }] }, { status: 401 }),
       ),
     );
-    const verdict = await createReviewer(createClassifier(env)!)(input);
+    const verdict = await createReviewer(classifierFor("jev"))(input);
     expect(verdict.approve).toBe(false);
     expect(verdict.error).toBeTruthy();
   });

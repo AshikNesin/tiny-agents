@@ -19,7 +19,7 @@ import { db, bots, routines } from "../../db";
 export interface ConversationBot {
   id: string;
   name: string;
-  modelId: string;
+  modelId: string | null;
   browserProfile: string;
   /** Memory capture and injection. Off while the bot is shared (issue #145), whatever the row says. */
   memoryEnabled: boolean;
@@ -47,7 +47,7 @@ const sharedWith = { guests: { columns: { userId: true }, limit: 1 } } as const;
 function conversationBot(row: {
   id: string;
   name: string;
-  modelId: string;
+  modelId: string | null;
   browserProfile: string;
   memoryEnabled: boolean;
   guests: { userId: number }[];
