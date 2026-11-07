@@ -14,7 +14,8 @@ import { defineDoc, type ToolExecutionApi } from "@earendil-works/pi-durable";
 
 export { VaultTargetMovedError } from "./vault-target";
 
-export type VaultKind = "login" | "card" | "identity" | "api_key";
+export const VAULT_KINDS = ["login", "card", "identity", "api_key"] as const;
+export type VaultKind = (typeof VAULT_KINDS)[number];
 
 export type VaultApproval = "every_use" | "per_conversation" | "allowed";
 
@@ -62,7 +63,8 @@ export interface VaultItemMeta {
  * - `window`: a desktop window on the bot's computer, bound by class and
  *   title and checked right before typing; every use asks.
  */
-export type VaultTargetKind = "origin" | "host" | "command" | "connection" | "window";
+export const VAULT_TARGET_KINDS = ["origin", "host", "command", "connection", "window"] as const;
+export type VaultTargetKind = (typeof VAULT_TARGET_KINDS)[number];
 
 /** One intended use of an item: what policy, the approval card and the audit see. */
 export interface VaultUse {

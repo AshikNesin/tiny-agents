@@ -9,7 +9,6 @@ import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import {
   defineTool,
-  type JsonObject,
   type ToolExecutionApi,
   type ToolExecutionResult,
 } from "@earendil-works/pi-durable";
@@ -27,6 +26,7 @@ import {
   pendingCredentialDetails,
   credentialResultDetails,
 } from "../credentials";
+import { toJson } from "../durable-json";
 import { SecretValue, VAULT_RULE, type VaultBroker } from "../vault";
 import { refuseUnattended, waitForOwner, type WaitTracker } from "../waiting";
 import type { SecretFill, SecretFillField } from "./browser-fill";
@@ -328,7 +328,7 @@ export function createBrowserVaultTools(
         context,
         (value) => {
           if (!value.request) {
-            value.request = stored as unknown as JsonObject;
+            value.request = toJson(stored);
             value.expiresAt = Date.now() + CREDENTIAL_REQUEST_TTL_MS;
           }
         },

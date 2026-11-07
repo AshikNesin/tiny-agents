@@ -29,9 +29,10 @@ import {
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
+import { z } from "zod";
 import { isUnattendedConversation } from "./policy";
 import type { ChatVaultUse } from "./types";
-import { GrantsDoc } from "./vault";
+import { GrantsDoc, VAULT_KINDS } from "./vault";
 import {
   pendingToolTask,
   sealedAsNotPending,
@@ -111,19 +112,31 @@ const APPROVAL_STATES: ReadonlySet<string> = new Set([
   "refused",
 ]);
 
+const chatVaultUse: z.ZodType<ChatVaultUse> = z.object({
+  handle: z.string(),
+  label: z.string(),
+  kind: z.enum(VAULT_KINDS),
+  tool: z.string(),
+  target: z.string(),
+  bot: z.string().optional(),
+  card: z.object({ brand: z.string(), last4: z.string() }).optional(),
+  username: z.string().optional(),
+  grantable: z.boolean(),
+  env: z.array(z.string()).optional(),
+  hosts: z.array(z.string()).optional(),
+});
+
 /** The approval view of a tool call's details; undefined for a call that never asked. */
 export function approvalOf(details: unknown): ApprovalView | undefined {
   const own = record(details);
   const state = own?.approval;
   if (typeof state !== "string" || !APPROVAL_STATES.has(state)) return undefined;
-  const vault = record(own?.vault);
+  const vault = state === "pending" ? chatVaultUse.safeParse(own?.vault) : undefined;
   return {
     state: state as ApprovalState,
     ...(typeof own?.waitedMs === "number" ? { waitedMs: own.waitedMs } : {}),
     ...(typeof own?.expiresAt === "number" ? { expiresAt: own.expiresAt } : {}),
-    ...(state === "pending" && vault && typeof vault.handle === "string"
-      ? { vault: vault as unknown as ChatVaultUse }
-      : {}),
+    ...(vault?.success ? { vault: vault.data } : {}),
     ...(own && "result" in own ? { result: own.result } : {}),
     ...(own?.interrupted === true ? { interrupted: true } : {}),
   };

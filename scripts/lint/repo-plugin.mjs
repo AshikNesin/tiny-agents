@@ -47,6 +47,14 @@ const renderedElements = (node) => {
   }
 };
 
+const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
+
+const unparenthesized = (node) =>
+  node.type === "ParenthesizedExpression" ? unparenthesized(node.expression) : node;
+
+const DOUBLE_CAST_MESSAGE =
+  "R6: a cast through unknown compiles any shape, so a wrong stored value surfaces later as a wrong value. Use packages/agent/src/durable-json.ts: `durableMemo(key, schema)` to read and keep a task memo, `parseStored(key, value, schema)` for a document field, `toJson(value)` to store one. For anything else, type it so it compiles: a typed list, a `Pick` of the api.";
+
 const RAW_ENV_MESSAGE =
   "R3: read the validated env, not process.env. In the app call `appEnv()` from apps/web/src/server/env.ts, or read `env` from @groot/core/env, and add the key to that schema if it is missing. Packages take the env as a parameter from the app.";
 
@@ -76,6 +84,19 @@ export default {
             }
           },
         };
+      },
+    },
+    "no-double-cast": {
+      create(context) {
+        const check = (node) => {
+          const inner = unparenthesized(node.expression);
+          if (!CASTS.has(inner.type)) return;
+          const through = inner.typeAnnotation.type;
+          if (through === "TSUnknownKeyword" || through === "TSAnyKeyword") {
+            context.report({ node, message: DOUBLE_CAST_MESSAGE });
+          }
+        };
+        return { TSAsExpression: check, TSTypeAssertion: check };
       },
     },
     "breadcrumbs-children": {
