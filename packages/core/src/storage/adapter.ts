@@ -1,9 +1,4 @@
 /**
- * The storage contract. Two implementations ship: the local filesystem
- * (`./node`) and an in-memory map for tests (`./memory`).
- * `tests/server/core/storage-adapters.test.ts` runs one contract suite against
- * both; a new adapter should pass it too.
- *
  * Semantics every adapter follows:
  *
  * - Keys are `/`-separated object paths with no leading or trailing `/`.

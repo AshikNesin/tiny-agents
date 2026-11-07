@@ -37,7 +37,6 @@ const dirSet = new Set(
 );
 const basenames = new Set(files.map((f) => path.posix.basename(f)));
 const topLevel = new Set(files.map((f) => f.split("/")[0]));
-// Docs name modules the way imports do, without the extension.
 const MODULE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const exists = (p) =>
   MODULE_SUFFIXES.some((suffix) => fileSet.has(p + suffix)) || dirSet.has(p.replace(/\/$/, ""));
@@ -63,15 +62,11 @@ const scanned = files.filter(
       f.startsWith("docs/") ||
       f.startsWith(".agents/skills/")),
 );
-// ADRs are never edited after acceptance, so the files they name may since have
-// moved. Only their links, which readers follow, must still resolve.
-const isHistorical = (md) => md.startsWith("docs/adr/");
+const checksLinksOnly = (md) => md.startsWith("docs/adr/");
 
 const EXT = /\.(tsx?|m?js|cjs|jsonc?|md|ya?ml|sql|sh|css|html|toml)$/;
 const SKIP = /[*<>{}$|\s…]|\.\.\.|NNNN|slug|^https?:|^@|^-|^\.\w+$|:$/;
-// Files docs name on purpose that are not in the tree: runtime outputs, files in
-// other repos or on other machines, and worked examples.
-const ALLOW = new Set([
+const KNOWN_ABSENT_PATHS = new Set([
   "result.json",
   "failure.aria.yml",
   "extract.json",
@@ -86,9 +81,7 @@ const ALLOW = new Set([
   "post.routes.ts",
   "migrate-layout.ts",
 ]);
-// Paths groot sync classifies (.groot/lib/patterns.ts) that tiny-agents lacks.
-// Only the docs about sync may name them.
-const SYNC_PATTERNS = new Set([
+const SYNC_DOC_ONLY_PATHS = new Set([
   "postcss.config.js",
   "wrangler.jsonc",
   ".groot/feature-request.md",
@@ -110,8 +103,8 @@ const anchorsOf = (token, md) =>
 
 function missingPath(raw, md) {
   const token = raw.replace(/[#?].*$/, "").replace(/:\d+(-\d+)?$/, "");
-  if (!token || SKIP.test(token) || ALLOW.has(token)) return null;
-  if (SYNC_PATTERNS.has(token) && describesSync(md)) return null;
+  if (!token || SKIP.test(token) || KNOWN_ABSENT_PATHS.has(token)) return null;
+  if (SYNC_DOC_ONLY_PATHS.has(token) && describesSync(md)) return null;
   const first = token.replace(/^\.\//, "").split("/")[0];
   const rooted = token.includes("/") && (token.startsWith(".") || topLevel.has(first));
   if (!rooted && !EXT.test(token)) return null;
@@ -145,37 +138,39 @@ for (const md of scanned) {
     .split("\n")
     .forEach((line, i) => {
       const at = `${md}:${i + 1}`;
-      // A backticked link such as [`a.md`](a.md) names its target twice; report it once.
-      const report = (problem) =>
+      const reportOnce = (problem) =>
         problem && problems.set(`${at} ${problem.target}`, { at, ...problem });
       if (/^\s*```/.test(line)) {
         inFence = !inFence;
         return;
       }
-      if (!isHistorical(md)) {
+      if (!checksLinksOnly(md)) {
         const spans = inFence ? [line] : [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
         for (const span of spans) {
-          missingScripts(span).forEach(report);
-          if (!inFence) report(missingPath(span.trim(), md));
+          missingScripts(span).forEach(reportOnce);
+          if (!inFence) reportOnce(missingPath(span.trim(), md));
         }
       }
       if (!inFence)
-        for (const m of line.matchAll(/\]\(([^)\s]+)\)/g)) report(missingLink(m[1], md));
+        for (const m of line.matchAll(/\]\(([^)\s]+)\)/g)) reportOnce(missingLink(m[1], md));
     });
 }
 
-// A gitignored target is a build or runtime output (dist/, data/dev.db), not a dangling reference.
-const anchors = [...new Set([...problems.values()].flatMap((p) => p.anchors ?? []))];
-let ignoredOut = "";
-try {
-  ignoredOut = git(["check-ignore", "--no-index", "--stdin"], { input: anchors.join("\n") });
-} catch (error) {
-  ignoredOut = error.stdout ?? "";
+function gitIgnored(paths) {
+  let out = "";
+  try {
+    out = git(["check-ignore", "--no-index", "--stdin"], { input: paths.join("\n") });
+  } catch (error) {
+    out = error.stdout ?? "";
+  }
+  return new Set(out.split("\n").filter(Boolean));
 }
-const ignored = new Set(ignoredOut.split("\n").filter(Boolean));
-const dangling = [...problems.values()].filter(
-  (p) => !(p.anchors ?? []).some((a) => ignored.has(a)),
-);
+
+const buildOutputs = gitIgnored([
+  ...new Set([...problems.values()].flatMap((p) => p.anchors ?? [])),
+]);
+const isBuildOutput = (p) => (p.anchors ?? []).some((a) => buildOutputs.has(a));
+const dangling = [...problems.values()].filter((p) => !isBuildOutput(p));
 
 for (const p of dangling) {
   console.log(`${p.at}  missing ${p.kind} ${p.target}. Fix the path or delete the sentence.`);

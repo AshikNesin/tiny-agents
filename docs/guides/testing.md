@@ -16,8 +16,8 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
 
 ## Server test setup
 
-`tests/server/setup.ts` runs once per test file and boots the app through the
-same `startWebApp()` as the entries, with:
+`tests/server/setup.ts` runs once per test file and calls the same
+`bootstrap()` as the entry, with:
 
 - `NODE_ENV=test`, `DATABASE_URL=":memory:"`, `LOG_LEVEL=silent`
 - `createAppDb(":memory:")`: a fresh database per file with every migration applied

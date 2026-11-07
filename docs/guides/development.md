@@ -201,7 +201,7 @@ export function registerPostJobs(): void {
 }
 ```
 
-Add `registerPostJobs()` to `registerJobHandlers()` in `apps/web/src/server/app.ts`; `startWebApp()` runs it.
+Add `registerPostJobs()` to `registerJobHandlers()` in `apps/web/src/server/app.ts`; the Node entry runs it at boot.
 Queue it with `await addJob("post-count", { label: "nightly" })`, through
 `POST /api/v1/jobs`, or on a cron with `scheduleJob("post-count", {}, "0 3 * * *")`.
 In tests jobs are disabled, so call `await runTick()` after `addJob()` and

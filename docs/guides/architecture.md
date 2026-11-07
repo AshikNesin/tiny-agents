@@ -24,7 +24,7 @@ packages/core/src/                 # Boilerplate (synced)
 packages/jobs/src/server/          # queue, tick, worker, dashboard API — see features/jobs.md
 
 apps/web/src/server/               # App-owned (not synced)
-├── app.ts                         # startWebApp(): bootstrap + register job handlers + createWebApp()
+├── app.ts                         # registerJobHandlers() + createWebApp()
 ├── config.ts                      # defineConfig() overrides
 ├── entry.node.ts                  # the only entry: env, db, storage, Sentry, static client, shutdown
 ├── db/schema.ts                   # app tables; drizzle-kit entry (re-exports core + jobs tables)
@@ -97,11 +97,10 @@ all and is the drizzle-kit entry. See [Database migrations](./database-migration
 
 `bootstrap({ env, config, db, storage, reportError })` wires, in order, env →
 config → logger → db → storage → error reporter (see
-[boot order](../reference/config.md#boot-order)). Nothing calls it directly:
-`entry.node.ts`, `scripts/seed.ts` and the test setup go through
-`startWebApp(runtime)` in `apps/web/src/server/app.ts`, which adds the app
-config, registers the job handlers and builds the app. The entry supplies the
-env source and adapters:
+[boot order](../reference/config.md#boot-order)). `entry.node.ts`,
+`scripts/seed.ts` and the test setup each call it with their own env source and
+adapters. The entry then calls `registerJobHandlers()` and `createWebApp()`
+from `apps/web/src/server/app.ts`. What the entry supplies:
 
 | Concern  | `entry.node.ts`                                                                                                                                       |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -128,9 +127,9 @@ interface in `packages/core/src/storage/adapter.ts`. See [File storage](../featu
 ## Background jobs
 
 The `jobs` table is the queue. `addJob()` inserts a row; `runTick()` claims and
-runs due rows; the Node poller calls it. Handlers
-are registered by `startWebApp()`: add a feature's registration to
-`registerJobHandlers()` in `apps/web/src/server/app.ts`. Details in [Background jobs](../features/jobs.md).
+runs due rows; the Node poller calls it. Add a feature's handler registration
+to `registerJobHandlers()` in `apps/web/src/server/app.ts`, which the entry
+calls after `bootstrap()`. Details in [Background jobs](../features/jobs.md).
 
 ## Logging and request context
 

@@ -70,8 +70,8 @@ export function registerDigestJobs(): void {
 first run, 2 for the first retry).
 
 Call your `register…Jobs()` from `registerJobHandlers()` in
-`apps/web/src/server/app.ts`; `startWebApp()`, the one boot sequence both
-entries run, calls it before the poller or the first cron tick. Registering a
+`apps/web/src/server/app.ts`; the Node entry calls it after `bootstrap()` and
+before the poller starts. Registering a
 name again replaces its handler. Any non-empty name works (routes address a job
 by its id, never its name). A job whose name has no registered handler is
 accepted but never claimed, and stays `created` until one is registered.

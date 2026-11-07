@@ -52,10 +52,6 @@ export const envSchema = z.object({
   SENTRY_DSN: z.string().optional(),
   /** Must match the release source maps were uploaded under. The Node bundle bakes in its build's release as the default. */
   SENTRY_RELEASE: z.string().optional(),
-  /**
-   * Cloudflare AI Gateway credentials, read by the model catalog in
-   * `packages/agent`, and the model `GET /bots/models` offers as the default.
-   */
   CLOUDFLARE_API_KEY: z.string().optional(),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_GATEWAY_ID: z.string().optional(),
