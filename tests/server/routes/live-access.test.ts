@@ -1,7 +1,7 @@
 /**
- * Taking access away takes it away live: removing a guest, or unsharing a
- * bot from them, ends the streams, desktop viewers and unredeemed tickets
- * they already hold, not only their next request.
+ * Taking access away takes it away live: removing a guest, unsharing a bot
+ * from them, or deleting the bot ends the streams, desktop viewers and
+ * unredeemed tickets they already hold, not only their next request.
  */
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -231,6 +231,34 @@ describe("revoking a guest's access", () => {
     expect(redeemVncTicket(pending, unshared)).toBeUndefined();
 
     expect(keptChat.isEnded, "the still-shared bot's stream").toBe(false);
+    expect(events.isEnded, "the guest's events stream").toBe(false);
+    expect(redeemVncTicket(keptTicket, kept)).toMatchObject({ userId: guest.id, botId: kept });
+  });
+
+  it("ends everyone's streams, viewers and tickets of a deleted bot, and nothing else", async () => {
+    const guest = await addGuest();
+    made.push(guest.id);
+    const deleted = await createBot("Deleted helper", [guest.id]);
+    const kept = await createBot("Staying helper", [guest.id]);
+    const target = await liveBrowser(deleted);
+
+    const chat = await openStream(`/api/v1/bots/${deleted}/stream`, guest.token);
+    const ownerChat = await openStream(`/api/v1/bots/${deleted}/stream`, ownerToken);
+    const keptChat = await openStream(`/api/v1/bots/${kept}/stream`, guest.token);
+    const events = await openStream("/api/v1/events", guest.token);
+    streams.push(chat, ownerChat, keptChat, events);
+    const viewer = await openViewer(guest.id, deleted, target);
+    const pending = issueVncTicket({ userId: guest.id, botId: deleted, target });
+    const keptTicket = issueVncTicket({ userId: guest.id, botId: kept, target });
+
+    expect((await asOwner(`/api/v1/bots/${deleted}`, { method: "DELETE" })).status).toBe(200);
+
+    await endsSoon(chat.ended, "the guest's chat stream of the deleted bot");
+    await endsSoon(ownerChat.ended, "the owner's chat stream of the deleted bot");
+    await endsSoon(viewer.closed, "the deleted bot's desktop viewer");
+    expect(redeemVncTicket(pending, deleted)).toBeUndefined();
+
+    expect(keptChat.isEnded, "another bot's stream").toBe(false);
     expect(events.isEnded, "the guest's events stream").toBe(false);
     expect(redeemVncTicket(keptTicket, kept)).toMatchObject({ userId: guest.id, botId: kept });
   });
