@@ -1,11 +1,12 @@
 import { createMiddleware } from "hono/factory";
 import { Boom, ErrorCode, type ErrorCodeValue } from "../errors";
 import { config, type RateLimitWindow } from "../config";
+import { rateLimitKey } from "../utils/client-address";
 import { clientIp } from "../utils/controller.utils";
 import type { AppEnv } from "../types";
 
 /**
- * Fixed-window rate limiting keyed by client IP.
+ * Fixed-window rate limiting keyed by client IP, or its /64 for IPv6.
  *
  * On Node the counters live in memory (one process, so that is exact). On
  * Workers memory is per isolate, so when a Cloudflare Rate Limiting binding
@@ -42,7 +43,7 @@ export function rateLimit(options: RateLimitOptions) {
 
   return createMiddleware<AppEnv>(async (c, next) => {
     const { windowMs, max } = options.window();
-    const key = clientIp(c);
+    const key = rateLimitKey(clientIp(c));
     const binding = options.binding
       ? (c.env?.[options.binding] as RateLimitBinding | undefined)
       : undefined;
