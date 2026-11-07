@@ -9,6 +9,7 @@
 import {
   AgentRuntime,
   createAttachmentsToolkit,
+  createBotBuilderCapability,
   createBotsToolkit,
   createBrowserToolkit,
   createClassifier,
@@ -48,6 +49,7 @@ import { memoryStore } from "./memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
 import { createInstructionsStore } from "./self-improve.store";
+import { createBotCreationStore } from "./bot-builder.store";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -98,6 +100,9 @@ function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
     // Self-improvement (issue #128): the bot edits its own system prompt;
     // `askOnly`, so every change waits for the owner in chat.
     createSelfImproveCapability(createInstructionsStore()),
+    // Bot builder (issue #149): create a new bot when the owner asks;
+    // `askOnly`, so every new bot waits for the owner in chat.
+    createBotBuilderCapability(createBotCreationStore()),
     own.tasks,
     own.routines,
     createWebToolkit({
@@ -306,6 +311,8 @@ const FAUX_ASK: ToolCall["arguments"] = {
  * reads the browser page N times (browser_snapshot), one tool round each.
  * "/improve" proposes appending a line to the bot's own instructions
  * (update_instructions), so e2e can drive the self-improvement approval.
+ * "/newbot NAME" asks to create a bot named NAME (create_bot), so e2e can
+ * drive the bot-builder approval.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -371,6 +378,17 @@ export async function openFauxAgentRuntime(
       const call = fauxAssistantMessage(
         fauxToolCall("update_instructions", {
           append,
+        }),
+      );
+      return { ...call, stopReason: "toolUse" as const };
+    }
+    const newBot = /^\/newbot\s+(.+)/.exec(text);
+    if (newBot && toolResults === 0) {
+      const call = fauxAssistantMessage(
+        fauxToolCall("create_bot", {
+          name: newBot[1],
+          description: "Made by the bot-builder e2e",
+          instructions: "You help the owner with the bot-builder e2e.",
         }),
       );
       return { ...call, stopReason: "toolUse" as const };

@@ -68,3 +68,28 @@ describe("Code page list", () => {
     ]);
   });
 });
+
+describe("selectionRoots", () => {
+  it("acts on the topmost selected threads; their subagents go along", async () => {
+    const { buildTree, selectionRoots } = await import("@/lib/code/list");
+    const tree = buildTree([
+      row("parent"),
+      row("child", { parentId: "shelley:parent" }),
+      row("grandchild", { parentId: "shelley:child" }),
+      row("other"),
+      row("lonely-child", { parentId: "shelley:other" }),
+    ]);
+    const { roots, covered } = selectionRoots(
+      tree,
+      new Set(["shelley:parent", "shelley:grandchild", "shelley:lonely-child"]),
+    );
+    expect(roots.map((n) => n.row.id).sort()).toEqual(["shelley:lonely-child", "shelley:parent"]);
+    expect([...covered].sort()).toEqual([
+      "shelley:child",
+      "shelley:grandchild",
+      "shelley:lonely-child",
+      "shelley:parent",
+    ]);
+    expect(selectionRoots(tree, new Set()).roots).toEqual([]);
+  });
+});

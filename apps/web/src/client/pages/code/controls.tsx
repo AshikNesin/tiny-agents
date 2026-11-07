@@ -288,6 +288,57 @@ export function ContextRing({
   );
 }
 
+const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+
+/**
+ * Archive (or restore) several threads at once (issue #148), each with its
+ * subagents, with one Undo for all of them. Resolves to the ids that moved
+ * (the rows themselves); a thread that failed stays where it was and the
+ * toast says how many did. `leave` navigates away after an archive.
+ */
+export function useArchiveMany() {
+  const navigate = useNavigate();
+  return useCallback(
+    async (
+      rows: Pick<ThreadSummary, "id" | "title">[],
+      archive: boolean,
+      options: { leave?: boolean } = {},
+    ): Promise<string[]> => {
+      if (rows.length === 0) return [];
+      const settled = await Promise.allSettled(rows.map((row) => codeApi.archive(row.id, archive)));
+      const done: string[] = [];
+      let subagents = 0;
+      settled.forEach((result, i) => {
+        if (result.status !== "fulfilled") return;
+        done.push(rows[i]!.id);
+        subagents += result.value?.moved?.length ?? 0;
+      });
+      const failed = rows.length - done.length;
+      if (failed > 0) {
+        const first = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+        toast.error(`Could not ${archive ? "archive" : "restore"} ${plural(failed, "thread")}.`, {
+          description: errorMessage(first?.reason, "Try again."),
+        });
+      }
+      if (done.length === 0) return [];
+      if (archive && options.leave) navigate("/code");
+      const what =
+        plural(done.length, "thread") + (subagents ? ` and ${plural(subagents, "subagent")}` : "");
+      toast.success(archive ? `Archived ${what}` : `Restored ${what}`, {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void Promise.all(done.map((id) => codeApi.archive(id, !archive))).catch(
+              (error: unknown) => toast.error(errorMessage(error, "Could not undo.")),
+            ),
+        },
+      });
+      return done;
+    },
+    [navigate],
+  );
+}
+
 /**
  * Archive (or restore) a thread with its subagents, with Undo. `leave`
  * navigates away from it after an archive.

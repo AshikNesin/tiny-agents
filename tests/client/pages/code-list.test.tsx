@@ -2,10 +2,11 @@
  * The Code page's thread list (issue #143, ADR 0011): one line per thread,
  * subagents nested, Archive on a row moves the thread together with its
  * subagents (the server cascades; the toast says how many, with Undo), and
- * a harness that cannot archive offers no Archive.
+ * a harness that cannot archive offers no Archive. Select mode (issue #148)
+ * archives many threads at once.
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
@@ -139,5 +140,80 @@ describe("Code thread list", () => {
     expect(rows.map((r) => r.textContent).sort()).toEqual(["c1Claude Codenow", "s1Shelleynow"]);
     expect(screen.getByRole("button", { name: "Archive s1" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Archive c1" })).toBeNull();
+  });
+
+  it("selects several threads and archives them at once, with one Undo", async () => {
+    archiveMock.mockImplementation(async (id: string) => ({
+      moved: id === "shelley:parent" ? ["shelley:child"] : [],
+    }));
+    render(
+      <MemoryRouter>
+        <ConversationList
+          harnesses={[shelley, claude]}
+          threads={[
+            row("parent"),
+            row("child", { parentId: "shelley:parent" }),
+            row("other"),
+            row("kept"),
+            row("c1", { id: "claude-code:c1", instanceId: "claude-code", kind: "claude-code" }),
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Select threads" }));
+    // Rows become checkboxes; a harness that cannot archive offers none.
+    expect(screen.queryByRole("checkbox", { name: "Select c1" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Archive parent" })).toBeNull();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select parent" }));
+    // The subagent goes along with its parent: ticked, not its own pick.
+    const child = screen.getByRole("checkbox", { name: "Select child" });
+    expect(child).toBeChecked();
+    expect(child).toBeDisabled();
+    // A click on the row picks it instead of opening it.
+    const other = screen
+      .getAllByTestId("code-conversation-row")
+      .find((r) => r.textContent?.startsWith("other"))!;
+    await userEvent.click(other);
+    const bar = screen.getByRole("toolbar", { name: "Selected threads" });
+    expect(within(bar).getByText("2 selected + 1 subagent")).toBeInTheDocument();
+
+    await userEvent.click(within(bar).getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    // Only the topmost picks are sent: the server moves subagents itself.
+    expect(archiveMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      "shelley:other",
+      "shelley:parent",
+    ]);
+    expect(archiveMock.mock.calls.every((c) => c[1] === true)).toBe(true);
+    const [message, options] = toastSuccess.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick(): void } },
+    ];
+    expect(message).toBe("Archived 2 threads and 1 subagent");
+    // Done: Select mode ends.
+    expect(screen.queryByRole("toolbar", { name: "Selected threads" })).toBeNull();
+
+    archiveMock.mockClear();
+    options.action.onClick();
+    expect(archiveMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      "shelley:other",
+      "shelley:parent",
+    ]);
+    expect(archiveMock.mock.calls.every((c) => c[1] === false)).toBe(true);
+  });
+
+  it("selects every archivable thread with Select all", async () => {
+    render(
+      <MemoryRouter>
+        <ConversationList harnesses={[shelley]} threads={[row("a"), row("b"), row("c")]} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Select threads" }));
+    const bar = screen.getByRole("toolbar", { name: "Selected threads" });
+    expect(within(bar).getByRole("button", { name: "Archive" })).toBeDisabled();
+    await userEvent.click(within(bar).getByRole("button", { name: "Select all" }));
+    expect(within(bar).getByText("3 selected")).toBeInTheDocument();
+    await userEvent.click(within(bar).getByRole("button", { name: "Clear" }));
+    expect(within(bar).getByText("Select threads")).toBeInTheDocument();
   });
 });

@@ -99,6 +99,10 @@ has no background jobs, so its threads show no job chips.
 - Stop, Resume, rename, change directory, fork from a message, delete,
   Open in Shelley — each where the harness has it.
 - **Archive** moves a thread **with its subagents**, with Undo.
+- **Select** (the checklist button beside New thread) turns the list into
+  checkboxes: pick threads (a click on a row picks it; a picked thread's
+  subagents go along), or **Select all**, then **Archive** (or **Restore** in
+  the archived view) moves them all, with one Undo.
 
 **Review.** **Changes** (⌘⇧D) shows the uncommitted changes, or a recent
 commit, of the thread's directory, each changed file as a card with its

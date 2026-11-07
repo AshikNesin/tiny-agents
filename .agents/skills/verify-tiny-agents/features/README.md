@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - A run started with `ta-verify up` (default `http://localhost:3100`), seeded with only the demo user `demo@example.com` / `demo@example.com`.
-- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [cwd=PATH] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval).
+- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [cwd=PATH] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval), `/newbot NAME` (bot-creation approval).
 - A random per-run `SECRETS_KEY` and `ADMIN_AUTH_KEY`; no AI provider keys, no Pushover (doctor fails unless push is `not_configured`), nothing from the shell or `.env`.
 - No sandbox unless `--sandbox`, no coding agent unless `--shelley`, demo user present unless `--empty`.
 - `ta-verify doctor --run <id>` exits 0 before the first drive and after any failed drive.
@@ -56,6 +56,7 @@ Chats
 - [Tool permissions](./tool-permissions.md): Allow/Ask/Off, approval cards, always allow.
 - [YOLO mode](./yolo.md): confirm, banner, auto-approval, off on New chat.
 - [Self-improvement](./self-improve.md): `/improve` approval, Read more, the prompt really changes.
+- [Bot builder](./bot-builder.md): `/newbot` approval card with the whole new bot, deny creates nothing, approve creates the bot.
 - [Auto-review](./auto-review.md): the switch and its no-classifier behaviour.
 - [Bot-to-bot](./bot-to-bot.md): `@` mentions and relayed peer replies.
 - [Shared bots and guests](./shared-bots.md): guests, sharing, what a guest can and can't reach.
@@ -82,6 +83,7 @@ Sandbox and code
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
 - [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, archive, bot hand-off.
+- [Code multi-select archive](./code-select.md) [`--shelley`]: Select threads, archive or restore many at once, one Undo.
 - [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, chips, completions, uploads, usage, queued actions, recover.
 - [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.

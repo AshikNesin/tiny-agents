@@ -30,6 +30,7 @@ export const BOT_TOOLKITS = [
   "skills",
   "memory",
   "self-improve",
+  "bot-builder",
   "today",
   "questions",
   "vault",

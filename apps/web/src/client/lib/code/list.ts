@@ -94,3 +94,33 @@ export function ancestry(rows: ThreadSummary[], id: string): ThreadSummary[] {
   }
   return chain;
 }
+
+/**
+ * A multi-selection over the list (issue #148), as the archive acts on it:
+ * `roots` are the selected nodes without a selected ancestor, in list order
+ * (archiving one moves its subagents too, so they are not sent again), and
+ * `covered` is every id they take along, selected or not.
+ */
+export function selectionRoots(
+  trees: readonly ListNode[],
+  selected: ReadonlySet<string>,
+): { roots: ListNode[]; covered: Set<string> } {
+  const roots: ListNode[] = [];
+  const covered = new Set<string>();
+  const take = (node: ListNode, depth: number): void => {
+    if (depth > 20) return;
+    covered.add(node.row.id);
+    for (const child of node.children) take(child, depth + 1);
+  };
+  const walk = (node: ListNode, depth: number): void => {
+    if (depth > 20) return;
+    if (selected.has(node.row.id)) {
+      roots.push(node);
+      take(node, depth);
+      return;
+    }
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  for (const tree of trees) walk(tree, 0);
+  return { roots, covered };
+}

@@ -108,10 +108,39 @@ export function approvalPayload(call: ChatToolCall): string {
   return argSummary(call);
 }
 
+/** A labelled line under an approval card's title. */
+export interface ApprovalFact {
+  label: string;
+  value: string;
+}
+
+/**
+ * Everything a new bot will be (create_bot, issue #149): approval is the
+ * only gate, so the card shows the description, the model and the
+ * instructions, not just the name. Instructions long enough to fold go
+ * behind Read more instead.
+ */
+function newBotFacts(args: Record<string, unknown>): ApprovalFact[] {
+  const text = (key: string) => {
+    const value = args[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const instructions = text("instructions");
+  return [
+    ...(text("description") ? [{ label: "Description", value: text("description") }] : []),
+    { label: "Model", value: text("model") || "default model" },
+    ...(instructions.length > PAYLOAD_FOLD
+      ? []
+      : [{ label: "Instructions", value: instructions || "(none)" }]),
+  ];
+}
+
 /** An approval card's sentences. */
 export interface ApprovalText {
   /** `<bot> wants to <ask> — “<summary>”`. */
   title: string;
+  /** Labelled lines the owner must read before approving; only create_bot has them. */
+  facts?: ApprovalFact[];
   /** The "Always allow" button's tooltip. */
   alwaysAllowHint: string;
   /** The full payload, when it is long enough to fold behind "Read more". */
@@ -130,6 +159,7 @@ export function approvalText(
   return {
     title: `${botName} wants to ${ask}${summary ? ` — “${summary}”` : ""}`,
     alwaysAllowHint: `Approve, and let ${botName} ${ask} without asking`,
+    ...(call.name === "create_bot" ? { facts: newBotFacts(call.args ?? {}) } : {}),
     ...(payload.length > PAYLOAD_FOLD ? { foldedPayload: payload } : {}),
   };
 }

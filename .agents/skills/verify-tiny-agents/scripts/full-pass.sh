@@ -13,12 +13,12 @@ OUT=data/verify-evidence/full-pass-$TAG
 
 GROUP_A="auth account-shell command-palette settings notifications passkeys tasks"
 GROUP_B="chats past-chats chat-attachments message-steering questions bot-settings memory message-paging"
-GROUP_C="tool-permissions yolo self-improve auto-review bot-to-bot shared-bots routines"
+GROUP_C="tool-permissions yolo self-improve bot-builder auto-review bot-to-bot shared-bots routines"
 GROUP_D="skills connections vault model-providers storage jobs jobs-admin"
 # vault-passkey spends ~11 auth attempts (logins, passkey options/verify); the
 # two scheduled-routine journeys each wait ~2 min for a fire: their own group.
 GROUP_E="vault-passkey routine-schedule workflow-e2e"
-GROUP_SBX="terminal computer browser code claude-plan bot-profiles code-extras"
+GROUP_SBX="terminal computer browser code claude-plan bot-profiles code-extras code-select"
 GROUP_EMPTY="setup"
 # Also driven against the production build (--prod). Not part of the
 # exactly-once check below: these journeys run twice, dev server and bundle.

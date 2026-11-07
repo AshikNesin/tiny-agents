@@ -47,6 +47,7 @@ What ships in the box and how to use or extend it.
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files                              |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions                              |
 | [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated                        |
+| [`features/bot-builder.md`](./features/bot-builder.md)                       | tiny-agents: a bot creates a new bot when asked, owner-gated                      |
 | [`features/routines.md`](./features/routines.md)                             | tiny-agents: the reference feature module; where routine runs happen              |
 | [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats                               |
 | [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you                                 |

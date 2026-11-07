@@ -254,6 +254,16 @@ function ApprovalCard({
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
       <ItemContent>
         <ItemTitle>{text.title}</ItemTitle>
+        {text.facts && (
+          <dl className="space-y-0.5 text-xs">
+            {text.facts.map((fact) => (
+              <div key={fact.label} className="flex gap-1.5">
+                <dt className="text-muted-foreground shrink-0">{fact.label}</dt>
+                <dd className="min-w-0 break-words whitespace-pre-wrap">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         {text.foldedPayload !== undefined ? (
           <div className="space-y-1">
             <button
