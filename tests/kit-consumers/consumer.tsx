@@ -27,7 +27,7 @@ import { copyFile } from "@groot/core/storage/storage.service";
 // Every other explicit @groot/ui entrypoint (census: groot apps/packages,
 // tests, and the finance app).
 import { Badge } from "@groot/ui/badge";
-import { Breadcrumb as UiBreadcrumb } from "@groot/ui/breadcrumb";
+import { Breadcrumb as UiBreadcrumb, Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Button, type ButtonProps } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";
 import { Checkbox } from "@groot/ui/checkbox";
@@ -148,6 +148,7 @@ const checks = {
   uiKit: [
     Badge,
     UiBreadcrumb,
+    Breadcrumbs,
     Button,
     Card,
     Checkbox,
@@ -347,7 +348,14 @@ function KitConsumerPage({ children }: { children: ReactNode }) {
         <ShellProvider config={shellConfig}>
           <Layout header={<span />} commandGroups={commandGroups} padded={false} />
         </ShellProvider>
-        <PageLayout title="Kit consumers">
+        <PageLayout
+          title="Kit consumers"
+          breadcrumb={
+            <Breadcrumbs page="Kit consumers">
+              <a href="/">Home</a>
+            </Breadcrumbs>
+          }
+        >
           <Card>
             <CardContent>
               <Text variant="title">Kit surface</Text>

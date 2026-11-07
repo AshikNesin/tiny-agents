@@ -181,13 +181,31 @@ const FIXTURES: Record<string, Fixture> = {
       'import { cn } from "@groot/ui/lib/utils";\nimport { formatBytes } from "@groot/shell/lib/utils";\nexport const x = cn(formatBytes(1));\n',
     rules: [],
   },
+  "apps/web/src/client/r5a-separator-fail.tsx": {
+    source:
+      'import { BreadcrumbSeparator } from "@groot/ui/breadcrumb";\nexport const S = BreadcrumbSeparator;\n',
+    rules: ["R5a"],
+    mentions: "<Breadcrumbs",
+  },
+  "packages/jobs/src/client/r5a-barrel-item-fail.tsx": {
+    source: 'import { BreadcrumbItem } from "@groot/ui";\nexport const I = BreadcrumbItem;\n',
+    rules: ["R5a"],
+  },
+  "apps/web/src/client/r5a-pass.tsx": {
+    source:
+      'import { Link } from "react-router-dom";\nimport { Breadcrumbs } from "@groot/ui/breadcrumb";\nexport const C = () => (\n  <Breadcrumbs page="Job">\n    <Link to="/jobs">Jobs</Link>\n  </Breadcrumbs>\n);\n',
+    rules: [],
+  },
   "apps/web/src/client/r5b-fail.tsx": {
     source: NESTED_SEPARATOR,
-    rules: ["R5b"],
+    rules: ["R5a", "R5a", "R5b"],
     mentions: "Make it a sibling of the items",
   },
-  "packages/shell/src/r5b-mapped-fail.tsx": { source: MAPPED_NESTED_SEPARATOR, rules: ["R5b"] },
-  "apps/web/src/client/r5b-pass.tsx": { source: SIBLING_SEPARATOR, rules: [] },
+  "packages/shell/src/r5b-mapped-fail.tsx": {
+    source: MAPPED_NESTED_SEPARATOR,
+    rules: ["R5a", "R5a", "R5b"],
+  },
+  "packages/ui/src/r5b-pass.tsx": { source: SIBLING_SEPARATOR, rules: [] },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };

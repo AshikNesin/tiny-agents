@@ -3,14 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Play, Wrench } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@groot/ui/alert";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@groot/ui/breadcrumb";
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Badge } from "@groot/ui/badge";
 import { Button } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";
@@ -511,25 +504,10 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
   }
 
   const breadcrumb = (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link to="/connections">Connections</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link to={backTo}>{tool.connection.name}</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{tool.label}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <Breadcrumbs page={tool.label}>
+      <Link to="/connections">Connections</Link>
+      <Link to={backTo}>{tool.connection.name}</Link>
+    </Breadcrumbs>
   );
 
   return (

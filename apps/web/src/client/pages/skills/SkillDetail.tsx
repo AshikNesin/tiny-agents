@@ -4,17 +4,10 @@
  * assignment toggles PATCH immediately.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@groot/ui/breadcrumb";
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import {
   Dialog,
   DialogContent,
@@ -153,17 +146,9 @@ export function SkillDetail({ id }: { id: string }) {
   const usedBy = skill.botIds.length;
 
   const breadcrumb = (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink onClick={() => navigate("/skills")}>Skills</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{skill.name}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <Breadcrumbs page={skill.name}>
+      <Link to="/skills">Skills</Link>
+    </Breadcrumbs>
   );
 
   return (

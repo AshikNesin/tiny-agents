@@ -108,16 +108,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "import",
     scope: "**",
     except: ["packages/ui/**"],
-    enabled: false,
+    enabled: true,
     restrict: {
-      paths: [
-        {
-          name: "@groot/ui/breadcrumb",
-          importNames: ["BreadcrumbSeparator"],
-          message:
-            "R5a: render breadcrumbs with <Breadcrumbs items={[...]} /> from @groot/ui/breadcrumb, which places the separators.",
-        },
-      ],
+      paths: ["@groot/ui/breadcrumb", "@groot/ui"].map((name) => ({
+        name,
+        importNames: ["BreadcrumbItem", "BreadcrumbSeparator"],
+        message:
+          'R5a: render breadcrumbs with <Breadcrumbs page="Current">{links}</Breadcrumbs> from @groot/ui/breadcrumb, which places the list items and separators.',
+      })),
     },
   },
   {

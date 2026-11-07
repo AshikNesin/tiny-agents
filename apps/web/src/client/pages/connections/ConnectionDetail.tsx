@@ -2,14 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Bot, ChevronRight, LogIn, RefreshCw, Trash2, Wrench } from "lucide-react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@groot/ui/breadcrumb";
+import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Badge } from "@groot/ui/badge";
 import { Button } from "@groot/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@groot/ui/card";
@@ -202,19 +195,9 @@ export function ConnectionDetail({ id }: { id: string }) {
   }
 
   const breadcrumb = (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link to="/connections">Connections</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{connection.name}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <Breadcrumbs page={connection.name}>
+      <Link to="/connections">Connections</Link>
+    </Breadcrumbs>
   );
 
   return (
