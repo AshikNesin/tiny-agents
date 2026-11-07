@@ -19,6 +19,7 @@ export const gates = [
   { name: "Checks coverage", run: "pnpm check:coverage" },
   { name: "Lint & format check", run: "pnpm check" },
   { name: "Doc references", run: "pnpm check:doc-refs" },
+  { name: "Dead code", run: "pnpm check:dead" },
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
 ];
