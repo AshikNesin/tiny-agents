@@ -38,7 +38,7 @@ What ships in the box and how to use or extend it.
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [`features/todos.md`](./features/todos.md)                                   | The reference feature module (table, routes, service, jobs)                       |
 | [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI                       |
-| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, R2, memory                       |
+| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, memory                           |
 | [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                                                 |
 | [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                                                 |
 | [`claude-subscription.md`](./claude-subscription.md)                         | Claude Pro/Max through Claude Code: enable, sign in, use                          |
