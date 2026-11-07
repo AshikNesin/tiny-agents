@@ -73,24 +73,24 @@ const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
 
-const staticString = (node, consts) => {
+const staticString = (node, lookup) => {
   switch (node.type) {
     case "Literal":
       return typeof node.value === "string" ? node.value : null;
     case "Identifier":
-      return consts.get(node.name) ?? null;
+      return lookup(node);
     case "ParenthesizedExpression":
-      return staticString(node.expression, consts);
+      return staticString(node.expression, lookup);
     case "BinaryExpression": {
       if (node.operator !== "+") return null;
-      const left = staticString(node.left, consts);
-      const right = staticString(node.right, consts);
+      const left = staticString(node.left, lookup);
+      const right = staticString(node.right, lookup);
       return left === null || right === null ? null : left + right;
     }
     case "TemplateLiteral": {
       let text = node.quasis[0].value.cooked;
       for (const [i, expression] of node.expressions.entries()) {
-        const piece = staticString(expression, consts);
+        const piece = staticString(expression, lookup);
         if (piece === null) return null;
         text += piece + node.quasis[i + 1].value.cooked;
       }
@@ -100,6 +100,8 @@ const staticString = (node, consts) => {
       return null;
   }
 };
+
+const MODULE_SCOPES = new Set(["module", "global"]);
 
 const DEADLINE_LOOP_MESSAGE =
   "R10: tests freeze Date (tests/test-clock.ts), so a loop that waits for Date.now() to pass a deadline never ends. Wait with `until(check, what, ms)` or `eventually(check, ms)` from tests/server/fixtures/until.ts, which time out on the real clock.";
@@ -117,6 +119,28 @@ const enclosingLoop = (node) => {
 
 const isEmptyStatement = (node) =>
   node.type === "EmptyStatement" || (node.type === "BlockStatement" && node.body.length === 0);
+
+const EXITS = new Set(["BreakStatement", "ReturnStatement", "ThrowStatement"]);
+
+const exits = (statement) =>
+  statement != null &&
+  (EXITS.has(statement.type) ||
+    (statement.type === "BlockStatement" && statement.body.some((s) => EXITS.has(s.type))));
+
+const controlsExit = (node, loop) => {
+  let child = node;
+  for (let p = node.parent; p !== loop; child = p, p = p.parent) {
+    if (p.type === "IfStatement" && child === p.test) {
+      return exits(p.consequent) || exits(p.alternate);
+    }
+  }
+  return child === loop.test;
+};
+
+const isInside = (node, ancestor) => {
+  for (let p = node.parent; p; p = p.parent) if (p === ancestor) return true;
+  return false;
+};
 
 const isDateNow = (node) =>
   node.type === "CallExpression" &&
@@ -228,8 +252,16 @@ export default {
           context.report({ node, message: SESSION_INVALID_MESSAGE });
         };
         const consts = new Map();
+        const lookup = (id) => {
+          if (!consts.has(id.name)) return null;
+          for (let scope = context.sourceCode.getScope(id); scope; scope = scope.upper) {
+            if (!scope.set.has(id.name)) continue;
+            return MODULE_SCOPES.has(scope.type) ? consts.get(id.name) : null;
+          }
+          return null;
+        };
         const check = (node) => {
-          if (SESSION_INVALID_NAMES.has(staticString(node, consts))) report(node);
+          if (SESSION_INVALID_NAMES.has(staticString(node, lookup))) report(node);
         };
         return {
           Identifier(node) {
@@ -242,7 +274,7 @@ export default {
               declaration.parent.type === "ExportNamedDeclaration";
             if (declaration.kind !== "const" || !topLevel) return;
             if (node.id.type !== "Identifier" || !node.init) return;
-            const value = staticString(node.init, consts);
+            const value = staticString(node.init, lookup);
             if (value !== null) consts.set(node.id.name, value);
           },
           Literal: check,
@@ -264,7 +296,39 @@ export default {
         };
         const awaitingLoops = new Set();
         const comparisons = [];
+        const assignments = [];
+        const unchangedIn = (loop, node) => {
+          const target = unparenthesized(node);
+          switch (target.type) {
+            case "Literal":
+            case "ThisExpression":
+              return true;
+            case "Identifier":
+              return !assignments.some((a) => a.name === target.name && isInside(a.node, loop));
+            case "BinaryExpression":
+            case "LogicalExpression":
+              return unchangedIn(loop, target.left) && unchangedIn(loop, target.right);
+            case "UnaryExpression":
+              return unchangedIn(loop, target.argument);
+            case "MemberExpression":
+              return (
+                unchangedIn(loop, target.object) &&
+                (!target.computed || unchangedIn(loop, target.property))
+              );
+            default:
+              return isDateNow(target);
+          }
+        };
+        const assigned = (node, target) => {
+          if (target.type === "Identifier") assignments.push({ name: target.name, node });
+        };
         return {
+          AssignmentExpression(node) {
+            assigned(node, node.left);
+          },
+          UpdateExpression(node) {
+            assigned(node, node.argument);
+          },
           VariableDeclarator(node) {
             if (
               node.id.type === "Identifier" &&
@@ -287,7 +351,11 @@ export default {
           },
           "Program:exit"() {
             for (const { node, loop } of comparisons) {
-              if (awaitingLoops.has(loop) || isEmptyStatement(loop.body)) {
+              if (
+                (awaitingLoops.has(loop) || isEmptyStatement(loop.body)) &&
+                controlsExit(node, loop) &&
+                unchangedIn(loop, node)
+              ) {
                 context.report({ node, message: DEADLINE_LOOP_MESSAGE });
               }
             }

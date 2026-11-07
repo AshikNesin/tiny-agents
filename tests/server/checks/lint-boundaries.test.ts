@@ -506,6 +506,11 @@ const FIXTURES: Record<string, Fixture> = {
       'export const a = () => {\n  const kind = "INVALID";\n  return kind;\n};\nexport const b = (kind: string) => "SESSION_" + kind;\n',
     rules: [],
   },
+  "apps/web/src/server/api/vault/r9-shadowed-const-pass.ts": {
+    source:
+      'const A = "SESSION";\nexport const top = A;\nexport const code = () => {\n  const A = "OTHER";\n  return A + "_INVALID";\n};\n',
+    rules: [],
+  },
   "packages/core/src/utils/jwt.utils.ts": {
     source:
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',
@@ -546,6 +551,36 @@ const FIXTURES: Record<string, Fixture> = {
     source:
       "export function spin(ms: number) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline);\n}\n",
     rules: ["R10"],
+  },
+  "tests/server/r10-do-while-fail.ts": {
+    source:
+      "export async function settle(ms: number) {\n  const deadline = Date.now() + ms;\n  do {\n    await new Promise((r) => setTimeout(r, 20));\n  } while (Date.now() < deadline);\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-empty-for-fail.ts": {
+    source:
+      "export function spin(ms: number) {\n  const deadline = Date.now() + ms;\n  for (; Date.now() < deadline; ) {}\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-now-start-fail.ts": {
+    source:
+      "export async function waitFor(read: () => boolean, ms = 5_000) {\n  const start = Date.now();\n  while (true) {\n    if (read()) return;\n    const now = Date.now();\n    if (now - start > ms) throw new Error('timed out');\n    await new Promise((r) => setTimeout(r, 20));\n  }\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-await-remove-pass.ts": {
+    source:
+      "export async function prune(rows: { expiresAt: number }[], remove: (i: number) => Promise<void>) {\n  for (let i = 0; i < rows.length; i++) {\n    if (rows[i].expiresAt > Date.now()) await remove(i);\n  }\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-await-drain-pass.ts": {
+    source:
+      "type Job = { runAt: number; run(): Promise<void> };\nexport async function drain(queue: Job[]) {\n  while (queue.length) {\n    const job = queue.shift();\n    if (job && job.runAt <= Date.now()) await job.run();\n  }\n}\n",
+    rules: [],
+  },
+  "tests/client/r10-await-days-pass.ts": {
+    source:
+      "const DAY = 86_400_000;\nexport async function seedWeek(insert: (at: number) => Promise<void>) {\n  for (let at = Date.now() - 7 * DAY; at < Date.now(); at += DAY) await insert(at);\n}\n",
+    rules: [],
   },
   "tests/server/r10-expect-pass.ts": {
     source:
