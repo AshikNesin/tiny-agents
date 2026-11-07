@@ -104,43 +104,37 @@ const staticString = (node, lookup) => {
 const MODULE_SCOPES = new Set(["module", "global"]);
 
 const DEADLINE_LOOP_MESSAGE =
-  "R10: tests freeze Date (tests/test-clock.ts), so a loop that waits for Date.now() to pass a deadline never ends. Wait with `until(check, what, ms)` or `eventually(check, ms)` from tests/server/fixtures/until.ts, which time out on the real clock.";
+  "R10: tests freeze Date (tests/test-clock.ts), so Date.now() never moves past a deadline taken from it and this timeout can never be reached. Wait with `until(check, what, ms)` or `eventually(check, ms)` from tests/server/fixtures/until.ts, which time out on the real clock.";
 
-const WAIT_LOOPS = new Set(["WhileStatement", "DoWhileStatement", "ForStatement"]);
+const LOOPS = new Set([
+  "WhileStatement",
+  "DoWhileStatement",
+  "ForStatement",
+  "ForInStatement",
+  "ForOfStatement",
+]);
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
 const COMPARISONS = new Set(["<", "<=", ">", ">="]);
+const CLOCK_MOVERS = /^(advanceTimersByTime|advanceTimersToNextTimer|runAllTimers|setSystemTime)/;
 
 const enclosingLoop = (node) => {
   for (let p = node.parent; p && !FUNCTIONS.has(p.type); p = p.parent) {
-    if (WAIT_LOOPS.has(p.type)) return p;
+    if (LOOPS.has(p.type)) return p;
   }
   return null;
-};
-
-const isEmptyStatement = (node) =>
-  node.type === "EmptyStatement" || (node.type === "BlockStatement" && node.body.length === 0);
-
-const EXITS = new Set(["BreakStatement", "ReturnStatement", "ThrowStatement"]);
-
-const exits = (statement) =>
-  statement != null &&
-  (EXITS.has(statement.type) ||
-    (statement.type === "BlockStatement" && statement.body.some((s) => EXITS.has(s.type))));
-
-const controlsExit = (node, loop) => {
-  let child = node;
-  for (let p = node.parent; p !== loop; child = p, p = p.parent) {
-    if (p.type === "IfStatement" && child === p.test) {
-      return exits(p.consequent) || exits(p.alternate);
-    }
-  }
-  return child === loop.test;
 };
 
 const isInside = (node, ancestor) => {
   for (let p = node.parent; p; p = p.parent) if (p === ancestor) return true;
   return false;
 };
+
+const movesClock = (node) =>
+  node.callee.type === "MemberExpression" &&
+  !node.callee.computed &&
+  node.callee.object.type === "Identifier" &&
+  node.callee.object.name === "vi" &&
+  CLOCK_MOVERS.test(node.callee.property.name);
 
 const isDateNow = (node) =>
   node.type === "CallExpression" &&
@@ -283,79 +277,65 @@ export default {
         };
       },
     },
+    // A comparison in a loop between a fresh Date.now() and a const taken from Date.now()
+    // before the loop is constant under the frozen clock, whatever the loop's shape. A
+    // retry loop capped by attempts also fires when its deadline comes from Date.now():
+    // that timeout is dead too. Fake timers move Date, so a loop that drives them is exempt.
     "no-date-now-deadline-loop": {
       create(context) {
-        const clockNames = new Set();
-        const readsClock = (node) => {
-          const target = unparenthesized(node);
-          if (target.type === "Identifier") return clockNames.has(target.name);
-          if (target.type === "BinaryExpression") {
-            return readsClock(target.left) || readsClock(target.right);
+        const NOTHING = { now: false, deadline: false };
+        const constDeclarator = (id) => {
+          for (let scope = context.sourceCode.getScope(id); scope; scope = scope.upper) {
+            const variable = scope.set.get(id.name);
+            if (!variable) continue;
+            const [def] = variable.defs;
+            return def?.type === "Variable" && def.parent?.kind === "const" && def.node.init
+              ? def.node
+              : null;
           }
-          return isDateNow(target);
+          return null;
         };
-        const awaitingLoops = new Set();
-        const comparisons = [];
-        const assignments = [];
-        const unchangedIn = (loop, node) => {
+        // `now`: reads a Date.now() taken inside the loop. `deadline`: reads a const taken
+        // from Date.now() before the loop.
+        const reads = (node, loop, seen) => {
           const target = unparenthesized(node);
+          if (isDateNow(target)) return { now: true, deadline: false };
           switch (target.type) {
-            case "Literal":
-            case "ThisExpression":
-              return true;
-            case "Identifier":
-              return !assignments.some((a) => a.name === target.name && isInside(a.node, loop));
-            case "BinaryExpression":
-            case "LogicalExpression":
-              return unchangedIn(loop, target.left) && unchangedIn(loop, target.right);
+            case "BinaryExpression": {
+              const left = reads(target.left, loop, seen);
+              const right = reads(target.right, loop, seen);
+              return { now: left.now || right.now, deadline: left.deadline || right.deadline };
+            }
             case "UnaryExpression":
-              return unchangedIn(loop, target.argument);
-            case "MemberExpression":
-              return (
-                unchangedIn(loop, target.object) &&
-                (!target.computed || unchangedIn(loop, target.property))
-              );
+              return reads(target.argument, loop, seen);
+            case "Identifier": {
+              const declarator = constDeclarator(target);
+              if (!declarator || seen.has(declarator)) return NOTHING;
+              seen.add(declarator);
+              const init = reads(declarator.init, loop, seen);
+              if (isInside(declarator, loop)) return init;
+              return { now: false, deadline: init.now || init.deadline };
+            }
             default:
-              return isDateNow(target);
+              return NOTHING;
           }
         };
-        const assigned = (node, target) => {
-          if (target.type === "Identifier") assignments.push({ name: target.name, node });
-        };
+        const comparisons = [];
+        const movers = [];
         return {
-          AssignmentExpression(node) {
-            assigned(node, node.left);
-          },
-          UpdateExpression(node) {
-            assigned(node, node.argument);
-          },
-          VariableDeclarator(node) {
-            if (
-              node.id.type === "Identifier" &&
-              node.init &&
-              readsClock(node.init) &&
-              enclosingLoop(node)
-            ) {
-              clockNames.add(node.id.name);
-            }
-          },
-          AwaitExpression(node) {
-            const loop = enclosingLoop(node);
-            if (loop) awaitingLoops.add(loop);
+          CallExpression(node) {
+            if (movesClock(node)) movers.push(node);
           },
           BinaryExpression(node) {
             if (!COMPARISONS.has(node.operator)) return;
-            if (!readsClock(node.left) && !readsClock(node.right)) return;
             const loop = enclosingLoop(node);
-            if (loop) comparisons.push({ node, loop });
+            if (!loop) return;
+            const { now, deadline } = reads(node, loop, new Set());
+            if (now && deadline) comparisons.push({ node, loop });
           },
           "Program:exit"() {
             for (const { node, loop } of comparisons) {
-              if (
-                (awaitingLoops.has(loop) || isEmptyStatement(loop.body)) &&
-                controlsExit(node, loop) &&
-                unchangedIn(loop, node)
-              ) {
+              if (!movers.some((mover) => isInside(mover, loop))) {
                 context.report({ node, message: DEADLINE_LOOP_MESSAGE });
               }
             }

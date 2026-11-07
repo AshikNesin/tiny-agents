@@ -582,6 +582,41 @@ const FIXTURES: Record<string, Fixture> = {
       "const DAY = 86_400_000;\nexport async function seedWeek(insert: (at: number) => Promise<void>) {\n  for (let at = Date.now() - 7 * DAY; at < Date.now(); at += DAY) await insert(at);\n}\n",
     rules: [],
   },
+  "tests/server/r10-tick-break-fail.ts": {
+    source:
+      "export async function waitFor(tick: () => Promise<void>, ms = 5_000) {\n  const deadline = Date.now() + ms;\n  while (true) {\n    await tick();\n    if (Date.now() >= deadline) break;\n  }\n}\n",
+    rules: ["R10"],
+  },
+  "tests/server/r10-scheduler-pass.ts": {
+    source:
+      "export async function run(scheduler: { nextAt: number; runNext(): Promise<void> }) {\n  while (scheduler.nextAt <= Date.now()) await scheduler.runNext();\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-queue-head-pass.ts": {
+    source:
+      "export async function run(queue: { runAt: number; run(): Promise<void> }[]) {\n  while (queue.length && queue[0].runAt <= Date.now()) await queue.shift()!.run();\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-peek-pass.ts": {
+    source:
+      "type Job = { runAt: number };\nexport async function run(jobs: { peek(): Job | undefined; runOne(): Promise<void> }) {\n  for (;;) {\n    const head = jobs.peek();\n    if (!head || head.runAt > Date.now()) return;\n    await jobs.runOne();\n  }\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-state-deadline-pass.ts": {
+    source:
+      "export async function run(state: { deadline: number }, next: () => Promise<number>) {\n  while (true) {\n    if (Date.now() >= state.deadline) break;\n    state.deadline = await next();\n  }\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-retry-cap-pass.ts": {
+    source:
+      "export async function retry(send: () => Promise<boolean>, deadline: number) {\n  for (let attempt = 0; attempt < 3 && Date.now() < deadline; attempt++) {\n    if (await send()) return true;\n  }\n  return false;\n}\n",
+    rules: [],
+  },
+  "tests/server/r10-fake-timers-pass.ts": {
+    source:
+      'import { vi } from "vite-plus/test";\nexport async function elapse(ms: number) {\n  const deadline = Date.now() + ms;\n  while (Date.now() < deadline) await vi.advanceTimersByTimeAsync(100);\n}\n',
+    rules: [],
+  },
   "tests/server/r10-expect-pass.ts": {
     source:
       'import { expect } from "vite-plus/test";\nexport function check(rows: { expiresAt: number }[]) {\n  for (let i = 0; i < rows.length; i++) expect(rows[i].expiresAt > Date.now()).toBe(true);\n}\n',
