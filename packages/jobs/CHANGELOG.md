@@ -1,5 +1,14 @@
 # @groot/jobs
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`dfca2ee`](https://github.com/AshikNesin/tiny-agents/commit/dfca2ee485c4928fa911174e2a9ee613a2c4ca3f)]:
+  - @groot/ui@0.12.0
+  - @groot/shell@1.5.0
+  - @groot/core@2.0.1
+
 ## 1.1.2
 
 ### Patch Changes
