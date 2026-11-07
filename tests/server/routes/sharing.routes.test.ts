@@ -229,6 +229,36 @@ describe("shared bots", () => {
     // An owner account is never removed through People.
     expect((await asOwner("/api/v1/people/990001", { method: "DELETE" })).status).toBe(404);
   });
+
+  it("signs a removed guest out instead of treating them as the owner", async () => {
+    const removed = await addGuest("Gone");
+    const kept = await addGuest("Stays");
+    made.push(kept.id);
+    expect((await removed.asGuest("/api/v1/people/me")).body.data).toEqual({ guest: true });
+    expect((await asOwner(`/api/v1/people/${removed.id}`, { method: "DELETE" })).status).toBe(200);
+
+    const sock = { name: "Sock", email: "sock@example.com", password: "secret-pass" };
+    for (const [method, path] of [
+      ["GET", "/api/v1/people/me"],
+      ["GET", "/api/v1/people"],
+      ["GET", "/api/v1/vault"],
+      ["POST", "/api/v1/people"],
+      ["GET", "/api/v1/auth/me"],
+    ] as const) {
+      const response = await removed.asGuest(path, {
+        method,
+        json: method === "POST" ? sock : undefined,
+      });
+      expect(response.status, `${method} ${path}`).toBe(401);
+      expect(response.body.error?.code, `${method} ${path}`).toBe("SESSION_INVALID");
+    }
+    expect(await db.$count(users, eq(users.email, sock.email))).toBe(0);
+
+    expect((await asOwner("/api/v1/people/me")).body.data).toEqual({ guest: false });
+    expect((await asOwner("/api/v1/vault")).status).toBe(200);
+    expect((await kept.asGuest("/api/v1/people/me")).body.data).toEqual({ guest: true });
+    expect((await kept.asGuest("/api/v1/people")).status).toBe(403);
+  });
 });
 
 describe("matchGuestRoute", () => {

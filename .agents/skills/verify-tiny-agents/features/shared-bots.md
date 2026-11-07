@@ -10,7 +10,7 @@ The owner adds guests (accounts they hand a password to) and shares individual b
 - `share-live-chat` the guest sees the existing history; each side sees the other's messages labeled with the sender's name, live, and the bot's replies.
 - `share-guards` owner pages (`/tasks`, `/memory`, `/routines`) redirect a guest to `/chats`; guest Settings shows only theme and sign-in; the API answers 403 for owner routes and 404 for unshared bots.
 - `share-unshare` switching sharing off removes the bot from the guest (`Nothing shared with you yet.`).
-- `share-remove-guest` `Remove <guest>` → alert dialog `Remove <guest>?` → `Remove`: row gone, the guest can no longer sign in.
+- `share-remove-guest` `Remove <guest>` → alert dialog `Remove <guest>?` → `Remove`: row gone, the guest can no longer sign in, and their open session is signed out.
 
 ## How to get to it (user POV)
 
@@ -30,8 +30,8 @@ Preconditions:
 - **Guest.** Sign in; sidebar has only the shared bot; open it: the owner's message is labeled `Demo User` (`[data-author="Demo User"]`); no owner controls.
 - **Live.** Guest sends `guest hello <stamp>` → the owner's page shows it under `[data-author="Guest <stamp>"]` without a reload; both see `Echo: Guest <stamp>: guest hello <stamp>`.
 - **Guards.** Guest `/tasks`, `/memory`, `/routines` → `/chats`; `/settings` shows `Your theme and sign-in.` and no `People` tab; guest API `GET /tasks` 403, `GET /people` 403, `PATCH /bots/<shared>` 403, `GET /bots/<private>` 404, `GET /bots/<shared>` 200.
-- **Unshare / remove.** Owner switches sharing off → guest `/chats` shows `Nothing shared with you yet.`, `GET /bots/<shared>` 404. Owner removes the guest → row gone; guest `POST /auth/login` 401.
-- **Proof.** `ta-verify drive $S/journeys/shared-bots.mjs` → owner `guest-added`, `owner-shared-chat`, `owner-sees-guest`, `guest-removed`; guest `guest-view`, `guest-chat`, `guest-unshared`.
+- **Unshare / remove.** Owner switches sharing off → guest `/chats` shows `Nothing shared with you yet.`, `GET /bots/<shared>` 404. Owner removes the guest → row gone; guest `POST /auth/login` 401; the guest's open session lands on `/login` from `/vault` and `/settings`, and its `GET /people` and `GET /vault` answer 401.
+- **Proof.** `ta-verify drive $S/journeys/shared-bots.mjs` → owner `guest-added`, `owner-shared-chat`, `owner-sees-guest`, `guest-removed`; guest `guest-view`, `guest-chat`, `guest-unshared`, `guest-signed-out`.
 
 ## Gotchas
 

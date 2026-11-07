@@ -207,4 +207,13 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     expect(login.status()).toBe(401);
   });
   await proof("guest-removed");
+  await step("the removed guest's open session lands on /login", async () => {
+    for (const path of ["/vault", "/settings"]) {
+      await guestPage.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(guestPage).toHaveURL(/\/login$/, { timeout: 15_000 });
+    }
+    expect(await guestApi("GET", "/people")).toBe(401);
+    expect(await guestApi("GET", "/vault")).toBe(401);
+  });
+  await guestProof("guest-signed-out");
 });
