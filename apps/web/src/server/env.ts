@@ -14,6 +14,8 @@ const appEnvSchema = z.object({
   /** Core's validator, so `sandboxHost()` can read the production default from one env. */
   NODE_ENV: envSchema.shape.NODE_ENV,
   SECRETS_KEY: z.string().optional(),
+  /** Opens secrets written under the old key while `pnpm secrets:rotate` rewrites them. */
+  SECRETS_KEY_PREVIOUS: z.string().optional(),
   SANDBOX_HOST: z.string().optional(),
   SANDBOX_PORT: z.string().optional(),
   SANDBOX_USER: z.string().optional(),

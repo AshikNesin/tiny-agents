@@ -1,13 +1,21 @@
 /**
- * The `local` vault backend (issue #56): values AES-256-GCM encrypted with
- * SECRETS_KEY (`connections/secrets.ts`) in the app's KV store. The fallback
+ * The `local` vault backend (issue #56): values sealed with SECRETS_KEY
+ * (`secrets/secret-box.ts`, purpose `vault-local`, bound to the item's KV
+ * key) in the app's KV store. The fallback
  * when no external manager is configured, and where connection header
  * secrets move when the owner turns them into vault items.
  */
 import { randomUUID } from "node:crypto";
 import { createNamespaceKv } from "@groot/core/kv";
 import { SecretValue, type VaultKind } from "@tiny-agents/agent";
-import { decryptJson, encryptJson, hasSecretsKey } from "../../connections/secrets";
+import {
+  hasSecretsKey,
+  needsReseal,
+  openJson,
+  SecretLockedError,
+  sealJson,
+  type SecretBinding,
+} from "../../../secrets/secret-box";
 import { parseTotp, totpCode } from "../vault.totp";
 import { cardBrand } from "./onepassword-mapping";
 import {
@@ -24,6 +32,16 @@ interface StoredItem {
   urls: string[];
   values: Partial<Record<ValueField, string>>;
   updatedAt: string;
+}
+
+const binding = (externalId: string): SecretBinding => ({
+  purpose: "vault-local",
+  record: externalId,
+  field: "item",
+});
+
+function seal(externalId: string, item: StoredItem): string {
+  return sealJson(item, binding(externalId));
 }
 
 /** Item ids, so listing doesn't need a KV scan. */
@@ -76,7 +94,12 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
     if (!hasSecretsKey()) throw new BackendError("unconfigured", "SECRETS_KEY is not set.");
     const raw = await store.get(externalId);
     if (!raw) throw new BackendError("not_found", "Item not found in the local vault.");
-    return decryptJson<StoredItem>(raw, undefined as never);
+    try {
+      return openJson<StoredItem>(raw, binding(externalId))!;
+    } catch (error) {
+      if (error instanceof SecretLockedError) throw new BackendError("failed", error.message);
+      throw error;
+    }
   };
   const index = async (): Promise<string[]> => JSON.parse((await store.get(INDEX_KEY)) ?? "[]");
 
@@ -121,7 +144,7 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
         values: Object.fromEntries(Object.entries(draft.values).filter(([, v]) => v)),
         updatedAt: new Date().toISOString(),
       };
-      await store.set(id, encryptJson(item));
+      await store.set(id, seal(id, item));
       await store.set(INDEX_KEY, JSON.stringify([...(await index()), id]));
       return id;
     },
@@ -139,11 +162,30 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
         values,
         updatedAt: new Date().toISOString(),
       };
-      await store.set(externalId, encryptJson(next));
+      await store.set(externalId, seal(externalId, next));
     },
     async remove(externalId) {
       await store.delete(externalId);
       await store.set(INDEX_KEY, JSON.stringify((await index()).filter((id) => id !== externalId)));
     },
   };
+}
+
+/**
+ * Rewrite every local item still sealed under SECRETS_KEY_PREVIOUS under the
+ * current key (`pnpm secrets:rotate`). Returns how many it rewrote.
+ */
+export async function resealLocalItems(store: LocalStore = kvStore()): Promise<number> {
+  const ids: string[] = JSON.parse((await store.get(INDEX_KEY)) ?? "[]");
+  let count = 0;
+  for (const id of ids) {
+    const raw = await store.get(id);
+    if (!raw || !needsReseal(raw, "vault-local")) continue;
+    const item = openJson<StoredItem>(raw, binding(id))!;
+    // Skip an item the owner changed meanwhile: its new value is already current.
+    if ((await store.get(id)) !== raw) continue;
+    await store.set(id, seal(id, item));
+    count++;
+  }
+  return count;
 }

@@ -44,7 +44,8 @@ import {
   TOOL_SEARCH_TOOLKIT,
 } from "../bots/bot-toolkits";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
-import { decryptSecret, SecretsKeyMissingError } from "./secrets";
+import { SecretLockedError } from "../../secrets/secret-box";
+import { openHeaderSecret } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
 
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
@@ -196,7 +197,7 @@ export class ConnectionManager {
       this.#set(id, { status: "connected" });
     } catch (error) {
       if (stale()) return;
-      if (error instanceof SecretsKeyMissingError) {
+      if (error instanceof SecretLockedError) {
         this.#set(id, { status: "error", error: error.message });
         return;
       }
@@ -219,7 +220,7 @@ export class ConnectionManager {
       };
     }
     if (row.authType === "header" && row.headerName && row.secretEnc) {
-      return { headers: { [row.headerName]: decryptSecret(row.secretEnc) } };
+      return { headers: { [row.headerName]: openHeaderSecret(row.id, row.secretEnc) } };
     }
     if (row.authType === "oauth") {
       // No tokens yet: connect without the provider so a 401 surfaces as

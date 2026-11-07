@@ -25,7 +25,9 @@ import {
 } from "../../db";
 import { getConnectionManager, type ConnectionStatus } from "./connections.manager";
 import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
-import { encryptJson, encryptSecret, hasSecretsKey } from "./secrets";
+import { createId } from "@groot/core/utils/id.utils";
+import { hasSecretsKey } from "../../secrets/secret-box";
+import { sealHeaderSecret, sealOAuthState } from "./connection-secrets";
 import type {
   CallToolDTO,
   CreateConnectionDTO,
@@ -189,18 +191,24 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionDTO> 
   checkUrl(data.url);
   const manualClient = data.authType === "oauth" && data.clientId;
   if (data.authType === "header" || data.authType === "oauth") requireSecretsKey();
+  // The id is chosen first: each sealed value is bound to its row.
+  const connectionId = createId();
   const [row] = await db
     .insert(connections)
     .values({
+      id: connectionId,
       name: data.name,
       slug: await uniqueSlug(data.name),
       url: data.url,
       transport: data.transport,
       authType: data.authType,
       headerName: data.authType === "header" ? (data.headerName ?? null) : null,
-      secretEnc: data.authType === "header" && data.secret ? encryptSecret(data.secret) : null,
+      secretEnc:
+        data.authType === "header" && data.secret
+          ? sealHeaderSecret(connectionId, data.secret)
+          : null,
       oauthEnc: manualClient
-        ? encryptJson({
+        ? sealOAuthState(connectionId, {
             client: {
               client_id: data.clientId,
               ...(data.clientSecret ? { client_secret: data.clientSecret } : {}),
@@ -237,7 +245,7 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
       ? { headerName: data.headerName }
       : {}),
     ...(data.secret !== undefined && current.authType === "header"
-      ? { secretEnc: encryptSecret(data.secret), secretRef: null }
+      ? { secretEnc: sealHeaderSecret(id, data.secret), secretRef: null }
       : {}),
     ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
       ? { secretRef: data.secretRef }

@@ -294,9 +294,23 @@ same way; the credentials file and the tokens then sit on one host.
 
 ### Local (fallback)
 
-Without `OP_CONNECT_HOST`, new items go to the `local` backend: values
-AES-256-GCM encrypted with `SECRETS_KEY` in the app's KV store. It's fully
-writable from the Vault UI. Losing `SECRETS_KEY` makes its values unreadable.
+Without `OP_CONNECT_HOST`, new items go to the `local` backend: values sealed
+in the app's KV store by `apps/web/src/server/secrets/secret-box.ts`. It's
+fully writable from the Vault UI.
+
+- **Keys.** Each purpose (`vault-local`, `connection`) gets its own AES-256-GCM
+  key, derived from `SECRETS_KEY` with HKDF-SHA256. Every write uses a fresh
+  IV. Values are stored as `v2:<kid>:<iv>:<tag>:<ciphertext>`, where `kid`
+  fingerprints the key.
+- **Binding.** The purpose, the record (the item's KV key, or the connection
+  row) and the field are the AAD. A value copied to another item, row or
+  column does not decrypt.
+- **Wrong key.** Losing or changing `SECRETS_KEY` makes stored values
+  unreadable: the item reports "stored under a different SECRETS_KEY" and has
+  to be re-entered. Boot is unaffected.
+- **Rotation.** Move the old key to `SECRETS_KEY_PREVIOUS`, set a new
+  `SECRETS_KEY` and run `pnpm secrets:rotate`. It re-seals local items and
+  connection secrets under the new key; then remove `SECRETS_KEY_PREVIOUS`.
 
 ### Field mapping (1Password)
 

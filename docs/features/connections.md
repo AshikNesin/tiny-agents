@@ -48,6 +48,14 @@ Each tool in `GET /api/v1/connections/:id` also carries `serverName` and
 error) answers 400 with the reason; a tool that runs and reports an error
 answers 200 with `result.isError: true`.
 
+## Stored secrets
+
+A connection's header secret (`secret_enc`) and OAuth state (`oauth_enc`) are
+sealed with `SECRETS_KEY` under the `connection` purpose and bound to their row
+and column; see the vault's [local backend](./vault.md#local-fallback) for the
+format and `pnpm secrets:rotate`. A value that no longer opens (a changed key)
+puts the connection in `error` with the reason; re-enter the secret.
+
 ## Header secrets from the vault
 
 A header-auth connection can read its header value from a [vault](./vault.md)
