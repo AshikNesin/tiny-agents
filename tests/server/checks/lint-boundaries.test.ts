@@ -312,6 +312,58 @@ const FIXTURES: Record<string, Fixture> = {
     source: "export const f = (x: string) => x as unknown as number;\n",
     rules: [],
   },
+  "packages/core/src/auth/r7-fail.ts": {
+    source:
+      'import { db } from "../database";\nexport const run = () => db.transaction((tx) => tx);\n',
+    rules: ["R7"],
+    mentions: "compare-and-set",
+  },
+  "packages/jobs/src/server/r7-computed-fail.ts": {
+    source: 'export const run = (db: any) => db["transaction"](() => 1);\n',
+    rules: ["R7"],
+  },
+  "apps/web/src/server/r7-app-pass.ts": {
+    source: 'import { db } from "./db";\nexport const run = () => db.transaction(() => 1);\n',
+    rules: [],
+  },
+  "apps/web/src/server/r8a-fail.ts": {
+    source: 'import Database from "better-sqlite3";\nexport const d = new Database(":memory:");\n',
+    rules: ["R8a"],
+    mentions: "bootstrap() sets it",
+  },
+  "packages/jobs/src/server/r8a-drizzle-fail.ts": {
+    source: 'export { drizzle } from "drizzle-orm/better-sqlite3";\n',
+    rules: ["R8a"],
+  },
+  "apps/web/src/server/r8a-node-sqlite-fail.ts": {
+    source: 'export { DatabaseSync } from "node:sqlite";\n',
+    rules: ["R8a"],
+  },
+  "apps/web/src/server/db/r8a-pass.ts": {
+    source: 'export { drizzle } from "drizzle-orm/better-sqlite3";\n',
+    rules: [],
+  },
+  "packages/agent/src/lock.ts": {
+    source: 'export { DatabaseSync } from "node:sqlite";\n',
+    rules: [],
+  },
+  "apps/web/src/server/r8b-fail.ts": {
+    source: 'import { setDb } from "@groot/core/database";\nexport const s = setDb;\n',
+    rules: ["R8b"],
+    mentions: "only bootstrap() calls setDb",
+  },
+  "packages/core/src/auth/r8b-relative-fail.ts": {
+    source: 'export { setDb } from "../database";\n',
+    rules: ["R8b"],
+  },
+  "packages/core/src/bootstrap.ts": {
+    source: 'import { setDb } from "./database";\nexport const s = setDb;\n',
+    rules: [],
+  },
+  "apps/web/src/server/r8b-pass.ts": {
+    source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
+    rules: [],
+  },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };

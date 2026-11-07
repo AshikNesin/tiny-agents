@@ -61,9 +61,24 @@ const NEVER_CAST_MESSAGE =
 const RAW_ENV_MESSAGE =
   "R3: read the validated env, not process.env. In the app call `appEnv()` from apps/web/src/server/env.ts, or read `env` from @groot/core/env, and add the key to that schema if it is missing. Packages take the env as a parameter from the app.";
 
+const TRANSACTION_MESSAGE =
+  "R7: no transactions in packages/ (AGENTS.md). Use one statement with RETURNING, a compare-and-set update (WHERE on the expected old value), or an idempotent retry. An app that needs a transaction runs a sync db.transaction() in apps/ and passes the tx in.";
+
 export default {
   meta: { name: "repo" },
   rules: {
+    "no-package-transaction": {
+      create(context) {
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            if (callee.type !== "MemberExpression") return;
+            const name = callee.computed ? callee.property.value : callee.property.name;
+            if (name === "transaction") context.report({ node, message: TRANSACTION_MESSAGE });
+          },
+        };
+      },
+    },
     "no-raw-env": {
       create(context) {
         const report = (node) => context.report({ node, message: RAW_ENV_MESSAGE });

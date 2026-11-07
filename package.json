@@ -45,6 +45,7 @@
     "changeset": "changeset",
     "check:changesets": "node scripts/check-changesets.mjs",
     "check:doc-refs": "node scripts/check-doc-refs.mjs",
+    "check:migrations-immutable": "node scripts/check-migrations-immutable.mjs",
     "changeset:version": "changeset version",
     "changeset:status": "changeset status",
     "doctor": "pnpm dlx react-doctor@latest",

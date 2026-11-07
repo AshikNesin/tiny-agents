@@ -20,6 +20,7 @@ feature end to end.
 | `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                            |
 | `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                 |
 | `pnpm check:doc-refs`                                                         | Doc paths, links and `pnpm` scripts all exist                                                                   |
+| `pnpm check:migrations-immutable`                                             | Fails when the branch edits or deletes a migration that is on main                                              |
 | `pnpm check:dead`                                                             | Unused files and exports (knip)                                                                                 |
 | `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
 

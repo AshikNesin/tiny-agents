@@ -22,6 +22,10 @@ export const gates = [
   { name: "Dead code", run: "pnpm check:dead" },
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
+  {
+    name: "Applied migrations unchanged",
+    run: "pnpm check:migrations-immutable --base origin/${GITHUB_BASE_REF:-main}",
+  },
 ];
 
 function sh(command) {

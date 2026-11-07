@@ -31,6 +31,16 @@ const bareBuiltins = [
 const R2_MESSAGE =
   "R2: packages/core/src stays runtime-neutral (AGENTS.md). Use Web APIs (crypto.subtle, fetch, TextEncoder), or move Node-only code to packages/core/src/database/node.ts, packages/core/src/storage/node.ts or apps/web/src/server/entry.node.ts.";
 
+const DRIZZLE_DRIVERS = [
+  "better-sqlite3",
+  "bun-sqlite",
+  "d1",
+  "durable-sqlite",
+  "libsql",
+  "node-sqlite",
+  "sqlite-proxy",
+].join("|");
+
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
@@ -150,6 +160,56 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     rule: "repo/no-never-cast",
     except: ["**/*.test.ts", "packages/agent/src/testing*.ts"],
     enabled: true,
+  },
+  {
+    id: "R7",
+    kind: "plugin",
+    scope: "packages/*/src/**",
+    rule: "repo/no-package-transaction",
+    enabled: true,
+  },
+  {
+    id: "R8a",
+    kind: "import",
+    scope: "**",
+    except: [
+      "packages/core/src/database/node.ts",
+      "apps/web/src/server/db/**",
+      "tests/**",
+      // A file lock for the agent store, not the app database.
+      "packages/agent/src/lock.ts",
+    ],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: `^(better-sqlite3|node:sqlite|@libsql/.*|drizzle-orm/(${DRIZZLE_DRIVERS}))(/|$)`,
+          message:
+            "R8a: open no second database driver. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package; bootstrap() sets it.",
+        },
+      ],
+    },
+  },
+  {
+    id: "R8b",
+    kind: "import",
+    scope: "**",
+    except: [
+      "packages/core/src/bootstrap.ts",
+      // The app's database module reads core.db through a namespace import.
+      "apps/web/src/server/db/**",
+    ],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "(^|/)database(/index(\\.ts)?)?$",
+          importNames: ["setDb"],
+          message:
+            "R8b: only bootstrap() calls setDb. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package.",
+        },
+      ],
+    },
   },
 ];
 
