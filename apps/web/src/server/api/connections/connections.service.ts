@@ -53,7 +53,7 @@ export interface ConnectionDTO {
   createdAt: Date;
 }
 
-export interface ConnectionToolDTO {
+interface ConnectionToolDTO {
   /** As bots see it: `mcp__<slug>__<tool>`. */
   name: string;
   /** As the server names it; the id in tool routes. */

@@ -27,10 +27,8 @@ import {
 import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 
 /** Max original sizes (issue #17 limits table). */
-export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-/** Max attachments on one send. */
-export const MAX_ATTACHMENTS = 10;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 /** Extensions a chat attachment may carry (denylist: executables, scripts). */
 const ALLOWED_EXTENSIONS = new Set([
@@ -222,7 +220,7 @@ export async function uploadStatus(id: string) {
   };
 }
 
-export async function getUpload(id: string): Promise<AttachmentRef> {
+async function getUpload(id: string): Promise<AttachmentRef> {
   const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
   return toRef(row);

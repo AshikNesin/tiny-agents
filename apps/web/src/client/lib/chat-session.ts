@@ -137,7 +137,7 @@ const LEGACY_ECHO_SKEW_MS = 5_000;
  * only when it is not older than the Echo: an earlier message with the same
  * text ("ok") is never mistaken for a new Echo.
  */
-export function echoMatches(
+function echoMatches(
   echo: Pick<Echo, "requestId" | "text" | "createdAt" | "attachments">,
   message: Pick<ChatMessage, "text" | "requestId" | "createdAt" | "attachments">,
 ): boolean {

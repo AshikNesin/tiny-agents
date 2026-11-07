@@ -77,14 +77,14 @@ const COPIED_TABLES: Table[] = [
   schema.notificationLog,
 ];
 
-export interface LegacyCopyReport {
+interface LegacyCopyReport {
   backup: string;
   rows: Record<string, number>;
   kv: number;
   uploadsCopied: boolean;
 }
 
-export function copyLegacyDatabase(
+function copyLegacyDatabase(
   file: string,
   url: string,
   options: OpenAppDatabaseOptions,
@@ -179,7 +179,7 @@ function copyRows(source: Database.Database, target: AppDatabase, report: Legacy
 }
 
 /** Map an old row onto a table's fields, converting each value to the field's mode. */
-export function convertRow(table: Table, row: Record<string, unknown>): Record<string, unknown> {
+function convertRow(table: Table, row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [field, column] of Object.entries(getTableColumns(table))) {
     if (!(field in row)) continue;
@@ -256,7 +256,7 @@ export function convertKeyvEntry(entry: {
  * now live beside the database. Copy anything still in the old folder (files
  * already in the new one win). Returns true when something was copied.
  */
-export function copyLegacyUploads(uploadsRoot: string): boolean {
+function copyLegacyUploads(uploadsRoot: string): boolean {
   const from = path.resolve(LOCAL_UPLOADS_ROOT);
   const to = path.resolve(uploadsRoot);
   if (from === to || !existsSync(from) || readdirSync(from).length === 0) return false;

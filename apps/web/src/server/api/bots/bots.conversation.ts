@@ -146,7 +146,7 @@ export interface BotDraft {
  * routine run, so a run that cannot do its job must say so through the tool
  * that records it, or it reads as succeeded.
  */
-export const ROUTINE_RUN_GUIDANCE =
+const ROUTINE_RUN_GUIDANCE =
   "This conversation runs your scheduled routines, and nobody watches it live: you cannot " +
   "ask the owner anything here. If a run cannot do its job until the owner fixes something " +
   "(a missing vault login, an account you cannot reach, an approval routines cannot get), " +

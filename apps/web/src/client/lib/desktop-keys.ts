@@ -21,7 +21,7 @@ const KEY = {
 type KeyName = keyof typeof KEY;
 
 /** Press the keys in order, then release them in reverse. */
-export function chord(...keys: KeyName[]): KeyStroke[] {
+function chord(...keys: KeyName[]): KeyStroke[] {
   return [
     ...keys.map((key) => ({ ...KEY[key], down: true })),
     ...[...keys].reverse().map((key) => ({ ...KEY[key], down: false })),

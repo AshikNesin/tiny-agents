@@ -25,7 +25,7 @@ import {
 } from "./tmux";
 
 /** One tmux invocation's outcome, stdout and stderr kept apart for parsing. */
-export interface TerminalExecResult {
+interface TerminalExecResult {
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -43,7 +43,7 @@ export type TerminalStatus =
   | { kind: "tmux-missing"; installCommand: string };
 
 /** The install line the tmux-missing state offers (Ubuntu on the sandbox VM). */
-export const TMUX_INSTALL_COMMAND = "sudo apt-get install -y tmux";
+const TMUX_INSTALL_COMMAND = "sudo apt-get install -y tmux";
 
 export class TerminalUnreachableError extends Error {}
 export class TmuxMissingError extends Error {
@@ -77,7 +77,7 @@ export interface TerminalSessionRow {
   createdAt: number;
 }
 
-export interface TerminalServiceListResult {
+interface TerminalServiceListResult {
   status: TerminalStatus;
   sessions: TerminalSessionRow[];
 }

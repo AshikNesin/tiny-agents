@@ -49,7 +49,7 @@ export function turnBudgetOf(rt: object): TurnBudget {
 }
 
 /** The message a bot sees when another bot writes to it. */
-export function botToBotText(fromName: string, text: string): string {
+function botToBotText(fromName: string, text: string): string {
   return `**Message from ${fromName} (bot):** ${text}`;
 }
 

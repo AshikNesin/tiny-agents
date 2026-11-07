@@ -12,7 +12,7 @@ export type Permissions = Record<string, ToolPermission>;
  * Read-only tools run unattended; anything that changes something asks,
  * unless its toolkit marks it `allowByDefault` (the Shelley hand-off).
  */
-export function defaultPermission(tool: ToolInfo): ToolPermission {
+function defaultPermission(tool: ToolInfo): ToolPermission {
   if (tool.askOnly) return "ask";
   return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
 }

@@ -36,7 +36,7 @@ export interface ReconnectingSocket<Handle> {
 }
 
 /** Same schedule for every socket; the cap holds forever. */
-export const BACKOFF_SECONDS = [1, 3, 5, 10, 20, 30];
+const BACKOFF_SECONDS = [1, 3, 5, 10, 20, 30];
 
 export function reconnectingSocket<Ticket, Handle>(
   transport: SocketTransport<Ticket, Handle>,

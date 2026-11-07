@@ -7,12 +7,7 @@
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories } from "../../db";
-import {
-  isExpired,
-  type MemoryCategory,
-  type MemoryRecord,
-  type MemoryStatus,
-} from "./memories.domain";
+import { type MemoryCategory, type MemoryRecord, type MemoryStatus } from "./memories.domain";
 import { memoryLedger, type MemoryRow } from "./memories.ledger";
 import type { CreateMemoryDTO, UpdateMemoryDTO } from "./memories.schema";
 
@@ -87,5 +82,3 @@ export async function remove(id: string): Promise<{ deleted: true }> {
   await memoryLedger(row.botId).tombstone([id]);
   return { deleted: true };
 }
-
-export { isExpired };

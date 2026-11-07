@@ -38,7 +38,7 @@ export const CLAUDE_WORKER_NODE_VERSION = "24.22.2";
 export const DEFAULT_SANDBOX_WORKER_PORT = 8765;
 
 /** Directory the Docker image pre-provisions. */
-export const BAKED_WORKER_DIR = "/opt/tiny-agents/claude-worker";
+const BAKED_WORKER_DIR = "/opt/tiny-agents/claude-worker";
 
 const MARKER = `.stack-${CLAUDE_WORKER_STACK_VERSION}`;
 const START_WAIT_SECONDS = 20;

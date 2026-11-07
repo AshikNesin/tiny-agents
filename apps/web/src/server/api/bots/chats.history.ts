@@ -53,7 +53,7 @@ const pastChatFields = {
 };
 
 /** The chat a bot is leaving: its conversation, and the row fields it had. */
-export interface EndingChat {
+interface EndingChat {
   botId: string;
   botName: string;
   botModelId: string;
@@ -69,7 +69,7 @@ export type ChatRow = Pick<
 >;
 
 /** The chat a bot row is on, as a Past chat would record it. */
-export function endingChat(row: ChatRow): EndingChat {
+function endingChat(row: ChatRow): EndingChat {
   return {
     botId: row.id,
     botName: row.name,
@@ -120,7 +120,7 @@ export async function leaveChat(
  * background. An empty chat is not worth listing and records nothing. Best
  * effort: the bot has already moved on, so a failure is only logged.
  */
-export async function recordPastChat(
+async function recordPastChat(
   ending: EndingChat,
   rt: PastChatRuntime,
   endedAt = new Date(),

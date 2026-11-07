@@ -21,7 +21,7 @@ import type { ChatToolCall, ChatToolStatus } from "./chat-types";
 export type ToolPhase = "pending" | "running" | "waiting" | "done" | "failed";
 
 /** The Owner wait a `waiting` call is paused on. */
-export type WaitingOn = "approval" | "answer" | "credentials" | "takeover";
+type WaitingOn = "approval" | "answer" | "credentials" | "takeover";
 
 /**
  * What draws the call when it is not a plain trace line.
@@ -33,7 +33,7 @@ export type WaitingOn = "approval" | "answer" | "credentials" | "takeover";
  * - `bot-handoff`: a `message_bot` call's hand-off line.
  * - `code-handoff`: a coding hand-off's card (issue #143).
  */
-export type ToolCard =
+type ToolCard =
   | "approval"
   | "vault-approval"
   | "credentials"

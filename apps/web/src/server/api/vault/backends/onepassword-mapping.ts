@@ -46,7 +46,7 @@ const CATEGORY: Record<VaultKind, string> = {
   api_key: "API_CREDENTIAL",
 };
 
-export function kindOfCategory(category: string): VaultKind | "other" {
+function kindOfCategory(category: string): VaultKind | "other" {
   switch (category) {
     case "LOGIN":
     case "PASSWORD":

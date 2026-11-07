@@ -33,7 +33,7 @@ import {
 import { Button } from "./button";
 import { FluidHoverHighlight } from "./fluid-hover-highlight";
 
-export interface AskUserOption {
+interface AskUserOption {
   id?: string;
   title: string;
   description?: string;
@@ -100,7 +100,7 @@ export interface AskUserAnswer {
   skipped?: boolean;
 }
 
-export interface AskUserQuestionsProps extends Omit<HTMLAttributes<HTMLDivElement>, "onChange"> {
+interface AskUserQuestionsProps extends Omit<HTMLAttributes<HTMLDivElement>, "onChange"> {
   questions: AskUserQuestion[];
   currentIndex?: number;
   defaultCurrentIndex?: number;
@@ -1801,4 +1801,3 @@ function Row({
 }
 
 export { AskUserQuestions };
-export default AskUserQuestions;

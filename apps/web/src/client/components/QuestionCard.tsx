@@ -37,7 +37,7 @@ function countText(questions: readonly OwnerQuestion[]): string {
  * answer in the owner's own words; a question without options is one open
  * text field. The last question's submit button sends the answers.
  */
-export function toAskUserQuestions(questions: readonly OwnerQuestion[]): AskUserQuestion[] {
+function toAskUserQuestions(questions: readonly OwnerQuestion[]): AskUserQuestion[] {
   return questions.map((question, index) => {
     const last = index === questions.length - 1;
     const base = {

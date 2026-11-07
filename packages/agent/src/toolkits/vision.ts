@@ -25,13 +25,7 @@ export interface VisionStore {
   >;
 }
 
-export {
-  createTranscriber,
-  VISION_SYSTEM,
-  DEFAULT_QUESTION,
-  type Transcriber,
-  type TranscribeImage,
-} from "./vision-transcribe";
+export { createTranscriber, type Transcriber } from "./vision-transcribe";
 
 const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
 const fail = (text: string): ToolExecutionResult => ({

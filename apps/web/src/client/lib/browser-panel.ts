@@ -17,7 +17,7 @@ import type { ChatMessage } from "./chat-types";
 import { viewOf } from "./tool-call-view";
 
 export const BROWSER_DISMISSED_KEY = "tiny-agents:browser-dismissed";
-export const COMPUTER_DISMISSED_KEY = "tiny-agents:computer-dismissed";
+const COMPUTER_DISMISSED_KEY = "tiny-agents:computer-dismissed";
 /** Oldest dismissals drop past this; a conversation id is all that's kept. */
 const MAX_REMEMBERED = 50;
 

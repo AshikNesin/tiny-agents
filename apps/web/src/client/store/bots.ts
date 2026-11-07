@@ -29,7 +29,7 @@ import { errorMessage } from "../lib/errors";
 import { chatSessions } from "./chats";
 
 /** An MCP connection's live state, as the events feed last reported it. */
-export interface ConnectionLive {
+interface ConnectionLive {
   status: string;
   error?: string;
 }

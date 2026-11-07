@@ -41,14 +41,14 @@ export interface CodeHandoffRecord {
   createdAt: string;
 }
 
-export interface CodeChangedFile {
+interface CodeChangedFile {
   path: string;
   status: string;
   additions: number;
   deletions: number;
 }
 
-export interface CodeThreadStatus {
+interface CodeThreadStatus {
   harness: string;
   working: boolean;
   title: string | null;
@@ -60,13 +60,13 @@ export interface CodeThreadStatus {
   url: string;
 }
 
-export interface CodeHarnessRecord {
+interface CodeHarnessRecord {
   id: string;
   label: string;
   isDefault: boolean;
 }
 
-export interface CodeModelRecord {
+interface CodeModelRecord {
   id: string;
   name?: string;
   isDefault: boolean;

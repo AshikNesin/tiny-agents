@@ -10,8 +10,6 @@ import {
   type ImageProcessor,
 } from "@tiny-agents/agent";
 
-export { createNodePhotonImages, type PreparedImage };
-
 let processor: Promise<ImageProcessor> | undefined;
 
 function images(): Promise<ImageProcessor> {

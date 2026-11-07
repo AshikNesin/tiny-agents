@@ -20,7 +20,7 @@ import { sandboxConnection } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 
 /** Packages the worker loads from its own `node_modules` on the sandbox. */
-export const WORKER_EXTERNALS = ["@anthropic-ai/claude-agent-sdk", "ws", "zod"];
+const WORKER_EXTERNALS = ["@anthropic-ai/claude-agent-sdk", "ws", "zod"];
 
 async function bundleFromSource(): Promise<string> {
   // A variable specifier keeps esbuild (a dev dependency) out of the
@@ -44,7 +44,7 @@ async function bundleFromSource(): Promise<string> {
 }
 
 /** The worker script uploaded to the sandbox. */
-export async function claudeWorkerScript(): Promise<string> {
+async function claudeWorkerScript(): Promise<string> {
   const here = import.meta.url;
   if (!here.endsWith(".ts")) return readFile(new URL("./claude-worker.mjs", here), "utf8");
   return bundleFromSource();

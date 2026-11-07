@@ -22,8 +22,8 @@ import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
 
-export type TaskStatus = "todo" | "in_progress" | "done";
-export type TaskPriority = "low" | "medium" | "high" | "urgent";
+type TaskStatus = "todo" | "in_progress" | "done";
+type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 /** The task as tools see and return it (ISO date strings). */
 export interface TaskRecord {

@@ -19,7 +19,7 @@ export interface ListSections {
   recent: ListNode[];
 }
 
-export function repoOf(row: Pick<ThreadSummary, "repoRoot" | "cwd">): string | null {
+function repoOf(row: Pick<ThreadSummary, "repoRoot" | "cwd">): string | null {
   return row.repoRoot || row.cwd || null;
 }
 

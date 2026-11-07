@@ -21,9 +21,9 @@ import {
 } from "@tiny-agents/code/server";
 import { seenMap } from "./code.store";
 
-export type HubChange = "list" | "status";
+type HubChange = "list" | "status";
 
-export interface HubEvent {
+interface HubEvent {
   instance: HarnessInstance;
   event: InstanceEvent;
 }

@@ -3,7 +3,7 @@ import { apiClient } from "@groot/shell/lib/api";
 
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
 
-export interface ConnectionTool {
+interface ConnectionTool {
   /** As bots see it: `mcp__<slug>__<tool>`. */
   name: string;
   /** As the server names it; the id in tool URLs. */

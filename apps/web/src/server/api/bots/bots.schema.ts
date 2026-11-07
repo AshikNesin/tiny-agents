@@ -100,7 +100,4 @@ export const sendMessageSchema = z
 
 export type CreateBotDTO = z.infer<typeof createBotSchema>;
 export type UpdateBotDTO = z.infer<typeof updateBotSchema>;
-export type SendMessageDTO = z.infer<typeof sendMessageSchema>;
-export type ApprovalDTO = z.infer<typeof approvalSchema>;
 export type ChatHistoryDTO = z.infer<typeof chatHistorySchema>;
-export type AnswerQuestionsDTO = z.infer<typeof answerQuestionsSchema>;

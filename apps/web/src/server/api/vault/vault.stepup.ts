@@ -12,8 +12,8 @@ import type { Middleware } from "@groot/core/types";
 import { verifyPassword as checkPassword } from "@groot/core/utils/password.utils";
 import { db, users } from "../../db";
 
-export const STEP_UP_HEADER = "x-vault-step-up";
-export const STEP_UP_TTL_MS = 5 * 60_000;
+const STEP_UP_HEADER = "x-vault-step-up";
+const STEP_UP_TTL_MS = 5 * 60_000;
 
 const tokens = new Map<string, { userId: number; expiresAt: number }>();
 
@@ -30,7 +30,7 @@ export function issueStepUp(userId: number): { token: string; expiresAt: number 
   return { token, expiresAt };
 }
 
-export function validStepUp(token: string | undefined, userId: number): boolean {
+function validStepUp(token: string | undefined, userId: number): boolean {
   if (!token) return false;
   prune();
   for (const [candidate, grant] of tokens) {

@@ -27,11 +27,11 @@ export interface OAuthState {
   state?: string;
 }
 
-export function appOrigin(): string {
+function appOrigin(): string {
   return env.ORIGIN.replace(/\/+$/, "");
 }
 
-export function oauthCallbackUrl(): string {
+function oauthCallbackUrl(): string {
   return `${appOrigin()}/api/v1/connections/oauth/callback`;
 }
 
@@ -61,7 +61,7 @@ export async function readOAuthState(connectionId: string): Promise<OAuthState> 
   return decryptJson<OAuthState>(row?.oauthEnc, {});
 }
 
-export async function writeOAuthState(
+async function writeOAuthState(
   connectionId: string,
   change: (state: OAuthState) => OAuthState,
 ): Promise<void> {

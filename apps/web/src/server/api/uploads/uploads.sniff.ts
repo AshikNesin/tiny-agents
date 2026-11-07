@@ -125,7 +125,7 @@ const isZip = (bytes: Uint8Array) =>
   startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]) || startsWith(bytes, [0x50, 0x4b, 0x05, 0x06]);
 
 /** Entry names of a zip, read from its central directory (nothing is inflated). */
-export function zipEntryNames(bytes: Uint8Array): string[] {
+function zipEntryNames(bytes: Uint8Array): string[] {
   const names: string[] = [];
   try {
     unzipSync(bytes, {
@@ -145,7 +145,7 @@ export function zipEntryNames(bytes: Uint8Array): string[] {
  * Anything else that has no NULs reads as Windows-1252, the usual legacy
  * encoding of CSVs and logs.
  */
-export function looksLikeText(bytes: Uint8Array): boolean {
+function looksLikeText(bytes: Uint8Array): boolean {
   if (startsWith(bytes, [0xff, 0xfe]) || startsWith(bytes, [0xfe, 0xff])) return true;
   const head = bytes.subarray(0, 8192);
   return !head.includes(0);

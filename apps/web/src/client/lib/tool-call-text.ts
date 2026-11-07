@@ -93,7 +93,7 @@ export function stepTitle(call: ChatToolCall, labels: ToolLabelCatalog): string 
  * "Read more": approving from a 60-char slice of a 700-word change is
  * rubber-stamping, and the one-line title can't hold it anyway.
  */
-export const PAYLOAD_FOLD = 120;
+const PAYLOAD_FOLD = 120;
 
 /**
  * The payload behind an approval: `instructions`/`append` for a

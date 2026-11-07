@@ -172,7 +172,7 @@ export const echo: Brain = async (query) => {
   }
 };
 
-export async function* prompts(query: FakeQuery): AsyncGenerator<CodingSdkUserMessage> {
+async function* prompts(query: FakeQuery): AsyncGenerator<CodingSdkUserMessage> {
   while (true) {
     // eslint-disable-next-line react-doctor/async-await-in-loop -- one prompt at a time
     const input = await query.nextInput();
@@ -247,7 +247,7 @@ export class FakeSdk implements CodingSdk {
 
 // --- SDK message builders (shapes from sdk.d.ts) ------------------------------
 
-export function init(query: FakeQuery): CodingSdkMessage {
+function init(query: FakeQuery): CodingSdkMessage {
   return {
     type: "system",
     subtype: "init",
@@ -274,7 +274,7 @@ const USAGE = {
   cache_read_input_tokens: 15000,
 };
 
-export function assistant(
+function assistant(
   query: FakeQuery,
   content: unknown[],
   extra: Record<string, unknown> = {},
@@ -388,13 +388,4 @@ export function result(
   return input.isError
     ? { ...base, subtype: "error_during_execution", errors: input.errors ?? ["failed"] }
     : { ...base, subtype: "success", result: input.text ?? "" };
-}
-
-/** A gate a brain can wait on. */
-export function gate(): { wait: Promise<void>; open: () => void } {
-  let open: () => void = () => undefined;
-  const wait = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { wait, open };
 }

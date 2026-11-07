@@ -109,8 +109,8 @@ export interface SandboxConnectionOptions {
 }
 
 /** Long enough that the terminal's 5s poll and a run of tool calls keep one connection. */
-export const SANDBOX_IDLE_TIMEOUT_MS = 5 * 60_000;
-export const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
+const SANDBOX_IDLE_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
 const DEFAULT_READ_BYTES = 200_000;
 /** How long `settleOnExit` waits for output still in flight after the exit status. */

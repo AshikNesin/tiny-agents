@@ -6,7 +6,7 @@
 
 type Schema = Record<string, unknown>;
 
-export type FieldKind = "string" | "number" | "integer" | "boolean" | "enum" | "json";
+type FieldKind = "string" | "number" | "integer" | "boolean" | "enum" | "json";
 
 export interface SchemaField {
   name: string;

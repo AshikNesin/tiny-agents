@@ -82,11 +82,10 @@ import { GrantsDoc } from "./vault";
 
 // The three wait kinds own their not-pending errors; the app imports them from here.
 export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
-export { ConversationNotFoundError };
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-export class ModelNotFoundError extends Error {
+class ModelNotFoundError extends Error {
   constructor(modelId: string) {
     super(`Unknown model "${modelId}"`);
     this.name = "ModelNotFoundError";

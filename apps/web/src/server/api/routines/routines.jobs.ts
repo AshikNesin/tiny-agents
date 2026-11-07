@@ -122,7 +122,7 @@ async function routineConversation(
   return claimConversation(routine.id, created);
 }
 
-export const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {
+const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {
   const payload = firePayloadSchema.parse(data as unknown);
   await dispatchOccurrence(payload, new Date(), id);
 };

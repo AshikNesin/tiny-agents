@@ -42,7 +42,7 @@ export function showComputerPanel(): void {
 }
 
 /** The HTTP adapter: owner actions for one bot's live chat. */
-export function httpOwnerActions(botId: string): OwnerActions {
+function httpOwnerActions(botId: string): OwnerActions {
   return {
     decideApproval: (taskId, decision, options = {}) =>
       botsApi.decideApproval(botId, taskId, decision, options.alwaysAllow, options.grant),

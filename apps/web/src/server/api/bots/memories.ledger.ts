@@ -31,7 +31,7 @@ import {
 export type MemoryRow = typeof memories.$inferSelect;
 
 /** One memory to add: a capture's extraction item, a chat `remember`, a page add. */
-export interface LedgerItem {
+interface LedgerItem {
   text: string;
   category: MemoryCategory;
   /** ISO date or datetime; null or absent = no expiry. */
@@ -42,7 +42,7 @@ export interface LedgerItem {
   supersedesIds?: string[] | null;
 }
 
-export interface AddOptions {
+interface AddOptions {
   /**
    * `capture` (the capture side-call and the chat `remember` tool) or
    * `manual` (the owner on the Memory page, who may bring back a row).
@@ -52,7 +52,7 @@ export interface AddOptions {
   watermark?: Date;
 }
 
-export interface AddResult {
+interface AddResult {
   created: number;
   /** Non-active rows the owner added again (manual adds only). */
   revived: number;
@@ -64,7 +64,7 @@ export interface AddResult {
 }
 
 /** What the capture prompt lists: current memories with ids, and what the owner removed. */
-export interface PromptContext {
+interface PromptContext {
   current: string | null;
   removed: string | null;
 }

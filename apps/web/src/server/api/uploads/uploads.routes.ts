@@ -27,7 +27,7 @@ function parseUploadId(c: AppContext): string {
 }
 
 /** Largest attachment accepted (the composer checks the same limit first). */
-export const MAX_UPLOAD_MB = 25;
+const MAX_UPLOAD_MB = 25;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 /** Room for the multipart framing (boundaries, part headers) around the file. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;

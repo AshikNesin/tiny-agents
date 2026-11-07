@@ -179,7 +179,7 @@ export interface LaunchedDesktop {
 /** Pids of the desktop's process groups (Xtigervnc, vncconfig, the session, dbus). */
 export const DESKTOP_PID_FILE = ".desktop-pids";
 /** `display=<n> vnc=<port> size=<w>x<h>` of the running desktop. */
-export const DESKTOP_STATE_FILE = ".desktop";
+const DESKTOP_STATE_FILE = ".desktop";
 /** Shell exports every tool exec sources: DISPLAY, the XDG dirs, the session bus. */
 export const DESKTOP_ENV_FILE = ".desktop-env";
 

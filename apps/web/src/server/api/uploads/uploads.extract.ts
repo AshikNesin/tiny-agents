@@ -19,7 +19,7 @@ import {
 } from "./uploads.office";
 import { decodeText, type ExtractKind } from "./uploads.text";
 
-export const EXTRACT_LIMITS = {
+const EXTRACT_LIMITS = {
   /** Extracted text per file; the rest is marked truncated. */
   maxChars: 2_000_000,
   maxPdfPages: 500,
@@ -34,7 +34,7 @@ export const EXTRACT_LIMITS = {
 };
 
 /** What the attachment row records about the extraction (no content). */
-export interface ExtractMeta {
+interface ExtractMeta {
   format: AttachmentContent["format"];
   pages?: number;
   sheets?: number;

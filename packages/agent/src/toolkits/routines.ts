@@ -30,7 +30,7 @@ import { toolIdempotencyKey } from "./tasks";
 /** The tool a routine run calls when it cannot do its job (issue #87). */
 export const REPORT_ROUTINE_BLOCKED = "report_routine_blocked";
 /** The longest blocked reason a run may record. */
-export const MAX_BLOCKED_REASON = 300;
+const MAX_BLOCKED_REASON = 300;
 
 export type RoutineSchedule =
   | { kind: "once"; at: string }
@@ -59,7 +59,7 @@ export interface RoutineUpdateInput {
   enabled?: boolean;
 }
 
-export interface RoutineCreateInput {
+interface RoutineCreateInput {
   /** Idempotency key (the durable tool task's identity) making replays return the same routine. */
   idempotencyKey: string;
   name: string;
@@ -150,7 +150,7 @@ async function attempt(work: () => Promise<ToolExecutionResult>): Promise<ToolEx
 }
 
 /** The confirmation card every save path echoes: sentence, next 3 fires, prompt. */
-export function confirmationCard(routine: RoutineRecord): string {
+function confirmationCard(routine: RoutineRecord): string {
   const fires =
     routine.nextFireTimes.length > 0
       ? routine.nextFireTimes.map((time) => `- ${time}`).join("\n")
@@ -176,7 +176,7 @@ const notFound = (id: string) => fail(`No routine with id "${id}".`);
  * apps/web routines.toolkit-store.ts). The tools are created per extension
  * so they close over the store.
  */
-export function createRoutinesExtension(
+function createRoutinesExtension(
   store: RoutineStore,
   options: { now?: () => Date } = {},
 ): Extension {

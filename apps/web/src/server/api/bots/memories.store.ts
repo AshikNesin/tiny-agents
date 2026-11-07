@@ -16,7 +16,7 @@ import { CATEGORY_ORDER, extractedMemorySchema, type MemoryCategory } from "./me
 import { memoryLedger } from "./memories.ledger";
 import { getAgentRuntime } from "./bots.runtime";
 import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
-import type { MemoryLine, MemoryStore } from "@tiny-agents/agent";
+import type { MemoryStore } from "@tiny-agents/agent";
 
 function order(category: string): number {
   const index = CATEGORY_ORDER.indexOf(category as MemoryCategory);
@@ -90,5 +90,3 @@ export function createMemoryStore(
 }
 
 export const memoryStore = createMemoryStore();
-
-export type { MemoryLine };

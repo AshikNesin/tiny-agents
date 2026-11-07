@@ -27,7 +27,7 @@ export interface ArchiveListing {
 const NESTED = /\.(zip|tar|tgz|gz|bz2|7z|rar|jar)$/i;
 
 /** Path traversal, absolute paths and control characters. */
-export function pathFlag(path: string): string | undefined {
+function pathFlag(path: string): string | undefined {
   // oxlint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(path)) return "control characters in the name";
   if (path.startsWith("/") || /^[a-z]:[\\/]/i.test(path)) return "absolute path";
@@ -101,7 +101,7 @@ function octal(block: Uint8Array, offset: number, length: number): number {
 }
 
 /** A streaming tar header walker: file data is counted and skipped. */
-export class TarLister {
+class TarLister {
   readonly entries: AttachmentEntry[] = [];
   truncated = false;
   suspicious: string | undefined;

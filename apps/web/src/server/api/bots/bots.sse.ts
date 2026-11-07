@@ -125,7 +125,7 @@ export function openSse<E>(
 }
 
 /** Errors after the stream opened end it, with an error event first. */
-export function endSseOnError(sse: SseStream<StreamErrorEvent>, error: unknown): void {
+function endSseOnError(sse: SseStream<StreamErrorEvent>, error: unknown): void {
   sse.write({ type: "error", message: error instanceof Error ? error.message : "error" });
   sse.end();
 }

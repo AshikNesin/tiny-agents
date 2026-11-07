@@ -182,7 +182,7 @@ type CredentialArgs = {
 };
 
 /** The request as stored and shown, or why it is refused. */
-export function normalizeCredentialRequest(
+function normalizeCredentialRequest(
   args: CredentialArgs,
   pageOrigin: string,
   allowedPrivateHosts?: string,

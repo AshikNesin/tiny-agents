@@ -21,7 +21,7 @@ export interface ConnectionAuthPorts {
   onMessage(listener: (data: unknown) => void): () => void;
 }
 
-export type SignInOutcome =
+type SignInOutcome =
   /** The popup shows the authorization page. */
   | { status: "opened" }
   /** The browser refused the popup: ask the owner to allow pop-ups. */
@@ -32,7 +32,7 @@ export type SignInOutcome =
   | { status: "failed"; error: unknown };
 
 /** What the callback page posts back: `tiny-agents:oauth`. */
-export interface SignInCompletion {
+interface SignInCompletion {
   id?: string;
   error?: string;
 }

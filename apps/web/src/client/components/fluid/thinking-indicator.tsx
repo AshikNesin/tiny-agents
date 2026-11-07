@@ -156,5 +156,3 @@ const ThinkingIndicator = forwardRef<HTMLDivElement, ThinkingIndicatorProps>(
 ThinkingIndicator.displayName = "ThinkingIndicator";
 
 export { ThinkingIndicator };
-export type { ThinkingIndicatorProps };
-export default ThinkingIndicator;

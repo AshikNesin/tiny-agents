@@ -142,9 +142,7 @@ export function mailCapability(sent: string[]): Capability {
 }
 
 /** The tool a message names and its arguments, or undefined for plain chat. */
-export function toolRequest(
-  said: string,
-): { tool: string; args: Record<string, unknown> } | undefined {
+function toolRequest(said: string): { tool: string; args: Record<string, unknown> } | undefined {
   const match = /(\w+_\w+)(?: (\S+))?/.exec(said);
   if (!match) return undefined;
   const [, tool = "", arg = ""] = match;
@@ -191,7 +189,7 @@ interface FakeSocket extends WebSocketLike {
   emit(event: string, ...args: unknown[]): void;
 }
 
-export interface FakeClaudeWorker {
+interface FakeClaudeWorker {
   locator: ClaudeWorkerLocator;
   connect: (url: string, token: string) => WebSocketLike;
   /** Every turn the engine sent, as the worker received it. */
@@ -206,7 +204,7 @@ export interface FakeClaudeWorker {
 }
 
 /** The Claude worker on the same script, behind a fake socket. */
-export function fakeClaudeWorker(): FakeClaudeWorker {
+function fakeClaudeWorker(): FakeClaudeWorker {
   const turns: FakeClaudeWorker["turns"] = [];
   const results: FakeClaudeWorker["results"] = [];
   const waiting = new Map<string, (content: string) => void>();
@@ -383,7 +381,7 @@ export async function openEngine(
 // ── Reading a chat ──────────────────────────────────────────────────────
 
 /** The state a stream's events add up to. */
-export function reduceChat(events: readonly ChatEvent[]): ChatState | undefined {
+function reduceChat(events: readonly ChatEvent[]): ChatState | undefined {
   let state: ChatState | undefined;
   for (const event of events) {
     if (event.type === "snapshot") state = structuredClone(event.state);

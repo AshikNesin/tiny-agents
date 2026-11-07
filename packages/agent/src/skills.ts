@@ -21,12 +21,12 @@ import {
 } from "@earendil-works/pi-durable";
 import type { Capability } from "./capabilities";
 
-export interface SkillSummary {
+interface SkillSummary {
   name: string;
   description: string;
 }
 
-export interface SkillContent extends SkillSummary {
+interface SkillContent extends SkillSummary {
   body: string;
   files: string[];
 }

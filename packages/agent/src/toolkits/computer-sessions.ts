@@ -19,9 +19,9 @@ import { VaultTargetMovedError } from "../vault-target";
 import type { BrowserClock } from "./browser-sessions";
 
 /** Where a desktop is while it opens; `installing` is the one-time VM setup. */
-export type ComputerPhase = "installing" | "starting";
+type ComputerPhase = "installing" | "starting";
 
-export type ComputerDriver = "agent" | "human";
+type ComputerDriver = "agent" | "human";
 
 export type MouseButton = "left" | "right" | "middle";
 export type ScrollDirection = "up" | "down" | "left" | "right";
@@ -125,7 +125,7 @@ export interface ComputerDesktop {
   close(): Promise<void>;
 }
 
-export interface OpenDesktopOptions {
+interface OpenDesktopOptions {
   width: number;
   height: number;
   onPhase?: (phase: ComputerPhase) => void;
@@ -148,7 +148,7 @@ export interface LiveComputer {
   takeover?: { reason: string; since: number };
 }
 
-export type ComputerOpenState =
+type ComputerOpenState =
   | { opening: true; phase: ComputerPhase }
   | { opening: false; error?: string };
 
@@ -212,7 +212,7 @@ const realClock: BrowserClock = {
 const IDLE_SWEEP_MS = 60_000;
 
 /** What a tool says while the owner drives: the bot learns to wait or move on. */
-export const OWNER_DRIVING =
+const OWNER_DRIVING =
   "The owner is driving the computer, so screenshots are paused. Wait for them to hand it back, or continue without the computer.";
 
 /** A `computer_request_takeover` call as the chat shows it. */

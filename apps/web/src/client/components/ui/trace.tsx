@@ -23,7 +23,7 @@ function Trace({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export type TraceStatus = "running" | "error" | "pending";
+type TraceStatus = "running" | "error" | "pending";
 
 /**
  * One step row. `status`: `running` shimmers the title, `error` tints the row

@@ -8,7 +8,7 @@ import type { Bot } from "../lib/bots-api";
 import { errorMessage } from "../lib/errors";
 import { useBotsStore } from "./bots";
 
-export const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
+const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
 
 function readCollapsed(): boolean {
   try {

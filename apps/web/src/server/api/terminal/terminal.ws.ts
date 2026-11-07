@@ -222,7 +222,7 @@ type ControlFrame =
   | { t: "ping" };
 
 /** A well-formed control frame, or undefined for anything else. */
-export function parseControl(message: string): ControlFrame | undefined {
+function parseControl(message: string): ControlFrame | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(message);

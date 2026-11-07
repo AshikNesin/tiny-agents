@@ -8,7 +8,7 @@
 import type { SecretValue } from "./vault";
 
 /** What a registered value is replaced with. */
-export const REDACTED = "[vault]";
+const REDACTED = "[vault]";
 
 /** A value is kept this long after its last use. */
 const TTL_MS = 24 * 60 * 60_000;

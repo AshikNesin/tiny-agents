@@ -27,7 +27,7 @@ import { issueBrowserPageVncTicket } from "./browser.vnc";
 import { knownProfile, listProfiles } from "./profiles";
 
 /** The owner's tab in every browser; bot tabs are keyed by bot id. */
-export const OWNER_TAB = "owner";
+const OWNER_TAB = "owner";
 
 const router = new Hono<AppEnv>();
 

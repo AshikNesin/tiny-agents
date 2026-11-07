@@ -63,8 +63,6 @@ export type BotAgentRuntime = Pick<
   | "dismissQuestions"
   | "isBusy"
 >;
-
-export type { BotListEntry } from "./bots.list";
 /** Kept for the boot wiring until it moves onto `botListStep` (bots.list.ts). */
 
 function runtime(): BotAgentRuntime {

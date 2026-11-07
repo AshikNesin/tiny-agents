@@ -44,7 +44,7 @@ let hostKeys: HostKeyStore | undefined;
  * store for every SSH user of the VM; the memory fallback keeps tests
  * key-free.
  */
-export function sandboxHostKeys(): HostKeyStore {
+function sandboxHostKeys(): HostKeyStore {
   if (hostKeys) return hostKeys;
   try {
     const kv = createNamespaceKv("SANDBOX");

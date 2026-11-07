@@ -6,7 +6,7 @@
  */
 import { badGateway, HarnessError } from "../../server/errors";
 
-export interface ShelleyConfig {
+interface ShelleyConfig {
   /** Base URL the server dials (`http://my-vm:9999`), no trailing slash. */
   url: string;
 }
