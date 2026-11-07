@@ -342,6 +342,41 @@ const FIXTURES: Record<string, Fixture> = {
       "export const run = (ctx: { db: { transaction(f: () => void): void } }) => ctx.db.transaction(() => {});\n",
     rules: ["R7"],
   },
+  "packages/core/src/auth/r7-getter-fail.ts": {
+    source:
+      'import { db } from "../database";\nconst getDb = () => db;\nexport const run = () => getDb().transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-getter-local-fail.ts": {
+    source:
+      'import { getDb } from "@groot/core/database";\nexport const run = () => {\n  const handle = getDb();\n  return handle.transaction(() => 1);\n};\n',
+    rules: ["R7"],
+  },
+  "packages/core/src/auth/r7-assigned-fail.ts": {
+    source:
+      'import { db } from "../database";\nexport const run = () => {\n  let handle;\n  handle = db;\n  return handle.transaction(() => 1);\n};\n',
+    rules: ["R7"],
+  },
+  "packages/jobs/src/server/r7-destructured-fail.ts": {
+    source:
+      "export const run = (deps: { db: any }) => {\n  const { db: handle } = deps;\n  return handle.transaction(() => 1);\n};\n",
+    rules: ["R7"],
+  },
+  "packages/ui/src/r7-indexeddb-pass.ts": {
+    source:
+      'const getDatabase = (): IDBDatabase => indexedDB.open("app").result;\nexport const read = () => getDatabase().transaction("store");\nexport const viaLocal = () => {\n  const handle = getDatabase();\n  return handle.transaction("store");\n};\n',
+    rules: [],
+  },
+  "packages/core/src/auth/r7-getter-function-fail.ts": {
+    source:
+      'import { db } from "../database";\nfunction database() {\n  return db;\n}\nexport const run = () => database().transaction(() => 1);\n',
+    rules: ["R7"],
+  },
+  "packages/agent/src/r7-other-call-pass.ts": {
+    source:
+      'import { openStore } from "./store";\nexport const run = () => openStore().transaction(() => 1);\n',
+    rules: [],
+  },
   "packages/agent/src/r7-other-receiver-pass.ts": {
     source:
       "type Store = { transaction<T>(f: () => T): T };\nexport const run = (store: Store) => store.transaction(() => 1);\n",
@@ -439,6 +474,42 @@ const FIXTURES: Record<string, Fixture> = {
     source:
       'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_INVALID`);\n};\n',
     rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-concat-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, "SESSION_" + "INVALID");\n};\n',
+    rules: ["R9"],
+    mentions: "throw a plain Boom.unauthorized",
+  },
+  "apps/web/src/server/api/vault/r9-template-piece-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_${"INVALID"}`);\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-const-piece-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nconst PREFIX = "SESSION_";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `${PREFIX}INVALID`);\n};\n',
+    rules: ["R9"],
+  },
+  "packages/core/src/auth/r9-name-pieces-fail.ts": {
+    source:
+      'import * as jwt from "../utils/jwt.utils";\nexport const refuse = () => {\n  throw jwt["session" + "Invalid"]("Wrong passkey");\n};\n',
+    rules: ["R9"],
+  },
+  "apps/web/src/server/api/vault/r9-pieces-pass.ts": {
+    source:
+      'const PREFIX = "SESSION_";\nexport const code = `${PREFIX}EXPIRED`;\nexport const label = (name: string) => "SESSION_" + name;\n',
+    rules: [],
+  },
+  "apps/web/src/server/api/vault/r9-shadowed-pass.ts": {
+    source:
+      'export const a = () => {\n  const kind = "INVALID";\n  return kind;\n};\nexport const b = (kind: string) => "SESSION_" + kind;\n',
+    rules: [],
+  },
+  "apps/web/src/server/api/vault/r9-shadowed-const-pass.ts": {
+    source:
+      'const A = "SESSION";\nexport const top = A;\nexport const code = () => {\n  const A = "OTHER";\n  return A + "_INVALID";\n};\n',
+    rules: [],
   },
   "packages/core/src/utils/jwt.utils.ts": {
     source:

@@ -65,13 +65,45 @@ const TRANSACTION_MESSAGE =
   "R7: no transactions in packages/ (AGENTS.md). Use one statement with RETURNING, a compare-and-set update (WHERE on the expected old value), or an idempotent retry. An app that needs a transaction runs a sync db.transaction() in apps/ and passes the tx in.";
 
 // `db` and `tx` by name, plus anything imported from the database module or
-// drizzle, or typed with a type from there.
+// drizzle, typed with a type from there, or a function that returns one.
 const DB_NAMES = ["db", "tx"];
 const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\/|$)/;
 
 const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
+
+const staticString = (node, lookup) => {
+  switch (node.type) {
+    case "Literal":
+      return typeof node.value === "string" ? node.value : null;
+    case "Identifier":
+      return lookup(node);
+    case "ParenthesizedExpression":
+      return staticString(node.expression, lookup);
+    case "BinaryExpression": {
+      if (node.operator !== "+") return null;
+      const left = staticString(node.left, lookup);
+      const right = staticString(node.right, lookup);
+      return left === null || right === null ? null : left + right;
+    }
+    case "TemplateLiteral": {
+      let text = node.quasis[0].value.cooked;
+      for (const [i, expression] of node.expressions.entries()) {
+        const piece = staticString(expression, lookup);
+        if (piece === null) return null;
+        text += piece + node.quasis[i + 1].value.cooked;
+      }
+      return text;
+    }
+    default:
+      return null;
+  }
+};
+
+const MODULE_SCOPES = new Set(["module", "global"]);
+
+const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
 
 export default {
   meta: { name: "repo" },
@@ -100,18 +132,28 @@ export default {
         const dbNames = new Set(DB_NAMES);
         const isDb = (node) => {
           const target = unparenthesized(node);
-          if (target.type === "Identifier") return dbNames.has(target.name);
-          return (
-            target.type === "MemberExpression" &&
-            !target.computed &&
-            DB_NAMES.includes(target.property.name)
-          );
+          switch (target.type) {
+            case "Identifier":
+              return dbNames.has(target.name);
+            case "MemberExpression":
+              return !target.computed && DB_NAMES.includes(target.property.name);
+            case "CallExpression":
+              return isDb(target.callee);
+            default:
+              return false;
+          }
         };
         const isDbType = (type) =>
           (type?.type === "TSTypeReference" &&
             type.typeName.type === "Identifier" &&
             dbNames.has(type.typeName.name)) ||
           (type?.type === "TSTypeQuery" && isDb(type.exprName));
+        const returnsDb = (fn) =>
+          fn.body.type === "BlockStatement"
+            ? fn.body.body.some(
+                (s) => s.type === "ReturnStatement" && s.argument && isDb(s.argument),
+              )
+            : isDb(fn.body);
         return {
           ImportDeclaration(node) {
             if (!DATABASE_MODULE.test(node.source.value)) return;
@@ -121,9 +163,29 @@ export default {
             if (isDbType(node.typeAnnotation?.typeAnnotation)) dbNames.add(node.name);
           },
           VariableDeclarator(node) {
-            if (node.id.type === "Identifier" && node.init && isDb(node.init)) {
+            if (
+              node.id.type === "Identifier" &&
+              node.init &&
+              (isDb(node.init) || (FUNCTIONS.has(node.init.type) && returnsDb(node.init)))
+            ) {
               dbNames.add(node.id.name);
             }
+            if (node.id.type !== "ObjectPattern") return;
+            for (const p of node.id.properties) {
+              if (
+                p.type === "Property" &&
+                !p.computed &&
+                DB_NAMES.includes(p.key.name) &&
+                p.value.type === "Identifier"
+              )
+                dbNames.add(p.value.name);
+            }
+          },
+          AssignmentExpression(node) {
+            if (node.left.type === "Identifier" && isDb(node.right)) dbNames.add(node.left.name);
+          },
+          FunctionDeclaration(node) {
+            if (node.id && returnsDb(node)) dbNames.add(node.id.name);
           },
           CallExpression(node) {
             const callee = node.callee;
@@ -144,16 +206,35 @@ export default {
           reported.add(node.start);
           context.report({ node, message: SESSION_INVALID_MESSAGE });
         };
+        const consts = new Map();
+        const lookup = (id) => {
+          if (!consts.has(id.name)) return null;
+          for (let scope = context.sourceCode.getScope(id); scope; scope = scope.upper) {
+            if (!scope.set.has(id.name)) continue;
+            return MODULE_SCOPES.has(scope.type) ? consts.get(id.name) : null;
+          }
+          return null;
+        };
+        const check = (node) => {
+          if (SESSION_INVALID_NAMES.has(staticString(node, lookup))) report(node);
+        };
         return {
           Identifier(node) {
             if (SESSION_INVALID_NAMES.has(node.name)) report(node);
           },
-          Literal(node) {
-            if (SESSION_INVALID_NAMES.has(node.value)) report(node);
+          VariableDeclarator(node) {
+            const declaration = node.parent;
+            const topLevel =
+              declaration.parent.type === "Program" ||
+              declaration.parent.type === "ExportNamedDeclaration";
+            if (declaration.kind !== "const" || !topLevel) return;
+            if (node.id.type !== "Identifier" || !node.init) return;
+            const value = staticString(node.init, lookup);
+            if (value !== null) consts.set(node.id.name, value);
           },
-          TemplateElement(node) {
-            if (SESSION_INVALID_NAMES.has(node.value.cooked)) report(node);
-          },
+          Literal: check,
+          TemplateLiteral: check,
+          BinaryExpression: check,
         };
       },
     },
