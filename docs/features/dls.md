@@ -92,12 +92,21 @@ Icon buttons follow the same steps (`icon-xs` size-6, `icon-sm` size-7,
 | Controls (button, input, select trigger, textarea, input group, tabs) | `rounded-xl`         |
 | Items inside a control or menu (tab trigger, menu / select item)      | `rounded-lg`         |
 | Page surfaces (`Card`, panels, table frames)                          | `rounded-2xl`        |
-| Modal surfaces (`Dialog`, `AlertDialog`, command palette)             | `rounded-3xl`        |
+| Modal surfaces (`Dialog`, `AlertDialog`)                              | `rounded-3xl`        |
 | Floating surfaces (dropdown, select menu, toast)                      | `rounded-xl`         |
 | Inset blocks (code / JSON / log blocks, notices, `Alert`), icon tiles | `rounded-xl`         |
 | Small inline (kbd, inline code), tooltip                              | `rounded-md` / `-lg` |
 | Pills: `Badge`                                                        | `rounded-4xl`        |
 | Pills: avatars, status dots                                           | `rounded-full`       |
+
+**The command menu is vendored.** The ⌘K palette (`@groot/ui/command-menu`)
+is the [Fluid Functionalism](https://www.fluidfunctionalism.com/docs/command-menu)
+command menu, kept close to upstream so it can be re-synced: it brings its own
+radii, 13px row type, spring motion and fluid hover fill. Its colours still
+come from groot tokens (the "Fluid Functionalism tokens" block in
+`packages/shell/src/index.css`), and its support code lives in
+`packages/ui/vendor/fluid/` (see the README there). Restyle it through those
+tokens, not by editing the vendored files.
 
 A hand-rolled frame matches the primitive it stands in for: a table frame is
 `rounded-2xl bg-card ring-1 ring-foreground/10` (as `Card`); a field-like
@@ -196,17 +205,17 @@ runs on every commit through the `vp staged` pre-commit hook
 (`vite.config.ts`) and in CI as a step of `.github/workflows/test.yml`, which
 catches `--no-verify` commits.
 
-| Rule                      | Catches                                                | Exempt                                                |
-| ------------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
-| `raw-palette-color`       | `text-gray-500`, `bg-red-100`, …                       | `packages/shell/src/index.css`                        |
-| `hand-rolled-card`        | a line with `rounded-*`, `border` and `bg-card`        | `card.tsx`                                            |
-| `raw-table-element`       | `<table>`, `<thead>`, `<tbody>`                        | `table.tsx`                                           |
-| `redundant-icon-margin`   | `mr-*`/`ml-*` on an icon inside a gap-spaced component | —                                                     |
-| `legacy-icon-sizing`      | square `h-N w-N`                                       | —                                                     |
-| `tracking-modified`       | `tracking-tight` … `tracking-widest`                   | `typography.tsx` (`metaLabelClass`)                   |
-| `font-bold`               | `font-bold`                                            | —                                                     |
-| `transition-colors-hover` | `transition-colors`, `transition-all`                  | all of `packages/ui/src/` (primitives own motion)     |
-| `inline-mono-full-step`   | `font-mono text-sm` (or `base`, `lg`, `xl`)            | `typography.tsx`, `command.tsx`, `CommandPalette.tsx` |
+| Rule                      | Catches                                                | Exempt                                                   |
+| ------------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| `raw-palette-color`       | `text-gray-500`, `bg-red-100`, …                       | `packages/shell/src/index.css`                           |
+| `hand-rolled-card`        | a line with `rounded-*`, `border` and `bg-card`        | `card.tsx`                                               |
+| `raw-table-element`       | `<table>`, `<thead>`, `<tbody>`                        | `table.tsx`                                              |
+| `redundant-icon-margin`   | `mr-*`/`ml-*` on an icon inside a gap-spaced component | —                                                        |
+| `legacy-icon-sizing`      | square `h-N w-N`                                       | —                                                        |
+| `tracking-modified`       | `tracking-tight` … `tracking-widest`                   | `typography.tsx` (`metaLabelClass`)                      |
+| `font-bold`               | `font-bold`                                            | —                                                        |
+| `transition-colors-hover` | `transition-colors`, `transition-all`                  | `packages/ui/src/` and `vendor/` (primitives own motion) |
+| `inline-mono-full-step`   | `font-mono text-sm` (or `base`, `lg`, `xl`)            | `typography.tsx`, `command.tsx`, `CommandPalette.tsx`    |
 
 An exemption goes in the rule's `allow` list in the script, with a comment
 saying why.

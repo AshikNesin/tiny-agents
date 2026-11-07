@@ -32,6 +32,7 @@ import { Button, type ButtonProps } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";
 import { Checkbox } from "@groot/ui/checkbox";
 import { Command, CommandInput } from "@groot/ui/command";
+import { CommandMenu, CommandMenuDialog, type CommandMenuItemData } from "@groot/ui/command-menu";
 import { Dialog, DialogContent } from "@groot/ui/dialog";
 import { DataField, DataFields } from "@groot/ui/display";
 import { DropdownMenu, DropdownMenuTrigger } from "@groot/ui/dropdown-menu";
@@ -154,6 +155,8 @@ const checks = {
     Checkbox,
     Command,
     CommandInput,
+    CommandMenu,
+    CommandMenuDialog,
     Dialog,
     DialogContent,
     DataField,
@@ -400,3 +403,7 @@ export function KitConsumers() {
   void appSettings;
   return <KitConsumerPage>consumer fixture compiled</KitConsumerPage>;
 }
+
+export const commandMenuItems: CommandMenuItemData[] = [
+  { value: "compile", label: "Compile", description: "Build the kit", shortcut: "mod+b" },
+];

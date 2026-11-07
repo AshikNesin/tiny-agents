@@ -82,15 +82,13 @@ export function requireUser(c: AppContext): AuthUser {
 /**
  * The client's address: the socket peer, or, when the peer is one of
  * `config.trustedProxies`, the hop it vouches for in `X-Forwarded-For`.
- * `unknown` when there is no socket (the Hono test client).
+ * On Workers there is no socket: Cloudflare's edge sets `cf-connecting-ip`
+ * and overwrites any client-sent value, so that header is the client.
+ * `unknown` when neither exists (the Hono test client).
  */
 export function clientIp(c: AppContext): string {
   const incoming = c.env?.incoming as { socket?: { remoteAddress?: string } } | undefined;
-  return (
-    clientAddress(
-      incoming?.socket?.remoteAddress,
-      c.req.header("x-forwarded-for"),
-      config.trustedProxies,
-    ) ?? "unknown"
-  );
+  const peer = incoming?.socket?.remoteAddress;
+  if (peer === undefined) return c.req.header("cf-connecting-ip") ?? "unknown";
+  return clientAddress(peer, c.req.header("x-forwarded-for"), config.trustedProxies) ?? "unknown";
 }

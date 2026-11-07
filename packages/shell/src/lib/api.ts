@@ -1,5 +1,3 @@
-import type { ErrorCode } from "@groot/core/errors";
-
 /** Standard API response envelope (mirrors the server's `api-response.utils`). */
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -57,7 +55,8 @@ export interface UnauthorizedEvent {
   sentAt: number;
 }
 
-const SESSION_INVALID: (typeof ErrorCode)["SESSION_INVALID"]["code"] = "SESSION_INVALID";
+/** `ErrorCode.SESSION_INVALID` in `@groot/core/errors`, the session guard's 401 code. */
+const SESSION_INVALID = "SESSION_INVALID";
 
 type Params = Record<string, unknown>;
 
