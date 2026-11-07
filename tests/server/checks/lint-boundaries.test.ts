@@ -435,6 +435,11 @@ const FIXTURES: Record<string, Fixture> = {
       'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, "SESSION_INVALID");\n};\n',
     rules: ["R9"],
   },
+  "apps/web/src/server/api/vault/r9-template-fail.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("Wrong password", undefined, `SESSION_INVALID`);\n};\n',
+    rules: ["R9"],
+  },
   "packages/core/src/utils/jwt.utils.ts": {
     source:
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',

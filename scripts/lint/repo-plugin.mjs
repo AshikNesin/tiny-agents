@@ -151,6 +151,9 @@ export default {
           Literal(node) {
             if (SESSION_INVALID_NAMES.has(node.value)) report(node);
           },
+          TemplateElement(node) {
+            if (SESSION_INVALID_NAMES.has(node.value.cooked)) report(node);
+          },
         };
       },
     },

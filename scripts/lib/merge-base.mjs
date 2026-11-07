@@ -7,11 +7,13 @@ import process from "node:process";
 
 const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8" });
 
+// An explicit destination, because a single-branch clone (`--depth 1`) only
+// fills FETCH_HEAD on `git fetch origin main`.
 function fetchCommand(ref) {
   const slash = ref.indexOf("/");
-  return slash === -1
-    ? `git fetch origin ${ref}`
-    : `git fetch ${ref.slice(0, slash)} ${ref.slice(slash + 1)}`;
+  if (slash === -1) return `git fetch origin ${ref}`;
+  const [remote, branch] = [ref.slice(0, slash), ref.slice(slash + 1)];
+  return `git fetch ${remote} ${branch}:refs/remotes/${remote}/${branch}`;
 }
 
 /** Why `ref` has no merge base with HEAD, as one line naming the fix. */

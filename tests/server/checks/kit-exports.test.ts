@@ -148,7 +148,7 @@ describe("kit exports guard", () => {
         const missingBase = runGuard(root, ["--base", "origin/main"]);
         expect(missingBase.status).toBe(1);
         expect(missingBase.stderr).toBe(
-          "Base ref origin/main is not in this clone. Fetch the base: `git fetch origin main` or set fetch-depth: 0 in CI.\n",
+          "Base ref origin/main is not in this clone. Fetch the base: `git fetch origin main:refs/remotes/origin/main` or set fetch-depth: 0 in CI.\n",
         );
       }),
     TIMEOUT * 4,
