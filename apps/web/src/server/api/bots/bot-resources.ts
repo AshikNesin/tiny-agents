@@ -27,6 +27,7 @@ import {
   vaultAuditEvents,
   vaultItems,
 } from "../../db";
+import { revokeLiveAccess } from "../people/live-access";
 import { cancelFireJob } from "../routines/routines.arming";
 import { forgetBotInVault } from "../vault/vault.admin.service";
 import { findBotRow, type BotRow } from "./bots.conversation";
@@ -153,9 +154,9 @@ export const BOT_RESOURCES = {
     "PRD §5.1: conversation history (the current chat, past chats, routines) and the uploads its messages attach stay in agent.db; Phase 2 adds cleanup",
     [uploads.botId],
   ),
-  chatStreams: retained(
-    "a chat stream open in another tab ends when that tab leaves; ending it here makes the client retry the 404",
-  ),
+  liveAccess: released({
+    release: async (bot) => revokeLiveAccess({ botId: bot.id }),
+  }),
 } satisfies Record<string, BotResource>;
 
 const backgroundReleases = new Set<Promise<void>>();

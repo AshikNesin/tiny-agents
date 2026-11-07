@@ -26,12 +26,9 @@ import {
   settleBotReleases,
 } from "../../../apps/web/src/server/api/bots/bot-resources";
 import { conversationRef } from "../../../apps/web/src/server/api/bots/bots.conversation";
-import {
-  onBotChatEvent,
-  publishBotChatEvent,
-} from "../../../apps/web/src/server/api/bots/bots.events";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
+import { holdLiveAccess } from "../../../apps/web/src/server/api/people/live-access";
 import {
   claimConversation,
   createRoutine,
@@ -330,13 +327,16 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
       expect(await db.$count(uploads, eq(uploads.botId, bot.id))).toBe(1);
     };
   },
-  async chatStreams({ bot }) {
-    const heard: unknown[] = [];
-    const stop = onBotChatEvent(bot.id, (event) => heard.push(event));
+  async liveAccess({ bot, other }) {
+    const closed = vi.fn();
+    const otherClosed = vi.fn();
+    holdLiveAccess({ userId: 1, botId: bot.id }, closed);
+    const releaseOther = holdLiveAccess({ userId: 1, botId: other.id }, otherClosed);
+    expect(closed, "held before the delete").not.toHaveBeenCalled();
     return async () => {
-      publishBotChatEvent(bot.id, { type: "yolo", on: true });
-      expect(heard).toEqual([{ type: "yolo", on: true }]);
-      stop();
+      expect(closed).toHaveBeenCalledOnce();
+      expect(otherClosed).not.toHaveBeenCalled();
+      releaseOther();
     };
   },
 };
