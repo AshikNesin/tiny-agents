@@ -15,4 +15,7 @@ the guest holds; `setBotGuests` closes what each dropped guest holds on that
 bot. Registering re-checks the account and the share synchronously, so a
 stream or ticket opened by a request that passed its access check before a
 revocation landed is closed at once. Viewers close with WebSocket code 1008,
-stop forwarding input while closing, and are cut a second later.
+stop forwarding input while closing, and are cut a second later. A viewer
+that closes while its desktop stream is still opening now closes that
+stream and frees its viewer slot; before, four such viewers left the bot
+answering 429 to every new viewer.

@@ -116,6 +116,12 @@ async function bridge(
     ws.close(1011, `Could not reach the ${kind} display`);
     return;
   }
+  // The viewer left (or was revoked) while the stream opened: its close
+  // event has already fired, so nothing below would ever end this bridge.
+  if (ws.readyState !== ws.OPEN) {
+    stream.destroy();
+    return;
+  }
 
   await new Promise<void>((resolve) => {
     let alive = true;
