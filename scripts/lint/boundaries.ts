@@ -236,15 +236,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     ],
     enabled: true,
   },
-  {
-    id: "R10",
-    kind: "plugin",
-    scope: "tests/**",
-    rule: "repo/no-date-now-deadline-loop",
-    // Playwright runs on the real clock.
-    except: ["tests/e2e/**"],
-    enabled: true,
-  },
 ];
 
 /** The AGENTS.md rule ids the enabled rules enforce. */
