@@ -11,6 +11,7 @@ the commit):
 
 | Step             | Command                                                                | Purpose                                                                                                                                                                                 |
 | ---------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Install**      | `command -v vp`                                                        | Stops the commit with a message naming `pnpm install` when the worktree has no `node_modules`. The pre-push hook starts with the same check                                             |
 | **Gitleaks**     | `gitleaks protect --staged --verbose --redact --config .gitleaks.toml` | Scans the staged changes for hardcoded secrets; findings are redacted. Without gitleaks on `PATH`, the hook prints `gitleaks not installed, secret scan runs in CI` and skips this step |
 | **Vite+ staged** | `vp staged`                                                            | Runs the `staged` commands from `vite.config.ts` on the staged files                                                                                                                    |
 
@@ -50,9 +51,14 @@ pnpm install           # runs `prepare` (vp config), which installs the hooks
 ```
 
 `core.hooksPath` is the relative `.vite-hooks/_`, so each git worktree runs its
-own hook scripts. Run `pnpm install` in each new worktree. It writes that
-worktree's `.vite-hooks/_`, and git runs no hooks in a worktree without one.
-`prepare` also changes an absolute `core.hooksPath` that ends in
+own hook scripts. Every file `vp config` writes there (`h`, one stub per hook
+and `.gitignore`) is tracked, byte for byte, so a new worktree has them before
+any install. Its hooks then stop every commit and push until you run
+`pnpm install` in it. If a Vite+ upgrade changes what `vp config` writes, the
+install shows those files as modified, and the upgrade commits them. Checking
+out a commit from before they were tracked deletes the whole directory, so git
+runs no hooks at that commit until `pnpm install`. Checking out a newer commit
+puts the files back. `prepare` also changes an absolute `core.hooksPath` that ends in
 `.vite-hooks/_` to the relative path. Rerun `pnpm prepare` if the hooks stop
 running.
 

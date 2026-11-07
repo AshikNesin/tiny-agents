@@ -24,7 +24,7 @@ feature end to end.
 | `pnpm check:dead`                                                             | Unused files and exports (knip)                                                                                 |
 | `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
 
-The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR. The pre-push hook runs `pnpm typecheck`. [AGENTS.md](../../AGENTS.md) pairs each rule with the gate that enforces it.
+The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR and every push to `main`. The pre-push hook runs `pnpm typecheck`. Both hooks run in every git worktree, because their dispatcher in `.vite-hooks/_` is tracked. In a worktree without `pnpm install` they stop the commit or push with a message naming `pnpm install`. [AGENTS.md](../../AGENTS.md) pairs each rule with the gate that enforces it.
 
 ## Conventions
 

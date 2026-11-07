@@ -10,8 +10,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Every push runs in a group of its own, because a shared group cancels a
+  # pending run even without cancel-in-progress, and each commit pushed to main
+  # needs its secret scan.
+  group: tests-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
