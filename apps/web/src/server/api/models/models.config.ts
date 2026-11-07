@@ -81,7 +81,7 @@ export async function loadModelConfig(): Promise<ModelConfig> {
 }
 
 /** The host a provider account's requests go to (what its key's vault item must list). */
-function providerHost(row: Pick<ProviderRow, "kind" | "baseUrl">): string | undefined {
+export function providerHost(row: Pick<ProviderRow, "kind" | "baseUrl">): string | undefined {
   const base = row.baseUrl ?? PROVIDER_KINDS[row.kind as ProviderKind]?.defaultBaseUrl;
   if (!base) return undefined;
   try {
@@ -150,7 +150,7 @@ export function onModelsChanged(listener: () => void): () => void {
 }
 
 /** After a commit: hand the runtime the new snapshot and tell the pickers. */
-async function reloadModels(): Promise<void> {
+export async function reloadModels(): Promise<void> {
   if (target) target.applyModelConfig(await loadModelConfig());
   for (const listener of listeners) {
     try {
@@ -164,7 +164,7 @@ async function reloadModels(): Promise<void> {
 // ── Faux (dev, e2e, tests) ──────────────────────────────────────────────
 
 /** The faux account's id: also the pi-ai provider id the host's faux provider uses. */
-const FAUX_PROVIDER_ID = "faux";
+export const FAUX_PROVIDER_ID = "faux";
 
 /**
  * Make sure the faux account and the given models exist (TINY_AGENTS_FAUX

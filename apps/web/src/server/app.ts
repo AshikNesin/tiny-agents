@@ -21,6 +21,7 @@ import uploadsRoutes from "./api/uploads/uploads.routes";
 import skillsRoutes from "./api/skills/skills.routes";
 import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/connections.routes";
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
+import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
 import peopleRoutes from "./api/people/people.routes";
 import { guestGuard } from "./api/people/guest.guard";
@@ -68,6 +69,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", skillsRoutes);
       api.route("/", connectionsRoutes);
       api.route("/", codeRoutes);
+      api.route("/", modelsRoutes);
       api.use("/vault/*", vaultNoStore);
       api.route("/", vaultRoutes);
       api.route("/jobs", jobRoutes);

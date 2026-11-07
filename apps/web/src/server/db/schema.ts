@@ -416,6 +416,8 @@ export const providers = sqliteTable("providers", {
   credentialItemId: text("credential_item_id").references(() => vaultItems.id, {
     onDelete: "restrict",
   }),
+  /** What the UI shows of the key ("sk-…a1B2"); never more. */
+  credentialHint: text("credential_hint"),
   /** Gateway route: the cloudflare-ai-gateway account this one goes through. */
   viaProviderId: text("via_provider_id").references((): AnySQLiteColumn => providers.id, {
     onDelete: "restrict",

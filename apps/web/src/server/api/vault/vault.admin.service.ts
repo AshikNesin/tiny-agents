@@ -607,7 +607,7 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
 }
 
 /** Delete a vault item (and, with `purge`, its value in the backend). */
-async function deleteItemRow(row: VaultItemRow, options: { purge: boolean }) {
+export async function deleteItemRow(row: VaultItemRow, options: { purge: boolean }) {
   if (options.purge) {
     const backend = backendFor(row.backend);
     if (!backend.remove)

@@ -92,7 +92,7 @@ export {
   type NewBotInput,
 } from "./toolkits/bot-builder";
 export { createWebToolkit } from "./toolkits/web";
-export { checkPublicUrl } from "./toolkits/public-url";
+export { checkPublicUrl, isPrivateAddress } from "./toolkits/public-url";
 export {
   connectMcp,
   createMcpCapability,
@@ -117,6 +117,16 @@ export type {
   ProviderAccount,
 } from "./providers/config";
 export { PROVIDER_KINDS } from "./providers/kinds";
+export { testModelCall, testUnsavedModel, type TestResult } from "./providers/test-call";
+export {
+  discoverModels,
+  DiscoveryError,
+  PROVIDER_TEMPLATES,
+  resolveCapabilities,
+  type DiscoveredModel,
+  type DiscoveryGet,
+  type ProviderTemplate,
+} from "./providers/discovery";
 export {
   windowChat,
   pageBefore,

@@ -70,6 +70,63 @@ documented fallback when it is unset (`ModelCatalog.forRole`):
 | `vision`         | [Image transcription](./chat-attachments.md) | The first available model that sees images |
 | `classifier`     | [Auto-review](./auto-review.md)              | None: auto-review asks the owner           |
 
+## Settings → Models
+
+The owner manages all of this in **Settings → Models** (`?tab=models`), with
+no restart:
+
+- **Add models.** "Connect a provider": pick a kind or a template
+  (Anthropic, OpenAI, Gemini, OpenRouter, Cloudflare AI Gateway, Groq,
+  DeepSeek, Mistral, Together, z.ai, z.ai Coding Plan, Ollama, Claude plan),
+  enter the endpoint and key, **Check models**, keep the ones you want
+  (aggregators start with none checked), **Connect**. "Add a single model":
+  one model by id, with max output, image input and (Advanced) context
+  window and reasoning set by hand, and **Test** before **Add**.
+- **Accounts.** Each card shows the kind, host, key hint ("sk-…a1B2") and
+  where the key is kept, a status (Connected, Key rejected, Unreachable,
+  Locked: re-enter key, Disabled) and when it was checked. Expanded, it lists
+  its models with an enable box, capabilities, how many bots use each, Test
+  and delete, plus "Add a model by id". The Claude plan's card picks its
+  fallback model.
+- **Default models.** One row per role, showing its model and whether it is
+  the fallback; Reset clears a role.
+- **Delete in use.** Deleting an account or model that bots, roles or the
+  Claude plan's fallback use asks which model takes over, then moves them.
+
+Creating an account, changing its endpoint or key, and deleting it need the
+vault's step-up (password or passkey): a stolen session that could repoint an
+account would receive every prompt sent through it. A new host needs the key
+again. Changes reach open pickers through `models.changed` on `/events`.
+
+### API (owner only)
+
+| Route                                         | Step-up | Purpose                                                    |
+| --------------------------------------------- | ------- | ---------------------------------------------------------- |
+| `GET /api/v1/models/providers`                |         | Accounts, their models and key hints; templates            |
+| `POST /api/v1/models/discover`                |         | List an endpoint's models without saving                   |
+| `POST /api/v1/models/providers`               | yes     | Create an account (discovers again, stores the key)        |
+| `PATCH /api/v1/models/providers/:id`          |         | Name, enabled, Claude plan fallback; `If-Match: <version>` |
+| `PUT /api/v1/models/providers/:id/connection` | yes     | Endpoint, key, private network                             |
+| `POST /api/v1/models/providers/:id/refresh`   |         | Discover again; marks models no longer listed              |
+| `DELETE /api/v1/models/providers/:id`         | yes     | 409 `in_use` unless `?moveTo=<modelId>`                    |
+| `POST /api/v1/models/providers/:id/models`    |         | Add a model by id                                          |
+| `PATCH` / `DELETE /api/v1/models/:id`         |         | Name, enabled, overrides / delete (same in-use rule)       |
+| `POST /api/v1/models/test`                    |         | One 16-token completion, saved model or unsaved account    |
+| `GET` / `PUT /api/v1/models/roles`            |         | Roles and whether each is the fallback                     |
+
+Bodies are strict (unknown fields are refused) and capped at 64 KB. No
+response carries a key. A Claude.ai token (`sk-ant-oat…`) is refused.
+
+### Outbound guard
+
+Discovery goes through one guarded GET (`models.fetch.ts`): https only (http
+only for an account that allows a private endpoint), no credentials, query or
+fragment in the endpoint, the address checked after DNS when the socket
+connects (private addresses refused unless allowed), no redirects, 15 s and
+4 MB per request, at most 50 pages and 5,000 models. Test resolves the host
+the same way before its call. Inference itself goes through pi-ai's clients,
+so the endpoint is checked when it is saved, not on each request.
+
 ## The runtime
 
 The app reads the tables into a `ModelConfig` snapshot
