@@ -57,6 +57,13 @@
       "when": 1794035964014,
       "tag": "0007_bored_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794051433626,
+      "tag": "0008_common_pretty_boy",
+      "breakpoints": true
     }
   ]
 }

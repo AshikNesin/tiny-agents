@@ -3,8 +3,11 @@
  * tests/server/api/bot-resources.test.ts fails for a column holding bot ids
  * or an exported `…ForBot` function that no entry claims. `capture` runs
  * before the bot row is deleted because the cascade erases what it reads.
+ *
+ * Every `release` must be safe to run twice: one cut off by a crash or failed
+ * by a sandbox outage runs again at the next boot (`sweepBotReleases`).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -15,6 +18,7 @@ import {
   botConnections,
   botGuests,
   botMessages,
+  botReleases,
   bots,
   botSkills,
   codeHandoffs,
@@ -26,6 +30,7 @@ import {
   uploads,
   vaultAuditEvents,
   vaultItems,
+  type Json,
 } from "../../db";
 import { revokeLiveAccess } from "../people/live-access";
 import { cancelFireJob } from "../routines/routines.arming";
@@ -59,7 +64,8 @@ interface Released {
   keyedBy?: (...args: never[]) => unknown;
   /** Waits on the sandbox VM, so the delete answers without it. */
   background?: true;
-  prepare(bot: BotRow): Promise<(context: ReleaseContext) => Promise<void>>;
+  capture(bot: BotRow): Promise<Json>;
+  release(botId: string, captured: Json, context: ReleaseContext): Promise<void>;
 }
 
 type BotResource = Cascade | Retained | Released;
@@ -72,21 +78,19 @@ function retained(reason: string, columns?: Columns): Retained {
   return { how: "retained", reason, columns };
 }
 
-function released<Captured = undefined>(entry: {
+function released<Captured extends Json = null>(entry: {
   columns?: Columns;
   keyedBy?: Released["keyedBy"];
   background?: true;
-  capture?: (bot: BotRow) => Promise<Captured>;
-  release: (bot: BotRow, captured: Captured, context: ReleaseContext) => Promise<void>;
+  capture?: (bot: BotRow) => Captured | Promise<Captured>;
+  release: (botId: string, captured: Captured, context: ReleaseContext) => Promise<void>;
 }): Released {
   const { capture, release, ...claims } = entry;
   return {
     how: "release",
     ...claims,
-    async prepare(bot) {
-      const captured = (await capture?.(bot)) as Captured;
-      return (context) => release(bot, captured, context);
-    },
+    capture: async (bot) => (capture ? await capture(bot) : null),
+    release: (botId, captured, context) => release(botId, captured as Captured, context),
   };
 }
 
@@ -105,7 +109,8 @@ export const BOT_RESOURCES = {
     botGuests.botId,
   ),
   chat: released({
-    release: (bot, _, { rt }) => retireConversation(rt, bot.conversationId),
+    capture: (bot) => bot.conversationId,
+    release: (_botId, conversationId, { rt }) => retireConversation(rt, conversationId),
   }),
   routines: released({
     columns: [routines.botId],
@@ -114,7 +119,7 @@ export const BOT_RESOURCES = {
         .select({ pendingJobId: routines.pendingJobId, conversationId: routines.conversationId })
         .from(routines)
         .where(eq(routines.botId, bot.id)),
-    release: async (_bot, owned, { rt }) => {
+    release: async (_botId, owned, { rt }) => {
       await Promise.all(
         owned.map(async ({ pendingJobId, conversationId }) => {
           await cancelFireJob(pendingJobId);
@@ -127,24 +132,24 @@ export const BOT_RESOURCES = {
   browser: released({
     keyedBy: browserTargetForBot,
     background: true,
-    release: async (bot) => {
+    release: async (botId) => {
       const sessions = getBrowserSessions();
       await Promise.all([
-        sessions.closeTab({ profile: SHARED_BROWSER_PROFILE, tab: bot.id }),
-        sessions.close({ profile: ownBrowserProfile(bot.id), tab: bot.id }, { wipeProfile: true }),
+        sessions.closeTab({ profile: SHARED_BROWSER_PROFILE, tab: botId }),
+        sessions.close({ profile: ownBrowserProfile(botId), tab: botId }, { wipeProfile: true }),
       ]);
     },
   }),
   desktop: released({
     keyedBy: computerProfileForBot,
     background: true,
-    release: async (bot) => {
-      await getComputerSessions()?.close(ownBrowserProfile(bot.id), { wipe: true });
+    release: async (botId) => {
+      await getComputerSessions()?.close(ownBrowserProfile(botId), { wipe: true });
     },
   }),
   vaultGrants: released({
     columns: [vaultItems.botsJson],
-    release: (bot) => forgetBotInVault(bot.id),
+    release: (botId) => forgetBotInVault(botId),
   }),
   vaultAudit: retained("the audit log outlives what it audits", [vaultAuditEvents.botId]),
   notificationLog: retained("the record of notifications sent outlives the bot they were about", [
@@ -155,9 +160,11 @@ export const BOT_RESOURCES = {
     [uploads.botId],
   ),
   liveAccess: released({
-    release: async (bot) => revokeLiveAccess({ botId: bot.id }),
+    release: async (botId) => revokeLiveAccess({ botId }),
   }),
 } satisfies Record<string, BotResource>;
+
+type Owed = typeof botReleases.$inferSelect;
 
 const backgroundReleases = new Set<Promise<void>>();
 
@@ -166,6 +173,28 @@ export async function settleBotReleases(): Promise<void> {
   await Promise.all(backgroundReleases);
 }
 
+function releasedEntry(resource: string): Released | undefined {
+  const entry: BotResource | undefined = (BOT_RESOURCES as Record<string, BotResource>)[resource];
+  return entry?.how === "release" ? entry : undefined;
+}
+
+async function runRelease(owed: Owed, rt: ReleaseContext["rt"]): Promise<void> {
+  const { botId, resource, captured } = owed;
+  const entry = releasedEntry(resource);
+  try {
+    if (entry) await entry.release(botId, captured, { rt });
+    else
+      logger.warn({ botId, resource }, "Dropping a release owed by a resource kind that is gone");
+    await db
+      .delete(botReleases)
+      .where(and(eq(botReleases.botId, botId), eq(botReleases.resource, resource)));
+  } catch (error) {
+    logger.warn({ error, botId, resource }, "Failed to release a deleted bot's resource");
+  }
+}
+
+const isBackground = ({ resource }: Owed) => releasedEntry(resource)?.background === true;
+
 /**
  * The loser of two concurrent deletes gets the 404 and releases nothing.
  * Background releases are still running when this returns.
@@ -173,32 +202,31 @@ export async function settleBotReleases(): Promise<void> {
 export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<BotRow> {
   const bot = await findBotRow(id);
   const entries: [string, BotResource][] = Object.entries(BOT_RESOURCES);
-  const releases = await Promise.all(
+  const owed = await Promise.all(
     entries.flatMap(([resource, entry]) =>
       entry.how === "release"
-        ? [
-            entry
-              .prepare(bot)
-              .then((release) => ({ resource, release, background: entry.background === true })),
-          ]
+        ? [entry.capture(bot).then((captured) => ({ botId: bot.id, resource, captured }))]
         : [],
     ),
   );
-  const [deleted] = await db.delete(bots).where(eq(bots.id, bot.id)).returning();
-  if (!deleted) throw Boom.notFound("Record not found");
-  const run = (resource: string, release: (context: ReleaseContext) => Promise<void>) =>
-    release({ rt }).catch((error: unknown) => {
-      logger.warn({ error, botId: id, resource }, "Failed to release a deleted bot's resource");
-    });
-  for (const { resource, release, background } of releases) {
-    if (!background) continue;
-    const pending = run(resource, release).finally(() => backgroundReleases.delete(pending));
+  const { deleted, rows } = db.transaction((tx) => {
+    const [deleted] = tx.delete(bots).where(eq(bots.id, bot.id)).returning().all();
+    if (!deleted) throw Boom.notFound("Record not found");
+    return { deleted, rows: tx.insert(botReleases).values(owed).returning().all() };
+  });
+  for (const row of rows.filter(isBackground)) {
+    const pending = runRelease(row, rt).finally(() => backgroundReleases.delete(pending));
     backgroundReleases.add(pending);
   }
-  await Promise.all(
-    releases
-      .filter(({ background }) => !background)
-      .map(({ resource, release }) => run(resource, release)),
-  );
+  await Promise.all(rows.filter((row) => !isBackground(row)).map((row) => runRelease(row, rt)));
   return deleted;
+}
+
+/**
+ * Boot: run again every release a crash or a sandbox outage left owed.
+ * Resolves once each has run; what fails again stays for the next boot.
+ */
+export async function sweepBotReleases(rt: ReleaseContext["rt"]): Promise<void> {
+  const owed = await db.select().from(botReleases);
+  await Promise.all(owed.map((row) => runRelease(row, rt)));
 }

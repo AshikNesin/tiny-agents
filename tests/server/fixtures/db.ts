@@ -9,6 +9,7 @@ import {
   botGuests,
   guests,
   botMessages,
+  botReleases,
   botSkills,
   connections,
   jobs,
@@ -83,4 +84,5 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(botGuests);
   await db.delete(guests);
   await db.delete(bots);
+  await db.delete(botReleases);
 }

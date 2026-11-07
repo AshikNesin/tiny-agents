@@ -5,7 +5,15 @@
  * every released and retained kind through the real route to see each go,
  * or stay, as its entry says.
  */
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq, getTableName, is, sql } from "drizzle-orm";
@@ -15,6 +23,7 @@ import { logger } from "@groot/core/logger";
 import * as schema from "../../../apps/web/src/server/db";
 import {
   db,
+  botReleases,
   jobs,
   notificationLog,
   uploads,
@@ -24,6 +33,7 @@ import {
 import {
   BOT_RESOURCES,
   settleBotReleases,
+  sweepBotReleases,
 } from "../../../apps/web/src/server/api/bots/bot-resources";
 import { conversationRef } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
@@ -59,6 +69,8 @@ import {
 
 const RESOURCES = "BOT_RESOURCES (apps/web/src/server/api/bots/bot-resources.ts)";
 const BOT_ID_COLUMN = /(^|_)bots?_(id|json)$/;
+// Holds only ids of bots already deleted, so no entry can claim it.
+const OWED_RELEASES = "bot_releases.bot_id";
 
 type Kind = keyof typeof BOT_RESOURCES;
 type Entry = (typeof BOT_RESOURCES)[Kind];
@@ -83,7 +95,8 @@ function botIdColumns(): string[] {
     );
     return config.columns
       .filter((column) => toBots.has(column.name) || BOT_ID_COLUMN.test(column.name))
-      .map((column) => `${config.name}.${column.name}`);
+      .map((column) => `${config.name}.${column.name}`)
+      .filter((column) => column !== OWED_RELEASES);
   });
 }
 
@@ -482,5 +495,85 @@ describe("deleting a bot", () => {
     expect(world.spied.abort).not.toHaveBeenCalled();
     expect(closeTab).not.toHaveBeenCalled();
     expect(closeDesktop).not.toHaveBeenCalled();
+  });
+
+  const owed = async () =>
+    (await db.select({ resource: botReleases.resource }).from(botReleases))
+      .map((row) => row.resource)
+      .sort();
+
+  it("runs every release that failed again at the next boot, and only once", async () => {
+    const checks = await seedThenSwitchToShared();
+    const releases = entries.flatMap(([kind, entry]) =>
+      entry.how === "release"
+        ? [{ kind, release: vi.spyOn(entry, "release").mockRejectedValueOnce(new Error("crash")) }]
+        : [],
+    );
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
+    expect(await owed()).toEqual(releases.map(({ kind }) => kind).sort());
+    expect(await holds(vaultItems.botsJson, world.bot.id), "vault grant left behind").toBe(true);
+
+    await sweepBotReleases(world.rt);
+
+    expect(await owed()).toEqual([]);
+    for (const check of checks.values()) await check();
+    await sweepBotReleases(world.rt);
+    for (const { kind, release } of releases) expect(release, kind).toHaveBeenCalledTimes(2);
+  });
+
+  it("wipes the desktop at the next boot when the sandbox failed the wipe", async () => {
+    const profile = `bot-${world.bot.id}`;
+    await world.computer.acquire(profile);
+    vi.spyOn(world.desktops.transport, "wipe").mockRejectedValueOnce(new Error("sandbox down"));
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+    await settleBotReleases();
+    expect(world.desktops.wiped).not.toContain(profile);
+    expect(await owed()).toEqual(["desktop"]);
+
+    await sweepBotReleases(world.rt);
+
+    expect(world.desktops.wiped).toContain(profile);
+    expect(await owed()).toEqual([]);
+  });
+
+  it("releases at the next boot what a process stopped mid-release left behind", async () => {
+    const own = { profile: `bot-${world.bot.id}`, tab: world.bot.id };
+    await world.browser.acquire(own);
+    await world.computer.acquire(own.profile);
+    const ownDir = join(world.profilesDir, own.profile);
+    mkdirSync(ownDir, { recursive: true });
+    let stop!: () => void;
+    const forever = new Promise<void>((resolve) => (stop = resolve));
+    vi.spyOn(world.browser, "close").mockReturnValue(forever);
+    vi.spyOn(world.computer, "close").mockReturnValue(forever);
+
+    expect((await deleteBot(world.bot.id)).status).toBe(200);
+    expect(await owed()).toEqual(["browser", "desktop"]);
+
+    await closeAppRuntime();
+    const rt = await openAppRuntime();
+    const browser = createBrowserSessions({
+      profilesDir: world.profilesDir,
+      transport: fakeBrowser().transport,
+    });
+    setBrowserSessionsForTests(browser);
+    const desktops = fakeComputer();
+    const computer = createComputerSessions({
+      transport: desktops.transport,
+      width: 1280,
+      height: 800,
+    });
+    setComputerSessionsForTests(computer);
+    world = { ...world, rt, browser, computer, desktops };
+    await sweepBotReleases(rt);
+
+    expect(existsSync(ownDir)).toBe(false);
+    expect(desktops.wiped).toContain(own.profile);
+    expect(await owed()).toEqual([]);
+    stop();
+    await settleBotReleases();
   });
 });
