@@ -173,6 +173,13 @@ describe("turnOutcomeProblems", () => {
       'turn_ended said text "other" but outcome() answers "Done."',
     ]);
   });
+
+  it("names fields the rule does not answer, such as a thread spread into the outcome", () => {
+    const spread = { ...thread, ...good };
+    expect(turnOutcomeProblems(snapshot, spread, spread)).toEqual([
+      "outcome has fields the rule does not answer: id, instanceId, kind, nativeId, model, parentId, createdAt, updatedAt, archived",
+    ]);
+  });
 });
 
 describe("parseThreadId", () => {

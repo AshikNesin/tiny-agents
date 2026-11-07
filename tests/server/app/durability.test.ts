@@ -4,9 +4,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import type { ChatEvent, ChatState } from "../../../packages/agent/src/index";
+import type { ChatState } from "../../../packages/agent/src/index";
 import { openTestRuntime } from "../../../packages/agent/src/testing";
-import { until } from "../fixtures";
+import { applyChatEvents, until } from "../fixtures";
 
 const TIMEOUT_MS = 15_000;
 /** The fixture's poll with this suite's longer patience (restarts are slow). */
@@ -15,53 +15,6 @@ const untilReady = <T>(
   what: string,
   ms = TIMEOUT_MS,
 ) => until(check, what, ms);
-
-function applyEvents(previous: ChatState, events: readonly ChatEvent[]): ChatState {
-  let state = structuredClone(previous);
-  for (const event of events) {
-    if (event.type === "snapshot") {
-      state = structuredClone(event.state);
-      continue;
-    }
-    if (event.type === "upsert") {
-      state = {
-        ...state,
-        messages: [
-          ...state.messages.filter((message) => message.id !== event.message.id),
-          event.message,
-        ],
-      };
-      continue;
-    }
-    if (event.type === "remove") {
-      state = { ...state, messages: state.messages.filter((message) => message.id !== event.id) };
-      continue;
-    }
-    if (event.type === "delta") {
-      state = {
-        ...state,
-        messages: state.messages.map((message) =>
-          message.id === event.id
-            ? {
-                ...message,
-                text: message.text + (event.text ?? ""),
-                ...(event.reasoning
-                  ? { reasoning: (message.reasoning ?? "") + event.reasoning }
-                  : {}),
-              }
-            : message,
-        ),
-      };
-      continue;
-    }
-    if (event.type === "queued") {
-      state = { ...state, queued: event.items };
-      continue;
-    }
-    state = { ...state, busy: event.busy };
-  }
-  return state;
-}
 
 async function waitForChildMessage(
   child: ChildProcess,
@@ -177,7 +130,7 @@ describe("AgentRuntime durability", () => {
 
       let state: ChatState = { messages: [], busy: false, queued: [] };
       const subscription = await resumed.watchChat(ref, (events) => {
-        state = applyEvents(state, events);
+        state = applyChatEvents(state, events);
       });
       try {
         await untilReady(() => {
