@@ -36,29 +36,30 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 
 ## Settings
 
-| Path                        | Default                                             | Source                                   |
-| --------------------------- | --------------------------------------------------- | ---------------------------------------- |
-| `app.name`                  | `"Groot"`                                           | app override                             |
-| `app.port`                  | `3000`                                              | `PORT`                                   |
-| `cors.origins`              | `[]` (reflect the requesting origin)                | `CORS_ALLOWED_ORIGINS` (comma-separated) |
-| `auth.jwtExpiresIn`         | `"30d"`                                             |                                          |
-| `jobs.enabled`              | `true` (`false` when `NODE_ENV=test`)               |                                          |
-| `jobs.pollIntervalSeconds`  | `5` — Node poller interval                          |                                          |
-| `jobs.batchSize`            | `10` — max jobs claimed per tick                    |                                          |
-| `jobs.retryLimit`           | `3`                                                 |                                          |
-| `jobs.retryDelaySeconds`    | `60` — base delay, doubles per attempt (max 24 h)   |                                          |
-| `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this is retried  |                                          |
-| `jobs.keepCompletedDays`    | `7` — completed/cancelled jobs + logs deleted after |                                          |
-| `jobs.runInline`            | `true` — `addJob()` and retry run a tick right away |                                          |
-| `logging.level`             | `debug` dev / `info` prod / `silent` test           | `LOG_LEVEL`                              |
-| `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                |
-| `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                  |
-| `passkey.origin`            | `"http://localhost:3000"`                           | `ORIGIN`                                 |
-| `rateLimits.auth`           | 20 requests / 15 min per IP                         |                                          |
-| `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                          |
-| `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                          |
-| `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                             |
-| `sentry.release`            | unset                                               | `SENTRY_RELEASE`                         |
+| Path                        | Default                                             | Source                                         |
+| --------------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| `app.name`                  | `"Groot"`                                           | app override                                   |
+| `app.port`                  | `3000`                                              | `PORT`                                         |
+| `cors.origins`              | `[]` (reflect the requesting origin)                | `CORS_ALLOWED_ORIGINS` (comma-separated)       |
+| `trustedProxies`            | loopback and private networks (`PRIVATE_NETWORKS`)  | `TRUSTED_PROXIES` (comma-separated, or `none`) |
+| `auth.jwtExpiresIn`         | `"30d"`                                             |                                                |
+| `jobs.enabled`              | `true` (`false` when `NODE_ENV=test`)               |                                                |
+| `jobs.pollIntervalSeconds`  | `5` — Node poller interval                          |                                                |
+| `jobs.batchSize`            | `10` — max jobs claimed per tick                    |                                                |
+| `jobs.retryLimit`           | `3`                                                 |                                                |
+| `jobs.retryDelaySeconds`    | `60` — base delay, doubles per attempt (max 24 h)   |                                                |
+| `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this is retried  |                                                |
+| `jobs.keepCompletedDays`    | `7` — completed/cancelled jobs + logs deleted after |                                                |
+| `jobs.runInline`            | `true` — `addJob()` and retry run a tick right away |                                                |
+| `logging.level`             | `debug` dev / `info` prod / `silent` test           | `LOG_LEVEL`                                    |
+| `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                      |
+| `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                        |
+| `passkey.origin`            | `"http://localhost:3000"`                           | `ORIGIN`                                       |
+| `rateLimits.auth`           | 20 requests / 15 min per IP                         |                                                |
+| `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                                |
+| `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                                |
+| `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                                   |
+| `sentry.release`            | unset                                               | `SENTRY_RELEASE`                               |
 
 ## Env vs config
 

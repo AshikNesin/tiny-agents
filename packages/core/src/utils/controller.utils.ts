@@ -1,6 +1,8 @@
 import { type ZodType, z } from "zod";
+import { config } from "../config";
 import { Boom, ErrorCode } from "../errors";
 import type { AppContext, AuthUser } from "../types";
+import { clientAddress } from "./client-address";
 
 /**
  * Request parsing helpers. Each validates with a Zod schema and throws a
@@ -77,12 +79,18 @@ export function requireUser(c: AppContext): AuthUser {
   return user;
 }
 
-/** Client IP: Cloudflare header, then proxy header, then unknown. */
+/**
+ * The client's address: the socket peer, or, when the peer is one of
+ * `config.trustedProxies`, the hop it vouches for in `X-Forwarded-For`.
+ * `unknown` when there is no socket (the Hono test client).
+ */
 export function clientIp(c: AppContext): string {
+  const incoming = c.env?.incoming as { socket?: { remoteAddress?: string } } | undefined;
   return (
-    c.req.header("cf-connecting-ip") ??
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    c.req.header("x-real-ip") ??
-    "unknown"
+    clientAddress(
+      incoming?.socket?.remoteAddress,
+      c.req.header("x-forwarded-for"),
+      config.trustedProxies,
+    ) ?? "unknown"
   );
 }
