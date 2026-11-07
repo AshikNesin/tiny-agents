@@ -359,6 +359,7 @@ export async function openEngine(
   const worker = fakeClaudeWorker();
   const runtime = await openTestRuntime({
     storePath: ":memory:",
+    env: process.env,
     respondWith: piScript,
     claudeWorker: worker.locator,
     claudeConnect: worker.connect,

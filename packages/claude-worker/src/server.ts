@@ -95,7 +95,7 @@ export async function createClaudeWorkerServer(
   options: ClaudeWorkerServerOptions,
 ): Promise<ClaudeWorkerServer> {
   assertWorkerToken(options.token);
-  const env = options.env ?? process.env;
+  const env = options.env ?? {};
   assertNoOverrides(env);
   const now = options.now ?? Date.now;
   const bootId = randomUUID();

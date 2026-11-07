@@ -17,11 +17,9 @@ import {
   type HarnessInstance,
   type InstanceStatus,
 } from "@tiny-agents/code/server";
-import { appEnv } from "../../env";
+import { appEnv, type AppEnv } from "../../env";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { threadIndex } from "./code.store";
-
-type Env = Readonly<Record<string, string | undefined>>;
 
 export function harnessHost(): HarnessHost {
   return {
@@ -36,12 +34,12 @@ export function harnessHost(): HarnessHost {
 }
 
 /** Shelley's base URL, or undefined when `SHELLEY_URL` is not set. */
-export function shelleyUrl(env: Env = process.env): string | undefined {
-  return shelley.trimUrl(appEnv(env).SHELLEY_URL);
+export function shelleyUrl(env: AppEnv = appEnv()): string | undefined {
+  return shelley.trimUrl(env.SHELLEY_URL);
 }
 
 export interface RegistryOptions {
-  env?: Env;
+  env?: AppEnv;
   host?: HarnessHost;
   /** Extra instances (tests). */
   extra?: HarnessInstance[];
@@ -52,7 +50,7 @@ export interface RegistryOptions {
  * configured. The worker locator is the one bot chats use; the login state
  * (read in the background) explains a harness that cannot run yet.
  */
-function claudeCodeHarness(env: Env, host: HarnessHost): HarnessInstance | undefined {
+function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
   if (!claudeCodeEngineEnabled(env)) return undefined;
   const locator = sharedClaudeWorkerLocator(env);
   if (!locator) return undefined;
@@ -84,7 +82,7 @@ function claudeCodeHarness(env: Env, host: HarnessHost): HarnessInstance | undef
 }
 
 export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[] {
-  const env = options.env ?? process.env;
+  const env = options.env ?? appEnv();
   const host = options.host ?? harnessHost();
   const instances: HarnessInstance[] = [];
   const url = shelleyUrl(env);

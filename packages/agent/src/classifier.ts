@@ -131,7 +131,7 @@ const gatewayTransport: SystemOneTransport = {
  * stay off). Calls send the token as `Authorization` (Workers AI) and as
  * `cf-aig-authorization` (for an authenticated gateway).
  */
-export function createClassifier(env: Env = process.env): Classifier | undefined {
+export function createClassifier(env: Env): Classifier | undefined {
   const key = unquote(env.CLOUDFLARE_API_KEY);
   const accountId = unquote(env.CLOUDFLARE_ACCOUNT_ID);
   const gatewayId = unquote(env.CLOUDFLARE_GATEWAY_ID);

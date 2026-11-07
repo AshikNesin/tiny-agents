@@ -116,6 +116,7 @@ describe("selected ids match installed ones", () => {
     // The production boot: builtinCapabilities, the runtime's own, bots and vision.
     const runtime = await openAgentRuntime({
       storePath: join(dir, "agent.db"),
+      env: process.env,
       onFatal: () => undefined,
       onReport: () => undefined,
     });

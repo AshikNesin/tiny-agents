@@ -17,8 +17,7 @@ import {
 } from "@tiny-agents/agent/claude-worker";
 import type { SandboxConnection } from "@tiny-agents/agent/sandbox";
 import { sandboxConnection } from "./sandbox-host";
-
-type Env = Readonly<Record<string, string | undefined>>;
+import { appEnv, type AppEnv } from "../../env";
 
 /** Packages the worker loads from its own `node_modules` on the sandbox. */
 export const WORKER_EXTERNALS = ["@anthropic-ai/claude-agent-sdk", "ws", "zod"];
@@ -58,7 +57,7 @@ let shared: { connection: SandboxConnection; locator: ClaudeWorkerLocator } | un
  * the Code page's Claude Code harness share the worker on the sandbox and
  * its tunnel (ADR 0012), so it is set up once.
  */
-export function sharedClaudeWorkerLocator(env: Env = process.env): ClaudeWorkerLocator | undefined {
+export function sharedClaudeWorkerLocator(env: AppEnv = appEnv()): ClaudeWorkerLocator | undefined {
   const connection = sandboxConnection(env);
   if (!connection) return undefined;
   if (shared?.connection !== connection) {

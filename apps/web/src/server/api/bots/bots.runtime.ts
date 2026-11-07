@@ -60,8 +60,10 @@ import {
 import { sandboxConnection, unquoteEnv as unquote } from "./sandbox-host";
 import { sharedClaudeWorkerLocator } from "./claude-worker";
 import { missingToolkits } from "./bot-toolkits";
+import { appEnv, type AppEnv } from "../../env";
 
-type Env = Readonly<Record<string, string | undefined>>;
+type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
+type RuntimeEnv = NonNullable<RuntimeOptions["env"]>;
 
 /**
  * Calls waiting on the owner's approval, shared by the runtime's approval
@@ -74,7 +76,7 @@ const ownerWaits = new WaitTracker();
  * processes behind them. The server test runtime installs exactly these
  * (with `botsCapability`); `builtinCapabilities` adds the rest.
  */
-export function appStoreCapabilities(env: Env = process.env) {
+export function appStoreCapabilities(env: AppEnv = appEnv()) {
   return {
     tasks: createTasksToolkit(taskStore),
     routines: createRoutinesToolkit(createRoutineStore()),
@@ -85,7 +87,7 @@ export function appStoreCapabilities(env: Env = process.env) {
 }
 
 /** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
-export function builtinCapabilities(env: Env = process.env): Capability[] {
+export function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
   // Every value the vault resolves is scrubbed from logs and error reports too.
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
@@ -165,7 +167,7 @@ export function botsCapability(rt: AgentRuntime): Capability {
 export function visionCapability(
   rt: AgentRuntime,
   models: Parameters<typeof createTranscriber>[0],
-  env: Env = process.env,
+  env: RuntimeEnv,
 ): Capability {
   return createVisionToolkit(
     createVisionStore(rt),
@@ -205,7 +207,7 @@ export function agentRuntimeReady(): boolean {
  * Gateway unless CLASSIFIER_MODEL names another classifier. Without the
  * gateway settings bots that turn auto-review on keep every approval card.
  */
-function autoReviewer(env: Env = process.env): Reviewer | undefined {
+function autoReviewer(env: RuntimeEnv): Reviewer | undefined {
   const classifier = createClassifier(env);
   if (!classifier) return undefined;
   return createReviewer(classifier, {
@@ -220,14 +222,15 @@ function autoReviewer(env: Env = process.env): Reviewer | undefined {
 
 /** Boot: open the runtime (exclusive store lock + Harness resume). */
 export async function openAgentRuntime(
-  options: Parameters<typeof AgentRuntime.open>[0],
+  options: RuntimeOptions & { env: RuntimeEnv },
 ): Promise<AgentRuntime> {
+  const appVars = appEnv(options.env);
   const instance = await AgentRuntime.open({
     ...options,
     approvalTracker: ownerWaits,
     reviewer: options.reviewer ?? autoReviewer(options.env),
-    capabilities: [...builtinCapabilities(options.env), ...(options.capabilities ?? [])],
-    claudeWorker: options.claudeWorker ?? sharedClaudeWorkerLocator(options.env),
+    capabilities: [...builtinCapabilities(appVars), ...(options.capabilities ?? [])],
+    claudeWorker: options.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
   });
   // With the Claude plan engine on, install and start its worker on the
   // sandbox now, so the first turn doesn't wait on it.
@@ -242,7 +245,7 @@ export async function openAgentRuntime(
  * runtime opened with, so both install after open; bots select them by name
  * on their next configure.
  */
-function finishOpen(instance: AgentRuntime, env: Env = process.env): AgentRuntime {
+function finishOpen(instance: AgentRuntime, env: RuntimeEnv): AgentRuntime {
   instance.installCapability(botsCapability(instance));
   instance.installCapability(visionCapability(instance, instance.models, env));
   // A selected id the runtime lacks is silently ignored at configure: say so.
@@ -306,9 +309,10 @@ const FAUX_ASK: ToolCall["arguments"] = {
  */
 export async function openFauxAgentRuntime(
   storePath: string,
-  handlers: Pick<Parameters<typeof AgentRuntime.open>[0], "onFatal" | "onReport"> = {},
-  env: Env = process.env,
+  options: Pick<RuntimeOptions, "onFatal" | "onReport"> & { env: RuntimeEnv },
 ): Promise<AgentRuntime> {
+  const { env, ...handlers } = options;
+  const appVars = appEnv(env);
   const { createModels } = await import("@earendil-works/pi-ai/models");
   const { fauxProvider } = await import("@earendil-works/pi-ai/providers/faux");
 
@@ -375,7 +379,7 @@ export async function openFauxAgentRuntime(
   };
 
   const models = createModels();
-  const tokensPerSecond = Number(env.TINY_AGENTS_FAUX_TOKENS_PER_SECOND);
+  const tokensPerSecond = Number(appVars.TINY_AGENTS_FAUX_TOKENS_PER_SECOND);
   const faux = fauxProvider({
     provider: "faux",
     models: [{ id: TEST_MODEL, name: "Test Model (faux)", reasoning: true }],
@@ -393,7 +397,7 @@ export async function openFauxAgentRuntime(
     provider: "faux",
     lockWaitMs: 5_000,
     approvalTracker: ownerWaits,
-    capabilities: builtinCapabilities(env),
+    capabilities: builtinCapabilities(appVars),
     settings: { retry: { enabled: false } },
     // The .env allowlist names real gateway custom models that don't exist
     // in the faux registry — without this override /models returns an empty

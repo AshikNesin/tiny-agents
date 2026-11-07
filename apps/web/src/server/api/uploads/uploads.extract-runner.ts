@@ -7,6 +7,7 @@
  */
 import { Worker } from "node:worker_threads";
 import { extract, type ExtractInput, type ExtractResult } from "./uploads.extract";
+import { appEnv } from "../../env";
 
 export const EXTRACT_TIMEOUT_MS = 60_000;
 const WORKER_HEAP_MB = 512;
@@ -94,6 +95,5 @@ export function createWorkerRunner(
 export const runInWorker: ExtractRunner = createWorkerRunner();
 
 /** The worker everywhere but under Vitest, which cannot load a .ts worker. */
-export const defaultRunner: ExtractRunner = process.env.VITEST
-  ? (input, mime) => extract(input, mime)
-  : runInWorker;
+export const defaultRunner: ExtractRunner = (input, mime) =>
+  appEnv().VITEST ? extract(input, mime) : runInWorker(input, mime);

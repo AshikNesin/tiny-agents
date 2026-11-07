@@ -68,7 +68,26 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "**",
     rule: "repo/no-raw-env",
-    enabled: false,
+    except: [
+      "packages/core/src/env.ts",
+      "apps/web/src/server/env.ts",
+      "scripts/**",
+      "tests/**",
+      ".agents/**",
+      ".claude/**",
+      ".groot/**",
+      "**/*.config.ts",
+      "**/*.config.*.ts",
+      // Loads .env and hands process.env to bootstrap() and the agent runtime.
+      "apps/web/src/server/entry.node.ts",
+      // Sets the production DATABASE_URL default before bootstrap() validates env.
+      "apps/web/src/server/db/open.ts",
+      // The Claude worker runs on the sandbox VM, outside the app's env; its entry reads process.env.
+      "packages/claude-worker/src/bin.ts",
+      // Hands the worker's environment to git with three overrides; reads no key.
+      "packages/claude-worker/src/coding-ops.ts",
+    ],
+    enabled: true,
   },
   {
     id: "R4",

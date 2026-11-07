@@ -15,8 +15,7 @@ import {
   type SandboxConnection,
   type SshEndpoint,
 } from "@tiny-agents/agent/sandbox";
-
-type Env = Readonly<Record<string, string | undefined>>;
+import { appEnv, type AppEnv } from "../../env";
 
 /** An env value without the quotes a .env file may carry; empty means unset. */
 export const unquoteEnv = (value: string | undefined) =>
@@ -31,7 +30,7 @@ export const unquoteEnv = (value: string | undefined) =>
  * empty value there still reaches the VM; elsewhere empty means "no sandbox"
  * and the browser falls back to local Chromium (issue #79).
  */
-export function sandboxHost(env: Env = process.env): string | undefined {
+export function sandboxHost(env: AppEnv = appEnv()): string | undefined {
   return (
     unquoteEnv(env.SANDBOX_HOST) ?? (env.NODE_ENV === "production" ? "tiny-agents-vm" : undefined)
   );
@@ -72,7 +71,7 @@ const keyFiles = new Map<string, string>();
  * once per path (a fix needs a restart). A local sandbox container (`docker/sandbox/`) needs one,
  * because it is reached without a tailnet to authenticate the app.
  */
-export function sandboxPrivateKey(env: Env = process.env): string | undefined {
+export function sandboxPrivateKey(env: AppEnv = appEnv()): string | undefined {
   const inline = unquoteEnv(env.SANDBOX_SSH_KEY);
   if (inline) return `${inline.replaceAll("\\n", "\n").trim()}\n`;
   const path = unquoteEnv(env.SANDBOX_SSH_KEY_FILE);
@@ -94,7 +93,7 @@ export function sandboxPrivateKey(env: Env = process.env): string | undefined {
 }
 
 /** The endpoint every SSH user dials, or undefined when no sandbox is configured. */
-export function sandboxEndpoint(env: Env = process.env): SshEndpoint | undefined {
+export function sandboxEndpoint(env: AppEnv = appEnv()): SshEndpoint | undefined {
   const host = sandboxHost(env);
   if (!host) return undefined;
   return {
@@ -112,7 +111,7 @@ const connections = new Map<string, SandboxConnection>();
  * The process's connection to the sandbox, or undefined when none is
  * configured: built once per endpoint and shared by every SSH user.
  */
-export function sandboxConnection(env: Env = process.env): SandboxConnection | undefined {
+export function sandboxConnection(env: AppEnv = appEnv()): SandboxConnection | undefined {
   const endpoint = sandboxEndpoint(env);
   if (!endpoint) return undefined;
   const { host, port, user, privateKey } = endpoint;

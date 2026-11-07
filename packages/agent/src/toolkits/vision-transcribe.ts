@@ -65,10 +65,10 @@ export function createTranscriber(
   models: TranscriberModels,
   options: {
     providerId: string;
-    env?: Readonly<Record<string, string | undefined>>;
+    env: Readonly<Record<string, string | undefined>>;
   },
 ): Transcriber {
-  const env = options.env ?? process.env;
+  const { env } = options;
   const directBase = env.VISION_BASE_URL?.trim();
   const directKey = env.VISION_API_KEY?.trim();
 

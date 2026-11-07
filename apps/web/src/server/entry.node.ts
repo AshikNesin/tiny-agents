@@ -126,8 +126,8 @@ async function openRuntime(): Promise<AgentRuntime> {
     return fauxMode()
       ? // Dev/E2E escape hatch: a faux-provider runtime (no network, no keys)
         // so streaming and durability can be exercised end-to-end anywhere.
-        await openFauxAgentRuntime(agentDbPath(), durableHandlers)
-      : await openAgentRuntime({ storePath: agentDbPath(), ...durableHandlers });
+        await openFauxAgentRuntime(agentDbPath(), { ...durableHandlers, env: process.env })
+      : await openAgentRuntime({ storePath: agentDbPath(), ...durableHandlers, env: process.env });
   } catch (error) {
     logger.error({ error }, "Failed to open agent runtime");
     process.exit(1);

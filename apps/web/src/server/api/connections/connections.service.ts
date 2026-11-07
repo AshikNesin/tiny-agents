@@ -5,6 +5,7 @@
  * are write-only from the API's point of view.
  */
 import { asc, eq, inArray } from "drizzle-orm";
+import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import {
   checkPublicUrl,
@@ -116,7 +117,7 @@ const withBots = { bots: { columns: { botId: true } } } as const;
 
 /** Production only talks to public servers; dev/test may use local ones. */
 function checkUrl(url: string): void {
-  if (process.env.NODE_ENV !== "production") return;
+  if (env.NODE_ENV !== "production") return;
   try {
     checkPublicUrl(url);
   } catch (error) {

@@ -144,7 +144,7 @@ function userContent(
 
 export function createSdkQueryFactory(
   sdk: ClaudeSdkModule,
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined>,
 ): QueryFactory {
   return async (ctx: QueryContext) => {
     let turnId = "";
