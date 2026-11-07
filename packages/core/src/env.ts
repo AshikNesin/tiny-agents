@@ -50,7 +50,7 @@ export const envSchema = z.object({
   CORS_ALLOWED_ORIGINS: z.string().default(""),
   /**
    * Comma-separated proxies whose `X-Forwarded-For` names the client: IPv4
-   * addresses or ranges (`10.0.0.0/8`) and IPv6 addresses. Unset trusts
+   * or IPv6 addresses or ranges (`10.0.0.0/8`, `fd00::/8`). Unset trusts
    * `PRIVATE_NETWORKS` (loopback and private ranges); `none` trusts no proxy,
    * so the client is always the socket peer.
    */
@@ -67,7 +67,7 @@ export const envSchema = z.object({
     })
     .refine(
       (entries) => entries.every(isProxyEntry),
-      "must be none, or list IPv4 addresses or ranges (10.0.0.0/8) or IPv6 addresses, comma-separated",
+      "must be none, or list IPv4 or IPv6 addresses or ranges (10.0.0.0/8, fd00::/8), comma-separated",
     ),
   LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
   /** Error reporting; surfaced as `config.sentry`, which the Node entry reads. */

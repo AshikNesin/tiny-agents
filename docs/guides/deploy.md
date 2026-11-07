@@ -68,7 +68,8 @@ Set these on the host; defaults and the full list are in the
   every client, that address is your proxy and is not trusted: add it to
   `TRUSTED_PROXIES`. Setting the variable replaces the default. If clients
   can reach the port directly from a private network, set the proxy's exact
-  address, or `none` when there is no proxy.
+  address, or `none` when there is no proxy. Rate limits count an IPv6
+  client by its /64, the block one host usually holds.
 
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.
