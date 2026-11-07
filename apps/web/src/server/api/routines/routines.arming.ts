@@ -64,7 +64,7 @@ async function queueFireJob(routineId: string, scheduledFor: Date, now: Date): P
 }
 
 /** Cancel a queued fire job. Advisory: it may already have fired or been purged. */
-async function cancelFireJob(jobId: string | null | undefined): Promise<void> {
+export async function cancelFireJob(jobId: string | null | undefined): Promise<void> {
   if (!jobId) return;
   try {
     await cancelJob(jobId);

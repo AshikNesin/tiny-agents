@@ -4,6 +4,9 @@
  * idle sweep closes only idle browsers, planning never launches, and an
  * action tool waits on the owner's hand-back rather than polling.
  */
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import {
   createBrowserSessions,
@@ -52,7 +55,7 @@ function fakeClock() {
 function fakeTransport(options: { gate?: Promise<void> } = {}) {
   const log: string[] = [];
   let dials = 0;
-  const transport: BrowserTransport = async () => {
+  const open = async () => {
     dials += 1;
     if (options.gate) await options.gate;
     const session: BrowserSession = {
@@ -67,12 +70,14 @@ function fakeTransport(options: { gate?: Promise<void> } = {}) {
       close: async () => {
         log.push("close");
       },
-      wipeProfile: async () => {
-        log.push("wipe");
-      },
     };
     return session;
   };
+  const transport: BrowserTransport = Object.assign(open, {
+    wipe: async (dir: string) => {
+      log.push(`wipe ${dir}`);
+    },
+  });
   return {
     transport,
     log,
@@ -115,7 +120,7 @@ describe("browser sessions", () => {
     await closing;
 
     expect(sessions.get(TARGET)).toBeUndefined();
-    expect(fake.log).toEqual(["close", "wipe"]);
+    expect(fake.log).toEqual(["close", "wipe /tmp/ta-bs/p1"]);
     // Not an open failure the status route should report.
     expect(sessions.openState(TARGET)).toEqual({ opening: false, error: undefined });
     // The next call opens fresh.
@@ -123,6 +128,62 @@ describe("browser sessions", () => {
     expect(sessions.get(TARGET)).toBeDefined();
     expect(fake.dials).toBe(2);
     await sessions.closeAll();
+  });
+
+  it("wipes a profile no browser has open: its local dir and the transport's copy", async () => {
+    const profilesDir = mkdtempSync(join(tmpdir(), "ta-bs-wipe-"));
+    const fake = fakeTransport();
+    const sessions = createBrowserSessions({ transport: fake.transport, profilesDir });
+    await sessions.acquire(TARGET);
+    await sessions.close(TARGET);
+    const dir = join(profilesDir, TARGET.profile);
+    expect(existsSync(dir)).toBe(true);
+
+    await sessions.close(TARGET, { wipeProfile: true });
+
+    expect(existsSync(dir)).toBe(false);
+    expect(fake.log).toEqual(["close", `wipe ${dir}`]);
+    rmSync(profilesDir, { recursive: true, force: true });
+  });
+
+  it("an open that starts during a wiping close waits for the wipe, then opens fresh", async () => {
+    const profilesDir = mkdtempSync(join(tmpdir(), "ta-bs-race-"));
+    const fake = fakeTransport();
+    const sessions = createBrowserSessions({ transport: fake.transport, profilesDir });
+    await sessions.acquire(TARGET);
+    const dir = join(profilesDir, TARGET.profile);
+
+    const closing = sessions.close(TARGET, { wipeProfile: true });
+    const reopened = sessions.acquire(TARGET);
+    await Promise.all([closing, reopened]);
+
+    expect(sessions.get(TARGET)).toBeDefined();
+    expect(existsSync(dir)).toBe(true);
+    expect(fake.log).toEqual(["close", `wipe ${dir}`]);
+    await sessions.closeAll();
+    rmSync(profilesDir, { recursive: true, force: true });
+  });
+
+  it("a failed wipe of the transport's copy fails the close, and a close clears the last open error", async () => {
+    const profilesDir = mkdtempSync(join(tmpdir(), "ta-bs-fail-"));
+    const failing: BrowserTransport = Object.assign(
+      async (): Promise<BrowserSession> => {
+        throw new Error("no display");
+      },
+      {
+        wipe: async () => {
+          throw new Error("VM unreachable");
+        },
+      },
+    );
+    const sessions = createBrowserSessions({ transport: failing, profilesDir });
+    await expect(sessions.acquire(TARGET)).rejects.toThrow("no display");
+    expect(sessions.openState(TARGET).error).toMatch(/no display/);
+
+    await expect(sessions.close(TARGET, { wipeProfile: true })).rejects.toThrow("VM unreachable");
+
+    expect(sessions.openState(TARGET).error).toBeUndefined();
+    rmSync(profilesDir, { recursive: true, force: true });
   });
 
   it("sweeps idle browsers on the clock, and never one the owner drives", async () => {

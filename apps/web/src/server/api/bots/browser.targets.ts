@@ -9,9 +9,13 @@ import { conversationOwner } from "./bots.owner";
 
 export const SHARED_BROWSER_PROFILE = "shared";
 
+export function ownBrowserProfile(botId: string): string {
+  return `bot-${botId}`;
+}
+
 export function browserTargetForBot(bot: { id: string; browserProfile: string }): BrowserTarget {
   return {
-    profile: bot.browserProfile === "own" ? `bot-${bot.id}` : SHARED_BROWSER_PROFILE,
+    profile: bot.browserProfile === "own" ? ownBrowserProfile(bot.id) : SHARED_BROWSER_PROFILE,
     tab: bot.id,
   };
 }
