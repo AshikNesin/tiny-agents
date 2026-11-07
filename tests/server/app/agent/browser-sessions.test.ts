@@ -146,6 +146,24 @@ describe("browser sessions", () => {
     rmSync(profilesDir, { recursive: true, force: true });
   });
 
+  it("an open that starts during a wiping close waits for the wipe, then opens fresh", async () => {
+    const profilesDir = mkdtempSync(join(tmpdir(), "ta-bs-race-"));
+    const fake = fakeTransport();
+    const sessions = createBrowserSessions({ transport: fake.transport, profilesDir });
+    await sessions.acquire(TARGET);
+    const dir = join(profilesDir, TARGET.profile);
+
+    const closing = sessions.close(TARGET, { wipeProfile: true });
+    const reopened = sessions.acquire(TARGET);
+    await Promise.all([closing, reopened]);
+
+    expect(sessions.get(TARGET)).toBeDefined();
+    expect(existsSync(dir)).toBe(true);
+    expect(fake.log).toEqual(["close", `wipe ${dir}`]);
+    await sessions.closeAll();
+    rmSync(profilesDir, { recursive: true, force: true });
+  });
+
   it("sweeps idle browsers on the clock, and never one the owner drives", async () => {
     const { clock, advance } = fakeClock();
     const fake = fakeTransport();

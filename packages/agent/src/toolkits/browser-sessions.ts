@@ -254,6 +254,8 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
 
   const live = new Map<string, LiveBrowserSession>();
   const opening = new Map<string, Opening>();
+  /** Closes in progress: an open waits for them, so a wipe never deletes a launching profile. */
+  const closing = new Map<string, Promise<void>>();
   /** In-flight tab opens per browser, by tab key, so one agent never gets two tabs. */
   const tabsOpening = new WeakMap<LiveBrowserSession, Map<string, Promise<BrowserSession>>>();
   /** Last open failure per profile, surfaced by the status route until the next attempt. */
@@ -333,9 +335,12 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     if (!pending) {
       let phase: BrowserPhase = "starting";
       let cancelled = false;
-      const promise = openSession(profile, (next) => {
-        phase = next;
-      })
+      const promise = (closing.get(profile) ?? Promise.resolve())
+        .then(() =>
+          openSession(profile, (next) => {
+            phase = next;
+          }),
+        )
         .then(async (opened) => {
           if (cancelled) {
             // Closed while opening: the browser never becomes live.
@@ -514,14 +519,24 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       release(entry);
     },
     async close(target, { wipeProfile = false } = {}) {
-      const pending = opening.get(target.profile);
-      if (pending) {
-        pending.cancel();
-        await pending.promise.catch(() => undefined);
+      const { profile } = target;
+      const done = (async () => {
+        const pending = opening.get(profile);
+        if (pending) {
+          pending.cancel();
+          await pending.promise.catch(() => undefined);
+        }
+        const entry = live.get(profile);
+        if (entry) await closeEntry(profile, entry);
+        if (wipeProfile) await wipe(profile);
+      })();
+      const settled = done.catch(() => undefined);
+      closing.set(profile, settled);
+      try {
+        await done;
+      } finally {
+        if (closing.get(profile) === settled) closing.delete(profile);
       }
-      const entry = live.get(target.profile);
-      if (entry) await closeEntry(target.profile, entry);
-      if (wipeProfile) await wipe(target.profile);
     },
     async closeTab(target) {
       const entry = live.get(target.profile);
