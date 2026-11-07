@@ -121,7 +121,12 @@ export {
   PROVIDER_KINDS,
   type GatewayCustomProvider,
 } from "./providers/kinds";
-export { testModelCall, testUnsavedModel, type TestResult } from "./providers/test-call";
+export {
+  testClassifierCall,
+  testModelCall,
+  testUnsavedModel,
+  type TestResult,
+} from "./providers/test-call";
 export {
   discoverModels,
   DiscoveryError,

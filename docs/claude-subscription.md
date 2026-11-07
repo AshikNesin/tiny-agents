@@ -20,7 +20,7 @@ container from `pnpm sandbox:up` ([local sandbox](guides/local-sandbox.md)).
 
 1. In **Settings → Models**, choose **Add models**, kind **Claude plan**,
    **Check models** and **Connect**. No key and no restart.
-2. Open **Settings → Claude plan**. On first use the app installs Node,
+2. Open **Settings → Models → Claude plan**. On first use the app installs Node,
    the Agent SDK and Claude Code on the sandbox (a minute or two; the
    local container has them preinstalled). The card shows the progress.
 3. Choose **Sign in to Claude**. A terminal tab opens and types
@@ -152,7 +152,7 @@ point a real bot at it.
 1. Add the Claude plan account and **Disable** it, give a bot one of its
    models and send. The turn pauses (or goes to the fallback model, if you
    set one). Nothing is installed on the sandbox.
-2. **Enable** the account. Settings → Claude plan shows "Installing", then
+2. **Enable** the account. Settings → Models → Claude plan shows "Installing", then
    "not signed in".
 3. Sign in from the card. The terminal tab runs `claude auth login`; after
    it, the card shows the plan.

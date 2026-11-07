@@ -6,7 +6,7 @@ which seeds a `Faux` account with one model, `Test Model (faux)`.
 
 ## Sub-features
 
-- `models-settings`: Settings → Models (`/settings?tab=models`): the `Faux` card, Add models → Claude plan → `Check models` (three static models, no network) → `Connect` behind step-up → a `Claude plan` card with its models and `Fallback model`; `Default models` table.
+- `models-settings`: Settings → Models (`/settings?tab=models`): the `Faux` card, Add models → Claude plan → `Check models` (three static models, no network) → `Connect` behind step-up → a `Claude plan` card with its models, `Fallback model` and the `Claude plan engine` region (engine on; `Disable` → `The engine is off. Enable this account to turn it on.`, no `claude-plan-account`, no `claude-plan-sign-in`); `Default models` table.
 
 - `models-catalog`: `GET /api/v1/models` returns `models` (each with `providerName`, `available`, `unavailableReason`), `defaultModelId`, `canAnswer` and `providers` (`id`, `name`, `kind`, `status`, `enabled`, `modelCount`).
 - `models-picker`: the bot dialog's model button opens a menu grouped by account name (`Faux`); a model that can't run is greyed out with its reason.

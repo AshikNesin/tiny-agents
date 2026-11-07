@@ -7,7 +7,7 @@ The owner opens real shells on the sandbox VM from `/terminal`: each tab is a tm
 - `terminal-open` opens a tab (`Open your first tab` on an empty page, the strip's `New tab` +, or the header's `New tab`) and streams the shell prompt.
 - `terminal-type` sends keystrokes and shows the command's output.
 - `terminal-reattach` keeps the tab across a reload; the re-attach redraws the pane.
-- `terminal-tabs` switches tabs (tablist `Terminal tabs`); `/terminal?tab=<name>` opens on a given tab (Settings → Claude plan links there).
+- `terminal-tabs` switches tabs (tablist `Terminal tabs`); `/terminal?tab=<name>` opens on a given tab (Settings → Models → Claude plan links there).
 - `terminal-keys` keys panel (complementary `Terminal keys`: esc, tab, arrows, home/end, pgup/pgdn, ^C ^D ^Z ^L ^R, sticky ctrl/alt, paste); `Hide keys panel` / `Show keys panel`, remembered per browser.
 - `terminal-font` `Smaller text` / `Larger text`, the size badge resets.
 - `terminal-fullscreen` `Full screen` / `Exit full screen`.

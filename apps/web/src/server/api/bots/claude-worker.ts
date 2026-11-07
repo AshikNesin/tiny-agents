@@ -3,7 +3,7 @@
  * sandbox container), set up over the same sandbox connection the browser,
  * the computer and the terminal use. The app installs Node, the Agent SDK and
  * Claude Code there on first use, uploads the worker and reaches it through
- * an SSH tunnel; the owner only signs Claude Code in (Settings → Claude plan).
+ * an SSH tunnel; the owner only signs Claude Code in (Settings → Models → Claude plan).
  *
  * The worker ships as one file. The production build emits it next to the
  * bundle as `claude-worker.mjs` (scripts/build.mjs); dev bundles the

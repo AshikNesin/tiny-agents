@@ -66,7 +66,7 @@ the Code page and the bots' `code_*` tools stay off. See [Code](./features/code.
 
 Claude plan (experimental, off by default): add a Claude plan account in
 Settings → Models; the app sets Claude Code up on the sandbox and you sign
-in from Settings → Claude plan. Its fallback model is optional.
+in from Settings → Models → Claude plan. Its fallback model is optional.
 The token is the worker's bearer, not a Claude credential. See
 [Use your Claude subscription](./claude-subscription.md).
 

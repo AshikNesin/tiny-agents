@@ -3,7 +3,7 @@
  * as configured, saved or not, so the owner sees the key and endpoint work
  * before a bot depends on them.
  */
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import type { CredentialResolver, ModelConfig } from "./config";
 import { buildProviders } from "./kinds";
@@ -54,6 +54,50 @@ export async function testModelCall(
         latencyMs,
         error: (reply.errorMessage ?? `The call ended: ${reply.stopReason}`).slice(0, 500),
       };
+    }
+    return { ok: true, latencyMs };
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - started,
+      error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+    };
+  }
+}
+
+/** Call classifier `model` once with one yes/no question, `timeoutMs` at most. */
+export async function testClassifierCall(
+  models: { classify: ReturnType<typeof createModels>["classify"] },
+  model: ClassifierModel<ClassifierApi>,
+  options: { timeoutMs?: number } = {},
+): Promise<TestResult> {
+  const started = Date.now();
+  const signal = AbortSignal.timeout(options.timeoutMs ?? 15_000);
+  try {
+    const result = await models.classify(
+      model,
+      {
+        state: { message: "Say OK." },
+        questions: {
+          ok: {
+            type: "bool",
+            instructions: "Does the message ask for a short reply?",
+            criteria: { true: "It does.", false: "It does not." },
+          },
+        },
+      },
+      { signal },
+    );
+    const latencyMs = Date.now() - started;
+    if (result.stopReason !== "stop") {
+      return {
+        ok: false,
+        latencyMs,
+        error: (result.errorMessage ?? `The call ended: ${result.stopReason}`).slice(0, 500),
+      };
+    }
+    if (!result.answers.ok) {
+      return { ok: false, latencyMs, error: "The classifier gave no answer." };
     }
     return { ok: true, latencyMs };
   } catch (error) {

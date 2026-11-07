@@ -108,7 +108,7 @@ export function TerminalPage() {
   const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
   const [status, setStatus] = useState<TerminalStatusWire | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // `?tab=` opens on that tab (Settings → Claude plan → Sign in links here).
+  // `?tab=` opens on that tab (Settings → Models → Claude plan → Sign in links here).
   const [searchParams] = useSearchParams();
   const [active, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});

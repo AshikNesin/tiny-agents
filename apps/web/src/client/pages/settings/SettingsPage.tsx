@@ -4,14 +4,13 @@ import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { Bell, Cpu, Settings as SettingsIcon, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { Bell, Cpu, Settings as SettingsIcon, ShieldCheck, Users } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { ClaudePlanStatusCard } from "../../components/ClaudePlanStatus";
 import { PeopleSettings } from "../../components/PeopleSettings";
 import { useIsGuest } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
 
-const TABS = ["general", "models", "notifications", "security", "people", "claude"] as const;
+const TABS = ["general", "models", "notifications", "security", "people"] as const;
 
 /** A guest's settings (issue #145): the theme and their own sign-in. The rest is the owner's. */
 function GuestSettings() {
@@ -25,13 +24,14 @@ function GuestSettings() {
   );
 }
 
-/** App settings, plus the Claude plan status card. No credential fields. */
+/** App settings. No credential fields. */
 export function SettingsPage() {
   const guest = useIsGuest();
   const [params, setParams] = useSearchParams();
   if (guest) return <GuestSettings />;
   // `?tab=models` opens a tab directly (the chat's "No model is set up" link).
-  const requested = params.get("tab");
+  // The Claude plan lives in the Models tab now: `?tab=claude` lands there.
+  const requested = params.get("tab") === "claude" ? "models" : params.get("tab");
   const tab = TABS.includes(requested as (typeof TABS)[number]) ? requested! : "general";
   return (
     <PageLayout
@@ -39,7 +39,7 @@ export function SettingsPage() {
       description="Manage your application preferences, configuration, and security."
       maxWidth="5xl"
     >
-      {/* At ~390px the four line tabs don't fit. max-w-full + overflow-x-auto
+      {/* At ~390px the line tabs don't fit. max-w-full + overflow-x-auto
           scrolls them; justify-start because the strip's justify-center would
           center the overflow (first tab bleeds left, unreachable). */}
       <Tabs
@@ -69,10 +69,6 @@ export function SettingsPage() {
             <Users className="size-4" />
             People
           </TabsTrigger>
-          <TabsTrigger value="claude">
-            <Sparkles className="size-4" />
-            Claude plan
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="mt-6">
@@ -96,10 +92,6 @@ export function SettingsPage() {
 
         <TabsContent value="people" className="mt-6">
           <PeopleSettings />
-        </TabsContent>
-
-        <TabsContent value="claude" className="mt-6">
-          <ClaudePlanStatusCard />
         </TabsContent>
       </Tabs>
     </PageLayout>

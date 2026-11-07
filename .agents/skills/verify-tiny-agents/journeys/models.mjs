@@ -50,8 +50,32 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
     await expect(page.getByText("Claude Sonnet 4.6")).toBeVisible();
     await expect(page.getByLabel("Fallback model")).toBeVisible();
     await expect(page.getByText("Default models")).toBeVisible();
+    // The Claude plan's engine and sign-in live in its card (no separate tab).
+    const engine = page.getByRole("region", { name: "Claude plan engine" });
+    await expect(engine).toContainText("The engine is on.");
+    await expect(engine).toContainText("Never paste a Claude token into tiny-agents");
   });
   await proof("models-plan-card");
+
+  await step(
+    "disabled, the plan's card says the engine is off, with nothing to sign in to",
+    async () => {
+      // The account's own switch, in its header (model rows have their own).
+      const header = page.locator("[data-slot=card-header]").filter({
+        has: page.getByRole("button", { name: "Claude plan", exact: true }),
+      });
+      await header.getByRole("button", { name: "Disable" }).click();
+      const engine = page.getByRole("region", { name: "Claude plan engine" });
+      await expect(engine).toContainText("The engine is off. Enable this account to turn it on.");
+      await expect(engine).toContainText("turns pause.");
+      // With the engine off the account line says nothing true either way (#171).
+      await expect(engine.getByTestId("claude-plan-account")).toHaveCount(0);
+      await expect(engine.getByTestId("claude-plan-sign-in")).toHaveCount(0);
+      await header.getByRole("button", { name: "Enable" }).click();
+      await expect(engine).toContainText("The engine is on.");
+    },
+  );
+  await proof("models-plan-engine-off");
 
   await step("the New bot picker groups the plan's models under the account", async () => {
     const { models } = await api.get("/models");

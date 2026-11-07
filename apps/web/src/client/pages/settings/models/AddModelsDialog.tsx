@@ -151,8 +151,8 @@ function ConnectionFields({
       </Field>
       {draft.kind === "claude-plan" ? (
         <Text variant="meta" className="block">
-          The Claude plan needs no key here: Claude Code signs in on the sandbox (Settings → Claude
-          plan).
+          The Claude plan needs no key here: Claude Code signs in on the sandbox (sign in from this
+          account's card once it is added).
         </Text>
       ) : (
         <>

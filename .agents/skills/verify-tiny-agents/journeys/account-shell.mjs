@@ -127,16 +127,18 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
     await expect(sidebar.getByText("Demo User")).toBeVisible();
   });
-  await step("Claude plan tab: engine off, no account line, no sign-in button", async () => {
-    await page.getByRole("tab", { name: "Claude plan" }).click();
-    const panel = page.getByRole("tabpanel", { name: "Claude plan" });
-    await expect(panel).toContainText("The engine is off. Add or enable the Claude plan account");
-    // With the engine off the account line says nothing true either way (#171).
-    await expect(panel.getByTestId("claude-plan-account")).toHaveCount(0);
-    await expect(panel.getByTestId("claude-plan-sign-in")).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "Check again" })).toHaveCount(0);
+  await step("Settings tabs: the Claude plan lives in Models, not a tab of its own", async () => {
+    await page.goto("/settings");
+    const tabs = page.getByRole("tab");
+    await expect(tabs).toHaveText(["General", "Models", "Notifications", "Security", "People"]);
+    // An old `?tab=claude` link lands on Models.
+    await page.goto("/settings?tab=claude");
+    await expect(page.getByRole("tab", { name: "Models" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
-  await proof("claude-plan");
+  await proof("settings-tabs");
   await step("People tab: add a guest", async () => {
     await page.getByRole("tab", { name: "People" }).click();
     const panel = page.getByRole("tabpanel", { name: "People" });
@@ -189,8 +191,8 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   await proof("phone-back");
   await step("phone: Settings tabs stay reachable (scrollable strip)", async () => {
     await page.goto("/settings");
-    await page.getByRole("tab", { name: "Claude plan" }).click();
-    await expect(page.getByRole("tabpanel", { name: "Claude plan" })).toBeVisible();
+    await page.getByRole("tab", { name: "People" }).click();
+    await expect(page.getByRole("tabpanel", { name: "People" })).toBeVisible();
     await page.getByRole("tab", { name: "General" }).click();
     await expect(page.getByRole("tabpanel", { name: "General" })).toBeVisible();
   });

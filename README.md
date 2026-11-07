@@ -55,7 +55,7 @@ Search and Fetch are free; without the key those tools stay hidden.
 
 A bot can answer on a Claude Pro or Max plan. tiny-agents installs and
 runs Claude Code on your sandbox; you add the Claude plan account in
-Settings → Models and sign in once from Settings → Claude plan. Claude Code holds the
+Settings → Models and sign in once from Settings → Models → Claude plan. Claude Code holds the
 login on the sandbox. tiny-agents does not: it will not read, store, or
 refresh that credential, and it will not proxy Anthropic.
 

@@ -1,6 +1,6 @@
 # Account and app shell
 
-The frame around every signed-in page: a sidebar with the account button (initial + name) whose menu holds the set-up pages, Settings, Send feedback and Log out; a ⌘K palette; light/dark/system themes from Settings or the palette; a sidebar that collapses to an icon rail and stays collapsed; and on phones a drawer opened from each page's menu button, with Back buttons on detail pages. Settings also holds the People tab (guests) and the Claude plan card.
+The frame around every signed-in page: a sidebar with the account button (initial + name) whose menu holds the set-up pages, Settings, Send feedback and Log out; a ⌘K palette; light/dark/system themes from Settings or the palette; a sidebar that collapses to an icon rail and stays collapsed; and on phones a drawer opened from each page's menu button, with Back buttons on detail pages. Settings also holds the People tab (guests); the Claude plan lives in its account card under Models.
 
 ## Sub-features
 
@@ -9,7 +9,7 @@ The frame around every signed-in page: a sidebar with the account button (initia
 - `shell-palette` opens with Ctrl/⌘+K or `Search`, filters, navigates and closes.
 - `shell-theme` switches Light/Dark/System from Settings → General → Appearance (`aria-pressed`) or the palette's Theme group (`Dark ✓`); persists across reload (`localStorage["groot.theme"]`, `dark` class on `<html>`).
 - `shell-collapse` collapses the sidebar to a rail (`Collapse sidebar` / `Expand sidebar`), persisted across reload.
-- `shell-claude-plan` shows the Claude plan card's off state: engine off, no sandbox, no sign-in.
+- `shell-settings-tabs` lists the Settings tabs; there is no Claude plan tab, and `?tab=claude` lands on Models.
 - `shell-people` adds a guest (Settings → People) and removes it after confirming.
 - `shell-phone` at 390x844: sidebar off-canvas, `Open menu` opens the drawer with the set-up pages listed directly, a drawer link navigates and closes it, detail pages show `Back`, the Settings tab strip scrolls.
 
@@ -17,7 +17,7 @@ The frame around every signed-in page: a sidebar with the account button (initia
 
 - Account menu: the `Account and navigation` button at the bottom of the sidebar.
 - Palette: `Search` (top of the sidebar) or Ctrl+K / ⌘K.
-- Settings tabs: `General`, `Notifications`, `Security`, `People`, `Claude plan`.
+- Settings tabs: `General`, `Models`, `Notifications`, `Security`, `People`.
 - Phone: `Open menu` at the top of each page; detail pages (vault item, new vault item, skill, connection, credential request) show `Back` instead.
 
 ## Driving it with ta-verify
@@ -31,10 +31,10 @@ Preconditions:
 - **Palette.** Ctrl+K → dialog `Command Menu`; type `Tasks`; option `Tasks` → `/tasks`, palette closed. Expected exactly one `Tasks` option.
 - **Theme.** `/settings`, group `Theme` → `Light`: `aria-pressed=true`, no `dark` class, stored `light`; reload keeps it. `Search` → option `Dark` → `dark` class, stored `dark`, Settings shows `Dark` pressed; reopen palette: option `Dark ✓`.
 - **Collapse.** `Collapse sidebar` → `Expand sidebar` shown, `Demo User` hidden, link `Tasks` has `title="Tasks"`; reload: still collapsed; `Expand sidebar` restores.
-- **Claude plan.** Tab `Claude plan`: `The engine is off. Add or enable the Claude plan account…`; no `claude-plan-account` line (the engine is off, #171); no `claude-plan-sign-in`, no `Check again`.
+- **Settings tabs.** Tabs are exactly `General`, `Models`, `Notifications`, `Security`, `People`; `/settings?tab=claude` selects `Models`.
 - **People.** Tab `People`: `Name`, `Email`, `Password` → `Add guest`; toast `Guest added`; `guest-row` with the email and `No bots shared`. `Remove <name>` → alertdialog `Remove` → row gone; `GET /api/v1/people` no longer has it.
-- **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Routines…Vault, no `Collapse sidebar`. Link `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: tabs `Claude plan` and `General` both selectable.
-- **Proof.** `ta-verify drive $S/journeys/account-shell.mjs` → `account-shell/account-menu`, `feedback-panel`, `theme-light`, `theme-dark`, `sidebar-rail`, `claude-plan`, `guest-added`, `phone-drawer`, `phone-back`, `phone-settings`.
+- **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Routines…Vault, no `Collapse sidebar`. Link `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: tabs `People` and `General` both selectable.
+- **Proof.** `ta-verify drive $S/journeys/account-shell.mjs` → `account-shell/account-menu`, `feedback-panel`, `theme-light`, `theme-dark`, `sidebar-rail`, `settings-tabs`, `guest-added`, `phone-drawer`, `phone-back`, `phone-settings`.
 
 ## Gotchas
 
