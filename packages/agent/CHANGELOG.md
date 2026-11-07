@@ -1,5 +1,85 @@
 # @tiny-agents/agent
 
+## 0.4.0
+
+### Minor Changes
+
+- [#187](https://github.com/AshikNesin/tiny-agents/pull/187) [`83ae1fd`](https://github.com/AshikNesin/tiny-agents/commit/83ae1fd3a967a9625171681c9d4059b3b3f65b47) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Every environment read goes through a validated env module, and lint rule R3
+  (`repo/no-raw-env`) fails any other `process.env` read with a message naming
+  `appEnv()`, core `env` and the schema.
+  
+  - `@tiny-agents/agent` no longer reads `process.env`. `AgentRuntime.open` and
+    `ClaudeCodeEngine` read the `env` they are given (default empty), and
+    `aiProviderIds`, `primaryProviderId`, `isGatewayConfigured`,
+    `createProviderModels`, `registerGatewayCustomProviders`,
+    `assertNoClaudeOauthToken`, `createClassifier` and `createTranscriber` take
+    `env` as a required argument. The Node entry passes `process.env`.
+  - `@tiny-agents/claude-worker`: `readClaudeAuth`, `requireSubscriptionLogin`
+    and `createSdkQueryFactory` take `env` as a required argument, and
+    `createClaudeWorkerServer` defaults it to empty. The worker's entry passes
+    `process.env`.
+  - `@groot/web`: the sandbox, browser, computer, TinyFish, TZ, SECRETS_KEY and
+    Claude plan variables join the `appEnv()` schema, and the app reads them,
+    SHELLEY_URL, ORIGIN and NODE_ENV only through `appEnv()` or core `env`.
+
+### Patch Changes
+
+- [#196](https://github.com/AshikNesin/tiny-agents/pull/196) [`75fbeb5`](https://github.com/AshikNesin/tiny-agents/commit/75fbeb5d0967630ae0a2465821d693648303ac9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Deleting a bot releases everything it owned, listed in one table.
+  
+  - `@tiny-agents/agent`: `BrowserSessions.close(target, { wipeProfile: true })`
+    wipes the profile even when no browser has it open. It removes the local
+    profile dir, then calls the transport's new optional `wipe(profileDir)`
+    (the sandbox VM transport deletes its copy there). `BrowserTransport` is
+    now a callable interface carrying `wipe`, and `BrowserSession.wipeProfile`
+    is gone. A failed wipe on the VM now fails the close instead of passing
+    silently. An open that starts while a close is running waits for it, so a
+    wipe never deletes the profile of a browser that is launching. A close
+    clears the profile's last open error.
+  - `@groot/web`: every per-bot resource has one entry in `BOT_RESOURCES`
+    (`apps/web/src/server/api/bots/bot-resources.ts`), and `deleteBot` runs
+    them all. A deleted bot's queued routine jobs are cancelled, its vault
+    grants are dropped, and its own browser profile and desktop are wiped even
+    after it switched to the shared browser. The delete answers without
+    waiting for the browser and desktop releases on the sandbox VM; each
+    failure is still logged with its resource kind.
+  - `@groot/web`: Reset browser, on the chat panel and on the Browser page,
+    deletes the local profile folder through the session manager (the local
+    Chromium transport never deleted it itself). A failed wipe answers 502.
+
+- [#191](https://github.com/AshikNesin/tiny-agents/pull/191) [`ae0099b`](https://github.com/AshikNesin/tiny-agents/commit/ae0099bfe7b438b19fd865ea839c73948afa41f9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Delete dead code, and fail CI on new dead code. `pnpm check:dead` runs knip
+  and fails on any unused file, export or unresolved import. Its message says
+  to add a file loaded by path to `entry` in `knip.json`, and otherwise to run
+  `scripts/codemods/remove-dead-code.ts`, which deletes unused files only with
+  `--remove-files`. Oxlint's `no-unused-vars` is now an error.
+  
+  - `@tiny-agents/agent`, `@tiny-agents/code`, `@tiny-agents/claude-worker`:
+    unused exports inside the packages lose `export` or are deleted, including
+    the deprecated `createGatewayModels` alias and `ClaudeEngineError`. No
+    export reachable from a package's `exports` map changes.
+  - `tiny-agents`: `pnpm db:generate` runs `drizzle-kit generate` alone.
+    `apps/web/drizzle/index.ts`, which only the deleted Workers entry read, and
+    `scripts/db-generate.ts`, which wrote it, are gone. The script is listed in
+    `additional_exclusions`, so `pnpm groot:sync` never restores it.
+
+- [#195](https://github.com/AshikNesin/tiny-agents/pull/195) [`80eb795`](https://github.com/AshikNesin/tiny-agents/commit/80eb79545ca683eb3db84ce44f0b01716cfea5c5) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Parse durable memo and document JSON once, at the toolkit boundary. Every
+  read of a task memo or task document field that holds a structured value
+  (`gate:plan`, `gate:review`, `vault:use`, the questions document's questions
+  and answers, the credential request) now parses it with a zod schema in
+  `packages/agent/src/durable-json.ts`, and a value of the wrong shape fails at
+  once with an error naming its key. Writes copy the value to JSON with
+  `toJson`, which drops undefined fields.
+  
+  - `@tiny-agents/agent`: no public export changes. `zod` is a new dependency.
+    A pending vault card in a call's details shows only when it fits the
+    `ChatVaultUse` shape, fields outside that shape are dropped, and a card
+    that does not fit logs a warning naming `vault`.
+  - `tiny-agents`: lint rule R6 (`repo/no-double-cast`) fails any `as unknown as`
+    or `as any as` in `packages/agent/src` outside test helpers, with a message
+    naming `durable-json.ts`. Rule R6b (`repo/no-never-cast`) fails `as never`
+    there too; the gate now carries its hooks as `GateHooks<unknown>`.
+- Updated dependencies [[`ae0099b`](https://github.com/AshikNesin/tiny-agents/commit/ae0099bfe7b438b19fd865ea839c73948afa41f9), [`83ae1fd`](https://github.com/AshikNesin/tiny-agents/commit/83ae1fd3a967a9625171681c9d4059b3b3f65b47)]:
+  - @tiny-agents/claude-worker@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,93 @@
 # @groot/web
 
+## 0.4.1
+
+### Patch Changes
+
+- [#196](https://github.com/AshikNesin/tiny-agents/pull/196) [`75fbeb5`](https://github.com/AshikNesin/tiny-agents/commit/75fbeb5d0967630ae0a2465821d693648303ac9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Deleting a bot releases everything it owned, listed in one table.
+  
+  - `@tiny-agents/agent`: `BrowserSessions.close(target, { wipeProfile: true })`
+    wipes the profile even when no browser has it open. It removes the local
+    profile dir, then calls the transport's new optional `wipe(profileDir)`
+    (the sandbox VM transport deletes its copy there). `BrowserTransport` is
+    now a callable interface carrying `wipe`, and `BrowserSession.wipeProfile`
+    is gone. A failed wipe on the VM now fails the close instead of passing
+    silently. An open that starts while a close is running waits for it, so a
+    wipe never deletes the profile of a browser that is launching. A close
+    clears the profile's last open error.
+  - `@groot/web`: every per-bot resource has one entry in `BOT_RESOURCES`
+    (`apps/web/src/server/api/bots/bot-resources.ts`), and `deleteBot` runs
+    them all. A deleted bot's queued routine jobs are cancelled, its vault
+    grants are dropped, and its own browser profile and desktop are wiped even
+    after it switched to the shared browser. The delete answers without
+    waiting for the browser and desktop releases on the sandbox VM; each
+    failure is still logged with its resource kind.
+  - `@groot/web`: Reset browser, on the chat panel and on the Browser page,
+    deletes the local profile folder through the session manager (the local
+    Chromium transport never deleted it itself). A failed wipe answers 502.
+
+- [#189](https://github.com/AshikNesin/tiny-agents/pull/189) [`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Render every breadcrumb through one component, so a list item can't land
+  inside another one again (40a8092, e017985).
+  
+  - `@groot/ui`: new `Breadcrumbs` in `@groot/ui/breadcrumb`. Its children are
+    the ancestor crumbs, each a link or button element, and `page` is the
+    current page: `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`.
+    It places the list items and separators. Fragment children are flattened,
+    and a `false` page counts as no page. Every existing breadcrumb export
+    stays.
+  - Lint rule R5a now fails an import of `BreadcrumbItem` or
+    `BreadcrumbSeparator` from `@groot/ui`, `@groot/ui/breadcrumb` or the ui
+    source outside `packages/ui`, with a message naming `Breadcrumbs`. New rule
+    R5c fails an `<li>`, `BreadcrumbItem`, `BreadcrumbList` or
+    `BreadcrumbSeparator` passed as a crumb to `Breadcrumbs`.
+  - `@groot/shell` (Storage) and `@groot/jobs` (JobDetail) render their
+    breadcrumbs with `Breadcrumbs`. The markup is unchanged.
+  - `@groot/web`: the skill, connection and connection tool pages use
+    `Breadcrumbs`. The skill page's `Skills` crumb is now a real link with an
+    `href`, so it can be reached with Tab and opened in a new tab.
+
+- [#187](https://github.com/AshikNesin/tiny-agents/pull/187) [`83ae1fd`](https://github.com/AshikNesin/tiny-agents/commit/83ae1fd3a967a9625171681c9d4059b3b3f65b47) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Every environment read goes through a validated env module, and lint rule R3
+  (`repo/no-raw-env`) fails any other `process.env` read with a message naming
+  `appEnv()`, core `env` and the schema.
+  
+  - `@tiny-agents/agent` no longer reads `process.env`. `AgentRuntime.open` and
+    `ClaudeCodeEngine` read the `env` they are given (default empty), and
+    `aiProviderIds`, `primaryProviderId`, `isGatewayConfigured`,
+    `createProviderModels`, `registerGatewayCustomProviders`,
+    `assertNoClaudeOauthToken`, `createClassifier` and `createTranscriber` take
+    `env` as a required argument. The Node entry passes `process.env`.
+  - `@tiny-agents/claude-worker`: `readClaudeAuth`, `requireSubscriptionLogin`
+    and `createSdkQueryFactory` take `env` as a required argument, and
+    `createClaudeWorkerServer` defaults it to empty. The worker's entry passes
+    `process.env`.
+  - `@groot/web`: the sandbox, browser, computer, TinyFish, TZ, SECRETS_KEY and
+    Claude plan variables join the `appEnv()` schema, and the app reads them,
+    SHELLEY_URL, ORIGIN and NODE_ENV only through `appEnv()` or core `env`.
+
+- [#192](https://github.com/AshikNesin/tiny-agents/pull/192) [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The client signs the owner out only when the session guard rejects the
+  session, never on a credential failure.
+  
+  - `@groot/core`: the session guard (`jwtAuthMiddleware` and `verifyToken`)
+    answers a missing, invalid or expired token with a 401 coded
+    `SESSION_INVALID` (`ErrorCode.SESSION_INVALID`, thrown by the new
+    `sessionInvalid()` in `utils/jwt.utils`). Before, it was coded
+    `UNAUTHORIZED`. Every other 401, such as a wrong password, an unknown
+    passkey or a missing admin key, keeps `UNAUTHORIZED`.
+  - `@groot/shell`: `apiClient.onUnauthorized` handlers run only for a
+    `SESSION_INVALID` response, not for every 401. A login form or step-up
+    dialog that gets a plain 401 shows the server's message and the owner stays
+    signed in. `UnauthorizedEvent` is unchanged.
+  - `@groot/web`: a refused vault step-up (wrong password or unknown passkey)
+    answers 401 with the server's message. The route no longer converts core's
+    401 to 403 by hand.
+- Updated dependencies [[`75fbeb5`](https://github.com/AshikNesin/tiny-agents/commit/75fbeb5d0967630ae0a2465821d693648303ac9a), [`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48), [`ae0099b`](https://github.com/AshikNesin/tiny-agents/commit/ae0099bfe7b438b19fd865ea839c73948afa41f9), [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b), [`80eb795`](https://github.com/AshikNesin/tiny-agents/commit/80eb79545ca683eb3db84ce44f0b01716cfea5c5), [`2987d1a`](https://github.com/AshikNesin/tiny-agents/commit/2987d1ab228b638bf08f7f792b9fa6d5f8eae667), [`af45885`](https://github.com/AshikNesin/tiny-agents/commit/af4588573840d89af0ff193d302fe6272a8c90f0), [`f598340`](https://github.com/AshikNesin/tiny-agents/commit/f598340325e146ab91cc988b4a85ca01ee134ae6), [`4bd27ac`](https://github.com/AshikNesin/tiny-agents/commit/4bd27ac3c83f67f4b4ad8d757f08248ea3333160), [`83ae1fd`](https://github.com/AshikNesin/tiny-agents/commit/83ae1fd3a967a9625171681c9d4059b3b3f65b47), [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7), [`bc8cc60`](https://github.com/AshikNesin/tiny-agents/commit/bc8cc60182a4f056a526a53dca925d5384c636af)]:
+  - @tiny-agents/agent@0.4.0
+  - @groot/ui@0.11.0
+  - @groot/shell@1.4.0
+  - @groot/jobs@1.1.2
+  - @tiny-agents/code@0.2.1
+  - @groot/core@2.0.0
+
 ## 0.4.0
 
 ### Minor Changes

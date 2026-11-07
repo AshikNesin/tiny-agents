@@ -1,5 +1,72 @@
 # @groot/core
 
+## 2.0.0
+
+### Major Changes
+
+- [#186](https://github.com/AshikNesin/tiny-agents/pull/186) [`f598340`](https://github.com/AshikNesin/tiny-agents/commit/f598340325e146ab91cc988b4a85ca01ee134ae6) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove the Cloudflare Workers adapters. tiny-agents runs on Node only, so
+  `@groot/core/database/d1` (`migrateD1`, `splitStatements`),
+  `@groot/core/storage/r2` and the `r2Storage` export of `@groot/core/storage`
+  are gone. Use `@groot/core/database/node` and `localStorage` from
+  `@groot/core/storage/node`. Both files are listed in `additional_exclusions`,
+  so `pnpm groot:sync` never restores them.
+
+### Minor Changes
+
+- [#192](https://github.com/AshikNesin/tiny-agents/pull/192) [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The client signs the owner out only when the session guard rejects the
+  session, never on a credential failure.
+  
+  - `@groot/core`: the session guard (`jwtAuthMiddleware` and `verifyToken`)
+    answers a missing, invalid or expired token with a 401 coded
+    `SESSION_INVALID` (`ErrorCode.SESSION_INVALID`, thrown by the new
+    `sessionInvalid()` in `utils/jwt.utils`). Before, it was coded
+    `UNAUTHORIZED`. Every other 401, such as a wrong password, an unknown
+    passkey or a missing admin key, keeps `UNAUTHORIZED`.
+  - `@groot/shell`: `apiClient.onUnauthorized` handlers run only for a
+    `SESSION_INVALID` response, not for every 401. A login form or step-up
+    dialog that gets a plain 401 shows the server's message and the owner stays
+    signed in. `UnauthorizedEvent` is unchanged.
+  - `@groot/web`: a refused vault step-up (wrong password or unknown passkey)
+    answers 401 with the server's message. The route no longer converts core's
+    401 to 403 by hand.
+
+### Patch Changes
+
+- [#190](https://github.com/AshikNesin/tiny-agents/pull/190) [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Comments in `@groot/core` (env, bootstrap, storage adapter), the `@groot/jobs` "no job handlers registered" log line and the setup script's deploy hint no longer describe the deleted Workers target, `@groot/ai` or a `startWebApp()` that does not exist.
+
+- [#203](https://github.com/AshikNesin/tiny-agents/pull/203) [`2987d1a`](https://github.com/AshikNesin/tiny-agents/commit/2987d1ab228b638bf08f7f792b9fa6d5f8eae667) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rate limits and request logs key on the client's real address. A client could
+  send a new `X-Forwarded-For` value on each sign-in attempt to get a fresh
+  rate-limit bucket and guess passwords without limit.
+  
+  - `clientIp()` returns the socket peer. It reads `X-Forwarded-For` only when
+    the peer is a trusted proxy, and then takes the rightmost hop that is not
+    one. It no longer reads `CF-Connecting-IP` or `X-Real-IP`.
+  - `TRUSTED_PROXIES` (env) and `config.trustedProxies` list the trusted
+    proxies: IPv4 addresses or ranges and IPv6 addresses. Unset trusts
+    loopback and the private networks (`127.0.0.0/8`, `10.0.0.0/8`,
+    `172.16.0.0/12`, `192.168.0.0/16`, `::1`). A list replaces that default,
+    and `none` trusts no proxy.
+
+- [#206](https://github.com/AshikNesin/tiny-agents/pull/206) [`af45885`](https://github.com/AshikNesin/tiny-agents/commit/af4588573840d89af0ff193d302fe6272a8c90f0) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rate limits count an IPv6 client by its /64, and `TRUSTED_PROXIES` accepts
+  IPv6 ranges. An IPv6 host usually holds a whole /64, so a client could pick a
+  new address in it for each sign-in attempt and get a fresh rate-limit bucket.
+  
+  - The rate limiters key an IPv6 client by its /64. An IPv4 client, including
+    one in IPv4-mapped IPv6 form, keeps its own address as the key.
+  - `TRUSTED_PROXIES` (env) and `config.trustedProxies` accept IPv6 ranges such
+    as `fd00::/8`. The default adds `fc00::/7` (unique local addresses), so a
+    proxy on a private IPv6 network is trusted without setup.
+  - A `TRUSTED_PROXIES` range with bits set past its prefix stops the boot with
+    an error that names the entry, for example `10.0.0.1/8` or
+    `::ffff:10.0.0.0/8` (which would mean `::/8`). Write the range's first
+    address, and IPv4 ranges in IPv4 form.
+
+- [#193](https://github.com/AshikNesin/tiny-agents/pull/193) [`4bd27ac`](https://github.com/AshikNesin/tiny-agents/commit/4bd27ac3c83f67f4b4ad8d757f08248ea3333160) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The session guard (`jwtAuthMiddleware`) now looks up the token's account and
+  answers 401 `SESSION_INVALID` when it no longer exists, so the client signs
+  out. It sets `c.get("user")` from that account. Before, a signed token was
+  enough, so a guest the owner removed kept a working session until the token
+  expired, and tiny-agents treated that account (no `guests` row) as the owner.
+
 ## 1.2.0
 
 ### Minor Changes
