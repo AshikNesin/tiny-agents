@@ -9,7 +9,7 @@ import { newToolUseId, type QueryContext, type QueryFactory } from "./sessions";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
 import type { ImagePart, JsonSchema } from "./protocol";
 
-export interface SdkToolResult {
+interface SdkToolResult {
   content: { type: "text"; text: string }[];
   isError?: boolean;
 }
@@ -44,7 +44,7 @@ export interface SdkQueryOptions {
   includePartialMessages: false;
 }
 
-export interface SdkUserMessage {
+interface SdkUserMessage {
   type: "user";
   message: {
     role: "user";
@@ -59,7 +59,7 @@ export interface SdkUserMessage {
   session_id: string;
 }
 
-export interface SdkMessage {
+interface SdkMessage {
   type: string;
   subtype?: string;
   session_id?: string;

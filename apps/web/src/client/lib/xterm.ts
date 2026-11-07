@@ -26,8 +26,6 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 import type { IClipboardProvider } from "@xterm/addon-clipboard";
 import { copyText, isMac } from "./clipboard";
 
-export type { Terminal } from "@xterm/xterm";
-
 export interface TerminalSize {
   cols: number;
   rows: number;
@@ -43,7 +41,7 @@ export const DEFAULT_FONT_SIZE = 14;
  * the real one. Ordered by platform (macOS, Windows, Linux) with the
  * generic last.
  */
-export const TERMINAL_FONT_FAMILY =
+const TERMINAL_FONT_FAMILY =
   '"SF Mono", ui-monospace, Menlo, Monaco, "Cascadia Mono", "Cascadia Code", Consolas, "JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", monospace';
 
 export interface TerminalOptions {

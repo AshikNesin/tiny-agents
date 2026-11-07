@@ -28,7 +28,7 @@ const languages = {
   yaml: () => import("shiki/langs/yaml.mjs"),
 };
 
-export type HighlighterLanguage = keyof typeof languages;
+type HighlighterLanguage = keyof typeof languages;
 
 const aliases: Record<string, HighlighterLanguage> = {
   js: "javascript",

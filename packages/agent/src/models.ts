@@ -16,7 +16,7 @@ export const GATEWAY_PROVIDER = "cloudflare-ai-gateway";
  * `claude setup-token`). The pinned pi-ai build impersonates the Claude Code
  * client when it sees one. tiny-agents must never carry that token.
  */
-export const CLAUDE_OAUTH_TOKEN_MARKER = "sk-ant-oat";
+const CLAUDE_OAUTH_TOKEN_MARKER = "sk-ant-oat";
 
 /** Boot refused because model-provider config holds a Claude Code OAuth token. */
 export class ClaudeOauthTokenError extends Error {
@@ -39,7 +39,7 @@ export class ClaudeOauthTokenError extends Error {
  * Walks strings and JSON so a token buried in `GATEWAY_CUSTOM_PROVIDERS`
  * is caught before pi-ai can see it. Returns the key path, never the token.
  */
-export function findClaudeOauthToken(
+function findClaudeOauthToken(
   env: Readonly<Record<string, string | undefined>>,
 ): string | undefined {
   for (const [key, value] of Object.entries(env)) {
@@ -89,7 +89,7 @@ function oauthTokenIn(value: unknown, path: string): string | undefined {
   return undefined;
 }
 
-export const GATEWAY_ENV_KEYS = [
+const GATEWAY_ENV_KEYS = [
   "CLOUDFLARE_API_KEY",
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_GATEWAY_ID",
@@ -206,11 +206,6 @@ export function unquote(value: string | undefined): string | undefined {
   return match ? match[2].trim() : trimmed;
 }
 
-/** True when every Cloudflare AI Gateway setting is present. */
-export function isGatewayConfigured(env: Readonly<Record<string, string | undefined>>): boolean {
-  return GATEWAY_ENV_KEYS.every((key) => (env[key] ?? "").trim() !== "");
-}
-
 /**
  * pi-ai model registry with the AI_PROVIDERS providers registered (default:
  * the Cloudflare AI Gateway alone). Each built-in provider reads its own key
@@ -232,9 +227,6 @@ export function createProviderModels(
   if (ids.includes(GATEWAY_PROVIDER)) registerGatewayCustomProviders(models, env);
   return models;
 }
-
-/** @deprecated Use `createProviderModels`; same registry (AI_PROVIDERS-driven). */
-export const createGatewayModels = createProviderModels;
 
 /**
  * Which registered providers have complete auth right now (a key and any
@@ -310,7 +302,7 @@ function gatewayCustomAuth(useNativeHeader: boolean) {
   };
 }
 
-export function registerGatewayCustomProviders(
+function registerGatewayCustomProviders(
   models: MutableModels,
   env: Readonly<Record<string, string | undefined>>,
 ): void {

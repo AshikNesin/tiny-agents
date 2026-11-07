@@ -23,7 +23,7 @@ export interface ParsedSkill {
 
 export const MAX_FILES = 50;
 export const MAX_FILE_BYTES = 200_000;
-export const MAX_TOTAL_BYTES = 1_000_000;
+const MAX_TOTAL_BYTES = 1_000_000;
 const SCRIPT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1|bat|exe)$/i;
 
 /** Read `name` / `description` from simple YAML frontmatter (single-line or folded values). */

@@ -27,7 +27,7 @@ export interface Slide {
 }
 
 /** Inflate the named parts (others are never decompressed). */
-export function readParts(
+function readParts(
   bytes: Uint8Array,
   wanted: (name: string) => boolean,
   maxPartBytes: number,

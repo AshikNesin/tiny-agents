@@ -40,7 +40,7 @@ const SEARCH_TIMEOUT_MS = 30_000;
 /** Fetch's CDN ceiling is 120s; wait long enough to receive that error. */
 const FETCH_TIMEOUT_MS = 150_000;
 
-export type WebSource = { url: string; title: string };
+type WebSource = { url: string; title: string };
 
 const fail = (text: string): ToolExecutionResult => ({
   output: [{ type: "text", text }],

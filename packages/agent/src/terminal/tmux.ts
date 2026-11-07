@@ -15,10 +15,10 @@
 const LC_ALL = "LC_ALL=C.UTF-8";
 
 /** Dedicated tmux socket: the owner's own tmux server is never touched. */
-export const TMUX_SOCKET = "ta-terminal";
+const TMUX_SOCKET = "ta-terminal";
 
 /** Session names are `ta-term-<n>` on that socket. */
-export const SESSION_PREFIX = "ta-term-";
+const SESSION_PREFIX = "ta-term-";
 
 /** The terminal type every attach requests. */
 export const TERM = "xterm-256color";
@@ -27,7 +27,7 @@ export const TERM = "xterm-256color";
 export const MAX_SESSIONS = 12;
 
 /** tmux history lines kept per session (the scrollback survives attaches). */
-export const SCROLLBACK = 50_000;
+const SCROLLBACK = 50_000;
 
 declare const sessionNameBrand: unique symbol;
 
@@ -166,7 +166,7 @@ export function loginShellCommand(): string {
 }
 
 /** One row of the session listing. */
-export interface TmuxSessionRow {
+interface TmuxSessionRow {
   name: SessionName;
   /** tmux session_created: epoch seconds. */
   createdAt: number;

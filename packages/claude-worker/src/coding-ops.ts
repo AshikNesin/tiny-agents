@@ -35,7 +35,7 @@ const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_LIST_ENTRIES = 1_000;
 
-export function defaultUploadsDir(home = homedir()): string {
+function defaultUploadsDir(home = homedir()): string {
   return path.join(home, ".tiny-agents", "uploads");
 }
 

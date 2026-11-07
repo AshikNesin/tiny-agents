@@ -15,7 +15,7 @@ import type { OutboxEntry } from "./chat-session";
  * A shared chat's silent reply (issue #145): the bot judged the message was
  * not for it. Hidden, also while it streams in (`[sk…`).
  */
-export function isHiddenReply(message: ChatMessage): boolean {
+function isHiddenReply(message: ChatMessage): boolean {
   if (isSkipReply(message)) return true;
   const text = message.text.trim();
   return (
@@ -50,7 +50,7 @@ const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Dat
  * run of them into the assistant message that follows, as the Code page
  * does, so the turn reads as one row: its tool steps, then the reply.
  */
-export function isToolRound(message: ChatMessage): boolean {
+function isToolRound(message: ChatMessage): boolean {
   return (
     message.role === "assistant" &&
     message.status === "done" &&

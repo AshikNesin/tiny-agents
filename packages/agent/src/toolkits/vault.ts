@@ -33,7 +33,7 @@ import {
 } from "../vault";
 
 /** A vault approval nobody answers fails closed after this long. */
-export const VAULT_APPROVAL_TTL_MS = 10 * 60_000;
+const VAULT_APPROVAL_TTL_MS = 10 * 60_000;
 
 export interface VaultToolkitOptions {
   /** The app's broker. Without one the toolkit offers no tools. */
@@ -46,7 +46,7 @@ const fail = (text: string): ToolExecutionResult => ({
 });
 
 /** One item as the model reads it. */
-export function describeItem(item: VaultItemMeta): string {
+function describeItem(item: VaultItemMeta): string {
   const lines = [`- ${item.handle} (${item.kind}): ${item.label}`];
   if (item.username) lines.push(`  username: ${item.username}`);
   if (item.origins.length > 0) lines.push(`  fills on: ${item.origins.join(", ")}`);

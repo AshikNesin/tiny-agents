@@ -6,7 +6,7 @@ import { Card } from "@groot/ui/card";
 import { Text } from "@groot/ui/typography";
 import type { SkillFile } from "../../lib/skills-api";
 
-export function formatFileSize(bytes: number): string {
+function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

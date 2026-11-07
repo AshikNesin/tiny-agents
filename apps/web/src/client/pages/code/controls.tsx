@@ -40,7 +40,7 @@ export function loadModels(instanceId: string): Promise<ModelOption[]> {
 
 export const DEFAULT = "default";
 
-export function modelLabel(model: ModelOption | undefined, fallback = ""): string {
+function modelLabel(model: ModelOption | undefined, fallback = ""): string {
   return model?.label || model?.id || fallback;
 }
 

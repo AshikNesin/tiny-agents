@@ -14,7 +14,7 @@ import { defineExtension, defineTool, section } from "@earendil-works/pi-durable
 import type { Capability } from "../capabilities";
 
 /** Why an instructions change was refused, as the model reads it. */
-export type InstructionsRefusal = "disabled" | "unattended";
+type InstructionsRefusal = "disabled" | "unattended";
 
 /** What the app provides: read, apply and review the bot's instructions. */
 export interface InstructionsStore {

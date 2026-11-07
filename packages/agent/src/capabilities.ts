@@ -49,7 +49,7 @@ export interface ToolInfo {
   vault?: boolean;
 }
 
-export type CapabilityKind = "toolkit" | "skills" | "connection";
+type CapabilityKind = "toolkit" | "skills" | "connection";
 
 export interface CapabilityInfo {
   /** The extension name, stored per conversation by pi-durable ("tasks", "mcp:linear"). */

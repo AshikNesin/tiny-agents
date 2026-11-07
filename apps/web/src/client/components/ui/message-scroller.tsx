@@ -4,13 +4,6 @@ import * as React from "react";
 import {
   MessageScroller as MessageScrollerPrimitive,
   useMessageScroller,
-  useMessageScrollerScrollable,
-  useMessageScrollerVisibility,
-  type MessageScrollerDefaultScrollPosition,
-  type MessageScrollerScrollAlign,
-  type MessageScrollerScrollOptions,
-  type MessageScrollerScrollable,
-  type MessageScrollerVisibilityState,
 } from "@shadcn/react/message-scroller";
 import { ArrowDownIcon } from "lucide-react";
 
@@ -137,14 +130,6 @@ function MessageScrollerButton({
   );
 }
 
-export type {
-  MessageScrollerDefaultScrollPosition,
-  MessageScrollerScrollAlign,
-  MessageScrollerScrollOptions,
-  MessageScrollerScrollable,
-  MessageScrollerVisibilityState,
-};
-
 export {
   MessageScrollerProvider,
   MessageScroller,
@@ -153,6 +138,4 @@ export {
   MessageScrollerItem,
   MessageScrollerButton,
   useMessageScroller,
-  useMessageScrollerScrollable,
-  useMessageScrollerVisibility,
 };

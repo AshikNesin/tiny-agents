@@ -90,7 +90,7 @@ export const toolSpecSchema = z.strictObject({
 
 export type ToolSpec = z.infer<typeof toolSpecSchema>;
 
-export const imagePartSchema = z.strictObject({
+const imagePartSchema = z.strictObject({
   data: z.string(),
   mimeType: z.string().min(1),
 });

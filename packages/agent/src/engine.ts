@@ -111,7 +111,7 @@ export interface AgentEngine {
 }
 
 /** The engine a model id selects. Anything other than `claude-code/…` is pi. */
-export function engineKindForModel(modelId: string): AgentEngineKind {
+function engineKindForModel(modelId: string): AgentEngineKind {
   return claudeCodeBareModel(modelId) ? "claude-code" : "pi";
 }
 

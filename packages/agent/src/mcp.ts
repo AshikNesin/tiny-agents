@@ -20,7 +20,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 import type { Capability } from "./capabilities";
 
-export { UnauthorizedError, auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
+export { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 export type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 export type {
   OAuthClientInformationMixed,
@@ -70,7 +70,7 @@ export interface ConnectMcpOptions {
   createTransport?: () => Transport;
 }
 
-export function toToolInfo(tool: McpTool): McpToolInfo {
+function toToolInfo(tool: McpTool): McpToolInfo {
   return {
     name: tool.name,
     ...(tool.title || tool.annotations?.title

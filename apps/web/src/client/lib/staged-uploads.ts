@@ -17,7 +17,7 @@ export const MAX_ATTACHMENTS = 10;
 /** The server's per-file limit (uploads.routes.ts, code.routes.ts), checked before uploading. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
-export type StagedStatus = "uploading" | "done" | "error";
+type StagedStatus = "uploading" | "done" | "error";
 
 export interface StagedUpload<Ref> {
   key: string;
@@ -57,7 +57,7 @@ export function humanSize(size: number): string {
 let pastedCount = 0;
 
 /** The name a file uploads under: a pasted image has none of its own. */
-export function stagedName(file: File): string {
+function stagedName(file: File): string {
   return file.name || `pasted-image-${++pastedCount}.png`;
 }
 

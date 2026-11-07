@@ -40,29 +40,10 @@ import {
 } from "./computer-sessions";
 import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 
-export {
-  closeAllComputerSessions,
-  createComputerSessions,
-  DesktopGoneError,
-  OWNER_DRIVING,
-  OwnerDrivingError,
-  WindowMismatchError,
-  type ComputerApp,
-  type ComputerDesktop,
-  type ComputerDriver,
-  type ComputerOpenState,
-  type ComputerPhase,
-  type ComputerSessions,
-  type ComputerSessionsOptions,
-  type ComputerTransport,
-  type ComputerWindow,
-  type LiveComputer,
-  type OpenDesktopOptions,
-  type WindowBinding,
-} from "./computer-sessions";
+export { createComputerSessions, type ComputerSessions } from "./computer-sessions";
 
 /** The profile every bot uses unless the app says otherwise. */
-export const SHARED_COMPUTER_PROFILE = "shared";
+const SHARED_COMPUTER_PROFILE = "shared";
 
 export interface ComputerToolkitOptions {
   /** The session manager; without one (no sandbox VM) the toolkit offers no working tools. */

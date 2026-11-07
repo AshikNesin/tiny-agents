@@ -34,7 +34,7 @@ export interface SearchSelectOption {
   disabled?: boolean;
 }
 
-export interface SearchSelectAction {
+interface SearchSelectAction {
   key: string;
   label: string;
   icon?: React.ReactNode;

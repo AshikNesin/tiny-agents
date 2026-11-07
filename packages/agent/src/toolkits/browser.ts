@@ -35,22 +35,15 @@ export {
   closeAllBrowserSessions,
   conversationBrowserTarget,
   createBrowserSessions,
-  type BrowserClock,
   type BrowserDriver,
-  type BrowserOpenState,
-  type BrowserPhase,
   type BrowserSession,
   type BrowserSessions,
   type BrowserSessionsOptions,
   type BrowserTarget,
   type BrowserTransport,
   type BrowserVnc,
-  type LiveBrowserSession,
-  type LiveBrowserTab,
-  type OpenBrowserOptions,
 } from "./browser-sessions";
-export { assertRefShape, isBlockedPrivateUrl } from "./browser-guard";
-export { normalizeCredentialRequest } from "./browser-vault";
+export { isBlockedPrivateUrl } from "./browser-guard";
 
 export interface BrowserToolkitOptions extends BrowserSessionsOptions {
   /**

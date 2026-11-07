@@ -186,14 +186,6 @@ export type CredentialRequestOutcome =
   | { status: "filled"; filled: string[]; savedHandle?: string }
   | { status: "cancelled" };
 
-/** Masked in the sheet; never saved when an OTP or CVC. */
-export const SECRET_FIELD_TYPES: ReadonlySet<CredentialFieldType> = new Set([
-  "password",
-  "otp",
-  "card_number",
-  "cvc",
-]);
-
 /** A credential request is open per conversation at most, and this many per bot per hour. */
 export const CREDENTIAL_REQUESTS_PER_HOUR = 3;
 

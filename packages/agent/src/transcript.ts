@@ -70,7 +70,7 @@ export function userMessagesOf(entries: readonly EntryRecord[]): GateUserMessage
 }
 
 /** Trusted peer attribution stored in a `chat.user` entry's data. */
-export function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
+function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
   const data = record(entry.data);
   const peer = record(data?.peer);
@@ -107,7 +107,7 @@ function authorOfData(data: Record<string, unknown> | undefined): ChatAuthor | u
 }
 
 /** The trusted sender of a `chat.user` entry (shared chats only). */
-export function authorOf(entry: EntryRecord): ChatAuthor | undefined {
+function authorOf(entry: EntryRecord): ChatAuthor | undefined {
   return entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
 }
 
@@ -279,7 +279,7 @@ function firstMessage(entry: EntryRecord): Message | undefined {
   return entry.model?.[0];
 }
 
-export function assistantToChat(
+function assistantToChat(
   id: string,
   message: AssistantMessage,
   streaming = false,

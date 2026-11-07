@@ -119,7 +119,7 @@ function parseList(raw: string | null): string[] {
 }
 
 /** An item as the Vault UI shows it: metadata and policy, never a value. */
-export function itemView(row: VaultItemRow) {
+function itemView(row: VaultItemRow) {
   const meta = toMeta(row);
   return {
     id: row.id,

@@ -19,6 +19,7 @@
     "packages/core/src/storage/r2.ts",
     "tests/server/core/d1-migrate.test.ts",
     "docs/guides/deploy-cloudflare.md",
-    "docs/features/ai-inference.md"
+    "docs/features/ai-inference.md",
+    "scripts/db-generate.ts"
   ]
 }

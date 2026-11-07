@@ -5,7 +5,7 @@
  * (not crash) on genuinely malformed config.
  */
 import { describe, expect, it } from "vite-plus/test";
-import { createGatewayModels, ClaudeOauthTokenError } from "../../../../packages/agent/src/models";
+import { createProviderModels, ClaudeOauthTokenError } from "../../../../packages/agent/src/models";
 import { AgentRuntime } from "../../../../packages/agent/src/runtime";
 
 const GOOD_PROVIDERS = JSON.stringify([
@@ -17,7 +17,7 @@ const GOOD_PROVIDERS = JSON.stringify([
 ]);
 
 function models(env: Record<string, string | undefined>) {
-  return createGatewayModels(env)
+  return createProviderModels(env)
     .getProviders()
     .filter((p) => p.id.startsWith("custom-"));
 }
@@ -49,7 +49,7 @@ describe("gateway env tolerance", () => {
       CLOUDFLARE_GATEWAY_ID: "gw",
     };
     const model = models(env)
-      .flatMap((p) => createGatewayModels(env).getModels(p.id))
+      .flatMap((p) => createProviderModels(env).getModels(p.id))
       .find((m) => m.id === "glm-5.3-flash");
     expect(model?.baseUrl).toBe(
       "https://gateway.example.com/v1/acc/gw/custom-zai-coding-plan/api/coding/paas/v4",
@@ -57,7 +57,7 @@ describe("gateway env tolerance", () => {
   });
 
   it("falls back to the real gateway host when GATEWAY_BASE_URL is not a URL", () => {
-    const registry = createGatewayModels({
+    const registry = createProviderModels({
       GATEWAY_CUSTOM_PROVIDERS: GOOD_PROVIDERS,
       GATEWAY_BASE_URL: "not a url",
       CLOUDFLARE_ACCOUNT_ID: "acc",
@@ -99,7 +99,7 @@ describe("gateway auth scheme selection", () => {
   ]);
 
   it("direct-to-gateway: no placeholder header (native cf-aig auth applies)", () => {
-    const registry = createGatewayModels({
+    const registry = createProviderModels({
       GATEWAY_CUSTOM_PROVIDERS: PROVIDERS,
       CLOUDFLARE_ACCOUNT_ID: "acc",
       CLOUDFLARE_GATEWAY_ID: "gw",
@@ -113,7 +113,7 @@ describe("gateway auth scheme selection", () => {
   });
 
   it("behind GATEWAY_BASE_URL: placeholder bearer header present (proxy swaps it)", () => {
-    const registry = createGatewayModels({
+    const registry = createProviderModels({
       GATEWAY_CUSTOM_PROVIDERS: PROVIDERS,
       GATEWAY_BASE_URL: "https://cf-proxy.example.com",
       CLOUDFLARE_ACCOUNT_ID: "acc",
@@ -168,7 +168,7 @@ describe("Claude Code OAuth token guard", () => {
   it("refuses gateway setup when an env value holds an sk-ant-oat token", () => {
     const token = "sk-ant-oat01-do-not-keep";
     expect(() =>
-      createGatewayModels({
+      createProviderModels({
         ANTHROPIC_API_KEY: token,
         CLOUDFLARE_ACCOUNT_ID: "acc",
         CLOUDFLARE_GATEWAY_ID: "gw",
@@ -179,7 +179,7 @@ describe("Claude Code OAuth token guard", () => {
   it("refuses a token buried in custom provider JSON and does not echo the secret", () => {
     const token = "sk-ant-oat01-buried";
     try {
-      createGatewayModels({
+      createProviderModels({
         GATEWAY_CUSTOM_PROVIDERS: JSON.stringify([{ id: "custom-x", apiKey: token, models: [] }]),
         CLOUDFLARE_ACCOUNT_ID: "acc",
         CLOUDFLARE_GATEWAY_ID: "gw",

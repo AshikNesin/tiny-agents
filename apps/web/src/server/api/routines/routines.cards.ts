@@ -21,7 +21,7 @@ import { publishBotChatEvent } from "../bots/bots.events";
 export type { RoutineRunCard };
 
 /** Cards one chat shows: the newest finished runs across the bot's routines. */
-export const CHAT_CARDS = 50;
+const CHAT_CARDS = 50;
 
 type CardRow = {
   id: string;
@@ -93,7 +93,7 @@ export async function chatCards(
 }
 
 /** Send a run that just finished to the open chats of its bot. Best-effort. */
-export async function publishRunCard(runId: string): Promise<void> {
+async function publishRunCard(runId: string): Promise<void> {
   try {
     const [row] = await db
       .select(cardColumns)

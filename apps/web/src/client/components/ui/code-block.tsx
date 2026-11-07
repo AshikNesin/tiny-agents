@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { CheckIcon, CopyIcon } from "lucide-react";
 
-import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
 
 /**
@@ -36,7 +34,7 @@ const codeBlockVariants = /* @__PURE__ */ cva(
   },
 );
 
-export type CodeBlockProps = React.ComponentProps<"div"> &
+type CodeBlockProps = React.ComponentProps<"div"> &
   VariantProps<typeof codeBlockVariants> & { size?: "default" | "sm" };
 
 function CodeBlock({ className, variant = "default", size = "default", ...props }: CodeBlockProps) {
@@ -74,70 +72,6 @@ function CodeBlockTitle({ className, ...props }: React.ComponentProps<"div">) {
       )}
       {...props}
     />
-  );
-}
-
-/**
- * Header actions. Placed directly inside `CodeBlock` (not in a header) the
- * actions float top-right and appear on hover/focus.
- */
-function CodeBlockActions({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="code-block-actions"
-      className={cn(
-        "-my-1 ms-auto -me-1.5 flex shrink-0 items-center gap-1 [[data-slot=code-block]>&]:absolute [[data-slot=code-block]>&]:end-2 [[data-slot=code-block]>&]:top-2 [[data-slot=code-block]>&]:z-10 [[data-slot=code-block]>&]:m-0 [[data-slot=code-block]>&]:opacity-0 [[data-slot=code-block]>&]:transition-opacity [[data-slot=code-block]>&]:group-focus-within/code-block:opacity-100 [[data-slot=code-block]>&]:group-hover/code-block:opacity-100 group-data-[size=sm]/code-block:[[data-slot=code-block]>&]:end-1.5 group-data-[size=sm]/code-block:[[data-slot=code-block]>&]:top-1.5 [[data-slot=code-block]>&]:pointer-coarse:opacity-100 [[data-slot=code-block]>&]:*:[button]:bg-background [[data-slot=code-block]>&]:*:[button]:ring-1 [[data-slot=code-block]>&]:*:[button]:ring-foreground/10",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-/** Copies `value` to the clipboard; shows a check for 2s after copying. */
-function CodeBlockCopyButton({
-  value,
-  variant = "ghost",
-  size = "icon-xs",
-  className,
-  onClick,
-  ...props
-}: React.ComponentProps<typeof Button> & { value: string }) {
-  const [copied, setCopied] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!copied) {
-      return;
-    }
-
-    const timeout = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [copied]);
-
-  return (
-    <>
-      <Button
-        data-slot="code-block-copy-button"
-        data-copied={copied || undefined}
-        variant={variant}
-        size={size}
-        aria-label={copied ? "Copied" : "Copy"}
-        className={cn(className)}
-        onClick={(event) => {
-          onClick?.(event);
-          navigator.clipboard
-            .writeText(value)
-            .then(() => setCopied(true))
-            .catch(() => {});
-        }}
-        {...props}
-      >
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </Button>
-      <span aria-live="polite" className="sr-only">
-        {copied ? "Copied" : ""}
-      </span>
-    </>
   );
 }
 
@@ -234,27 +168,4 @@ function CodeBlockLine({
   );
 }
 
-function CodeBlockFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="code-block-footer"
-      className={cn(
-        "flex min-w-0 shrink-0 items-center gap-2 px-3 pb-3 text-muted-foreground group-data-[size=sm]/code-block:px-2.5 group-data-[size=sm]/code-block:pb-2.5",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export {
-  CodeBlock,
-  CodeBlockHeader,
-  CodeBlockTitle,
-  CodeBlockActions,
-  CodeBlockCopyButton,
-  CodeBlockContent,
-  CodeBlockLine,
-  CodeBlockFooter,
-  codeBlockVariants,
-};
+export { CodeBlock, CodeBlockHeader, CodeBlockTitle, CodeBlockContent, CodeBlockLine };

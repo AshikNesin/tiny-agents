@@ -34,7 +34,7 @@ import {
   setAgentRuntimeForTests,
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
 
-export { TEST_MODEL, TEST_MODEL_2 } from "../../../packages/agent/src/testing";
+export { TEST_MODEL } from "../../../packages/agent/src/testing";
 
 // ── The real runtime ────────────────────────────────────────────────────
 
@@ -135,7 +135,7 @@ export type FakeRuntime = { [K in FakeMethod]: MockOf<AgentRuntime[K]> } & {
 };
 
 /** The catalog the fake lists: a text model and one that sees images. */
-export const FAKE_MODELS: ModelInfo[] = [
+const FAKE_MODELS: ModelInfo[] = [
   {
     id: "known-model",
     name: "Known Model",
@@ -161,7 +161,7 @@ export const FAKE_MODELS: ModelInfo[] = [
  * reason, the shapes `finishedReplyTo` reads. `say` scripts a conversation
  * outright (owner, bot, owner, bot…).
  */
-export interface TranscriptScript {
+interface TranscriptScript {
   submitted(conversation: number): string[];
   answer(requestId: string, reply: Omit<FinishedReply, "createdAt">, conversation?: number): void;
   say(conversation: number, ...turns: string[]): void;

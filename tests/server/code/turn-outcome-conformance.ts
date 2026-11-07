@@ -15,7 +15,7 @@ import { turnOutcomeProblems } from "../../../packages/code/src/testing";
 export type TurnCase = "answered" | "failed" | "steered" | "unanswered";
 
 /** What each played thread must come to, whichever harness ran it. */
-export const TURN_CASES: Record<
+const TURN_CASES: Record<
   TurnCase,
   { story: string; users: string[]; text: string; failed: boolean }
 > = {

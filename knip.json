@@ -1,0 +1,44 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreFiles": ["site/demos/kit/**"],
+  "ignoreIssues": {
+    "site/demos/kit/**": ["exports", "types"]
+  },
+  "rules": {
+    "dependencies": "off",
+    "devDependencies": "off",
+    "optionalPeerDependencies": "off",
+    "unlisted": "off",
+    "binaries": "off"
+  },
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/**/*.{ts,mjs,cjs}",
+        ".groot/*.ts",
+        "site/demos/main.tsx",
+        "site/demos/vite.config.ts",
+        "tests/**/*.{test,spec}.{ts,tsx}",
+        "tests/{server,client}/setup.ts",
+        "tests/e2e/**/*.ts",
+        "tests/kit-consumers/consumer.tsx",
+        "playwright.headless.config.ts",
+        "vitest.config.server.ts"
+      ],
+      "project": [
+        "scripts/**/*.{ts,tsx,mjs,cjs}",
+        "site/**/*.{ts,tsx}",
+        "site/demos/**/*.css",
+        "tests/**/*.{ts,tsx}",
+        "*.{ts,mjs}"
+      ]
+    },
+    "apps/web": {
+      "entry": ["src/server/api/uploads/uploads.extract.worker.ts", "src/server/db/schema.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/*": {
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  }
+}

@@ -9,7 +9,7 @@ import { Worker } from "node:worker_threads";
 import { extract, type ExtractInput, type ExtractResult } from "./uploads.extract";
 import { appEnv } from "../../env";
 
-export const EXTRACT_TIMEOUT_MS = 60_000;
+const EXTRACT_TIMEOUT_MS = 60_000;
 const WORKER_HEAP_MB = 512;
 
 export type ExtractRunner = (input: ExtractInput, mime: string) => Promise<ExtractResult>;
@@ -92,7 +92,7 @@ export function createWorkerRunner(
     });
 }
 
-export const runInWorker: ExtractRunner = createWorkerRunner();
+const runInWorker: ExtractRunner = createWorkerRunner();
 
 /** The worker everywhere but under Vitest, which cannot load a .ts worker. */
 export const defaultRunner: ExtractRunner = (input, mime) =>

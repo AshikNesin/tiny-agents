@@ -36,7 +36,7 @@ import type { ChatRead } from "./bots.settled";
 /** What the Delivery module needs from the runtime. */
 export type DeliveryRuntime = BotConversationRuntime & Pick<AgentRuntime, "readChat" | "isBusy">;
 
-export interface DeliveryInput {
+interface DeliveryInput {
   /** Idempotency key of the submit and the ledger row. */
   requestId: string;
   kind: "send" | "mention";
@@ -54,7 +54,7 @@ export interface DeliveryInput {
   sourceKey?: string;
 }
 
-export type DeliveryOutcome<Reason extends string = never> =
+type DeliveryOutcome<Reason extends string = never> =
   | { status: "delivered"; queued: boolean }
   /** This request id was delivered before: nothing submitted, nothing charged. */
   | { status: "replayed" }

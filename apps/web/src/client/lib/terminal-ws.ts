@@ -26,7 +26,7 @@ import { terminalApi } from "./terminal-api";
 export type TerminalConnectionState = SocketState;
 
 /** Text frames the protocol defines; binary frames are pty bytes. */
-export type ControlFrame =
+type ControlFrame =
   | { t: "resize"; cols: number; rows: number }
   | { t: "pause" }
   | { t: "resume" }

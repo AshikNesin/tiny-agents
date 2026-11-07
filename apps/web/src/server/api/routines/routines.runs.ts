@@ -24,8 +24,8 @@ import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
 import { clearBlockedStreak, disarmRoutine, recordBlocked } from "./routines.arming";
 
-export const KEEP_RUNS_PER_ROUTINE = 50;
-export const OUTPUT_PREVIEW_CHARS = 2000;
+const KEEP_RUNS_PER_ROUTINE = 50;
+const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
 
 /** Minimal runtime surface run resolution needs (the full AgentRuntime satisfies it). */

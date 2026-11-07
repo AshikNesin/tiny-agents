@@ -4,7 +4,7 @@
  * few unambiguous words are read, and only as whole words, so a title like
  * "Plan Monday meeting notes" keeps its words unless they parse as a date.
  */
-export type QuickPriority = "low" | "medium" | "high";
+type QuickPriority = "low" | "medium" | "high";
 
 export interface QuickTask {
   title: string;

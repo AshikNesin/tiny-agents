@@ -27,7 +27,7 @@ test-results/
 /data/*
 !data/.gitkeep
 
-# Scratch output from scripts (e.g. pnpm check:worker bundles in tmp/worker-build)
+# Scratch output from scripts
 /tmp/
 
 # Sensitive files

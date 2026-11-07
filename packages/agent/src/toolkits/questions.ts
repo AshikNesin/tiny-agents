@@ -34,7 +34,7 @@ import {
   type WaitTracker,
 } from "../waiting";
 
-export const ASK_OWNER = "ask_owner";
+const ASK_OWNER = "ask_owner";
 
 const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 6;
@@ -42,7 +42,7 @@ const MAX_OPTIONS = 6;
 export const MAX_ANSWER_TEXT = 2_000;
 
 /** One ask_owner call's questions and the owner's response, owned by its tool task. */
-export const QuestionsDoc = defineDoc<{
+const QuestionsDoc = defineDoc<{
   status: "pending" | "answered" | "dismissed";
   /** The normalized questions: what the answers are checked against. */
   questions: JsonValue[];
@@ -74,7 +74,7 @@ export class InvalidAnswersError extends Error {
 // Normalized questions and answers never carry undefined fields, so they are
 // JSON as they are; the document and the details store them as such.
 const toJson = (value: OwnerQuestion[] | OwnerAnswer[]) => value as unknown as JsonValue[];
-export const storedQuestions = (doc: { questions: JsonValue[] }) =>
+const storedQuestions = (doc: { questions: JsonValue[] }) =>
   doc.questions as unknown as OwnerQuestion[];
 
 // ── The card's details: one shape, produced and parsed here ─────────────
@@ -194,7 +194,7 @@ function normalizeQuestions(questions: readonly OwnerQuestion[]): OwnerQuestion[
  * per question, picks among its options (at most one unless `multiple`), own
  * words trimmed and bounded.
  */
-export function checkAnswers(questions: readonly OwnerQuestion[], answers: readonly OwnerAnswer[]) {
+function checkAnswers(questions: readonly OwnerQuestion[], answers: readonly OwnerAnswer[]) {
   if (answers.length !== questions.length) {
     throw new InvalidAnswersError(`Expected ${questions.length} answer(s), got ${answers.length}`);
   }

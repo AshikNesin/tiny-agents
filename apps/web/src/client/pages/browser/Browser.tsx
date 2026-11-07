@@ -34,7 +34,7 @@ import { errorMessage } from "../../lib/errors";
 import { connectionOf, useLiveView } from "../../lib/live-view";
 import { VncView } from "../../components/browser/VncView";
 
-export const BROWSER_SELECTED_KEY = "tiny-agents:browser-page-profile";
+const BROWSER_SELECTED_KEY = "tiny-agents:browser-page-profile";
 
 function readSelected(): string {
   try {

@@ -9,23 +9,23 @@ import { MEMORY_CATEGORY_ORDER } from "@tiny-agents/agent";
 import { z } from "zod";
 
 /** The injected block's render lives with the prompt section that injects it. */
-export { MEMORY_HEADING, MEMORY_RENDER_CHAR_CAP, renderMemoryBlock } from "@tiny-agents/agent";
+export { MEMORY_RENDER_CHAR_CAP, renderMemoryBlock } from "@tiny-agents/agent";
 
-export const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
+const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 /** Only `active` is ever injected. Everything else is visible history. */
-export const MEMORY_STATUSES = ["active", "superseded", "archived", "expired", "deleted"] as const;
+const MEMORY_STATUSES = ["active", "superseded", "archived", "expired", "deleted"] as const;
 export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
 
-export const MEMORY_SOURCES = ["capture", "manual"] as const;
+const MEMORY_SOURCES = ["capture", "manual"] as const;
 export type MemorySource = (typeof MEMORY_SOURCES)[number];
 
 /** Category display order in every rendered surface (prompt and page). */
 export const CATEGORY_ORDER: readonly MemoryCategory[] = MEMORY_CATEGORY_ORDER;
 
 export const MEMORY_MAX_ACTIVE = 100;
-export const MEMORY_TEXT_MAX = 300;
+const MEMORY_TEXT_MAX = 300;
 /** Capture window cap: the newest transcript characters one extraction reads. */
 export const MEMORY_CAPTURE_CHAR_CAP = 24_000;
 /** Deleted memories the capture prompt lists as never-re-add. */
@@ -39,8 +39,6 @@ export const MEMORY_TURN_LIMIT = 6;
 export const memoryTextSchema = z.string().trim().min(1).max(MEMORY_TEXT_MAX);
 
 export const memoryCategorySchema = z.enum(MEMORY_CATEGORIES);
-export const memoryStatusSchema = z.enum(MEMORY_STATUSES);
-export const memorySourceSchema = z.enum(MEMORY_SOURCES);
 
 /** A memory row as the app surfaces see it (ISO dates, typed enums). */
 export interface MemoryRecord {
@@ -91,4 +89,3 @@ export const extractionResultSchema = z
   .transform((v) => v ?? []);
 
 export type ExtractedMemory = z.infer<typeof extractedMemorySchema>;
-export type ExtractionResult = z.output<typeof extractionResultSchema>;

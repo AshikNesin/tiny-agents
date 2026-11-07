@@ -22,7 +22,7 @@ export interface DiffLine {
 }
 
 /** Unified diff text → display lines with line numbers. */
-export function parseUnified(patchText: string): DiffLine[] {
+function parseUnified(patchText: string): DiffLine[] {
   const lines: DiffLine[] = [];
   let parsed: ReturnType<typeof parsePatch>;
   try {

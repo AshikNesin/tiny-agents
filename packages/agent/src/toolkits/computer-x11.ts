@@ -44,7 +44,7 @@ export const DESKTOP_GONE_EXIT = 97;
 /** Exit code of `typeSecret` when another window is in front. */
 export const WINDOW_MISMATCH_EXIT = 96;
 /** Exit code of `openApp` for an unknown desktop entry. */
-export const NO_SUCH_APP_EXIT = 95;
+const NO_SUCH_APP_EXIT = 95;
 
 const BUTTONS: Record<MouseButton, number> = { left: 1, middle: 2, right: 3 };
 const SCROLL_BUTTONS: Record<ScrollDirection, number> = { up: 4, down: 5, left: 6, right: 7 };
@@ -93,7 +93,7 @@ export function screenshotBody(region?: {
   ].join("\n");
 }
 
-export function cursorBody(): string {
+function cursorBody(): string {
   return "xdotool getmouselocation --shell";
 }
 
@@ -115,11 +115,11 @@ export function clickBody(
   return parts.filter(Boolean).join(" ");
 }
 
-export function moveBody(x: number, y: number): string {
+function moveBody(x: number, y: number): string {
   return `xdotool mousemove ${int(x, "x")} ${int(y, "y")}`;
 }
 
-export function dragBody(from: { x: number; y: number }, to: { x: number; y: number }): string {
+function dragBody(from: { x: number; y: number }, to: { x: number; y: number }): string {
   const midX = Math.round((from.x + to.x) / 2);
   const midY = Math.round((from.y + to.y) / 2);
   return (
@@ -149,7 +149,7 @@ export function keyBody(chords: string[], repeat: number): string {
   return `xdotool key --clearmodifiers --repeat ${int(repeat, "repeat")} --delay 80 -- ${chords.join(" ")}`;
 }
 
-export function listWindowsBody(): string {
+function listWindowsBody(): string {
   return ["wmctrl -l -x", 'echo "--active"', "xdotool getactivewindow 2>/dev/null || true"].join(
     "\n",
   );
@@ -162,16 +162,16 @@ export function checkWindowId(id: string): string {
   return id.toLowerCase();
 }
 
-export function focusWindowBody(id: string): string {
+function focusWindowBody(id: string): string {
   return `wmctrl -i -a ${checkWindowId(id)}`;
 }
 
-export function closeWindowBody(id: string): string {
+function closeWindowBody(id: string): string {
   return `wmctrl -i -c ${checkWindowId(id)}`;
 }
 
 /** `<id>\t<name>` per visible application entry, user entries first. */
-export function listAppsBody(): string {
+function listAppsBody(): string {
   return [
     'for D in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" "$HOME/.local/share/applications" /usr/local/share/applications /usr/share/applications; do',
     '  [ -d "$D" ] || continue',
@@ -209,12 +209,12 @@ export function openAppBody(id: string): string {
   ].join("\n");
 }
 
-export function clipboardGetBody(): string {
+function clipboardGetBody(): string {
   return "xclip -selection clipboard -o 2>/dev/null || true";
 }
 
 /** Sets the clipboard from stdin; xclip stays behind as the selection owner. */
-export function clipboardSetBody(): string {
+function clipboardSetBody(): string {
   return "xclip -selection clipboard -i >/dev/null 2>&1";
 }
 

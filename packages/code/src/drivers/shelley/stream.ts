@@ -14,7 +14,7 @@ import type { HarnessLogger, InstanceStatus } from "../../contracts";
 import { readSseFrames, shelleyFetch, shelleyJson, type ShelleyDeps } from "./client";
 import { isWorking, type ShelleyFrame, type ShelleyRow } from "./wire";
 
-export interface TurnEnd {
+interface TurnEnd {
   conversationId: string;
 }
 

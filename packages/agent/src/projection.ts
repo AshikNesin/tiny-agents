@@ -54,7 +54,7 @@ export function unansweredOf(records: Iterable<SubmissionRecord>): Map<number, s
 }
 
 /** Model-issued calls of the current round (nested calls live in `nestedTools`). */
-export function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
+function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
   const tools = new Map<string, LiveTool>();
   for (const slot of slots) {
     tools.set(slot.callId, {
@@ -247,7 +247,7 @@ export class ChatProjection {
 }
 
 /** One streaming change applied to the in-flight assistant message. */
-export function applyChange(message: AssistantMessage, change: MessageChange): AssistantMessage {
+function applyChange(message: AssistantMessage, change: MessageChange): AssistantMessage {
   if (change.type === "message") return structuredClone(change.message);
   const content = [...message.content];
   switch (change.type) {

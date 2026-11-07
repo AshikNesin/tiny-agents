@@ -27,7 +27,7 @@ export type ValueField =
   | "identity_address"
   | "value";
 
-export interface BackendStatus {
+interface BackendStatus {
   state: "ready" | "unconfigured" | "error";
   code?: string;
   detail?: string;
@@ -91,7 +91,7 @@ export interface VaultOverview {
   kindDefaults: Record<VaultKind, string[]>;
 }
 
-export interface VaultAuditEvent {
+interface VaultAuditEvent {
   id: string;
   at: string;
   handle: string;

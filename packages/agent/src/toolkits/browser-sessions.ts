@@ -18,7 +18,7 @@ import type { SecretFill } from "./browser-fill";
 import { parseExemptHosts } from "./browser-guard";
 
 /** Where a session is while it opens; `installing` is the one-time VM setup. */
-export type BrowserPhase = "installing" | "starting";
+type BrowserPhase = "installing" | "starting";
 
 export interface OpenBrowserOptions {
   viewportWidth: number;
@@ -109,7 +109,7 @@ export type BrowserTransport = (
 export type BrowserDriver = "agent" | "human";
 
 /** One live browser (a profile): shared by every agent whose target names it. */
-export interface LiveBrowserSession {
+interface LiveBrowserSession {
   /** The browser itself; closing it closes every tab. Also the first agent's tab. */
   session: BrowserSession;
   /** Each agent's tab, by `BrowserTarget.tab`. */
@@ -172,9 +172,7 @@ export interface BrowserSessionsOptions {
   clock?: BrowserClock;
 }
 
-export type BrowserOpenState =
-  | { opening: true; phase: BrowserPhase }
-  | { opening: false; error?: string };
+type BrowserOpenState = { opening: true; phase: BrowserPhase } | { opening: false; error?: string };
 
 export interface BrowserSessions {
   /** Profiles root (the reset endpoint wipes under it). */

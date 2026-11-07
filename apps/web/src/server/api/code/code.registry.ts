@@ -21,7 +21,7 @@ import { appEnv, type AppEnv } from "../../env";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { threadIndex } from "./code.store";
 
-export function harnessHost(): HarnessHost {
+function harnessHost(): HarnessHost {
   return {
     logger: {
       info: (message, fields) => logger.info(fields ?? {}, message),
@@ -34,7 +34,7 @@ export function harnessHost(): HarnessHost {
 }
 
 /** Shelley's base URL, or undefined when `SHELLEY_URL` is not set. */
-export function shelleyUrl(env: AppEnv = appEnv()): string | undefined {
+function shelleyUrl(env: AppEnv = appEnv()): string | undefined {
   return shelley.trimUrl(env.SHELLEY_URL);
 }
 

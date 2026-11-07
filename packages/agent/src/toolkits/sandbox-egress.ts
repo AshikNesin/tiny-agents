@@ -104,7 +104,7 @@ export function commandHosts(command: string): string[] {
 }
 
 /** The lines a confined command starts with: one stdin line per secret, into its env var. */
-export function secretPrelude(envNames: readonly string[]): string {
+function secretPrelude(envNames: readonly string[]): string {
   return envNames
     .map(
       (name, index) =>

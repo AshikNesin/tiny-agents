@@ -155,7 +155,7 @@ export function connectionOf(status: ConnectionInput | null, vncState: VncState)
 
 export const MIN_PANEL_WIDTH = 360;
 /** Room the docked panel leaves for the sidebar (256px) and a usable chat (416px). */
-export const RESERVED_WIDTH = 672;
+const RESERVED_WIDTH = 672;
 
 /** The widest a docked panel gets in a viewport `viewport` pixels wide. */
 export function maxPanelWidth(viewport: number): number {

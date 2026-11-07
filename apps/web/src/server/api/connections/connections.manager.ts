@@ -76,7 +76,7 @@ interface Live extends ConnectionLiveState {
 
 const MAX_BACKOFF_MS = 5 * 60_000;
 /** How long a row change waits for its connect attempt before answering. */
-export const CONNECT_WAIT_MS = 15_000;
+const CONNECT_WAIT_MS = 15_000;
 /** How long a tool call waits for a (re)connect. */
 const CALL_WAIT_MS = 30_000;
 

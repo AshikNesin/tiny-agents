@@ -17,18 +17,18 @@ import type { Api, AssistantMessage, Context, Model, UserMessage } from "@earend
 import { formatModelId, parseModelId } from "../model-catalog";
 
 /** Transcription prompts, reused verbatim from the dotfiles CLI. */
-export const VISION_SYSTEM =
+const VISION_SYSTEM =
   "You are a vision transcription service for an agent that cannot see images. " +
   "Answer the question about the image with high fidelity. Always transcribe text verbatim. " +
   "Prefer specifics (exact strings, positions like 'top-left', colors) over generalities. " +
   "Never refuse to describe what is visible, and never invent content that is not there.";
 
-export const DEFAULT_QUESTION =
+const DEFAULT_QUESTION =
   "Describe this image precisely and completely. Transcribe any visible text EXACTLY as written " +
   "(error messages, labels, filenames, code), then describe the layout, positions, and colors. " +
   "Be factual; do not speculate beyond what is visible.";
 
-export interface TranscribeImage {
+interface TranscribeImage {
   data: string;
   mimeType: string;
   name: string;

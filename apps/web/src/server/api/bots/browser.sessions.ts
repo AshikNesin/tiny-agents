@@ -21,7 +21,7 @@ import { appEnv, type AppEnv } from "../../env";
  * BROWSER_EXECUTABLE_PATH set we drive that local binary instead (dev on
  * the exe.dev VM); with neither, Playwright's bundled Chromium.
  */
-export function browserTransport(env: AppEnv = appEnv()): BrowserTransport {
+function browserTransport(env: AppEnv = appEnv()): BrowserTransport {
   const executable = unquoteEnv(env.BROWSER_EXECUTABLE_PATH);
   if (executable) return createChromiumTransport({ executablePath: executable });
   const connection = sandboxConnection(env);

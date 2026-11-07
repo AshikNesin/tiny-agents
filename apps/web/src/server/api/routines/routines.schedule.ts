@@ -11,8 +11,8 @@ import { z } from "zod";
 /** The single timezone constant (PRD 5.2). Everything renders in this zone. */
 export const TZ_IST = "Asia/Kolkata";
 
-export const MIN_INTERVAL_MINUTES = 15;
-export const MAX_INTERVAL_MINUTES = 1440;
+const MIN_INTERVAL_MINUTES = 15;
+const MAX_INTERVAL_MINUTES = 1440;
 export const MAX_ROUTINES = 50;
 export const MAX_NAME_CHARS = 80;
 export const MAX_PROMPT_CHARS = 20_000;
@@ -45,7 +45,7 @@ const onceSchema = z.object({
   }),
 });
 
-export const intervalSchema = z.object({
+const intervalSchema = z.object({
   kind: z.literal("interval"),
   minutes: z
     .number()
@@ -66,9 +66,6 @@ export const scheduleSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type Schedule = z.infer<typeof scheduleSchema>;
-export type OnceSchedule = z.infer<typeof onceSchema>;
-export type CronSchedule = z.infer<typeof cronSchema>;
-export type IntervalSchedule = z.infer<typeof intervalSchema>;
 
 /**
  * Parse a stored/transported schedule value. Every boundary (API, job handler,

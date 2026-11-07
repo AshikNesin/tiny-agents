@@ -13,7 +13,7 @@ export interface LifecyclePart {
   stop?(): Promise<unknown> | unknown;
 }
 
-export interface LifecycleLogger {
+interface LifecycleLogger {
   info(message: string): void;
   warn(context: { error?: unknown; part?: string }, message: string): void;
 }
@@ -41,7 +41,7 @@ export interface Lifecycle {
   handleSignals(signals: readonly NodeJS.Signals[]): () => void;
 }
 
-export const DEFAULT_STOP_DEADLINE_MS = 10_000;
+const DEFAULT_STOP_DEADLINE_MS = 10_000;
 
 export function createLifecycle(options: LifecycleOptions): Lifecycle {
   const { log } = options;

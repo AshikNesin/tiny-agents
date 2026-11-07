@@ -87,7 +87,7 @@ export function appStoreCapabilities(env: AppEnv = appEnv()) {
 }
 
 /** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
-export function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
+function builtinCapabilities(env: AppEnv = appEnv()): Capability[] {
   // Every value the vault resolves is scrubbed from logs and error reports too.
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
@@ -164,7 +164,7 @@ export function botsCapability(rt: AgentRuntime): Capability {
 }
 
 /** The vision side-call (issue #17): uploads bytes + a transcriber model. */
-export function visionCapability(
+function visionCapability(
   rt: AgentRuntime,
   models: Parameters<typeof createTranscriber>[0],
   env: RuntimeEnv,

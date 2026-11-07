@@ -13,7 +13,7 @@ export interface TotpSpec {
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-export function base32Decode(input: string): Buffer {
+function base32Decode(input: string): Buffer {
   const clean = input.toUpperCase().replace(/[\s=-]/g, "");
   let bits = 0;
   let value = 0;

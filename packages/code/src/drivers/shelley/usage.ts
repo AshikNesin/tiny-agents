@@ -42,7 +42,7 @@ type TokenKey =
   | "output_tokens";
 
 /** Display order: cache read first (it dominates agent conversation volume). */
-export const TOKEN_BANDS: Array<{
+const TOKEN_BANDS: Array<{
   key: TokenKey;
   costKey: PriceKey;
   label: string;

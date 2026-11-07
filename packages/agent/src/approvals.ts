@@ -29,7 +29,7 @@ import {
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
-import { isUnattendedConversation, PermissionsDoc } from "./policy";
+import { isUnattendedConversation } from "./policy";
 import type { ChatVaultUse } from "./types";
 import { GrantsDoc } from "./vault";
 import {
@@ -42,7 +42,7 @@ import {
 } from "./waiting";
 
 // Read by tools that decide their own unattended behaviour (routines, browser).
-export { isUnattendedConversation, PermissionsDoc };
+export { isUnattendedConversation };
 
 export type ApprovalDecision = "approved" | "denied";
 
@@ -53,7 +53,7 @@ export type ApprovalDecision = "approved" | "denied";
  * `grant` is the standing grant the card offers; `expiresAt` makes it settle
  * as `expired`.
  */
-export const ApprovalDoc = defineDoc<{
+const ApprovalDoc = defineDoc<{
   status: "pending" | ApprovalDecision | "expired";
   asked?: boolean;
   grant?: string;
@@ -79,14 +79,7 @@ export class ApprovalNotPendingError extends Error {
 // ── The card's details: one shape, produced and parsed here ─────────────
 
 /** How a gated call stands with the owner, as its tool details say it. */
-export type ApprovalState =
-  | "pending"
-  | "approved"
-  | "denied"
-  | "expired"
-  | "auto"
-  | "yolo"
-  | "refused";
+type ApprovalState = "pending" | "approved" | "denied" | "expired" | "auto" | "yolo" | "refused";
 
 /** What the chat reads off a gated call's details. */
 export interface ApprovalView {

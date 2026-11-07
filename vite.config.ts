@@ -147,6 +147,7 @@ export default defineConfig({
       "site/demos/kit/**",
       "site/assets/**",
     ],
+    rules: { "no-unused-vars": "error" },
     overrides: boundaryOverrides("./scripts/lint/repo-plugin.mjs"),
   },
 

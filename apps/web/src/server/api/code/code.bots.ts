@@ -28,7 +28,7 @@ import {
 } from "./code.store";
 
 /** The harness bots hand work to when they name none. */
-export const DEFAULT_HANDOFF_HARNESS = "shelley";
+const DEFAULT_HANDOFF_HARNESS = "shelley";
 
 const codePath = (threadId: string) => `/code/${encodeURIComponent(threadId)}`;
 

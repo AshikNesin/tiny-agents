@@ -26,7 +26,7 @@ export interface GuestEntry {
   botIds: string[];
 }
 
-export async function isGuest(userId: number): Promise<boolean> {
+async function isGuest(userId: number): Promise<boolean> {
   const row = await db.query.guests.findFirst({
     where: eq(guests.userId, userId),
     columns: { userId: true },
@@ -39,7 +39,7 @@ export async function viewerOf(userId: number): Promise<Viewer> {
 }
 
 /** The name a person goes by in a shared chat: their name, else their email's local part. */
-export function displayName(user: { name: string | null; email: string }): string {
+function displayName(user: { name: string | null; email: string }): string {
   return user.name?.trim() || user.email.split("@")[0] || user.email;
 }
 

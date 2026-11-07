@@ -60,10 +60,6 @@ export async function seedBot(
   return bot!;
 }
 
-/** The conversation of a seeded bot, as the runtime refers to it. */
-export const conversationOf = (bot: Pick<SeededBot, "conversationId">): number =>
-  Number(bot.conversationId);
-
 /** Delete every app row, children before parents. */
 export async function resetAppTables(): Promise<void> {
   await db.delete(codeHandoffs);

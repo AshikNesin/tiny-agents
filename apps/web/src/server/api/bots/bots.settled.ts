@@ -34,7 +34,7 @@ import { runNotificationsStep, type Notifier } from "../notifications/notificati
 /** The conversation's chat state, read once by whoever reacts to it settling. */
 export type ChatRead = () => Promise<ChatState>;
 
-export interface SettledConversation {
+interface SettledConversation {
   conversationId: number;
   /** Its chat state, read on first call and shared by every later step. */
   chat: ChatRead;

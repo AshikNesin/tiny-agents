@@ -43,7 +43,7 @@ export const KIND_DEFAULT_TOOLS: Record<VaultKind, string[]> = {
   api_key: ["http_request", "mcp"],
 };
 
-export const UNKNOWN_HANDLE = (handle: string) => `No vault item \`${handle}\`. Call vault_list.`;
+const UNKNOWN_HANDLE = (handle: string) => `No vault item \`${handle}\`. Call vault_list.`;
 
 const parseList = (raw: string | null | undefined): string[] => {
   if (!raw) return [];

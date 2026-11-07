@@ -37,7 +37,7 @@ export function isUnread(
   return bot.lastReadAt === null || bot.lastActivityAt > bot.lastReadAt;
 }
 
-export function toListEntry(
+function toListEntry(
   bot: BotRow,
   replying: boolean,
   waiting: { approvals: number; questions: number },
@@ -101,7 +101,7 @@ export async function listBots(rt: BotListRuntime, viewer?: Viewer): Promise<Bot
  * (a routine's, a Past chat's) updates nothing. Best effort: the fields
  * catch up on the next reply.
  */
-export async function recordReply(
+async function recordReply(
   conversationId: string,
   last: { role: "user" | "assistant"; text: string; createdAt: number } | undefined,
 ): Promise<void> {

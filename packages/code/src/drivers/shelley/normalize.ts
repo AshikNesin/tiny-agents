@@ -70,7 +70,7 @@ function textOf(blocks: Block[] | undefined): string {
     .join("\n");
 }
 
-export function toolKind(name: string): ToolKind {
+function toolKind(name: string): ToolKind {
   if (name === "bash") return "bash";
   if (name === "patch" || name === "apply_patch") return "edit";
   if (name === "subagent") return "subagent";
@@ -112,7 +112,7 @@ function basename(path: string): string {
 }
 
 /** A file on Shelley's machine as an asset. */
-export function fileAsset(path: string): AssetRef {
+function fileAsset(path: string): AssetRef {
   return { ref: `file:${path}`, name: basename(path), image: isImageFile(path) };
 }
 

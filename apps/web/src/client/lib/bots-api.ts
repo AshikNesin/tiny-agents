@@ -82,7 +82,7 @@ export interface Bot {
 }
 
 /** A file upload's text extraction state (issue #58). */
-export type UploadExtractStatus = NonNullable<AttachmentRef["status"]>;
+type UploadExtractStatus = NonNullable<AttachmentRef["status"]>;
 
 /** An upload's live extraction state (GET /uploads/:id). */
 export interface UploadStatus {
@@ -117,7 +117,7 @@ export type UploadText =
     }
   | { status: Exclude<UploadExtractStatus, "ready">; error?: string };
 
-export interface ToolInfo {
+interface ToolInfo {
   name: string;
   /** Past tense, for the transcript ("Opened a page"). */
   label: string;
@@ -157,18 +157,16 @@ export interface BotInput {
 
 export type BrowserProfile = "shared" | "own";
 
-export const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
+const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 /** Only `active` is ever injected; the rest is visible history (issue #22 5.4). */
-export type MemoryStatus = "active" | "superseded" | "archived" | "expired" | "deleted";
+type MemoryStatus = "active" | "superseded" | "archived" | "expired" | "deleted";
 
-export type MemorySource = "capture" | "manual";
+type MemorySource = "capture" | "manual";
 
 /** Category display order, the same order the injected block renders in. */
 export const CATEGORY_ORDER: readonly MemoryCategory[] = ["preference", "fact", "goal", "habit"];
-
-export const MEMORY_TEXT_MAX = 300;
 
 /** A memory row as the API returns it (ISO dates, typed enums). */
 export interface MemoryRecord {

@@ -69,7 +69,7 @@ export const REVIEW_QUESTIONS = {
 } satisfies Record<string, ClassifierQuestion>;
 
 /** Approve only when the owner clearly asked and the worst case is minor. */
-export const REVIEW_THRESHOLDS = {
+const REVIEW_THRESHOLDS = {
   minRequested: 0.9,
   maxRisk: 1,
   minRiskConfidence: 0.6,

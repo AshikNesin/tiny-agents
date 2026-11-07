@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const KINDS = ["login", "card", "identity", "api_key"] as const;
+const KINDS = ["login", "card", "identity", "api_key"] as const;
 
-export const VALUE_FIELDS = [
+const VALUE_FIELDS = [
   "username",
   "password",
   "totp",
@@ -46,7 +46,7 @@ const host = z
   .regex(/^[a-z0-9.-]+(:\d+)?$/, "A hostname, optionally with a port");
 
 /** Who and what may use an item: never a value. */
-export const policySchema = z.object({
+const policySchema = z.object({
   handle,
   label: z.string().trim().min(1).max(120).optional(),
   origins: z.array(origin).max(20).default([]),

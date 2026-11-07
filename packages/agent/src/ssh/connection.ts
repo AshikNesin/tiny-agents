@@ -82,8 +82,8 @@ export interface SshEndpoint {
   keepaliveIntervalMs?: number;
 }
 
-export const DEFAULT_SSH_PORT = 22;
-export const DEFAULT_SSH_USER = "exedev";
+const DEFAULT_SSH_PORT = 22;
+const DEFAULT_SSH_USER = "exedev";
 
 /** The pinned form of a host key: `sha256:<base64>`. */
 export function hostKeyHash(raw: Buffer): string {
@@ -91,7 +91,7 @@ export function hostKeyHash(raw: Buffer): string {
 }
 
 /** The TOFU rule: pin on first sight, accept the same key, refuse a change. */
-export async function verifyHostKey(store: HostKeyStore, host: string, raw: Buffer): Promise<void> {
+async function verifyHostKey(store: HostKeyStore, host: string, raw: Buffer): Promise<void> {
   const hash = hostKeyHash(raw);
   const known = await store.get(host);
   if (known === undefined) {

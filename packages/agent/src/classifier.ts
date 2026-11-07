@@ -22,21 +22,17 @@ import {
 import { createModels, createProvider, type Models } from "@earendil-works/pi-ai/models";
 import { CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
 
-export type {
-  ClassifierAnswer,
-  ClassifierContext,
-  ClassifierQuestion,
-} from "@earendil-works/pi-ai";
+export type { ClassifierAnswer, ClassifierQuestion } from "@earendil-works/pi-ai";
 
 /** The provider id classifier calls are registered under (and logged with). */
-export const CLASSIFIER_PROVIDER = "cloudflare-ai-gateway";
+const CLASSIFIER_PROVIDER = "cloudflare-ai-gateway";
 
 /**
  * Default classifier model: TypeSafe's Jev, which runs through the gateway's
  * own balance. `@cf/…` models such as Clef bill through the gateway's Unified
  * Billing credits instead, and fail with 402 when the gateway has none.
  */
-export const DEFAULT_CLASSIFIER_MODEL = "typesafe/jev";
+const DEFAULT_CLASSIFIER_MODEL = "typesafe/jev";
 
 const API_HOST = "https://api.cloudflare.com/client/v4";
 const LABEL = "Cloudflare AI Gateway (Workers AI)";
@@ -60,10 +56,7 @@ const unquote = (value: string | undefined) =>
     .trim() || undefined;
 
 /** A classifier over a pi-ai model registry (tests pass a faux one). */
-export function classifierFromModels(
-  models: Models,
-  model: ClassifierModel<ClassifierApi>,
-): Classifier {
+function classifierFromModels(models: Models, model: ClassifierModel<ClassifierApi>): Classifier {
   return {
     id: `${model.provider}/${model.id}`,
     async classify(context, signal) {

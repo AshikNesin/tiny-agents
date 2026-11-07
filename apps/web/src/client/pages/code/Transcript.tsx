@@ -78,7 +78,7 @@ export interface TranscriptContext {
   rows: ThreadSummary[];
 }
 
-export function formatDuration(ms: number): string {
+function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   const minutes = Math.floor(ms / 60_000);

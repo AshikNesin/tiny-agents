@@ -12,11 +12,9 @@ way.
 | `packages/jobs/src/server/schema.ts`   | `jobs`, `job_schedules`, `job_logs`                                                                                      |
 | `apps/web/src/server/db/schema.ts`     | App tables (`bots`, `routines`, ...); re-exports the two above and is the single drizzle-kit entry (`drizzle.config.ts`) |
 
-Generated output: `apps/web/drizzle/NNNN_<name>.sql`, `meta/` (snapshot +
-journal) and `index.ts`, a list of the SQL files (rewritten by
-`pnpm db:generate`, never edited by hand; it served the deleted Workers entry and
-nothing imports it now). App-owned, never synced from the
-boilerplate.
+Generated output: `apps/web/drizzle/NNNN_<name>.sql` and `meta/` (snapshot +
+journal), written by `pnpm db:generate` and never edited by hand. App-owned,
+never synced from the boilerplate.
 
 ## Making a change
 
