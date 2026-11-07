@@ -132,16 +132,16 @@ async function assertNoCanary(): Promise<void> {
 }
 
 describe("vault routes", () => {
-  it("refuses writes without step-up and a wrong password", async () => {
+  it("refuses writes without step-up and a wrong password, without ending the session (#164)", async () => {
     const response = await createGithub("not-a-token");
     expect(response.status).toBe(403);
     const wrong = await vault("/step-up", { method: "POST", json: { password: "nope" } });
-    expect(wrong.status).toBe(403);
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.error?.code).not.toBe("SESSION_INVALID");
     expect(await db.$count(vaultItems)).toBe(0);
   });
 
-  it("refuses a passkey it does not know with 403, never 401 (#164)", async () => {
-    // A 401 reads as an expired session in the client and signs the owner out.
+  it("refuses a passkey it does not know without ending the session (#174)", async () => {
     const options = await vault("/step-up/options", { method: "POST" });
     expect(options.status).toBe(200);
     const clientDataJSON = Buffer.from(
@@ -163,7 +163,8 @@ describe("vault routes", () => {
         },
       },
     });
-    expect(unknown.status).toBe(403);
+    expect(unknown.status).toBe(401);
+    expect(unknown.body.error?.code).not.toBe("SESSION_INVALID");
     expect(unknown.body.error?.message).toMatch(/Passkey not found/);
   });
 
@@ -184,7 +185,7 @@ describe("vault routes", () => {
         token: legacyToken,
       });
     expect((await step(PASSWORD)).status).toBe(200);
-    expect((await step("nope")).status).toBe(403);
+    expect((await step("nope")).status).toBe(401);
   });
 
   it("creates, lists, reveals and deletes with step-up; values never stored in the clear", async () => {

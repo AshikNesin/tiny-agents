@@ -64,8 +64,10 @@ throws an `ApiError` (`status`, `code`, `message`, `details`, `url`) for any
 non-2xx response. `get`, `post`, `put` and `patch` also throw (code `NO_DATA`)
 when a 2xx envelope has no `data`, so only `delete` suits an endpoint that
 answers `204`. `postForm` uploads and `getBlob` downloads. It knows nothing
-about sessions: `apiClient.onUnauthorized(handler)` reports each 401 with its
-`path` and `sentAt` time.
+about sessions: `apiClient.onUnauthorized(handler)` reports each 401 from the
+server's session guard (`error.code` `SESSION_INVALID`) with its `path` and
+`sentAt` time. Any other 401, such as a wrong password or an unknown passkey,
+only throws.
 
 The session is `useAuthStore` (`@groot/shell/store/auth`, Zustand). The server
 keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
@@ -80,9 +82,10 @@ keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 | `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                        |
 | `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password."; network and WebAuthn cases)    |
 
-The store installs the 401 hook: a 401 for a request sent during the current
-session clears it, so `ProtectedRoute` redirects to `/login`. A 401 for a
-request sent before the last sign-in or sign-out is ignored.
+The store installs the `onUnauthorized` hook: a session-guard 401 for a
+request sent during the current session clears it, so `ProtectedRoute`
+redirects to `/login`. One for a request sent before the last sign-in or
+sign-out is ignored.
 
 Response types come from the server, imported type-only (for example
 `SessionUser` from `@groot/core/auth/auth.schema`), never hand-copied; see the

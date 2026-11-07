@@ -37,12 +37,12 @@ Preconditions:
 - **Delete everywhere.** API key → `Delete` → `Delete everywhere` → `Deleted`; `GET /vault/items/<handle>` 404 and not under `unlinked`.
 - **Request page.** `/vault/requests/999999` → heading `Credential request`, `Nothing to fill`.
 - **Server log.** `data/verify/<run>/server.log` contains none of the values.
-- **Wrong step-up password.** Reload an item, `Reveal`, wrong password → toast `Wrong password`; the dialog must stay open on the item. **Fails today, see Gotchas.**
+- **Wrong step-up password.** Reload an item, `Reveal`, wrong password → toast `Wrong password`; the dialog stays open on the item and the owner stays signed in.
 - **Proof.** `ta-verify drive $S/journeys/vault.mjs` → `vault/backends`, `step-up`, `api-key-masked`, `api-key-revealed`, `login`, `list-by-kind`, `unlinked`, `deleted`, `request-closed`, `step-up-refused`.
 
 ## Gotchas
 
-- Regression check for #164 (fixed 2026-11): `/vault/step-up` used to answer a wrong password with 401, which the shell's global 401 handler read as an expired session, signing the owner out. It answers 403 now; the last step asserts the dialog stays open and the session survives.
+- Regression check for #164 (fixed 2026-11): `/vault/step-up` answers a wrong password with 401, and the shell used to sign the owner out on any 401. It now signs out only on the session guard's 401 (`error.code` `SESSION_INVALID`); the last step asserts the dialog stays open and the session survives.
 - Step-up calls count toward the auth rate limit (20 per 15 min per instance) like logins.
 - Toasts stack (`Saved`, `Key saved`, `Key copied…`); assert the stored state rather than a toast that may be hidden under newer ones.
 - The contact form has two `Name` fields (item name and the contact's name) and the feedback widget has its own `Email (optional)`; use `exact` names / `first()`.

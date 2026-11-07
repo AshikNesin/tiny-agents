@@ -106,8 +106,9 @@ const created = await apiClient.post<Post>("/posts", { title: "Hello" });
 ```
 
 `apiClient` is a thin `fetch` client: it prefixes `/api/v1`, sends the session
-cookie, unwraps `data` and throws an `ApiError` on failure. A 401 is reported to
-the session store, which signs the user out. See [Client](./features/client.md).
+cookie, unwraps `data` and throws an `ApiError` on failure. A 401 from the
+session guard (code `SESSION_INVALID`) is reported to the session store, which
+signs the user out. See [Client](./features/client.md).
 
 ## Commands
 

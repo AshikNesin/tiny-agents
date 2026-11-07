@@ -6,7 +6,7 @@
  * None of this is reachable from an agent tool.
  */
 import { Hono } from "hono";
-import { Boom, HttpError } from "@groot/core/errors";
+import { Boom } from "@groot/core/errors";
 import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import * as passkeyService from "@groot/core/passkey/passkey.service";
 import type { AppContext, AppEnv, Middleware } from "@groot/core/types";
@@ -65,29 +65,17 @@ router.post("/vault/step-up/options", authRateLimiter, async (c) => {
   return ok(c, await passkeyService.generateAuthenticationOptions({ email }));
 });
 
-// A refused confirmation is 403, never 401: the client treats any 401 as an
-// expired session and signs the owner out (#164).
 router.post("/vault/step-up", authRateLimiter, async (c) => {
   const { userId } = requireUser(c);
   const body = await parseBody(c, stepUpSchema);
   if ("password" in body) {
-    if (!(await verifyPassword(userId, body.password))) throw Boom.forbidden("Wrong password");
+    if (!(await verifyPassword(userId, body.password))) throw Boom.unauthorized("Wrong password");
   } else {
-    // Core's passkey login answers an unknown or unverified credential with
-    // 401 (right for a login), but here the owner is signed in: a refused
-    // confirmation must not read as an expired session (#164).
-    const result = await passkeyService
-      .verifyAuthentication({
-        response: body.passkey as unknown as Parameters<
-          typeof passkeyService.verifyAuthentication
-        >[0]["response"],
-      })
-      .catch((error: unknown) => {
-        if (error instanceof HttpError && error.statusCode === 401) {
-          throw Boom.forbidden(error.message);
-        }
-        throw error;
-      });
+    const result = await passkeyService.verifyAuthentication({
+      response: body.passkey as unknown as Parameters<
+        typeof passkeyService.verifyAuthentication
+      >[0]["response"],
+    });
     if (result.user.id !== userId) throw Boom.forbidden("That passkey belongs to someone else");
   }
   return ok(c, issueStepUp(userId));

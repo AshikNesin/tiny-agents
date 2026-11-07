@@ -1,3 +1,5 @@
+import type { ErrorCode } from "@groot/core/errors";
+
 /** Standard API response envelope (mirrors the server's `api-response.utils`). */
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -52,6 +54,8 @@ export interface UnauthorizedEvent {
   sentAt: number;
 }
 
+const SESSION_INVALID: (typeof ErrorCode)["SESSION_INVALID"]["code"] = "SESSION_INVALID";
+
 type Params = Record<string, unknown>;
 
 const BASE_URL = "/api/v1";
@@ -71,8 +75,7 @@ function buildUrl(path: string, params?: Params): string {
  * API client: the single surface for backend calls, on plain `fetch`. Unwraps
  * the `{ success, data }` envelope and throws an `ApiError` on failure so
  * callers get typed values directly. The session cookie travels with every
- * request; what a 401 means is up to whoever subscribes to `onUnauthorized`
- * (the session store in `@groot/shell/store/auth`).
+ * request.
  */
 /** Per-request extras every verb accepts. */
 export interface ExtraOptions {
@@ -87,10 +90,24 @@ export interface RequestOptions extends ExtraOptions {
   emptyOk?: boolean;
 }
 
+async function readEnvelope<T>(response: Response): Promise<ApiResponse<T> | undefined> {
+  const text = await response.text();
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text) as ApiResponse<T>;
+  } catch {
+    return undefined;
+  }
+}
+
 class ApiClient {
   private readonly unauthorizedHandlers = new Set<(event: UnauthorizedEvent) => void>();
 
-  /** Run `handler` on every 401 response. Returns an unsubscribe function. */
+  /**
+   * Run `handler` when the session guard rejects a request (a 401 coded
+   * `SESSION_INVALID`). Any other 401, such as a wrong password, only throws.
+   * Returns an unsubscribe function.
+   */
   onUnauthorized(handler: (event: UnauthorizedEvent) => void): () => void {
     this.unauthorizedHandlers.add(handler);
     return () => {
@@ -119,36 +136,26 @@ class ApiClient {
       body,
       credentials: "include",
     });
-    if (response.status === 401) {
+    if (response.ok) return response;
+    const parsed = await readEnvelope(response);
+    const error = new ApiError({
+      status: response.status,
+      code: parsed?.error?.code ?? `HTTP_${response.status}`,
+      message:
+        parsed?.error?.message ??
+        (response.statusText || `Request failed with status ${response.status}`),
+      details: parsed?.error?.details,
+      url: path,
+      fromServer: typeof parsed?.error?.message === "string",
+    });
+    if (error.code === SESSION_INVALID) {
       for (const handler of this.unauthorizedHandlers) handler({ path, sentAt });
     }
-    return response;
+    throw error;
   }
 
-  /** Parse the envelope; throw an `ApiError` for non-2xx responses. */
-  private async envelope<T>(response: Response, path: string): Promise<ApiResponse<T>> {
-    const text = await response.text();
-    let parsed: ApiResponse<T> | undefined;
-    if (text) {
-      try {
-        parsed = JSON.parse(text) as ApiResponse<T>;
-      } catch {
-        parsed = undefined;
-      }
-    }
-    if (!response.ok) {
-      throw new ApiError({
-        status: response.status,
-        code: parsed?.error?.code ?? `HTTP_${response.status}`,
-        message:
-          parsed?.error?.message ??
-          (response.statusText || `Request failed with status ${response.status}`),
-        details: parsed?.error?.details,
-        url: path,
-        fromServer: typeof parsed?.error?.message === "string",
-      });
-    }
-    return parsed ?? { success: true };
+  private async envelope<T>(response: Response): Promise<ApiResponse<T>> {
+    return (await readEnvelope<T>(response)) ?? { success: true };
   }
 
   private unwrap<T>(envelope: ApiResponse<T>, path: string): T {
@@ -164,10 +171,7 @@ class ApiClient {
   }
 
   private async call<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
-    return this.unwrap<T>(
-      await this.envelope<T>(await this.send(method, path, options), path),
-      path,
-    );
+    return this.unwrap<T>(await this.envelope<T>(await this.send(method, path, options)), path);
   }
 
   /**
@@ -179,7 +183,7 @@ class ApiClient {
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const verb = method.toUpperCase();
     if (!options.emptyOk) return this.call<T>(verb, path, options);
-    const envelope = await this.envelope<T>(await this.send(verb, path, options), path);
+    const envelope = await this.envelope<T>(await this.send(verb, path, options));
     return envelope.data as T;
   }
 
@@ -216,7 +220,6 @@ class ApiClient {
   /** Download a binary file as a `Blob` (no envelope unwrapping). */
   async getBlob(url: string, params?: Params): Promise<Blob> {
     const response = await this.send("GET", url, { params });
-    if (!response.ok) await this.envelope(response, url); // throws with the server's message
     return response.blob();
   }
 }

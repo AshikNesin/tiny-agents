@@ -34,6 +34,29 @@ describe("auth API", () => {
     expect((await api(app, "/api/v1/todos")).status).toBe(401);
   });
 
+  it("codes only the session guard's 401 as SESSION_INVALID", async () => {
+    const { email, token } = await signIn(app);
+    const tampered = `${token.slice(0, -2)}xx`;
+    for (const rejected of [
+      await api(app, "/api/v1/auth/me"),
+      await api(app, "/api/v1/auth/me", { token: tampered }),
+      await api(app, "/api/v1/bots", { token: "garbage" }),
+    ]) {
+      expect(rejected.status).toBe(401);
+      expect(rejected.body.error?.code).toBe("SESSION_INVALID");
+    }
+
+    const wrongPassword = await api(app, "/api/v1/auth/login", {
+      method: "POST",
+      json: { email, password: "wrong-password" },
+    });
+    const noAdminKey = await api(app, "/api/v1/auth/users", { token });
+    for (const refused of [wrongPassword, noAdminKey]) {
+      expect(refused.status).toBe(401);
+      expect(refused.body.error?.code).toBe("UNAUTHORIZED");
+    }
+  });
+
   it("validates the login payload", async () => {
     const response = await api(app, "/api/v1/auth/login", {
       method: "POST",

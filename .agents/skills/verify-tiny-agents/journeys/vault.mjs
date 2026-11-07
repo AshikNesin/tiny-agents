@@ -311,7 +311,6 @@ await journey("vault", async ({ page, context, step, proof, cleanup, api, stamp 
     noSecretIn(readFileSync(log, "utf8"), "server.log");
   });
 
-  // Last on purpose: today this signs the owner out (see features/vault.md, Gotchas).
   await step("step-up: a wrong password is refused and the dialog stays open", async () => {
     await page.goto(`/vault/items/${loginHandle}`);
     await page.reload(); // the step-up token lives in page memory only
