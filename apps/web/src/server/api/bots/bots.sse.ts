@@ -63,6 +63,8 @@ export function openSse<E>(
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const listeners: (() => void)[] = [];
   let closed = false;
+  // Set once the stream is held; a refused hold ends the stream before then.
+  let release = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   const signal = c.req.raw.signal;
@@ -124,7 +126,7 @@ export function openSse<E>(
     sse.write({ type: "ping" });
   }, HEARTBEAT_MS);
   openStreams.add(sse);
-  const release = holdLiveAccess({ userId: requireUser(c).userId, botId: options.botId }, () =>
+  release = holdLiveAccess({ userId: requireUser(c).userId, botId: options.botId }, () =>
     sse.end(),
   );
   signal?.addEventListener("abort", finish, { once: true });

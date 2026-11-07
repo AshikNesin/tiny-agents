@@ -76,7 +76,7 @@ export function attachVncBridge<T extends LiveGrant>(
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       viewers.set(botId, (viewers.get(botId) ?? 0) + 1);
-      const release = holdLiveAccess(ticket, () => ws.close(1008, "Access removed"));
+      const release = holdLiveAccess(ticket, () => revoke(ws));
       void bridge(ws, target, botId, options.kind).finally(() => {
         release();
         const left = (viewers.get(botId) ?? 1) - 1;
@@ -92,6 +92,14 @@ export function attachVncBridge<T extends LiveGrant>(
       wss.close();
     },
   };
+}
+
+/** How long a revoked viewer gets to answer the close before the socket is cut. */
+const REVOKE_CLOSE_GRACE_MS = 1_000;
+
+function revoke(ws: WebSocket): void {
+  ws.close(1008, "Access removed");
+  setTimeout(() => ws.terminate(), REVOKE_CLOSE_GRACE_MS).unref();
 }
 
 async function bridge(
@@ -132,6 +140,8 @@ async function bridge(
       if (ws.bufferedAmount >= MAX_BUFFERED_BYTES) stream.pause();
     });
     ws.on("message", (data) => {
+      // A closing viewer (revoked, say) no longer reaches the desktop.
+      if (ws.readyState !== ws.OPEN) return;
       const bytes = Array.isArray(data)
         ? Buffer.concat(data)
         : Buffer.isBuffer(data)

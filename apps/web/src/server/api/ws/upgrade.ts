@@ -61,8 +61,9 @@ export function createTicketStore<T extends LiveGrant>(
         }
       }
       const ticket = randomBytes(24).toString("base64url");
-      const release = holdLiveAccess(data, () => tickets.delete(ticket));
-      tickets.set(ticket, { data, expiresAt: now + ttl, release });
+      const entry = { data, expiresAt: now + ttl, release: () => {} };
+      tickets.set(ticket, entry);
+      entry.release = holdLiveAccess(data, () => tickets.delete(ticket));
       return ticket;
     },
     redeem(ticket, bound) {

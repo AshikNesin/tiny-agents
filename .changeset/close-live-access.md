@@ -12,4 +12,7 @@ Every SSE stream, open desktop viewer and unredeemed viewer ticket is now
 held in one registry of live access (`api/people/live-access.ts`) under its
 person and, when it shows one bot, that bot. `removeGuest` closes everything
 the guest holds; `setBotGuests` closes what each dropped guest holds on that
-bot. Viewers close with WebSocket code 1008.
+bot. Registering re-checks the account and the share synchronously, so a
+stream or ticket opened by a request that passed its access check before a
+revocation landed is closed at once. Viewers close with WebSocket code 1008,
+stop forwarding input while closing, and are cut a second later.

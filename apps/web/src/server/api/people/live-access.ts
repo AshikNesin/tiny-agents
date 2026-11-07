@@ -4,7 +4,15 @@
  * yet redeemed were each checked once, when they opened; the guard never
  * sees them again. Each registers here, and taking access away (removing a
  * guest, unsharing a bot) closes what it covers at once.
+ *
+ * Registration re-checks the grant against the database synchronously, so a
+ * revocation that lands between a request's guard and its registration (the
+ * route awaited something in between) is still seen: it either committed
+ * before the check, which then refuses, or runs after the registration and
+ * closes it.
  */
+import { and, eq } from "drizzle-orm";
+import { db, botGuests, guests, users } from "../../db";
 
 /** What a live connection was opened under: a person, and the bot it shows (none for app-wide feeds). */
 export interface LiveGrant {
@@ -19,11 +27,35 @@ interface Held {
 
 const held = new Set<Held>();
 
+/** Whether the grant still holds: the account exists, and a guest's bot is still shared with them. */
+function granted({ userId, botId }: LiveGrant): boolean {
+  const account = db.select({ id: users.id }).from(users).where(eq(users.id, userId)).get();
+  if (!account) return false;
+  if (botId === undefined) return true;
+  const guest = db
+    .select({ userId: guests.userId })
+    .from(guests)
+    .where(eq(guests.userId, userId))
+    .get();
+  if (!guest) return true;
+  const share = db
+    .select({ botId: botGuests.botId })
+    .from(botGuests)
+    .where(and(eq(botGuests.botId, botId), eq(botGuests.userId, userId)))
+    .get();
+  return share !== undefined;
+}
+
 /**
  * Register a live connection under `grant`; `close` ends it when the grant
- * is revoked. Returns the release, to call when it ends on its own.
+ * is revoked, and at once when it no longer holds. Returns the release, to
+ * call when it ends on its own.
  */
 export function holdLiveAccess(grant: LiveGrant, close: () => void): () => void {
+  if (!granted(grant)) {
+    close();
+    return () => {};
+  }
   const entry: Held = { grant, close };
   held.add(entry);
   return () => held.delete(entry);
