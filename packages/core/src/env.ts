@@ -48,16 +48,10 @@ export const envSchema = z.object({
   /** Comma-separated list. Empty allows the requesting origin. */
   CORS_ALLOWED_ORIGINS: z.string().default(""),
   LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
-  /** Error reporting; surfaced as `config.sentry`, which both entries read. */
+  /** Error reporting; surfaced as `config.sentry`, which the Node entry reads. */
   SENTRY_DSN: z.string().optional(),
   /** Must match the release source maps were uploaded under. The Node bundle bakes in its build's release as the default. */
   SENTRY_RELEASE: z.string().optional(),
-  /**
-   * Cloudflare AI Gateway and the default model, for app code that builds an
-   * `@groot/ai` client (`new AI({ ..., apiKey: env.CLOUDFLARE_API_KEY })`).
-   * `@groot/ai` does not read these; given no `apiKey`, its provider SDKs
-   * fall back to their own variables (`OPENAI_API_KEY`, ...) in `process.env`.
-   */
   CLOUDFLARE_API_KEY: z.string().optional(),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_GATEWAY_ID: z.string().optional(),

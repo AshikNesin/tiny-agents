@@ -140,7 +140,7 @@ If you only want Claude models through the gateway, do not use this
 engine and do not paste a Claude Code token anywhere. Create a normal
 console API key that spends Max-plan API credits or usage credits, and
 store that key only as the Anthropic BYOK secret in Cloudflare AI
-Gateway. Details are in [AI inference](features/ai-inference.md).
+Gateway. Details are in [Model providers](features/model-providers.md).
 
 ## Manual smoke test
 

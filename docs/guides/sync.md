@@ -22,8 +22,9 @@ The groot sync system has four workflows:
 Groot uses [changesets](https://github.com/changesets/changesets) for versioning.
 The released packages are the root package (the `name` in the root
 `package.json`) and the kit packages
-`@groot/core`, `@groot/jobs`, `@groot/shell`, `@groot/ui` and `@groot/ai`
-(all private: they are versioned, never published to npm).
+`@groot/core`, `@groot/jobs`, `@groot/shell` and `@groot/ui` (all private:
+they are versioned, never published to npm). groot also releases `@groot/ai`,
+which tiny-agents deleted.
 
 1. **When making changes to groot**, add a changeset file:
 

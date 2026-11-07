@@ -40,7 +40,7 @@ export async function startWorkers(): Promise<void> {
   }
   if (handlers.size === 0) {
     logger.error(
-      "No job handlers registered — workers NOT started. Register handlers (startWebApp() does) before startWorkers().",
+      "No job handlers registered — workers NOT started. Register handlers with registerJobHandler() before startWorkers().",
     );
     return;
   }

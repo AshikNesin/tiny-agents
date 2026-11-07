@@ -42,13 +42,11 @@ maps share one release.
 
 The client ships no Sentry SDK, so the client maps only help once you add one.
 
-At runtime both entries read `config.sentry`, which `defaultConfig()` fills
-from the validated `SENTRY_DSN` and `SENTRY_RELEASE`: the Node entry
-initialises `@sentry/node` when the DSN is set, and the Worker passes both to
-`@sentry/cloudflare`. The Node bundle bakes the release it uploaded under in as
-the default for `SENTRY_RELEASE`; a runtime value still wins. The Worker has
-no baked default: it reports whatever `SENTRY_RELEASE` its vars or secrets
-hold. For stack traces to resolve, the runtime release must equal the uploaded
+At runtime the Node entry reads `config.sentry`, which `defaultConfig()` fills
+from the validated `SENTRY_DSN` and `SENTRY_RELEASE`, and initialises
+`@sentry/node` when the DSN is set. The Node bundle bakes the release it
+uploaded under in as the default for `SENTRY_RELEASE`; a runtime value still
+wins. For stack traces to resolve, the runtime release must equal the uploaded
 one, so **set `SENTRY_RELEASE` explicitly in both the build and the runtime
 environment** (for example `groot@$(git rev-parse --short HEAD)` in CI) rather
 than relying on the fallbacks.
@@ -66,7 +64,3 @@ than relying on the fallbacks.
 - **Still bundled paths** — the runtime release does not match the uploaded
   release (`SENTRY_RELEASE` differs or is unset on one side), or processing is
   still in progress.
-- **Workers** — the client maps are uploaded by `pnpm build:client`
-  (run by `pnpm deploy:worker`); the Worker bundle itself is built by wrangler,
-  which has its own `upload_source_maps` option in `wrangler.jsonc` if you want
-  server-side maps there too.

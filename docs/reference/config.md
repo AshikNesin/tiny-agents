@@ -3,7 +3,7 @@
 Application settings are a typed object in code, not a file. `defaultConfig(env)`
 in `packages/core/src/config.ts` derives sensible values from the validated
 environment; the app overrides what it wants in `apps/web/src/server/config.ts`
-with `defineConfig()`; `startWebApp()` passes those overrides to `bootstrap()`,
+with `defineConfig()`; the entry passes those overrides to `bootstrap()`,
 which merges the two before the first request.
 
 ```ts
@@ -107,18 +107,18 @@ The worker also refuses `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
 ## Boot order
 
 ```
-startWebApp({ env, db, storage, reportError })   apps/web/src/server/app.ts
-  bootstrap({ ...runtime, config: appConfig })
+entry.node.ts
+  bootstrap({ env, config: appConfig, db, storage, reportError })
     loadEnv(source)          parse + validate, dev defaults outside production
     setConfig(overrides)     defaultConfig(env) ⊕ defineConfig(...)
     configureLogger()        level from config.logging.level, pretty outside production
-    setDb(...)               the Drizzle handle (better-sqlite3 or D1)
-    setStorageAdapter(...)   StorageAdapter (local, R2 or memory), if given
+    setDb(...)               the Drizzle handle (better-sqlite3)
+    setStorageAdapter(...)   StorageAdapter (local or memory), if given
     setErrorReporter(...)    Sentry or anything else, if given
-  registerJobHandlers()
-  createWebApp()           the Hono app
+  registerJobHandlers()      apps/web/src/server/app.ts
+  createWebApp()             the Hono app
 ```
 
-Called once per process on Node (`entry.node.ts`, `scripts/seed.ts`), once per
-isolate on Workers (`entry.worker.ts`), and once per test file
-(`tests/server/setup.ts`).
+`bootstrap()` runs once per process (`entry.node.ts`, `scripts/seed.ts`) and
+once per test file (`tests/server/setup.ts`). Only the entry registers job
+handlers and builds the app; tests build it with `createTestApp()`.

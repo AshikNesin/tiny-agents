@@ -1,7 +1,7 @@
 # Key-value store
 
 A JSON key-value API over the `kv` table (`packages/core/src/kv/index.ts`). It
-runs wherever the database runs (better-sqlite3 on Node, D1 on Workers) and
+runs wherever the database runs (better-sqlite3) and
 needs no extra service. The boilerplate uses it for app settings
 (`APP_SETTING:` namespace) and passkey challenges (`passkey:challenge:`
 namespace, five-minute TTL, consumed on first use).
@@ -41,7 +41,7 @@ whole table, app settings and passkey challenges included.
 `expiresAt` is enforced on read and swept by `purgeExpiredKv()` (through the
 `kv_expires_at_idx` index), which the job tick's
 [housekeeping](./jobs.md#the-tick-packagesjobssrcservertickts) runs at most
-every ten minutes (Node poller or Workers cron). Housekeeping keeps its own
+every ten minutes (the Node poller). Housekeeping keeps its own
 last-run time in the `jobs:housekeeping:lastRunAt` key, so a root
 `kv.clear()` only makes the next sweep run early. On Node with
 `config.jobs.enabled` off there is no poller, so expired rows stay in the table
@@ -65,7 +65,5 @@ export const kv = sqliteTable(
 ## When to use it
 
 Settings, short-lived tokens and challenges, small caches. Use a real table for
-relational data, and avoid high-frequency counters on the Workers free plan:
-every `set` is a D1 row write, and writes are the scarcest
-[free-plan quota](../guides/deploy-cloudflare.md#free-plan-limits-that-shaped-the-design).
-This is a table in your SQLite/D1 database, not Workers KV.
+relational data. This is a table in your SQLite database, not a separate
+key-value service.

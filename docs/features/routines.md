@@ -5,6 +5,25 @@ where each run happens and how its result reaches the owner (issue #63). The
 schedule engine itself (exactly-once fires, grace, the `routine-fire` job)
 lives in `apps/web/src/server/api/routines/routines.jobs.ts`.
 
+Routines is also the reference feature module: it has every layer a feature
+can have. To build a new feature the same way, follow
+[Adding a feature end to end](../guides/development.md#adding-a-feature-end-to-end).
+
+```
+apps/web/src/server/api/routines/
+├── routines.schema.ts    # Zod schemas
+├── routines.service.ts   # Drizzle queries + Boom errors
+├── routines.routes.ts    # Hono router, mounted by createWebApp() in app.ts
+├── routines.jobs.ts      # the routine-fire job, registered by registerRoutineJobs()
+└── routines.*.ts         # helpers: arming, cards, runs, schedule, toolkit-store, watcher
+apps/web/src/server/db/schema.ts           # the `routines` and `routine_runs` tables
+apps/web/src/client/pages/routines/        # the Routines page
+apps/web/src/client/lib/routines-api.ts    # typed client for the API
+tests/server/routes/routines.routes.test.ts  # the HTTP API through createTestApp()
+tests/server/api/routines/                 # arming, engine, once, rearm, schedule, toolkit-store
+tests/client/pages/routines.test.tsx       # the page
+```
+
 ## One conversation per routine
 
 Each routine has a durable conversation of its own (`Routine.conversationId`).
@@ -47,7 +66,7 @@ document). In it:
 - `ask_owner` returns at once and tells the model to carry on, and
   `request_credentials` opens no sheet.
 - Vault uses, `remember` and `forget` are refused as unattended
-  (`isUnattended` in `bots/bots.unattended.ts`).
+  (`isUnattended` in `bots/bots.owner.ts`).
 - The routines toolkit refuses to create or manage routines (the recursion
   guard); `list_routines` stays open. The owner's chat is never a routine's
   conversation, so the owner can manage routines while a run is working.

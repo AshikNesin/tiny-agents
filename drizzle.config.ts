@@ -3,8 +3,7 @@ import { defaultDatabaseUrl } from "@groot/core/env";
 
 /**
  * drizzle-kit config. One SQLite schema; migrations are plain SQL files that
- * the Node entry applies at boot and `wrangler d1 migrations apply` applies on
- * Cloudflare.
+ * the Node entry applies at boot.
  *
  *   pnpm db:generate   # after editing a schema file
  *   pnpm db:studio     # browse the local database

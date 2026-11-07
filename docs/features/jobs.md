@@ -2,9 +2,8 @@
 
 The `jobs` table is the queue. There is no broker and no adapter: `addJob()`
 inserts a row, `runTick()` claims due rows with a single `UPDATE … RETURNING`
-and runs them in-process. On Node a poller calls `runTick()` every few seconds;
-on Cloudflare Workers a cron trigger calls it once a minute; and `addJob()`
-kicks off an inline tick so a job queued from a request runs right after the
+and runs them in-process. A poller calls `runTick()` every few seconds, and
+`addJob()` kicks off an inline tick so a job queued from a request runs right after the
 response.
 
 Everything lives in `@groot/jobs`: `@groot/jobs/lifecycle` (the state machine),
@@ -71,8 +70,8 @@ export function registerDigestJobs(): void {
 first run, 2 for the first retry).
 
 Call your `register…Jobs()` from `registerJobHandlers()` in
-`apps/web/src/server/app.ts`; `startWebApp()`, the one boot sequence both
-entries run, calls it before the poller or the first cron tick. Registering a
+`apps/web/src/server/app.ts`; the Node entry calls it after `bootstrap()` and
+before the poller starts. Registering a
 name again replaces its handler. Any non-empty name works (routes address a job
 by its id, never its name). A job whose name has no registered handler is
 accepted but never claimed, and stays `created` until one is registered.
@@ -106,7 +105,7 @@ await scheduleJob("todo-cleanup", { daysToKeep: 30 }, "0 3 * * *", { timezone: "
 | `getJobs`, `getJobById(id)`, `getQueueStats`, `getAvailableQueues`, `getScheduledJobs`, `getJobLogs`, `purgeJobsByState` | Queries (`queries.ts`)                                                                                                              |
 
 Cron expressions are evaluated by croner. Without a `timezone` they use the
-process's local time zone: UTC on Workers, the host's `TZ` on Node. Pass
+process's local time zone, the host's `TZ`. Pass
 `timezone` when the schedule must not depend on the host.
 
 ## The tick (`packages/jobs/src/server/tick.ts`)
@@ -133,10 +132,10 @@ One `runTick()` pass:
    older than `config.jobs.keepCompletedDays`, their logs, and expired kv
    entries. Failed jobs stay until you purge them. The last run time is a kv
    row (`jobs:housekeeping:lastRunAt`) claimed with one compare-and-set upsert,
-   because a fresh Workers isolate has no memory of the last run. Every
-   statement uses an index (`jobs_state_completed_at_idx`, `job_logs_job_id_idx`,
-   `kv_expires_at_idx`), so on D1 the rows read follow what is deleted, not
-   table size.
+   so a restarted process remembers the last run. Every statement uses an
+   index (`jobs_state_completed_at_idx`, `job_logs_job_id_idx`,
+   `kv_expires_at_idx`), so the rows read follow what is deleted, not table
+   size.
 
 Only one tick runs at a time per process; a `runTick()` call during a tick
 schedules one more pass after it.
@@ -146,8 +145,7 @@ schedules one more pass after it.
 | Runtime | Driver                                                                                                                                                                                                                                                       |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Node    | `startWorkers()` in `entry.node.ts` when `config.jobs.enabled`: one tick immediately, then every `config.jobs.pollIntervalSeconds`; `stopWorkers()` on shutdown waits for the in-flight tick. With no handlers registered it logs an error and does not poll |
-| Workers | the `scheduled` handler (cron `* * * * *` in `wrangler.jsonc`) → `ctx.waitUntil(runTick())`. It does not read `config.jobs.enabled`; remove the trigger to stop it                                                                                           |
-| Both    | `addJob()` (when the job is due and has a handler) and `retryJob()` run an inline tick, with schedules and housekeeping skipped, when `config.jobs.enabled` and `config.jobs.runInline` are true; on Workers through the request's `waitUntil`               |
+| Inline  | `addJob()` (when the job is due and has a handler) and `retryJob()` run an inline tick, with schedules and housekeeping skipped, when `config.jobs.enabled` and `config.jobs.runInline` are true                                                             |
 | Tests   | jobs are disabled, so nothing ticks on its own; call `await runTick()` yourself                                                                                                                                                                              |
 
 Every `config.jobs` key and its default is listed in
@@ -226,14 +224,12 @@ them are separate subpaths (`@groot/jobs/client/useJobActions`,
 - The detail page fetches the job and its logs on load and polls both every
   2 s while the job is `created` or `active`; polling stops once it finishes.
 
-The todo feature's `todo-cleanup` and `todo-summary` are the reference
-handlers; see [Todos](./todos.md#background-jobs).
+The routines feature's `routine-fire` handler is the reference; see
+`registerRoutineJobs()` in `apps/web/src/server/api/routines/routines.jobs.ts`.
 
 ## Good practice
 
 - Keep handlers idempotent: a crashed process re-runs them after the active timeout.
-- Keep them short. On Workers a job shares the CPU budget of the request or
-  cron run that ticks it; see the
-  [free-plan limits](../guides/deploy-cloudflare.md#free-plan-limits-that-shaped-the-design).
+- Keep them short: jobs run one after another in each tick.
 - Use `singletonKey` to collapse duplicate work while a job is pending.
 - Return small outputs; put large results somewhere else and return a reference.

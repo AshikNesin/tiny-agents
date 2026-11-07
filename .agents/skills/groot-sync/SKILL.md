@@ -138,7 +138,6 @@ maintenance fact, not inferred from imports.
 
 | Test area                      | Owns (synced source)                                  |
 | ------------------------------ | ----------------------------------------------------- |
-| `tests/server/ai`              | `packages/ai/src/**`                                  |
 | `tests/server/core`            | `packages/core/src/**`                                |
 | `tests/server/jobs`            | `packages/jobs/src/server/**`                         |
 | `tests/server/api`             | `packages/core/src/**`, `packages/jobs/src/server/**` |
@@ -146,6 +145,10 @@ maintenance fact, not inferred from imports.
 | `tests/client/components/ui`   | `packages/ui/src/**`                                  |
 | `tests/client/components/jobs` | `packages/jobs/src/client/**`                         |
 | `tests/client`                 | `packages/shell/src/**`                               |
+
+groot also declares a test area for its AI package. tiny-agents deleted that
+package, and `additional_exclusions` in `.groot/boilerplate-sync.json` keeps
+both the package and its tests out of sync.
 
 Adding a suite for synced source means adding (or extending) its area in
 `TEST_AREA_OWNERSHIP`; an undeclared `tests/` path classifies as drift, which

@@ -1,14 +1,13 @@
 # File storage
 
 A small file browser (list, upload, download, delete, folders, rename) over a
-storage adapter. Three adapters ship; the runtime entry injects one through
+storage adapter. Two adapters ship; the runtime entry injects one through
 `bootstrap({ storage })` and the rest of the code uses `storage` from
 `@groot/core/storage`.
 
 | Adapter                                  | File                                  | Used by                                                                                                                                    |
 | ---------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `localStorage(root = "./local/uploads")` | `packages/core/src/storage/node.ts`   | `entry.node.ts` — plain files on disk, content type from the extension, empty folders pruned on delete, a key that escapes the root throws |
-| `r2Storage(env.STORAGE)`                 | `packages/core/src/storage/r2.ts`     | `entry.worker.ts` — an R2 bucket binding; no credentials, no SDK                                                                           |
 | `memoryStorage()`                        | `packages/core/src/storage/memory.ts` | `tests/server/setup.ts`                                                                                                                    |
 
 `localStorage` and `uploadsRoot` are Node-only, so they are imported from
@@ -61,7 +60,7 @@ The semantics every adapter follows:
   derives it from the extension instead.
 
 `tests/server/core/storage-adapters.test.ts` runs one contract suite against
-all three adapters (local on a temp directory, R2 on an in-memory bucket fake).
+both adapters (local on a temp directory, and memory).
 
 Need S3, GCS or anything else? Implement these six methods (the helpers
 `bodyToBytes`, `bodyContentType` and `listKeys` in `adapter.ts` do the boring
@@ -92,7 +91,7 @@ packages/core/src/storage/
 ├── index.ts              # the @groot/core/storage barrel (no Node-only adapter)
 ├── adapter.ts            # StorageAdapter contract + helpers
 ├── storage.ts            # the `storage` proxy, setStorageAdapter(), getStorage()
-├── node.ts · r2.ts · memory.ts
+├── node.ts · memory.ts
 ├── storage.routes.ts     # Hono router (rate-limited, 100 MB upload limit)
 ├── storage.service.ts    # listFiles, uploadFile, uploadFiles, downloadFile, deleteFiles,
 │                         # createFolder, deleteFolder, renameFile, copyFile
@@ -140,10 +139,6 @@ graph reaches server middleware that the client tsconfig cannot type.
   directory (git-ignored). In production they default to `/data/uploads`, next
   to the SQLite file (`uploadsRoot(env)` in `@groot/core/storage/node`); set
   `UPLOADS_DIR` to use another folder.
-- **Workers**: the `STORAGE` R2 binding in `wrangler.jsonc`. Bucket bindings
-  have no signed URLs, so downloads always stream through the API. Free-plan
-  quotas are in
-  [Deploying on Cloudflare Workers](../guides/deploy-cloudflare.md#free-plan-limits-that-shaped-the-design).
 - **Tests**: `memoryStorage()`; nothing touches the disk outside the adapter contract suite.
 
 ## Frontend
@@ -158,10 +153,8 @@ sends one request), `useDeleteFiles()`, `useCreateFolder()`,
 
 ## Troubleshooting
 
-- **429** — rate limits; tune `config.rateLimits.storage` / `.upload`. On
-  Workers with the `STORAGE_RATE_LIMITER` / `UPLOAD_RATE_LIMITER` bindings, the
-  binding's own limit applies instead.
+- **429** — rate limits; tune `config.rateLimits.storage` / `.upload`.
 - **413 on upload** — larger than 100 MB (`MAX_UPLOAD_BYTES` in `storage.routes.ts`).
 - **"Storage is not configured"** — the entry did not pass `storage` to
-  `bootstrap()`; on Workers that means the `STORAGE` binding is missing.
+  `bootstrap()`.
 - **Download prints binary** — it streams raw bytes; use `curl -o file`.
