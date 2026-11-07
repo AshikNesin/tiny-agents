@@ -4,6 +4,7 @@
  * store's refusals reach the model.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
@@ -39,23 +40,16 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
   return state;
 }
 
-async function until<T>(read: () => T | undefined | false, what: string): Promise<T> {
-  const deadline = Date.now() + 10_000;
-  for (;;) {
-    const value = read();
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await new Promise((r) => setTimeout(r, 20));
-  }
-}
-
 const runtimes: AgentRuntime[] = [];
 afterEach(async () => {
   await Promise.allSettled(runtimes.splice(0).map((r) => r.close()));
 });
 
 /** A bot that calls create_bot once, then answers; tool results land in `results`. */
-async function openBuilder(store: BotCreationStore, args: Record<string, unknown> = ARGS) {
+async function openBuilder(
+  store: BotCreationStore,
+  args: Parameters<typeof fauxToolCall>[1] = ARGS,
+) {
   const results: string[] = [];
   const runtime = await openTestRuntime({
     storePath: ":memory:",
@@ -83,7 +77,9 @@ async function openBuilder(store: BotCreationStore, args: Record<string, unknown
     capabilities: { enabled: ["bot-builder"], permissions: { create_bot: "allow" } },
   });
   const events: ChatEvent[] = [];
-  await runtime.watchChat(ref, (batch) => events.push(...batch));
+  await runtime.watchChat(ref, (batch) => {
+    events.push(...batch);
+  });
   await runtime.submit(ref, { requestId: "r1", text: "make me a bot" });
   const call = await until(
     () =>
