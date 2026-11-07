@@ -20,7 +20,10 @@ feature end to end.
 | `pnpm db:migrate` · `pnpm db:migrate:worker`                                  | Apply migrations to the local SQLite file · to remote D1 ahead of a deploy (optional; the Worker migrates on first request) |
 | `pnpm db:seed`                                                                | Demo user + three todos (idempotent; also applies migrations)                                                               |
 | `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                                        |
-| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area ownership coverage · changeset gate                            |
+| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                             |
+| `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites             |
+
+The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR. The pre-push hook runs `pnpm typecheck`. A new gate is one line in `scripts/gates.mjs`. `pnpm check:coverage` fails when a workflow step, or a `check:*` or `typecheck:*` script, runs a check outside that list.
 
 ## Conventions
 

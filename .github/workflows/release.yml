@@ -54,11 +54,11 @@ jobs:
           version: pnpm changeset version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Skip the Vite+ pre-commit hook on the bot's version-bump commit.
-          # gitleaks isn't installed on the GitHub runner ("gitleaks: not found",
-          # exit 127), which would abort every "chore: version packages" commit.
-          # The hook wrapper (.vite-hooks/_/h) bails early when HUSKY=0 or
-          # VITE_GIT_HOOKS=0.
+          # Keeps the Vite+ hooks off the bot's version-bump commit and push if
+          # the install step ever stops passing --ignore-scripts and installs
+          # them. The commit changes only versions and changelogs, and the
+          # Tests workflow scans it for secrets when it lands on main. The hook
+          # wrapper (.vite-hooks/_/h) exits early when VITE_GIT_HOOKS=0.
           VITE_GIT_HOOKS: "0"
 
       - name: Create git tag

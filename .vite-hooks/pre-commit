@@ -1,11 +1,9 @@
-#!/bin/bash
-# Vite+ pre-commit hook
-# Runs Gitleaks (secret detection) then Vite+ staged checks
+# The hook wrapper runs this with `sh -e`.
 
-set -e
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --verbose --redact --config .gitleaks.toml
+else
+  echo "gitleaks not installed, secret scan runs in CI"
+fi
 
-# Run Gitleaks for secret detection on staged files
-gitleaks protect --staged --verbose --redact --config .gitleaks.toml
-
-# Run Vite+ staged checks (lint + format)
 vp staged
