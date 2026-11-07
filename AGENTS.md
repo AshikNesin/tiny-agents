@@ -24,6 +24,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Never edit an applied migration.                                   | `pnpm check:migrations-immutable`                 |
 | A managed-path change adds a changeset or `.no-release/` reason.   | `pnpm check:changesets`                           |
 | Remove a kit export only in a major, after a deprecation.          | `scripts/check-kit-exports.ts`                    |
+| `packages/agent` parses stored JSON with `durable-json.ts`.        | R6, R6b                                           |
 | No transactions in `packages/`; sync ones are fine in `apps/`.     | R7                                                |
 | Only `bootstrap()` sets `db`; never open a driver.                 | R8a, R8b                                          |
 | Test dates derive from `FIXED_NOW` in `tests/test-clock.ts`.       | `tests/server/setup.ts` freezes `Date`            |
