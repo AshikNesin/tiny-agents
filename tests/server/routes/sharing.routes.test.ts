@@ -103,6 +103,8 @@ describe("shared bots", () => {
 
     expect((await guest.asGuest(`/api/v1/bots/${shared.id}`)).status).toBe(200);
     expect((await guest.asGuest(`/api/v1/bots/${other.id}`)).status).toBe(404);
+    expect((await guest.asGuest(`/api/v1/bots/${other.id}/stream`)).status).toBe(404);
+    expect((await guest.asGuest(`/api/v1/bots/${other.id}/browser`)).status).toBe(404);
     expect(
       (
         await guest.asGuest(`/api/v1/bots/${other.id}/messages`, {
