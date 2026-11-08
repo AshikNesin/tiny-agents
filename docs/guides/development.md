@@ -5,24 +5,34 @@ feature end to end.
 
 ## Commands
 
-| Command                                                                       | What it does                                                                                                    |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                                                    | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                       |
-| `pnpm check` · `pnpm lint` · `pnpm format`                                    | Vite+ (Oxlint + Oxfmt)                                                                                          |
-| `pnpm typecheck` · `typecheck:client` · `typecheck:e2e` · `typecheck:kit`     | Server, client and e2e programs, tests included · client only · e2e only · the kit consumer fixture             |
-| `pnpm test` · `pnpm test:watch`                                               | Server tests (Vitest, in-memory SQLite per file)                                                                |
-| `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                        | Client tests (jsdom) · both suites · Playwright                                                                 |
-| `pnpm build`                                                                  | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                |
-| `pnpm start`                                                                  | Run the production bundle                                                                                       |
-| `pnpm db:generate [--name x]`                                                 | drizzle-kit: schema diff → `apps/web/drizzle/NNNN_x.sql`                                                        |
-| `pnpm db:migrate`                                                             | Apply migrations to the local SQLite file                                                                       |
-| `pnpm db:seed`                                                                | Demo user (idempotent; also applies migrations)                                                                 |
-| `pnpm db:studio`                                                              | Drizzle Studio on the local database                                                                            |
-| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets` | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                 |
-| `pnpm check:doc-refs`                                                         | Doc paths, links and `pnpm` scripts all exist                                                                   |
-| `pnpm check:migrations-immutable`                                             | Fails when the branch edits or deletes a migration that is on main                                              |
-| `pnpm check:dead`                                                             | Unused files and exports (knip)                                                                                 |
-| `pnpm verify:static` · `pnpm verify`                                          | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
+| Command                                                                                | What it does                                                                                                    |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                                                             | Migrate + seed SQLite, then Hono + Vite (HMR) on one port, under portless                                       |
+| `pnpm check` · `pnpm lint` · `pnpm format`                                             | Vite+ (Oxlint + Oxfmt)                                                                                          |
+| `pnpm typecheck` · `typecheck:client` · `typecheck:e2e` · `typecheck:kit`              | Server, client and e2e programs, tests included · client only · e2e only · the kit consumer fixture             |
+| `pnpm test` · `pnpm test:watch`                                                        | Server tests (Vitest, in-memory SQLite per file)                                                                |
+| `pnpm test:client` · `pnpm test:all` · `pnpm test:e2e`                                 | Client tests (jsdom) · both suites · Playwright                                                                 |
+| `pnpm build`                                                                           | `dist/client` (Vite) + `dist/server/bundle.js` (esbuild) + `dist/server/drizzle`                                |
+| `pnpm start`                                                                           | Run the production bundle                                                                                       |
+| `pnpm db:generate [--name x]`                                                          | drizzle-kit: schema diff → `apps/web/drizzle/NNNN_x.sql`                                                        |
+| `pnpm db:migrate`                                                                      | Apply migrations to the local SQLite file                                                                       |
+| `pnpm db:seed`                                                                         | Demo user (idempotent; also applies migrations)                                                                 |
+| `pnpm db:studio`                                                                       | Drizzle Studio on the local database                                                                            |
+| `pnpm sandbox:up` · `:down` · `:logs` · `:shell` · `:reset`                            | The local sandbox container — see [Local sandbox](./local-sandbox.md)                                           |
+| `pnpm secrets:rotate`                                                                  | Re-seal MCP and vault secrets under a new `SECRETS_KEY`                                                         |
+| `pnpm test:e2e:ui`                                                                     | Playwright in interactive UI mode                                                                               |
+| `pnpm dev:debug`                                                                       | The dev server under `node --inspect`                                                                           |
+| `pnpm site:build`                                                                      | Rebuild the marketing site's demo bundle (`site/`)                                                              |
+| `pnpm doctor`                                                                          | React diagnostics scan                                                                                          |
+| `pnpm groot:setup` · `groot:check` · `groot:sync` · `groot:resolve` · `groot:upstream` | Boilerplate sync — see [Sync](./sync.md)                                                                        |
+| `pnpm changeset` · `changeset:version` · `changeset:status`                            | Record and version changes — see [Sync](./sync.md)                                                              |
+| `pnpm check:tokens` · `check:closure` · `check:coverage` · `check:changesets`          | Design tokens · bundle imports are declared deps · test-area and gate coverage · changeset gate                 |
+| `pnpm check:doc-refs`                                                                  | Doc paths, links and `pnpm` scripts all exist                                                                   |
+| `pnpm check:migrations-immutable`                                                      | Fails when the branch edits or deletes a migration that is on main                                              |
+| `pnpm check:dead`                                                                      | Unused files and exports (knip)                                                                                 |
+| `pnpm build:client`                                                                    | The Vite half of `pnpm build`                                                                                   |
+| `pnpm prepare`                                                                         | Runs on `pnpm install`: hook paths + Vite+ config (internal)                                                    |
+| `pnpm verify:static` · `pnpm verify`                                                   | The static gates in `scripts/gates.mjs`, as CI runs them, stopping at the first failure · plus both test suites |
 
 The pre-commit hook runs gitleaks, then `vp staged`. Where gitleaks isn't installed it prints a notice and skips the scan, because CI scans every PR and every push to `main`. The pre-push hook runs `pnpm typecheck`. Both hooks run in every git worktree, because their dispatcher in `.vite-hooks/_` is tracked. In a worktree without `pnpm install` they stop the commit or push with a message naming `pnpm install`. [AGENTS.md](../../AGENTS.md) pairs each rule with the gate that enforces it.
 

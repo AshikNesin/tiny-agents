@@ -10,7 +10,7 @@ This project uses [portless](https://github.com/vercel-labs/portless) to replace
 NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts
 ```
 
-The name comes from `package.json` → `name` (`groot`). Which URL you get
+The name comes from `package.json` → `name`. Which URL you get
 depends on the portless proxy:
 
 - **A proxy is already running** (for example one you started on 443 with

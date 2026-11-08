@@ -1,6 +1,6 @@
 # tiny-agents — Product Requirements Document
 
-> Status: Phase 1 scope agreed · Last updated: 2026-10-17
+> Status: Phase 1 scope agreed · Last updated: 2026-11-08
 
 ## 1. Overview
 
@@ -11,7 +11,9 @@ messenger-style app where every contact in the bot list is an AI bot you chat wi
   conversation is durable: it survives page refreshes, server crashes and redeploys.
 - **Foundation:** a child project of the [groot](https://github.com/AshikNesin/groot) boilerplate (Hono +
   React 19 + Drizzle/SQLite + JWT/passkey auth), kept in sync with it via groot's sync tooling.
-- **Inference:** all LLM calls go through **Cloudflare AI Gateway**; provider keys live only in the gateway.
+- **Inference:** all LLM calls go through **Cloudflare AI Gateway**; provider keys live only in the gateway
+  (since changed: models are owner data — provider accounts of several kinds, configured in
+  Settings → Models; §7.3 and [ADR 0016](docs/adr/0016-models-are-owner-data.md)).
 - **UI:** React + shadcn/ui + shadcn [AI Elements](https://ui.shadcn.com/docs/ai-elements). Visual and layout
   reference: [Talorys](https://rociiu.github.io/talorys/#demo) (calm three-column workspace, light + dark);
   product/feature reference: [OpenMausBot](https://github.com/milind-soni/OpenMausBot) and Grok Bot.
@@ -353,19 +355,24 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 
 - **Tools** via pi-durable `defineTool` (durable tool calls, replay-safe tools), approvals UI
   (AI Elements `Tool`, `Confirmation`). Tool activity shown inline as compact status chips above the reply
-  (Talorys: "✓ Adding task …").
+  (Talorys: "✓ Adding task …"). _(shipped: toolkits, the Tool gate and approvals; see
+  [ADR 0004](docs/adr/0004-every-bot-has-every-toolkit.md), [ADR 0014](docs/adr/0014-tool-gate-and-engine-seam.md))_
 - Message edit / regenerate and conversation **fork**; multiple threads per bot (then a per-bot history list
-  with "Search history", as in Talorys' conversation column)
-- Custom gateway models (Grok, Gemini via `/compat` or Cloudflare REST API)
+  with "Search history", as in Talorys' conversation column). _(shipped in the Code page's threads, which
+  fork; bot chats still have one thread plus past chats)_
+- Custom gateway models (Grok, Gemini via `/compat` or Cloudflare REST API). _(shipped: gateway custom
+  providers, issue #216)_
 - **Memory** page (Talorys "Memories"): what bots know about you, grouped by category (Preferences, Facts,
-  Goals, Habits) with counts, searchable, add/edit/delete, source line ("Added manually" / "From chat")
+  Goals, Habits) with counts, searchable, add/edit/delete, source line ("Added manually" / "From chat").
+  _(shipped: issue #22, [docs/features/memory.md](docs/features/memory.md))_
 - **Routines** page (Talorys "Automations"): reminders and AI routines on groot jobs — "Upcoming" cards,
-  "Active schedules" list with enable toggle + delete + next run, "Recent executions"
+  "Active schedules" list with enable toggle + delete + next run, "Recent executions". _(shipped: issue #18)_
 - Skills; notifications (bell in the nav header, web push); mobile bottom tab bar once there are several
-  sections
-- Channels / group chats, bot-to-bot, chief-of-staff orchestration
-- Per-bot computers, connected apps / MCP (computers shipped as desktops on the sandbox VM, issue #108; macOS and Windows machines remain out of scope)
-- Attachments, avatar upload / generation, voice
+  sections. _(skills and Pushover notifications shipped; web push and the tab bar have not)_
+- Channels / group chats, bot-to-bot, chief-of-staff orchestration. _(bot-to-bot delivery shipped, issue
+  #12; group chats and orchestration have not)_
+- Per-bot computers, connected apps / MCP (computers shipped as desktops on the sandbox VM, issue #108; macOS and Windows machines remain out of scope). _(MCP connections shipped too)_
+- Attachments, avatar upload / generation, voice. _(attachments shipped, issues #17 and #58; avatars and voice have not)_
 - Orphaned conversation cleanup
 - Cloudflare Durable Objects hosting option
 

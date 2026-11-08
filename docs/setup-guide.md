@@ -56,6 +56,12 @@ Non-secret settings (rate limits, job tuning, ...) are derived from these in
 [Config](./reference/config.md#env-vs-config) covers that split and what adding
 a variable involves.
 
+The table above covers the core (groot) variables. tiny-agents adds its own —
+the sandbox VM, the browser and computer toolkits, the secrets key, 1Password
+Connect, TinyFish web search, the faux model — each with a comment in
+[`.env.example`](../.env.example), validated in `apps/web/src/server/env.ts`.
+All are optional in development.
+
 Models are not env: add provider accounts and their keys in **Settings →
 Models** after first sign-in, with no restart. Keys are kept in the vault, so
 set `SECRETS_KEY` first. See [Models](./features/models.md).

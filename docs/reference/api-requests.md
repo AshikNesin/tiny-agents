@@ -1,8 +1,10 @@
 # API request recipes
 
-Copy-ready `curl` snippets for every endpoint, with the status code each one
-returns. Responses use the envelope `{ success: true, data }`; errors are
-`{ success: false, error: { code, message, details } }`.
+Copy-ready `curl` snippets for the core endpoints (auth, users, health,
+routines, jobs, storage, app settings, passkeys), with the status code each
+one returns. Responses use the envelope `{ success: true, data }`; errors are
+`{ success: false, error: { code, message, details } }`. The full API
+surface is in the [docs hub](../README.md#api-surface).
 
 ```bash
 BASE=https://tiny-agents.localhost   # http://localhost:3000 under PORTLESS=0

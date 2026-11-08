@@ -24,11 +24,6 @@ it creates the first account (`POST /auth/setup`) and signs in. Once a user
 exists it redirects to `/login`. `useSetupStatus()`
 (`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
 
-`/setup` is first-run setup: while no user exists, `Login` redirects there and
-it creates the first account (`POST /auth/setup`) and signs in. Once a user
-exists it redirects to `/login`. `useSetupStatus()`
-(`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
-
 Any other path redirects to `/`. The router sits inside nuqs's `NuqsAdapter`
 (URL state) and `GrootUIProvider` (`@groot/ui/provider`), which mounts the
 toaster and the `ConfirmProvider` that `useConfirm()` needs.

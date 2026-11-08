@@ -34,10 +34,12 @@ chat replies; see [`scripts/demo/`](scripts/demo/README.md) to re-record it.
 
 ```sh
 pnpm install
-pnpm dev          # http://localhost:3000 (demo@example.com / demo@example.com)
+pnpm dev          # https://tiny-agents.localhost (demo@example.com / demo@example.com)
 ```
 
-No `.env` is needed for development; `.env.example` lists every variable.
+No `.env` is needed for development; `.env.example` lists every variable. The
+dev server runs under [portless](docs/guides/portless-https.md);
+`PORTLESS=0 pnpm dev` serves `http://localhost:3000` instead.
 
 For real inference, sign in and add a provider in **Settings → Models**
 (set `SECRETS_KEY` first: keys are kept in the vault). No restart; see
@@ -83,6 +85,8 @@ it. Short version:
   [docs/README.md](docs/README.md#tiny-agentsagent-entry-points))
 - `packages/claude-worker` — loopback daemon that drives Claude Code. It
   does not run inside the tiny-agents process
+- `packages/code` — the Code page's harness adapters: one contract every
+  coding agent plugs into (Shelley, Claude Code), with the built-in drivers
 - `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
   under `src/client`); everything else is the groot boilerplate, synced via
   `pnpm groot:sync` and never edited here

@@ -75,7 +75,7 @@ Set these on the host; defaults and the full list are in the
 
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.
-tiny-agents' own variables (gateway, sandbox, vault, browser) are listed in
+tiny-agents' own variables (sandbox, models' vault key, browser, computer) are listed in
 `.env.example`.
 
 ## Upgrading from the Prisma build
