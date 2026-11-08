@@ -14,7 +14,7 @@ Routes are defined in `apps/web/src/client/App.tsx` (React Router 7):
 | `/` → `/chats` (index)  | `ChatWorkspace`      | `apps/web/src/client/pages/chats/ChatsLayout` | Protected |
 | `/storage`              | `Storage`            | `@groot/shell/pages/storage/Storage`          | Protected |
 | `/jobs`, `/jobs/:jobId` | `Jobs` / `JobDetail` | `@groot/jobs/client`                          | Protected |
-| `/settings`             | `SettingsPage`       | `apps/web/src/client/pages/settings`          | Protected |
+| `/settings/*`           | `SettingsPage`       | `apps/web/src/client/pages/settings`          | Protected |
 
 The tiny-agents pages (tasks, routines, skills, memory, vault, ...) are listed
 in `apps/web/src/client/App.tsx`.
@@ -23,6 +23,16 @@ in `apps/web/src/client/App.tsx`.
 it creates the first account (`POST /auth/setup`) and signs in. Once a user
 exists it redirects to `/login`. `useSetupStatus()`
 (`@groot/shell/hooks/useSetupStatus`) reads `GET /auth/setup` for both.
+
+`/settings` is a full-page screen (no app sidebar) with one sub-route per
+section: tiny-agents uses `/settings/account`, `appearance`, `security`,
+`models`, `notifications`, `people` and `configuration`.
+The bare path and unknown sections redirect to the first section. Its left
+sidebar has a search (`/` to focus) that matches section names, their
+keywords and individual settings. Pass `sections` (`SettingsSection[]`,
+default `DEFAULT_SETTINGS_SECTIONS`) to add or reorder sections; each has an
+`id` (the URL segment), `label`, `group`, `icon`, `description`,
+`keywords`, `items` and `element`.
 
 Any other path redirects to `/`. The router sits inside nuqs's `NuqsAdapter`
 (URL state) and `GrootUIProvider` (`@groot/ui/provider`), which mounts the
@@ -38,15 +48,20 @@ routes.
 `<ShellProvider config={…}>` (`@groot/shell/lib/shell-config`) describes the
 shell once:
 
-| Field   | Drives                                                                                                                  |
-| ------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `brand` | `{ label, icon?, to? }`: the sidebar, mobile bar and login logo; defaults to Groot, `LayoutDashboard`, `/`              |
-| `nav`   | `{ label, icon?, to, primary? }[]`: `primary` entries are sidebar rows, the rest account-menu rows; all are ⌘K commands |
-| `login` | `{ tagline?, description?, features? }`: the login brand panel                                                          |
+| Field   | Drives                                                                                                                                                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brand` | `{ label, icon?, to? }`: the sidebar, mobile bar and login logo; defaults to Groot, `LayoutDashboard`, `/`                                                                                                                                                                 |
+| `nav`   | `{ label, icon?, to, primary?, fullPage?, shortcut? }[]`: `primary` entries are sidebar rows, the rest account-menu rows; all are ⌘K commands. `fullPage` pages bring their own chrome; `shortcut` (e.g. `"mod+,"`) is bound globally and shown in the account menu and ⌘K |
+| `login` | `{ tagline?, description?, features? }`: the login brand panel                                                                                                                                                                                                             |
 
-The shell always adds the theme submenu and **Log out** (one action: end the
-session, toast, go to `/login`) to the account menu, and Theme and Account
-groups to ⌘K. `Layout` takes `commandGroups` for app-specific ⌘K groups
+The account menu follows Amp's layout. It opens upward with **Log out** first
+(one action: end the session, toast, go to `/login`), then a **Command
+palette** row (⌘K), then the non-primary destinations in config order, so the
+last one (Settings) sits next to the trigger. Theme lives in Settings ›
+Appearance and the ⌘K Theme group, not in the account menu. ⌘K also gets an
+Account group. On a `fullPage` destination's path (and below it), `Layout`
+renders no sidebar, mobile bar or `<main>` padding, only the ⌘K palette and
+the page. `Layout` takes `commandGroups` for app-specific ⌘K groups
 (listed between Navigation and Theme), `header` to replace the sidebar and
 mobile bar with your own, and `padded`, `mainClassName`, `className`.
 
@@ -60,8 +75,9 @@ under Suggestions while the query is empty) and `variant: "destructive"`.
 
 `App.tsx` keeps a `PAGES` list of `NavDestination & { element }`: it is both
 `ShellConfig.nav` and the routes, so a page with a place in the navigation is
-declared once. Routes without a nav entry (`jobs/:jobId`) are written out as
-usual.
+declared once. An entry's optional `path` overrides the route path (Settings
+uses `/settings/*` for its section sub-routes). Routes without a nav entry
+(`jobs/:jobId`) are written out as usual.
 
 ## Transport and session
 

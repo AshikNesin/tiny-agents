@@ -1,99 +1,121 @@
+/**
+ * The app's settings: the shell's full-page settings screen
+ * (`@groot/shell/pages/settings/Settings`) with tiny-agents' own sections —
+ * Models (issue #179), Notifications, People — beside Account, Appearance,
+ * Security and Configuration. A guest (issue #145) gets Appearance and
+ * Security only.
+ */
+import { useMemo } from "react";
+import { AccountSettings } from "@groot/shell/components/AccountSettings";
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import { NotificationSettings } from "@groot/shell/components/NotificationSettings";
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
-import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { Bell, Cpu, Settings as SettingsIcon, ShieldCheck, Users } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Settings, type SettingsSection } from "@groot/shell/pages/settings/Settings";
+import { Bell, Cpu, FileJson, Palette, ShieldCheck, UserRound, Users } from "lucide-react";
 import { PeopleSettings } from "../../components/PeopleSettings";
 import { useIsGuest } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
 
-const TABS = ["general", "models", "notifications", "security", "people"] as const;
+const APPEARANCE: SettingsSection = {
+  id: "appearance",
+  label: "Appearance",
+  group: "Personal",
+  icon: Palette,
+  description: "Customize how the app looks.",
+  keywords: ["theme", "dark", "light", "system", "color", "mode"],
+  element: <ThemeSettings />,
+};
 
-/** A guest's settings (issue #145): the theme and their own sign-in. The rest is the owner's. */
-function GuestSettings() {
-  return (
-    <PageLayout title="Settings" description="Your theme and sign-in." maxWidth="5xl">
-      <div className="space-y-6">
-        <ThemeSettings />
-        <PasskeyManager />
-      </div>
-    </PageLayout>
-  );
-}
+const SECURITY: SettingsSection = {
+  id: "security",
+  label: "Security",
+  group: "Personal",
+  icon: ShieldCheck,
+  description: "Passkeys for passwordless sign-in.",
+  keywords: [
+    "passkey",
+    "webauthn",
+    "face id",
+    "touch id",
+    "security key",
+    "biometric",
+    "sign in",
+    "login",
+  ],
+  element: <PasskeyManager />,
+};
 
-/** App settings. No credential fields. */
+/** A guest sees only their own theme and sign-in (issue #145). */
+const GUEST_SECTIONS: SettingsSection[] = [APPEARANCE, SECURITY];
+
+/** The owner's settings, in sidebar order. */
 export function SettingsPage() {
   const guest = useIsGuest();
-  const [params, setParams] = useSearchParams();
-  if (guest) return <GuestSettings />;
-  // `?tab=models` opens a tab directly (the chat's "No model is set up" link).
-  // The Claude plan lives in the Models tab now: `?tab=claude` lands there.
-  const requested = params.get("tab") === "claude" ? "models" : params.get("tab");
-  const tab = TABS.includes(requested as (typeof TABS)[number]) ? requested! : "general";
-  return (
-    <PageLayout
-      title="Settings"
-      description="Manage your application preferences, configuration, and security."
-      maxWidth="5xl"
-    >
-      {/* At ~390px the line tabs don't fit. max-w-full + overflow-x-auto
-          scrolls them; justify-start because the strip's justify-center would
-          center the overflow (first tab bleeds left, unreachable). */}
-      <Tabs
-        value={tab}
-        onValueChange={(value) =>
-          setParams(value === "general" ? {} : { tab: value }, { replace: true })
-        }
-      >
-        <TabsList variant="line" className="max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="general">
-            <SettingsIcon className="size-4" />
-            General
-          </TabsTrigger>
-          <TabsTrigger value="models">
-            <Cpu className="size-4" />
-            Models
-          </TabsTrigger>
-          <TabsTrigger value="notifications">
-            <Bell className="size-4" />
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger value="security">
-            <ShieldCheck className="size-4" />
-            Security
-          </TabsTrigger>
-          <TabsTrigger value="people">
-            <Users className="size-4" />
-            People
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="general" className="mt-6">
-          <div className="space-y-6">
-            <ThemeSettings />
-            <AppSettings />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="models" className="mt-6">
-          <ModelsSettings />
-        </TabsContent>
-
-        <TabsContent value="notifications" className="mt-6">
-          <NotificationSettings />
-        </TabsContent>
-
-        <TabsContent value="security" className="mt-6">
-          <PasskeyManager />
-        </TabsContent>
-
-        <TabsContent value="people" className="mt-6">
-          <PeopleSettings />
-        </TabsContent>
-      </Tabs>
-    </PageLayout>
+  const sections = useMemo<SettingsSection[]>(
+    () =>
+      guest
+        ? GUEST_SECTIONS
+        : [
+            {
+              id: "account",
+              label: "Account",
+              group: "Personal",
+              icon: UserRound,
+              description: "Your profile and sign-in identity.",
+              keywords: ["profile", "user", "me"],
+              element: <AccountSettings />,
+            },
+            APPEARANCE,
+            SECURITY,
+            {
+              id: "models",
+              label: "Models",
+              group: "App",
+              icon: Cpu,
+              description: "Provider accounts, their models and the default models.",
+              keywords: [
+                "anthropic",
+                "openai",
+                "gemini",
+                "claude",
+                "gateway",
+                "api key",
+                "provider",
+              ],
+              element: <ModelsSettings />,
+              wide: true,
+            },
+            {
+              id: "notifications",
+              label: "Notifications",
+              group: "App",
+              icon: Bell,
+              description: "Push notifications for waiting bots and routine results.",
+              keywords: ["push", "pushover", "quiet hours", "digest"],
+              element: <NotificationSettings />,
+            },
+            {
+              id: "people",
+              label: "People",
+              group: "App",
+              icon: Users,
+              description: "Guests who can use the shared bots.",
+              keywords: ["guests", "sharing", "invite"],
+              element: <PeopleSettings />,
+            },
+            {
+              id: "configuration",
+              label: "Configuration",
+              group: "App",
+              icon: FileJson,
+              description: "App-wide settings, shared by every user.",
+              keywords: ["app settings", "json", "config", "key", "value", "feature flags"],
+              element: <AppSettings />,
+              wide: true,
+            },
+          ],
+    [guest],
   );
+  return <Settings sections={sections} />;
 }

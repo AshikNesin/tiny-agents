@@ -11,7 +11,8 @@ test.describe("App settings (authenticated)", () => {
   });
 
   test("create, edit, and persist a setting through the full round trip", async ({ page }) => {
-    await page.goto("/settings");
+    // App settings live in the Configuration section of the full-page settings
+    await page.goto("/settings/configuration");
     const key = `e2e.setting.${Date.now()}`;
 
     // Create — the editor should open with the new setting auto-selected

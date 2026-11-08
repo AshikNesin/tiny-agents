@@ -1,7 +1,8 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import {
   CommandPaletteTrigger,
   CommandPaletteDialog,
@@ -15,17 +16,32 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { Button } from "@groot/ui/button";
+import {
+  formatShortcut,
+  hasModifier,
+  matchesShortcut,
+  parseShortcut,
+  useIsMac,
+} from "@groot/ui/command-menu";
 import { cn } from "@groot/ui/lib/utils";
-import { useShellConfig } from "@groot/shell/lib/shell-config";
+import { type NavDestination, useShellConfig } from "@groot/shell/lib/shell-config";
 import { isTheme, THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
 import { useSignOut } from "@groot/shell/hooks/useSignOut";
-import { MoreHorizontal, LogOut, PanelLeftClose, PanelLeft, Monitor } from "lucide-react";
+import {
+  MoreHorizontal,
+  LogOut,
+  PanelLeftClose,
+  PanelLeft,
+  Monitor,
+  SquareTerminal,
+} from "lucide-react";
 
 const SIDEBAR_COLLAPSED_KEY = "groot.sidebar.collapsed";
 
@@ -70,6 +86,9 @@ export function Layout({
   const location = useLocation();
   const { brand, nav } = useShellConfig();
   const signOut = useSignOut();
+  const setPaletteOpen = useCommandPaletteStore((state) => state.setOpen);
+  const openingPalette = useRef(false);
+  useNavShortcuts(nav);
 
   // When a custom header is supplied the default sidebar (and its offset /
   // mobile bar) is disabled so the header owns the full top of the page.
@@ -91,6 +110,13 @@ export function Layout({
   };
 
   const menuNav = nav.filter((item) => !item.primary);
+
+  const fullPage = nav.some(
+    (item) =>
+      item.fullPage &&
+      (location.pathname === item.to || location.pathname.startsWith(item.to + "/")),
+  );
+  const showSidebar = useDefaultSidebar && !fullPage;
 
   const userMenuFooter = (
     <DropdownMenu>
@@ -121,54 +147,79 @@ export function Layout({
           />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-52">
-        <ThemeMenu />
-        {menuNav.map(({ to, label, icon: Icon }) => (
-          <DropdownMenuItem key={to} onClick={() => navigate(to)}>
-            {Icon ? <Icon className="size-4" /> : null}
-            <span>{label}</span>
-          </DropdownMenuItem>
-        ))}
-        {menuNav.length > 0 && <DropdownMenuSeparator />}
-        <DropdownMenuItem
-          onClick={signOut}
-          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-        >
-          <LogOut className="size-4" />
+      {/* Opens upward, so the last group sits next to the trigger and Log out
+          is the row farthest from it. */}
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        sideOffset={8}
+        className="w-64"
+        onCloseAutoFocus={(event) => {
+          // The palette takes focus; handing it back to the trigger would
+          // pull it out of the dialog.
+          if (openingPalette.current) {
+            openingPalette.current = false;
+            event.preventDefault();
+          }
+        }}
+      >
+        <DropdownMenuItem onSelect={signOut} className={MENU_ROW}>
+          <LogOut />
           <span>Log out</span>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            openingPalette.current = true;
+            setPaletteOpen(true);
+          }}
+          className={MENU_ROW}
+        >
+          <SquareTerminal />
+          <span>Command palette</span>
+          <ShortcutHint shortcut="mod+k" />
+        </DropdownMenuItem>
+        {menuNav.length > 0 && <DropdownMenuSeparator />}
+        {menuNav.map(({ to, label, icon: Icon, shortcut }) => (
+          <DropdownMenuItem key={to} onSelect={() => navigate(to)} className={MENU_ROW}>
+            {Icon ? <Icon /> : null}
+            <span>{label}</span>
+            {shortcut ? <ShortcutHint shortcut={shortcut} /> : null}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
-
   return (
     <div className={cn("min-h-dvh bg-background text-foreground", className)}>
       {/* Single shared command palette dialog — mounted once. */}
       <CommandPaletteDialog groups={commandGroups} builtIns={commandBuiltIns} />
 
-      {header ?? (
-        <SidebarNav
-          items={nav.filter((item) => item.primary)}
-          brand={brand}
-          pathname={location.pathname}
-          open={sidebarOpen}
-          onOpenChange={setSidebarOpen}
-          collapsed={collapsed}
-          onCollapsedChange={handleCollapsedChange}
-          footer={userMenuFooter}
-        />
-      )}
+      {fullPage
+        ? null
+        : (header ?? (
+            <SidebarNav
+              items={nav.filter((item) => item.primary)}
+              brand={brand}
+              pathname={location.pathname}
+              open={sidebarOpen}
+              onOpenChange={setSidebarOpen}
+              collapsed={collapsed}
+              onCollapsedChange={handleCollapsedChange}
+              footer={userMenuFooter}
+            />
+          ))}
 
       {/* Main column: sidebar offset on desktop (animated with the sidebar),
           full-width on mobile. Only applies when the default sidebar renders. */}
       <div
         className={cn(
           "transition-[padding] duration-300 ease-in-out",
-          useDefaultSidebar && (collapsed ? "lg:pl-16" : "lg:pl-56"),
+          showSidebar && (collapsed ? "lg:pl-16" : "lg:pl-56"),
         )}
       >
         {/* Top bar — mobile (sidebar toggle + brand + search icon). */}
-        {useDefaultSidebar && (
+        {showSidebar && (
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background px-4 lg:hidden">
             <Button
               variant="ghost"
@@ -197,8 +248,8 @@ export function Layout({
             // min-height would overflow the visible area (100dvh tracks it).
             // The 3.5rem offset only exists where the mobile top bar renders.
             "w-full",
-            useDefaultSidebar && "min-h-[calc(100dvh-3.5rem)]",
-            padded && "px-4 pb-10 pt-6 sm:px-6 lg:px-8",
+            showSidebar && "min-h-[calc(100dvh-3.5rem)]",
+            padded && !fullPage && "px-4 pb-10 pt-6 sm:px-6 lg:px-8",
             mainClassName,
           )}
         >
@@ -207,6 +258,53 @@ export function Layout({
       </div>
     </div>
   );
+}
+
+/** Account-menu row: Amp-like spacing between the icon and the label. */
+const MENU_ROW = "gap-2.5";
+
+/** Plain muted key glyphs ("⌘ ,"), not key caps, at a menu row's trailing edge. */
+function ShortcutHint({ shortcut }: { shortcut: string }) {
+  const mac = useIsMac();
+  return (
+    <DropdownMenuShortcut aria-hidden className="font-normal">
+      {formatShortcut(shortcut, mac).join(" ")}
+    </DropdownMenuShortcut>
+  );
+}
+
+function isEditable(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT" ||
+    el.isContentEditable
+  );
+}
+
+/** Binds each `NavDestination.shortcut` to navigating there. */
+function useNavShortcuts(nav: NavDestination[]) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const bound = nav.flatMap((item) =>
+      item.shortcut ? [{ to: item.to, parsed: parseShortcut(item.shortcut) }] : [],
+    );
+    if (bound.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat || e.defaultPrevented) return;
+      const hit = bound.find(
+        ({ parsed }) =>
+          matchesShortcut(e, parsed) && (hasModifier(parsed) || !isEditable(e.target)),
+      );
+      if (!hit) return;
+      e.preventDefault();
+      navigate(hit.to);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [nav, navigate]);
 }
 
 export function ThemeMenu() {

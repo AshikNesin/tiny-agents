@@ -1,6 +1,26 @@
 # @groot/ui
 
-## 0.12.0
+## 1.1.0
+
+### Minor Changes
+
+- [#147](https://github.com/AshikNesin/groot/pull/147) [`4a97dbe`](https://github.com/AshikNesin/groot/commit/4a97dbef479531c72e160a000c2af0a214225ccb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Replace the ⌘K command palette UI with the Fluid Functionalism command menu.
+
+  `@groot/ui/command-menu` is a new public subpath (`CommandMenu`,
+  `CommandMenuDialog`, `CommandMenuInput`, `CommandMenuTabs`, `CommandMenuList`,
+  `CommandMenuItem`, `CommandMenuFooter`, …) vendored from
+  fluidfunctionalism.com (MIT) with its support code in `packages/ui/vendor/fluid`.
+  It adds a `motion` dependency. `@groot/ui/command` (cmdk) is unchanged and
+  still exported.
+
+  `CommandPaletteDialog` now renders the new menu: a fluid hover highlight, group
+  tabs, a key-hint footer that names what Enter does, and ⌘K / Ctrl+K bound by
+  the dialog itself (the `Layout` listener is gone). `CommandItemEntry` gains
+  optional `action`, `description`, `shortcut`, `keywords` and `suggested`
+  fields; existing entries keep working unchanged. The shell stylesheet adds the
+  Fluid surface, hover and shadow tokens, mapped onto the groot palette.
+
+## 1.0.0
 
 ### Minor Changes
 

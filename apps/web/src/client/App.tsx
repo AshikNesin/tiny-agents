@@ -41,7 +41,18 @@ const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
   // Phones open the app's sidebar as a drawer from every page's menu button.
   openNav: () => useUiStore.getState().setMobileOpen(true),
-  nav: [...APP_NAV, { label: "Settings", icon: SettingsIcon, to: "/settings" }],
+  nav: [
+    ...APP_NAV,
+    {
+      label: "Settings",
+      icon: SettingsIcon,
+      to: "/settings",
+      // The full-page settings screen brings its own chrome (upstream): no
+      // app sidebar there, and mod+, opens it from anywhere.
+      fullPage: true,
+      shortcut: "mod+,",
+    },
+  ],
   login: {
     tagline: "Your team of always-on agents.",
     description:
@@ -81,7 +92,16 @@ function Root() {
       guest
         ? {
             ...SHELL_CONFIG,
-            nav: [...guestNav(APP_NAV), { label: "Settings", icon: SettingsIcon, to: "/settings" }],
+            nav: [
+              ...guestNav(APP_NAV),
+              {
+                label: "Settings",
+                icon: SettingsIcon,
+                to: "/settings",
+                fullPage: true,
+                shortcut: "mod+,",
+              },
+            ],
           }
         : SHELL_CONFIG,
     [guest],
@@ -152,7 +172,7 @@ export const appRoutes: RouteObject[] = [
               // older two-segment form keeps working for existing links.
               { path: "/jobs/:jobId", element: <JobDetail /> },
               { path: "/jobs/:queueName/:jobId", element: <JobDetail /> },
-              { path: "/settings", element: <SettingsPage /> },
+              { path: "/settings/*", element: <SettingsPage /> },
             ],
           },
         ],

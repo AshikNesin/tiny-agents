@@ -303,6 +303,29 @@ export function AppSidebar() {
                 openFeedback({ keyboard: request === "keyboard" });
               }}
             >
+              {/* Amp-style order (upstream): Log out on top — farthest from
+                  the trigger, safe to reach for — then the palette, the
+                  destinations and Settings last, next to the trigger. */}
+              <DropdownMenuItem
+                onSelect={() => {
+                  void logout();
+                  toast.success("Signed out", { description: "You have been logged out safely." });
+                  navigate("/login");
+                }}
+              >
+                <LogOut className="size-4" /> Log out
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  closeDrawer();
+                  toggleCommandPalette();
+                }}
+              >
+                <Search className="size-4" /> Command palette
+                <span className="text-muted-foreground ml-auto text-xs">{SEARCH_SHORTCUT}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {[...secondaryNav, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map(
                 (item) => (
                   <DropdownMenuItem
@@ -330,16 +353,6 @@ export function AppSidebar() {
                 }}
               >
                 <MessageSquareHeart className="size-4" /> Send feedback
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  void logout();
-                  toast.success("Signed out", { description: "You have been logged out safely." });
-                  navigate("/login");
-                }}
-              >
-                <LogOut className="size-4" /> Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

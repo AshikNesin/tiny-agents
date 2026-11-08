@@ -1,6 +1,52 @@
 # @groot/shell
 
-## 1.5.0
+## 2.1.0
+
+### Minor Changes
+
+- [#152](https://github.com/AshikNesin/groot/pull/152) [`b1661dd`](https://github.com/AshikNesin/groot/commit/b1661dd7e885d4a1ba3f64f6297032f6a2516c85) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - The command palette takes `builtIns` again, and `Layout` takes `commandBuiltIns`. Passing `false` drops the shell's Navigation, Theme and Account groups, for an app that builds its own and would otherwise list them twice. The Fluid command menu rewrite ([#147](https://github.com/AshikNesin/groot/issues/147)) had removed the option.
+
+- [#149](https://github.com/AshikNesin/groot/pull/149) [`0bbf92f`](https://github.com/AshikNesin/groot/commit/0bbf92f21c56d4f7c8a0a874782a6787b8b83f53) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add first-run setup: create the first user from the browser at `/setup`.
+
+  `@groot/core` adds `GET /api/v1/auth/setup` (`{ needsSetup }`) and
+  `POST /api/v1/auth/setup`, which creates the first account and signs it in
+  (cookie + token, like login). It answers 403 once any user exists and is
+  rate-limited like login. The service gains `hasAnyUser()` and
+  `createFirstUser()`; the schema exports `SetupStatus`.
+
+  `@groot/shell` adds the `Setup` page (`@groot/shell/pages/auth/Setup`), the
+  `useSetupStatus()` hook and the store's `setup()` action. `Login` redirects to
+  `/setup` while no user exists, and `Setup` redirects to `/login` once one
+  does. Apps mount it with `<Route path="/setup" element={<Setup />} />`.
+
+- [#147](https://github.com/AshikNesin/groot/pull/147) [`4a97dbe`](https://github.com/AshikNesin/groot/commit/4a97dbef479531c72e160a000c2af0a214225ccb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Replace the ⌘K command palette UI with the Fluid Functionalism command menu.
+
+  `@groot/ui/command-menu` is a new public subpath (`CommandMenu`,
+  `CommandMenuDialog`, `CommandMenuInput`, `CommandMenuTabs`, `CommandMenuList`,
+  `CommandMenuItem`, `CommandMenuFooter`, …) vendored from
+  fluidfunctionalism.com (MIT) with its support code in `packages/ui/vendor/fluid`.
+  It adds a `motion` dependency. `@groot/ui/command` (cmdk) is unchanged and
+  still exported.
+
+  `CommandPaletteDialog` now renders the new menu: a fluid hover highlight, group
+  tabs, a key-hint footer that names what Enter does, and ⌘K / Ctrl+K bound by
+  the dialog itself (the `Layout` listener is gone). `CommandItemEntry` gains
+  optional `action`, `description`, `shortcut`, `keywords` and `suggested`
+  fields; existing entries keep working unchanged. The shell stylesheet adds the
+  Fluid surface, hover and shadow tokens, mapped onto the groot palette.
+
+- [#151](https://github.com/AshikNesin/groot/pull/151) [`1faa763`](https://github.com/AshikNesin/groot/commit/1faa7639c5a63dbb75f53b7006b9d551d78f845c) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Upstreamed from tiny-agents: the session guard and client-address fixes.
+
+  - **Session guard.** `jwtAuthMiddleware` now looks up the account behind a valid token. A token for a deleted account gets a 401 coded `SESSION_INVALID` (`sessionInvalid()` in `@groot/core/utils/jwt.utils`, `ErrorCode.SESSION_INVALID`). Before, a removed user's token kept working until it expired. The shell's `apiClient.onUnauthorized` now fires only on that code, so a wrong password or another 401 no longer signs the user out. `ApiError` gains `fromServer`.
+  - **Client address.** `clientIp()` now keys on the socket peer. It trusts `X-Forwarded-For` only when the peer is in the new `TRUSTED_PROXIES` (IPv4 and IPv6 addresses or CIDR ranges; unset means loopback and the private ranges, including `fc00::/7`; `none` means no proxy). Before, any client could rotate `X-Forwarded-For` to get past the login rate limit. On Workers, `cf-connecting-ip` is still the client. The rate limiter keys an IPv6 client by its /64. An entry with host bits set (`10.0.0.1/8`) fails at boot.
+
+### Patch Changes
+
+- Updated dependencies [[`0bbf92f`](https://github.com/AshikNesin/groot/commit/0bbf92f21c56d4f7c8a0a874782a6787b8b83f53), [`4a97dbe`](https://github.com/AshikNesin/groot/commit/4a97dbef479531c72e160a000c2af0a214225ccb), [`1faa763`](https://github.com/AshikNesin/groot/commit/1faa7639c5a63dbb75f53b7006b9d551d78f845c)]:
+  - @groot/core@2.1.0
+  - @groot/ui@1.1.0
+
+## 2.0.0
 
 ### Minor Changes
 

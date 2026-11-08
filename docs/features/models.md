@@ -94,7 +94,7 @@ documented fallback when it is unset (`ModelCatalog.forRole`):
 
 ## Settings → Models
 
-The owner manages all of this in **Settings → Models** (`?tab=models`), with
+The owner manages all of this in **Settings → Models** (`/settings/models`), with
 no restart:
 
 - **Add models.** "Connect a provider": pick a kind or a template

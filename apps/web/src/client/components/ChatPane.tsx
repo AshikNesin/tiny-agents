@@ -468,7 +468,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
             ) : (
               <>No model is set up. Add one in </>
             )}
-            <Link to="/settings?tab=models" className="font-medium underline underline-offset-2">
+            <Link to="/settings/models" className="font-medium underline underline-offset-2">
               Settings → Models
             </Link>
             . Sending is disabled.

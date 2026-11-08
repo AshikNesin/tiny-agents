@@ -212,10 +212,13 @@ export function AppShell() {
     pathname.startsWith("/chats/") ||
     pathname === "/code" ||
     pathname.startsWith("/code/");
+  // The full-page settings screen (upstream) brings its own chrome: no app
+  // sidebar, no Layout main padding — only the ⌘K palette stays.
+  const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
   return (
     <div className="bg-background flex h-dvh overflow-hidden">
-      <AppSidebar />
+      {!inSettings && <AppSidebar />}
       <div className="h-dvh min-w-0 flex-1 overflow-y-auto">
         {/* `header` disables the shell's own sidebar and mobile bar; Layout
             stays only for the ⌘K palette and the routed Outlet. */}
@@ -225,7 +228,7 @@ export function AppShell() {
           // AppShell builds its own Navigation (guest- and Code-aware), Theme and
           // Account groups: the shell's built-ins would list them twice (#166).
           commandBuiltIns={false}
-          padded={!inChats}
+          padded={!inChats && !inSettings}
           className="bg-background"
           mainClassName={inChats ? "h-dvh overflow-hidden" : "min-h-dvh"}
         />

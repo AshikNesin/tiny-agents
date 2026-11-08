@@ -1,6 +1,39 @@
 # @groot/core
 
-## 2.0.1
+## 2.1.0
+
+### Minor Changes
+
+- [#149](https://github.com/AshikNesin/groot/pull/149) [`0bbf92f`](https://github.com/AshikNesin/groot/commit/0bbf92f21c56d4f7c8a0a874782a6787b8b83f53) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add first-run setup: create the first user from the browser at `/setup`.
+
+  `@groot/core` adds `GET /api/v1/auth/setup` (`{ needsSetup }`) and
+  `POST /api/v1/auth/setup`, which creates the first account and signs it in
+  (cookie + token, like login). It answers 403 once any user exists and is
+  rate-limited like login. The service gains `hasAnyUser()` and
+  `createFirstUser()`; the schema exports `SetupStatus`.
+
+  `@groot/shell` adds the `Setup` page (`@groot/shell/pages/auth/Setup`), the
+  `useSetupStatus()` hook and the store's `setup()` action. `Login` redirects to
+  `/setup` while no user exists, and `Setup` redirects to `/login` once one
+  does. Apps mount it with `<Route path="/setup" element={<Setup />} />`.
+
+- [#151](https://github.com/AshikNesin/groot/pull/151) [`1faa763`](https://github.com/AshikNesin/groot/commit/1faa7639c5a63dbb75f53b7006b9d551d78f845c) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Upstreamed from tiny-agents: the session guard and client-address fixes.
+
+  - **Session guard.** `jwtAuthMiddleware` now looks up the account behind a valid token. A token for a deleted account gets a 401 coded `SESSION_INVALID` (`sessionInvalid()` in `@groot/core/utils/jwt.utils`, `ErrorCode.SESSION_INVALID`). Before, a removed user's token kept working until it expired. The shell's `apiClient.onUnauthorized` now fires only on that code, so a wrong password or another 401 no longer signs the user out. `ApiError` gains `fromServer`.
+  - **Client address.** `clientIp()` now keys on the socket peer. It trusts `X-Forwarded-For` only when the peer is in the new `TRUSTED_PROXIES` (IPv4 and IPv6 addresses or CIDR ranges; unset means loopback and the private ranges, including `fc00::/7`; `none` means no proxy). Before, any client could rotate `X-Forwarded-For` to get past the login rate limit. On Workers, `cf-connecting-ip` is still the client. The rate limiter keys an IPv6 client by its /64. An entry with host bits set (`10.0.0.1/8`) fails at boot.
+
+## 2.0.0
+
+### Major Changes
+
+- [`df27e7b`](https://github.com/AshikNesin/groot/commit/df27e7b99478ad44ee400f69ebd523d23a1ff404) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Dead surface removed.
+
+  - **Breaking:** the `@groot/core/auth`, `@groot/core/passkey` and `@groot/core/settings` entrypoints (barrel re-exports) are removed; nothing imported them. Import the modules directly: `@groot/core/auth/auth.routes`, `@groot/core/passkey/passkey.service`, `@groot/core/settings/app-settings.schema`, etc.
+  - **Breaking:** `created()` is removed from `@groot/core/utils/api-response.utils`; use `ok(c, data, 201)`.
+  - **Breaking:** the `NewUser`, `NewPasskey` and `KvRow` type aliases are removed from `@groot/core/database/schema` (no readers); use `typeof users.$inferInsert` and friends where needed.
+  - `parseParams` and the `Middleware` type stay: the storage routes validate folder params with `parseParams`, and downstream apps type middleware with `Middleware`.
+
+- [`e0a63a9`](https://github.com/AshikNesin/groot/commit/e0a63a9b46d73c1eaadee94280c12fc5f2c5b014) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The env schema holds only what is read through the validated `env`.
 
 ### Patch Changes
 

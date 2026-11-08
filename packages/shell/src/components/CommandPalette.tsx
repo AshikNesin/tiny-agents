@@ -110,6 +110,7 @@ export function CommandPaletteDialog({
                       label: item.label,
                       icon: item.icon,
                       action: `Go to ${item.label}`,
+                      shortcut: item.shortcut,
                       onSelect: () => navigate(item.to),
                     })),
                   },

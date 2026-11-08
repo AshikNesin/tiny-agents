@@ -97,7 +97,7 @@ export function AppSettings() {
           </Button>
           <Button size="sm" onClick={() => s.setShowNewSettingForm(true)}>
             <Plus className="size-3.5" />
-            Add Setting
+            Add setting
           </Button>
         </div>
       </div>

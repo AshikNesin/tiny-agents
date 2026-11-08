@@ -1,6 +1,15 @@
 # @groot/jobs
 
-## 1.1.3
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`b1661dd`](https://github.com/AshikNesin/groot/commit/b1661dd7e885d4a1ba3f64f6297032f6a2516c85), [`0bbf92f`](https://github.com/AshikNesin/groot/commit/0bbf92f21c56d4f7c8a0a874782a6787b8b83f53), [`4a97dbe`](https://github.com/AshikNesin/groot/commit/4a97dbef479531c72e160a000c2af0a214225ccb), [`1faa763`](https://github.com/AshikNesin/groot/commit/1faa7639c5a63dbb75f53b7006b9d551d78f845c)]:
+  - @groot/shell@2.1.0
+  - @groot/core@2.1.0
+  - @groot/ui@1.1.0
+
+## 2.0.0
 
 ### Patch Changes
 
