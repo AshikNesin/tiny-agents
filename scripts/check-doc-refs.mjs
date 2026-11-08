@@ -69,6 +69,8 @@ const SKIP = /[*<>{}$|\s…]|\.\.\.|NNNN|slug|^https?:|^@|^-|^\.\w+$|:$/;
 const KNOWN_ABSENT_PATHS = new Set([
   "result.json",
   "failure.aria.yml",
+  // verify-groot's drive.mjs writes one per run, next to result.json.
+  "steps.md",
   "extract.json",
   ".claude.json",
   "1password-credentials.json",
@@ -81,12 +83,25 @@ const KNOWN_ABSENT_PATHS = new Set([
   "post.routes.ts",
   "migrate-layout.ts",
   ".vite-hooks/_",
+  // The domain-modeling skill creates it on first use.
+  "GLOSSARY.md",
+  // Vendored skills from AshikNesin/skill-book (`npx skills update` overwrites
+  // edits): files they write at runtime, an upstream location they describe,
+  // and the visual-plan skill visual-recap reads, which skill-book doesn't ship.
+  "FRICTION.md",
+  "data.html",
+  "data.css",
+  ".plan-state.json",
+  ".cursor/skills/",
+  "../visual-plan/references/canvas.md",
 ]);
 const SYNC_DOC_ONLY_PATHS = new Set([
   "postcss.config.js",
   "wrangler.jsonc",
   ".groot/feature-request.md",
   ".groot/repo-drift.md",
+  // Written by a sync in a child project, never in groot itself.
+  ".groot/needs-review/manifest.json",
 ]);
 const describesSync = (md) =>
   md.startsWith(".agents/skills/groot-sync/") || md === "docs/guides/sync.md";
@@ -105,6 +120,9 @@ const anchorsOf = (token, md) =>
 function missingPath(raw, md) {
   const token = raw.replace(/[#?].*$/, "").replace(/:\d+(-\d+)?$/, "");
   if (!token || SKIP.test(token) || KNOWN_ABSENT_PATHS.has(token)) return null;
+  // An absolute path (`/tmp/x.md`) names the machine, not the repo. It also
+  // makes `git check-ignore` exit fatally, dropping every build output below.
+  if (token.startsWith("/")) return null;
   if (SYNC_DOC_ONLY_PATHS.has(token) && describesSync(md)) return null;
   const first = token.replace(/^\.\//, "").split("/")[0];
   const rooted = token.includes("/") && (token.startsWith(".") || topLevel.has(first));

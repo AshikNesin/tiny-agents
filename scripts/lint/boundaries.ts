@@ -48,7 +48,10 @@ const DRIVER_MESSAGE =
   "R8a: open no second database driver. Import `db` from apps/web/src/server/db in the app, or from @groot/core/database in a package; bootstrap() sets it.";
 const DRIVER_HOMES = [
   "packages/core/src/database/node.ts",
+  "packages/core/src/database/d1.ts",
   "apps/web/src/server/db/**",
+  // Workers: the D1 binding only exists per request, so the entry opens it.
+  "apps/web/src/server/entry.worker.ts",
   "tests/**",
   // A file lock for the agent store, not the app database.
   "packages/agent/src/lock.ts",

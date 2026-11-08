@@ -27,7 +27,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+// TypeScript 7 (the native compiler) ships no classic JS API; the TS 6 package
+// keeps it for AST scripts like this one.
+import ts from "@typescript/typescript6";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // The kit-consumer fixture (`pnpm typecheck:kit`) imports every public kit

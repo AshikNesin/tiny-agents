@@ -1,6 +1,8 @@
+import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vite-plus/test";
 import { db, users } from "@groot/core/database";
+import { needsRehash } from "@groot/core/utils/password.utils";
 import { adminHeaders, api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
@@ -17,6 +19,27 @@ describe("auth API", () => {
       headers: { cookie: cookie!.split(";")[0]! },
     });
     expect(viaCookie.status).toBe(200);
+  });
+
+  it("upgrades a hash made with an older iteration count on the next login", async () => {
+    const { user, email, password } = await signIn(app);
+    const salt = randomBytes(16);
+    const hash = pbkdf2Sync(password, salt, 1_000, 32, "sha256");
+    const old = ["pbkdf2-sha256", "1000", salt.toString("base64url"), hash.toString("base64url")];
+    await db
+      .update(users)
+      .set({ password: old.join("$") })
+      .where(eq(users.id, user.id));
+
+    const login = await api(app, "/api/v1/auth/login", {
+      method: "POST",
+      json: { email, password },
+    });
+    expect(login.status).toBe(200);
+
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row!.password).not.toBe(old.join("$"));
+    expect(needsRehash(row!.password)).toBe(false);
   });
 
   it("rejects wrong credentials and missing tokens", async () => {

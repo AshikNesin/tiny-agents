@@ -1,9 +1,8 @@
 {
   "fromVersion": "3.1.0",
-  "toVersion": "3.1.0",
-  "fromCommit": "b1661dd7e885d4a1ba3f64f6297032f6a2516c85",
-  "toCommit": "4fda966725221f125ccac8eaa4552dfdea5384e5",
-  "generatedAt": "2026-11-08T08:13:34.540Z",
-  "conflicts": [],
-  "deletionReview": []
+  "toVersion": "3.2.0",
+  "fromCommit": "4fda966725221f125ccac8eaa4552dfdea5384e5",
+  "toCommit": "e77d641ea7282530ea3967dd4f0e1dc302445d56",
+  "generatedAt": "2026-11-08T15:02:43.918Z",
+  "conflicts": []
 }

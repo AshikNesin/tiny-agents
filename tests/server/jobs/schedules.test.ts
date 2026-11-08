@@ -75,4 +75,16 @@ describe("schedules", () => {
     expect(nextCronRun("* * * * *", from)?.toISOString()).toBe("2026-01-01T00:01:00.000Z");
     expect(nextCronRun("0 9 * * *", from, "UTC")?.toISOString()).toBe("2026-01-01T09:00:00.000Z");
   });
+
+  it("never returns the instant it starts from, so a schedule cannot re-fire in its own minute", () => {
+    const fired = new Date("2026-01-01T09:00:00.000Z");
+    expect(nextCronRun("0 9 * * *", fired, "UTC")?.toISOString()).toBe("2026-01-02T09:00:00.000Z");
+    expect(nextCronRun("* * * * *", fired)?.toISOString()).toBe("2026-01-01T09:01:00.000Z");
+  });
+
+  it("reads ? as no constraint on that field, not as every day", () => {
+    // 2026-01-01 is a Thursday; the next Monday is the 5th.
+    const from = new Date("2026-01-01T00:00:30Z");
+    expect(nextCronRun("0 0 ? * MON", from, "UTC")?.toISOString()).toBe("2026-01-05T00:00:00.000Z");
+  });
 });
