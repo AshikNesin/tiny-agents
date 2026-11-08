@@ -215,10 +215,14 @@ export function AppShell() {
   // The full-page settings screen (upstream) brings its own chrome: no app
   // sidebar, no Layout main padding — only the ⌘K palette stays.
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  // Code's workspace owns the whole column too: its thread list takes the
+  // sidebar's place (issue #143, ADR 0011), and it gets its own slim top bar.
+  const inCode = pathname === "/code" || pathname.startsWith("/code/");
+  const fullPage = inSettings || inCode;
 
   return (
     <div className="bg-background flex h-dvh overflow-hidden">
-      {!inSettings && <AppSidebar />}
+      {!fullPage && <AppSidebar />}
       <div className="h-dvh min-w-0 flex-1 overflow-y-auto">
         {/* `header` disables the shell's own sidebar and mobile bar; Layout
             stays only for the ⌘K palette and the routed Outlet. */}

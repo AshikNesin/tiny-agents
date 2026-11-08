@@ -34,6 +34,8 @@ label and a filter, and **New thread** offers a harness picker.
 
 The layout follows Cursor's cloud agents and Claude Code on the web:
 
+- a slim top bar with a way back to the app (the workspace owns the full
+  column — no app sidebar here) and the ⌘K trigger;
 - one line per thread in the list;
 - a one-line header;
 - every setting a turn needs (model, reasoning, permissions, context) as a

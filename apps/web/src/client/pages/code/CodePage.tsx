@@ -10,11 +10,12 @@
  * `/code/new` or `/code/:id` → `/code/:id/changes`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Code2, Menu, TriangleAlert } from "lucide-react";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Code2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { Button, EmptyState, monoClass } from "@groot/ui";
+import { EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
+import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
@@ -47,7 +48,7 @@ export function CodePage() {
   const { conversationId: rawId, slug } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { openNav } = useShellConfig();
+  const { brand } = useShellConfig();
   const harnessList = useCodeStore((s) => s.harnesses);
   const statuses = useCodeStore((s) => s.statuses);
   const threads = useCodeStore((s) => s.threads);
@@ -105,13 +106,6 @@ export function CodePage() {
   if (harnessList !== null && harnessList.length === 0) {
     return (
       <div className="mx-auto max-w-xl p-6">
-        <div className="mb-6 flex items-center gap-2 md:hidden">
-          {openNav && (
-            <Button variant="ghost" size="icon" onClick={openNav} aria-label="Open menu">
-              <Menu />
-            </Button>
-          )}
-        </div>
         <EmptyState
           icon={Code2}
           title="No coding agent is connected"
@@ -139,6 +133,20 @@ export function CodePage() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
+      {/* The workspace owns the full column (the app sidebar stays away), so
+          it carries its own way back to the app — like the settings screen. */}
+      <header className="border-border bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-4">
+        <Link
+          to={brand.to}
+          className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" />
+          Back to {brand.label}
+        </Link>
+        <div className="ml-auto">
+          <CommandPaletteTrigger />
+        </div>
+      </header>
       {offline.map((h) => (
         <div
           key={h.id}
@@ -173,11 +181,6 @@ export function CodePage() {
           )}
         >
           <div className="flex items-center gap-1 px-2 pt-2 md:hidden">
-            {openNav && (
-              <Button variant="ghost" size="icon" onClick={openNav} aria-label="Open menu">
-                <Menu />
-              </Button>
-            )}
             <span className="font-medium">Code</span>
           </div>
           <ConversationList threads={threads} harnesses={harnesses} activeId={threadId} />
