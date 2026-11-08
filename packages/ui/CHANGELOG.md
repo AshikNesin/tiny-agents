@@ -1,5 +1,85 @@
 # @groot/ui
 
+## 1.2.0
+
+### Minor Changes
+
+- [#154](https://github.com/AshikNesin/groot/pull/154) [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(kit): upstream the kit fixes and features made first in tiny-agents
+  
+  - **`@groot/ui`: Fluid motion in the primitives.** New `@groot/ui/motion`
+    entry (`spring` tiers, `useModalPresence`, `FluidHighlight`). `Dialog` and
+    `AlertDialog` spring in and stay mounted through their exit; `DialogContent`
+    gains `size` (`sm` 400px default, `md`, `lg`, `xl`) and `position`
+    (`center` / `top`). `TabsList` slides its selected pill (or `line`
+    underline) and shows a hover pill; `Tooltip` is an inverted chip that springs
+    in and fades out, with a 200ms provider delay; `Select`, `DropdownMenu` and
+    `Command` share one gliding row highlight; `CommandDialog` opens top-anchored
+    at `lg`, and `Command` gains a `CommandFooter` of keyboard hints. Existing
+    props are unchanged. Client tests should set
+    `MotionGlobalConfig.skipAnimations = true` (see `tests/client/setup.ts`).
+  - **`@groot/ui`: `Breadcrumbs`.** `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`
+    places the list items and separators, so a separator can't land inside an
+    item. Storage (`@groot/shell`) and JobDetail (`@groot/jobs`) use it.
+  - **`@groot/shell`: login returns to the page that asked for it.**
+    `ProtectedRoute` passes the location to `/login`, and a successful password
+    or passkey sign-in goes back there (in-app paths only) instead of `/`.
+  - **`@groot/shell`: Inter is no longer imported by `index.css`.** Tailwind
+    inlined that `@import` before Vite saw it, so the font files were never
+    emitted and production served `index.html` in their place. Import it from
+    your client entry instead: `import "@fontsource-variable/inter";` before
+    `import "@groot/shell/index.css";`.
+  - **`@groot/shell`: fixes.** Auth pages use `min-h-dvh`; the dev demo
+    credentials have a space after the label; the page scrollbar follows the
+    theme; Storage's icon buttons have accessible names, its select column has a
+    screen-reader header, folders show `-` for Modified instead of the epoch,
+    folder names have readable contrast, and viewing a UTF-8 text file no longer
+    shows mojibake. The row buttons' names include the file name, so an e2e
+    locator like `getByRole("cell", { name })` needs `exact: true`. The passkey card title is a level-2 heading.
+  - **`@groot/jobs`: accessible state filter.** The overflow state menu sits
+    beside the tab list (a tablist may only hold tabs) and has a label.
+  - **`@groot/core`: fixes.** Storage downloads of `text/*` with no charset are
+    served as `charset=utf-8`. Login re-hashes a password stored with an older
+    PBKDF2 iteration count (`needsRehash`).
+  - **App: missing build files 404.** The Node SPA fallback answers a request for
+    a missing asset (`/assets/*`, common static extensions) with a 404 instead of
+    `index.html`, and the client reloads once when a lazy chunk fails to load
+    after a deploy.
+
+### Patch Changes
+
+- [#154](https://github.com/AshikNesin/groot/pull/154) [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - chore(deps): take the latest compatible releases
+  
+  Vite+ 1.5 with Vitest 5.1, hono 4.13, jose 6.2.15, motion 14.10, Tailwind
+  4.3.5, wrangler 4.158 and jsdom 31. `@earendil-works/pi-ai` stays at 1.4.0:
+  1.5.0 drops `Type`, `TSchema` and `Static` from its `compat` entry, which
+  `@groot/ai` imports.
+
+- [#154](https://github.com/AshikNesin/groot/pull/154) [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - chore(deps): upgrade dependencies to the versions tiny-agents runs
+  
+  Every dependency groot shares with tiny-agents now matches its version, so a
+  sync no longer conflicts on version ranges.
+  
+  - **Majors.** Vite+ 1.4 with Vitest 5, Sentry 11 (`@sentry/node`,
+    `@sentry/cloudflare` and the build plugins), SimpleWebAuthn 14,
+    better-sqlite3 13, jsdom 30, `@testing-library/jest-dom` 7,
+    `@hookform/resolvers` 6, `@types/node` 26, changesets 3 (with
+    `@changesets/changelog-github` 1) and `openai` 7.
+  - **Minors and patches.** React 19.3, radix-ui 1.8, lucide-react 1.61, zod 4.6,
+    TanStack Query 5.104, the CodeMirror pins, pi-ai 1.4 and the rest.
+  - **Call sites.** Sentry 11 dropped `sendDefaultPii`; its `dataCollection`
+    defaults already attach user info, cookies and headers, so both entries just
+    drop the option. SimpleWebAuthn 14 renamed `AuthenticatorTransportFuture` to
+    `AuthenticatorTransport`.
+  - **Changesets 3** skips private packages unless asked, so
+    `.changeset/config.json` sets `privatePackages: { version: true, tag: false }`
+    to keep versioning the private kit packages (tags still come from the
+    release workflow).
+
+- [#158](https://github.com/AshikNesin/groot/pull/158) [`b2ecb45`](https://github.com/AshikNesin/groot/commit/b2ecb452ac2ee6429a6d4c9b460a5df45b7b4a27) Thanks [@AshikNesin](https://github.com/AshikNesin)! - chore(deps): `@hookform/resolvers` 7
+  
+  7.0's breaking changes are all in the typebox resolver; `zodResolver`, the
+  only one `@groot/ui/form` uses, is unchanged.
+
 ## 1.1.0
 
 ### Minor Changes

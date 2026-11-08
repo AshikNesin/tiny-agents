@@ -1,7 +1,9 @@
 #!/usr/bin/env tsx
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import ts from "typescript";
+// TypeScript 7 (the native compiler) ships no classic JS API; the TS 6 package
+// keeps it for AST scripts like this one.
+import ts from "@typescript/typescript6";
 
 type Finding = { file: string; line: number; name: string };
 

@@ -29,18 +29,18 @@ export async function handleDownload(filePath: string, name: string): Promise<vo
   }
 }
 
-/** Open a file in a new tab. Opens the tab before the await so the browser ties
- * it to the click's user activation — opening after an await is popup-blocked. */
 /**
  * A blob keeps only the MIME essence (`text/plain`), not the response's
  * charset, so a blob URL of UTF-8 text opens as windows-1252 mojibake
- * ("✓" as "âœ“", #168). Re-type text blobs as UTF-8 before viewing them.
+ * ("✓" as "âœ“"). Re-type text blobs as UTF-8 before viewing them.
  */
 function withTextCharset(blob: Blob): Blob {
   if (!blob.type.startsWith("text/") || /charset=/i.test(blob.type)) return blob;
   return new Blob([blob], { type: `${blob.type};charset=utf-8` });
 }
 
+/** Open a file in a new tab. Opens the tab before the await so the browser ties
+ * it to the click's user activation — opening after an await is popup-blocked. */
 export async function handleView(filePath: string): Promise<void> {
   const win = window.open("", "_blank");
   try {

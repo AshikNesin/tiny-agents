@@ -4,11 +4,92 @@
 
 ### Minor Changes
 
-- [`3ca0b6b`](https://github.com/AshikNesin/tiny-agents/commit/3ca0b6b20b0bc18e034b00e3a25b6a2d7631f168) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot's settings revamp and Amp-style account menu (groot `4fda966`, after `b1661dd`).
+- [`4fda966`](https://github.com/AshikNesin/groot/commit/4fda966725221f125ccac8eaa4552dfdea5384e5) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sidebar account menu follows Amp's layout. **Log out** is the first row and is no longer red. Next comes a **Command palette** row (⌘K) that opens the palette, then the app's non-primary destinations, with Settings last, next to the trigger. The menu is wider (`w-64`) and can extend past the sidebar edge. Shortcuts show as plain muted glyphs at each row's trailing edge.
   
-  - **Full-page settings.** Settings is now a screen of its own (upstream `56dfce8`): a slim "Back to app" bar, a left sidebar with a searchable, grouped section list (`/` to focus; arrows move, Enter opens, Esc clears) and one sub-route per section — `/settings/account`, `appearance`, `security`, `models`, `notifications`, `people`, `configuration`. The app sidebar is hidden there. `mod+,` opens Settings from anywhere; the old `?tab=` links now go to their section path (`/settings/models`).
-  - **Amp-style account menu.** The sidebar's account menu follows upstream `4fda966`: Log out on top, then a Command palette row (⌘K), then the destinations with Settings last, next to the trigger. Send feedback stays at the bottom.
-  - **Adopted upstream kit versions.** `@groot/core` 2.1.0, `@groot/shell` 2.1.0, `@groot/ui` 1.1.0, `@groot/jobs` 2.0.1 with their changelogs, so future version-bump syncs merge cleanly.
+  The Theme submenu is no longer in the account menu. Theme stays available in Settings › Appearance and ⌘K. `ThemeMenu` is still exported from `@groot/shell/components/Layout` for apps that render it themselves.
+  
+  `NavDestination` gains `shortcut` (command-menu syntax, e.g. `"mod+,"`). `Layout` binds the combo globally to navigate to that destination and shows it in the account menu and ⌘K. To get ⌘, for Settings, add `shortcut: "mod+,"` to the Settings entry in `App.tsx`'s `PAGES`.
+
+- [`56dfce8`](https://github.com/AshikNesin/groot/commit/56dfce84d94dae5abb15646fa6067c193beef38f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The settings page is now a full-page screen with a searchable section sidebar, modeled on ampcode.com/settings. Each section has its own URL: `/settings/account`, `/settings/appearance`, `/settings/security` and `/settings/configuration`. The bare `/settings` path and unknown sections redirect to Account. The sidebar search matches section names, keywords ("dark" finds Appearance) and individual settings. `/` focuses it, ↑/↓ move through the results, Enter opens one and Esc clears it.
+  
+  New: an Account section (`AccountSettings`) that shows the signed-in user's name, email and ID. `ThemeSettings` is now a single "Theme" row with a segmented Light/Dark/System control. `Settings` takes an optional `sections` prop (`SettingsSection[]`; the default is `DEFAULT_SETTINGS_SECTIONS`) so an app can add or reorder sections.
+  
+  `NavDestination` gains `fullPage`. On that path and below it, `Layout` renders no sidebar, mobile top bar or `<main>` padding, and keeps the ⌘K palette.
+  
+  To upgrade, mount Settings on a splat route and mark it full page, for example in `App.tsx`'s `PAGES`:
+  
+  ```tsx
+  { label: "Settings", icon: SettingsIcon, to: "/settings", path: "/settings/*", fullPage: true, element: <Settings /> }
+  ```
+  
+  and route each page with `path={page.path ?? page.to}`. Without the splat route the section URLs fall through to the catch-all redirect.
+
+- [#154](https://github.com/AshikNesin/groot/pull/154) [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(kit): upstream the kit fixes and features made first in tiny-agents
+  
+  - **`@groot/ui`: Fluid motion in the primitives.** New `@groot/ui/motion`
+    entry (`spring` tiers, `useModalPresence`, `FluidHighlight`). `Dialog` and
+    `AlertDialog` spring in and stay mounted through their exit; `DialogContent`
+    gains `size` (`sm` 400px default, `md`, `lg`, `xl`) and `position`
+    (`center` / `top`). `TabsList` slides its selected pill (or `line`
+    underline) and shows a hover pill; `Tooltip` is an inverted chip that springs
+    in and fades out, with a 200ms provider delay; `Select`, `DropdownMenu` and
+    `Command` share one gliding row highlight; `CommandDialog` opens top-anchored
+    at `lg`, and `Command` gains a `CommandFooter` of keyboard hints. Existing
+    props are unchanged. Client tests should set
+    `MotionGlobalConfig.skipAnimations = true` (see `tests/client/setup.ts`).
+  - **`@groot/ui`: `Breadcrumbs`.** `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`
+    places the list items and separators, so a separator can't land inside an
+    item. Storage (`@groot/shell`) and JobDetail (`@groot/jobs`) use it.
+  - **`@groot/shell`: login returns to the page that asked for it.**
+    `ProtectedRoute` passes the location to `/login`, and a successful password
+    or passkey sign-in goes back there (in-app paths only) instead of `/`.
+  - **`@groot/shell`: Inter is no longer imported by `index.css`.** Tailwind
+    inlined that `@import` before Vite saw it, so the font files were never
+    emitted and production served `index.html` in their place. Import it from
+    your client entry instead: `import "@fontsource-variable/inter";` before
+    `import "@groot/shell/index.css";`.
+  - **`@groot/shell`: fixes.** Auth pages use `min-h-dvh`; the dev demo
+    credentials have a space after the label; the page scrollbar follows the
+    theme; Storage's icon buttons have accessible names, its select column has a
+    screen-reader header, folders show `-` for Modified instead of the epoch,
+    folder names have readable contrast, and viewing a UTF-8 text file no longer
+    shows mojibake. The row buttons' names include the file name, so an e2e
+    locator like `getByRole("cell", { name })` needs `exact: true`. The passkey card title is a level-2 heading.
+  - **`@groot/jobs`: accessible state filter.** The overflow state menu sits
+    beside the tab list (a tablist may only hold tabs) and has a label.
+  - **`@groot/core`: fixes.** Storage downloads of `text/*` with no charset are
+    served as `charset=utf-8`. Login re-hashes a password stored with an older
+    PBKDF2 iteration count (`needsRehash`).
+  - **App: missing build files 404.** The Node SPA fallback answers a request for
+    a missing asset (`/assets/*`, common static extensions) with a 404 instead of
+    `index.html`, and the client reloads once when a lazy chunk fails to load
+    after a deploy.
+
+### Patch Changes
+
+- [#154](https://github.com/AshikNesin/groot/pull/154) [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - chore(deps): upgrade dependencies to the versions tiny-agents runs
+  
+  Every dependency groot shares with tiny-agents now matches its version, so a
+  sync no longer conflicts on version ranges.
+  
+  - **Majors.** Vite+ 1.4 with Vitest 5, Sentry 11 (`@sentry/node`,
+    `@sentry/cloudflare` and the build plugins), SimpleWebAuthn 14,
+    better-sqlite3 13, jsdom 30, `@testing-library/jest-dom` 7,
+    `@hookform/resolvers` 6, `@types/node` 26, changesets 3 (with
+    `@changesets/changelog-github` 1) and `openai` 7.
+  - **Minors and patches.** React 19.3, radix-ui 1.8, lucide-react 1.61, zod 4.6,
+    TanStack Query 5.104, the CodeMirror pins, pi-ai 1.4 and the rest.
+  - **Call sites.** Sentry 11 dropped `sendDefaultPii`; its `dataCollection`
+    defaults already attach user info, cookies and headers, so both entries just
+    drop the option. SimpleWebAuthn 14 renamed `AuthenticatorTransportFuture` to
+    `AuthenticatorTransport`.
+  - **Changesets 3** skips private packages unless asked, so
+    `.changeset/config.json` sets `privatePackages: { version: true, tag: false }`
+    to keep versioning the private kit packages (tags still come from the
+    release workflow).
+- Updated dependencies [[`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9), [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9), [`b2ecb45`](https://github.com/AshikNesin/groot/commit/b2ecb452ac2ee6429a6d4c9b460a5df45b7b4a27), [`4acfa49`](https://github.com/AshikNesin/groot/commit/4acfa49e504c19534ade389a857f843f3b8ea5c9), [`bd42693`](https://github.com/AshikNesin/groot/commit/bd426933e3274957888307f580b9949aa9ca6ffb), [`6e83765`](https://github.com/AshikNesin/groot/commit/6e83765462d2d7cab627c572fc20092f073859ba)]:
+  - @groot/core@2.1.1
+  - @groot/ui@1.2.0
 
 ## 2.1.0
 
@@ -58,181 +139,84 @@
 
 ## 2.0.0
 
-### Minor Changes
+### Major Changes
 
-- [#212](https://github.com/AshikNesin/tiny-agents/pull/212) [`dfca2ee`](https://github.com/AshikNesin/tiny-agents/commit/dfca2ee485c4928fa911174e2a9ee613a2c4ca3f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot 3.1 (b1661dd).
-  
-  - **Command palette.** The ⌘K palette is now groot's Fluid command menu (`@groot/ui/command-menu`), with tabs per group and keyboard shortcuts. tiny-agents still passes `commandBuiltIns={false}`, so its own Navigation, Theme and Account groups appear once.
-  - **Session guard and client address.** The fixes upstreamed from tiny-agents now come back from groot, so the next sync has nothing to merge in these files. The shell declares the `SESSION_INVALID` literal itself instead of importing a type from core. On Workers, `clientIp()` falls back to `cf-connecting-ip`.
-  - **Kept local.** tiny-agents' versions and changelogs, its CI gates, its first-run setup page (`min-dvh`), its login page and its client docs stay as they were.
+- [`0eff25d`](https://github.com/AshikNesin/groot/commit/0eff25daff7315a63e28af7e419e13beac5e7ac9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Dead exports trimmed from the kit surface.
 
-### Patch Changes
+  - **`titleClass` is no longer exported** from `@groot/ui/typography` (or the `@groot/ui` barrel). It was the `Text` `title` variant's class list with the export left over; use `<Text variant="title">` — identical classes.
+  - **The deprecated `CommandPalette` wrapper is removed** from `@groot/shell/components/CommandPalette`; render `CommandPaletteTrigger` and `CommandPaletteDialog` directly.
+  - **`CommandPaletteTrigger` drops the `iconOnly` prop** and always renders the icon button — the labeled, input-styled variant had no callers left.
 
-- Updated dependencies [[`dfca2ee`](https://github.com/AshikNesin/tiny-agents/commit/dfca2ee485c4928fa911174e2a9ee613a2c4ca3f)]:
-  - @groot/ui@0.12.0
-  - @groot/core@2.0.1
+- [`a17ed96`](https://github.com/AshikNesin/groot/commit/a17ed960618f9e4bc38a57d4e8dd3f14bd16e0d7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The server owns passkey policy; the client renders it.
 
-## 1.4.0
+  - **`@groot/core`**: `GET /api/v1/passkey/list`, `POST /register/verify` and `PATCH /:id` return `PasskeySummary` = `{ id, credentialName, kind, label, backedUp, canDelete, lastUsedAt, createdAt }`. `kind` (`"security-key" | "synced" | "device"`) and `label` come from the new `describePasskey()` in `passkey/webauthn.utils`; `canDelete` is `false` for a user's last passkey, which the server already refused to delete. The raw `userId`, `counter`, `transports`, `deviceType` and `updatedAt` fields are no longer returned; read the `passkeys` table if you need them. No schema change.
+  - **`@groot/core`**: `POST /login/verify` no longer accepts `email` (nothing read it; extra keys are ignored), and `verifyAuthentication()` drops the parameter. `POST /login/options` keeps its optional `email`. Removed the unused `VerifyRegistrationDTO`, `VerifyAuthenticationDTO`, `GenerateAuthenticationOptionsDTO` and `UpdatePasskeyNameDTO` types from `passkey/passkey.schema`; use `z.infer<typeof …Schema>`.
+  - **`@groot/shell`**: the `Passkey` type in `services/passkey` is the summary above. `PasskeyManager` picks the icon from `kind`, shows `label`, and disables Delete when `canDelete` is false (it used to check a `deviceType === "platform"` value the server never stores, and warned as if the last passkey could be deleted). Removed `passkeyService.isPasskeySupported()` and `passkeyService.isPlatformAuthenticatorAvailable()`; call `window.PublicKeyCredential` directly or use `browserSupportsWebAuthn()` from `@simplewebauthn/browser`.
 
-### Minor Changes
+- [`cac0a3f`](https://github.com/AshikNesin/groot/commit/cac0a3f0222efb6c4442185f7bd51e05252b12c0) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Shell navigation is described once, in `ShellConfig`. `ShellConfig.nav` (`{ label, icon?, to, primary? }[]`) drives the sidebar (`primary` entries), the account menu (the rest) and the ⌘K palette; the `brand` defaults (Groot, `LayoutDashboard`, `/`) and the theme options live in one place each.
 
-- [#192](https://github.com/AshikNesin/tiny-agents/pull/192) [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The client signs the owner out only when the session guard rejects the
-  session, never on a credential failure.
-  
-  - `@groot/core`: the session guard (`jwtAuthMiddleware` and `verifyToken`)
-    answers a missing, invalid or expired token with a 401 coded
-    `SESSION_INVALID` (`ErrorCode.SESSION_INVALID`, thrown by the new
-    `sessionInvalid()` in `utils/jwt.utils`). Before, it was coded
-    `UNAUTHORIZED`. Every other 401, such as a wrong password, an unknown
-    passkey or a missing admin key, keeps `UNAUTHORIZED`.
-  - `@groot/shell`: `apiClient.onUnauthorized` handlers run only for a
-    `SESSION_INVALID` response, not for every 401. A login form or step-up
-    dialog that gets a plain 401 shows the server's message and the owner stays
-    signed in. `UnauthorizedEvent` is unchanged.
-  - `@groot/web`: a refused vault step-up (wrong password or unknown passkey)
-    answers 401 with the server's message. The route no longer converts core's
-    401 to 403 by hand.
+  - **Built-ins can't be dropped.** The account menu always has the theme submenu and Log out; ⌘K always ends with Theme and Account (Log out) groups. Log out is one action everywhere: end the session, toast "Signed out", go to `/login` (the palette used to skip the toast).
+  - **`Layout`** keeps `header`, `commandGroups`, `padded`, `mainClassName` and `className`. `commandGroups` now **adds** groups between the nav-derived Navigation group and the built-ins instead of replacing the defaults, so drop your own Navigation, Theme and Log out entries. Removed props: `navItems`, `brand`, `userMenuItems` (move entries to `ShellConfig.nav` / `ShellConfig.brand`).
+  - **Removed types**: `UserMenuItem` and the `NavItem` re-export (`@groot/shell/components/Layout`); `NavItem`, `NavIcon` and `SidebarBrand` (`@groot/shell/components/SidebarNav`). Use `NavDestination` and `ShellBrand` from `@groot/shell/lib/shell-config`. `SidebarNav` takes `items: NavDestination[]` and a required `brand`; string icon keys (`"check-square"`) are gone, pass the Lucide component.
+  - **`useShellConfig()`** returns the config with defaults filled in: `brand` is always complete and `nav` is always an array.
+  - **The palette** no longer has the "Dashboard → /" entry; `CommandPaletteDialog`'s `groups` are extra groups, as above.
+  - New: `THEME_OPTIONS` (`@groot/shell/lib/theme`) and `useSignOut()` (`@groot/shell/hooks/useSignOut`).
 
-### Patch Changes
+- [`507b6dd`](https://github.com/AshikNesin/groot/commit/507b6dd55f5a3a3a26468e49fae970e7d87406c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Page chrome and app settings lose their extra modules.
 
-- [#189](https://github.com/AshikNesin/tiny-agents/pull/189) [`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Render every breadcrumb through one component, so a list item can't land
-  inside another one again (40a8092, e017985).
-  
-  - `@groot/ui`: new `Breadcrumbs` in `@groot/ui/breadcrumb`. Its children are
-    the ancestor crumbs, each a link or button element, and `page` is the
-    current page: `<Breadcrumbs page={job.name}><Link to="/jobs">Jobs</Link></Breadcrumbs>`.
-    It places the list items and separators. Fragment children are flattened,
-    and a `false` page counts as no page. Every existing breadcrumb export
-    stays.
-  - Lint rule R5a now fails an import of `BreadcrumbItem` or
-    `BreadcrumbSeparator` from `@groot/ui`, `@groot/ui/breadcrumb` or the ui
-    source outside `packages/ui`, with a message naming `Breadcrumbs`. New rule
-    R5c fails an `<li>`, `BreadcrumbItem`, `BreadcrumbList` or
-    `BreadcrumbSeparator` passed as a crumb to `Breadcrumbs`.
-  - `@groot/shell` (Storage) and `@groot/jobs` (JobDetail) render their
-    breadcrumbs with `Breadcrumbs`. The markup is unchanged.
-  - `@groot/web`: the skill, connection and connection tool pages use
-    `Breadcrumbs`. The skill page's `Skills` crumb is now a real link with an
-    `href`, so it can be reached with Tab and opened in a new tab.
-- Updated dependencies [[`6ed0fa4`](https://github.com/AshikNesin/tiny-agents/commit/6ed0fa4337bd0852bdb7580ffe740f4a898eaf48), [`74eddfe`](https://github.com/AshikNesin/tiny-agents/commit/74eddfec119010ff3d63e04ede952e058101587b), [`2987d1a`](https://github.com/AshikNesin/tiny-agents/commit/2987d1ab228b638bf08f7f792b9fa6d5f8eae667), [`af45885`](https://github.com/AshikNesin/tiny-agents/commit/af4588573840d89af0ff193d302fe6272a8c90f0), [`f598340`](https://github.com/AshikNesin/tiny-agents/commit/f598340325e146ab91cc988b4a85ca01ee134ae6), [`4bd27ac`](https://github.com/AshikNesin/tiny-agents/commit/4bd27ac3c83f67f4b4ad8d757f08248ea3333160), [`b824aec`](https://github.com/AshikNesin/tiny-agents/commit/b824aeca84a0f3ae967d3612c1f394d694f3bea7)]:
-  - @groot/ui@0.11.0
-  - @groot/core@2.0.0
+  - **`PageHeader` is folded into `PageLayout`.** `@groot/shell/components/layout/PageHeader` and the `@groot/shell/components/layout/index` barrel are removed; import `PageLayout` and `PageContainer` from their own files (`@groot/shell/components/layout/PageLayout`). `PageLayout` keeps `title`, `description`, `actions`, `breadcrumb`, `titleAdornment`, `maxWidth` and `className` — everything `PageHeader` rendered.
+  - **`@groot/shell/services/settings` is removed** (`settingsService`, `AppSettingMetadata`, `UpsertSettingData`). Its three `apiClient` calls are inlined into `useAppSettings`; the `AppSetting` type moved to `@groot/shell/hooks/useAppSettings`.
 
-## 1.3.0
+- [`8532dc0`](https://github.com/AshikNesin/groot/commit/8532dc003cce91cc872b4a2508e5f5f5c7fc4529) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One client session module; `@groot/shell/lib/api` is pure transport. The transport and the session store no longer import each other, and the sign-in rules live in one place.
+
+  - **`apiClient`** no longer knows about sessions. New `apiClient.onUnauthorized(handler)` reports every 401 as `{ path, sentAt }` and returns an unsubscribe function; the session store installs it. Removed `apiClient.login()`, `apiClient.logout()` and `apiClient.getCurrentUser()`: call `useAuthStore.getState().login()` / `.logout()` / `.checkAuth()`, or `apiClient.post("/auth/login", …)` and `apiClient.get("/auth/me")` directly.
+  - **`useAuthStore`** (`@groot/shell/store/auth`) owns sign-in (password or passkey), sign-out, the current user and the 401 rule. `user`, `isAuthenticated`, `hasCheckedAuth`, `generation`, `login`, `loginWithPasskey`, `logout`, `checkAuth` and `clearAuth` keep their names. Changes: `login()` and `loginWithPasskey()` resolve with the user; `loginWithPasskey()` takes no `email` (nothing passed one); `logout()` never rejects; the unused `isLoading` and `error` fields are gone. A 401 now clears the session only when it answers a request sent during the current session, instead of skipping `/auth/me`, `/auth/login` and the `/login` page by path.
+  - **`SessionUser`** (`{ id, email, name }`) is exported from `@groot/shell/store/auth`, declared once.
+  - **`loginErrorDescription(error, fallback)`** lives in the session store and is re-exported from `@groot/shell/pages/auth/Login`. It reads `ApiError.status`, so a rejected password now shows "Invalid email or password." (the 401 branch never fired after the move to `fetch`); a `TypeError` reads as a network failure, and a cancelled WebAuthn prompt gets its own wording.
+  - **`passkeyService.loginWithPasskey()`** is removed from `@groot/shell/services/passkey`: use `useAuthStore.getState().loginWithPasskey()`.
+  - Login page copy no longer mentions Express, S3 or audit logs.
+
+- [`becdce4`](https://github.com/AshikNesin/groot/commit/becdce4363122d09dd588cbb8eea3806be8c8ea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The storage HTTP interface is narrowed to what the Storage page uses, and paths are validated once, at the edge.
+
+  - **Breaking:** `POST /api/v1/storage/files/upload` takes one or many files (field `file`, repeated, up to 50) plus an optional `folder`, stores each at `<folder><file name>`, and returns `{ uploadedFiles, failedFiles }`. The `filePath` and `contentType` form fields are gone (the content type comes from the file). Migration: send `folder` instead of a full `filePath`; to store under another name, call `storageService.uploadFile()` from server code.
+  - **Breaking:** `POST /files/bulk-upload` is removed (it ignored the folder); use `POST /files/upload`. `storageService.bulkUpload()` is renamed `uploadFiles()`.
+  - **Breaking:** `GET /files/metadata` and `storageService.getFileMetadata()` are removed; use `storage.head(key)`.
+  - **Breaking:** `GET /files` takes `folder` instead of `prefix` and `delimiter`, and always lists one folder level; the empty-delimiter mode is removed. `storageService.listFiles()` takes `{ folder }`.
+  - **Breaking:** file paths with a leading, trailing or doubled `/`, or a `.` / `..` segment, are rejected with `400`, as are upload file names containing `/`. Folder paths are normalised to `a/b/` (a trailing `/` is no longer required on `POST /folders` and `DELETE /folders/:folderPath`), and the schemas are now the only place that checks them: `createFolder()` and `deleteFolder()` no longer reject a path without a trailing `/`, so pass one when calling them directly. The schema module exports `filePathSchema`, `folderPathSchema`, `uploadFilesSchema`, `deleteFolderSchema` and `MAX_UPLOAD_FILES`; `getFileMetadataSchema` is removed.
+  - New `parseForm(c, schema)` in `@groot/core/utils/controller.utils` validates a multipart or urlencoded body like `parseBody` does JSON.
+  - **Breaking (`@groot/shell`):** `useUploadFile()` is replaced by `useUploadFiles()`, which takes `{ files, folder }` and uploads in one request; `useStorageFiles(folder)` sends `folder`. Multi-file uploads on the Storage page now land in the open folder through the single upload route.
 
 ### Minor Changes
 
-- [#139](https://github.com/AshikNesin/tiny-agents/pull/139) [`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add first-run setup: create the first user from the browser at `/setup`.
-  
-  `@groot/core` adds `GET /api/v1/auth/setup` (`{ needsSetup }`) and
-  `POST /api/v1/auth/setup`, which creates the first account and signs it in
-  (cookie + token, like login). It answers 403 once any user exists and is
-  rate-limited like login. The service gains `hasAnyUser()` and
-  `createFirstUser()`; the schema exports `SetupStatus`.
-  
-  `@groot/shell` adds the `Setup` page (`@groot/shell/pages/auth/Setup`), the
-  `useSetupStatus()` hook and the store's `setup()` action. `Login` redirects to
-  `/setup` while no user exists, and `Setup` redirects to `/login` once one
-  does. Apps mount it with `<Route path="/setup" element={<Setup />} />`.
-
-### Patch Changes
-
-- [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rebuild the remaining kit components on Fluid Functionalism's design, with
-  their APIs unchanged. New `@groot/ui/motion` entry exports the shared
-  `spring` tiers, `useModalPresence` and `FluidHighlight`.
-  
-  - `TabsList` slides its selected pill (or `line` underline) between tabs and
-    shows a hover pill.
-  - `Tooltip` is an inverted chip that springs in and fades out; the provider's
-    delay drops to 200ms.
-  - `Select`, `DropdownMenu` and the command menu share one gliding row
-    highlight and a softer popup entrance; the picked select row is medium weight.
-  - The command menu gets a borderless search line, brightening rows and a new
-    `CommandFooter` of keyboard hints (hidden on touch); `CommandDialog` and the
-    shell palette open top-anchored at `lg` width.
-  - In the app: the switch thumb springs, stretches, squashes and can be
-    dragged; owner messages are a soft tinted bubble and bot replies plain text,
-    with time and copy in a hover row (always shown on touch) and a spring
-    entrance for new messages; the composer has Fluid's ring frame and a
-    send/stop button that morphs between states.
-- Updated dependencies [[`ea8011c`](https://github.com/AshikNesin/tiny-agents/commit/ea8011cae6f77836511661722567a1c72f21f9e8), [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc), [`a0fb7fd`](https://github.com/AshikNesin/tiny-agents/commit/a0fb7fdb53bca28ae63c984f6356cfefb33345da)]:
-  - @groot/core@1.2.0
-  - @groot/ui@0.10.0
-
-## 1.2.0
-
-### Minor Changes
-
-- [`a6a4e79`](https://github.com/AshikNesin/tiny-agents/commit/a6a4e79fded85cb2fa1e7bbd2c3560555ea07ea7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `apiClient` takes per-request options. Every verb accepts a trailing
+- [`5fe5d03`](https://github.com/AshikNesin/groot/commit/5fe5d0367001c380b64b4b0ed9583ba7cc0123ee) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `apiClient` takes per-request options. Every verb accepts a trailing
   `{ headers }`, and `apiClient.request(method, path, { params, body, headers,
-  emptyOk })` covers the rest: extra headers such as a step-up token or an
+emptyOk })` covers the rest: extra headers such as a step-up token or an
   idempotency key, and `emptyOk` for an endpoint that may answer with no data
   (as `delete` always allowed). Apps no longer need a second copy of the
   client's 401 handling and `ApiError` parsing to send one header.
 
-- [#104](https://github.com/AshikNesin/tiny-agents/pull/104) [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Move to groot 3.0: Hono instead of Express, Drizzle on SQLite instead of
-  Prisma, a table-backed job queue instead of honker, code config instead of
-  config.yml and varlock. tiny-agents stays on Node (Chromium, ssh2 and the
-  pi-durable store run in-process).
-  
-  - **Your data moves over on the first boot.** A database from the Prisma
-    build is renamed to `app.db.prisma-backup-<time>` and every row is copied
-    into the new layout: users, passkeys, bots, past chats, skills, connections,
-    messages, tasks, vault items and audit events, uploads, routines and runs,
-    memories, the notification log, and key-value settings (local vault
-    secrets, SSH host keys, app and notification settings). Routines re-arm
-    their next run on boot.
-  - **Existing passwords keep working.** A bcrypt hash from the old build is
-    accepted once and replaced with a PBKDF2 hash on that sign-in. Vault
-    step-up accepts both.
-  - **Uploads persist across redeploys.** They now live beside the database
-    (`/app/data/uploads` with the current volume) instead of `./local/uploads`
-    in the container; files still in the old folder are copied over.
-  - The groot 3.0 UI refresh comes along: one control height scale, rounder
-    surfaces, toasts that follow dark mode, CodeMirror on the theme tokens, and
-    the warm palette now lives in the shell (app.css keeps only chat tokens).
-  - Fixes found on the way: a bot edit that only changed its skills or
-    connections returned 500 under Drizzle; the login page showed the raw error
-    instead of "Invalid email or password" with the fetch client; a server
-    error message without a code (the terminal's, for one) was replaced by the
-    generic fallback. `ApiError` now carries `fromServer` to tell the two apart.
+- [`b3a2a21`](https://github.com/AshikNesin/groot/commit/b3a2a210251e7557517804feda498a711591eeb8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One wire-type source per slice: the server publishes its JSON response types once, and clients import them type-only (erased at build) instead of hand-copying shapes that drift.
 
-- [#48](https://github.com/AshikNesin/tiny-agents/pull/48) [`bbf5163`](https://github.com/AshikNesin/tiny-agents/commit/bbf5163dae529c1fd7ee8f79dfd65003c89014fc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `ShellConfig.openNav` lets an app with `pageChrome: "sidebar"` open its own
-  navigation from every page: phones get one menu button where the back button
-  and profile circle were, while pages that pass the new `PageLayout` /
-  `TopBar` `backTo` keep a back button to their parent. On phones the page
-  description now sits under the title, above the action row, and on desktop
-  the title row has the same height with or without actions, so headers no
-  longer shift between pages.
+  - **`@groot/jobs`**: new `@groot/jobs/server/wire-types` — `Job`, `JobSchedule`, `JobLog`, `JobStats`, `BulkRerunResult`, derived from the schema rows with every timestamp as an ISO string. `@groot/jobs/client/types` re-exports them under the same names, so existing imports keep working.
+  - **`@groot/core`**: `SessionUser` (`auth.schema`), `PasskeySummary` with string dates (`passkey.schema`), `FileInfo` with a string `lastModified` plus `UploadFilesResult` (`storage.schema`) and `AppSetting` (`app-settings.schema`) are the single sources, each declared in a zod-only leaf so the client's type graph never pulls in server modules. The passkey service now serialises dates itself, matching what JSON always sent; the service modules re-export their wire types for server-side importers.
+  - **`@groot/shell`**: local copies removed — `useStorage`'s `StorageFile`/`UploadResult`, `store/auth`'s `SessionUser`, `services/passkey`'s `Passkey` and `useAppSettings`' `AppSetting` are now aliases of the core types. `@groot/shell` gains a (type-only) `@groot/core` dependency.
 
-- [#60](https://github.com/AshikNesin/tiny-agents/pull/60) [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Push notifications via Pushover (issue [#57](https://github.com/AshikNesin/tiny-agents/issues/57)). `@groot/core/notification` replaces the `send-push-notification` wrapper with a small fetch client (`pushover.ts`) behind a channel port (`notifier.ts`) and a `NotificationService` whose `notify()` never blocks or throws: per-event switches, dedupe backed by the new `NotificationLog` table (so replays after a restart stay quiet), coalescing with cancel-on-resolve, quiet hours with a digest, throttling (30/h, 5/min per bot) with one "suppressed" summary, retries for transient failures only, and the 429/invalid-credentials channel states. Free text is scrubbed (`scrub.ts`: links, registered redactors, secret-looking runs, length caps). Settings live in the `notifications` app setting; `/api/v1/notifications` serves status, settings, a test send, re-validation and the log, and Settings gains a Notifications tab (`@groot/shell`). The agent's `WaitTracker` reports each waiting call (`onTransition`, with the tool and a preview) and `AgentRuntime.onWait` exposes it. App side: approvals, questions (plus one reminder), failed and long replies while the chat is closed, and routine results, misses and pauses push with deep links (`/chats/:botId?focus=approval:<task>` scrolls to the card); the startup ping becomes a silent `system.started`. Vault approvals name the item and target host, credential requests push to `/vault/requests/:task` and expire with the request, the vault's reveal/delete/refused-fill alerts become the locked `vault.alert` security event, and the vault's secret redactor scrubs every push (`WaitInfo` gains `subject` and `expiresAt`).
-
-- [`d419bdf`](https://github.com/AshikNesin/tiny-agents/commit/d419bdf388ac5b583b7329a3ef88cb3e7f1f321a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add TopBar + ProfileButton (Grok-style floating page chrome) and render
-  it from PageLayout. ShellConfig gains `nav` rows for the profile menu.
+  `AGENTS.md` documents the rule: type-only imports across the client/server boundary are allowed for wire types; each slice publishes them once, in a web-neutral leaf module, with dates as ISO strings.
 
 ### Patch Changes
 
-- [#51](https://github.com/AshikNesin/tiny-agents/pull/51) [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bump dependencies, including `@earendil-works/pi-durable`, `pi-ai`, and `chord` to 1.4.0. Document definitions pass `checkpointWhen: () => false` so ordinary changes stay deltas. Sentry 11, files-sdk 3, and SimpleWebAuthn 14 needed small call-site updates.
+- [`1f59d1b`](https://github.com/AshikNesin/groot/commit/1f59d1b2190274f9a9cc362049e3ea4b29f26977) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Gitleaks' two generic rules now match quoted literal values only, so ordinary code (`password: z.string()`, `const token = makeToken()`) no longer blocks commits; the demo login's credentials carry an inline `gitleaks:allow`. Sync tooling: a malformed conflict manifest or `boilerplate-sync.json` is reported as such instead of being treated as "nothing pending" / "not found"; `package.json` without a sync baseline is merged instead of getting conflict markers. `groot:setup` rejects names that give no usable slug, renames the Worker whatever its current name, and no longer breaks on `|`, `&` or `\` in the app name.
 
-- [`a111ade`](https://github.com/AshikNesin/tiny-agents/commit/a111ade11c5551a018328c218b34f4807f0c3b70) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix the login demo-credentials spacing and report failed message-copy attempts.
+- [`f6a363f`](https://github.com/AshikNesin/groot/commit/f6a363f2d968f893756c723aa7abc4a172d4791f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One contract for every storage adapter. The semantics (keys, `put`/`head` agreement, missing keys, `list` order, `limit` and `cursor`, `copy`, content types) are written down in `@groot/core/storage/adapter`, and one contract suite runs against the memory, local and R2 adapters.
 
-- [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rounder, taller Grok-style controls: larger corner radius, 36px default buttons and 40px inputs/selects, 2xl cards, 3xl dialogs with a flat footer, and a lighter dialog overlay. In sidebar mode the page title is larger and Settings uses the same 5xl width as other pages.
+  - **Breaking:** `StorageAdapter.delete(keys)` resolves to `void` instead of a count. The R2 adapter no longer heads every key before deleting it. Custom adapters: return nothing from `delete`.
+  - **Breaking:** `storageService.deleteFiles()` resolves to `void`, and `DELETE /api/v1/storage/files` answers `204` with no body instead of `{ deletedCount }`. `deleteFolder()` and `DELETE /folders/:folderPath` still return `{ deletedCount }`, the number of objects listed under the prefix.
+  - **Breaking:** the `groupByDelimiter` helper in `@groot/core/storage/adapter` is replaced by `listKeys(keys, options)`, which also applies `limit` and `cursor`. The memory and local adapters now page like R2 (at most `limit` entries, default and maximum 1000, with a `cursor` when more exist).
+  - Fixed: R2 listings carried no content type (the adapter now asks for `httpMetadata`); the local adapter's `head`/`get` now reject a key that escapes the root instead of returning `null`; the local adapter's `put` reports the extension-derived content type it will serve; `memoryStorage().get()` returns a copy of the bytes.
 
-- [#46](https://github.com/AshikNesin/tiny-agents/pull/46) [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `PageLayout` passes page actions to the new `TopBar` `actions` slot: they
-  close the title row on desktop and wrap to their own row under it on
-  phones, instead of squeezing beside a multi-line description. The slot
-  follows the profile circle in the DOM, so focus order matches the layout.
-
-- [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Gitleaks' two generic rules now match quoted literal values only, so ordinary code (`password: z.string()`, `const token = makeToken()`) no longer blocks commits; the demo login's credentials carry an inline `gitleaks:allow`. Sync tooling: a malformed conflict manifest or `boilerplate-sync.json` is reported as such instead of being treated as "nothing pending" / "not found"; `package.json` without a sync baseline is merged instead of getting conflict markers. `groot:setup` rejects names that give no usable slug, renames the Worker whatever its current name, and no longer breaks on `|`, `&` or `\` in the app name.
-
-- [#27](https://github.com/AshikNesin/tiny-agents/pull/27) [`3944039`](https://github.com/AshikNesin/tiny-agents/commit/39440393d04314b7cd9e8afbf5f8fb72105d0a2d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add optional `ShellConfig.pageChrome` (`"floating"` | `"sidebar"`). With `"sidebar"`, the top bar hides its back and profile buttons at md+ for apps that render their own sidebar. The shell theme also maps the chat surface tokens (`bubble`, `composer`, `fg-tertiary`, `link`) to Tailwind colors.
-
-- [`c760f77`](https://github.com/AshikNesin/tiny-agents/commit/c760f77e0919d0b7fccd44a68894889560833a7b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Storage rows show "-" in the Modified column for folders, matching the
-  Size column, instead of formatting the service's epoch sentinel as
-  1970-01-01.
-- Updated dependencies [[`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086), [`5bc76f2`](https://github.com/AshikNesin/tiny-agents/commit/5bc76f2e8a00227cc331067a8b4ed825fb1af8bf), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f1e3914`](https://github.com/AshikNesin/tiny-agents/commit/f1e39146a6cd72b104b41a905080fea52a9a340c), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`16cfe00`](https://github.com/AshikNesin/tiny-agents/commit/16cfe00b63d9d8ffb29efc4e058d0290dc6e2b40), [`046443a`](https://github.com/AshikNesin/tiny-agents/commit/046443a45d56e86449b241eea4a9c924a2b5ee22), [`0826ecb`](https://github.com/AshikNesin/tiny-agents/commit/0826ecbc3ea7c3e68fa93bb00648688d53cb0b81), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`371f766`](https://github.com/AshikNesin/tiny-agents/commit/371f766487b4800ad9c228326012f471822ebf94), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`f68af60`](https://github.com/AshikNesin/tiny-agents/commit/f68af60207a704ffc54b797ddb06b19f3403c842), [`9029da7`](https://github.com/AshikNesin/tiny-agents/commit/9029da718a59d989f03a27e9a581d81244cf6698)]:
-  - @groot/core@1.1.0
-  - @groot/ui@0.9.0
+- Updated dependencies [[`1a38cc2`](https://github.com/AshikNesin/groot/commit/1a38cc221122ba029a6820bcab9ea7f3ca9f402b), [`df27e7b`](https://github.com/AshikNesin/groot/commit/df27e7b99478ad44ee400f69ebd523d23a1ff404), [`a7a0f17`](https://github.com/AshikNesin/groot/commit/a7a0f1739e0de3e8b4770f81033f69cc1ef51863), [`e0a63a9`](https://github.com/AshikNesin/groot/commit/e0a63a9b46d73c1eaadee94280c12fc5f2c5b014), [`28e8bd3`](https://github.com/AshikNesin/groot/commit/28e8bd3a8a45f12ce9474f6dd76b3396603cdcaa), [`1f33ccc`](https://github.com/AshikNesin/groot/commit/1f33cccf00d1074e350194cdb03350fc4544b011), [`0eff25d`](https://github.com/AshikNesin/groot/commit/0eff25daff7315a63e28af7e419e13beac5e7ac9), [`2861fa1`](https://github.com/AshikNesin/groot/commit/2861fa1b43fc745c4a83117d75587ecfcfb5df47), [`9613dad`](https://github.com/AshikNesin/groot/commit/9613dad11d403526d08492a74b3b0546bda1c34e), [`869db96`](https://github.com/AshikNesin/groot/commit/869db96397cac115b16c05c4a4e4bf2cbfd5a1cc), [`1f59d1b`](https://github.com/AshikNesin/groot/commit/1f59d1b2190274f9a9cc362049e3ea4b29f26977), [`a17ed96`](https://github.com/AshikNesin/groot/commit/a17ed960618f9e4bc38a57d4e8dd3f14bd16e0d7), [`f6a363f`](https://github.com/AshikNesin/groot/commit/f6a363f2d968f893756c723aa7abc4a172d4791f), [`becdce4`](https://github.com/AshikNesin/groot/commit/becdce4363122d09dd588cbb8eea3806be8c8ea7), [`29c96e1`](https://github.com/AshikNesin/groot/commit/29c96e120320efe5da8d04bfa75caaeb97a9409a), [`b3a2a21`](https://github.com/AshikNesin/groot/commit/b3a2a210251e7557517804feda498a711591eeb8)]:
+  - @groot/ui@1.0.0
+  - @groot/core@2.0.0
 
 ## 1.1.0
 

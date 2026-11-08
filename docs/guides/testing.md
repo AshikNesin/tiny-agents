@@ -48,7 +48,7 @@ tests/
 │   ├── api/       # HTTP tests through the routers (auth, passkey, settings, storage) and app services
 │   ├── app/       # app-owned: bot messaging, durability, the agent toolkits
 │   ├── routes/    # app-owned HTTP tests: bots, routines, vault, browser, terminal, …
-│   ├── checks/    # repo guards: changesets gate, kit exports, typecheck coverage
+│   ├── checks/    # repo guards: changesets, kit exports, typecheck coverage, lint rules, doc refs, migrations, rule table
 │   ├── groot/     # sync tooling
 │   └── scripts/   # build scripts (runtime closure)
 ├── client/        # jsdom + testing-library (configured in vite.config.ts)

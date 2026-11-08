@@ -540,7 +540,7 @@
   }
   html {
     @apply font-sans;
-    /* A quiet thumb on no track; inherited by every scroll container. */
+    /* The page's own scrollbar takes its color from the root element, not body. */
     scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
   }
 }

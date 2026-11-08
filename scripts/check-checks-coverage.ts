@@ -109,7 +109,9 @@ for (const area of areas) {
 
 // --- 3. The Tests workflow runs the gates, and only through gates.mjs. -----
 const WORKFLOW = ".github/workflows/test.yml";
-const POST_BUILD_CHECKS = ["check:closure"];
+// Need `pnpm build` first: the closure reads the server bundle's metafile, and the
+// wrangler dry run uploads dist/client as the Worker's assets.
+const POST_BUILD_CHECKS = ["check:closure", "check:worker"];
 const STATIC_CHECK =
   /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
 
