@@ -278,6 +278,28 @@ describe("models routes", () => {
     expect(refreshed.body.data.available.map((m: Data) => m.upstreamId)).toEqual(["model-b"]);
   });
 
+  it("suggests the models the endpoint lists that the account lacks, without touching its status", async () => {
+    const created = (await createAccount(await stepUp())).body.data;
+    listed = ["model-a", "model-b", "model-c"];
+    const available = await call(`/models/providers/${created.id}/available`);
+    expect(available.status).toBe(200);
+    expect(available.body.data.models.map((m: Data) => m.upstreamId)).toEqual([
+      "model-b",
+      "model-c",
+    ]);
+    const account = ((await call("/models/providers")).body.data.accounts as Data[]).find(
+      (a) => a.id === created.id,
+    );
+    expect(account?.checkedAt).toBe(created.checkedAt);
+    // The faux account has nothing to discover.
+    const faux = ((await call("/models/providers")).body.data.accounts as Data[]).find(
+      (a) => a.kind === "faux",
+    );
+    if (faux) {
+      expect((await call(`/models/providers/${faux.id}/available`)).body.data.models).toEqual([]);
+    }
+  });
+
   it("refuses to delete a model or account in use until its bots move", async () => {
     const token1 = await stepUp();
     const created = (await createAccount(token1)).body.data;

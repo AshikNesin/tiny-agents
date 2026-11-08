@@ -39,6 +39,7 @@ import {
   modelsApi,
   type Account,
   type AccountModel,
+  type DiscoveredModel,
   type ModelRole,
   type ProviderTemplate,
   type Roles,
@@ -46,6 +47,7 @@ import {
 import { useBotsStore } from "../../../store/bots";
 import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
 import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";
+import { SearchSelect, type SearchSelectOption } from "../../../components/ui/search-select";
 import { AddModelsDialog } from "./AddModelsDialog";
 import { GatewayCustomProvidersDialog } from "./GatewayCustomProvidersDialog";
 import { accountStatus, formatTokens, hostOf, KIND_LABEL, ROLE_LABEL, ROLES } from "./model-labels";
@@ -335,33 +337,79 @@ function ClaudePlanFallback({
   );
 }
 
-function AddModelById({
+/**
+ * Add a model: search what the account's endpoint lists and it doesn't have
+ * yet (the same list the Add models dialog offers), or type any id.
+ */
+function AddModel({
+  accountId,
+  hint,
   onAdd,
-  placeholder = "Add a model by id",
 }: {
-  onAdd: (upstreamId: string) => Promise<boolean>;
-  placeholder?: string;
+  accountId: string;
+  /** An example id for the typed-id row ("e.g. custom-zai-coding-plan/glm-5.3"). */
+  hint?: string;
+  onAdd: (model: { upstreamId: string; name?: string }) => Promise<boolean>;
 }) {
-  const [adding, setAdding] = useState("");
+  const [listed, setListed] = useState<DiscoveredModel[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    modelsApi
+      .available(accountId)
+      .then(({ models }) => {
+        if (!cancelled) setListed(models);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+  const options: SearchSelectOption[] = useMemo(
+    () =>
+      (listed ?? []).map((model) => ({
+        value: model.upstreamId,
+        label: model.name,
+        description:
+          model.type === "classifier"
+            ? `${model.upstreamId} · classifier`
+            : `${model.upstreamId} · ${formatTokens(model.contextWindow)}`,
+        keywords: [model.upstreamId],
+      })),
+    [listed],
+  );
+  const add = async (upstreamId: string) => {
+    const model = listed?.find((m) => m.upstreamId === upstreamId);
+    const added = await onAdd({ upstreamId, ...(model ? { name: model.name } : {}) });
+    if (added) setListed((list) => list?.filter((m) => m.upstreamId !== upstreamId) ?? null);
+  };
+  const emptyText = failed
+    ? "Couldn't list the models. Type a model id to add it."
+    : listed === null
+      ? "Loading models…"
+      : "No listed model matches. Type its id to add it.";
   return (
-    <form
-      className="flex gap-2"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        const upstreamId = adding.trim();
-        if (upstreamId && (await onAdd(upstreamId))) setAdding("");
-      }}
+    <SearchSelect
+      value=""
+      onValueChange={(upstreamId) => void add(upstreamId)}
+      options={options}
+      label="Add a model"
+      searchPlaceholder={hint ? `Search or type an id, e.g. ${hint}` : "Search or type an id…"}
+      emptyText={emptyText}
+      createOption={(query) => ({
+        key: "add-by-id",
+        label: `Add “${query}” by id`,
+        icon: <Plus />,
+        onSelect: (typed) => void add(typed.trim()),
+      })}
+      contentClassName="w-[min(36rem,calc(100vw-2rem))]"
+      triggerClassName="h-9 w-full justify-start gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-muted-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
     >
-      <Input
-        aria-label="Model ID to add"
-        placeholder={placeholder}
-        value={adding}
-        onChange={(e) => setAdding(e.target.value)}
-      />
-      <Button type="submit" variant="outline" disabled={!adding.trim()}>
-        Add
-      </Button>
-    </form>
+      <Plus className="size-4" />
+      <span className="truncate">Add a model…</span>
+    </SearchSelect>
   );
 }
 
@@ -579,12 +627,13 @@ function AccountCard({
             )}
           </ul>
           {account.kind !== "claude-plan" && (
-            <AddModelById
+            <AddModel
+              accountId={account.id}
               {...(account.kind === "cloudflare-ai-gateway"
-                ? { placeholder: "Add a model by id, e.g. custom-zai-coding-plan/glm-5.3" }
+                ? { hint: "custom-zai-coding-plan/glm-5.3" }
                 : {})}
-              onAdd={(upstreamId) =>
-                act(() => modelsApi.addModel(account.id, { upstreamId }), "Couldn't add the model")
+              onAdd={(input) =>
+                act(() => modelsApi.addModel(account.id, input), "Couldn't add the model")
               }
             />
           )}
