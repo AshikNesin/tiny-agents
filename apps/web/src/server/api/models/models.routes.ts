@@ -64,6 +64,9 @@ router.put("/models/providers/:id/connection", requireStepUp, async (c) =>
   ok(c, await service.updateConnection(idParam(c), await parseBody(c, updateConnectionSchema))),
 );
 
+router.get("/models/providers/:id/available", async (c) =>
+  ok(c, { models: await service.availableModels(idParam(c)) }),
+);
 router.post("/models/providers/:id/refresh", async (c) =>
   ok(c, await service.refreshAccount(idParam(c))),
 );

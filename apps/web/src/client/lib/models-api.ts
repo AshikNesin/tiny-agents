@@ -120,6 +120,9 @@ export const modelsApi = {
     }),
   updateConnection: (id: string, input: Omit<Connection, "kind" | "viaProviderId">) =>
     stepped<Account>("put", `/models/providers/${id}/connection`, input),
+  /** The models the account's endpoint lists that it doesn't have yet. */
+  available: (id: string) =>
+    apiClient.get<{ models: DiscoveredModel[] }>(`/models/providers/${id}/available`),
   refresh: (id: string) =>
     apiClient.post<{ account: Account; available: DiscoveredModel[] }>(
       `/models/providers/${id}/refresh`,

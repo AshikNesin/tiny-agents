@@ -621,21 +621,46 @@ async function removeKey(itemId: string): Promise<void> {
   if (item) await deleteItemRow(item, { purge: true });
 }
 
+/** What a saved account's endpoint lists now, read with its stored key. */
+async function discoverSaved(row: ProviderRow): Promise<DiscoveredModel[]> {
+  const key = await storedKey(row);
+  return discoverAt({
+    kind: row.kind as Kind,
+    baseUrl: row.baseUrl,
+    ...(key ? { apiKey: key } : {}),
+    allowPrivateNetwork: row.allowPrivateNetwork,
+    viaProviderId: row.viaProviderId,
+    settings: parseObject(row.settingsJson) as Endpoint["settings"],
+  });
+}
+
+/** The account's upstream ids already saved as models. */
+async function savedUpstreamIds(id: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ upstreamId: models.upstreamId })
+    .from(models)
+    .where(eq(models.providerId, id));
+  return new Set(rows.map((m) => m.upstreamId));
+}
+
+/**
+ * The models an account's endpoint lists that it doesn't have yet: the card's
+ * add-a-model suggestions. Reads only: the account's status is left alone, and
+ * a Claude plan or faux account (nothing to discover) lists none.
+ */
+export async function availableModels(id: string): Promise<DiscoveredModel[]> {
+  const row = await accountOrThrow(id);
+  if (row.kind === "faux" || row.kind === "claude-plan") return [];
+  const [found, have] = await Promise.all([discoverSaved(row), savedUpstreamIds(id)]);
+  return found.filter((m) => !have.has(m.upstreamId));
+}
+
 /** Discover again with the stored key: marks models the endpoint stopped listing. */
 export async function refreshAccount(id: string) {
   const row = await accountOrThrow(id);
-  const kind = row.kind as Kind;
   let found: DiscoveredModel[];
-  const key = await storedKey(row);
   try {
-    found = await discoverAt({
-      kind,
-      baseUrl: row.baseUrl,
-      ...(key ? { apiKey: key } : {}),
-      allowPrivateNetwork: row.allowPrivateNetwork,
-      viaProviderId: row.viaProviderId,
-      settings: parseObject(row.settingsJson) as Endpoint["settings"],
-    });
+    found = await discoverSaved(row);
   } catch (error) {
     const code = error instanceof HttpError ? error.code : undefined;
     await db
@@ -655,14 +680,7 @@ export async function refreshAccount(id: string) {
     .where(eq(providers.id, id));
   if (row.discovery === "auto") await markListed(id, found);
   await reloadModels();
-  const have = new Set(
-    (
-      await db
-        .select({ upstreamId: models.upstreamId })
-        .from(models)
-        .where(eq(models.providerId, id))
-    ).map((m) => m.upstreamId),
-  );
+  const have = await savedUpstreamIds(id);
   return {
     account: await accountView(await accountOrThrow(id), await botUsage()),
     available: found.filter((m) => !have.has(m.upstreamId)),

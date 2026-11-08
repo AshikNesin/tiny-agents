@@ -1,6 +1,6 @@
 // Feature: models (features/models.md). A gateway custom provider's model added by id before the
 // provider is set up (the Z.AI coding plan's GLM-5.3), against a real Cloudflare AI Gateway. Same
-// env as models-gateway.mjs. The row says the provider isn't set up, Test explains the upstream's
+// env as models-gateway.mjs. Add a model suggests the gateway's models (Opus 5.5 picked). The row says the provider isn't set up, Test explains the upstream's
 // 404, Custom providers comes prefilled with the slug, and once the base path is in, GLM answers.
 import { journey, expect, DEMO } from "../scripts/lib.mjs";
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -51,12 +51,26 @@ await journey(
     const glmRow = card
       .getByRole("listitem")
       .filter({ has: page.getByText("custom-zai-coding-plan/glm-5.3", { exact: true }) });
+    await step("Add a model suggests the gateway's models: pick Claude Opus 5.5", async () => {
+      await card.getByRole("button", { name: accountName, exact: true }).click();
+      await card.getByRole("button", { name: "Add a model" }).click();
+      await page.getByPlaceholder(/Search or type an id/).fill("claude-opus-5-5");
+      const suggestion = page.getByRole("option", { name: /Claude Opus 5\.5/ }).first();
+      await expect(suggestion).toBeVisible({ timeout: 30_000 });
+      await proof("add-model-suggestions");
+      await suggestion.click();
+      await expect(card.getByText("claude-opus-5-5", { exact: true })).toBeVisible({
+        timeout: 20_000,
+      });
+    });
     await step(
       "add GLM by id: the row says the provider isn't set up; Test explains the 404",
       async () => {
-        await card.getByRole("button", { name: accountName, exact: true }).click();
-        await card.getByPlaceholder(/Add a model by id/).fill("custom-zai-coding-plan/glm-5.3");
-        await card.getByRole("button", { name: "Add", exact: true }).click();
+        await card.getByRole("button", { name: "Add a model" }).click();
+        await page.getByPlaceholder(/Search or type an id/).fill("custom-zai-coding-plan/glm-5.3");
+        await page
+          .getByRole("option", { name: "Add “custom-zai-coding-plan/glm-5.3” by id" })
+          .click();
         await expect(glmRow).toContainText("custom-zai-coding-plan isn't set up", {
           timeout: 20_000,
         });

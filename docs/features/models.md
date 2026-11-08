@@ -108,8 +108,9 @@ no restart:
   where the key is kept, a status (Connected, Key rejected, Unreachable,
   Locked: re-enter key, Disabled) and when it was checked. Expanded, it lists
   its models with an enable box, capabilities, how many bots use each, Test
-  and delete, plus "Add a model by id". The Claude plan's card picks its
-  fallback model.
+  and delete, plus **Add a model**: a search over what the endpoint lists
+  and the account lacks (the Add models dialog's list), or any typed id.
+  The Claude plan's card picks its fallback model.
 - **Default models.** One row per role, showing its model and whether it is
   the fallback; Reset clears a role.
 - **Delete in use.** Deleting an account or model that bots, roles or the
@@ -129,6 +130,7 @@ again. Changes reach open pickers through `models.changed` on `/events`.
 | `POST /api/v1/models/providers`               | yes     | Create an account (discovers again, stores the key)        |
 | `PATCH /api/v1/models/providers/:id`          |         | Name, enabled, Claude plan fallback; `If-Match: <version>` |
 | `PUT /api/v1/models/providers/:id/connection` | yes     | Endpoint, key, private network                             |
+| `GET /api/v1/models/providers/:id/available`  |         | Listed models the account lacks (Add a model); reads only  |
 | `POST /api/v1/models/providers/:id/refresh`   |         | Discover again; marks models no longer listed              |
 | `DELETE /api/v1/models/providers/:id`         | yes     | 409 `in_use` unless `?moveTo=<modelId>`                    |
 | `POST /api/v1/models/providers/:id/models`    |         | Add a model by id                                          |
