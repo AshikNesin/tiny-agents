@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# Orb setup for tiny-agents (Amp cloud sandboxes).
+#
+# Idempotent: a stale snapshot reruns it, so every step checks before doing
+# work and no command downloads what a warm filesystem already has.
+#
+# Why each step exists:
+# - Node 24: package.json pins "engines": { "node": "24.x" } and CI runs 24;
+#   orbs ship a newer Node. Installed under ~/.local, prepended to PATH only
+#   for this repo (login-shell hook below), so the orb's own tooling (agent-
+#   browser, Amp) keeps using the system Node it was built against.
+# - node-gyp + portless (npm -g): node-gyp because this orb's pnpm runs as a
+#   native binary without the JS pnpm's node-gyp shim, which better-sqlite3's
+#   implicit "node-gyp rebuild" needs (its gyp file no-ops when a prebuild
+#   exists, so nothing actually compiles). portless because the pnpm dev
+#   script wraps the dev server in it and it is a global tool, not a dep.
+# - gitleaks 8.30.1: the version CI pins; used for local secret scans.
+# - Playwright Chromium: e2e (pnpm test:e2e) and the verify-tiny-agents skill.
+# - Ripgrep: scripts/check-design-tokens.ts shells out to it (installed in CI
+#   for the same reason); the orb image also ships it, so this is a fallback.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+log() { printf '\n[setup %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+readonly NODE_VERSION="24.22.2"
+readonly GITLEAKS_VERSION="8.30.1"
+readonly GITLEAKS_SHA256_ARM64="e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+readonly GITLEAKS_SHA256_X64="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+# --- System packages (checked first: a stale snapshot must not re-apt) ------
+# command -v first: the orb image ships some tools (ripgrep) outside dpkg.
+# libnss3-tools: certutil, to trust the portless dev CA for Chromium.
+needed=()
+for pkg in make g++ libnss3-tools; do
+  if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed'; then
+    needed+=("$pkg")
+  fi
+done
+for cmd in rg; do
+  command -v "$cmd" >/dev/null 2>&1 || needed+=(ripgrep)
+done
+# De-duplicate while keeping order.
+needed=($(printf '%s\n' "${needed[@]:-}" | awk '!seen[$0]++'))
+if [ "${#needed[@]}" -gt 0 ]; then
+  log "apt-get install: ${needed[*]}"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq "${needed[@]}"
+else
+  log "system packages already present"
+fi
+
+# --- Node (pinned major from package.json engines) --------------------------
+arch=$(dpkg --print-architecture)
+node_dir="$HOME/.local/node-v$NODE_VERSION-linux-$arch"
+if [ ! -x "$node_dir/bin/node" ]; then
+  log "installing Node v$NODE_VERSION"
+  url="https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$arch.tar.xz"
+  tmp=$(mktemp -d)
+  curl -fsSL --retry 3 "$url" -o "$tmp/node.tar.xz"
+  mkdir -p "$HOME/.local"
+  rm -rf "$node_dir"
+  tar -xJf "$tmp/node.tar.xz" -C "$HOME/.local"
+  rm -rf "$tmp"
+else
+  log "Node v$NODE_VERSION already installed"
+fi
+
+# The installer cannot update the environment of this running script.
+export PATH="$node_dir/bin:$PATH"
+
+# --- node-gyp + portless for the native pnpm binary --------------------------
+# node-gyp: this orb's pnpm runs as a native binary (the JS pnpm bundles a
+# node-gyp shim; the native one does not), and better-sqlite3's implicit
+# "node-gyp rebuild" then fails cold installs even though its prebuild is
+# present. A global node-gyp satisfies it; the gyp file itself no-ops when
+# a prebuild for the host exists.
+# portless: the pnpm dev script wraps the dev server in it, but it is a
+# global tool by design and not in the lockfile.
+for tool in node-gyp@13 portless; do
+  name=${tool%@*}
+  # Check /usr/local/bin, not command -v: this script prepends the pinned
+  # Node, and a tool installed under that prefix would satisfy command -v
+  # while staying invisible to non-repo shells.
+  if [ ! -x "/usr/local/bin/$name" ]; then
+    log "installing $tool globally"
+    sudo npm install -g "$tool"
+  else
+    log "$name already installed"
+  fi
+done
+
+# --- Portless HTTPS trust ----------------------------------------------------
+# pnpm dev serves https://tiny-agents.localhost:8888 through portless's local
+# CA. Two orb-specific blockers, both fixed here:
+# 1. This orb image's orbstack-root.crt trust anchors (both copies) carry
+#    three stale "portless Local CA" certs from earlier orbs (CRLF endings,
+#    same subject, different keys). Any portless leaf then fails chain
+#    building with "certificate signature failure". Strip them; keep the real
+#    OrbStack root.
+# 2. Chromium verifies against the NSS DB, not the Debian bundle: certutil
+#    installs the CA there.
+purge_stale_portless_cas() {
+  local file="$1"
+  sudo python3 - "$file" <<'PY'
+import re, sys
+path = sys.argv[1]
+data = open(path, "rb").read()
+blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----\r?\n?", data, re.S)
+keep = [b for b in blocks if b"cG9ydGxlc3MgTG9jYWwgQ0E" not in b]  # base64 of "portless Local CA"
+if len(keep) != len(blocks):
+    open(path, "wb").write(b"".join(keep))
+    print(f"purged {len(blocks) - len(keep)} stale portless CA(s) from {path}")
+PY
+}
+ca_files=(
+  "/etc/ca-certificates/trust-source/anchors/orbstack-root.crt"
+  "/usr/local/share/ca-certificates/orbstack-root.crt"
+)
+rebuild_bundle=0
+for f in "${ca_files[@]}"; do
+  if [ -f "$f" ] && grep -aq 'cG9ydGxlc3MgTG9jYWwgQ0E' "$f"; then
+    purge_stale_portless_cas "$f"
+    rebuild_bundle=1
+  fi
+done
+if [ "$rebuild_bundle" = 1 ]; then
+  sudo update-ca-certificates >/dev/null
+  log "system CA bundle rebuilt without stale portless CAs"
+fi
+# Trust portless's own CA (generates it if ~/.portless is empty; no-op warm).
+# /usr/sbin must be on PATH: portless shells out to update-ca-certificates.
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" portless trust >/dev/null 2>&1 || true
+if [ -f "$HOME/.portless/ca.pem" ]; then
+  mkdir -p "$HOME/.pki/nssdb"
+  certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n "portless Local CA" -i "$HOME/.portless/ca.pem"
+  log "portless CA trusted (system + NSS for Chromium)"
+fi
+
+# --- Dependencies ------------------------------------------------------------
+if pnpm install --frozen-lockfile >/tmp/orb-pnpm-install.log 2>&1; then
+  log "pnpm install ok ($(tail -1 /tmp/orb-pnpm-install.log))"
+else
+  log "pnpm install FAILED — last lines:"
+  tail -30 /tmp/orb-pnpm-install.log >&2
+  exit 1
+fi
+
+# The repo's prepare hook (vp config) cannot set core.hooksPath in orbs: Amp
+# sets its own global hooksPath, and the two would fight. CI enforces the
+# gates; the hooks dispatcher stays committed for non-orb machines.
+log "dependencies ready"
+
+# --- Playwright Chromium (e2e + the verify skill) ----------------------------
+# Match by major revision dirs: playwright-core looks up its exact revision
+# (e.g. chromium-1248) and errors with "Executable doesn't exist" otherwise,
+# so a version bump reinstalls cleanly.
+if ! ls "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome >/dev/null 2>&1; then
+  log "installing Playwright Chromium"
+  pnpm exec playwright install chromium
+else
+  log "Playwright Chromium already installed"
+fi
+
+# --- gitleaks (same pin as CI) ----------------------------------------------
+if ! command -v gitleaks >/dev/null 2>&1 || [ "$(gitleaks version)" != "$GITLEAKS_VERSION" ]; then
+  log "installing gitleaks v$GITLEAKS_VERSION"
+  case "$arch" in
+    arm64) sha="$GITLEAKS_SHA256_ARM64" ;;
+    amd64) sha="$GITLEAKS_SHA256_X64" ;;
+    *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+  esac
+  tmp=$(mktemp -d)
+  # github.com release assets 504 on some orb egress paths; gh (api.github.com)
+  # reaches the same asset. Try curl first so setups without gh still work.
+  asset="gitleaks_${GITLEAKS_VERSION}_linux_${arch/amd64/x64}.tar.gz"
+  url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+  if ! curl -fsSL --retry 3 -o "$tmp/gitleaks.tgz" "$url"; then
+    log "curl failed for $url, falling back to gh release download"
+    gh release download "v$GITLEAKS_VERSION" -R gitleaks/gitleaks -p "$asset" -O "$tmp/gitleaks.tgz"
+  fi
+  echo "$sha  $tmp/gitleaks.tgz" | sha256sum -c -
+  sudo tar -xzf "$tmp/gitleaks.tgz" -C /usr/local/bin gitleaks
+  sudo chmod +x /usr/local/bin/gitleaks
+  rm -rf "$tmp"
+else
+  log "gitleaks $GITLEAKS_VERSION already installed"
+fi
+
+# --- Repo-scoped PATH hook for login shells ----------------------------------
+# Amp and supervised services start in non-interactive login shells; this
+# makes the pinned Node (and node-gyp) reachable there, in this repo only.
+# The marker carries the version so a NODE_VERSION bump replaces the block,
+# never leaves a stale export.
+marker="# tiny-agents orb Node v$NODE_VERSION"
+if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+  # Drop any previous version's block (marker line through its closing fi).
+  sed -i '/^# tiny-agents orb Node v/,/^fi$/d' "$HOME/.bash_profile"
+  repo_root="$(pwd)"
+  cat >> "$HOME/.bash_profile" <<EOF
+
+$marker
+if [[ "\${PWD}" == "$repo_root" || "\${PWD}" == "$repo_root"/* ]]; then
+  export PATH="$node_dir/bin:\$PATH"
+fi
+EOF
+  log "PATH hook added to ~/.bash_profile"
+else
+  log "PATH hook already present"
+fi
+
+log "setup complete"

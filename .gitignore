@@ -38,6 +38,11 @@ secrets/
 credentials.json
 service-account.json
 
+# Amp orb state: portal registrations and agent review artifacts stay local;
+# .amp/services.yaml (if added) stays tracked.
+.amp/portals/*
+.amp/in/
+
 # Groot sync generated report
 .groot/sync-report.json
 

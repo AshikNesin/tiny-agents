@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Runs after orb activation and every wake. Fast, read-only checks only:
+# no installs, no servers, must finish well under 10 seconds. Everything
+# slow belongs in .agents/setup.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+status=()
+
+# Pinned Node reachable from this shell (setup prepends it via ~/.bash_profile
+# for login shells; this guards against a PATH regression after a wake).
+if command -v node >/dev/null 2>&1; then
+  status+=("node $(node --version)")
+else
+  status+=("node MISSING (rerun .agents/setup)")
+fi
+
+# Dependencies restored. A missing node_modules means setup was skipped or
+# the snapshot is broken; name the fix instead of silently reinstalling.
+if [ -x node_modules/.bin/tsx ]; then
+  status+=("deps ok")
+else
+  status+=("node_modules missing (rerun .agents/setup)")
+fi
+
+# No database to start: better-sqlite3 is embedded, and the dev server, e2e
+# and the verify skill create/migrate data/*.db on demand.
+
+printf '[resume %s] %s\n' "$(date +%H:%M:%S)" "${status[*]}"
