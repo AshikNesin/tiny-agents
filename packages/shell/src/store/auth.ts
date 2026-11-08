@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import { ApiError, apiClient } from "@groot/shell/lib/api";
+import { describeError } from "@groot/shell/lib/feedback";
 import type { SessionUser } from "@groot/core/auth/auth.schema";
 
 /** The signed-in user, as `/auth/me` and both sign-in routes return it.
@@ -34,25 +35,13 @@ interface AuthState {
 }
 
 /**
- * The wording a person sees when sign-in fails. A 401 is always "wrong
- * credentials" for the person typing; a `TypeError` from `fetch` means the
- * request never reached the server.
+ * The wording a person sees when sign-in fails: `describeError`
+ * (`@groot/shell/lib/feedback`), except that a 401 always means "wrong
+ * credentials" for the person typing.
  */
 export function loginErrorDescription(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) {
-    return error.status === 401 ? "Invalid email or password." : error.message || fallback;
-  }
-  if (error instanceof TypeError) {
-    return "Could not reach the server. Check your connection and try again.";
-  }
-  if (error instanceof Error && error.name === "NotAllowedError") {
-    return "Passkey sign-in was cancelled or not allowed. Please try again.";
-  }
-  if (error instanceof Error && error.name === "NotSupportedError") {
-    return "Passkeys are not supported in this browser.";
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
+  if (error instanceof ApiError && error.status === 401) return "Invalid email or password.";
+  return describeError(error, fallback);
 }
 
 async function passkeySignIn(): Promise<SessionUser> {

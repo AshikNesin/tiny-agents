@@ -71,7 +71,7 @@ const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\
 
 const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
-  "R9: only the session guard throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
+  "R9: only the session guard (packages/core/src/session/index.ts) throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
 
 const staticString = (node, lookup) => {
   switch (node.type) {

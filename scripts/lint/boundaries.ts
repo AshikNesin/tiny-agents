@@ -228,8 +228,9 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**",
     rule: "repo/no-session-invalid",
     except: [
-      "packages/core/src/middlewares/jwt-auth.middleware.ts",
-      "packages/core/src/utils/jwt.utils.ts",
+      // The guard. `sessionInvalid` is module-private there, but the code is
+      // public in ErrorCode, so a hand-built error elsewhere still needs this rule.
+      "packages/core/src/session/index.ts",
       // Defines the code.
       "packages/core/src/errors/index.ts",
       // The client, which signs the owner out on the code.

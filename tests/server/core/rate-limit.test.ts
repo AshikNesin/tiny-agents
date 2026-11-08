@@ -1,14 +1,22 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { Hono } from "hono";
-import { createApp } from "@groot/core/app";
-import { setConfig } from "@groot/core/config";
+import { createApp, type CreateAppOptions } from "@groot/core/app";
 import { rateLimit } from "@groot/core/middlewares/rate-limit.middleware";
 import { ok } from "@groot/core/utils/api-response.utils";
+import { peerClientAddress } from "@groot/core/utils/client-ip";
 import type { AppEnv } from "@groot/core/types";
-import { createTestApp } from "../helpers";
+import { createTestApp, setAppConfig } from "../helpers";
 
-function buildApp() {
+/**
+ * The tests stand in for the Node entry's socket with a header: the app is
+ * given `peerClientAddress` (the resolver the Node entry uses) reading the
+ * peer from `x-test-peer` instead of from the socket.
+ */
+const fromTestPeer = peerClientAddress((c) => c.req.header("x-test-peer"));
+
+function buildApp(options: Omit<CreateAppOptions, "routes"> = { clientAddress: fromTestPeer }) {
   return createApp({
+    ...options,
     routes(app) {
       const r = new Hono<AppEnv>();
       r.get(
@@ -27,17 +35,14 @@ function buildApp() {
 
 type TestApp = ReturnType<typeof buildApp>;
 
-function fromPeer(app: TestApp, peer: string, forwardedFor?: string, bindings: object = {}) {
-  const headers: Record<string, string> = forwardedFor ? { "x-forwarded-for": forwardedFor } : {};
-  return app.request(
-    "/api/v1/limited",
-    { headers },
-    { ...bindings, incoming: { socket: { remoteAddress: peer } } },
-  );
+function fromPeer(app: TestApp, peer: string, forwardedFor?: string) {
+  const headers: Record<string, string> = { "x-test-peer": peer };
+  if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
+  return app.request("/api/v1/limited", { headers });
 }
 
 afterEach(() => {
-  setConfig();
+  setAppConfig();
 });
 
 describe("rateLimit middleware", () => {
@@ -73,7 +78,7 @@ describe("rateLimit middleware", () => {
   });
 
   it("ignores X-Forwarded-For even from loopback when no proxy is trusted", async () => {
-    setConfig({ trustedProxies: [] });
+    setAppConfig({ trustedProxies: [] });
     const app = buildApp();
     expect((await fromPeer(app, "127.0.0.1", "198.51.100.1")).status).toBe(200);
     expect((await fromPeer(app, "127.0.0.1", "198.51.100.2")).status).toBe(200);
@@ -81,7 +86,7 @@ describe("rateLimit middleware", () => {
   });
 
   it("ignores X-Forwarded-For from a peer outside an explicit proxy list", async () => {
-    setConfig({ trustedProxies: ["192.0.2.10"] });
+    setAppConfig({ trustedProxies: ["192.0.2.10"] });
     const app = buildApp();
     expect((await fromPeer(app, "10.0.0.2", "198.51.100.1")).status).toBe(200);
     expect((await fromPeer(app, "10.0.0.2", "198.51.100.2")).status).toBe(200);
@@ -131,7 +136,7 @@ describe("rateLimit middleware", () => {
   });
 
   it("trusts a proxy inside an IPv6 range in an explicit proxy list", async () => {
-    setConfig({ trustedProxies: ["2001:db8:ffff::/48"] });
+    setAppConfig({ trustedProxies: ["2001:db8:ffff::/48"] });
     const app = buildApp();
     for (let i = 0; i < 2; i++) {
       expect((await fromPeer(app, "2001:db8:ffff:1::5", "198.51.100.1")).status).toBe(200);
@@ -144,58 +149,67 @@ describe("rateLimit middleware", () => {
   });
 
   it("reads an IPv4-mapped range's prefix in IPv6 terms and never trusts one with host bits set", async () => {
-    setConfig({ trustedProxies: ["::ffff:10.0.0.0/104"] });
+    setAppConfig({ trustedProxies: ["::ffff:10.0.0.0/104"] });
     const app = buildApp();
     for (let i = 0; i < 2; i++) {
       expect((await fromPeer(app, "10.9.9.9", "198.51.100.1")).status).toBe(200);
     }
     expect((await fromPeer(app, "10.9.9.9", "198.51.100.2")).status).toBe(200);
-    setConfig({ trustedProxies: ["::ffff:10.0.0.0/8", "fd00::1/0"] });
+    setAppConfig({ trustedProxies: ["::ffff:10.0.0.0/8", "fd00::1/0"] });
     expect((await fromPeer(app, "203.0.113.9", "6.6.6.1")).status).toBe(200);
     expect((await fromPeer(app, "203.0.113.9", "6.6.6.2")).status).toBe(200);
     expect((await fromPeer(app, "203.0.113.9", "6.6.6.3")).status).toBe(429);
   });
 
-  it("serves requests without a socket (the Hono test client) under one shared key", async () => {
-    const app = buildApp();
-    const plain = (forwardedFor: string) =>
-      app.request("/api/v1/limited", { headers: { "x-forwarded-for": forwardedFor } });
-    expect((await plain("198.51.100.1")).status).toBe(200);
-    expect((await plain("198.51.100.2")).status).toBe(200);
-    expect((await plain("198.51.100.3")).status).toBe(429);
+  it("gives each app its own counters", async () => {
+    const first = buildApp();
+    for (let i = 0; i < 2; i++) expect((await fromPeer(first, "203.0.113.5")).status).toBe(200);
+    expect((await fromPeer(first, "203.0.113.5")).status).toBe(429);
+    expect((await fromPeer(buildApp(), "203.0.113.5")).status).toBe(200);
   });
 
-  it("prefers a Workers rate-limit binding when the environment provides one", async () => {
-    const app = buildApp();
-    const calls: string[] = [];
-    const bindings = {
-      TEST_LIMITER: {
-        limit: async ({ key }: { key: string }) => {
-          calls.push(key);
-          return { success: calls.length < 2 };
-        },
-      },
-    };
-    expect((await fromPeer(app, "203.0.113.5", "198.51.100.1", bindings)).status).toBe(200);
-    expect((await fromPeer(app, "203.0.113.5", "198.51.100.2", bindings)).status).toBe(429);
-    expect(calls).toEqual(["203.0.113.5", "203.0.113.5"]);
+  it("keys every request on one `unknown` bucket when the resolver cannot tell", async () => {
+    const app = buildApp({ clientAddress: () => undefined });
+    expect((await fromPeer(app, "198.51.100.1")).status).toBe(200);
+    expect((await fromPeer(app, "198.51.100.2")).status).toBe(200);
+    expect((await fromPeer(app, "198.51.100.3")).status).toBe(429);
+  });
+
+  it("without a resolver, reads @hono/node-server's socket peer, else cf-connecting-ip", async () => {
+    const app = buildApp({});
+    const socket = (peer: string) => ({ incoming: { socket: { remoteAddress: peer } } });
+    const viaSocket = (peer: string, forwardedFor: string) =>
+      app.request(
+        "/api/v1/limited",
+        { headers: { "x-forwarded-for": forwardedFor } },
+        socket(peer),
+      );
+    expect((await viaSocket("127.0.0.1", "198.51.100.1")).status).toBe(200);
+    expect((await viaSocket("127.0.0.1", "198.51.100.1")).status).toBe(200);
+    expect((await viaSocket("127.0.0.1", "198.51.100.1")).status).toBe(429);
+    expect((await viaSocket("127.0.0.1", "198.51.100.2")).status).toBe(200);
+    const viaEdge = (ip: string) =>
+      app.request("/api/v1/limited", { headers: { "cf-connecting-ip": ip } });
+    expect((await viaEdge("192.0.2.1")).status).toBe(200);
+    expect((await viaEdge("192.0.2.1")).status).toBe(200);
+    expect((await viaEdge("192.0.2.1")).status).toBe(429);
+    expect((await viaEdge("192.0.2.2")).status).toBe(200);
   });
 });
 
 describe("sign-in rate limit", () => {
   it("limits a client that rotates addresses inside one IPv6 /64", async () => {
-    const app = createTestApp();
+    const app = createTestApp({ clientAddress: fromTestPeer });
     const statuses: number[] = [];
     for (let i = 1; i <= 25; i++) {
-      const response = await app.request(
-        "/api/v1/auth/login",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: "nobody@example.com", password: "wrong-password" }),
+      const response = await app.request("/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-test-peer": `2001:db8:5:6::${i.toString(16)}`,
         },
-        { incoming: { socket: { remoteAddress: `2001:db8:5:6::${i.toString(16)}` } } },
-      );
+        body: JSON.stringify({ email: "nobody@example.com", password: "wrong-password" }),
+      });
       statuses.push(response.status);
     }
     expect(statuses).toEqual([...Array<number>(20).fill(401), ...Array<number>(5).fill(429)]);

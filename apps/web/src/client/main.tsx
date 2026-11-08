@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
+import { ShellQueryProvider, createShellQueryClient } from "@groot/shell/lib/query-client";
 import App from "./App";
 import { installFeedbackDismiss, installFeedbackLabels } from "./lib/feedback";
 // Inter loads from JS, not from the shell CSS: an @import there is inlined by
@@ -42,20 +42,9 @@ initTheme();
 installFeedbackDismiss();
 installFeedbackLabels();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 30,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      retry: 1,
-    },
-    mutations: {
-      retry: 1,
-    },
-  },
-});
+// The shell owns the query defaults and resets the cache on every sign-in and
+// sign-out; tiny-agents keeps one mutation retry on top of them.
+const queryClient = createShellQueryClient({ mutations: { retry: 1 } });
 
 const rootElement = document.getElementById("root");
 
@@ -65,8 +54,8 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <ShellQueryProvider client={queryClient}>
       <App />
-    </QueryClientProvider>
+    </ShellQueryProvider>
   </StrictMode>,
 );

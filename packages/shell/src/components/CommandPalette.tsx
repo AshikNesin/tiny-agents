@@ -32,7 +32,7 @@ export interface CommandItemEntry {
   /** Muted text after the label. Also matched by the search. */
   description?: string;
   /** Keys shown at the row's trailing edge, e.g. `"mod+shift+n"`. Display
-   *  only: bind the combo yourself. */
+   *  only: bind the combo yourself with `useHotkey` (`@groot/ui/hotkeys`). */
   shortcut?: string;
   /** Extra search terms besides the label and description. */
   keywords?: string[];
@@ -143,8 +143,11 @@ export function CommandPaletteDialog({
     [builtIns, nav, groups, navigate, setTheme, signOut],
   );
 
-  const { items, destructive, suggestions, tabs } = React.useMemo(() => {
+  const { items, groupOf, destructive, suggestions, tabs } = React.useMemo(() => {
     const items: CommandMenuItemData[] = [];
+    // Item value → its group's tab value. Tabs filter by group id, so two
+    // groups that share a heading stay two tabs.
+    const groupOf = new Map<string, string>();
     const destructive = new Set<string>();
     const suggestions: string[] = [];
     const tabs: CommandMenuTab[] = [{ value: ALL_TAB, label: "All" }];
@@ -153,6 +156,7 @@ export function CommandPaletteDialog({
       tabs.push({ value: groupKey, label: group.heading });
       for (const entry of group.items) {
         const value = `${groupKey}::${entry.id ?? entry.label}`;
+        groupOf.set(value, groupKey);
         items.push({
           value,
           label: entry.label,
@@ -168,14 +172,13 @@ export function CommandPaletteDialog({
         if (entry.suggested) suggestions.push(value);
       }
     }
-    return { items, destructive, suggestions, tabs };
+    return { items, groupOf, destructive, suggestions, tabs };
   }, [resolvedGroups]);
 
   const visibleItems = React.useMemo(() => {
     if (tab === ALL_TAB) return items;
-    const heading = tabs.find((t) => t.value === tab)?.label;
-    return items.filter((item) => item.group === heading);
-  }, [items, tabs, tab]);
+    return items.filter((item) => groupOf.get(item.value) === tab);
+  }, [items, groupOf, tab]);
 
   return (
     <CommandMenuDialog open={open} onOpenChange={setOpen} shortcut="mod+k">

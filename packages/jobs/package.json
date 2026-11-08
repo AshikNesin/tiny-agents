@@ -1,6 +1,6 @@
 {
   "name": "@groot/jobs",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,6 +14,7 @@
     "./server/queries": "./src/server/queries.ts",
     "./server/worker": "./src/server/worker.ts",
     "./server/tick": "./src/server/tick.ts",
+    "./server/transitions": "./src/server/transitions.ts",
     "./server/logger": "./src/server/logger.ts",
     "./server/routes": "./src/server/routes.ts",
     "./server/validation": "./src/server/validation.ts",
@@ -40,6 +41,7 @@
     "./client/useJobActions": "./src/client/useJobActions.tsx",
     "./client/useJobDetail": "./src/client/useJobDetail.ts",
     "./client/useJobs": "./src/client/useJobs.ts",
+    "./client/useJobsFilter": "./src/client/useJobsFilter.ts",
     "./client/utils": "./src/client/utils.ts"
   },
   "dependencies": {

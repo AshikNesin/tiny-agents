@@ -1,5 +1,112 @@
 # @groot/jobs
 
+## 3.0.0
+
+### Major Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`2479a3d`](https://github.com/AshikNesin/groot/commit/2479a3d61d3555c78aa75347d610cec77a106ecf) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(jobs): the jobs list filter behind one interface, with server-side search
+  
+  - **`useJobsFilter()`** (new `@groot/jobs/client/useJobsFilter`) owns the
+    list's URL params (`?state&queue&search&datePreset&page`). Its intent
+    setters (`setState`, `setQueue`, `setSearch`, `setPreset`, `clear`) go back
+    to the first page; `goToPage` pages. `listParams()` maps the filter to the
+    list endpoint's params, and `filterKey` changes with the filter and the page
+    (`Jobs` keys `JobsTable` on it to clear the row selection).
+  - **Date presets are stored by name.** `?datePreset=today` used to be written
+    with the absolute dates of the day it was clicked, so a shared link went
+    stale; the preset is now resolved when the query runs. Old `startDate` and
+    `endDate` URL params are ignored.
+  - **Search runs on the server.** `GET /api/v1/jobs` takes `search` (a
+    substring of the job's name or id, case-insensitive; `getJobs()` takes it as
+    an option), so a search pages through every match and `total` counts them
+    all. It used to filter only the 50 rows of the current page and report that
+    page's matches as the total.
+  - **Changed props.** `JobsStats` and `JobsFilters` take `filter` (from
+    `useJobsFilter()`), and `JobsTable` takes `state`, `page` and `onPage` in
+    place of `queryParams` and `setQueryParams`. `useJobs()` returns `filter`
+    in place of `queryParams`, `setQueryParams`, `handlePresetChange`,
+    `handleClearFilters`, `activeSecondaryTab` and `hasActiveFilters` (all on
+    the filter now). `JobsQueryPatch` (`@groot/jobs/client/constants`) is
+    deprecated and removed in the next major.
+
+### Minor Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`c6fffd9`](https://github.com/AshikNesin/groot/commit/c6fffd9d63951f916dec196228137b43af47b56a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - refactor(jobs): one transitions module and one runner
+  
+  - New `@groot/jobs/server/transitions`: `enqueue(spec)` is the only insert into
+    `jobs` (used by `addJob()`, schedule fires and `rerun`), and
+    `apply(job | jobId, event)` runs each lifecycle action and tick outcome as one
+    compare-and-set `UPDATE … RETURNING`. It owns the not-found
+    (`JOB_NOT_FOUND`) and wrong-state (`400`, now with code
+    `JOB_ACTION_NOT_ALLOWED`) errors, and `getJobById` (re-exported from
+    `queries`).
+  - One retry policy: a job that times out while `active` now backs off like a
+    handler failure (`runAt = now + retryDelay × 2^retryCount`), logs
+    "Job <name> timed out" to `job_logs` and calls `reportError()`. Before, it was
+    retried immediately with no log line and no report. A failure is reported
+    only by the writer whose compare-and-set wins.
+  - Every transition that lands a job in `created` and due nudges the inline tick,
+    so `resumeJob()` (and `rerunJob()`, a schedule fire, a zero-delay retry) now
+    runs promptly on Workers instead of waiting for the next cron fire.
+  - Tick outcomes are guarded by the claim's `startedAt` too, so a run that
+    outlived its timeout cannot overwrite the attempt that replaced it.
+  - New `JobRunner` / `jobRunner` in `@groot/jobs/server/tick` owns the handler
+    registry, the in-flight tick and its re-run request, the poll timer and the
+    housekeeping schedule; `jobRunner.reset()` gives tests fresh state.
+    `worker.ts` is now functions over it, and `worker.ts` and `tick.ts` no longer
+    import each other.
+  - Deprecated: `clearJobHandlers()`; use `jobRunner.reset()`.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`3541799`](https://github.com/AshikNesin/groot/commit/35417995eefbaddbd0f8bc3b0591b8c3c20f8818) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(shell): one mutation-feedback module, `@groot/shell/lib/feedback`
+  
+  Four idioms for "run, toast, invalidate" worded the same failure four ways:
+  a fixed "Unable to update setting" hid "Invalid JSON format", the jobs
+  dashboard showed "Bad Gateway", "Failed to fetch" or a raw `SyntaxError`, and
+  WebAuthn errors were worded twice. Now:
+  
+  - `describeError(error, fallback)` words every failure once: the server's
+    envelope message (`ApiError.fromServer`), an offline sentence for a request
+    that never left (`NetworkError`, which `apiClient` now throws, or a `fetch`
+    `TypeError`), a row of the one WebAuthn table (`WEBAUTHN_MESSAGES`,
+    `describeWebAuthnError`), the message of a plain `Error` the action threw,
+    else the fallback.
+  - `useAction(action, { confirm?, success?, errorTitle?, fallback, invalidate?, onSuccess? })`
+    returns `{ run, isPending }`: it confirms, runs once at a time, toasts and
+    awaits the invalidations. `toastError` and `toastSuccess` are the toasts on
+    their own.
+  - `PasskeyManager`, the settings page, the jobs dashboard (`useJobActions`,
+    `AddJobDialog`, `ScheduleJobDialog`, `ScheduledJobsPanel`) and the Todos
+    reference page use it. `useJobActions()` also returns `isPending`.
+  - `loginErrorDescription` is a 401 wrapper over `describeError`; a status-line
+    `ApiError` (not from the server) now reads as the fallback.
+  - New `parseJobData(text)` in `@groot/jobs/client/utils` refuses a payload
+    that is not JSON with a sentence.
+  - Deprecated: `useToastMutation` and `withJobToast`; both keep working and
+    now word errors with `describeError`.
+
+### Patch Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`f44c850`](https://github.com/AshikNesin/groot/commit/f44c850f3f632ca54c01f6e265c643020ccfe4f8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(core): `KvStore.take` and `KvStore.claim`, single-statement consume and claim
+  
+  - **`take(key)`** deletes a live entry and returns its value in one
+    `DELETE … RETURNING` (`undefined` when missing or expired). Of any number of
+    concurrent `take`s of one key, exactly one gets the value.
+  - **`claim(key, intervalMs)`** is one compare-and-set upsert that returns
+    `true` for at most one caller per interval, across processes and Workers
+    isolates. The value is the claim time in epoch ms; the row expires with the
+    claim.
+  - **Fix: passkey challenge replay.** Verification consumed a challenge with
+    `has()` then `delete()`, so two concurrent verifications of one challenge
+    could both pass. It now uses `take`.
+  - `@groot/jobs`: the tick's housekeeping slot is claimed with `kv.claim`
+    instead of a hand-written upsert on the `kv` table. The key and value format
+    (`jobs:housekeeping:lastRunAt`, epoch ms) are unchanged, so existing rows
+    keep working.
+- Updated dependencies [[`b3039be`](https://github.com/AshikNesin/groot/commit/b3039befd01979bcdc9f655fcf41e55a47a8e879), [`d9fcc26`](https://github.com/AshikNesin/groot/commit/d9fcc26278342e6ae725c6cda497400782548715), [`f44c850`](https://github.com/AshikNesin/groot/commit/f44c850f3f632ca54c01f6e265c643020ccfe4f8), [`3541799`](https://github.com/AshikNesin/groot/commit/35417995eefbaddbd0f8bc3b0591b8c3c20f8818), [`82718e6`](https://github.com/AshikNesin/groot/commit/82718e6c579bae0269f16d42f4e2a74c4ecdde3b), [`1abd148`](https://github.com/AshikNesin/groot/commit/1abd148fc59353dbc4b3f629af9449ec1eb25896), [`f4022b4`](https://github.com/AshikNesin/groot/commit/f4022b454292fa768d71aea5efd1a496501dfc57), [`494007f`](https://github.com/AshikNesin/groot/commit/494007f804a7ad3c83c2413b2222b1bc9d0b59ac), [`090e53c`](https://github.com/AshikNesin/groot/commit/090e53cd85acbd6cd9f755c96ead35b4d559596f), [`d58c2a8`](https://github.com/AshikNesin/groot/commit/d58c2a833a71bf8047b257f9bc9e9336a3cebd80)]:
+  - @groot/shell@3.0.0
+  - @groot/core@2.2.0
+  - @groot/ui@1.3.0
+
 ## 2.0.2
 
 ### Patch Changes

@@ -47,6 +47,21 @@ export class ApiError extends Error {
 }
 
 /**
+ * The request never reached the server: `fetch` itself rejected (offline, DNS,
+ * CORS, a dropped connection). Extends `TypeError`, which is what `fetch`
+ * throws, so `instanceof TypeError` checks keep working.
+ */
+export class NetworkError extends TypeError {
+  readonly url: string;
+
+  constructor(url: string, options?: { cause?: unknown }) {
+    super(`Could not reach ${url}`, options);
+    this.name = "NetworkError";
+    this.url = url;
+  }
+}
+
+/**
  * A 401 from the session guard (`SESSION_INVALID`), with when its request was
  * sent (a `performance.now()` timestamp).
  */
@@ -132,12 +147,19 @@ class ApiClient {
     }
 
     const sentAt = performance.now();
-    const response = await fetch(buildUrl(path, options.params), {
-      method,
-      headers,
-      body,
-      credentials: "include",
-    });
+    let response: Response;
+    try {
+      response = await fetch(buildUrl(path, options.params), {
+        method,
+        headers,
+        body,
+        credentials: "include",
+      });
+    } catch (error) {
+      // `fetch` rejects with a TypeError only when the request could not be made.
+      if (error instanceof TypeError) throw new NetworkError(path, { cause: error });
+      throw error;
+    }
     if (response.ok) return response;
     const parsed = await readEnvelope(response);
     const error = new ApiError({

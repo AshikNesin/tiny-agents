@@ -3,9 +3,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import {
   cancelScheduledJob,
-  clearJobHandlers,
   getJobs,
   getScheduledJobs,
+  jobRunner,
   jobSchedules,
   nextCronRun,
   registerJobHandler,
@@ -14,7 +14,7 @@ import {
 } from "@groot/jobs/server";
 
 beforeEach(async () => {
-  clearJobHandlers();
+  jobRunner.reset();
   await db.delete(jobSchedules);
 });
 

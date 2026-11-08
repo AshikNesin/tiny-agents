@@ -28,15 +28,25 @@ export const createUserSchema = z.object({
 export type CreateUserDTO = z.infer<typeof createUserSchema>;
 
 /**
- * The signed-in user as `POST /auth/login`, `POST /passkey/login/verify`
- * and `GET /auth/me` return it — the shape the client session store keeps.
- * This is the wire type the client imports (type-only). (`/auth/me` also
- * returns `createdAt`; clients must not rely on it.)
+ * The signed-in user as every sign-in route (`POST /auth/login`,
+ * `POST /auth/setup`, `POST /passkey/login/verify`) and `GET /auth/me` return
+ * it — the shape the client session store keeps. This is the wire type the
+ * client imports (type-only). (`/auth/me` also returns `createdAt`; clients
+ * must not rely on it.)
  */
 export interface SessionUser {
   id: number;
   email: string;
   name: string | null;
+}
+
+/**
+ * The body of every sign-in route: the user, and the session token for
+ * clients that send `Authorization: Bearer` instead of the cookie.
+ */
+export interface SignInResponse {
+  token: string;
+  user: SessionUser;
 }
 
 /** `GET /auth/setup`: whether the first account still needs creating. */

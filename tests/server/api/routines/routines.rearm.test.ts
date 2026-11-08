@@ -11,7 +11,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { addJob } from "@groot/jobs/server/queue";
 import { runTick } from "@groot/jobs/server/tick";
-import { clearJobHandlers } from "@groot/jobs/server/worker";
+import { jobRunner } from "@groot/jobs/server/tick";
 import { db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
 import {
   ROUTINE_FIRE_JOB,
@@ -83,7 +83,7 @@ describe("re-arming routines on boot", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    clearJobHandlers();
+    jobRunner.reset();
     registerRoutineJobs();
     rt = await openAppRuntime();
     runtime = spyOnRuntime(rt);
@@ -92,7 +92,7 @@ describe("re-arming routines on boot", () => {
   });
 
   afterEach(async () => {
-    clearJobHandlers();
+    jobRunner.reset();
     await clearTables();
     await closeAppRuntime();
   });

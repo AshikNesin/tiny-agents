@@ -26,16 +26,17 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
   background; tests call `runTick()` when they want jobs processed
 
 Files are isolated from each other for free. Within a file, clear what you
-need in `beforeEach` (e.g. `await db.delete(tasks)`, `clearJobHandlers()`).
+need in `beforeEach` (e.g. `await db.delete(tasks)`, `jobRunner.reset()`).
 
 ## Helpers (`tests/server/helpers.ts`)
 
-| Helper                                             | Does                                                                                                             |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `createTestApp()`                                  | `createWebApp()` — the real app with every router                                                                |
-| `api(app, path, { method, json, token, headers })` | Sends the request, returns `{ status, headers, body }`; `body` is the envelope, a 204 yields `{ success: true }` |
-| `signIn(app)`                                      | Creates a unique user and logs in; returns `{ token, user, email, password, cookie }`                            |
-| `adminHeaders()`                                   | `{ "x-admin-auth-key": env.ADMIN_AUTH_KEY }`                                                                     |
+| Helper                                             | Does                                                                                                                                                                                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createTestApp(options?)`                          | `createWebApp()` — the real app with every router and rate-limit counters of its own. Pass `clientAddress` (a resolver such as `(c) => c.req.header("x-test-peer")`) to say who each request is from instead of faking a socket |
+| `setAppConfig(overrides?)`                         | The app's config with `overrides` on top; call it bare to restore. A bare `setConfig()` would drop the app's own overrides                                                                                                      |
+| `api(app, path, { method, json, token, headers })` | Sends the request, returns `{ status, headers, body }`; `body` is the envelope, a 204 yields `{ success: true }`                                                                                                                |
+| `signIn(app)`                                      | Creates a unique user and logs in; returns `{ token, user, email, password, cookie }`                                                                                                                                           |
+| `adminHeaders()`                                   | `{ "x-admin-auth-key": env.ADMIN_AUTH_KEY }`                                                                                                                                                                                    |
 
 ## Layout
 
@@ -105,9 +106,9 @@ describe("tasks API", () => {
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db } from "@groot/core/database";
-import { addJob, clearJobHandlers, jobs, registerJobHandler, runTick } from "@groot/jobs/server";
+import { addJob, jobRunner, jobs, registerJobHandler, runTick } from "@groot/jobs/server";
 
-beforeEach(() => clearJobHandlers());
+beforeEach(() => jobRunner.reset());
 
 it("runs a job and stores its output", async () => {
   registerJobHandler<{ n: number }>("double", (job) => ({ doubled: job.data.n * 2 }));
@@ -134,6 +135,16 @@ expect(res.status).toBe(201);
 Call them directly; the database is real, so there is nothing to mock
 (`tests/server/core/kv.test.ts`, `tests/server/jobs/queue.test.ts`). Reach for
 `vi.mock` only for external services.
+
+### A client component
+
+Render it the way `main.tsx` mounts the app: a client from
+`createShellQueryClient({ queries: { retry: false } })` in a
+`ShellQueryProvider`, and `GrootUIProvider` for confirmations and toasts. Stub
+`fetch` with `vi.stubGlobal` rather than mocking `apiClient`, so the envelope,
+`ApiError` and the error wording are the real ones, and assert on the toast
+text a person reads (`tests/client/components/shell/AppSettings.test.tsx`,
+`tests/client/lib/query-client.test.tsx`).
 
 ### Dates and time
 

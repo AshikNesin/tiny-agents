@@ -3,12 +3,15 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { bootstrap } from "@groot/core/bootstrap";
 import { env } from "@groot/core/env";
 import { config } from "@groot/core/config";
 import { logger, scrubValue } from "@groot/core/logger";
 import { markShuttingDown } from "@groot/core/app";
+import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
+import { peerClientAddress } from "@groot/core/utils/client-ip";
 import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
@@ -97,6 +100,9 @@ if (config.sentry.dsn) {
 
 registerJobHandlers();
 const app = createWebApp({
+  // The socket peer, or the hop a TRUSTED_PROXIES proxy vouches for.
+  clientAddress: peerClientAddress((c) => getConnInfo(c).remote.address),
+  rateLimitStore: memoryRateLimitStore(),
   // /health stays 503 until the agent store is open and resumed, so
   // orchestrators never route traffic at a half-booted server (PRD §7.2).
   readiness: () => (agentRuntimeReady() ? undefined : "agent-runtime-starting"),

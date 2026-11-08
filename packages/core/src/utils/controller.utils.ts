@@ -1,8 +1,7 @@
 import { type ZodType, z } from "zod";
-import { config } from "../config";
 import { Boom, ErrorCode } from "../errors";
 import type { AppContext, AuthUser } from "../types";
-import { clientAddress } from "./client-address";
+import { defaultClientAddress } from "./client-ip";
 
 /**
  * Request parsing helpers. Each validates with a Zod schema and throws a
@@ -72,7 +71,7 @@ export function parseStringParam(value: string | undefined, paramName = "param")
   return value;
 }
 
-/** The authenticated user set by `jwtAuthMiddleware`. Throws 401 if absent. */
+/** The authenticated user set by `requireSession`. Throws 401 if absent. */
 export function requireUser(c: AppContext): AuthUser {
   const user = c.get("user");
   if (!user) throw Boom.unauthorized("Authentication required");
@@ -80,15 +79,12 @@ export function requireUser(c: AppContext): AuthUser {
 }
 
 /**
- * The client's address: the socket peer, or, when the peer is one of
- * `config.trustedProxies`, the hop it vouches for in `X-Forwarded-For`.
- * On Workers there is no socket: Cloudflare's edge sets `cf-connecting-ip`
- * and overwrites any client-sent value, so that header is the client.
- * `unknown` when neither exists (the Hono test client).
+ * The client's address, as the runtime's `ClientAddressResolver` reports it
+ * (`createApp({ clientAddress })`; see `./client-ip`). Node passes the socket
+ * peer, or the hop a trusted proxy vouches for in `X-Forwarded-For`; Workers
+ * pass `cf-connecting-ip`. `unknown` when the resolver cannot tell.
  */
 export function clientIp(c: AppContext): string {
-  const incoming = c.env?.incoming as { socket?: { remoteAddress?: string } } | undefined;
-  const peer = incoming?.socket?.remoteAddress;
-  if (peer === undefined) return c.req.header("cf-connecting-ip") ?? "unknown";
-  return clientAddress(peer, c.req.header("x-forwarded-for"), config.trustedProxies) ?? "unknown";
+  const resolve = c.get("clientAddress") ?? defaultClientAddress;
+  return resolve(c) ?? "unknown";
 }

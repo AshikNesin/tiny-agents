@@ -38,6 +38,7 @@ import { DataField, DataFields } from "@groot/ui/display";
 import { DropdownMenu, DropdownMenuTrigger } from "@groot/ui/dropdown-menu";
 import { EmptyState, ErrorState } from "@groot/ui/empty-state";
 import { Form, Field } from "@groot/ui/form";
+import { formatShortcut, isEditable, useHotkey, type HotkeyOptions } from "@groot/ui/hotkeys";
 import { Input } from "@groot/ui/input";
 import { InputGroup } from "@groot/ui/input-group";
 import { Label } from "@groot/ui/label";
@@ -85,7 +86,12 @@ import { defaultJobOptions } from "@groot/jobs/server/config";
 import { getJobs } from "@groot/jobs/server/queries";
 import { addJob, scheduleJob, deleteJob } from "@groot/jobs/server/queue";
 import { registerJobHandler, startWorkers, stopWorkers } from "@groot/jobs/server/worker";
-import { housekeeping, nextCronRun } from "@groot/jobs/server/tick";
+import { housekeeping, jobRunner, nextCronRun, type JobRunner } from "@groot/jobs/server/tick";
+import {
+  createJobTransitions,
+  jobNotFound,
+  type JobTransitions,
+} from "@groot/jobs/server/transitions";
 import { createJobLogger, flushJobLogs } from "@groot/jobs/server/logger";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import { createJobSchema } from "@groot/jobs/server/validation";
@@ -94,7 +100,7 @@ import { jobsApi as jobsApiFromModule } from "@groot/jobs/client/api";
 import { JobDetail as JobDetailPage } from "@groot/jobs/client/JobDetail";
 import { Jobs as JobsPage } from "@groot/jobs/client/Jobs";
 import { type Job, type JobStats, type JobName } from "@groot/jobs/client/types";
-import { formatJobId } from "@groot/jobs/client/utils";
+import { formatJobId, parseJobData, withJobToast } from "@groot/jobs/client/utils";
 import { STATE_TABS } from "@groot/jobs/client/constants";
 import { JobJsonBlock } from "@groot/jobs/client/components/JobJsonBlock";
 import { JobsTable } from "@groot/jobs/client/components/JobsTable";
@@ -110,6 +116,7 @@ import { JobDataEditor } from "@groot/jobs/client/components/JobDataEditor";
 import { ScheduledJobsPanel } from "@groot/jobs/client/components/ScheduledJobsPanel";
 import { JobsTableSkeleton } from "@groot/jobs/client/components/skeletons";
 import { useJobs } from "@groot/jobs/client/useJobs";
+import { useJobsFilter, type JobsFilter } from "@groot/jobs/client/useJobsFilter";
 import { jobsKeys, useAvailableJobs } from "@groot/jobs/client/queries";
 import { useJobActions } from "@groot/jobs/client/useJobActions";
 import { useJobDetail } from "@groot/jobs/client/useJobDetail";
@@ -125,6 +132,15 @@ import { formatRelativeTime } from "@groot/shell/lib/utils";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useStorageFiles, type StorageFile } from "@groot/shell/pages/storage/hooks/useStorage";
 import { useAppSettings, type AppSetting } from "@groot/shell/hooks/useAppSettings";
+import { useAppSettingsData } from "@groot/shell/hooks/useAppSettingsData";
+import { useSettingDraft } from "@groot/shell/hooks/useSettingDraft";
+import { useToastMutation } from "@groot/shell/hooks/useToastMutation";
+import {
+  createShellQueryClient,
+  ShellQueryProvider,
+  SHELL_QUERY_DEFAULTS,
+} from "@groot/shell/lib/query-client";
+import { describeError, toastError, useAction, type ActionResult } from "@groot/shell/lib/feedback";
 // Shell pages and guards an app mounts as routes (or leaves out).
 import { Login } from "@groot/shell/pages/auth/Login";
 import { Setup } from "@groot/shell/pages/auth/Setup";
@@ -146,6 +162,7 @@ const checks = {
   restoredKit: [Alert, Pagination, Select, Tooltip, addBreadcrumb, logPerformance, copyFile],
   uiBarrel: [ButtonFromBarrel, ToasterFromBarrel, Form, Field],
   uiMotion: [FluidHighlight, spring.slow, useModalPresence],
+  uiHotkeys: [formatShortcut, isEditable, useHotkey],
   uiKit: [
     Badge,
     UiBreadcrumb,
@@ -206,6 +223,9 @@ const checks = {
     deleteJob,
     housekeeping,
     nextCronRun,
+    jobRunner,
+    createJobTransitions,
+    jobNotFound,
     createJobLogger,
     flushJobLogs,
     jobRoutes,
@@ -218,6 +238,8 @@ const checks = {
     JobDetail,
     JobDetailPage,
     formatJobId,
+    parseJobData,
+    withJobToast,
     JobJsonBlock,
     JobsTable,
     JobLogs,
@@ -232,6 +254,7 @@ const checks = {
     ScheduledJobsPanel,
     JobsTableSkeleton,
     useJobs,
+    useJobsFilter,
     useJobActions,
     useJobDetail,
     useAvailableJobs,
@@ -248,6 +271,14 @@ const checks = {
     useAuthStore,
     useStorageFiles,
     useAppSettings,
+    useAppSettingsData,
+    useSettingDraft,
+    useToastMutation,
+    createShellQueryClient,
+    ShellQueryProvider,
+    describeError,
+    toastError,
+    useAction,
   ],
   core: [db, users, HttpError, config, defineConfig, kv, getContentType, sanitizeFileName, logger],
 };
@@ -284,6 +315,11 @@ const jobRow: JobRow = {
   singletonKey: null,
 };
 void jobRow;
+const runner: JobRunner = jobRunner;
+const transitions: JobTransitions = runner.transitions;
+const rerunCopy: Promise<JobRow> = transitions.apply("0", { type: "rerun" });
+const tickOutcome: Promise<JobRow | null> = transitions.apply(jobRow, { type: "succeed" });
+void [rerunCopy, tickOutcome];
 const stats: JobStats = {
   active: 0,
   created: 1,
@@ -338,8 +374,12 @@ export type ButtonSize = ButtonProps["size"];
 export type ConfirmOptionsShape = ConfirmOptions;
 export type JobQueryShape = JobQueryResponse;
 export type DashboardJob = Job;
+export type JobsListFilter = JobsFilter;
 export type StoredFile = StorageFile;
 export type KitSetting = AppSetting;
+export const shellStaleTime: number = SHELL_QUERY_DEFAULTS.queries.staleTime;
+export const offlineWording: string = describeError(new TypeError("Failed to fetch"), "fallback");
+export type KitActionResult = ActionResult<AppSetting>;
 export type AppConfig = CoreConfig;
 export const jobStatesProbed: boolean = jobStates !== undefined;
 export const confirmHookShape: string = typeof useConfirm();
@@ -398,9 +438,20 @@ export function KitConsumers() {
   const confirm = useConfirm();
   const storageFiles = useStorageFiles("tmp/");
   const appSettings = useAppSettings();
+  const hotkeyOptions: HotkeyOptions = { scope: "global", inFields: false };
+  useHotkey("mod+shift+k", () => undefined, hotkeyOptions);
+  const settingsData = useAppSettingsData();
+  const draft = useSettingDraft(settingsData.get("theme"));
+  const createSetting = useAction((key: string) => settingsData.create(key), {
+    success: (created) => `Created ${created.key}`,
+    errorTitle: "Create failed",
+    fallback: "Unable to create setting",
+  });
   void confirm;
   void storageFiles;
   void appSettings;
+  void draft.isDirty;
+  void createSetting.run;
   return <KitConsumerPage>consumer fixture compiled</KitConsumerPage>;
 }
 

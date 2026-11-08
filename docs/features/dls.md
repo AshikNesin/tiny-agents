@@ -106,7 +106,21 @@ radii, 13px row type, spring motion and fluid hover fill. Its colours still
 come from groot tokens (the "Fluid Functionalism tokens" block in
 `packages/shell/src/index.css`), and its support code lives in
 `packages/ui/vendor/fluid/` (see the README there). Restyle it through those
-tokens, not by editing the vendored files.
+tokens, not by editing the vendored files. The older cmdk-based
+`@groot/ui/command` (`Command`, `CommandDialog`, …) is deprecated in its
+favour and is removed in the next major.
+
+**Keyboard shortcuts go through `@groot/ui/hotkeys`.** It holds the combo
+grammar (`parseShortcut`, `matchesShortcut`, `formatShortcut`, `useIsMac`;
+`"mod+k"` is ⌘K on a Mac and Ctrl+K elsewhere), the one `isEditable` check,
+and `useHotkey(combo, handler, { scope?, inFields?, open?, within?, enabled? })`.
+Every hotkey shares one window listener and one precedence, so a press runs
+one handler: a `"dialog"` hotkey whose dialog is open answers first (the ⌘K
+combo closes the palette); while any dialog is open nothing else answers;
+otherwise a `"dialog"` hotkey beats a `"global"` one, and the most recently
+bound wins. A bare key (`"/"`) stays out of text fields unless `inFields` is
+set. The command menu's `CommandMenuDialog` binds its combo this way and
+re-exports the grammar, so `@groot/ui/command-menu` imports keep working.
 
 A hand-rolled frame matches the primitive it stands in for: a table frame is
 `rounded-2xl bg-card ring-1 ring-foreground/10` (as `Card`); a field-like

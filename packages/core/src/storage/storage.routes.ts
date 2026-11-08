@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
+import { routeBodyLimit } from "../middlewares/body-limit.middleware";
 import { storageRateLimiter, uploadRateLimiter } from "../middlewares/rate-limit.middleware";
 import { parseBody, parseForm, parseParams, parseQuery } from "../utils/controller.utils";
 import { noContent, ok } from "../utils/api-response.utils";
@@ -29,7 +29,8 @@ router.get("/files", async (c) => {
 router.post(
   "/files/upload",
   uploadRateLimiter,
-  bodyLimit({ maxSize: MAX_UPLOAD_BYTES }),
+  // Replaces the app's 1 MB API limit, wherever this router is mounted.
+  routeBodyLimit(MAX_UPLOAD_BYTES),
   async (c) => {
     const form = await parseForm(c, uploadFilesSchema);
     return ok(

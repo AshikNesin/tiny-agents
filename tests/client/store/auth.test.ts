@@ -78,8 +78,16 @@ describe("session", () => {
       code: "RATE_LIMITED",
       message: "Too many requests",
       url: "/auth/login",
+      fromServer: true,
     });
     expect(loginErrorDescription(limited, "fallback")).toBe("Too many requests");
+    const gateway = new ApiError({
+      status: 502,
+      code: "HTTP_502",
+      message: "Bad Gateway",
+      url: "/auth/login",
+    });
+    expect(loginErrorDescription(gateway, "fallback")).toBe("fallback");
     expect(loginErrorDescription(undefined, "fallback")).toBe("fallback");
   });
 

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { createApp, type CreateAppOptions } from "@groot/core/app";
 import type { AppEnv } from "@groot/core/types";
-import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
+import { requireSession } from "@groot/core/session";
 import authRoutes from "@groot/core/auth/auth.routes";
 import passkeyRoutes from "@groot/core/passkey/passkey.routes";
 import storageRoutes from "@groot/core/storage/storage.routes";
@@ -52,7 +52,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
 
       // Protected (JWT cookie or bearer token)
       const api = new Hono<AppEnv>();
-      api.use(jwtAuthMiddleware);
+      api.use(requireSession);
       // Guests reach only the bots shared with them and Code (issue #145).
       api.use(guestGuard());
       api.route("/", peopleRoutes);

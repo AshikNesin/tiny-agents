@@ -6,9 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { CheckSquare, Settings as SettingsIcon } from "lucide-react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GrootUIProvider } from "@groot/ui/provider";
 import { type ShellConfig, ShellProvider } from "@groot/shell/lib/shell-config";
+import { createShellQueryClient, ShellQueryProvider } from "@groot/shell/lib/query-client";
 import { Layout } from "@groot/shell/components/Layout";
 import { Settings } from "@groot/shell/pages/settings/Settings";
 import { useAuthStore } from "@groot/shell/store/auth";
@@ -28,9 +28,9 @@ function Pathname() {
 
 function renderAt(path: string) {
   // Security and Configuration query the API; with no server they settle into their error states.
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = createShellQueryClient({ queries: { retry: false } });
   return render(
-    <QueryClientProvider client={queryClient}>
+    <ShellQueryProvider client={queryClient}>
       <GrootUIProvider>
         <MemoryRouter initialEntries={[path]}>
           <ShellProvider config={CONFIG}>
@@ -44,7 +44,7 @@ function renderAt(path: string) {
           </ShellProvider>
         </MemoryRouter>
       </GrootUIProvider>
-    </QueryClientProvider>,
+    </ShellQueryProvider>,
   );
 }
 

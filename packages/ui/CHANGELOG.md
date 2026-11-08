@@ -1,5 +1,46 @@
 # @groot/ui
 
+## 1.3.0
+
+### Minor Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`d9fcc26`](https://github.com/AshikNesin/groot/commit/d9fcc26278342e6ae725c6cda497400782548715) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(shell): a ⌘K tab lists its own group, even when another shares its heading
+  
+  - **`@groot/shell`:** the palette's group tabs filtered rows by heading, so
+    two `CommandGroupEntry`s with the same `heading` but different `id`s showed
+    each other's rows under both tabs. Tabs now filter by the group's id
+    (`id`, or `heading` when there is none).
+  - **`@groot/ui`: `@groot/ui/command` is deprecated.** Its cmdk-based
+    `Command`, `CommandDialog`, `CommandInput`, `CommandList`, `CommandEmpty`,
+    `CommandGroup`, `CommandSeparator`, `CommandItem`, `CommandFooter` and
+    `CommandShortcut` are replaced by the command menu
+    (`@groot/ui/command-menu`), which the shell's palette uses, and are removed
+    in the next major.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`82718e6`](https://github.com/AshikNesin/groot/commit/82718e6c579bae0269f16d42f4e2a74c4ecdde3b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(ui): one hotkeys module, `@groot/ui/hotkeys`, with one precedence
+  
+  - **`@groot/ui/hotkeys`** holds the shortcut grammar (`parseShortcut`,
+    `matchesShortcut`, `hasModifier`, `formatShortcut`, `isMacPlatform`,
+    `useIsMac`), one `isEditable`, `isDialogOpen` and
+    `useHotkey(combo, handler, { scope?, inFields?, open?, within?, enabled? })`.
+    All hotkeys share one window listener, and a press runs one handler: a
+    `"dialog"` hotkey whose dialog is open answers first (so ⌘K closes the
+    palette); while any dialog is open nothing else answers; otherwise a
+    `"dialog"` hotkey beats a `"global"` one and the most recently bound wins.
+    `@groot/ui/command-menu` re-exports the grammar, so its imports keep
+    working, and `CommandMenuDialog` binds its combo through `useHotkey`.
+  - **`@groot/shell`: nav shortcuts stand down behind dialogs.** A
+    `NavDestination.shortcut` is a global hotkey: `mod+,` no longer navigates
+    behind the open ⌘K palette or any other open dialog, and a nav shortcut on
+    the palette's own combo no longer fires alongside it. The settings search's
+    `/` uses the same module.
+  - **`@groot/shell`: `isNavActive(pathname, to)`** (`@groot/shell/lib/shell-config`)
+    is the one "is this nav destination active" check; the sidebar and
+    `Layout`'s full-page test use it.
+  - **`@groot/shell`: `ThemeMenu`** (`@groot/shell/components/Layout`) is
+    deprecated: nothing renders it (Theme lives in Settings › Appearance and the
+    ⌘K Theme group). It is removed in the next major.
+
 ## 1.2.0
 
 ### Minor Changes
