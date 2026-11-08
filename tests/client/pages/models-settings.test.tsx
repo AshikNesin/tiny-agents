@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   accounts: vi.fn(),
   roles: vi.fn(),
   discover: vi.fn(),
+  available: vi.fn(),
   create: vi.fn(),
   removeModel: vi.fn(),
 }));
@@ -66,6 +67,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.accounts.mockResolvedValue({ accounts: [] as Account[], templates: TEMPLATES });
   api.roles.mockResolvedValue({ roles: ROLES });
+  api.available.mockResolvedValue({ models: [] });
 });
 
 describe("Settings → Models", () => {
