@@ -75,7 +75,7 @@ function renderStorage(search = "") {
   const tree = (searchParams: string) => (
     <ShellQueryProvider client={client}>
       <GrootUIProvider>
-        {/* tiny-agents' PageLayout navigates (its back button), so it needs a router. */}
+        {/* Shell pages render inside the app's router; a PageLayout may navigate. */}
         <MemoryRouter>
           <NuqsTestingAdapter searchParams={searchParams} hasMemory>
             <Storage />

@@ -18,12 +18,22 @@ import type { AppContext, Middleware } from "../types";
 
 const routeLimits = new WeakSet<MiddlewareHandler>();
 
+/** Options for `routeBodyLimit`. */
+export interface RouteBodyLimitOptions {
+  /**
+   * Answers a body over the limit, in place of Hono's bare 413. Return a
+   * response, or throw an `HttpError` (`Boom.entityTooLarge("Files can be up
+   * to 25 MB.")`) so the app's error handler words it like any other refusal.
+   */
+  onError?: (c: AppContext) => Response | Promise<Response>;
+}
+
 /**
  * A body limit for the routes it is registered on, in place of the app's
  * default: `router.post("/upload", routeBodyLimit(100 * 1024 * 1024), handler)`.
  */
-export function routeBodyLimit(maxSize: number): Middleware {
-  const middleware = bodyLimit({ maxSize });
+export function routeBodyLimit(maxSize: number, options: RouteBodyLimitOptions = {}): Middleware {
+  const middleware = bodyLimit({ maxSize, onError: options.onError });
   routeLimits.add(middleware);
   return middleware;
 }

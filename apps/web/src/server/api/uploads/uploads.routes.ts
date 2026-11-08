@@ -6,8 +6,8 @@
  * for the read-only preview; never HTML).
  */
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { Boom } from "@groot/core/errors";
+import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import { uploadRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import { sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { AppContext, AppEnv } from "@groot/core/types";
@@ -38,9 +38,11 @@ const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
  */
 const tooLarge = () => Boom.entityTooLarge(`Files can be up to ${MAX_UPLOAD_MB} MB.`);
 
-/** The whole request is capped before it is read; the file itself after parsing. */
-const uploadBodyLimit = bodyLimit({
-  maxSize: MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES,
+/**
+ * The whole request is capped before it is read; the file itself after
+ * parsing. The route owns this limit in place of the app's 1 MB API default.
+ */
+const uploadBodyLimit = routeBodyLimit(MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, {
   onError: () => {
     throw tooLarge();
   },

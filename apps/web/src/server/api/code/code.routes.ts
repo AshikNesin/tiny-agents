@@ -13,6 +13,7 @@ import type { AppContext, AppEnv } from "@groot/core/types";
 import { Boom, HttpError } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
+import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import {
   HarnessError,
   capabilityMissing,
@@ -402,15 +403,19 @@ router.get("/code/harnesses/:instance/find-files", async (c) => {
   );
 });
 
+/** The raw body is capped before it is read, in place of the app's 1 MB API default. */
+const uploadBodyLimit = routeBodyLimit(UPLOAD_MAX_BYTES, {
+  onError: () => {
+    throw Boom.entityTooLarge("Uploads are limited to 25 MB");
+  },
+});
+
 /** Raw upload (screenshots, logs): answers the ref to attach. */
-router.post("/code/uploads/:instance", async (c) => {
+router.post("/code/uploads/:instance", uploadBodyLimit, async (c) => {
   const instance = harness(c);
   const filename = query(c, "filename")!;
   if (filename.length > 255 || /[/\\\0]/.test(filename)) throw Boom.badRequest("Invalid filename");
-  const length = Number(c.req.header("content-length") ?? "0");
-  if (length > UPLOAD_MAX_BYTES) throw Boom.entityTooLarge("Uploads are limited to 25 MB");
   const body = await c.req.arrayBuffer();
-  if (body.byteLength > UPLOAD_MAX_BYTES) throw Boom.entityTooLarge("Uploads are limited to 25 MB");
   const file = new Blob([body], {
     type: c.req.header("content-type") ?? "application/octet-stream",
   });

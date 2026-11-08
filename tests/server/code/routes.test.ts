@@ -235,6 +235,31 @@ describe("Code API", () => {
     );
     expect((await post("/uploads/shelley?filename=..%2F..%2Fx")).status).toBe(400);
 
+    // Over the route's own limit (not the app's 1 MB default): a worded 413,
+    // before the body is read or forwarded.
+    const forwarded = shelley.seen.length;
+    const oversized = await app.request("/api/v1/code/uploads/shelley?filename=big.bin", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/octet-stream",
+        "content-length": String(25 * 1024 * 1024 + 1),
+      },
+      body: new Uint8Array([1]),
+    });
+    expect(oversized.status).toBe(413);
+    expect(((await oversized.json()) as { error: { message: string } }).error.message).toBe(
+      "Uploads are limited to 25 MB",
+    );
+    expect(shelley.seen.length).toBe(forwarded);
+    // Bigger than the app's 1 MB API default, within the route's 25 MB.
+    const midsize = await app.request("/api/v1/code/uploads/shelley?filename=log.txt", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "text/plain" },
+      body: new Uint8Array(2 * 1024 * 1024),
+    });
+    expect(midsize.status).toBe(201);
+
     const file = await app.request(
       "/api/v1/code/harnesses/shelley/asset?ref=file%3A%2Ftmp%2Fshot.png",
       { headers: { authorization: `Bearer ${token}` } },
