@@ -1,5 +1,31 @@
 # tiny-agents
 
+## 1.2.0
+
+### Minor Changes
+
+- [#223](https://github.com/AshikNesin/tiny-agents/pull/223) [`d8d299e`](https://github.com/AshikNesin/tiny-agents/commit/d8d299e6093f68f7759d2a91e84846699f4f4831) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot 3.2.0 (`e77d641`), which brings back the kit fixes tiny-agents sent upstream plus groot's follow-up work.
+  
+  - **Scheduled jobs:** croner 11, so a job schedule with `?` in the day-of-month or day-of-week field (`0 0 ? * MON`) runs on the days it names instead of every day.
+  - **Server:** `@hono/node-server` 2. Static files are served for GET and HEAD only, and paths with a raw backslash or a `%` left after decoding are refused.
+  - **Dependencies:** TypeScript 7 (the native compiler; the AST check scripts use `@typescript/typescript6`), `@hookform/resolvers` 7, Vite+ 1.5 with Vitest 5.1, jsdom 31, hono 4.13 and `@types/better-sqlite3` 9.
+  - **Checks:** a `pnpm check:pnpm-policy` gate keeps the supply-chain settings in `pnpm-workspace.yaml`, the migrations check ignores the generated drizzle index, and CI's gitleaks download fallback has a token.
+  - **Kept local:** tiny-agents' R6/R6b lint rules, its env and driver exemptions, its test setup and aliases, and its Node-only deletions. groot's `verify-groot` skill is excluded from sync (it drives groot's demo app).
+
+- [#225](https://github.com/AshikNesin/tiny-agents/pull/225) [`9ccb86e`](https://github.com/AshikNesin/tiny-agents/commit/9ccb86e7d958a4afe07666bfd835858717eef2f4) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot 3.2.1 (`98f12af`), groot's deep-module pass over the kit.
+  
+  - **Sessions:** one session module, `@groot/core/session` (`startSession`, `endSession`, `requireSession`). The protected API now uses `requireSession`; the old JWT and cookie helpers still work but are deprecated.
+  - **Rate limits:** limits count in a `RateLimitStore` the entry supplies, and the entry says who the client is. The Node entry passes `memoryRateLimitStore()` and `peerClientAddress` (the socket peer, or the hop a `TRUSTED_PROXIES` proxy vouches for, as before). Each app gets counters of its own.
+  - **Passkeys:** a challenge is consumed with one `DELETE … RETURNING` (`kv.take`), so two concurrent verifications of one challenge can no longer both pass. Housekeeping claims its slot with `kv.claim`.
+  - **Signed-in data:** the React Query cache resets on every sign-in, sign-out and expired session (`ShellQueryProvider`), so one account never sees another's cached data. tiny-agents keeps its one mutation retry.
+  - **Jobs:** one transitions module and one runner (`jobRunner`); the jobs list filter lives in `useJobsFilter()` and search runs on the server.
+  - **Shell and UI:** one hotkeys module (`@groot/ui/hotkeys`, nav shortcuts stand down behind dialogs), one mutation-feedback module (`useAction`), one storage browser (`useStorageBrowser`), ⌘K tabs list their own group, and adding an existing app setting no longer overwrites it. `@groot/ui/command` is deprecated.
+  - **Bodies:** a route can own its body limit with `routeBodyLimit()`; `uploadPaths` still works but is deprecated.
+
+### Patch Changes
+
+- [#226](https://github.com/AshikNesin/tiny-agents/pull/226) [`e607021`](https://github.com/AshikNesin/tiny-agents/commit/e6070210708557c3e09fa101060a76ed555c9115) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot `2a63753` (AshikNesin/groot#167): `routeBodyLimit()` can word its own 413. The upload and Code upload routes now own their body limits with it, keeping their "25 MB" messages, and tiny-agents no longer uses the deprecated `uploadPaths` option.
+
 ## 1.1.0
 
 ### Minor Changes
