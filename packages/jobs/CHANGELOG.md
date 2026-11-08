@@ -1,5 +1,12 @@
 # @groot/jobs
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`3ca0b6b`](https://github.com/AshikNesin/tiny-agents/commit/3ca0b6b20b0bc18e034b00e3a25b6a2d7631f168)]:
+  - @groot/shell@2.2.0
+
 ## 2.0.1
 
 ### Patch Changes
