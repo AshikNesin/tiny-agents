@@ -1,5 +1,94 @@
 # @groot/core
 
+## 2.2.0
+
+### Minor Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`b3039be`](https://github.com/AshikNesin/groot/commit/b3039befd01979bcdc9f655fcf41e55a47a8e879) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(settings): adding an existing setting no longer wipes its value; drafts survive refetches
+  
+  "Add setting" saved `{}` through the `PUT` upsert, so adding a key that
+  already existed replaced its value. The settings page also replaced unsaved
+  edits whenever a refetch brought a new server value, and switching settings
+  dropped a dirty draft without a word.
+  
+  - `@groot/core`: `POST /api/v1/settings` (`{ key, value, metadata? }`)
+    creates a setting and answers 409 for a key that exists; `PUT` keeps its
+    upsert semantics for saving. It writes through the new `KvStore.add(key,
+    value, ttlMs?)`, an insert-only write in one statement that resolves false
+    when a live entry holds the key.
+  - `@groot/shell`: `useAppSettingsData()` is the data (settings, `get`, `save`,
+    `create`, `remove`); `create` refuses a key the list holds without a
+    request. `useSettingDraft(setting)` is one editor draft with `isDirty`,
+    `serverChanged`, `discard()` and `parse()`: a refetch leaves a dirty draft
+    alone, and `AppSettings` asks before leaving one. `useAppSettings()` keeps
+    its shape on top of the two and is deprecated.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`f44c850`](https://github.com/AshikNesin/groot/commit/f44c850f3f632ca54c01f6e265c643020ccfe4f8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(core): `KvStore.take` and `KvStore.claim`, single-statement consume and claim
+  
+  - **`take(key)`** deletes a live entry and returns its value in one
+    `DELETE … RETURNING` (`undefined` when missing or expired). Of any number of
+    concurrent `take`s of one key, exactly one gets the value.
+  - **`claim(key, intervalMs)`** is one compare-and-set upsert that returns
+    `true` for at most one caller per interval, across processes and Workers
+    isolates. The value is the claim time in epoch ms; the row expires with the
+    claim.
+  - **Fix: passkey challenge replay.** Verification consumed a challenge with
+    `has()` then `delete()`, so two concurrent verifications of one challenge
+    could both pass. It now uses `take`.
+  - `@groot/jobs`: the tick's housekeeping slot is claimed with `kv.claim`
+    instead of a hand-written upsert on the `kv` table. The key and value format
+    (`jobs:housekeeping:lastRunAt`, epoch ms) are unchanged, so existing rows
+    keep working.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`1abd148`](https://github.com/AshikNesin/groot/commit/1abd148fc59353dbc4b3f629af9449ec1eb25896) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(core): one session module, `@groot/core/session`
+  
+  Starting a session (mint the JWT, shape the user, set the cookie) was spread
+  over three services and two routers, and the user shape had drifted: passkey
+  login returned the whole account row minus the password, `createdAt` and
+  `updatedAt` included. Now:
+  
+  - **`startSession(c, account)`** mints the token, sets the `token` cookie and
+    returns the body every sign-in route sends, `{ token, user }`, typed
+    `SignInResponse` in `@groot/core/auth/auth.schema` (the wire type, next to
+    `SessionUser`). `user` is exactly `{ id, email, name }` whatever record is
+    passed. Password login and first-run setup answer as before; **passkey login
+    now returns the same `user` shape** (no `createdAt`/`updatedAt`).
+  - **`endSession(c)`** clears the cookie; **`requireSession`** is the session
+    guard (cookie, else bearer; the account must still exist; sets
+    `c.get("user")`). `sessionInvalid()` is private to the module, so only the
+    guard can answer 401 `SESSION_INVALID`. `verifySessionToken(token)` checks a
+    token outside HTTP.
+  - The services return the account and the routes sign it in:
+    `authService.authenticate()` and `authService.setupFirstUser()` return the
+    user, and `passkeyService.authenticatePasskey()` replaces
+    `verifyAuthentication()`. `authService.toPublicUser()` is new.
+  - **Deprecated** (still working, removed in the next major):
+    `jwtAuthMiddleware` (use `requireSession`); `generateToken`, `verifyToken`
+    and `jwtExpiresInMs` in `utils/jwt.utils` (now `signSessionToken`,
+    `verifySessionToken`, `sessionLifetimeMs`); `setAuthCookie`,
+    `clearAuthCookie` and `extractAuthToken` in `utils/auth-cookie.utils`;
+    `authService.login()`, `authService.createFirstUser()` and
+    `passkeyService.verifyAuthentication()`, which still return
+    `{ token, user }` without setting the cookie.
+  - **Removed:** `sessionInvalid` from `utils/jwt.utils`. Lint rule R9 already
+    allowed it only in the session guard, so no conforming caller used it.
+  - Fix: the login comment no longer claims bcrypt hashes are upgraded;
+    `verifyPassword` accepts only PBKDF2-SHA256.
+  
+  Apps: `apps/web/src/server/app.ts` guards the protected sub-app with
+  `requireSession` from `@groot/core/session`.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`f4022b4`](https://github.com/AshikNesin/groot/commit/f4022b454292fa768d71aea5efd1a496501dfc57) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Rate limits count in a `RateLimitStore` the runtime supplies, and the runtime says who the client is.
+  
+  - **Stores.** `rateLimit()` asks the app's store (`hit(key, rule)` → `{ allowed, limit?, remaining?, resetAt? }`). Two adapters ship: `memoryRateLimitStore()` in `@groot/core/rate-limit/store` and `cloudflareRateLimitStore(bindings)` in `@groot/core/rate-limit/cloudflare`, which uses each limiter's Workers Rate Limiting binding and memory for one that is not bound. Responses carry `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` whenever the store reports them, and a 429 also `Retry-After`; the Cloudflare binding reports only allowed or not, so its responses carry none.
+  - **Per app.** Each `createApp()` call gets counters of its own, so test apps no longer share one bucket per test file. `createApp({ rateLimitStore })` picks the store; without one, a binding on `c.env` wins as before, else memory.
+  - **Client address.** `createApp({ clientAddress })` takes a `ClientAddressResolver` (`@groot/core/utils/client-ip`): `peerClientAddress(peer)` for Node (the socket peer, or the hop a `TRUSTED_PROXIES` proxy vouches for, as before) and `cloudflareClientAddress` for Workers. `clientIp(c)` reads it. Without one, core still reads @hono/node-server's socket, else `cf-connecting-ip`.
+  - `AppEnv` variables gain `clientAddress` and `rateLimitStore`; `RateLimitOptions` gains `name`. The exported limiters (`authRateLimiter`, `storageRateLimiter`, `uploadRateLimiter`) are unchanged.
+  
+  To adopt in an app: pass `clientAddress: peerClientAddress((c) => getConnInfo(c).remote.address)` and `rateLimitStore: memoryRateLimitStore()` from `entry.node.ts`, and `clientAddress: cloudflareClientAddress` and `rateLimitStore: cloudflareRateLimitStore(bindings)` from `entry.worker.ts`, through `startWebApp()` (`WebRuntime` now picks both from `CreateAppOptions`).
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`494007f`](https://github.com/AshikNesin/groot/commit/494007f804a7ad3c83c2413b2222b1bc9d0b59ac) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A route declares its own body limit with `routeBodyLimit(bytes)` (`@groot/core/middlewares/body-limit.middleware`), and the app's 1 MB `/api/*` limit skips every request such a route matches, so the limit holds wherever the router is mounted. Storage uploads use it for their 100 MB limit, so `createApp()` no longer hard-codes `/api/v1/storage/files/upload`, and mounting the storage router elsewhere keeps large uploads working. Streamed bodies are still counted as they arrive. `CreateAppOptions.uploadPaths` still works but is deprecated: declare the limit on the route instead.
+
 ## 2.1.1
 
 ### Patch Changes

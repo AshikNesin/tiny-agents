@@ -8,12 +8,12 @@ import {
   addJob,
   canApplyJobAction,
   cancelJob,
-  clearJobHandlers,
   deleteJob,
   getJobById,
   getJobLogs,
   getJobs,
   getQueueStats,
+  jobRunner,
   jobs,
   registerJobHandler,
   rerunJob,
@@ -28,7 +28,7 @@ async function load(id: string) {
   return row!;
 }
 
-beforeEach(() => clearJobHandlers());
+beforeEach(() => jobRunner.reset());
 
 describe("queue + tick", () => {
   it("runs a job, stores its output and persists its logs", async () => {
@@ -211,7 +211,8 @@ describe("queue + tick", () => {
 
   it("recovers jobs stuck in active past the timeout", async () => {
     registerJobHandler("stuck", () => "ok");
-    const id = await addJob("stuck", null, { retryLimit: 3 });
+    // No backoff, so the recovered job is due again in the same tick.
+    const id = await addJob("stuck", null, { retryLimit: 3, retryDelaySeconds: 0 });
     const longAgo = new Date(Date.now() - (config.jobs.activeTimeoutSeconds + 60) * 1000);
     await db.update(jobs).set({ state: "active", startedAt: longAgo }).where(eq(jobs.id, id));
 

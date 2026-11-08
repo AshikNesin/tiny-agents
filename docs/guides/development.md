@@ -85,7 +85,20 @@ export const createPostSchema = z.object({
 export const updatePostSchema = createPostSchema.partial();
 export type CreatePostDTO = z.infer<typeof createPostSchema>;
 export type UpdatePostDTO = z.infer<typeof updatePostSchema>;
+
+/** A post as `/api/v1/posts` returns it: dates as ISO strings. The client imports this type-only. */
+export interface Post {
+  id: number;
+  title: string;
+  body: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 ```
+
+The schema module stays zod-only, so the client can import its wire type
+(`import type { Post } from "…/server/api/post/post.schema"`) instead of
+copying it; see the wire-type rule in [`AGENTS.md`](../../AGENTS.md).
 
 ### 3. Service
 
@@ -162,7 +175,7 @@ Need the signed-in user? `const { userId } = requireUser(c);`.
 // apps/web/src/server/app.ts
 import postRoutes from "./api/post/post.routes";
 // inside createWebApp() → routes(app):
-api.route("/posts", postRoutes); // the `api` sub-app already runs jwtAuthMiddleware
+api.route("/posts", postRoutes); // the `api` sub-app already runs requireSession
 ```
 
 ### 6. Test
@@ -224,7 +237,8 @@ model is in [Background jobs](../features/jobs.md).
 | Concern       | Where                                                                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Routes        | `apps/web/src/client/App.tsx` (React Router)                                                                                                                                  |
-| Data fetching | A typed client in `apps/web/src/client/lib/<feature>-api.ts` (e.g. `routines-api.ts`), called from the page                                                                   |
+| Data fetching | A typed client in `apps/web/src/client/lib/<feature>-api.ts` (e.g. `routines-api.ts`), called from the page; the query client comes from `createShellQueryClient()`           |
+| Mutations     | `useAction` from `@groot/shell/lib/feedback`: confirm, run once, toast (errors worded by `describeError`), invalidate                                                         |
 | API calls     | `apiClient` from `@groot/shell/lib/api` (unwraps the envelope, sends the cookie)                                                                                              |
 | Auth state    | `useAuthStore` from `@groot/shell/store/auth` (Zustand; the user, sign-in, sign-out)                                                                                          |
 | UI components | `@groot/ui`; rules in [DLS](../features/dls.md), enforced by `pnpm check:tokens`                                                                                              |

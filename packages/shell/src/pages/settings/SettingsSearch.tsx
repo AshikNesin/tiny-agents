@@ -1,5 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Search } from "lucide-react";
+import { useHotkey } from "@groot/ui/hotkeys";
 import { Input } from "@groot/ui/input";
 import { cn } from "@groot/ui/lib/utils";
 import type { SettingsSection } from "./sections";
@@ -35,11 +36,6 @@ function buildIndex(sections: SettingsSection[]): SearchEntry[] {
       terms: lower([item.label, ...(item.keywords ?? [])]),
     })),
   ]);
-}
-
-function isEditable(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -78,16 +74,9 @@ export function SettingsSearch({
   const activeIndex = Math.min(active, results.length - 1);
   const showList = open && q.length > 0;
 
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.defaultPrevented || isEditable(event.target)) return;
-      event.preventDefault();
-      inputRef.current?.focus();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  // A bare key, so it stays out of text fields; like every global hotkey it
+  // does nothing while a dialog is open.
+  useHotkey("/", () => inputRef.current?.focus());
 
   const close = () => {
     setQuery("");

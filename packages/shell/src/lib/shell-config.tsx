@@ -30,6 +30,11 @@ export interface NavDestination {
   shortcut?: string;
 }
 
+/** Whether `pathname` is the destination `to` or a page below it. */
+export function isNavActive(pathname: string, to: string): boolean {
+  return pathname === to || pathname.startsWith(to + "/");
+}
+
 export interface ShellBrand {
   label: string;
   /** Logo mark; defaults to `LayoutDashboard`. */

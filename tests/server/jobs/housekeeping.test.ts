@@ -1,24 +1,27 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
-import { db, kv as kvTable } from "@groot/core/database";
+import { db } from "@groot/core/database";
 import { config } from "@groot/core/config";
-import { kv } from "@groot/core/kv";
+import { kv, purgeExpiredKv } from "@groot/core/kv";
 import {
   addJob,
-  clearJobHandlers,
   deleteJob,
   getJobById,
   getJobLogs,
   housekeeping,
+  jobRunner,
   jobs,
   purgeJobsByState,
   registerJobHandler,
   runTick,
 } from "@groot/jobs/server";
 
+// Fresh runner state per test: no handlers, no housekeeping schedule left by
+// an earlier test.
+beforeEach(() => jobRunner.reset());
+
 describe("housekeeping", () => {
   it("removes old finished jobs with their logs, keeps recent and pending ones, purges expired kv", async () => {
-    clearJobHandlers();
     registerJobHandler("hk", (job) => {
       job.logger.info("hello from hk");
       return "done";
@@ -26,7 +29,7 @@ describe("housekeeping", () => {
     const old = await addJob("hk", { which: "old" });
     const recent = await addJob("hk", { which: "recent" });
     const pending = await addJob("hk", { which: "pending" }, { delaySeconds: 3600 });
-    await runTick();
+    await runTick({ housekeeping: false });
     expect((await getJobLogs({ jobId: old })).length).toBeGreaterThan(0);
 
     const longAgo = new Date(
@@ -49,56 +52,52 @@ describe("housekeeping", () => {
 
 describe("housekeeping schedule", () => {
   const MINUTE = 60_000;
+  const INTERVAL = 10 * MINUTE;
   const LAST_RUN_KEY = "jobs:housekeeping:lastRunAt";
 
-  async function plantExpiredKv(): Promise<void> {
-    await db
-      .insert(kvTable)
-      .values({ key: "hk-gate", value: "1", expiresAt: new Date(0) })
-      .onConflictDoNothing();
+  /** An entry that will have expired by the next `at()`. */
+  async function plantExpiringKv(): Promise<void> {
+    await kv.set("hk-gate", 1, 1);
   }
 
+  /** True when the last tick swept the planted entry (nothing expired is left to purge). */
   async function swept(): Promise<boolean> {
-    const rows = await db.select().from(kvTable).where(eq(kvTable.key, "hk-gate"));
-    return rows.length === 0;
+    return (await purgeExpiredKv()) === 0;
   }
 
   it("runs at most once per interval, even when another process ran it", async () => {
-    clearJobHandlers();
-    const start = Date.now() + 24 * 60 * MINUTE;
+    const start = Date.now();
     const at = (minutes: number) => vi.setSystemTime(start + minutes * MINUTE);
 
+    await plantExpiringKv();
     at(0);
-    await plantExpiredKv();
     await runTick();
     expect(await swept()).toBe(true);
 
+    await plantExpiringKv();
     at(5);
-    await plantExpiredKv();
     await runTick();
     expect(await swept()).toBe(false);
 
-    // A second process (another Workers isolate) swept at minute 9.
-    await db
-      .update(kvTable)
-      .set({ value: JSON.stringify(start + 9 * MINUTE) })
-      .where(eq(kvTable.key, LAST_RUN_KEY));
+    // A second process (another Workers isolate) swept at minute 10.
+    at(10);
+    expect(await kv.claim(LAST_RUN_KEY, INTERVAL)).toBe(true);
 
+    await plantExpiringKv();
     at(11);
     await runTick();
     expect(await swept()).toBe(false);
 
-    at(19.5);
+    await plantExpiringKv();
+    at(20.5);
     await runTick();
     expect(await swept()).toBe(true);
-    const [row] = await db.select().from(kvTable).where(eq(kvTable.key, LAST_RUN_KEY));
-    expect(JSON.parse(row!.value)).toBe(start + 19.5 * MINUTE);
+    expect(await kv.get(LAST_RUN_KEY)).toBe(start + 20.5 * MINUTE);
   });
 });
 
 describe("job logs follow their job", () => {
   it("deleteJob and purgeJobsByState remove the job's logs", async () => {
-    clearJobHandlers();
     registerJobHandler("logs-follow", (job) => {
       job.logger.info("hello");
     });
@@ -117,7 +116,6 @@ describe("job logs follow their job", () => {
   });
 
   it("drops the logs a handler writes after its job was deleted mid-run", async () => {
-    clearJobHandlers();
     let started!: () => void;
     let release!: () => void;
     const running = new Promise<void>((resolve) => (started = resolve));

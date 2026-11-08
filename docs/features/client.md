@@ -48,11 +48,11 @@ routes.
 `<ShellProvider config={…}>` (`@groot/shell/lib/shell-config`) describes the
 shell once:
 
-| Field   | Drives                                                                                                                                                                                                                                                                     |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `brand` | `{ label, icon?, to? }`: the sidebar, mobile bar and login logo; defaults to Groot, `LayoutDashboard`, `/`                                                                                                                                                                 |
-| `nav`   | `{ label, icon?, to, primary?, fullPage?, shortcut? }[]`: `primary` entries are sidebar rows, the rest account-menu rows; all are ⌘K commands. `fullPage` pages bring their own chrome; `shortcut` (e.g. `"mod+,"`) is bound globally and shown in the account menu and ⌘K |
-| `login` | `{ tagline?, description?, features? }`: the login brand panel                                                                                                                                                                                                             |
+| Field   | Drives                                                                                                                                                                                                                                                                                                          |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brand` | `{ label, icon?, to? }`: the sidebar, mobile bar and login logo; defaults to Groot, `LayoutDashboard`, `/`                                                                                                                                                                                                      |
+| `nav`   | `{ label, icon?, to, primary?, fullPage?, shortcut? }[]`: `primary` entries are sidebar rows, the rest account-menu rows; all are ⌘K commands. `fullPage` pages bring their own chrome; `shortcut` (e.g. `"mod+,"`) is a global hotkey (not while a dialog such as ⌘K is open) shown in the account menu and ⌘K |
+| `login` | `{ tagline?, description?, features? }`: the login brand panel                                                                                                                                                                                                                                                  |
 
 The account menu follows Amp's layout. It opens upward with **Log out** first
 (one action: end the session, toast, go to `/login`), then a **Command
@@ -69,7 +69,8 @@ The ⌘K palette is the Fluid Functionalism command menu
 (`@groot/ui/command-menu`): type to filter, ↑/↓ to move, ←/→ to switch the
 group tabs, Enter to run. A `CommandItemEntry` takes `label`, `icon` and
 `onSelect`, plus optional `description` (muted text, also searched),
-`shortcut` (display-only caps, e.g. `"mod+shift+n"`), `keywords`, `action`
+`shortcut` (display-only caps, e.g. `"mod+shift+n"`; bind it with
+`useHotkey` from `@groot/ui/hotkeys`), `keywords`, `action`
 (what the footer calls Enter, e.g. "Go to Settings"), `suggested` (listed
 under Suggestions while the query is empty) and `variant: "destructive"`.
 
@@ -84,8 +85,10 @@ uses `/settings/*` for its section sub-routes). Routes without a nav entry
 `apiClient` (`@groot/shell/lib/api`) is pure transport on `fetch`: it prefixes
 `/api/v1`, sends the cookie (`credentials: "include"`), JSON-encodes bodies
 (`FormData` goes as multipart), unwraps the `{ success, data }` envelope and
-throws an `ApiError` (`status`, `code`, `message`, `details`, `url`) for any
-non-2xx response. `get`, `post`, `put` and `patch` also throw (code `NO_DATA`)
+throws an `ApiError` (`status`, `code`, `message`, `details`, `url`,
+`fromServer`) for any non-2xx response; `fromServer` is true when the message
+came from the server's error envelope rather than the status line. A request
+that never reached the server rejects with a `NetworkError` (a `TypeError`). `get`, `post`, `put` and `patch` also throw (code `NO_DATA`)
 when a 2xx envelope has no `data`, so only `delete` suits an endpoint that
 answers `204`. `postForm` uploads and `getBlob` downloads. It knows nothing
 about sessions: `apiClient.onUnauthorized(handler)` reports each 401 from the
@@ -104,7 +107,7 @@ keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 | `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                                 |
 | `checkAuth()`                                   | Resolves the session from the cookie on app load (`GET /auth/me`)                               |
 | `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                        |
-| `loginErrorDescription(error, fallback)`        | The sign-in failure wording (401 → "Invalid email or password."; network and WebAuthn cases)    |
+| `loginErrorDescription(error, fallback)`        | The sign-in failure wording: a 401 is "Invalid email or password.", the rest is `describeError` |
 
 The store installs the `onUnauthorized` hook: a session-guard 401 for a
 request sent during the current session clears it, so `ProtectedRoute`
@@ -117,15 +120,92 @@ wire-type rule in [`AGENTS.md`](../../AGENTS.md).
 
 ## Data fetching
 
-- The `QueryClient` is created in `apps/web/src/client/main.tsx`: queries stay
-  fresh for 5 minutes, refetch on window focus and reconnect, and retry once.
+- The `QueryClient` comes from `createShellQueryClient(overrides?)`
+  (`@groot/shell/lib/query-client`), which owns the defaults
+  (`SHELL_QUERY_DEFAULTS`): queries stay fresh for 5 minutes, live in the
+  cache for 30, refetch on window focus and reconnect, and retry once.
   Mutations never retry, because a repeated POST can create a duplicate.
-- Feature hooks (e.g. `useTodos`) wrap list + CRUD mutations and invalidate
-  caches after each mutation.
-- `useToastMutation(fn, { success, error, onSuccess })`
-  (`@groot/shell/hooks/useToastMutation`) is `useMutation` with Sonner toasts.
-  Its `onSuccess` is awaited, so returning an invalidation keeps `isPending`
-  true until the refetch lands.
+  Overrides merge per section (`{ queries: { retry: false } }` in tests).
+- `main.tsx` mounts it with `<ShellQueryProvider client={…}>`, which resets
+  the cache whenever the auth store's `generation` changes: every sign-in,
+  sign-out and session-invalid 401. Query keys (`["passkeys"]`,
+  `["app-settings"]`, `["todos"]`) say nothing about the user, so without the
+  reset the next account would be served the last one's data. Inactive
+  queries and the mutation cache are dropped; mounted queries lose their data
+  at once and refetch as the new session. A client provided some other way
+  can call `bindQueryClientToSession(client)` instead.
+- Feature hooks (e.g. `useTodos`) own the query and its key; mutations run
+  through `useAction` (below), which invalidates the keys it is given.
+
+## Mutation feedback
+
+`@groot/shell/lib/feedback` is the one way a page runs a user action and
+words its outcome:
+
+| Export                                    | Does                                                                                                                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useAction(action, options)`              | Returns `{ run(vars), isPending }`. `run` asks `confirm` first if given, ignores a second call while one is under way (`busy`), runs the action, toasts, awaits the `invalidate` keys, then calls `onSuccess`. It never rejects |
+| `describeError(error, fallback)`          | The sentence for a failure (table below)                                                                                                                                                                                        |
+| `describeWebAuthnError(error)`            | The `WEBAUTHN_MESSAGES` row for a WebAuthn failure, or `undefined`                                                                                                                                                              |
+| `toastError(error, { title, fallback })`  | Log the error and toast it, worded by `describeError`                                                                                                                                                                           |
+| `toastSuccess(content)`                   | A success toast: a title, or `{ title, description }`                                                                                                                                                                           |
+| `OFFLINE_MESSAGE`, `WEBAUTHN_MESSAGES`    | The offline sentence and the WebAuthn wording table                                                                                                                                                                             |
+| `ActionOptions`, `ActionResult`, `Action` | The option, result and return types                                                                                                                                                                                             |
+
+`useAction` options: `confirm?` (`ConfirmOptions`, or a function of the vars
+returning one or `null`), `success?` (a toast, or a function of the result and
+vars), `errorTitle?` (default "Something went wrong"), `fallback` (a string or
+a function of the vars), `invalidate?` (`QueryKey[]`, or a function of the
+result and vars) and `onSuccess?`. `run` resolves `{ ok: true, data }`, or
+`{ ok: false, reason }` with `reason` `"cancelled"`, `"busy"` or `"failed"`
+(with the `error`). It needs `GrootUIProvider` and a `QueryClientProvider`.
+
+```tsx
+const remove = useAction((id: number) => todosApi.remove(id), {
+  success: { title: "Deleted", description: "Todo removed" },
+  errorTitle: "Error",
+  fallback: "Unable to delete todo",
+  invalidate: [TODOS_KEY],
+});
+<Button onClick={() => void remove.run(todo.id)} disabled={remove.isPending} />;
+```
+
+`describeError(error, fallback)` picks the first that applies:
+
+| Error                                                                 | Wording                     |
+| --------------------------------------------------------------------- | --------------------------- |
+| `ApiError` with `fromServer` (the server's envelope message)          | That message                |
+| Any other `ApiError` (a status line such as "Bad Gateway")            | `fallback`                  |
+| `NetworkError`, or a `TypeError` from `fetch` ("Failed to fetch")     | `OFFLINE_MESSAGE`           |
+| A WebAuthn failure (`NotAllowedError`, `NotSupportedError`, …)        | Its `WEBAUTHN_MESSAGES` row |
+| A plain `Error` the action threw (`new Error("Invalid JSON format")`) | Its message                 |
+| Anything else (`SyntaxError`, a programming `TypeError`)              | `fallback`                  |
+
+So an action refuses with words by throwing a plain `Error`, and anything it
+did not word itself falls back to the caller's sentence. `useToastMutation`
+(`@groot/shell/hooks/useToastMutation`) and the jobs `withJobToast` are
+deprecated in favour of `useAction`; both now word errors with
+`describeError`.
+
+## App settings
+
+The Configuration section (`AppSettings`, `@groot/shell/components/AppSettings`)
+keeps data and editor apart:
+
+- `useAppSettingsData()` (`@groot/shell/hooks/useAppSettingsData`) is the data:
+  `settings`, `isLoading`, `isError`, `refresh()`, `get(key)`,
+  `save(key, value, description?)` (a `PUT` upsert),
+  `create(key, value?, description?)` and `remove(key)`. Each call refreshes
+  the list before it resolves and rejects on failure. `create` refuses a key
+  the list holds without a request, and `POST /settings` answers 409 for a key
+  the server holds, so creating never overwrites a value.
+- `useSettingDraft(setting)` (`@groot/shell/hooks/useSettingDraft`) is one
+  setting's editable JSON and description with `isDirty`, `serverChanged`,
+  `discard()` and `parse()` (throws "Invalid JSON format"). A refetch updates
+  a clean draft and leaves a dirty one alone; selecting another setting with
+  unsaved edits asks first.
+- `useAppSettings()` is the old combined hook, deprecated and kept with its
+  shape on top of these two.
 
 ## UI system
 

@@ -1,5 +1,140 @@
 # @groot/shell
 
+## 3.0.0
+
+### Major Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`d58c2a8`](https://github.com/AshikNesin/groot/commit/d58c2a833a71bf8047b257f9bc9e9336a3cebd80) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(shell): one storage browser module, `useStorageBrowser()`
+  
+  The Storage page's state and handlers lived in `useStorageActions()`, which
+  returned 25 members to its one caller, and had two bugs: the file selection
+  was cleared only when the page itself navigated, so after a link reset
+  `?path` "Delete N files?" deleted files from a folder no longer on screen; and
+  a single-file delete neither confirmed nor left the selection.
+  
+  - `useStorageBrowser({ onView? })` (`@groot/shell/pages/storage/hooks/useStorageBrowser`)
+    returns `{ files, isLoading, path, crumbs, selection, dialog, actions, fileActions, pending }`.
+    The selection is derived from the listing on screen and forgotten on a
+    folder change. Every operation runs through `useAction`, so each confirms
+    (single-file delete included), toasts and invalidates the same way.
+  - `fileActions(file)` is one list of actions that `DesktopFileRow` and
+    `MobileFileCard` both render: the mobile card gains Rename and Delete for
+    files. Both rows now take `actions` (and `onToggle`, `onNavigate`) instead
+    of one callback per action; their checkboxes are labelled `Select <name>`.
+  - `useStorage.ts` gains `storageKeys`, `storageApi`, `downloadFile` and
+    `viewFile` (they reject instead of toasting); blob handling left the row
+    components.
+  - Deprecated: `useStorageActions()` (now a wrapper over the browser; its
+    `createFolder` and `renameFile` members carry only `isPending`) and
+    `handleDownload` / `handleView`.
+
+### Minor Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`b3039be`](https://github.com/AshikNesin/groot/commit/b3039befd01979bcdc9f655fcf41e55a47a8e879) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(settings): adding an existing setting no longer wipes its value; drafts survive refetches
+  
+  "Add setting" saved `{}` through the `PUT` upsert, so adding a key that
+  already existed replaced its value. The settings page also replaced unsaved
+  edits whenever a refetch brought a new server value, and switching settings
+  dropped a dirty draft without a word.
+  
+  - `@groot/core`: `POST /api/v1/settings` (`{ key, value, metadata? }`)
+    creates a setting and answers 409 for a key that exists; `PUT` keeps its
+    upsert semantics for saving. It writes through the new `KvStore.add(key,
+    value, ttlMs?)`, an insert-only write in one statement that resolves false
+    when a live entry holds the key.
+  - `@groot/shell`: `useAppSettingsData()` is the data (settings, `get`, `save`,
+    `create`, `remove`); `create` refuses a key the list holds without a
+    request. `useSettingDraft(setting)` is one editor draft with `isDirty`,
+    `serverChanged`, `discard()` and `parse()`: a refetch leaves a dirty draft
+    alone, and `AppSettings` asks before leaving one. `useAppSettings()` keeps
+    its shape on top of the two and is deprecated.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`3541799`](https://github.com/AshikNesin/groot/commit/35417995eefbaddbd0f8bc3b0591b8c3c20f8818) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(shell): one mutation-feedback module, `@groot/shell/lib/feedback`
+  
+  Four idioms for "run, toast, invalidate" worded the same failure four ways:
+  a fixed "Unable to update setting" hid "Invalid JSON format", the jobs
+  dashboard showed "Bad Gateway", "Failed to fetch" or a raw `SyntaxError`, and
+  WebAuthn errors were worded twice. Now:
+  
+  - `describeError(error, fallback)` words every failure once: the server's
+    envelope message (`ApiError.fromServer`), an offline sentence for a request
+    that never left (`NetworkError`, which `apiClient` now throws, or a `fetch`
+    `TypeError`), a row of the one WebAuthn table (`WEBAUTHN_MESSAGES`,
+    `describeWebAuthnError`), the message of a plain `Error` the action threw,
+    else the fallback.
+  - `useAction(action, { confirm?, success?, errorTitle?, fallback, invalidate?, onSuccess? })`
+    returns `{ run, isPending }`: it confirms, runs once at a time, toasts and
+    awaits the invalidations. `toastError` and `toastSuccess` are the toasts on
+    their own.
+  - `PasskeyManager`, the settings page, the jobs dashboard (`useJobActions`,
+    `AddJobDialog`, `ScheduleJobDialog`, `ScheduledJobsPanel`) and the Todos
+    reference page use it. `useJobActions()` also returns `isPending`.
+  - `loginErrorDescription` is a 401 wrapper over `describeError`; a status-line
+    `ApiError` (not from the server) now reads as the fallback.
+  - New `parseJobData(text)` in `@groot/jobs/client/utils` refuses a payload
+    that is not JSON with a sentence.
+  - Deprecated: `useToastMutation` and `withJobToast`; both keep working and
+    now word errors with `describeError`.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`82718e6`](https://github.com/AshikNesin/groot/commit/82718e6c579bae0269f16d42f4e2a74c4ecdde3b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(ui): one hotkeys module, `@groot/ui/hotkeys`, with one precedence
+  
+  - **`@groot/ui/hotkeys`** holds the shortcut grammar (`parseShortcut`,
+    `matchesShortcut`, `hasModifier`, `formatShortcut`, `isMacPlatform`,
+    `useIsMac`), one `isEditable`, `isDialogOpen` and
+    `useHotkey(combo, handler, { scope?, inFields?, open?, within?, enabled? })`.
+    All hotkeys share one window listener, and a press runs one handler: a
+    `"dialog"` hotkey whose dialog is open answers first (so ⌘K closes the
+    palette); while any dialog is open nothing else answers; otherwise a
+    `"dialog"` hotkey beats a `"global"` one and the most recently bound wins.
+    `@groot/ui/command-menu` re-exports the grammar, so its imports keep
+    working, and `CommandMenuDialog` binds its combo through `useHotkey`.
+  - **`@groot/shell`: nav shortcuts stand down behind dialogs.** A
+    `NavDestination.shortcut` is a global hotkey: `mod+,` no longer navigates
+    behind the open ⌘K palette or any other open dialog, and a nav shortcut on
+    the palette's own combo no longer fires alongside it. The settings search's
+    `/` uses the same module.
+  - **`@groot/shell`: `isNavActive(pathname, to)`** (`@groot/shell/lib/shell-config`)
+    is the one "is this nav destination active" check; the sidebar and
+    `Layout`'s full-page test use it.
+  - **`@groot/shell`: `ThemeMenu`** (`@groot/shell/components/Layout`) is
+    deprecated: nothing renders it (Theme lives in Settings › Appearance and the
+    ⌘K Theme group). It is removed in the next major.
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`090e53c`](https://github.com/AshikNesin/groot/commit/090e53cd85acbd6cd9f755c96ead35b4d559596f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(shell): reset the React Query cache on every session change
+  
+  Query keys (`["passkeys"]`, `["app-settings"]`, `["todos"]`) say nothing about
+  the user, so after one account signed out and another signed in within the
+  5-minute `staleTime`, the second was served the first one's cached data (its
+  passkeys on the Security page, for one). `@groot/shell/lib/query-client` now
+  owns the client: `createShellQueryClient(overrides?)` carries the defaults
+  (`SHELL_QUERY_DEFAULTS`), and `<ShellQueryProvider client={…}>` resets the
+  cache whenever the auth store's `generation` changes (sign-in, sign-out and a
+  session-invalid 401): inactive queries and the mutation cache are dropped,
+  mounted queries lose their data and refetch as the new session.
+  `bindQueryClientToSession(client)` does the same for a client provided some
+  other way.
+  
+  Child projects: in `main.tsx`, replace `new QueryClient({...})` and
+  `QueryClientProvider` with `createShellQueryClient()` and `ShellQueryProvider`.
+
+### Patch Changes
+
+- [#165](https://github.com/AshikNesin/groot/pull/165) [`d9fcc26`](https://github.com/AshikNesin/groot/commit/d9fcc26278342e6ae725c6cda497400782548715) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(shell): a ⌘K tab lists its own group, even when another shares its heading
+  
+  - **`@groot/shell`:** the palette's group tabs filtered rows by heading, so
+    two `CommandGroupEntry`s with the same `heading` but different `id`s showed
+    each other's rows under both tabs. Tabs now filter by the group's id
+    (`id`, or `heading` when there is none).
+  - **`@groot/ui`: `@groot/ui/command` is deprecated.** Its cmdk-based
+    `Command`, `CommandDialog`, `CommandInput`, `CommandList`, `CommandEmpty`,
+    `CommandGroup`, `CommandSeparator`, `CommandItem`, `CommandFooter` and
+    `CommandShortcut` are replaced by the command menu
+    (`@groot/ui/command-menu`), which the shell's palette uses, and are removed
+    in the next major.
+- Updated dependencies [[`b3039be`](https://github.com/AshikNesin/groot/commit/b3039befd01979bcdc9f655fcf41e55a47a8e879), [`d9fcc26`](https://github.com/AshikNesin/groot/commit/d9fcc26278342e6ae725c6cda497400782548715), [`f44c850`](https://github.com/AshikNesin/groot/commit/f44c850f3f632ca54c01f6e265c643020ccfe4f8), [`82718e6`](https://github.com/AshikNesin/groot/commit/82718e6c579bae0269f16d42f4e2a74c4ecdde3b), [`1abd148`](https://github.com/AshikNesin/groot/commit/1abd148fc59353dbc4b3f629af9449ec1eb25896), [`f4022b4`](https://github.com/AshikNesin/groot/commit/f4022b454292fa768d71aea5efd1a496501dfc57), [`494007f`](https://github.com/AshikNesin/groot/commit/494007f804a7ad3c83c2413b2222b1bc9d0b59ac)]:
+  - @groot/core@2.2.0
+  - @groot/ui@1.3.0
+
 ## 2.2.0
 
 ### Minor Changes

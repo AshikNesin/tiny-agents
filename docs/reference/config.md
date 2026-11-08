@@ -48,9 +48,9 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `jobs.batchSize`            | `10` — max jobs claimed per tick                    |                                                |
 | `jobs.retryLimit`           | `3`                                                 |                                                |
 | `jobs.retryDelaySeconds`    | `60` — base delay, doubles per attempt (max 24 h)   |                                                |
-| `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this is retried  |                                                |
+| `jobs.activeTimeoutSeconds` | `300` — an `active` job older than this times out   |                                                |
 | `jobs.keepCompletedDays`    | `7` — completed/cancelled jobs + logs deleted after |                                                |
-| `jobs.runInline`            | `true` — `addJob()` and retry run a tick right away |                                                |
+| `jobs.runInline`            | `true` — a job queued due runs a tick right away    |                                                |
 | `logging.level`             | `debug` dev / `info` prod / `silent` test           | `LOG_LEVEL`                                    |
 | `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                      |
 | `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                        |
@@ -60,6 +60,10 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                                |
 | `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                                   |
 | `sentry.release`            | unset                                               | `SENTRY_RELEASE`                               |
+
+The rate limits count in the app's `RateLimitStore`, in memory on Node
+(`memoryRateLimitStore()` in `entry.node.ts`). See
+[Rate limits and client addresses](../guides/architecture.md#rate-limits-and-client-addresses).
 
 ## Env vs config
 
@@ -116,7 +120,7 @@ entry.node.ts
     setStorageAdapter(...)   StorageAdapter (local or memory), if given
     setErrorReporter(...)    Sentry or anything else, if given
   registerJobHandlers()      apps/web/src/server/app.ts
-  createWebApp()             the Hono app
+  createWebApp({ clientAddress, rateLimitStore, readiness })   the Hono app; its own rate-limit counters
 ```
 
 `bootstrap()` runs once per process (`entry.node.ts`, `scripts/seed.ts`) and

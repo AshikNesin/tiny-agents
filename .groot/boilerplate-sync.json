@@ -4,9 +4,9 @@
     "repo": "https://github.com/AshikNesin/groot"
   },
   "last_sync": {
-    "version": "3.2.0",
-    "commit": "e77d641ea7282530ea3967dd4f0e1dc302445d56",
-    "date": "2026-11-08T15:02:44.661Z"
+    "version": "3.2.1",
+    "commit": "98f12af20b2cd17a8d9175e706cbdef34a0504fd",
+    "date": "2026-11-08T17:46:08.380Z"
   },
   "additional_exclusions": [
     "packages/agent/**",

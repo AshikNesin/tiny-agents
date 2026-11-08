@@ -1,6 +1,6 @@
 {
   "name": "@groot/core",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -8,6 +8,7 @@
     "./errors": "./src/errors/index.ts",
     "./kv": "./src/kv/index.ts",
     "./logger": "./src/logger/index.ts",
+    "./session": "./src/session/index.ts",
     "./storage": "./src/storage/index.ts",
     "./*": "./src/*.ts"
   },

@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import {
@@ -23,15 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { Button } from "@groot/ui/button";
-import {
-  formatShortcut,
-  hasModifier,
-  matchesShortcut,
-  parseShortcut,
-  useIsMac,
-} from "@groot/ui/command-menu";
+import { formatShortcut, useHotkey, useIsMac } from "@groot/ui/hotkeys";
 import { cn } from "@groot/ui/lib/utils";
-import { type NavDestination, useShellConfig } from "@groot/shell/lib/shell-config";
+import { isNavActive, useShellConfig } from "@groot/shell/lib/shell-config";
 import { isTheme, THEME_OPTIONS, useTheme } from "@groot/shell/lib/theme";
 import { useSignOut } from "@groot/shell/hooks/useSignOut";
 import {
@@ -88,7 +82,6 @@ export function Layout({
   const signOut = useSignOut();
   const setPaletteOpen = useCommandPaletteStore((state) => state.setOpen);
   const openingPalette = useRef(false);
-  useNavShortcuts(nav);
 
   // When a custom header is supplied the default sidebar (and its offset /
   // mobile bar) is disabled so the header owns the full top of the page.
@@ -111,11 +104,7 @@ export function Layout({
 
   const menuNav = nav.filter((item) => !item.primary);
 
-  const fullPage = nav.some(
-    (item) =>
-      item.fullPage &&
-      (location.pathname === item.to || location.pathname.startsWith(item.to + "/")),
-  );
+  const fullPage = nav.some((item) => item.fullPage && isNavActive(location.pathname, item.to));
   const showSidebar = useDefaultSidebar && !fullPage;
 
   const userMenuFooter = (
@@ -194,6 +183,9 @@ export function Layout({
     <div className={cn("min-h-dvh bg-background text-foreground", className)}>
       {/* Single shared command palette dialog — mounted once. */}
       <CommandPaletteDialog groups={commandGroups} builtIns={commandBuiltIns} />
+      {nav.map((item) =>
+        item.shortcut ? <NavShortcut key={item.to} shortcut={item.shortcut} to={item.to} /> : null,
+      )}
 
       {fullPage
         ? null
@@ -273,40 +265,23 @@ function ShortcutHint({ shortcut }: { shortcut: string }) {
   );
 }
 
-function isEditable(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "SELECT" ||
-    el.isContentEditable
-  );
-}
-
-/** Binds each `NavDestination.shortcut` to navigating there. */
-function useNavShortcuts(nav: NavDestination[]) {
+/**
+ * Binds a `NavDestination.shortcut` to navigating there: a global hotkey, so
+ * it does not fire while a dialog (the ⌘K palette included) is open, and a
+ * combo without a modifier does not fire in a text field.
+ */
+function NavShortcut({ shortcut, to }: { shortcut: string; to: string }) {
   const navigate = useNavigate();
-  useEffect(() => {
-    const bound = nav.flatMap((item) =>
-      item.shortcut ? [{ to: item.to, parsed: parseShortcut(item.shortcut) }] : [],
-    );
-    if (bound.length === 0) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || e.defaultPrevented) return;
-      const hit = bound.find(
-        ({ parsed }) =>
-          matchesShortcut(e, parsed) && (hasModifier(parsed) || !isEditable(e.target)),
-      );
-      if (!hit) return;
-      e.preventDefault();
-      navigate(hit.to);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [nav, navigate]);
+  useHotkey(shortcut, () => navigate(to));
+  return null;
 }
 
+/**
+ * A Theme submenu for a `DropdownMenu`.
+ *
+ * @deprecated Nothing renders it: Theme lives in Settings › Appearance and
+ * the ⌘K Theme group. Removed in the next major.
+ */
 export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
 

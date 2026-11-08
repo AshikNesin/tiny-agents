@@ -511,19 +511,25 @@ const FIXTURES: Record<string, Fixture> = {
       'const A = "SESSION";\nexport const top = A;\nexport const code = () => {\n  const A = "OTHER";\n  return A + "_INVALID";\n};\n',
     rules: [],
   },
+  "packages/core/src/session/index.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nconst sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\nexport const guard = () => {\n  throw sessionInvalid("No token provided");\n};\n',
+    rules: [],
+  },
+  // The guard's old homes are no longer exempt.
+  "packages/core/src/middlewares/jwt-auth.middleware.ts": {
+    source:
+      'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("No token", undefined, "SESSION_INVALID");\n};\n',
+    rules: ["R9"],
+  },
   "packages/core/src/utils/jwt.utils.ts": {
     source:
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nexport const sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\n',
-    rules: [],
-  },
-  "packages/core/src/middlewares/jwt-auth.middleware.ts": {
-    source:
-      'import { sessionInvalid } from "../utils/jwt.utils";\nexport const s = sessionInvalid;\n',
-    rules: [],
+    rules: ["R9", "R9"],
   },
   "apps/web/src/server/r9-pass.ts": {
     source:
-      'import { generateToken } from "@groot/core/utils/jwt.utils";\nexport const g = generateToken;\n',
+      'import { requireSession, startSession } from "@groot/core/session";\nexport const g = [requireSession, startSession];\n',
     rules: [],
   },
   "apps/web/src/server/r8b-pass.ts": {

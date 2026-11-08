@@ -106,199 +106,23 @@ const listShape = shapeMap.rounded;
 
 // ---------------------------------------------------------------------------
 // Shortcuts — one string syntax for both the trigger combo and the caps a row
-// displays. Tokens join with "+": modifiers first, then one key.
-//   "mod+k"        ⌘K on a Mac, Ctrl+K elsewhere
-//   "mod+shift+p"  ⌘⇧P / Ctrl+Shift+P
-//   "/"            a bare key
-// Pre-formatted caps ("⌘K", "⌘⇧P") display as-is, one cap per glyph.
+// displays, owned by ./hotkeys and re-exported here for existing importers.
 // ---------------------------------------------------------------------------
 
-export interface ParsedShortcut {
-  /** ⌘ on a Mac, Ctrl elsewhere. Matches either while listening, so a Ctrl
-   *  press on a Mac still opens the menu. */
-  mod: boolean;
-  meta: boolean;
-  ctrl: boolean;
-  alt: boolean;
-  shift: boolean;
-  /** Lowercase `KeyboardEvent.key` ("k", "/", "escape"). */
-  key: string;
-}
+import { formatShortcut, useHotkey, useIsMac } from "./hotkeys";
 
-const MODIFIER_TOKENS: Record<string, keyof Omit<ParsedShortcut, "key">> = {
-  mod: "mod",
-  cmd: "meta",
-  command: "meta",
-  meta: "meta",
-  win: "meta",
-  super: "meta",
-  ctrl: "ctrl",
-  control: "ctrl",
-  alt: "alt",
-  option: "alt",
-  opt: "alt",
-  shift: "shift",
-};
-
-/** Named keys, as `KeyboardEvent.key` spells them (lowercased). */
-const KEY_ALIASES: Record<string, string> = {
-  esc: "escape",
-  return: "enter",
-  space: " ",
-  spacebar: " ",
-  up: "arrowup",
-  down: "arrowdown",
-  left: "arrowleft",
-  right: "arrowright",
-  del: "delete",
-  plus: "+",
-};
-
-/** Splits a combo on "+", keeping a trailing "+" as the key itself. */
-function shortcutTokens(shortcut: string): string[] {
-  const trimmed = shortcut.trim();
-  if (trimmed === "") return [];
-  const tokens = trimmed.split("+").map((t) => t.trim());
-  // "mod++" splits into ["mod", "", ""]: the empties were a literal "+".
-  const out: string[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === "" && i > 0) {
-      if (out[out.length - 1] !== "+") out.push("+");
-      continue;
-    }
-    if (tokens[i] !== "") out.push(tokens[i]);
-  }
-  return out;
-}
-
-export function parseShortcut(shortcut: string): ParsedShortcut {
-  const parsed: ParsedShortcut = {
-    mod: false,
-    meta: false,
-    ctrl: false,
-    alt: false,
-    shift: false,
-    key: "",
-  };
-  for (const token of shortcutTokens(shortcut)) {
-    const lower = token.toLowerCase();
-    const modifier = MODIFIER_TOKENS[lower];
-    if (modifier) parsed[modifier] = true;
-    else parsed.key = KEY_ALIASES[lower] ?? lower;
-  }
-  return parsed;
-}
-
-/** Whether a keydown is the parsed combo. The physical key (`code`) stands
- *  in when `key` is not a Latin letter or digit — non-Latin layouts
- *  (Cyrillic, Greek) — or whenever ⌥ is held, since a Mac ⌥ combo usually
- *  turns `key` into a symbol but not on every layout. Without ⌥ a Latin
- *  letter is taken at face value, so on Dvorak or AZERTY the key that types
- *  "t" is never read as the physical K. */
-export function matchesShortcut(
-  e: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
-  parsed: ParsedShortcut,
-): boolean {
-  if (parsed.key === "") return false;
-  const key = e.key.toLowerCase();
-  const byCode =
-    parsed.key.length === 1 &&
-    /[a-z0-9]/.test(parsed.key) &&
-    (e.altKey || !/^[a-z0-9]$/i.test(e.key)) &&
-    e.code.toLowerCase() === (/[a-z]/.test(parsed.key) ? `key${parsed.key}` : `digit${parsed.key}`);
-  if (key !== parsed.key && !byCode) return false;
-  if (parsed.mod) {
-    if (!e.metaKey && !e.ctrlKey) return false;
-  } else if (e.metaKey !== parsed.meta || e.ctrlKey !== parsed.ctrl) {
-    return false;
-  }
-  if (e.altKey !== parsed.alt) return false;
-  // Shift is implied by an uppercase letter or a shifted symbol, so it is
-  // only checked when the combo names it.
-  if (parsed.shift && !e.shiftKey) return false;
-  return true;
-}
-
-/** Whether the parsed combo holds any modifier, i.e. is safe to fire while
- *  typing in a field. A bare key stays out of inputs. */
-export function hasModifier(parsed: ParsedShortcut): boolean {
-  return parsed.mod || parsed.meta || parsed.ctrl || parsed.alt;
-}
-
-const CAP_LABELS: Record<string, { mac: string; other: string }> = {
-  mod: { mac: "⌘", other: "Ctrl" },
-  meta: { mac: "⌘", other: "Win" },
-  ctrl: { mac: "⌃", other: "Ctrl" },
-  alt: { mac: "⌥", other: "Alt" },
-  shift: { mac: "⇧", other: "Shift" },
-  enter: { mac: "↵", other: "Enter" },
-  escape: { mac: "Esc", other: "Esc" },
-  backspace: { mac: "⌫", other: "Backspace" },
-  delete: { mac: "⌦", other: "Del" },
-  tab: { mac: "⇥", other: "Tab" },
-  " ": { mac: "Space", other: "Space" },
-  arrowup: { mac: "↑", other: "↑" },
-  arrowdown: { mac: "↓", other: "↓" },
-  arrowleft: { mac: "←", other: "←" },
-  arrowright: { mac: "→", other: "→" },
-};
-
-const PREFORMATTED = /^[⌘⌃⌥⇧↵⌫⌦⇥↑↓←→]+[A-Za-z0-9]?$/;
-
-/** The caps a shortcut displays, in order: modifiers as symbols on a Mac and
- *  words elsewhere, letters upper-cased, named keys spelled out. */
-export function formatShortcut(shortcut: string, mac: boolean): string[] {
-  const caps: string[] = [];
-  for (const token of shortcutTokens(shortcut)) {
-    if (PREFORMATTED.test(token)) {
-      caps.push(...Array.from(token));
-      continue;
-    }
-    const lower = token.toLowerCase();
-    const modifier = MODIFIER_TOKENS[lower];
-    const name = modifier ?? KEY_ALIASES[lower] ?? lower;
-    const cap = CAP_LABELS[name];
-    if (cap) caps.push(mac ? cap.mac : cap.other);
-    else if (name.length === 1) caps.push(name.toUpperCase());
-    else caps.push(name.charAt(0).toUpperCase() + name.slice(1));
-  }
-  return caps;
-}
-
-/** Whether the page runs on a Mac — the platform that draws ⌘ and ⌥. */
-export function isMacPlatform(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-  const platform = nav.userAgentData?.platform ?? nav.platform ?? "";
-  return /mac|iphone|ipad|ipod/i.test(platform);
-}
-
-// The platform never changes, so it is read once and served as a store
-// snapshot: the server (and hydration) draw ⌘, other platforms swap to
-// words in the render that follows, with no state or effect per cap.
-let macPlatform: boolean | null = null;
-const readMac = () => (macPlatform ??= isMacPlatform());
-const serverMac = () => true;
-const subscribeNever = () => () => {};
-
-/** Whether to draw ⌘ and ⌥ rather than Ctrl and Alt. */
-export function useIsMac(): boolean {
-  return useSyncExternalStore(subscribeNever, readMac, serverMac);
-}
+export {
+  formatShortcut,
+  hasModifier,
+  isMacPlatform,
+  matchesShortcut,
+  parseShortcut,
+  useIsMac,
+  type ParsedShortcut,
+} from "./hotkeys";
 
 // Layout effects have no server counterpart; on the server they are no-ops.
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-function isEditable(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "SELECT" ||
-    el.isContentEditable
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Filtering
@@ -1404,31 +1228,11 @@ CommandMenuFooter.displayName = "CommandMenuFooter";
 // CommandMenuDialog — the modal shell, opened by a global shortcut.
 // ---------------------------------------------------------------------------
 
-// Every mounted dialog listens for its own combo; one of them answers a
-// press. An open dialog answers first (the press closes it). Otherwise the
-// most recently mounted one with that combo whose scope holds the focus
-// does: a dialog without a scope is in scope everywhere, so an app-wide
-// palette keeps its key, and a scoped one (a docs demo, a pane) takes it
-// only while focus is inside its element. Peers are matched on the parsed
-// combo, so "mod+k", "cmd+k" and "Mod+K" are one key.
-const mountedDialogs: {
-  combo: string;
-  isOpen: () => boolean;
-  inScope: () => boolean;
-}[] = [];
-
-function comboKey(parsed: ParsedShortcut): string {
-  return [
-    parsed.mod && "mod",
-    parsed.meta && "meta",
-    parsed.ctrl && "ctrl",
-    parsed.alt && "alt",
-    parsed.shift && "shift",
-    parsed.key,
-  ]
-    .filter(Boolean)
-    .join("+");
-}
+// The combo is a "dialog" hotkey (./hotkeys): while this dialog is open the
+// press closes it; otherwise the most recently mounted dialog with that combo
+// whose scope holds the focus opens. A dialog without a scope is in scope
+// everywhere, so an app-wide palette keeps its key, and a scoped one (a docs
+// demo, a pane) takes it only while focus is inside its element.
 
 export interface CommandMenuDialogProps {
   open?: boolean;
@@ -1470,16 +1274,12 @@ function CommandMenuDialog({
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = openProp ?? internalOpen;
   // Read through refs so `setOpen` keeps one identity for the dialog's
-  // life: the listener below depends on it, and re-registering on every
-  // toggle would move the dialog to the end of the peer list, changing
-  // which dialog answers a shared combo with each click.
+  // life (the dialog context below hands it out).
   const openRef = useRef(open);
-  const scopeRef = useRef(shortcutScope);
   const onOpenChangeRef = useRef(onOpenChange);
   const controlledRef = useRef(openProp !== undefined);
   useIsoLayoutEffect(() => {
     openRef.current = open;
-    scopeRef.current = shortcutScope;
     onOpenChangeRef.current = onOpenChange;
     controlledRef.current = openProp !== undefined;
   });
@@ -1489,43 +1289,11 @@ function CommandMenuDialog({
     onOpenChangeRef.current?.(next);
   }, []);
 
-  useEffect(() => {
-    if (!shortcut) return;
-    const parsed = parseShortcut(shortcut);
-    if (parsed.key === "") return;
-    const combo = comboKey(parsed);
-    const entry = {
-      combo,
-      isOpen: () => openRef.current,
-      inScope: () => {
-        const scope = scopeRef.current?.current;
-        return !scope || scope.contains(document.activeElement);
-      },
-    };
-    mountedDialogs.push(entry);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || e.defaultPrevented) return;
-      if (!matchesShortcut(e, parsed)) return;
-      // A bare key stays out of fields; a modifier combo fires anywhere.
-      if (!hasModifier(parsed) && isEditable(e.target)) return;
-      const peers = mountedDialogs.filter((d) => d.combo === combo);
-      const answers =
-        peers.find((d) => d.isOpen()) ??
-        peers
-          .slice()
-          .reverse()
-          .find((d) => d.inScope());
-      if (answers !== entry) return;
-      e.preventDefault();
-      setOpen(!openRef.current);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      const i = mountedDialogs.indexOf(entry);
-      if (i !== -1) mountedDialogs.splice(i, 1);
-    };
-  }, [shortcut, setOpen]);
+  useHotkey(shortcut, () => setOpen(!openRef.current), {
+    scope: "dialog",
+    open,
+    within: shortcutScope,
+  });
 
   const dialogCtx = useMemo(() => ({ close: () => setOpen(false) }), [setOpen]);
 

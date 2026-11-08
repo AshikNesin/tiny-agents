@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { clearJobHandlers, registerJobHandler, runTick } from "@groot/jobs/server";
+import { jobRunner, registerJobHandler, runTick } from "@groot/jobs/server";
 import { api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
 let token: string;
 
 beforeEach(async () => {
-  clearJobHandlers();
+  jobRunner.reset();
   registerJobHandler("report", () => ({ ok: true }));
   if (!token) ({ token } = await signIn(app));
 });

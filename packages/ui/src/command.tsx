@@ -13,8 +13,13 @@ import { SearchIcon, CheckIcon } from "lucide-react";
  * (https://www.fluidfunctionalism.com/docs/command-menu): a borderless search
  * line over the list, rows that brighten as they become active under one
  * gliding highlight, and an optional footer of keyboard hints.
+ *
+ * Deprecated: groot's own ⌘K palette is the command menu
+ * (`@groot/ui/command-menu`), and nothing in the repo renders this module.
+ * Every export is marked `@deprecated` and is removed in the next major.
  */
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
@@ -28,6 +33,7 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandDialog({
   title = "Command Palette",
   description = "Search for a command to run...",
@@ -62,6 +68,7 @@ function CommandDialog({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandInput({
   className,
   ...props
@@ -87,6 +94,7 @@ function CommandInput({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandList({
   className,
   children,
@@ -107,6 +115,7 @@ function CommandList({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandEmpty({
   className,
   ...props
@@ -120,6 +129,7 @@ function CommandEmpty({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandGroup({
   className,
   ...props
@@ -136,6 +146,7 @@ function CommandGroup({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandSeparator({
   className,
   ...props
@@ -149,6 +160,7 @@ function CommandSeparator({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandItem({
   className,
   children,
@@ -172,6 +184,8 @@ function CommandItem({
 /**
  * Keyboard hints under the list, Fluid CommandMenu style. Hidden on touch
  * screens, which have no keys to press.
+ *
+ * @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major.
  */
 function CommandFooter({
   className,
@@ -210,6 +224,7 @@ function CommandFooter({
   );
 }
 
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
