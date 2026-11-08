@@ -537,6 +537,25 @@ function AccountCard({
     }
   };
 
+  /** A model goes only after the owner confirms; on 409 `in_use`, which takes over. */
+  const removeModel = async (model: AccountModel) => {
+    const ok = await confirm({
+      title: `Delete ${model.name}?`,
+      description: model.usedBy
+        ? `${model.usedBy} bot${model.usedBy === 1 ? "" : "s"} use${model.usedBy === 1 ? "s" : ""} it. You'll pick the model that takes over.`
+        : "You'll pick a replacement if anything still uses it.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (ok) {
+      await deleteOrMove(
+        model.name,
+        (to) => modelsApi.removeModel(model.id, to),
+        "Couldn't delete the model",
+      );
+    }
+  };
+
   const test = async (model: AccountModel) => {
     try {
       const result = await modelsApi.test({ modelId: model.id });
@@ -611,13 +630,7 @@ function AccountCard({
                   act(() => modelsApi.patchModel(model.id, input), "Couldn't change the model")
                 }
                 onTest={() => test(model)}
-                onDelete={() =>
-                  deleteOrMove(
-                    model.name,
-                    (to) => modelsApi.removeModel(model.id, to),
-                    "Couldn't delete the model",
-                  )
-                }
+                onDelete={() => removeModel(model)}
               />
             ))}
             {account.models.length === 0 && (

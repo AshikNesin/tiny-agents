@@ -10,13 +10,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ModelsSettings } from "@/pages/settings/models/ModelsSettings";
-import type { Account, ProviderTemplate } from "@/lib/models-api";
+import { ConfirmProvider } from "@groot/ui/primitives";
+import type { Account, AccountModel, ProviderTemplate } from "@/lib/models-api";
 
 const api = vi.hoisted(() => ({
   accounts: vi.fn(),
   roles: vi.fn(),
   discover: vi.fn(),
   create: vi.fn(),
+  removeModel: vi.fn(),
 }));
 
 vi.mock("@/lib/models-api", () => ({ modelsApi: api }));
@@ -119,5 +121,107 @@ describe("Settings → Models", () => {
     await user.click(within(dialog).getByRole("button", { name: "Check models" }));
     expect(await within(dialog).findByText("0 of 2 selected")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Connect" })).toBeDisabled();
+  });
+});
+
+/** A connected account with two models, as the server returns after refresh. */
+const account = (models: Partial<AccountModel>[]): Account => ({
+  id: "acc1",
+  name: "Anthropic",
+  kind: "anthropic",
+  baseUrl: "https://api.anthropic.com",
+  viaProviderId: null,
+  settings: {},
+  discovery: "auto",
+  allowPrivateNetwork: false,
+  enabled: true,
+  status: "ok",
+  statusDetail: null,
+  checkedAt: "2026-11-08T10:00:00.000Z",
+  version: 1,
+  credential: { hint: "sk-…a1B2", backend: "local" },
+  models: models.map((model, index) => ({
+    id: `m${index + 1}`,
+    upstreamId: `claude-${index + 1}`,
+    name: `Claude ${index + 1}`,
+    type: "chat",
+    source: "discovered",
+    enabled: true,
+    contextWindow: 200_000,
+    maxOutputTokens: 32_000,
+    imageInput: true,
+    reasoning: true,
+    overrides: {},
+    compat: null,
+    missing: false,
+    usedBy: 0,
+    ...model,
+  })),
+});
+
+describe("Settings → Models · delete", () => {
+  beforeEach(() => {
+    api.accounts.mockResolvedValue({
+      accounts: [
+        account([
+          { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
+          { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+        ]),
+      ],
+      templates: TEMPLATES,
+    });
+    api.removeModel.mockResolvedValue({ deleted: true });
+  });
+
+  const openModels = async (user: ReturnType<typeof userEvent.setup>) => {
+    render(
+      <ConfirmProvider>
+        <ModelsSettings />
+      </ConfirmProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Anthropic" }));
+  };
+
+  it("deletes a model only after the owner confirms", async () => {
+    const user = userEvent.setup();
+    await openModels(user);
+    await user.click(await screen.findByRole("button", { name: "Delete Claude Haiku 5.5" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Delete Claude Haiku 5.5?")).toBeInTheDocument();
+    expect(api.removeModel).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(api.removeModel).toHaveBeenCalledWith("m1", undefined));
+  });
+
+  it("keeps the model when the owner cancels", async () => {
+    const user = userEvent.setup();
+    await openModels(user);
+    await user.click(await screen.findByRole("button", { name: "Delete Claude Haiku 5.5" }));
+
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(api.removeModel).not.toHaveBeenCalled();
+  });
+
+  it("warns which bots use a model before deleting it", async () => {
+    api.accounts.mockResolvedValue({
+      accounts: [
+        account([
+          { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5", usedBy: 2 },
+          { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+        ]),
+      ],
+      templates: TEMPLATES,
+    });
+    const user = userEvent.setup();
+    await openModels(user);
+    await user.click(await screen.findByRole("button", { name: "Delete Claude Haiku 5.5" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/^2 bots use it\./)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(api.removeModel).not.toHaveBeenCalled();
   });
 });
