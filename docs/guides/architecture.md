@@ -165,7 +165,9 @@ upload does with 100 MB; the app's limit skips every request such a route
 matches, so the route's limit holds wherever its router is mounted. Both are
 Hono's `bodyLimit`: a declared `Content-Length` over the limit is refused
 before the body is read, and a streamed body is refused once it passes the
-limit. The older `uploadPaths` option, which skips the limit by path, still
+limit. The refusal is a bare 413 unless the route passes
+`routeBodyLimit(bytes, { onError })`, whose handler can throw a worded
+`Boom.entityTooLarge(...)`. The older `uploadPaths` option, which skips the limit by path, still
 works but is deprecated.
 
 ## Background jobs

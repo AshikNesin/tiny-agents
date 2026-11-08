@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createApp } from "@groot/core/app";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
+import { Boom } from "@groot/core/errors";
 import type { AppEnv } from "@groot/core/types";
 
 /** A router that takes bodies up to 64 bytes on `/upload` and keeps the app's limit elsewhere. */
@@ -12,6 +13,15 @@ function mediaRouter() {
     c.json({ size: (await c.req.text()).length });
   router.post("/upload", routeBodyLimit(64), echo as never);
   router.post("/notes", echo as never);
+  router.post(
+    "/worded",
+    routeBodyLimit(64, {
+      onError: () => {
+        throw Boom.entityTooLarge("Files can be up to 64 bytes.");
+      },
+    }),
+    echo as never,
+  );
   return router;
 }
 
@@ -78,6 +88,20 @@ describe("routeBodyLimit", () => {
       expect((await app.fetch(post(path, 8))).status, path).toBe(200);
       expect((await app.fetch(post(path, 48))).status, path).toBe(413);
       expect((await app.fetch(postStream(path, 48))).status, path).toBe(413);
+    }
+  });
+
+  it("words the refusal with onError, through the app's error handler", async () => {
+    const app = buildApp();
+    const path = "/api/v1/media/worded";
+    expect((await app.fetch(post(path, 48))).status).toBe(200);
+    for (const request of [post(path, 65), postStream(path, 65)]) {
+      const refused = await app.fetch(request);
+      expect(refused.status).toBe(413);
+      expect(await refused.json()).toMatchObject({
+        success: false,
+        error: { message: "Files can be up to 64 bytes." },
+      });
     }
   });
 });
