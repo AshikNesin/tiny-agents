@@ -34,9 +34,13 @@ endpoint and capabilities, and the engine
   `gateway/v1/<account>/<gateway>/<slug>/<basePath>` under their bare id;
   the gateway's unified `/compat` endpoint can't add the provider's path.
   Discovery lists each custom provider's `/models` beside the catalog, and
-  a model it doesn't list can be added by id. Cloudflare's API to list
-  custom providers needs a token with AI Gateway edit rights, so the slugs
-  are entered by hand.
+  a model it doesn't list can be added by id. A `custom-…` model whose
+  slug isn't in the settings still goes to `gateway/…/<slug>` (never
+  `/compat`, which 404s for every custom provider); its row says the
+  provider isn't set up, **Custom providers** opens with the slug filled
+  in, and Test reads an upstream 404 as a missing or wrong base path.
+  Cloudflare's API to list custom providers needs a token with AI Gateway
+  edit rights, so the base paths are entered by hand.
 - **Gateway route.** An `openai-chat` account can also go through a gateway
   account instead of an endpoint of its own (`viaProviderId`,
   `settings.upstream`, `settings.basePath`). The API keeps it; the dialog
