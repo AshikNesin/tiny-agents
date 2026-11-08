@@ -261,7 +261,7 @@ function ModelRow({
       <Button variant="ghost" size="sm" onClick={onTest}>
         Test
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`Delete ${model.name}`} onClick={onDelete}>
+      <Button variant="ghost" size="icon-sm" aria-label={`Delete ${model.name}`} onClick={onDelete}>
         <Trash2 className="size-4" />
       </Button>
     </li>
@@ -367,7 +367,7 @@ function AccountActions({
         <>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label={`Check ${account.name} again`}
             onClick={onRefresh}
           >
@@ -383,7 +383,12 @@ function AccountActions({
           Custom providers
         </Button>
       )}
-      <Button variant="ghost" size="icon" aria-label={`Delete ${account.name}`} onClick={onDelete}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Delete ${account.name}`}
+        onClick={onDelete}
+      >
         <Trash2 className="size-4" />
       </Button>
     </CardAction>
