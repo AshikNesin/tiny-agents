@@ -26,9 +26,22 @@ import {
   type CustomProvider,
 } from "./CustomProvidersEditor";
 
+/**
+ * What is saved, plus a row for each `custom-…` slug the account's models
+ * name that isn't saved yet (a model added by id): only its base path to fill.
+ */
 function savedProviders(account: Account): CustomProvider[] {
   const list = account.settings.customProviders;
-  return Array.isArray(list) ? (list as CustomProvider[]) : [];
+  const saved = Array.isArray(list) ? (list as CustomProvider[]) : [];
+  const known = new Set(saved.map((p) => p.slug));
+  const unsaved = new Set<string>();
+  for (const model of account.models) {
+    const slug = model.upstreamId.split("/")[0];
+    if (slug?.startsWith("custom-") && model.upstreamId.includes("/") && !known.has(slug)) {
+      unsaved.add(slug);
+    }
+  }
+  return [...saved, ...[...unsaved].map((slug) => ({ slug, basePath: "" }))];
 }
 
 /** Mounted per open, so it starts from what is saved. */

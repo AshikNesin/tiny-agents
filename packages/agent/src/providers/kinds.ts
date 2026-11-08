@@ -189,21 +189,51 @@ function gatewayCustomProviders(settings: Record<string, unknown>): GatewayCusto
 /** Where a gateway account's custom provider is registered (its own base URL). */
 const customProviderId = (accountId: string, slug: string) => `${accountId}:${slug}`;
 
+/** The custom provider slug a gateway model id names (`custom-x/model` → `custom-x`). */
+function customSlugOf(upstreamId: string): string | undefined {
+  const slash = upstreamId.indexOf("/");
+  const slug = slash > 0 ? upstreamId.slice(0, slash) : "";
+  return slug.startsWith("custom-") ? slug : undefined;
+}
+
+/**
+ * The account's custom providers: those in its settings, plus any slug one of
+ * its models names that the settings lack (no base path yet), so a model added
+ * by id still goes to its provider's URL rather than the unified endpoint,
+ * which answers 404 for every custom provider.
+ */
+function customProvidersFor(
+  settings: Record<string, unknown>,
+  rows: readonly Pick<ModelRow, "upstreamId">[],
+): GatewayCustomProvider[] {
+  const configured = gatewayCustomProviders(settings);
+  const known = new Set(configured.map((p) => p.slug));
+  const extra = new Set<string>();
+  for (const row of rows) {
+    const slug = customSlugOf(row.upstreamId);
+    if (slug && !known.has(slug)) extra.add(slug);
+  }
+  return [...configured, ...[...extra].map((slug) => ({ slug }))];
+}
+
 /**
  * How a gateway account's model is called. A model of one of its custom
  * providers (`custom-zai-coding-plan/glm-5.3-flash`) goes to that provider's
  * own gateway URL under its bare id: the gateway's unified endpoint can't add
- * the provider's base path. Every other model is the account's own.
+ * the provider's base path. A `custom-…` slug the settings lack routes the
+ * same way. Every other model is the account's own.
  */
 export function gatewayModelRoute(
-  account: Pick<ProviderAccount, "id" | "settings">,
+  account: Pick<ProviderAccount, "id">,
   upstreamId: string,
 ): { providerId: string; upstreamId: string } {
-  const slash = upstreamId.indexOf("/");
-  const slug = slash > 0 ? upstreamId.slice(0, slash) : "";
-  const custom = gatewayCustomProviders(account.settings).find((p) => p.slug === slug);
-  return custom
-    ? { providerId: customProviderId(account.id, slug), upstreamId: upstreamId.slice(slash + 1) }
+  // Settings only hold `custom-…` slugs (the schema), so the id alone decides.
+  const slug = customSlugOf(upstreamId);
+  return slug
+    ? {
+        providerId: customProviderId(account.id, slug),
+        upstreamId: upstreamId.slice(slug.length + 1),
+      }
     : { providerId: account.id, upstreamId };
 }
 
@@ -277,7 +307,7 @@ function gatewayProviders(
   if (!settings) return [];
   const frontDoor = gatewayFrontDoor(account);
   const placeholderBase = (url: string) => url.replace(GATEWAY_HOST, frontDoor).replace(/\/+$/, "");
-  const custom = gatewayCustomProviders(account.settings);
+  const custom = customProvidersFor(account.settings, rows);
   const customOf = (row: ModelRow) => gatewayModelRoute(account, row.upstreamId);
   const chat = rows
     .filter((row) => row.type === "chat" && customOf(row).providerId === account.id)

@@ -871,16 +871,25 @@ export async function putRoles(input: Partial<Record<(typeof ROLES)[number], str
 // ── Test ────────────────────────────────────────────────────────────────
 
 /** A provider's error, cut and with any key scrubbed, before it reaches the UI. */
-const redacted = (result: TestResult): TestResult =>
+const redacted = (result: TestResult, upstreamId?: string): TestResult =>
   result.error
-    ? { ...result, error: explained(secretRedactor.scrub(result.error)).slice(0, 600) }
+    ? {
+        ...result,
+        error: explained(secretRedactor.scrub(result.error), upstreamId).slice(0, 600),
+      }
     : result;
 
 /**
  * Cloudflare account limits read as JSON: say what they mean first. Neither
  * is a fault of the model or of tiny-agents.
  */
-function explained(error: string): string {
+function explained(error: string, upstreamId?: string): string {
+  // A custom provider's upstream answering 404 (often an HTML page): the
+  // gateway reached it on the wrong path, nearly always a missing base path.
+  const slug = upstreamId?.startsWith("custom-") ? upstreamId.split("/")[0] : undefined;
+  if (slug && /^404\b/.test(error)) {
+    return `${slug} answered 404 Not Found: the gateway reached it on the wrong path. Set its base path in this card's Custom providers (for Z.AI's coding plan: api/coding/paas/v4).`;
+  }
   if (/"code":\s*2021|unified billing credits/i.test(error)) {
     return `The gateway has no key for this provider and no Unified Billing credits: add the provider's key to the gateway (BYOK), or credits in Cloudflare. ${error}`;
   }
@@ -930,7 +939,7 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
         error: `The model can't run (${model.unavailableReason ?? "missing"}).`,
       };
     }
-    return redacted(await testModelCall(rt.models, pi));
+    return redacted(await testModelCall(rt.models, pi), model.upstreamId);
   }
   refuseClaudeToken(input.apiKey);
   if (input.kind === "claude-plan")
@@ -1000,5 +1009,5 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
     input.upstreamId,
     { image: input.image },
   );
-  return redacted(result);
+  return redacted(result, input.upstreamId);
 }

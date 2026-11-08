@@ -224,11 +224,14 @@ function EditConnectionDialog({
 
 function ModelRow({
   model,
+  warning,
   onChange,
   onTest,
   onDelete,
 }: {
   model: AccountModel;
+  /** Why the model can't answer as set up, when the card can tell. */
+  warning?: string | undefined;
   onChange: (input: { enabled: boolean }) => void;
   onTest: () => void;
   onDelete: () => void;
@@ -257,6 +260,11 @@ function ModelRow({
           <span className={monoClass}>{model.upstreamId}</span>
           {chips.length > 0 ? ` · ${chips.join(" · ")}` : ""}
         </Text>
+        {warning && (
+          <Text variant="meta" className="text-destructive block">
+            {warning}
+          </Text>
+        )}
       </div>
       <Button variant="ghost" size="sm" onClick={onTest}>
         Test
@@ -266,6 +274,22 @@ function ModelRow({
       </Button>
     </li>
   );
+}
+
+/**
+ * A gateway custom provider's model whose provider has no base path: the
+ * gateway reaches the upstream's root, and most APIs answer 404 there.
+ */
+function basePathWarning(account: Account, upstreamId: string): string | undefined {
+  const slug = upstreamId.split("/")[0];
+  if (!slug?.startsWith("custom-") || !upstreamId.includes("/")) return undefined;
+  const saved = account.settings.customProviders;
+  const list = Array.isArray(saved) ? (saved as { slug: string; basePath?: string }[]) : [];
+  const provider = list.find((p) => p.slug === slug);
+  if (provider?.basePath) return undefined;
+  return provider
+    ? `${slug} has no base path: set it in Custom providers if its API isn't at the root (Z.AI's coding plan: api/coding/paas/v4).`
+    : `${slug} isn't set up: add it in Custom providers, with its base path (Z.AI's coding plan: api/coding/paas/v4).`;
 }
 
 /** The account's one-line summary: kind, where it goes, its key, models, last check. */
@@ -530,6 +554,11 @@ function AccountCard({
               <ModelRow
                 key={model.id}
                 model={model}
+                warning={
+                  account.kind === "cloudflare-ai-gateway"
+                    ? basePathWarning(account, model.upstreamId)
+                    : undefined
+                }
                 onChange={(input) =>
                   act(() => modelsApi.patchModel(model.id, input), "Couldn't change the model")
                 }

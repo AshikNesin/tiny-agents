@@ -277,6 +277,21 @@ describe("Cloudflare AI Gateway accounts (issue #216)", () => {
     });
   });
 
+  it("routes a custom provider's model added by id, unset in the settings, to its own URL", () => {
+    // The unified endpoint answers 404 for every custom provider: never send one there.
+    const { catalog } = catalogOf({
+      ...config,
+      providers: [{ ...gateway, settings: { accountId: "acc", gatewayId: "gate" } }],
+    });
+    expect(catalog.route("glm")).toMatchObject({
+      providerId: "gw:custom-zai-coding-plan",
+      upstreamId: "glm-5.3-flash",
+    });
+    expect(catalog.piModel("glm")?.baseUrl).toBe(
+      "https://gateway.ai.cloudflare.com/v1/acc/gate/custom-zai-coding-plan",
+    );
+  });
+
   it("sends a custom provider's requests on the gateway's token", async () => {
     const { models } = catalogOf(config);
     expect(await models.getAuth("gw:custom-zai-coding-plan")).toMatchObject({
