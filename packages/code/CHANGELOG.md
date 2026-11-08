@@ -1,5 +1,12 @@
 # @tiny-agents/code
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`56ada98`](https://github.com/AshikNesin/tiny-agents/commit/56ada985d0014bbaeea7c04ff1dd09e9a78d8d2f)]:
+  - @tiny-agents/claude-worker@0.4.1
+
 ## 0.2.1
 
 ### Patch Changes

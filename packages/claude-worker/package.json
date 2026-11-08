@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/claude-worker",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Loopback daemon that drives Claude Code through the Agent SDK for tiny-agents. Claude Code owns the subscription login.",
   "bin": {
