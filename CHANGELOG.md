@@ -1,5 +1,16 @@
 # tiny-agents
 
+## 1.1.0
+
+### Minor Changes
+
+- [`2c554d5`](https://github.com/AshikNesin/tiny-agents/commit/2c554d5f324cf88673130ff882cc6d619cc47625) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The Code workspace owns the full page, like Settings.
+  
+  - The generic app sidebar (Tasks, Terminal, Bots) is hidden on `/code` and
+    below: the workspace's own thread list takes the column, Cursor-style.
+  - A slim top bar with **Back to tiny-agents** and the ⌘K trigger replaces the
+    mobile hamburger that opened the (now absent) sidebar.
+
 ## 1.0.0
 
 ### Major Changes
