@@ -47,6 +47,11 @@ answers `404` (`JOB_NOT_FOUND`). The tick guards its own writes the same way
 mid-run stays cancelled (the handler itself is not interrupted), and a run that
 outlived its timeout cannot overwrite the attempt that replaced it.
 
+Every move back to `created` (a retry, a resume, a backed-off failure)
+clears `startedAt` and `completedAt`, so a queued job never shows a start or
+finish time. Every job delete (an operator's, a purge, housekeeping) goes
+through `deleteJobsWhere`, which removes the job's logs with it.
+
 `retry` and `resume` keep `retryCount`, so a job that used up its retries gets
 one more attempt, not a fresh set. `rerun` queues a new job with the same
 name, data, priority and retry settings and a `retryCount` of 0.

@@ -2,6 +2,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@groot/ui/button";
 import { displayClass, h1Class } from "@groot/ui/typography";
 import { Input } from "@groot/ui/input";
+import { LoadingSpinner } from "@groot/ui/loading-spinner";
 import { Form, FormField } from "@groot/ui/form";
 import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
@@ -90,6 +91,15 @@ export function Login() {
     }
   };
 
+  // Wait for the answer rather than flash the form at someone setup is about
+  // to redirect. A failed check reads as `false`, so this never blocks sign-in.
+  if (needsSetup === undefined) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-muted/40">
+        <LoadingSpinner size="md" />
+      </div>
+    );
+  }
   if (needsSetup) return <Navigate to="/setup" replace />;
 
   return (

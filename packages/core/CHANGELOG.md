@@ -1,5 +1,40 @@
 # @groot/core
 
+## 2.3.0
+
+### Minor Changes
+
+- [#167](https://github.com/AshikNesin/groot/pull/167) [`5602ce2`](https://github.com/AshikNesin/groot/commit/5602ce274942bf678317547e339d15ac24cf58a9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat(core): `routeBodyLimit(bytes, { onError })` words its own refusal
+  
+  A route that owns its body limit can now answer an oversized body itself, in
+  place of Hono's bare 413: throw `Boom.entityTooLarge("Files can be up to 25
+  MB.")` from `onError` and the app's error handler words it like any other
+  refusal. Routes that needed a worded 413 no longer have to fall back to the
+  deprecated `uploadPaths` option with their own `bodyLimit`.
+
+### Patch Changes
+
+- [#171](https://github.com/AshikNesin/groot/pull/171) [`3717cbe`](https://github.com/AshikNesin/groot/commit/3717cbe2237c3fe2c980496561dd31dbf42a5668) Thanks [@emeeran](https://github.com/emeeran)! - fix: tighten the implicit state machines in auth, passkeys, jobs and todos
+  
+  - core: deleting a passkey is one compare-and-set statement, so two
+    concurrent deletes can no longer remove a user's last passkey. Passkey
+    challenges record what they were issued for: a sign-in challenge no longer
+    verifies a registration, and a registration challenge verifies only for the
+    user it was issued to.
+  - jobs: every move back to `created` clears `startedAt` and `completedAt`, so a
+    resumed job no longer shows a start time. Every job delete goes through
+    `deleteJobsWhere`, which drops the job's logs with it. `stop()` drops a
+    re-run the in-flight tick asked for.
+  - shell: `selectAuthStatus(state)` reads the session as one value (`unknown`,
+    `signedOut`, `signedIn`). A failed sign-in no longer signs a signed-in user
+    out locally, a `checkAuth()` answer that arrives after a sign-in is dropped,
+    and `/login` waits for the setup check instead of flashing its form.
+  - web: todos gain `completedAt` (migration `0002_todo_completed_at` backfills
+    it from `updatedAt`), and `todo-cleanup` ages done todos by it, so editing a
+    done todo no longer restarts its cleanup clock.
+    A `PUT /todos/:id` that leaves out `completed` no longer reopens a done
+    todo: `updateTodoSchema` stopped inheriting `completed`'s default.
+
 ## 2.2.0
 
 ### Minor Changes

@@ -6,8 +6,8 @@ import { logger, logPerformance, waitUntil } from "@groot/core/logger";
 import { reportError } from "@groot/core/errors";
 import { kv, purgeExpiredKv } from "@groot/core/kv";
 import { jobs, jobSchedules, type Job } from "./schema";
-import { createJobLogger, deleteJobLogs, flushJobLogs } from "./logger";
-import { createJobTransitions, type JobTransitions } from "./transitions";
+import { createJobLogger, flushJobLogs } from "./logger";
+import { createJobTransitions, deleteJobsWhere, type JobTransitions } from "./transitions";
 import type { JobHandler, TickOptions, TickResult } from "./types";
 
 /**
@@ -121,10 +121,11 @@ export class JobRunner {
     logger.info({ workerCount: this.#handlers.size, intervalMs }, "Job workers started");
   }
 
-  /** Stop polling and wait for the in-flight tick. */
+  /** Stop polling and wait for the in-flight tick; a re-run it asked for is dropped. */
   async stop(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
+    this.#rerunRequested = false;
     await this.idle();
   }
 
@@ -305,10 +306,8 @@ export function nextCronRun(cron: string, from: Date, timezone?: string | null):
  */
 export async function housekeeping(now: Date = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - config.jobs.keepCompletedDays * 24 * 60 * 60 * 1000);
-  const deleted = await db
-    .delete(jobs)
-    .where(and(inArray(jobs.state, ["completed", "cancelled"]), lt(jobs.completedAt, cutoff)))
-    .returning({ id: jobs.id });
-  await deleteJobLogs(deleted.map((job) => job.id));
+  await deleteJobsWhere(
+    and(inArray(jobs.state, ["completed", "cancelled"]), lt(jobs.completedAt, cutoff)),
+  );
   await purgeExpiredKv();
 }

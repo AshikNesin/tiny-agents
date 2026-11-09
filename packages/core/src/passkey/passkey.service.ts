@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { and, desc, eq, count } from "drizzle-orm";
+import { and, desc, eq, count, exists, ne } from "drizzle-orm";
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -51,16 +51,30 @@ async function countPasskeys(userId: number): Promise<number> {
   return total;
 }
 
-async function storeChallenge(challenge: string): Promise<void> {
-  await challengeKv.set(challenge, true, CHALLENGE_TTL_MS);
+/**
+ * What a challenge was issued for. A challenge is issued, then consumed once
+ * by the matching verification or left to expire; one issued for sign-in
+ * never verifies a registration, and a registration challenge only verifies
+ * for the user it was issued to.
+ */
+type ChallengeIssue = { purpose: "authenticate" } | { purpose: "register"; userId: number };
+
+async function storeChallenge(challenge: string, issue: ChallengeIssue): Promise<void> {
+  await challengeKv.set(challenge, issue, CHALLENGE_TTL_MS);
 }
 
 /**
  * Challenges are single use: `take` deletes a live one and returns it in one
- * statement, so of two concurrent verifications of one challenge only one passes.
+ * statement, so of two concurrent verifications of one challenge only one
+ * passes. A challenge issued for something else is consumed and refused.
  */
-async function consumeChallenge(challenge: string): Promise<boolean> {
-  return (await challengeKv.take(challenge)) !== undefined;
+async function consumeChallenge(challenge: string, expected: ChallengeIssue): Promise<boolean> {
+  const issue = await challengeKv.take<ChallengeIssue>(challenge);
+  if (!issue || typeof issue !== "object") return false;
+  if (issue.purpose === "register" && expected.purpose === "register") {
+    return issue.userId === expected.userId;
+  }
+  return issue.purpose === expected.purpose;
 }
 
 function errorMessage(error: unknown): string {
@@ -95,7 +109,7 @@ export async function generateRegistrationOptions({
   if (!user) throw Boom.notFound("User not found");
 
   const options = await generatePasskeyRegistrationOptions(user, await passkeysForUser(userId));
-  await storeChallenge(options.challenge);
+  await storeChallenge(options.challenge, { purpose: "register", userId });
   logger.debug({ userId, email: user.email }, "Generated passkey registration options");
   return options;
 }
@@ -110,7 +124,7 @@ export async function verifyRegistration({
   credentialName?: string;
 }): Promise<PasskeySummary> {
   const challenge = extractChallengeFromResponse(response);
-  if (!(await consumeChallenge(challenge))) {
+  if (!(await consumeChallenge(challenge, { purpose: "register", userId }))) {
     throw Boom.badRequest("Challenge not found or expired");
   }
 
@@ -166,7 +180,7 @@ export async function generateAuthenticationOptions({
   }
 
   const options = await generatePasskeyAuthenticationOptions(userPasskeys);
-  await storeChallenge(options.challenge);
+  await storeChallenge(options.challenge, { purpose: "authenticate" });
   logger.debug({ email }, "Generated passkey authentication options");
   return options;
 }
@@ -182,7 +196,7 @@ export async function authenticatePasskey({
   response: AuthenticationResponseJSON;
 }): Promise<PublicUser> {
   const challenge = extractChallengeFromResponse(response);
-  if (!(await consumeChallenge(challenge))) {
+  if (!(await consumeChallenge(challenge, { purpose: "authenticate" }))) {
     throw Boom.badRequest("Challenge not found or expired");
   }
 
@@ -247,11 +261,19 @@ export async function deletePasskey({
   userId: number;
 }): Promise<void> {
   await findOwnedPasskey(userId, passkeyId);
-  if ((await countPasskeys(userId)) === 1) {
+  // One compare-and-set DELETE: the row goes only while another passkey of the
+  // same user still exists, so two concurrent deletes can never remove the last.
+  const others = db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(and(eq(passkeys.userId, userId), ne(passkeys.id, passkeyId)));
+  const deleted = await db
+    .delete(passkeys)
+    .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, userId), exists(others)))
+    .returning({ id: passkeys.id });
+  if (deleted.length === 0) {
     throw Boom.badRequest("Cannot delete the last passkey. Please add another passkey first.");
   }
-
-  await db.delete(passkeys).where(eq(passkeys.id, passkeyId));
   logger.info({ userId, passkeyId }, "Passkey deleted");
 }
 
