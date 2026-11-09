@@ -15,6 +15,7 @@ import { Boom } from "@groot/core/errors";
 import { storageService } from "@groot/core/storage";
 import type { AttachmentRef } from "@tiny-agents/agent";
 import { db, uploads } from "../../db";
+import type { ExtractStatus } from "../../../shared/machines/extraction";
 import { asBuffer, imageSize, prepareImage, sniffImage } from "./uploads.prepare";
 import {
   cancelExtraction,
@@ -193,7 +194,7 @@ function toRef(row: {
   size: number;
   width: number | null;
   height: number | null;
-  extractStatus?: string;
+  extractStatus?: ExtractStatus;
 }): AttachmentRef {
   return {
     uploadId: row.id,
@@ -202,9 +203,7 @@ function toRef(row: {
     mimeType: row.mimeType,
     size: row.size,
     ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
-    ...(row.kind === "file" && row.extractStatus
-      ? { status: row.extractStatus as NonNullable<AttachmentRef["status"]> }
-      : {}),
+    ...(row.kind === "file" && row.extractStatus ? { status: row.extractStatus } : {}),
   };
 }
 

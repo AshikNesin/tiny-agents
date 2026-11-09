@@ -1,10 +1,11 @@
 import { apiClient } from "@groot/shell/lib/api";
+import type { TaskStatus } from "../../shared/machines/task";
 
 export interface Task {
   id: string;
   title: string;
   description: string;
-  status: "todo" | "in_progress" | "done";
+  status: TaskStatus;
   priority: "low" | "medium" | "high" | "urgent";
   dueAt: string | null;
   completedAt: string | null;

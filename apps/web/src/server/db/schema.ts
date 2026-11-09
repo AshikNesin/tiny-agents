@@ -12,6 +12,11 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { timestamps, users } from "@groot/core/database/schema";
 import { createId } from "@groot/core/utils/id.utils";
+import type { ExtractStatus } from "../../shared/machines/extraction";
+import type { HandoffStatus } from "../../shared/machines/handoff";
+import type { MemoryStatus } from "../../shared/machines/memory";
+import type { RoutineRunStatus } from "../../shared/machines/routine-run";
+import type { TaskStatus } from "../../shared/machines/task";
 
 /**
  * App-owned tables. This file is the single schema entry point for
@@ -45,8 +50,8 @@ export const tasks = sqliteTable(
     title: text("title").notNull(),
     /** Notes, max 2000 chars. */
     description: text("description").notNull().default(""),
-    /** todo | in_progress | done */
-    status: text("status").notNull().default("todo"),
+    /** The task machine (shared/machines/task.ts). */
+    status: text("status").$type<TaskStatus>().notNull().default("todo"),
     /** low | medium | high | urgent */
     priority: text("priority").notNull().default("medium"),
     dueAt: ms("due_at"),
@@ -287,8 +292,8 @@ export const codeHandoffs = sqliteTable(
     cwd: text("cwd"),
     /** Durable tool task identity: a replayed start returns this row. */
     idempotencyKey: text("idempotency_key").notNull().unique(),
-    /** "running" | "finished". */
-    status: text("status").notNull(),
+    /** The hand-off machine (shared/machines/handoff.ts). */
+    status: text("status").$type<HandoffStatus>().notNull(),
     createdAt: createdAt(),
     finishedAt: ms("finished_at"),
   },
@@ -532,8 +537,8 @@ export const uploads = sqliteTable("uploads", {
   createdAt: createdAt(),
   /** SHA-256 of the original bytes (sandbox copies report it). */
   sha256: text("sha256"),
-  /** Extraction (issue #58): none | pending | ready | failed | unsupported. */
-  extractStatus: text("extract_status").notNull().default("none"),
+  /** Extraction (issue #58): the extraction machine (shared/machines/extraction.ts). */
+  extractStatus: text("extract_status").$type<ExtractStatus>().notNull().default("none"),
   /** Why extraction failed, or why the type can't be read. */
   extractError: text("extract_error"),
   /** JSON ExtractMeta: format, pages, sheets, lines, entries, truncated, … */
@@ -584,8 +589,8 @@ export const memories = sqliteTable(
     text: text("text").notNull(),
     /** preference | fact | goal | habit (Zod-validated at every boundary). */
     category: text("category").notNull(),
-    /** active | superseded | archived | expired | deleted. Only `active` injects. */
-    status: text("status").notNull().default("active"),
+    /** The memory machine (shared/machines/memory.ts). Only `active` injects. */
+    status: text("status").$type<MemoryStatus>().notNull().default("active"),
     /** capture | manual (source line on the Memory page). */
     source: text("source").notNull().default("capture"),
     /** Extraction confidence 0..1; null for manual entries. */
@@ -634,8 +639,8 @@ export const routineRuns = sqliteTable(
       .references(() => routines.id, { onDelete: "cascade" }),
     /** The occurrence this run represents (UTC instant). */
     scheduledFor: ms("scheduled_for").notNull(),
-    /** awaiting | succeeded | blocked | failed | missed | cancelled (blocked: it finished but could not do its job, issue #87) */
-    status: text("status").notNull(),
+    /** The routine-run machine (shared/machines/routine-run.ts). */
+    status: text("status").$type<RoutineRunStatus>().notNull(),
     /** schedule | manual */
     trigger: text("trigger").notNull().default("schedule"),
     /** pi-durable submit id: "routine:<routineId>:<scheduledFor ISO>". */

@@ -1,13 +1,10 @@
 /**
  * An upload's extraction (issue #58), from the moment its bytes are sniffed
- * to the text a bot reads. This module owns every value `extractStatus`
- * takes and every move between them:
- *
- *   sniffed ─┬─ unsupported / failed   (settled at upload: nothing to read)
- *            └─ pending ──┬─ ready     (extract.json stored next to the original)
- *                         ├─ failed
- *                         └─ (deleted: the job is cancelled, nothing written)
- *   none (uploaded before extraction existed) ─ pending, the first time a bot asks
+ * to the text a bot reads. This module writes every move of the extraction
+ * machine (`shared/machines/extraction.ts`, which draws the graph); a ready
+ * row's extract.json is stored next to the original, and a row deleted
+ * while its job runs keeps nothing. Each write is guarded by the states the
+ * machine allows it from, so a stale worker never settles a row twice.
  *
  * Extraction runs in a worker (`uploads.extract-runner.ts`), two at a time,
  * and the result is stored as `chat/<id>/extract.json` while the row records
@@ -19,6 +16,7 @@ import { storageService } from "@groot/core/storage";
 import { logger } from "@groot/core/logger";
 import type { AttachmentContent } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
+import { extractionMachine, type ExtractStatus } from "../../../shared/machines/extraction";
 import { extract } from "./uploads.extract";
 import { defaultRunner, type ExtractRunner } from "./uploads.extract-runner";
 import { sniffFile, SniffError, type ExtractKind, type SniffResult } from "./uploads.sniff";
@@ -90,7 +88,15 @@ export function startExtraction(
 /** Uploads from before extraction existed are queued the first time anyone asks. */
 export async function ensureExtracting<T extends UploadRow>(row: T): Promise<T> {
   if (row.kind !== "file" || row.extractStatus !== "none") return row;
-  await db.update(uploads).set({ extractStatus: "pending" }).where(eq(uploads.id, row.id));
+  await db
+    .update(uploads)
+    .set({ extractStatus: "pending" })
+    .where(
+      and(
+        eq(uploads.id, row.id),
+        inArray(uploads.extractStatus, extractionMachine.sourcesOf("pending")),
+      ),
+    );
   void queueExtraction(row.id);
   return { ...row, extractStatus: "pending" };
 }
@@ -242,14 +248,23 @@ async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): 
 /** Record a job's outcome. A row deleted meanwhile keeps nothing: the bytes written for it go too. */
 async function finish(
   uploadId: string,
-  data: { extractStatus: string; extractError?: string | null; extractMeta?: string },
+  data: {
+    extractStatus: Exclude<ExtractStatus, "none" | "pending">;
+    extractError?: string | null;
+    extractMeta?: string;
+  },
 ): Promise<void> {
   const updated = cancelled.has(uploadId)
     ? []
     : await db
         .update(uploads)
         .set({ ...data, extractedAt: new Date() })
-        .where(eq(uploads.id, uploadId))
+        .where(
+          and(
+            eq(uploads.id, uploadId),
+            inArray(uploads.extractStatus, extractionMachine.sourcesOf(data.extractStatus)),
+          ),
+        )
         .returning({ id: uploads.id })
         .catch(() => []);
   if (updated.length === 0 && data.extractStatus === "ready") {

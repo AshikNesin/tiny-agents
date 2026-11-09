@@ -21,6 +21,7 @@ import {
   type CodeHandoff,
   type CodeThreadRow,
 } from "../../db";
+import { handoffMachine } from "../../../shared/machines/handoff";
 
 function parseData(raw: string): Record<string, unknown> {
   try {
@@ -207,12 +208,20 @@ export async function findHandoff(
   });
 }
 
-/** Mark a hand-off running again (the bot sent a follow-up), so its next finish is delivered. */
+/**
+ * Mark a hand-off running again (the bot sent a follow-up), so its next
+ * finish is delivered. A hand-off still running is left as it is.
+ */
 export async function reopenHandoff(id: string): Promise<void> {
   await db
     .update(codeHandoffs)
     .set({ status: "running", finishedAt: null })
-    .where(eq(codeHandoffs.id, id));
+    .where(
+      and(
+        eq(codeHandoffs.id, id),
+        inArray(codeHandoffs.status, handoffMachine.sourcesOf("running")),
+      ),
+    );
 }
 
 /** Running hand-offs of these threads (all when omitted). */
@@ -229,7 +238,12 @@ export async function finishHandoffOnce(id: string): Promise<boolean> {
   const updated = await db
     .update(codeHandoffs)
     .set({ status: "finished", finishedAt: new Date() })
-    .where(and(eq(codeHandoffs.id, id), eq(codeHandoffs.status, "running")))
+    .where(
+      and(
+        eq(codeHandoffs.id, id),
+        inArray(codeHandoffs.status, handoffMachine.sourcesOf("finished")),
+      ),
+    )
     .returning({ id: codeHandoffs.id });
   return updated.length > 0;
 }
@@ -272,7 +286,8 @@ export async function copyShelleyTables(instanceId = "shelley"): Promise<number>
         task: row.task,
         cwd: row.cwd,
         idempotencyKey: row.idempotencyKey,
-        status: row.status,
+        // The legacy column is untyped text: anything unknown has finished.
+        status: handoffMachine.is(row.status) ? row.status : "finished",
         createdAt: row.createdAt,
         finishedAt: row.finishedAt,
       })

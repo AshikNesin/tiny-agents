@@ -16,9 +16,12 @@
  * - The capture watermark: advanced with the rows a capture adds, in the
  *   same transaction, so a failed write retries the window.
  *
- * Writes are one synchronous better-sqlite3 transaction each: all or nothing.
+ * Every status move is an edge of the memory machine
+ * (`shared/machines/memory.ts`); the guarded writes read their "from"
+ * states off it. Writes are one synchronous better-sqlite3 transaction
+ * each: all or nothing.
  */
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories, type AppDatabase } from "../../db";
 import {
@@ -27,6 +30,7 @@ import {
   type MemoryCategory,
   type MemorySource,
 } from "./memories.domain";
+import { memoryMachine, type MemoryStatus } from "../../../shared/machines/memory";
 
 export type MemoryRow = typeof memories.$inferSelect;
 
@@ -82,7 +86,7 @@ export interface MemoryLedger {
   /** Active rows that have not expired, oldest first: what a prompt may carry. */
   active(now?: Date): Promise<MemoryRow[]>;
   /** The page's view: expire what is due, then the rows in these statuses, oldest first. */
-  history(statuses: readonly string[], now?: Date): Promise<MemoryRow[]>;
+  history(statuses: readonly MemoryStatus[], now?: Date): Promise<MemoryRow[]>;
   promptContext(now?: Date): Promise<PromptContext>;
   /** Move the capture watermark (a window with nothing worth a call). Throws for a missing bot. */
   advanceWatermark(at: Date): Promise<void>;
@@ -103,7 +107,7 @@ export function memoryLedger(botId: string): MemoryLedger {
       .where(
         and(
           ofBot,
-          eq(memories.status, "active"),
+          inArray(memories.status, memoryMachine.sourcesOf("expired")),
           isNotNull(memories.until),
           lte(memories.until, now),
         ),
@@ -206,7 +210,13 @@ export function memoryLedger(botId: string): MemoryLedger {
     const { changes } = db
       .update(memories)
       .set({ status: "deleted" })
-      .where(and(ofBot, inArray(memories.id, [...ids]), ne(memories.status, "deleted")))
+      .where(
+        and(
+          ofBot,
+          inArray(memories.id, [...ids]),
+          inArray(memories.status, memoryMachine.sourcesOf("deleted")),
+        ),
+      )
       .run();
     return changes;
   }
@@ -219,6 +229,8 @@ export function memoryLedger(botId: string): MemoryLedger {
         .where(and(ofBot, eq(memories.id, id)))
         .get();
       if (!row) return undefined;
+      // Restore brings history back; a tombstone comes back only by the
+      // owner adding its text again (`add`, source manual).
       if (row.status === "deleted") return row;
       tx.update(memories)
         .set({ status: "active", supersededById: null, supersededAt: null })
@@ -240,7 +252,10 @@ export function memoryLedger(botId: string): MemoryLedger {
       .all();
   }
 
-  async function history(statuses: readonly string[], now = new Date()): Promise<MemoryRow[]> {
+  async function history(
+    statuses: readonly MemoryStatus[],
+    now = new Date(),
+  ): Promise<MemoryRow[]> {
     expire(db, now);
     return db
       .select()

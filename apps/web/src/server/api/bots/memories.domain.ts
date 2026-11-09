@@ -7,16 +7,13 @@
  */
 import { MEMORY_CATEGORY_ORDER } from "@tiny-agents/agent";
 import { z } from "zod";
+import type { MemoryStatus } from "../../../shared/machines/memory";
 
 /** The injected block's render lives with the prompt section that injects it. */
 export { MEMORY_RENDER_CHAR_CAP, renderMemoryBlock } from "@tiny-agents/agent";
 
 const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
-
-/** Only `active` is ever injected. Everything else is visible history. */
-const MEMORY_STATUSES = ["active", "superseded", "archived", "expired", "deleted"] as const;
-export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
 
 const MEMORY_SOURCES = ["capture", "manual"] as const;
 export type MemorySource = (typeof MEMORY_SOURCES)[number];

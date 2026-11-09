@@ -556,6 +556,24 @@ describe("completion watcher", () => {
     expect(after?.error).toContain("Model error");
   });
 
+  it("a run cancelled while its reply is read stays cancelled: the move out of awaiting is guarded", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await runOf(routine.id);
+    answer(run!, { text: "Late reply." });
+    const watcher = createRoutinesCompletionWatcher(runtime);
+    // The routine moves to another bot after the resolver listed the run.
+    const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION, async () => {
+      await db
+        .update(routineRuns)
+        .set({ status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" })
+        .where(eq(routineRuns.id, run!.id));
+      return runtime.readChat(ROUTINE_CONVERSATION);
+    });
+    expect(resolved).toBe(0);
+    expect(await runById(run!.id)).toMatchObject({ status: "cancelled", output: null });
+  });
+
   it("two awaiting runs on one conversation each get their own reply", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await db

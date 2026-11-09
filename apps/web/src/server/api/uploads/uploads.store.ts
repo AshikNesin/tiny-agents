@@ -15,6 +15,7 @@ import type {
   VisionStore,
 } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
+import { extractionMachine } from "../../../shared/machines/extraction";
 import { ensureExtracting, loadContent } from "./uploads.extraction";
 import { asBuffer, sniffImage } from "./uploads.prepare";
 
@@ -52,8 +53,6 @@ export function createVisionStore(rt: IdSource): VisionStore {
 
 type UploadRow = Upload;
 
-const STATUSES = new Set<AttachmentStatus>(["none", "pending", "ready", "failed", "unsupported"]);
-
 export function summarize(row: UploadRow): AttachmentSummary {
   let meta: Record<string, unknown> = {};
   try {
@@ -63,8 +62,8 @@ export function summarize(row: UploadRow): AttachmentSummary {
   }
   const count = (key: string) =>
     typeof meta[key] === "number" ? (meta[key] as number) : undefined;
-  const status = STATUSES.has(row.extractStatus as AttachmentStatus)
-    ? (row.extractStatus as AttachmentStatus)
+  const status: AttachmentStatus = extractionMachine.is(row.extractStatus)
+    ? row.extractStatus
     : "none";
   const pages = count("pages");
   const sheets = count("sheets");

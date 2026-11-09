@@ -66,6 +66,7 @@ import {
   previewFireTimes,
 } from "../../lib/routines-schedule";
 import { errorMessage } from "../../lib/errors";
+import { ROUTINE_NEEDS_ATTENTION, routineState } from "../../../shared/machines/routine";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -359,8 +360,9 @@ function RoutineCard({
   onResume: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
-  const autoPaused = !routine.enabled && routine.pausedReason !== null;
-  const blocked = routine.enabled && routine.blockedStreak > 0;
+  const state = routineState(routine);
+  const autoPaused = state === "auto_paused";
+  const blocked = state === "struggling";
   return (
     <Card>
       <div className="flex items-start gap-3 px-4 pt-4">
@@ -368,7 +370,7 @@ function RoutineCard({
           <div className="flex items-center gap-2">
             <Repeat className="size-4 shrink-0 text-muted-foreground" />
             <p className="truncate text-sm font-medium">{routine.name}</p>
-            {(autoPaused || blocked) && (
+            {ROUTINE_NEEDS_ATTENTION.has(state) && (
               <StatusBadge status="warning" label="Needs attention" className="shrink-0" />
             )}
           </div>
