@@ -3,7 +3,7 @@
  */
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Box, CheckSquare, HardDrive, Settings as SettingsIcon, Star } from "lucide-react";
 import { type ShellConfig, ShellProvider } from "@groot/shell/lib/shell-config";
@@ -37,13 +37,24 @@ function renderLayout(config: ShellConfig, props: Parameters<typeof Layout>[0] =
   );
 }
 
+/** `/login` waits for `GET /auth/setup`; answer that setup is done. */
+function setupDone() {
+  vi.stubGlobal(
+    "fetch",
+    async () =>
+      new Response(JSON.stringify({ success: true, data: { needsSetup: false } }), { status: 200 }),
+  );
+}
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   useCommandPaletteStore.setState({ open: false });
   useAuthStore.setState({ user: null });
 });
 
 describe("ShellConfig", () => {
-  it("overrides Login brand and marketing copy", () => {
+  it("overrides Login brand and marketing copy", async () => {
+    setupDone();
     render(
       <MemoryRouter>
         <ShellProvider
@@ -60,19 +71,20 @@ describe("ShellConfig", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(await screen.findByText("Acme")).toBeInTheDocument();
     expect(screen.getByText("Ship smarter.")).toBeInTheDocument();
     expect(screen.getByText("Custom feature")).toBeInTheDocument();
   });
 
-  it("keeps the Groot Login defaults without a provider", () => {
+  it("keeps the Groot Login defaults without a provider", async () => {
+    setupDone();
     render(
       <MemoryRouter>
         <Login />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Groot")).toBeInTheDocument();
+    expect(await screen.findByText("Groot")).toBeInTheDocument();
   });
 
   it("puts primary destinations in the sidebar", () => {

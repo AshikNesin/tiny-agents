@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ApiError, apiClient } from "@groot/shell/lib/api";
-import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
+import { loginErrorDescription, selectAuthStatus, useAuthStore } from "@groot/shell/store/auth";
 
 const USER = { id: 1, email: "demo@example.com", name: "Demo" };
 
@@ -99,6 +99,48 @@ describe("session", () => {
     serve({ "/auth/me": sessionInvalid });
     await useAuthStore.getState().checkAuth();
     expect(useAuthStore.getState()).toMatchObject({ user: null, hasCheckedAuth: true });
+  });
+
+  it("keeps a signed-in session when another sign-in fails", async () => {
+    serve({ "/auth/login": ok({ token: "t", user: USER }) });
+    await useAuthStore.getState().login(USER.email, "secret");
+    const generation = useAuthStore.getState().generation;
+    serve({ "/auth/login": unauthorized });
+    await expect(useAuthStore.getState().login(USER.email, "wrong")).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(useAuthStore.getState()).toMatchObject({
+      user: USER,
+      isAuthenticated: true,
+      generation,
+    });
+  });
+
+  it("lets a sign-in during the load check win over the check's stale answer", async () => {
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    serve({
+      "/auth/me": async () => {
+        await held;
+        return sessionInvalid;
+      },
+      "/auth/login": ok({ token: "t", user: USER }),
+    });
+    const check = useAuthStore.getState().checkAuth();
+    await useAuthStore.getState().login(USER.email, "secret");
+    answer();
+    await check;
+    expect(selectAuthStatus(useAuthStore.getState())).toEqual({ status: "signedIn", user: USER });
+  });
+
+  it("reads as unknown, then signed out or signed in", async () => {
+    expect(selectAuthStatus(useAuthStore.getState())).toEqual({ status: "unknown" });
+    serve({ "/auth/me": sessionInvalid });
+    await useAuthStore.getState().checkAuth();
+    expect(selectAuthStatus(useAuthStore.getState())).toEqual({ status: "signedOut" });
+    serve({ "/auth/login": ok({ token: "t", user: USER }) });
+    await useAuthStore.getState().login(USER.email, "secret");
+    expect(selectAuthStatus(useAuthStore.getState())).toEqual({ status: "signedIn", user: USER });
   });
 
   it("signs out locally even when the server call fails", async () => {

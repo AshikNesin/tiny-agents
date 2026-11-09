@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { Boom, reportError } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -92,9 +92,31 @@ export function jobActionNotAllowed(action: JobAction, state: JobState) {
   );
 }
 
+/**
+ * Delete the jobs `where` matches, with their logs, and return the deleted
+ * rows. Every job delete (an operator's, a purge, housekeeping) goes through
+ * here, so no path leaves orphaned log rows. An active job's handler may
+ * still log after this; the tick drops those rows when it finishes.
+ */
+export async function deleteJobsWhere(where: SQL | undefined): Promise<Job[]> {
+  const deleted = await db.delete(jobs).where(where).returning();
+  await deleteJobLogs(deleted.map((job) => job.id));
+  return deleted;
+}
+
 export async function getJobById(jobId: string): Promise<Job | null> {
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
   return job ?? null;
+}
+
+/**
+ * The fields every move back to `created` writes. A `created` job has not
+ * started this attempt and has not finished, so `startedAt` and `completedAt`
+ * are always null there, whichever event (retry, resume, a backed-off
+ * failure) put it back on the queue.
+ */
+function toCreated(runAt: Date): Partial<NewJob> {
+  return { state: "created", runAt, startedAt: null, completedAt: null };
 }
 
 /**
@@ -111,9 +133,7 @@ export function afterFailedAttempt(
   if (job.retryCount < job.retryLimit) {
     const delayMs = Math.min(job.retryDelay * 1000 * 2 ** job.retryCount, MAX_RETRY_DELAY_MS);
     return {
-      state: "created",
-      startedAt: null,
-      runAt: new Date(now.getTime() + delayMs),
+      ...toCreated(new Date(now.getTime() + delayMs)),
       retryCount: job.retryCount + 1,
       error,
     };
@@ -123,14 +143,8 @@ export function afterFailedAttempt(
 
 /** What each lifecycle action that updates the row in place writes. */
 const OPERATOR_UPDATES: Record<"retry" | "resume" | "cancel", (now: Date) => Partial<NewJob>> = {
-  retry: (now) => ({
-    state: "created",
-    runAt: now,
-    startedAt: null,
-    completedAt: null,
-    error: null,
-  }),
-  resume: (now) => ({ state: "created", runAt: now, completedAt: null }),
+  retry: (now) => ({ ...toCreated(now), error: null }),
+  resume: (now) => toCreated(now),
   cancel: (now) => ({ state: "cancelled", completedAt: now }),
 };
 
@@ -227,10 +241,8 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
   async function applyOperator(jobId: string, action: JobAction): Promise<Job> {
     switch (action) {
       case "delete": {
-        const [deleted] = await db.delete(jobs).where(eq(jobs.id, jobId)).returning();
+        const [deleted] = await deleteJobsWhere(eq(jobs.id, jobId));
         if (!deleted) throw jobNotFound(jobId);
-        // An active job's handler may still log; the tick drops those rows when it finishes.
-        await deleteJobLogs([jobId]);
         return deleted;
       }
       case "rerun": {

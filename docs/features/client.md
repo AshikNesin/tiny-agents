@@ -102,6 +102,7 @@ keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 | Member                                          | Does                                                                                            |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled              |
+| `selectAuthStatus(state)`                       | The session as one value: `unknown`, `signedOut`, or `signedIn` with its `user`                 |
 | `login(email, password)` / `loginWithPasskey()` | Sign in (`POST /auth/login`, or the WebAuthn ceremony); resolve with the user, or reject        |
 | `setup({ email, password, name? })`             | First-run setup (`POST /auth/setup`): create the first account and sign in; 403 once one exists |
 | `logout()`                                      | `POST /auth/logout`, then ends the local session; never rejects                                 |
@@ -109,6 +110,8 @@ keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 | `generation`, `clearAuth()`                     | Bumped on every sign-in/out; end the local session without a server call                        |
 | `loginErrorDescription(error, fallback)`        | The sign-in failure wording: a 401 is "Invalid email or password.", the rest is `describeError` |
 
+A failed sign-in changes nothing (a signed-in user stays signed in), and a
+`checkAuth()` answer that arrives after a sign-in or sign-out is dropped.
 The store installs the `onUnauthorized` hook: a session-guard 401 for a
 request sent during the current session clears it, so `ProtectedRoute`
 redirects to `/login`. One for a request sent before the last sign-in or

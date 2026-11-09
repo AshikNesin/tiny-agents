@@ -9,8 +9,19 @@ import type { SessionUser } from "@groot/core/auth/auth.schema";
  *  Defined once in `@groot/core` (type-only import, erased at build). */
 export type { SessionUser };
 
+/**
+ * The client session as one value: not yet known (the first `checkAuth()` has
+ * not settled), signed out, or signed in as `user`. Read it with
+ * `selectAuthStatus`; the store's fields are its storage.
+ */
+export type AuthStatus =
+  | { status: "unknown" }
+  | { status: "signedOut" }
+  | { status: "signedIn"; user: SessionUser };
+
 interface AuthState {
   user: SessionUser | null;
+  /** Always `user !== null`; prefer `selectAuthStatus`. */
   isAuthenticated: boolean;
   /** False until the first `checkAuth()` settles. */
   hasCheckedAuth: boolean;
@@ -65,6 +76,12 @@ async function passkeySignIn(): Promise<SessionUser> {
   }
 }
 
+/** The session as one tagged value, derived from `user` and `hasCheckedAuth`. */
+export function selectAuthStatus(state: Pick<AuthState, "user" | "hasCheckedAuth">): AuthStatus {
+  if (state.user) return { status: "signedIn", user: state.user };
+  return state.hasCheckedAuth ? { status: "signedOut" } : { status: "unknown" };
+}
+
 /** When `generation` last changed (`performance.now()`), for the 401 hook below. */
 let generationChangedAt = 0;
 
@@ -73,21 +90,28 @@ let generationChangedAt = 0;
  * the session guard's 401 means. The server keeps the session in an HttpOnly
  * cookie, so this holds only the user.
  */
-export const useAuthStore = create<AuthState>((set) => {
+export const useAuthStore = create<AuthState>((set, get) => {
+  /**
+   * The one transition: every sign-in and sign-out lands here, so `user`,
+   * `isAuthenticated` and `generation` always move together, and once a
+   * session is known (either way) the state is no longer `unknown`.
+   */
   const change = (user: SessionUser | null) => {
     generationChangedAt = performance.now();
-    set((s) => ({ user, isAuthenticated: user !== null, generation: s.generation + 1 }));
+    set((s) => ({
+      user,
+      isAuthenticated: user !== null,
+      hasCheckedAuth: true,
+      generation: s.generation + 1,
+    }));
   };
 
+  // A failed sign-in changes nothing: the server kept whatever session it had,
+  // so a signed-in user stays signed in.
   const signIn = async (run: () => Promise<SessionUser>) => {
-    try {
-      const user = await run();
-      change(user);
-      return user;
-    } catch (error) {
-      set({ user: null, isAuthenticated: false });
-      throw error;
-    }
+    const user = await run();
+    change(user);
+    return user;
   };
 
   return {
@@ -123,14 +147,16 @@ export const useAuthStore = create<AuthState>((set) => {
     },
 
     checkAuth: async () => {
+      const startedAt = get().generation;
       let user: SessionUser | null = null;
       try {
         user = await apiClient.get<SessionUser>("/auth/me");
       } catch {
         // No session cookie, or an expired one.
       }
+      // A sign-in or sign-out while the check ran is newer than its answer.
+      if (get().generation !== startedAt) return;
       change(user);
-      set({ hasCheckedAuth: true });
     },
 
     clearAuth: () => change(null),
@@ -138,7 +164,7 @@ export const useAuthStore = create<AuthState>((set) => {
 });
 
 apiClient.onUnauthorized(({ sentAt }) => {
-  if (useAuthStore.getState().isAuthenticated && sentAt >= generationChangedAt) {
+  if (useAuthStore.getState().user !== null && sentAt >= generationChangedAt) {
     useAuthStore.getState().clearAuth();
   }
 });

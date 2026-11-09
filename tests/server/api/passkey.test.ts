@@ -203,6 +203,61 @@ describe("passkey API", () => {
     expect(renamed.body.data).toMatchObject({ credentialName: "Renamed", canDelete: false });
   });
 
+  it("never deletes the last passkey, even when two deletes race", async () => {
+    const { token, user } = await signIn(app);
+    const device = { transports: ["internal"], deviceType: "singleDevice" };
+    await storePasskey(user.id, { ...device, credentialName: "A" });
+    await storePasskey(user.id, { ...device, credentialName: "B" });
+    const rows = (await api<PasskeyRow[]>(app, "/api/v1/passkey/list", { token })).body.data!;
+
+    const results = await Promise.all(
+      rows.map((row) => api(app, `/api/v1/passkey/${row.id}`, { method: "DELETE", token })),
+    );
+    expect(results.map((r) => r.status).toSorted()).toEqual([204, 400]);
+    expect(await db.select().from(passkeys).where(eq(passkeys.userId, user.id))).toHaveLength(1);
+  });
+
+  it("verifies a challenge only for what it was issued for", async () => {
+    const { token, user } = await signIn(app);
+    const passkey = await createSoftPasskey(user.id);
+
+    // A registration challenge does not sign anyone in.
+    const reg = await api<{ challenge: string }>(app, "/api/v1/passkey/register/options", {
+      method: "POST",
+      token,
+    });
+    const signInWithReg = await api(app, "/api/v1/passkey/login/verify", {
+      method: "POST",
+      json: { response: passkey.assert(reg.body.data!.challenge) },
+    });
+    expect(signInWithReg.status).toBe(400);
+    expect(signInWithReg.body.error?.message).toMatch(/Challenge not found or expired/);
+
+    // A sign-in challenge does not register a passkey.
+    const login = await api<{ challenge: string }>(app, "/api/v1/passkey/login/options", {
+      method: "POST",
+      json: {},
+    });
+    const registerWithLogin = await api(app, "/api/v1/passkey/register/verify", {
+      method: "POST",
+      json: {
+        response: {
+          id: "cred",
+          rawId: "cred",
+          type: "public-key",
+          response: {
+            clientDataJSON: clientData(login.body.data!.challenge),
+            attestationObject: "AA",
+          },
+          clientExtensionResults: {},
+        },
+      },
+      token,
+    });
+    expect(registerWithLogin.status).toBe(400);
+    expect(registerWithLogin.body.error?.message).toMatch(/Challenge not found or expired/);
+  });
+
   it("lists, renames and guards passkeys per user", async () => {
     const { token } = await signIn(app);
     expect((await api(app, "/api/v1/passkey/list", { token })).body.data).toEqual([]);

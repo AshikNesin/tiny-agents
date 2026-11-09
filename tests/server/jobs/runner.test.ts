@@ -294,6 +294,22 @@ describe("tick scheduling", () => {
     expect(ticks).toHaveBeenCalledTimes(1);
     vi.restoreAllMocks();
   });
+
+  it("forgets a pending re-run on stop", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    registerJobHandler("held", () => gate);
+    await addJob("held", null);
+    const first = runTick({ housekeeping: false });
+    const ticks = vi.spyOn(jobRunner, "runTick");
+    void runTick();
+    const stopped = jobRunner.stop();
+    release();
+    await first;
+    await stopped;
+    expect(ticks).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
 });
 
 describe("startWorkers / stopWorkers", () => {

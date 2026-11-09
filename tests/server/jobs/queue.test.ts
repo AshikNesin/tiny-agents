@@ -156,6 +156,20 @@ describe("queue + tick", () => {
     await expect(cancelJob("missing")).rejects.toThrow(/Job not found/);
   });
 
+  it("leaves no startedAt or completedAt on a job back in created", async () => {
+    const id = await addJob("parked", {});
+    await db.update(jobs).set({ state: "active", startedAt: new Date() }).where(eq(jobs.id, id));
+    await cancelJob(id);
+    expect(await load(id)).toMatchObject({ state: "cancelled", startedAt: expect.any(Date) });
+
+    await resumeJob(id);
+    expect(await load(id)).toMatchObject({ state: "created", startedAt: null, completedAt: null });
+
+    await cancelJob(id);
+    await retryJob(id);
+    expect(await load(id)).toMatchObject({ state: "created", startedAt: null, completedAt: null });
+  });
+
   it("accepts exactly the actions the lifecycle allows from each state", async () => {
     expect(VALID_JOB_STATES).toEqual(["created", "active", "completed", "failed", "cancelled"]);
     const calls = {
