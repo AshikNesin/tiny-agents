@@ -9,6 +9,7 @@
  * verbatim; the rest are the app's (routine cards, YOLO mode).
  */
 import type { ChatEvent } from "@tiny-agents/agent";
+import type { SettledRoutineRunStatus } from "./machines/routine-run";
 
 /**
  * A finished routine run, shown as a quiet line in its bot's chat (issue
@@ -22,7 +23,7 @@ export interface RoutineRunCard {
   routineId: string;
   routineName: string;
   /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
-  status: "succeeded" | "blocked" | "failed" | "missed" | "cancelled";
+  status: SettledRoutineRunStatus;
   trigger: "schedule" | "manual";
   /** ISO time of the slot the run was for. */
   scheduledFor: string;

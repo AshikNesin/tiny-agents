@@ -23,11 +23,12 @@ import {
   type WorkerLike,
 } from "../../../../apps/web/src/server/api/uploads/uploads.extract-runner";
 import type { ExtractResult } from "../../../../apps/web/src/server/api/uploads/uploads.extract";
+import type { ExtractStatus } from "../../../../apps/web/src/shared/machines/extraction";
 
 let seq = 0;
 
 /** A stored text file with a row in the given state. */
-async function seedFile(extractStatus: string, text = "hello") {
+async function seedFile(extractStatus: ExtractStatus, text = "hello") {
   const id = `upl-${++seq}-${Date.now().toString(36)}`;
   const storageKey = `chat/${id}/original`;
   await storageService.uploadFile({

@@ -32,6 +32,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | A page or route guests reach is in `GUEST_ACCESS`.                 | `tests/server/routes/guest-access.routes.test.ts` |
 | Each kind of resource a bot owns is in `BOT_RESOURCES`.            | `tests/server/api/bot-resources.test.ts`          |
 | Only the session guard throws `sessionInvalid()`.                  | R9                                                |
+| A status column is a typed machine; its writes guard on it.        | `tests/server/api/state-machines.test.ts`         |
 | Turn each operator correction into a row here.                     | Judgment, see below                               |
 
 An `apps/` transaction is a sync `db.transaction()` with no `await` inside. Guest
@@ -48,5 +49,6 @@ test) in the same change.
 [Migrations](./docs/guides/database-migrations.md) ·
 [Testing](./docs/guides/testing.md) · [Config](./docs/reference/config.md) ·
 [Routines, the reference feature](./docs/features/routines.md) ·
-[Design system](./docs/features/dls.md) · [Decisions](./docs/adr/README.md),
+[Design system](./docs/features/dls.md) ·
+[State machines](./docs/reference/state-machines.md) · [Decisions](./docs/adr/README.md),
 read before reversing one · [groot sync](./docs/guides/sync.md)

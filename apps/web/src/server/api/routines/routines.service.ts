@@ -5,10 +5,11 @@
  * routines.arming.ts: every mutation that can move nextRunAt asks it to arm
  * or disarm, so the queue and the row never disagree.
  */
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { bots, db, routineRuns, routines } from "../../db";
+import { routineRunMachine } from "../../../shared/machines/routine-run";
 import { conversationRef } from "../bots/bots.conversation";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import {
@@ -181,7 +182,12 @@ export async function update(
     await db
       .update(routineRuns)
       .set({ status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" })
-      .where(and(eq(routineRuns.routineId, id), eq(routineRuns.status, "awaiting")));
+      .where(
+        and(
+          eq(routineRuns.routineId, id),
+          inArray(routineRuns.status, routineRunMachine.sourcesOf("cancelled")),
+        ),
+      );
   }
   const scheduleChanged = input.schedule !== undefined;
   if (scheduleChanged || botChanged) {

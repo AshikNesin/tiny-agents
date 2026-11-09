@@ -5,10 +5,11 @@
  * share the row mapping, the update rule and the idempotent create, so they
  * never diverge.
  */
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { db, tasks } from "../../db";
-import type { CreateTaskDTO, TaskPriority, TaskStatus, UpdateTaskDTO } from "./task.schema";
+import type { TaskStatus } from "../../../shared/machines/task";
+import type { CreateTaskDTO, TaskPriority, UpdateTaskDTO } from "./task.schema";
 
 export interface TaskRow {
   id: string;
@@ -49,8 +50,8 @@ function toRow(row: DbTask): TaskRow {
     id: row.id,
     title: row.title,
     description: row.description,
-    // Text columns in SQLite; only the DTO unions ever write them.
-    status: row.status as TaskStatus,
+    status: row.status,
+    // A text column in SQLite; only the DTO union ever writes it.
     priority: row.priority as TaskPriority,
     dueAt: row.dueAt,
     completedAt: row.completedAt,
@@ -97,6 +98,17 @@ export async function createTask(input: NewTask): Promise<TaskRow> {
   return toRow(row!);
 }
 
+/**
+ * The task machine's edge rule (`shared/machines/task.ts`), as one SQL
+ * expression read against the row before the update: entering `done` stamps
+ * now, staying `done` keeps the first stamp (a repeated "complete" never
+ * moves a task in the Completed tab), any other status clears it.
+ */
+function completedAtOnMoveTo(status: TaskStatus) {
+  if (status !== "done") return null;
+  return sql<Date>`CASE WHEN ${tasks.status} = 'done' AND ${tasks.completedAt} IS NOT NULL THEN ${tasks.completedAt} ELSE ${Date.now()} END`;
+}
+
 /** Apply a patch; undefined when the task is gone (each adapter says so its own way). */
 export async function updateTask(id: string, patch: TaskPatch): Promise<TaskRow | undefined> {
   const changes = {
@@ -104,11 +116,8 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<TaskRow 
     ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
     ...(patch.dueAt !== undefined ? { dueAt: patch.dueAt ?? null } : {}),
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    // completedAt follows status so "done" always has a completion time and
-    // reopening always clears it — the Completed tab sorts by it.
     ...(patch.status !== undefined
-      ? { completedAt: patch.status === "done" ? new Date() : null }
+      ? { status: patch.status, completedAt: completedAtOnMoveTo(patch.status) }
       : {}),
   };
   if (Object.keys(changes).length === 0) return findTask(id);

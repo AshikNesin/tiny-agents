@@ -7,7 +7,8 @@
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories } from "../../db";
-import { type MemoryCategory, type MemoryRecord, type MemoryStatus } from "./memories.domain";
+import { type MemoryCategory, type MemoryRecord } from "./memories.domain";
+import type { MemoryStatus } from "../../../shared/machines/memory";
 import { memoryLedger, type MemoryRow } from "./memories.ledger";
 import type { CreateMemoryDTO, UpdateMemoryDTO } from "./memories.schema";
 
@@ -17,7 +18,7 @@ function toRecord(row: MemoryRow): MemoryRecord {
     botId: row.botId,
     text: row.text,
     category: row.category as MemoryCategory,
-    status: row.status as MemoryStatus,
+    status: row.status,
     source: row.source === "manual" ? "manual" : "capture",
     confidence: row.confidence,
     until: row.until?.toISOString() ?? null,
@@ -42,7 +43,7 @@ async function findMemory(id: string): Promise<MemoryRow> {
 
 export async function list(id: string, includeArchived = false): Promise<MemoryRecord[]> {
   const botId = await findBotId(id);
-  const statuses = includeArchived
+  const statuses: MemoryStatus[] = includeArchived
     ? ["active", "superseded", "archived", "expired"]
     : ["active", "superseded"];
   return (await memoryLedger(botId).history(statuses)).map(toRecord);

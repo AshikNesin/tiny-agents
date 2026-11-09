@@ -281,7 +281,7 @@ describe("captureConversation", () => {
         botId,
         text: `Removed fact ${String(i).padStart(2, "0")}.`,
         category: "fact",
-        status: "deleted",
+        status: "deleted" as const,
         updatedAt: new Date(Date.UTC(2026, 9, 1, 0, i)),
       })),
     );

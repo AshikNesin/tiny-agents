@@ -3,6 +3,7 @@
  * response shapes; `apiClient` unwraps the { success, data } envelope.
  */
 import { apiClient } from "@groot/shell/lib/api";
+import type { RoutineRunStatus } from "../../shared/machines/routine-run";
 
 /** The schedule union as it travels on the wire (PRD 5.1). */
 export type Schedule =
@@ -49,7 +50,7 @@ export interface RoutineRun {
   botName?: string;
   scheduledFor: string;
   /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
-  status: "awaiting" | "succeeded" | "blocked" | "failed" | "missed" | "cancelled";
+  status: RoutineRunStatus;
   trigger: "schedule" | "manual";
   submittedAt: string | null;
   startedAt: string | null;

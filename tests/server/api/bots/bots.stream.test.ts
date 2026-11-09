@@ -11,6 +11,7 @@ import { followBotChat } from "../../../../apps/web/src/server/api/bots/bots.str
 import { publishBotChatEvent } from "../../../../apps/web/src/server/api/bots/bots.events";
 import { isBotWatched } from "../../../../apps/web/src/server/api/bots/bots.viewers";
 import type { BotStreamEvent, RoutineRunCard } from "../../../../apps/web/src/shared/bot-stream";
+import type { RoutineRunStatus } from "../../../../apps/web/src/shared/machines/routine-run";
 import { createFakeRuntime, resetAppTables, seedBot, type SeededBot } from "../../fixtures";
 
 /** A sink that records what the follow wrote, and whether it ended the stream. */
@@ -28,7 +29,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function seedRun(bot: SeededBot, finishedAt: Date | null, status = "succeeded") {
+async function seedRun(
+  bot: SeededBot,
+  finishedAt: Date | null,
+  status: RoutineRunStatus = "succeeded",
+) {
   const [routine] = await db
     .insert(routines)
     .values({

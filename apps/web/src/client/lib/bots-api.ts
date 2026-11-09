@@ -4,6 +4,7 @@
  * through `Jsonified` (dates arrive as ISO strings). `apiClient` unwraps the
  * { success, data } envelope.
  */
+import type { MemoryStatus } from "../../shared/machines/memory";
 import { apiClient } from "@groot/shell/lib/api";
 import type { CatalogModel, ProviderSummary } from "@tiny-agents/agent";
 import type { BotListEntry as BotListRow } from "../../shared/bot-list";
@@ -155,7 +156,6 @@ const MEMORY_CATEGORIES = ["preference", "fact", "goal", "habit"] as const;
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 /** Only `active` is ever injected; the rest is visible history (issue #22 5.4). */
-type MemoryStatus = "active" | "superseded" | "archived" | "expired" | "deleted";
 
 type MemorySource = "capture" | "manual";
 

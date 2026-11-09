@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { and, eq } from "drizzle-orm";
 import { memoryLedger } from "../../../../apps/web/src/server/api/bots/memories.ledger";
 import { bots, db, memories } from "../../../../apps/web/src/server/db";
+import type { MemoryStatus } from "../../../../apps/web/src/shared/machines/memory";
 import { resetAppTables, seedBot } from "../../fixtures";
 
 afterEach(resetAppTables);
@@ -21,7 +22,7 @@ const fact = (text: string, extra: Record<string, unknown> = {}) => ({
 const statusOf = async (id: string) =>
   (await db.query.memories.findFirst({ where: eq(memories.id, id) }))?.status;
 
-const count = (botId: string, status: string) =>
+const count = (botId: string, status: MemoryStatus) =>
   db.$count(memories, and(eq(memories.botId, botId), eq(memories.status, status)));
 
 describe("memoryLedger.add: dedupe", () => {

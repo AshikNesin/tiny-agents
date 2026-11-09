@@ -1,25 +1,29 @@
 /**
  * Routine runs: one run of routine R at slot S, from the fire to its card.
- * This module owns every state a run row takes and what follows from it:
- *
- *   fire ─┬─ missed   (past the grace window; never submitted)
- *         ├─ failed   (the submit failed; the routine pauses)
- *         └─ awaiting ─┬─ succeeded
- *                      ├─ blocked   (refused tools or `report_routine_blocked`;
- *                      │             three in a row pause the routine, issue #87)
- *                      └─ failed    (model error, or interrupted by a restart)
+ * This module writes the moves of the routine-run machine
+ * (`shared/machines/routine-run.ts`, which draws the graph) and what follows
+ * from them: a blocked run counts toward pausing its routine (three in a
+ * row, issue #87); a failed submit pauses it at once. Every move out of
+ * `awaiting` is a compare-and-set, so a run is resolved and announced once
+ * even when the idle listener and the boot sweep race, and a cancelled run
+ * is never overwritten by a late reply.
  *
  * An awaiting run is answered by the Finished reply to its request id in the
  * routine's own conversation (issue #63), so a mid-turn message never stands
  * in for the answer and two queued runs never swap replies. Every finished
  * run is announced: a push notification and a card in its bot's chat.
  */
-import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
 import { conversationRef } from "../bots/bots.conversation";
 import type { ChatRead } from "../bots/bots.settled";
 import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
+import {
+  routineRunMachine,
+  type RoutineRunStatus,
+  type SettledRoutineRunStatus,
+} from "../../../shared/machines/routine-run";
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
 import { clearBlockedStreak, disarmRoutine, recordBlocked } from "./routines.arming";
@@ -58,10 +62,9 @@ async function upsertRun(
   routine: RunRoutine,
   scheduledFor: Date,
   trigger: string,
-  fields: Partial<
-    Pick<RoutineRun, "status" | "submittedAt" | "startedAt" | "finishedAt" | "error">
-  > & {
-    status: string;
+  fields: Partial<Pick<RoutineRun, "submittedAt" | "startedAt" | "finishedAt" | "error">> & {
+    /** Only a state a run may be recorded in at its fire. */
+    status: (typeof routineRunMachine.initial)[number];
   },
 ): Promise<string> {
   const [row] = await db
@@ -199,19 +202,24 @@ export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): st
 }
 
 /**
- * Update one run row. Throws when it is gone (its routine was deleted
- * meanwhile), so the caller skips the announcement.
+ * Move one run to `status`, only from a state the machine allows. Throws
+ * when no row moved (its routine was deleted, it was cancelled, or another
+ * resolver settled it first), so the caller skips the announcement.
  */
-async function updateRun(
+async function settleRun(
   id: string,
-  data: Partial<Pick<RoutineRun, "status" | "finishedAt" | "error" | "output">>,
+  status: SettledRoutineRunStatus,
+  data: Partial<Pick<RoutineRun, "error" | "output">>,
 ): Promise<void> {
+  const from: RoutineRunStatus[] = routineRunMachine.sourcesOf(status);
   const updated = await db
     .update(routineRuns)
-    .set(data)
-    .where(eq(routineRuns.id, id))
+    .set({ ...data, status, finishedAt: new Date() })
+    .where(and(eq(routineRuns.id, id), inArray(routineRuns.status, from)))
     .returning({ id: routineRuns.id });
-  if (updated.length === 0) throw new Error(`Routine run ${id} not found`);
+  if (updated.length === 0) {
+    throw new Error(`Routine run ${id} is gone or no longer ${from.join(" or ")}`);
+  }
 }
 
 /** The conversation a run awaits (runs fired before routines had their own awaited the chat). */
@@ -279,7 +287,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
   async function resolveRun(ref: RoutineRunRef, routineId: string, reply: FinishedReply) {
     if (reply.error !== undefined) {
       const error = preview(reply.error, ERROR_PREVIEW_CHARS);
-      await updateRun(ref.runId, { status: "failed", finishedAt: new Date(), error });
+      await settleRun(ref.runId, "failed", { error });
       await clearBlockedStreak(routineId);
       announceRun(ref, { status: "failed", error });
       return;
@@ -291,23 +299,18 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     ].filter((reason): reason is string => reason !== undefined);
     if (reasons.length > 0) {
       const error = preview(reasons.join(" "), ERROR_PREVIEW_CHARS);
-      await updateRun(ref.runId, {
-        status: "blocked",
-        finishedAt: new Date(),
-        error,
-        output: output || null,
-      });
+      await settleRun(ref.runId, "blocked", { error, output: output || null });
       const pausedReason = await recordBlocked(routineId, error);
       announceRun(ref, { status: "blocked", error, pausedReason });
       return;
     }
-    await updateRun(ref.runId, { status: "succeeded", finishedAt: new Date(), output });
+    await settleRun(ref.runId, "succeeded", { output });
     await clearBlockedStreak(routineId);
     announceRun(ref, { status: "succeeded", output });
   }
 
   async function markInterrupted(ref: RoutineRunRef): Promise<void> {
-    await updateRun(ref.runId, { status: "failed", finishedAt: new Date(), error: "interrupted" });
+    await settleRun(ref.runId, "failed", { error: "interrupted" });
     announceRun(ref, { status: "failed", error: "Interrupted by a server restart." });
   }
 

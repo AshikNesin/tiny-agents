@@ -38,7 +38,7 @@ Whether a routine will fire, and when: enabled with exactly one queued routine-f
 _Avoid_: schedule (that is the routine's cron/slot rule), enabled (one column of it)
 
 **Routine run**:
-One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` owns every state change and the card and push that follow.
+One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` writes every move of the routine-run machine (`apps/web/src/shared/machines/routine-run.ts`) and the card and push that follow.
 _Avoid_: job, execution
 
 **Bot chat**:
