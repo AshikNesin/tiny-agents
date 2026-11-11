@@ -128,6 +128,7 @@ export {
   type TestResult,
 } from "./providers/test-call";
 export {
+  claudePlanFallbackModels,
   discoverModels,
   DiscoveryError,
   PROVIDER_TEMPLATES,

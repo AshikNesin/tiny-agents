@@ -133,6 +133,8 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     afterSeq: z.number().int().nonnegative(),
   }),
   z.strictObject({ type: z.literal("abort"), sessionId: z.string().min(1) }),
+  /** Claude Code's own model list for this login; answers `{ models: ClaudeCodeModel[] }`. */
+  z.strictObject({ type: z.literal("models"), requestId: z.string().min(1).max(100) }),
   z.strictObject({
     type: z.literal("tool_result"),
     sessionId: z.string().min(1),
@@ -174,6 +176,24 @@ export const workerMessageSchema = z.discriminatedUnion("type", [
 export type WorkerMessage = z.infer<typeof workerMessageSchema>;
 
 export type ToolResultPayload = { content: string; isError?: boolean };
+
+/**
+ * One entry of Claude Code's model list (the SDK's `ModelInfo`). `value` is
+ * what Claude Code takes (`opus`, `sonnet[1m]`, `default`); `resolvedModel`
+ * is the model id that alias stands for today, when Claude Code says.
+ */
+export const claudeCodeModelSchema = z.object({
+  value: z.string().min(1),
+  displayName: z.string(),
+  description: z.string().optional(),
+  resolvedModel: z.string().min(1).optional(),
+});
+
+export type ClaudeCodeModel = z.infer<typeof claudeCodeModelSchema>;
+
+export const claudeCodeModelsResultSchema = z.object({
+  models: z.array(claudeCodeModelSchema),
+});
 
 export function parseClientMessage(value: unknown): ClientMessage | undefined {
   const parsed = clientMessageSchema.safeParse(value);

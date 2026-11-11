@@ -4,8 +4,10 @@
  *
  * - Discovery asks the endpoint (`GET /models` and its kind's variants)
  *   through the `get` the app hands in: the app's guarded fetch, so this
- *   module never opens a connection itself. Static kinds (the gateway's
- *   catalog, the Claude plan) list without a request.
+ *   module never opens a connection itself. The gateway's catalog lists
+ *   without a request; the Claude plan asks Claude Code on the sandbox
+ *   (`listClaudePlan`, which the app hands in), since only Claude Code
+ *   holds that login.
  * - Capabilities come from pi-ai's built-in per-provider catalogs, matched by
  *   the endpoint's host and then by upstream id; else the kind's defaults.
  *   Owner overrides win over both (the app applies them).
@@ -24,6 +26,7 @@ import { OPENROUTER_MODELS } from "@earendil-works/pi-ai/providers/openrouter.mo
 import { TOGETHER_MODELS } from "@earendil-works/pi-ai/providers/together.models";
 import { XAI_MODELS } from "@earendil-works/pi-ai/providers/xai.models";
 import { ZAI_MODELS } from "@earendil-works/pi-ai/providers/zai.models";
+import type { ClaudeCodeModel } from "@tiny-agents/claude-worker";
 import type { ProviderKind } from "../types";
 import { PROVIDER_KINDS } from "./kinds";
 
@@ -39,6 +42,8 @@ export interface DiscoveredModel {
   compat: Record<string, unknown> | null;
   /** Capabilities came from a catalog (false: the kind's defaults, "unknown capabilities"). */
   known: boolean;
+  /** Other ids the endpoint lists this model under (a Claude Code alias such as `opus`). */
+  aliases?: string[];
 }
 
 /** One HTTP GET, as the app's guarded fetch answers it. */
@@ -57,6 +62,11 @@ export interface DiscoverInput {
    */
   headers?: Record<string, string>;
   get: DiscoveryGet;
+  /**
+   * The Claude plan's list, asked of Claude Code on the sandbox. Absent:
+   * there is nowhere to ask, and discovery fails `unreachable`.
+   */
+  listClaudePlan?: () => Promise<ClaudeCodeModel[]>;
 }
 
 /** Why discovery failed, for the account's status. */
@@ -73,22 +83,71 @@ export class DiscoveryError extends Error {
 const MAX_PAGES = 50;
 const MAX_MODELS = 5_000;
 
-/** The Claude plan's models: the worker passes the upstream id to Claude Code. */
-const CLAUDE_PLAN_MODELS: readonly DiscoveredModel[] = [
-  ["claude-opus-4-6", "Claude Opus 4.6"],
-  ["claude-sonnet-4-6", "Claude Sonnet 4.6"],
-  ["claude-haiku-4-5", "Claude Haiku 4.5"],
-].map(([upstreamId, name]) => ({
-  upstreamId: upstreamId!,
-  name: name!,
-  type: "chat",
-  contextWindow: 200_000,
-  maxOutputTokens: 32_000,
-  imageInput: true,
-  reasoning: true,
-  compat: null,
-  known: true,
-}));
+/** Claude Code's family aliases: each resolves to that family's newest model. */
+const CLAUDE_PLAN_ALIASES: readonly (readonly [string, string])[] = [
+  ["opus", "Claude Opus (latest)"],
+  ["sonnet", "Claude Sonnet (latest)"],
+  ["haiku", "Claude Haiku (latest)"],
+];
+
+/** Claude Code's `[1m]` suffix: the 1M-token context variant of a model. */
+const ONE_M = /\[1m\]$/i;
+
+/** A Claude plan model, named and sized from pi-ai's Anthropic catalog when it knows the id. */
+function claudePlanModel(upstreamId: string, fallbackName: string): DiscoveredModel {
+  const longContext = ONE_M.test(upstreamId);
+  const entry = resolveCapabilities("anthropic", null, upstreamId.replace(ONE_M, ""));
+  const defaults = PROVIDER_KINDS["claude-plan"].defaults;
+  const name = entry.known ? entry.name : fallbackName;
+  return {
+    upstreamId,
+    name: longContext && entry.known ? `${name} (1M context)` : name,
+    type: "chat",
+    contextWindow: longContext
+      ? 1_000_000
+      : entry.known
+        ? entry.contextWindow
+        : defaults.contextWindow,
+    maxOutputTokens: entry.known ? entry.maxOutputTokens : defaults.maxOutputTokens,
+    // Claude Code takes images and thinks with every model it offers.
+    imageInput: true,
+    reasoning: true,
+    compat: null,
+    known: entry.known,
+  };
+}
+
+/**
+ * The Claude plan's models from Claude Code's own list (what the worker's
+ * `models` request answers): each model under the id its alias resolves to
+ * today, named from pi-ai's catalog when it knows the id, else as Claude Code
+ * names it. `default` is left out: it is one of the others.
+ */
+export function claudePlanModels(listed: readonly ClaudeCodeModel[]): DiscoveredModel[] {
+  const out = new Map<string, DiscoveredModel>();
+  for (const model of listed) {
+    if (model.value === "default") continue;
+    const upstreamId = model.resolvedModel ?? model.value;
+    const found = out.get(upstreamId) ?? claudePlanModel(upstreamId, model.displayName);
+    const aliases = model.value === upstreamId ? [] : [model.value];
+    out.set(upstreamId, {
+      ...found,
+      ...(aliases.length || found.aliases
+        ? { aliases: [...(found.aliases ?? []), ...aliases] }
+        : {}),
+    });
+  }
+  return [...out.values()];
+}
+
+/**
+ * What a Claude plan account offers when Claude Code can't be asked yet (no
+ * sandbox, not signed in): the family aliases, which Claude Code resolves to
+ * the newest model of each family on every turn.
+ */
+export function claudePlanFallbackModels(): DiscoveredModel[] {
+  return CLAUDE_PLAN_ALIASES.map(([alias, name]) => claudePlanModel(alias, name));
+}
 
 const values = <T>(catalog: unknown) => Object.values(catalog as Record<string, T>);
 
@@ -146,6 +205,9 @@ export function resolveCapabilities(
   upstreamId: string,
   name?: string,
 ): DiscoveredModel {
+  if (kind === "claude-plan") {
+    return { ...claudePlanModel(upstreamId, name ?? upstreamId), ...(name ? { name } : {}) };
+  }
   const entry = catalogEntry(kind, baseUrl, upstreamId);
   const defaults = PROVIDER_KINDS[kind].defaults;
   return {
@@ -271,7 +333,23 @@ function gatewayModel(baseUrl: string | null, model: Model<Api>): DiscoveredMode
  */
 export async function discoverModels(input: DiscoverInput): Promise<DiscoveredModel[]> {
   const { kind } = input;
-  if (kind === "claude-plan") return [...CLAUDE_PLAN_MODELS];
+  if (kind === "claude-plan") {
+    if (!input.listClaudePlan) {
+      throw new DiscoveryError("unreachable", "There is no sandbox to run Claude Code on.");
+    }
+    let listed: ClaudeCodeModel[];
+    try {
+      listed = await input.listClaudePlan();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new DiscoveryError("unreachable", `Claude Code could not list its models: ${detail}`);
+    }
+    const models = claudePlanModels(listed);
+    if (models.length === 0) {
+      throw new DiscoveryError("invalid", "Claude Code listed no models.");
+    }
+    return models;
+  }
   if (kind === "faux") return [];
   if (kind === "cloudflare-ai-gateway") {
     return [

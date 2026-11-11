@@ -5,6 +5,7 @@
  */
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import { parseClientMessage, type ClientMessage, type SessionEvent } from "./protocol";
+import type { ModelLister } from "./sdk";
 import { resumeResultOf } from "./session-log";
 import { SessionLimitError, type SessionBook, type SessionOpen } from "./sessions";
 import type { Audience, EventFrame, Peer, ProtocolHandler } from "./socket-handler";
@@ -23,6 +24,8 @@ export function createBotHandler(deps: {
   env: Record<string, string | undefined>;
   authStatus: () => Promise<ClaudeAuthStatus>;
   now: () => number;
+  /** Claude Code's model list. Absent: a `models` request answers `unavailable`. */
+  listModels?: ModelLister;
 }): ProtocolHandler {
   const { book, everyone } = deps;
 
@@ -54,6 +57,24 @@ export function createBotHandler(deps: {
         sessionId: message.sessionId,
         turnId: message.turnId,
       });
+    }
+  }
+
+  async function models(requestId: string, peer: Peer): Promise<void> {
+    if (!deps.listModels) {
+      peer.refuse(requestId, "unavailable", "This worker cannot list Claude Code's models.");
+      return;
+    }
+    try {
+      await assertSessionMayStart(deps.env, deps.authStatus);
+      peer.reply(requestId, { models: await deps.listModels() });
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "";
+      peer.refuse(
+        requestId,
+        name === "SubscriptionRequired" ? "auth" : "failed",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -94,6 +115,9 @@ export function createBotHandler(deps: {
           return;
         case "turn":
           await turn(message, peer);
+          return;
+        case "models":
+          await models(message.requestId, peer);
           return;
       }
     },

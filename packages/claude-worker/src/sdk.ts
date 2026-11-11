@@ -7,7 +7,12 @@ import { z } from "zod";
 import { workerProcessEnv } from "./guards";
 import { newToolUseId, type QueryContext, type QueryFactory } from "./sessions";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
-import type { ImagePart, JsonSchema } from "./protocol";
+import {
+  claudeCodeModelSchema,
+  type ClaudeCodeModel,
+  type ImagePart,
+  type JsonSchema,
+} from "./protocol";
 
 interface SdkToolResult {
   content: { type: "text"; text: string }[];
@@ -140,6 +145,98 @@ function userContent(
       source: { type: "base64" as const, media_type: image.mimeType, data: image.data },
     })),
   ];
+}
+
+/** The `Query` methods the model list reads. Older SDKs lack some. */
+interface ModelListingQuery {
+  initializationResult?(): Promise<{ models?: unknown }>;
+  supportedModels?(): Promise<unknown>;
+  close?(): void;
+}
+
+/** Claude Code's model list for the signed-in account. */
+export type ModelLister = () => Promise<ClaudeCodeModel[]>;
+
+const MODEL_LIST_TIMEOUT_MS = 45_000;
+
+function asModels(value: unknown): ClaudeCodeModel[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const parsed = claudeCodeModelSchema.safeParse(item);
+    if (!parsed.success) return [];
+    const { value: id, displayName, description, resolvedModel } = parsed.data;
+    return [
+      {
+        value: id,
+        displayName,
+        ...(description ? { description } : {}),
+        ...(resolvedModel ? { resolvedModel } : {}),
+      },
+    ];
+  });
+}
+
+/**
+ * Ask Claude Code which models this login can use: start a query that never
+ * sends a prompt, read its initialization (the `ModelInfo` list, with each
+ * alias's resolved model), then close it. No tools, no settings, no turn:
+ * nothing is sent to the model. Concurrent calls share one query.
+ */
+export function createSdkModelLister(
+  sdk: ClaudeSdkModule,
+  env: Record<string, string | undefined>,
+  timeoutMs = MODEL_LIST_TIMEOUT_MS,
+): ModelLister {
+  let inflight: Promise<ClaudeCodeModel[]> | undefined;
+  const listOnce = async (): Promise<ClaudeCodeModel[]> => {
+    const workerEnv = workerProcessEnv(env);
+    if ("ANTHROPIC_BASE_URL" in workerEnv) throw new Error("Refusing to set ANTHROPIC_BASE_URL.");
+    let release: () => void = () => {};
+    const closed = new Promise<void>((resolve) => (release = resolve));
+    const prompt = (async function* (): AsyncIterable<SdkUserMessage> {
+      await closed;
+    })();
+    const query = sdk.query({
+      prompt,
+      options: {
+        tools: [],
+        strictMcpConfig: true,
+        settingSources: [],
+        maxTurns: 1,
+        permissionMode: "dontAsk",
+        allowedTools: [],
+        mcpServers: {},
+        env: workerEnv,
+        includePartialMessages: false,
+      } as unknown as SdkQueryOptions,
+    }) as AsyncIterable<SdkMessage> & ModelListingQuery;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const read = query.initializationResult
+        ? query.initializationResult().then((result) => result.models)
+        : query.supportedModels
+          ? query.supportedModels()
+          : Promise.reject(new Error("This Agent SDK cannot list Claude Code's models."));
+      const models = await Promise.race([
+        read,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("Claude Code did not list its models in time.")),
+            timeoutMs,
+          );
+        }),
+      ]);
+      return asModels(models);
+    } finally {
+      if (timer) clearTimeout(timer);
+      release();
+      query.close?.();
+    }
+  };
+  return () => {
+    inflight ??= listOnce().finally(() => (inflight = undefined));
+    return inflight;
+  };
 }
 
 export function createSdkQueryFactory(

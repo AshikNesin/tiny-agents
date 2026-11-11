@@ -6,7 +6,7 @@
 import { assertNoOverrides } from "./guards";
 import { requireSubscriptionLogin } from "./auth";
 import { createClaudeWorkerServer } from "./server";
-import { createSdkQueryFactory } from "./sdk";
+import { createSdkModelLister, createSdkQueryFactory } from "./sdk";
 import { timingsFromEnv } from "./protocol";
 import { codingLimitsFromEnv } from "./coding-protocol";
 import { codingSdkOf } from "./coding-sdk";
@@ -47,6 +47,7 @@ async function main(): Promise<void> {
   const server = await createClaudeWorkerServer({
     token,
     query: createSdkQueryFactory(sdk, process.env),
+    listModels: createSdkModelLister(sdk, process.env),
     authStatus: async () => {
       const report = await requireSubscriptionLogin(process.env);
       return {

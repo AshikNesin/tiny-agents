@@ -143,11 +143,18 @@ function AccountActions({
  * the one step left to the owner is the login, which runs in Claude Code's
  * own prompt in a terminal tab. There is no field for a Claude credential:
  * Claude Code keeps the login on the sandbox.
+ *
+ * `onCheckModels`: "Check again" also lists Claude Code's models while it is
+ * signed in, so a new model shows up without another click.
  */
-export function ClaudePlanStatus() {
+export function ClaudePlanStatus({ onCheckModels }: { onCheckModels?: () => void } = {}) {
   const { status, error } = useClaudeStatus();
   const { account, check } = useClaudeAccount();
   const onSandbox = status?.mode === "sandbox" || account?.state === "ready";
+  const onCheck = () => {
+    void check();
+    if (account?.state === "ready" && account.subscription) onCheckModels?.();
+  };
 
   return (
     <section aria-label="Claude plan engine" className="space-y-3 rounded-md border p-4">
@@ -169,7 +176,7 @@ export function ClaudePlanStatus() {
           <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
         </p>
       )}
-      {onSandbox ? <AccountActions account={account} onCheck={() => void check()} /> : null}
+      {onSandbox ? <AccountActions account={account} onCheck={onCheck} /> : null}
       {status ? (
         <p>
           <Text variant="meta">{fallbackLine(status)}</Text>

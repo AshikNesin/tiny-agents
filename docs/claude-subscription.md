@@ -26,7 +26,13 @@ container from `pnpm sandbox:up` ([local sandbox](guides/local-sandbox.md)).
 3. Choose **Sign in to Claude**. A terminal tab opens and types
    `claude auth login`. Open the link it prints, approve, and paste the
    code back into the tab. The card then shows "Signed in to Claude (max)".
-4. Give a bot one of the Claude plan account's models (labelled "uses your
+4. Choose **Check again** (the refresh icon on the account's card). The app
+   asks Claude Code on the sandbox which models your plan offers and lists
+   them under their full ids (`claude-opus-5-5`), named from pi-ai's catalog.
+   Until then the account holds the family aliases `opus`, `sonnet` and
+   `haiku`, which Claude Code resolves to the newest model of each family.
+   New models show up in **Add a model** after a check; nothing is hardcoded.
+5. Give a bot one of the Claude plan account's models (labelled "uses your
    Claude plan").
 
 That's all. There is no URL, token, unit file or Tailscale serve to set
