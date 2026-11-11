@@ -83,13 +83,6 @@ export class DiscoveryError extends Error {
 const MAX_PAGES = 50;
 const MAX_MODELS = 5_000;
 
-/** Claude Code's family aliases: each resolves to that family's newest model. */
-const CLAUDE_PLAN_ALIASES: readonly (readonly [string, string])[] = [
-  ["opus", "Claude Opus (latest)"],
-  ["sonnet", "Claude Sonnet (latest)"],
-  ["haiku", "Claude Haiku (latest)"],
-];
-
 /** Claude Code's `[1m]` suffix: the 1M-token context variant of a model. */
 const ONE_M = /\[1m\]$/i;
 
@@ -138,15 +131,6 @@ export function claudePlanModels(listed: readonly ClaudeCodeModel[]): Discovered
     });
   }
   return [...out.values()];
-}
-
-/**
- * What a Claude plan account offers when Claude Code can't be asked yet (no
- * sandbox, not signed in): the family aliases, which Claude Code resolves to
- * the newest model of each family on every turn.
- */
-export function claudePlanFallbackModels(): DiscoveredModel[] {
-  return CLAUDE_PLAN_ALIASES.map(([alias, name]) => claudePlanModel(alias, name));
 }
 
 const values = <T>(catalog: unknown) => Object.values(catalog as Record<string, T>);

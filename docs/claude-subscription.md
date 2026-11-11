@@ -26,12 +26,12 @@ container from `pnpm sandbox:up` ([local sandbox](guides/local-sandbox.md)).
 3. Choose **Sign in to Claude**. A terminal tab opens and types
    `claude auth login`. Open the link it prints, approve, and paste the
    code back into the tab. The card then shows "Signed in to Claude (max)".
-4. Choose **Check again** (the refresh icon on the account's card). The app
-   asks Claude Code on the sandbox which models your plan offers and lists
-   them under their full ids (`claude-opus-5-5`), named from pi-ai's catalog.
-   Until then the account holds the family aliases `opus`, `sonnet` and
-   `haiku`, which Claude Code resolves to the newest model of each family.
-   New models show up in **Add a model** after a check; nothing is hardcoded.
+4. Choose **Check again** (on the Claude plan box or the account's refresh
+   icon). The app asks Claude Code on the sandbox which models your plan
+   offers and saves each one under its full id (`claude-opus-5-5`), named from
+   pi-ai's catalog. Nothing is hardcoded: the account has no models until
+   Claude Code lists them, and a new model is added on the next check. The
+   Code page's Claude Code picker offers the same models.
 5. Give a bot one of the Claude plan account's models (labelled "uses your
    Claude plan").
 

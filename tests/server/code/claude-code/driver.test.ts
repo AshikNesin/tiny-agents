@@ -158,6 +158,20 @@ async function attention(events: InstanceEvent[], index = 0) {
 }
 
 describe("Claude Code harness", () => {
+  it("offers the Claude plan's models, and nothing hardcoded before Claude Code reports any", async () => {
+    const { harness, host } = await setup(manual);
+    // No session yet and no plan models: no invented list ("Default" is the picker's own).
+    expect(await harness.models()).toEqual([]);
+    const plan = [{ id: "claude-opus-5-5", label: "Claude Opus 5.5", supportsReasoning: true }];
+    const withPlan = createClaudeCodeHarness({
+      host,
+      resolveWorker: async () => ({ url: "ws://127.0.0.1:1", token: TOKEN }),
+      models: () => plan,
+    });
+    cleanups.push(() => withPlan.stop());
+    expect(await withPlan.models()).toEqual(plan);
+  });
+
   it("is honest about its capabilities", async () => {
     const { harness } = await setup(manual);
     expect(capabilityProblems(harness)).toEqual([]);

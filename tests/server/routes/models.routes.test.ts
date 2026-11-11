@@ -195,25 +195,21 @@ describe("models routes", () => {
     await assertNoSentinel();
   });
 
-  it("starts a Claude plan on the family aliases until Claude Code can list its models", async () => {
-    // No sandbox in tests: Claude Code can't be asked yet, so nothing is hardcoded but the aliases.
+  it("connects a Claude plan with no models until Claude Code can list them", async () => {
+    // No sandbox in tests: Claude Code can't be asked, and nothing is assumed in its place.
     const found = await call("/models/discover", {
       method: "POST",
       json: { kind: "claude-plan", allowPrivateNetwork: false },
     });
     expect(found.status).toBe(200);
-    expect(found.body.data.models.map((m: Data) => m.upstreamId)).toEqual([
-      "opus",
-      "sonnet",
-      "haiku",
-    ]);
+    expect(found.body.data.models).toEqual([]);
     const created = await call("/models/providers", {
       method: "POST",
       stepUp: await stepUp(),
-      json: { kind: "claude-plan", allowPrivateNetwork: false, models: ["opus", "sonnet"] },
+      json: { kind: "claude-plan", allowPrivateNetwork: false, models: [] },
     });
     expect(created.status).toBe(201);
-    expect(created.body.data.models.map((m: Data) => m.upstreamId)).toEqual(["opus", "sonnet"]);
+    expect(created.body.data.models).toEqual([]);
     // Checking again asks Claude Code; with no sandbox the account says so.
     const checked = await call(`/models/providers/${created.body.data.id}/refresh`, {
       method: "POST",

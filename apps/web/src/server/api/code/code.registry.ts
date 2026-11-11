@@ -16,6 +16,7 @@ import {
   type HarnessInstance,
   type InstanceStatus,
 } from "@tiny-agents/code/server";
+import type { ModelOption } from "@tiny-agents/code/contracts";
 import { appEnv, type AppEnv } from "../../env";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
@@ -78,7 +79,27 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
     host,
     resolveWorker: () => locator.resolve(),
     status: () => hint ?? { state: "connected" },
+    models: claudePlanModels,
   });
+}
+
+/**
+ * The Claude plan account's models that can run now, as the Code page's
+ * picker offers them: what Claude Code lists for the subscription (Settings →
+ * Models → Claude plan), under the ids Claude Code takes.
+ */
+function claudePlanModels(): ModelOption[] {
+  if (!agentRuntimeReady()) return [];
+  return getAgentRuntime()
+    .catalog.list({ type: "chat", enabledOnly: true })
+    .filter((model) => model.providerKind === "claude-plan" && model.available)
+    .map((model) => ({
+      id: model.upstreamId,
+      label: model.name,
+      contextWindow: model.contextWindow,
+      supportsReasoning: model.reasoning,
+      supportsImages: model.vision,
+    }));
 }
 
 export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[] {

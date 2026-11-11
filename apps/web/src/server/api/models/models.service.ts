@@ -8,7 +8,6 @@ import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
 import {
-  claudePlanFallbackModels,
   discoverModels,
   DiscoveryError,
   gatewayCustomBaseUrl,
@@ -320,17 +319,17 @@ function claudePlanLister(): (() => ReturnType<typeof listClaudeCodeModels>) | u
 }
 
 /**
- * Discovery for a new Claude plan account. Claude Code can only list its
+ * Discovery for a new account. Claude Code can only list a Claude plan's
  * models once it is installed and signed in, which the owner does from the
- * account's card after adding it: until then the account starts on the
- * family aliases, and "Check again" lists the real models.
+ * account's card after adding it: until then the account starts with no
+ * models, and "Check again" adds what Claude Code lists. Nothing is assumed.
  */
 async function discoverNew(input: Endpoint): Promise<DiscoveredModel[]> {
   if (input.kind !== "claude-plan") return discoverAt(input);
   try {
     return await discoverAt(input);
   } catch {
-    return claudePlanFallbackModels();
+    return [];
   }
 }
 
@@ -564,6 +563,18 @@ async function storedKey(row: ProviderRow): Promise<string | undefined> {
   return key;
 }
 
+/**
+ * Save the models a Claude plan's Claude Code lists that the account lacks:
+ * the plan's models are whatever the subscription offers, so a new one shows
+ * up on the next check without being added by hand.
+ */
+async function addListed(providerId: string, found: readonly DiscoveredModel[]) {
+  const have = await savedUpstreamIds(providerId);
+  const fresh = found.filter((m) => !have.has(m.upstreamId));
+  if (fresh.length === 0) return;
+  await db.insert(models).values(fresh.map((m) => modelValues(providerId, m, "discovered")));
+}
+
 /** Mark rows the endpoint no longer lists, and clear the mark on the ones it does. */
 async function markListed(providerId: string, found: readonly DiscoveredModel[]) {
   // A row saved under an alias (`opus`) is listed while Claude Code still offers that alias.
@@ -707,6 +718,7 @@ export async function refreshAccount(id: string) {
     .set({ status: "ok", statusDetail: null, checkedAt: new Date() })
     .where(eq(providers.id, id));
   if (row.discovery === "auto") await markListed(id, found);
+  if (row.kind === "claude-plan") await addListed(id, found);
   await reloadModels();
   const have = await savedUpstreamIds(id);
   return {

@@ -77,6 +77,12 @@ export interface ClaudeCodeHarnessOptions {
   status?: () => InstanceStatus;
   /** Connection timings (tests). */
   timings?: Partial<ConnectionTimings>;
+  /**
+   * The models the owner's Claude plan offers (Settings → Models → Claude
+   * plan, which Claude Code lists for the subscription). Without any, the
+   * picker shows what Claude Code's running sessions report.
+   */
+  models?: () => ModelOption[];
 }
 
 export type ClaudeCodeHarness = HarnessInstance;
@@ -122,13 +128,6 @@ const CAPABILITIES: Capabilities = {
 };
 
 /** Claude Code's model aliases; replaced by `supportedModels()` once a session ran. */
-const STATIC_MODELS: ModelOption[] = [
-  { id: "default", label: "Default (recommended)", isDefault: true, supportsReasoning: true },
-  { id: "opus", label: "Opus", supportsReasoning: true, supportsImages: true },
-  { id: "sonnet", label: "Sonnet", supportsReasoning: true, supportsImages: true },
-  { id: "haiku", label: "Haiku", supportsImages: true },
-];
-
 const DEFAULT_COMMANDS: SlashCommand[] = [
   { command: "/compact", hint: "Summarize the conversation to free context" },
   { command: "/init", hint: "Write a CLAUDE.md for this repository" },
@@ -1009,8 +1008,11 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     },
 
     async models() {
+      const plan = options.models?.() ?? [];
+      if (plan.length > 0) return plan;
+      // Claude Code's own list, once a session reported it. Nothing is assumed:
+      // "Default" (Claude Code's choice) is the picker's own entry.
       const models = catalog?.models ?? [];
-      if (models.length === 0) return STATIC_MODELS;
       return models.map((model) => ({
         id: model.value,
         label: model.displayName || model.value,
