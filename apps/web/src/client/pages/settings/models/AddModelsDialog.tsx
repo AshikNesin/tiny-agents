@@ -152,7 +152,8 @@ function ConnectionFields({
       {draft.kind === "claude-plan" ? (
         <Text variant="meta" className="block">
           The Claude plan needs no key here: Claude Code signs in on the sandbox (sign in from this
-          account's card once it is added).
+          account's card once it is added). Its models are the ones your subscription offers, listed
+          by Claude Code.
         </Text>
       ) : (
         <>
@@ -490,7 +491,13 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
       setFound(models);
       // Aggregators list hundreds: start with none.
       setChosen(new Set(aggregator ? [] : models.map((m) => m.upstreamId)));
-      if (models.length === 0) toast.info("The endpoint lists no models. Add one by id instead.");
+      if (models.length === 0) {
+        toast.info(
+          draft.kind === "claude-plan"
+            ? "Claude Code lists its models once it is signed in. Connect, sign in from the account's card, then check again."
+            : "The endpoint lists no models. Add one by id instead.",
+        );
+      }
     }, "Couldn't check the endpoint");
 
   const save = (
@@ -585,7 +592,8 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
         <Actions
           tab={tab}
           checked={found !== null}
-          canConnect={chosen.size > 0}
+          // A Claude plan connects before sign-in; its models come on the next check.
+          canConnect={chosen.size > 0 || draft.kind === "claude-plan"}
           canAdd={single.upstreamId.trim() !== ""}
           canTest={single.upstreamId.trim() !== "" && draft.kind !== "claude-plan"}
           busy={busy}

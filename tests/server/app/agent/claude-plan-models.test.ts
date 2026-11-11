@@ -7,7 +7,6 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { listClaudeCodeModels } from "../../../../packages/agent/src/engines/claude-code/models";
 import {
-  claudePlanFallbackModels,
   claudePlanModels,
   discoverModels,
   DiscoveryError,
@@ -75,14 +74,6 @@ describe("naming what Claude Code lists", () => {
       name: "Claude Sonnet 5.5 (1M context)",
       contextWindow: 1_000_000,
     });
-  });
-
-  it("falls back to the family aliases, which always resolve to the newest model", () => {
-    expect(claudePlanFallbackModels().map((m) => m.upstreamId)).toEqual([
-      "opus",
-      "sonnet",
-      "haiku",
-    ]);
   });
 
   it("names a model added by id the same way", () => {
