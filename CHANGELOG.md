@@ -1,5 +1,26 @@
 # tiny-agents
 
+## 1.2.1
+
+### Patch Changes
+
+- [#231](https://github.com/AshikNesin/tiny-agents/pull/231) [`42a17f2`](https://github.com/AshikNesin/tiny-agents/commit/42a17f2a58bb901bb30d43998a922fe9ae64ccd4) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The Claude plan lists its models from Claude Code instead of a hardcoded list.
+  
+  - **Worker:** a new `models` request asks the signed-in Claude Code for its model list (the Agent SDK's `initializationResult().models`) without sending a prompt.
+  - **Discovery:** each model is saved under the id its alias resolves to (`claude-opus-5-5`) and named from pi-ai's catalog. A new account starts on the `opus`, `sonnet` and `haiku` aliases until Claude Code is signed in.
+  - **Settings:** the Claude plan card can check again and add the models Claude Code lists.
+
+- [#232](https://github.com/AshikNesin/tiny-agents/pull/232) [`1ac44ab`](https://github.com/AshikNesin/tiny-agents/commit/1ac44ab686f414d20cc268d80fc58652a25fb87e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - No hardcoded Claude models: the Claude plan and the Code page use only what Claude Code lists for your subscription.
+  
+  - **Settings:** a new Claude plan account connects with no models until Claude Code is signed in. "Check again" adds each model Claude Code lists, so a new model appears without adding it by hand. The `opus` / `sonnet` / `haiku` fallback is gone.
+  - **Code page:** the Claude Code picker offers the Claude plan account's models (full ids, versioned names) instead of a fixed Opus / Sonnet / Haiku list. With none saved, it shows what Claude Code's sessions report.
+
+- [#228](https://github.com/AshikNesin/tiny-agents/pull/228) [`7a9eb42`](https://github.com/AshikNesin/tiny-agents/commit/7a9eb4278171f554f79f1e9c5cf2ceef84214201) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Synced groot `0a924aa`: tighter state machines in auth, passkeys and jobs.
+  
+  - **Auth:** a failed sign-in no longer signs out a signed-in user, and a stale `checkAuth()` answer that arrives after a sign-in or sign-out is dropped. The store exposes `selectAuthStatus()`.
+  - **Passkeys and jobs:** passkey ceremonies and job transitions reject invalid state changes.
+  - **Checks:** the changeset gate in a child covers only its own paths, doc-reference checks skip docs synced from groot, and typecheck coverage counts a child's `typecheck:app` projects.
+
 ## 1.2.0
 
 ### Minor Changes
