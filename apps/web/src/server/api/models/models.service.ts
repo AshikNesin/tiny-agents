@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
 import {
+  claudePlanFallbackModels,
   discoverModels,
   DiscoveryError,
   gatewayCustomBaseUrl,
@@ -25,6 +26,7 @@ import {
   type DiscoveredModel,
   type ProviderKind,
 } from "@tiny-agents/agent";
+import { listClaudeCodeModels } from "@tiny-agents/agent/claude-worker";
 import {
   bots,
   db,
@@ -38,6 +40,7 @@ import {
 import { fauxMode } from "../../env";
 import { createAppCredential, deleteItemRow } from "../vault/vault.admin.service";
 import { getAgentRuntime } from "../bots/bots.runtime";
+import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { providerHost, reloadModels, vaultCredentials } from "./models.config";
 import {
   checkBaseUrl,
@@ -310,13 +313,36 @@ async function discoverAt(input: Endpoint): Promise<DiscoveredModel[]> {
   return discoverDirect(input);
 }
 
+/** Ask Claude Code on the sandbox for the Claude plan's models; undefined without a sandbox. */
+function claudePlanLister(): (() => ReturnType<typeof listClaudeCodeModels>) | undefined {
+  const locator = sharedClaudeWorkerLocator();
+  return locator ? () => listClaudeCodeModels(() => locator.resolve()) : undefined;
+}
+
+/**
+ * Discovery for a new Claude plan account. Claude Code can only list its
+ * models once it is installed and signed in, which the owner does from the
+ * account's card after adding it: until then the account starts on the
+ * family aliases, and "Check again" lists the real models.
+ */
+async function discoverNew(input: Endpoint): Promise<DiscoveredModel[]> {
+  if (input.kind !== "claude-plan") return discoverAt(input);
+  try {
+    return await discoverAt(input);
+  } catch {
+    return claudePlanFallbackModels();
+  }
+}
+
 async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
   const baseUrl = canonicalEndpoint(input);
+  const listClaudePlan = input.kind === "claude-plan" ? claudePlanLister() : undefined;
   try {
     return await discoverModels({
       kind: input.kind,
       baseUrl,
       ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+      ...(listClaudePlan ? { listClaudePlan } : {}),
       get: (url, headers) =>
         guardedGet(url, headers, { allowPrivateNetwork: input.allowPrivateNetwork }),
     });
@@ -328,7 +354,7 @@ async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
 /** Discover without saving (the dialog's "Check models"). */
 export async function discover(input: DiscoverDTO) {
   refuseClaudeToken(input.apiKey);
-  const found = await discoverAt({ ...input, kind: input.kind, baseUrl: input.baseUrl ?? null });
+  const found = await discoverNew({ ...input, kind: input.kind, baseUrl: input.baseUrl ?? null });
   return { models: found };
 }
 
@@ -443,7 +469,7 @@ export async function createAccount(input: CreateAccountDTO) {
   // Discover again with what will be saved, so the stored models are real.
   const found =
     input.discovery === "auto"
-      ? await discoverAt({ ...input, kind, baseUrl })
+      ? await discoverNew({ ...input, kind, baseUrl })
       : input.model
         ? [
             resolveCapabilities(
@@ -540,7 +566,8 @@ async function storedKey(row: ProviderRow): Promise<string | undefined> {
 
 /** Mark rows the endpoint no longer lists, and clear the mark on the ones it does. */
 async function markListed(providerId: string, found: readonly DiscoveredModel[]) {
-  const listed = new Set(found.map((m) => m.upstreamId));
+  // A row saved under an alias (`opus`) is listed while Claude Code still offers that alias.
+  const listed = new Set(found.flatMap((m) => [m.upstreamId, ...(m.aliases ?? [])]));
   const rows = await db.select().from(models).where(eq(models.providerId, providerId));
   const now = new Date();
   const changed = rows.filter((row) => !listed.has(row.upstreamId) !== (row.missingSince !== null));
@@ -646,11 +673,12 @@ async function savedUpstreamIds(id: string): Promise<Set<string>> {
 /**
  * The models an account's endpoint lists that it doesn't have yet: the card's
  * add-a-model suggestions. Reads only: the account's status is left alone, and
- * a Claude plan or faux account (nothing to discover) lists none.
+ * a faux account (nothing to discover) lists none. A Claude plan account lists
+ * what Claude Code offers on the sandbox.
  */
 export async function availableModels(id: string): Promise<DiscoveredModel[]> {
   const row = await accountOrThrow(id);
-  if (row.kind === "faux" || row.kind === "claude-plan") return [];
+  if (row.kind === "faux") return [];
   const [found, have] = await Promise.all([discoverSaved(row), savedUpstreamIds(id)]);
   return found.filter((m) => !have.has(m.upstreamId));
 }

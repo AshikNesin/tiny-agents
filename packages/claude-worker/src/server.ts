@@ -20,6 +20,7 @@ import { DEFAULT_CODING_LIMITS, type CodingLimits } from "./coding-protocol";
 import type { CodingSdk } from "./coding-sdk";
 import { assertNoOverrides } from "./guards";
 import type { Timings } from "./protocol";
+import type { ModelLister } from "./sdk";
 import { SessionBook, type QueryFactory } from "./sessions";
 import { Audience, Peer, type ProtocolHandler } from "./socket-handler";
 import type { ArmTimer } from "./tool-proxy";
@@ -27,6 +28,8 @@ import type { ArmTimer } from "./tool-proxy";
 export interface ClaudeWorkerServerOptions {
   token: string;
   query: QueryFactory;
+  /** Claude Code's model list for the login (the `models` request). */
+  listModels?: ModelLister;
   /** Checked before a session process starts. Startup also checks in the bin. */
   authStatus: () => Promise<ClaudeAuthStatus>;
   env?: Record<string, string | undefined>;
@@ -128,6 +131,7 @@ export async function createClaudeWorkerServer(
       env,
       authStatus: options.authStatus,
       now,
+      ...(options.listModels ? { listModels: options.listModels } : {}),
     }),
   ];
 

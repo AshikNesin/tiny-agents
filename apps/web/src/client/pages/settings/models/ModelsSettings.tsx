@@ -428,27 +428,29 @@ function AccountActions({
   onCustomProviders: () => void;
   onDelete: () => void;
 }) {
-  // A Claude plan or faux account has no endpoint to check or edit.
+  // A Claude plan or faux account has no endpoint to edit. The Claude plan
+  // still checks again: Claude Code on the sandbox lists its models.
   const editable = account.kind !== "claude-plan" && account.kind !== "faux";
+  const checkable = account.kind !== "faux";
   return (
     <CardAction className="flex flex-wrap gap-1">
       <Button variant="ghost" size="sm" onClick={onToggle}>
         {account.enabled ? "Disable" : "Enable"}
       </Button>
+      {checkable && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Check ${account.name} again`}
+          onClick={onRefresh}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+      )}
       {editable && (
-        <>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Check ${account.name} again`}
-            onClick={onRefresh}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onEdit}>
-            Edit
-          </Button>
-        </>
+        <Button variant="ghost" size="sm" onClick={onEdit}>
+          Edit
+        </Button>
       )}
       {account.kind === "cloudflare-ai-gateway" && (
         <Button variant="ghost" size="sm" onClick={onCustomProviders}>
@@ -603,7 +605,14 @@ function AccountCard({
       </CardHeader>
       {open && (
         <CardContent className="space-y-4">
-          {account.kind === "claude-plan" && <ClaudePlanStatus key={String(account.enabled)} />}
+          {account.kind === "claude-plan" && (
+            <ClaudePlanStatus
+              key={String(account.enabled)}
+              onCheckModels={() =>
+                act(() => modelsApi.refresh(account.id), "Couldn't list Claude Code's models")
+              }
+            />
+          )}
           {account.kind === "claude-plan" && (
             <ClaudePlanFallback
               account={account}
@@ -639,17 +648,16 @@ function AccountCard({
               </li>
             )}
           </ul>
-          {account.kind !== "claude-plan" && (
-            <AddModel
-              accountId={account.id}
-              {...(account.kind === "cloudflare-ai-gateway"
-                ? { hint: "custom-zai-coding-plan/glm-5.3" }
-                : {})}
-              onAdd={(input) =>
-                act(() => modelsApi.addModel(account.id, input), "Couldn't add the model")
-              }
-            />
-          )}
+          <AddModel
+            key={account.checkedAt ?? "unchecked"}
+            accountId={account.id}
+            {...(account.kind === "cloudflare-ai-gateway"
+              ? { hint: "custom-zai-coding-plan/glm-5.3" }
+              : {})}
+            onAdd={(input) =>
+              act(() => modelsApi.addModel(account.id, input), "Couldn't add the model")
+            }
+          />
         </CardContent>
       )}
       {customizing && (

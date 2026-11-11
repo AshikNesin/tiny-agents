@@ -1,5 +1,7 @@
 export {
   DEFAULT_TIMINGS,
+  claudeCodeModelSchema,
+  claudeCodeModelsResultSchema,
   clientMessageSchema,
   parseClientMessage,
   parseWorkerMessage,
@@ -8,6 +10,7 @@ export {
   timingsFromEnv,
   toolSpecSchema,
   workerMessageSchema,
+  type ClaudeCodeModel,
   type ClientMessage,
   type ImagePart,
   type JsonSchema,
@@ -61,8 +64,10 @@ export {
 } from "./sessions";
 export {
   buildSdkOptions,
+  createSdkModelLister,
   createSdkQueryFactory,
   type ClaudeSdkModule,
+  type ModelLister,
   type SdkQueryOptions,
 } from "./sdk";
 export {
