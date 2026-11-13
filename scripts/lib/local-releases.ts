@@ -6,8 +6,8 @@
  * swapping is only a restart. `current` in that folder names the release to run.
  */
 import { fork, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { UpdateCommit, UpdateRelease } from "../../apps/web/src/shared/local-updates";
@@ -129,9 +129,13 @@ export function releaseStore(root: string, dir: string) {
 
   const isBuilt = (sha: string) => existsSync(path.join(releaseDir(sha), BUILT_MARKER));
 
-  async function removeRelease(target: string): Promise<void> {
-    await git(root, ["worktree", "remove", "--force", target]).catch(() => undefined);
-    rmSync(target, { recursive: true, force: true });
+  /**
+   * Delete release folders (independent, so in parallel), then let one
+   * `git worktree prune` drop their now-missing worktree entries. Git
+   * commands on the same repository stay serial: they share its lock files.
+   */
+  async function removeReleases(targets: string[]): Promise<void> {
+    await Promise.all(targets.map((target) => rm(target, { recursive: true, force: true })));
     await git(root, ["worktree", "prune"]);
   }
 
@@ -155,8 +159,7 @@ export function releaseStore(root: string, dir: string) {
     async build(sha: string, onLine: (line: string) => void): Promise<void> {
       const target = releaseDir(sha);
       mkdirSync(dir, { recursive: true });
-      if (existsSync(target)) await removeRelease(target);
-      await git(root, ["worktree", "prune"]);
+      await removeReleases(existsSync(target) ? [target] : []);
       onLine(`$ git worktree add ${target} ${sha.slice(0, 7)}`);
       await git(root, ["worktree", "add", "--detach", "--force", target, sha]);
 
@@ -164,14 +167,14 @@ export function releaseStore(root: string, dir: string) {
       // esbuild): never pass the server's NODE_ENV down.
       const env = { ...process.env };
       delete env.NODE_ENV;
-      for (const args of [
-        ["install", "--frozen-lockfile"],
-        ["run", "build"],
-      ]) {
+      const pnpm = async (args: string[]) => {
         onLine(`$ pnpm ${args.join(" ")}`);
         const result = await run("pnpm", args, { cwd: target, env, onLine });
         if (result.code !== 0) throw new Error(`pnpm ${args.join(" ")} exited ${result.code}`);
-      }
+      };
+      // In order: the build needs the installed dependencies.
+      await pnpm(["install", "--frozen-lockfile"]);
+      await pnpm(["run", "build"]);
       writeFileSync(path.join(target, BUILT_MARKER), `${new Date().toISOString()}\n`);
     },
 
@@ -179,10 +182,12 @@ export function releaseStore(root: string, dir: string) {
     async prune(keep: string[]): Promise<void> {
       if (!existsSync(dir)) return;
       const kept = new Set(keep);
-      for (const entry of await readdir(dir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || kept.has(entry.name)) continue;
-        await removeRelease(path.join(dir, entry.name));
-      }
+      const entries = await readdir(dir, { withFileTypes: true });
+      await removeReleases(
+        entries
+          .filter((entry) => entry.isDirectory() && !kept.has(entry.name))
+          .map((entry) => path.join(dir, entry.name)),
+      );
     },
 
     /**

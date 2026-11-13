@@ -4,7 +4,7 @@
  * describing a commit, and listing what an update brings.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -80,6 +80,21 @@ describe("local releases", () => {
     commit("1.11.0", "unreleased");
 
     expect(await fetchTracked(clone, { kind: "release", remote: "origin" })).toBe(ten);
+  });
+
+  it("prunes every release worktree but the ones it keeps", async () => {
+    const store = releaseStore(clone, path.join(base, "prune"));
+    const keep = store.releaseDir("keep");
+    const drop = store.releaseDir("drop");
+    sh(clone, "worktree", "add", "-q", "--detach", keep, first);
+    sh(clone, "worktree", "add", "-q", "--detach", drop, first);
+
+    await store.prune(["keep"]);
+
+    const listed = sh(clone, "worktree", "list", "--porcelain");
+    expect(listed).toContain(keep);
+    expect(listed).not.toContain(drop);
+    expect(existsSync(drop)).toBe(false);
   });
 
   it("remembers only a release that finished building", () => {
