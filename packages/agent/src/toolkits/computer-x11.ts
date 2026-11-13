@@ -286,6 +286,12 @@ export interface X11ComputerTransportOptions {
   connection: SandboxConnection;
   /** `COMPUTER_EXTRA_PACKAGES`, already validated. */
   extraPackages?: string[];
+  /**
+   * The browser toolkit's profiles root on the VM. Set, each desktop's Chrome
+   * opens the browser profile of the same key (`<root>/<profile>`), so a site
+   * signed into in either one is signed in in both.
+   */
+  browserProfilesDir?: string;
 }
 
 interface ExecResult {
@@ -356,7 +362,14 @@ export function createX11ComputerTransport(
         launched = parseDesktopLaunch(
           (
             await ok(
-              launchDesktopCommand({ profileDir: dir, width: open.width, height: open.height }),
+              launchDesktopCommand({
+                profileDir: dir,
+                width: open.width,
+                height: open.height,
+                browserProfileDir: options.browserProfilesDir
+                  ? `${options.browserProfilesDir.replace(/\/$/, "")}/${profile}`
+                  : undefined,
+              }),
               "start the desktop",
               { timeoutMs: LAUNCH_TIMEOUT_MS },
             )

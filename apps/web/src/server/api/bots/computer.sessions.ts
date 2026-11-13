@@ -13,6 +13,7 @@ import {
   parseExtraPackages,
   type ComputerSessions,
 } from "@tiny-agents/agent/computer";
+import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/agent/browser";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
@@ -44,6 +45,11 @@ export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | 
     transport: createX11ComputerTransport({
       connection,
       extraPackages: parseExtraPackages(unquoteEnv(env.COMPUTER_EXTRA_PACKAGES)).packages,
+      // The desktop's Chrome shares the bot browser's profile, which lives on
+      // the VM too unless BROWSER_EXECUTABLE_PATH runs the browser here.
+      browserProfilesDir: unquoteEnv(env.BROWSER_EXECUTABLE_PATH)
+        ? undefined
+        : (env.BROWSER_PROFILES_DIR ?? DEFAULT_BROWSER_PROFILES_DIR),
     }),
     width: size.width,
     height: size.height,

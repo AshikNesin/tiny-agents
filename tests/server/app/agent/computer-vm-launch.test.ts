@@ -276,6 +276,67 @@ runIfPython("desktop launch script", () => {
     );
   }, 60_000);
 
+  it("opens the browser profile in the desktop's Chrome, taking it over from the browser", async () => {
+    const profile = join(root, "profiles", "shared");
+    profiles.push(profile);
+    const browserProfile = join(root, "browser-profiles", "shared");
+    const apps = join(root, "applications");
+    mkdirSync(apps);
+    writeFileSync(
+      join(apps, "google-chrome.desktop"),
+      "[Desktop Entry]\nName=Google Chrome\nExec=/usr/bin/google-chrome-stable %U\nTryExec=/usr/bin/google-chrome-stable\n",
+    );
+    const fakeChrome = join(root, "fake-chrome");
+    writeFileSync(fakeChrome, `#!/bin/sh\necho "$@" > "${root}/chrome-args"\n`, { mode: 0o755 });
+    const command = aimAtFakeX(
+      launchDesktopCommand({
+        profileDir: profile,
+        width: 1280,
+        height: 800,
+        browserProfileDir: browserProfile,
+      }),
+    )
+      .replaceAll("/usr/share/applications", apps)
+      .replace(
+        "/usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium",
+        fakeChrome,
+      );
+    const result = await run(command, env, 20_000);
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+
+    const envFile = readFileSync(join(profile, DESKTOP_ENV_FILE), "utf8");
+    expect(envFile).toContain(`export PATH="${profile}/bin:$PATH"`);
+    const entry = readFileSync(join(profile, "data/applications/google-chrome.desktop"), "utf8");
+    expect(entry).toContain(`Exec=${profile}/bin/google-chrome-stable %U`);
+    expect(entry).toContain(`TryExec=${profile}/bin/google-chrome-stable\n`);
+
+    // The browser toolkit's Chrome holds the profile: the desktop's stops it first.
+    const browserChrome = spawn("sleep", ["600"], { stdio: "ignore" });
+    try {
+      writeFileSync(join(browserProfile, ".stack-pids"), `${browserChrome.pid}\n`);
+      const opened = await run(`"${profile}/bin/google-chrome" https://example.com`, env, 20_000);
+      expect(opened.code).toBe(0);
+      expect(alive(browserChrome.pid!)).toBe(false);
+      expect(existsSync(join(browserProfile, ".stack-pids"))).toBe(false);
+      expect(readFileSync(join(root, "chrome-args"), "utf8").trim()).toBe(
+        `--user-data-dir=${browserProfile} --no-first-run --no-default-browser-check --password-store=basic https://example.com`,
+      );
+    } finally {
+      browserChrome.kill("SIGKILL");
+    }
+
+    // Without a browser profile the desktop's Chrome is the system one again.
+    const plain = await run(
+      aimAtFakeX(launchDesktopCommand({ profileDir: profile, width: 1280, height: 800 })),
+      env,
+      20_000,
+    );
+    expect(plain.code).toBe(0);
+    expect(existsSync(join(profile, "bin"))).toBe(false);
+    expect(existsSync(join(profile, "data/applications/google-chrome.desktop"))).toBe(false);
+  }, 60_000);
+
   it("reattaches to a running desktop instead of starting another", async () => {
     const first = await launch("a");
     const again = await launch("a");

@@ -6,6 +6,7 @@
 export {
   closeAllBrowserSessions,
   createBrowserSessions,
+  DEFAULT_BROWSER_PROFILES_DIR,
   type BrowserSessions,
   type BrowserSessionsOptions,
   type BrowserTarget,

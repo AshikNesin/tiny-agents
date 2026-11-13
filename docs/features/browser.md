@@ -93,6 +93,16 @@ dialog (Tools, Browser, "Browser profile": Shared or Own); that is the
   shared profile signs every bot on it out (the panel asks first and says so).
 - Changing a bot's profile takes effect on its next browser call; its old tab
   stays in the shared browser until that browser idles out.
+- **The computer's Chrome opens the same profile.** Chrome started on a bot's
+  desktop ([computer](./computer.md)) runs with this profile's directory as
+  its `--user-data-dir`, so logins, history and extensions are the same in
+  both. Chrome lets one running browser hold a profile, so the last one opened
+  wins: the desktop's Chrome stops this browser first (the panel shows
+  "Closed"), and the next browser launch stops the desktop's Chrome
+  (`pkill` on `--user-data-dir=<profile>`, then a wait of up to 10 s so the
+  cookies are written). Both run with `--password-store=basic`, or one could
+  not read the cookies the other saved. Reset stops either one before it
+  wipes the profile.
 
 ## The viewer
 

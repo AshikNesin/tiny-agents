@@ -110,6 +110,9 @@ export interface BrowserTransport {
 
 export type BrowserDriver = "agent" | "human";
 
+/** Where profiles live when `profilesDir` is not set (on the VM, under the SSH user's home). */
+export const DEFAULT_BROWSER_PROFILES_DIR = "./data/browser-profiles";
+
 /** One live browser (a profile): shared by every agent whose target names it. */
 interface LiveBrowserSession {
   /** The browser itself; closing it closes every tab. Also the first agent's tab. */
@@ -247,7 +250,7 @@ interface Opening {
 
 export function createBrowserSessions(options: BrowserSessionsOptions = {}): BrowserSessions {
   const clock = options.clock ?? realClock;
-  const profilesDir = (options.profilesDir ?? "./data/browser-profiles").replace(/\/$/, "");
+  const profilesDir = (options.profilesDir ?? DEFAULT_BROWSER_PROFILES_DIR).replace(/\/$/, "");
   const exemptHosts = parseExemptHosts(options.allowedPrivateHosts);
   const idleMs = (options.idleMinutes ?? 10) * 60_000;
   const humanWaitMs = options.humanDriverWaitMs ?? 10 * 60_000;

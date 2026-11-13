@@ -97,14 +97,17 @@ const RELEASE_LOCK = "8>&-";
 const LOCK_WAIT_SECONDS = 25;
 const X_WAIT_SECONDS = 10;
 const CDP_WAIT_SECONDS = 30;
+/** How long a launch waits for an earlier Chrome on the profile to exit. */
+const STOP_WAIT_SECONDS = 10;
 
 /**
- * Upper bound on how long a launch script runs: its three waits plus the
+ * Upper bound on how long a launch script runs: its four waits plus the
  * fixed sleeps and process starts. The script always ends by itself within
  * this, so a caller that waits at least this long never walks away from a
  * script that is still running on the VM.
  */
-export const LAUNCH_BUDGET_MS = (LOCK_WAIT_SECONDS + X_WAIT_SECONDS + CDP_WAIT_SECONDS + 5) * 1000;
+export const LAUNCH_BUDGET_MS =
+  (LOCK_WAIT_SECONDS + STOP_WAIT_SECONDS + X_WAIT_SECONDS + CDP_WAIT_SECONDS + 5) * 1000;
 
 /**
  * Start Xtigervnc and a headful Chrome on it. Prints
@@ -127,13 +130,18 @@ export function launchStackCommand(options: LaunchStackOptions): string {
       "set -e",
       `PROFILE=${profile}`,
       'mkdir -p "$PROFILE" "$HOME/.tiny-agents"',
+      // Absolute, so it matches the computer's Chrome (`browserLinkLines`),
+      // which opens this same profile on the desktop.
+      'PROFILE="$(cd "$PROFILE" && pwd)"',
       `exec 8>"$HOME/.tiny-agents/${LAUNCH_LOCK_FILE}"`,
       `flock -w ${LOCK_WAIT_SECONDS} 8 || { echo "Gave up after ${LOCK_WAIT_SECONDS}s waiting for another browser to finish starting on the VM" >&2; exit 1; }`,
-      // A previous app process may have died without tearing down: its Chrome
-      // would hold the profile lock and swallow this launch.
+      // A previous app process may have died without tearing down, or the
+      // owner opened this profile in the computer's Chrome: either holds the
+      // profile lock and would swallow this launch. Chrome flushes cookies on
+      // SIGTERM, so the profile's logins carry over.
       `if [ -s "$PROFILE/${PID_FILE}" ]; then xargs -r kill < "$PROFILE/${PID_FILE}" 2>/dev/null || true; fi`,
-      'pkill -f -- "--user-data-dir=$PROFILE( |\\$)" 2>/dev/null || true',
-      "sleep 0.5",
+      ...stopProfileChromeLines(),
+      "sleep 0.3",
       // Free ports; the bind-then-close window is short and the lock above
       // serializes launches on this VM.
       `PORTS="$(python3 -c 'import socket
@@ -218,5 +226,28 @@ export function teardownStackCommand(profileDir: string): string {
  * the just-killed Chrome finish exiting so it cannot rewrite files.
  */
 export function wipeProfileCommand(profileDir: string): string {
-  return `sleep 1; rm -rf ${shQuote(profileDir)}`;
+  return bash(
+    [
+      `PROFILE=${shQuote(profileDir)}`,
+      'if [ -d "$PROFILE" ]; then PROFILE="$(cd "$PROFILE" && pwd)"; fi',
+      // The computer's Chrome may have the profile open too.
+      ...stopProfileChromeLines(),
+      "sleep 1",
+      'rm -rf "$PROFILE"',
+    ].join("\n"),
+  );
+}
+
+/**
+ * Stop every Chrome running on `$PROFILE` (the browser's, or the computer's
+ * on the same profile) and wait up to `STOP_WAIT_SECONDS` for it to exit, so the next Chrome
+ * finds the profile unlocked and its cookies written.
+ */
+function stopProfileChromeLines(): string[] {
+  const match = '"--user-data-dir=$PROFILE( |\\$)"';
+  return [
+    `pkill -f -- ${match} 2>/dev/null || true`,
+    `TA_STOP=$((SECONDS + ${STOP_WAIT_SECONDS}))`,
+    `while pgrep -f -- ${match} >/dev/null 2>&1 && [ "$SECONDS" -lt "$TA_STOP" ]; do sleep 0.2; done`,
+  ];
 }

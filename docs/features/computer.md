@@ -38,6 +38,19 @@ App ──────┴──────────────────�
   profile gets its own (`bot-<id>`). Each desktop runs on its own X display,
   separate from the browser's Chrome, and both share the VM's filesystem, so
   a file Chrome downloads is in `~/Downloads` on the desktop.
+- **The desktop's Chrome is the browser's profile.** The launch script
+  writes `$PROFILE/bin/google-chrome-stable` (with `google-chrome` and
+  `chromium` links), puts `$PROFILE/bin` first on the session's `PATH`, and
+  copies each installed Chrome menu entry into the desktop's `XDG_DATA_HOME`
+  with its `Exec` pointed at that wrapper. The wrapper runs Chrome with
+  `--user-data-dir` set to the browser profile of the same key, so the menu,
+  the Web Browser launcher and `computer_open_app` all open the bot's browser
+  profile. Chrome holds a profile in one running browser, so the wrapper first
+  stops the Browser feature's Chrome on it (its `.stack-pids`); the bot's next
+  browser call stops the desktop's Chrome the same way and reopens it in the
+  Browser panel. See [browser profiles](./browser.md#profiles). With
+  `BROWSER_EXECUTABLE_PATH` set the browser runs off the VM, so the desktop's
+  Chrome keeps a profile of its own.
 - **Fixed geometry, scaled viewer.** The desktop is `COMPUTER_DESKTOP_SIZE`
   (default `1280x800`) for its whole life. Screenshots are taken at that size
   and coordinates go to `xdotool` unchanged, so what the model sees and where
@@ -230,4 +243,5 @@ toggle, and boot needs no new variable.
   `pages/computer.test.tsx`: the Computer page, its routes and its viewer
   path.
 
-Follow-up: run the bot's Chrome inside its desktop, so one panel shows both.
+Follow-up: run the bot's Chrome inside its desktop, so one panel shows both
+at the same time (today they share a profile and hand it over).

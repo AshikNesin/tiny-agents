@@ -167,6 +167,12 @@ export interface LaunchDesktopOptions {
   profileDir: string;
   width: number;
   height: number;
+  /**
+   * The browser profile's Chrome user-data-dir on the VM (the browser
+   * toolkit's, for the same profile key). Set, the desktop's Chrome opens
+   * that profile, so the browser and the computer share one set of logins.
+   */
+  browserProfileDir?: string;
 }
 
 export interface LaunchedDesktop {
@@ -299,6 +305,78 @@ function seedLines(): string[] {
   return lines;
 }
 
+/** The browser pid file (`browser-vm-setup.ts`) a desktop Chrome reads to take the profile over. */
+const BROWSER_PID_FILE = ".stack-pids";
+
+/**
+ * The desktop's Chrome, installed as `$PROFILE/bin/google-chrome-stable`
+ * (and `google-chrome`, `chromium` beside it): Chrome on the browser's
+ * profile. Chrome locks a profile to one running instance on one display, so
+ * the browser toolkit's Chrome on it, if any, is stopped first (the bot's
+ * next browser call reopens it there and closes this one the same way).
+ * Same `--password-store` as the browser's launch, or Chrome could not read
+ * the cookies the other one saved.
+ */
+const DESKTOP_CHROME = `#!/bin/sh
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+B="$(cat "$HERE/browser-profile")"
+mkdir -p "$B"
+if [ -s "$B/${BROWSER_PID_FILE}" ]; then
+  PIDS="$(cat "$B/${BROWSER_PID_FILE}")"
+  rm -f "$B/${BROWSER_PID_FILE}"
+  kill $PIDS 2>/dev/null || true
+  for _ in $(seq 50); do
+    ALIVE=""
+    for P in $PIDS; do kill -0 "$P" 2>/dev/null && ALIVE=1; done
+    [ -z "$ALIVE" ] && break
+    sleep 0.2
+  done
+fi
+for C in /usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium; do
+  [ -x "$C" ] && exec "$C" --user-data-dir="$B" --no-first-run --no-default-browser-check --password-store=basic "$@"
+done
+echo "Chrome is not installed on the VM" >&2
+exit 1`;
+
+/** System Chrome launchers the desktop's menu and `gtk-launch` would otherwise run. */
+const CHROME_DESKTOP_ENTRIES = [
+  "google-chrome.desktop",
+  "chromium.desktop",
+  "chromium-browser.desktop",
+];
+
+/**
+ * Point the desktop's Chrome at the browser profile: the wrapper above, on
+ * the session's PATH (the XFCE "Web Browser" helper), and a copy of each
+ * installed Chrome menu entry in the desktop's own XDG data dir that runs it.
+ * Without a browser profile, remove them so Chrome keeps its own.
+ */
+function browserLinkLines(browserProfileDir: string | undefined): string[] {
+  const entries = CHROME_DESKTOP_ENTRIES.join(" ");
+  if (!browserProfileDir) {
+    return [
+      'rm -rf "$PROFILE/bin" "$PROFILE/browser-profile"',
+      `for F in ${entries}; do rm -f "$PROFILE/data/applications/$F"; done`,
+    ];
+  }
+  return [
+    `BROWSER_PROFILE=${shQuote(browserProfileDir)}`,
+    'mkdir -p "$BROWSER_PROFILE" "$PROFILE/bin" "$PROFILE/data/applications"',
+    'BROWSER_PROFILE="$(cd "$BROWSER_PROFILE" && pwd)"',
+    'printf \'%s\\n\' "$BROWSER_PROFILE" > "$PROFILE/browser-profile"',
+    `cat > "$PROFILE/bin/google-chrome-stable" <<'TA_CHROME_EOF'`,
+    DESKTOP_CHROME,
+    "TA_CHROME_EOF",
+    'chmod 755 "$PROFILE/bin/google-chrome-stable"',
+    'for N in google-chrome chromium chromium-browser; do ln -sf google-chrome-stable "$PROFILE/bin/$N"; done',
+    `for F in ${entries}; do`,
+    '  if [ -f "/usr/share/applications/$F" ]; then',
+    '    sed -E "s#^(Exec|TryExec)=[^ ]+#\\1=$PROFILE/bin/google-chrome-stable#" "/usr/share/applications/$F" > "$PROFILE/data/applications/$F"',
+    "  fi",
+    "done",
+  ];
+}
+
 /** Kill every process group recorded for the profile, then the pids themselves. */
 const KILL_RECORDED = [
   `if [ -s "$PROFILE/${DESKTOP_PID_FILE}" ]; then`,
@@ -324,6 +402,8 @@ export function launchDesktopCommand(options: LaunchDesktopOptions): string {
     `PROFILE=${shQuote(options.profileDir)}`,
     'mkdir -p "$PROFILE" "$HOME/.tiny-agents"',
     'PROFILE="$(cd "$PROFILE" && pwd)"',
+    // Before the reattach check, so a running desktop's menu follows too.
+    ...browserLinkLines(options.browserProfileDir),
     `exec 8>"$HOME/.tiny-agents/${LAUNCH_LOCK_FILE}"`,
     `flock -w ${LOCK_WAIT_SECONDS} 8 || { echo "Gave up after ${LOCK_WAIT_SECONDS}s waiting for another browser or desktop to finish starting on the VM" >&2; exit 1; }`,
     // Reattach: the desktop this profile recorded is still up at this size.
@@ -387,6 +467,7 @@ s.close()')"`,
     'export XDG_CONFIG_HOME="$CONF"',
     'export XDG_CACHE_HOME="$PROFILE/cache"',
     'export XDG_DATA_HOME="$PROFILE/data"',
+    'export PATH="$PROFILE/bin:\\$PATH"',
     "export DBUS_SESSION_BUS_ADDRESS='${DBUS_SESSION_BUS_ADDRESS:-}'",
     "TA_ENV_EOF",
     `( . "$PROFILE/${DESKTOP_ENV_FILE}" && exec setsid nohup xfce4-session </dev/null >"$SLOG" 2>&1 ${RELEASE_LOCK} ) &`,

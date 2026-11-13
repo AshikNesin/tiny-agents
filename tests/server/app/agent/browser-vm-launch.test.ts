@@ -312,6 +312,32 @@ runIfPython("browser stack launch script", () => {
     expect(stackPids(again.profile).every(alive)).toBe(true);
   }, 60_000);
 
+  it("closes the computer's Chrome on the same profile before starting", async () => {
+    const profile = join(root, "profiles", "shared");
+    mkdirSync(profile, { recursive: true });
+    // The desktop's Chrome (computer-vm-setup.ts) on this profile, and one on another.
+    const desktopChrome = spawn(
+      "python3",
+      ["-c", "import time; time.sleep(600)", `--user-data-dir=${profile}`, "about:blank"],
+      { stdio: "ignore" },
+    );
+    const other = spawn(
+      "python3",
+      ["-c", "import time; time.sleep(600)", `--user-data-dir=${profile}-2`],
+      { stdio: "ignore" },
+    );
+    try {
+      await until(() => alive(desktopChrome.pid!) && alive(other.pid!), "the stand-ins", 5_000);
+      const result = await launch("shared");
+      expect(result.code).toBe(0);
+      expect(alive(desktopChrome.pid!)).toBe(false);
+      expect(alive(other.pid!)).toBe(true);
+    } finally {
+      desktopChrome.kill("SIGKILL");
+      other.kill("SIGKILL");
+    }
+  }, 60_000);
+
   it("gives up with a clear message when another launch never finishes", async () => {
     await holdLock();
     const result = await launch("a", { lockWaitSeconds: 1 });
