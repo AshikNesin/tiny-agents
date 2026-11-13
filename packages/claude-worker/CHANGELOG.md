@@ -1,5 +1,15 @@
 # @tiny-agents/claude-worker
 
+## 0.4.2
+
+### Patch Changes
+
+- [#231](https://github.com/AshikNesin/tiny-agents/pull/231) [`42a17f2`](https://github.com/AshikNesin/tiny-agents/commit/42a17f2a58bb901bb30d43998a922fe9ae64ccd4) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The Claude plan lists its models from Claude Code instead of a hardcoded list.
+  
+  - **Worker:** a new `models` request asks the signed-in Claude Code for its model list (the Agent SDK's `initializationResult().models`) without sending a prompt.
+  - **Discovery:** each model is saved under the id its alias resolves to (`claude-opus-5-5`) and named from pi-ai's catalog. A new account starts on the `opus`, `sonnet` and `haiku` aliases until Claude Code is signed in.
+  - **Settings:** the Claude plan card can check again and add the models Claude Code lists.
+
 ## 0.4.1
 
 ### Patch Changes

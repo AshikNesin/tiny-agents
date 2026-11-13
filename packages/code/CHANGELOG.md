@@ -1,5 +1,16 @@
 # @tiny-agents/code
 
+## 0.2.3
+
+### Patch Changes
+
+- [#232](https://github.com/AshikNesin/tiny-agents/pull/232) [`1ac44ab`](https://github.com/AshikNesin/tiny-agents/commit/1ac44ab686f414d20cc268d80fc58652a25fb87e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - No hardcoded Claude models: the Claude plan and the Code page use only what Claude Code lists for your subscription.
+  
+  - **Settings:** a new Claude plan account connects with no models until Claude Code is signed in. "Check again" adds each model Claude Code lists, so a new model appears without adding it by hand. The `opus` / `sonnet` / `haiku` fallback is gone.
+  - **Code page:** the Claude Code picker offers the Claude plan account's models (full ids, versioned names) instead of a fixed Opus / Sonnet / Haiku list. With none saved, it shows what Claude Code's sessions report.
+- Updated dependencies [[`42a17f2`](https://github.com/AshikNesin/tiny-agents/commit/42a17f2a58bb901bb30d43998a922fe9ae64ccd4)]:
+  - @tiny-agents/claude-worker@0.4.2
+
 ## 0.2.2
 
 ### Patch Changes
