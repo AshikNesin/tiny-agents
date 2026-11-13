@@ -14,6 +14,7 @@ export {
   type ClientMessage,
   type ImagePart,
   type JsonSchema,
+  type MaxTurns,
   type SequencedEvent,
   type SessionEvent,
   type Timings,

@@ -112,7 +112,12 @@ export const modelsApi = {
   ) => stepped<Account>("post", "/models/providers", input),
   patch: (
     account: Account,
-    input: { name?: string; enabled?: boolean; fallbackModelId?: string | null },
+    input: {
+      name?: string;
+      enabled?: boolean;
+      fallbackModelId?: string | null;
+      maxTurns?: number | "unlimited" | null;
+    },
   ) =>
     apiClient.request<Account>("patch", `/models/providers/${account.id}`, {
       body: input,

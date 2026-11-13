@@ -177,7 +177,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     await this.restore();
     const session = this.sessions.get(ref);
     if (!session || session.surface !== "claude") return "unavailable";
-    const { enabled, fallback } = this.plan();
+    const { enabled, fallback, maxTurns } = this.plan();
     if (!enabled) {
       return this.unavailable(
         ref,
@@ -245,6 +245,7 @@ export class ClaudeCodeEngine implements AgentEngine {
       ...(session.claudeSessionId ? { resume: session.claudeSessionId } : {}),
       tools: session.tools,
       ...(input.images?.length ? { images: input.images } : {}),
+      ...(maxTurns ? { maxTurns } : {}),
     });
     await done;
     await this.persist();

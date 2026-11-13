@@ -41,7 +41,8 @@ export interface SdkQueryOptions {
   tools: readonly string[];
   strictMcpConfig: true;
   settingSources: readonly string[];
-  maxTurns: number;
+  /** Absent: Claude Code runs without a turn limit (opt-in "unlimited"). */
+  maxTurns?: number;
   permissionMode: "dontAsk";
   allowedTools: string[];
   mcpServers: Record<string, unknown>;
@@ -85,7 +86,7 @@ export function buildSdkOptions(input: {
   model: string;
   system?: string;
   resume?: string;
-  maxTurns: number;
+  maxTurns?: number;
   env: Record<string, string | undefined>;
   mcpServer: unknown;
   toolNames: readonly string[];
@@ -101,7 +102,7 @@ export function buildSdkOptions(input: {
     tools: [],
     strictMcpConfig: true,
     settingSources: [],
-    maxTurns: input.maxTurns,
+    ...(input.maxTurns ? { maxTurns: input.maxTurns } : {}),
     permissionMode: "dontAsk",
     allowedTools: input.toolNames.map((name) => `${MCP_PREFIX}${name}`),
     mcpServers: { "tiny-agents": input.mcpServer },
@@ -310,9 +311,7 @@ export function createSdkQueryFactory(
       }
       if (message.type === "result") {
         if (message.session_id) ctx.setClaudeSessionId(message.session_id);
-        const error = message.is_error
-          ? message.errors?.join("\n") || message.result || "Claude Code returned an error"
-          : undefined;
+        const error = message.is_error ? resultError(message) : undefined;
         ctx.publish({
           type: "turn_end",
           turnId,
@@ -323,4 +322,12 @@ export function createSdkQueryFactory(
       }
     }
   };
+}
+
+/** A failed result's message; running out of turns says where to raise the limit. */
+function resultError(message: SdkMessage): string {
+  const text = message.errors?.join("\n") || message.result || "Claude Code returned an error";
+  return message.subtype === "error_max_turns"
+    ? `${text}. Raise "Max turns" in Settings → Models → Claude plan, then send a message to continue.`
+    : text;
 }

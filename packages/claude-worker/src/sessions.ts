@@ -4,7 +4,14 @@
  * than the max age are recycled but keep the Claude session id for `resume`.
  */
 import { randomBytes } from "node:crypto";
-import type { ImagePart, SessionEvent, Timings, ToolResultPayload, ToolSpec } from "./protocol";
+import type {
+  ImagePart,
+  MaxTurns,
+  SessionEvent,
+  Timings,
+  ToolResultPayload,
+  ToolSpec,
+} from "./protocol";
 import { SessionLog } from "./session-log";
 import { ToolProxy, type ArmTimer } from "./tool-proxy";
 import { usagePauseMessage, usagePauseReason, type RateLimitInfo } from "./usage";
@@ -30,8 +37,8 @@ export interface QueryContext {
     input: unknown;
   }) => Promise<ToolResultPayload>;
   setClaudeSessionId: (id: string) => void;
-  /** SDK options the adapter is about to use. Tests assert lockdown here. */
-  maxTurns: number;
+  /** SDK options the adapter is about to use. Tests assert lockdown here. Absent: no limit. */
+  maxTurns?: number;
 }
 
 export type QueryFactory = (ctx: QueryContext) => Promise<void>;
@@ -42,6 +49,8 @@ export interface SessionOpen {
   system?: string;
   resume?: string;
   tools: readonly ToolSpec[];
+  /** Claude Code `maxTurns`; the worker's default when absent. */
+  maxTurns?: MaxTurns;
 }
 
 interface TurnWaiter {
@@ -58,6 +67,8 @@ export class Session {
   model: string;
   system?: string;
   tools: readonly ToolSpec[];
+  /** Claude Code `maxTurns` the next process starts with; the worker's default when absent. */
+  maxTurns?: MaxTurns;
   alive = false;
   running = false;
   /** Every event of this session, numbered, kept for resume and followed by the sockets. */
@@ -83,6 +94,7 @@ export class Session {
     this.system = open.system;
     this.claudeSessionId = open.resume;
     this.tools = open.tools;
+    this.maxTurns = open.maxTurns;
     this.createdAt = now;
     this.lastUsed = now;
     this.log = new SessionLog(open.sessionId, timings.eventBuffer);
@@ -132,6 +144,7 @@ export class Session {
     const generation = this.generation;
     this.activeGeneration = generation;
     const signal = this.abort.signal;
+    const maxTurns = this.maxTurns ?? this.timings.maxTurns;
     this.process = this.factory({
       model: this.model,
       system: this.system,
@@ -145,7 +158,7 @@ export class Session {
         this.claudeSessionId = id;
         this.publish({ type: "session", claudeSessionId: id });
       },
-      maxTurns: this.timings.maxTurns,
+      ...(maxTurns === "unlimited" ? {} : { maxTurns }),
     }).then(
       () => {
         if (generation !== this.generation) return;
@@ -295,6 +308,12 @@ export class SessionBook {
       existing.system = input.system;
       if (input.tools.length > 0) existing.tools = input.tools;
       if (input.resume) existing.claudeSessionId = input.resume;
+      if (input.maxTurns !== existing.maxTurns) {
+        existing.maxTurns = input.maxTurns;
+        // maxTurns is fixed when the process starts: restart it (Claude resumes
+        // the same conversation) so the new limit applies from this turn.
+        if (existing.alive && !existing.running) existing.recycle();
+      }
       existing.touch(now);
       return existing;
     }

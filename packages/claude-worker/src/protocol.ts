@@ -23,9 +23,18 @@ export const DEFAULT_TIMINGS = {
   maxSessionAgeMs: 6 * 60 * 60_000,
   maxLiveProcesses: 2,
   maxRunningTurns: 1,
-  /** Claude Code `maxTurns` for one query(). Tools are proxied, so a turn can take several. */
-  maxTurns: 30,
+  /**
+   * Claude Code `maxTurns` for one query() when the app sends none. Tools are
+   * proxied, so a turn can take several; a browser task can take dozens.
+   */
+  maxTurns: 100,
 } as const;
+
+/** The most `maxTurns` a turn may ask for, short of `"unlimited"`. */
+const MAX_TURNS_LIMIT = 1_000;
+
+/** Claude Code `maxTurns` for a turn: a cap, or `"unlimited"` (opt-in) for none. */
+export type MaxTurns = number | "unlimited";
 
 export type Timings = {
   [K in keyof typeof DEFAULT_TIMINGS]: number;
@@ -152,6 +161,10 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     resume: z.string().optional(),
     tools: z.array(toolSpecSchema).optional(),
     images: z.array(imagePartSchema).optional(),
+    /** Claude Code `maxTurns` (Settings → Models → Claude plan); the worker's default when absent. */
+    maxTurns: z
+      .union([z.number().int().positive().max(MAX_TURNS_LIMIT), z.literal("unlimited")])
+      .optional(),
   }),
 ]);
 

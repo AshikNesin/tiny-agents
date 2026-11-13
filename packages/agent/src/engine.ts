@@ -6,6 +6,7 @@
  * calls it; neither knows about the other. Tool calls of both go through
  * the one Tool gate (`gate.ts`).
  */
+import type { MaxTurns } from "@tiny-agents/claude-worker";
 import type { AgentChange } from "@earendil-works/pi-durable";
 import type { ClaudeSessionSync } from "./engines/claude-code/engine";
 import type { GateUserMessage, Permissions } from "./policy";
@@ -113,4 +114,6 @@ export type ClaudeEngineFallback = "gateway" | "pause";
 export interface ClaudePlanState {
   enabled: boolean;
   fallback: ClaudeEngineFallback;
+  /** Claude Code `maxTurns` for a turn (`"unlimited"`: none); the worker's default when absent. */
+  maxTurns?: MaxTurns;
 }

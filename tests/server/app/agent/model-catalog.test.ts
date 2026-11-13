@@ -103,6 +103,20 @@ describe("Model catalog", () => {
     expect(catalog.claudePlan()).toEqual({ enabled: true });
   });
 
+  it("reads the Claude plan's max turns or unlimited, ignoring anything else", () => {
+    const withMaxTurns = (maxTurns: unknown) =>
+      catalogOf({
+        ...base,
+        providers: base.providers.map((p) =>
+          p.kind === "claude-plan" ? { ...p, settings: { ...p.settings, maxTurns } } : p,
+        ),
+      }).catalog.claudePlan();
+    expect(withMaxTurns(250)).toEqual({ enabled: true, maxTurns: 250 });
+    expect(withMaxTurns("unlimited")).toEqual({ enabled: true, maxTurns: "unlimited" });
+    expect(withMaxTurns("250")).toEqual({ enabled: true });
+    expect(withMaxTurns(0)).toEqual({ enabled: true });
+  });
+
   it("says why a model can't run, and routes nothing for it", () => {
     const { catalog } = catalogOf({
       ...base,

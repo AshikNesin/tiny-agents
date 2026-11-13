@@ -102,7 +102,7 @@ connection. See [Use your Claude subscription](../claude-subscription.md).
 | `CLAUDE_WORKER_MAX_PROCESSES`    | `2`        | Live Claude processes.                                         |
 | `CLAUDE_WORKER_MAX_TURNS`        | `1`        | Running turns.                                                 |
 | `CLAUDE_WORKER_EVENT_BUFFER`     | `1000`     | Events kept per session for resume.                            |
-| `CLAUDE_WORKER_QUERY_MAX_TURNS`  | `30`       | `maxTurns` passed to the Agent SDK.                            |
+| `CLAUDE_WORKER_QUERY_MAX_TURNS`  | `100`      | `maxTurns` when the Claude plan account sets no Max turns.     |
 | `CLAUDE_WORKER_PORT`             | `8765`     | Worker only. Bind stays `127.0.0.1`.                           |
 
 The worker also refuses `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
