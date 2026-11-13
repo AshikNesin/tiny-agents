@@ -151,6 +151,12 @@ no release: the next message restarts an idle Claude process with the new
 limit and resumes the same conversation. A reply that runs out stops with
 "Reached maximum number of turns" and says where to raise it.
 
+**No limit** is opt-in: Claude Code then runs without `maxTurns`, and a reply
+goes on until it finishes, the plan's usage limit pauses it, or you stop it.
+The worker runs one Claude reply at a time, so a reply stuck in a loop holds
+up the other Claude plan chats until you stop it. Routines have no one
+watching to stop them.
+
 ## Max plan, without this engine
 
 If you only want Claude models on API keys, do not use this

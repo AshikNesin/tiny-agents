@@ -239,9 +239,16 @@ describe("models routes", () => {
       json: { maxTurns: 1_001 },
     });
     expect(tooMany.status).toBe(400);
-    const cleared = await call(`/models/providers/${plan.id}`, {
+    const unlimited = await call(`/models/providers/${plan.id}`, {
       method: "PATCH",
       headers: { "If-Match": String(set.body.data.version) },
+      json: { maxTurns: "unlimited" },
+    });
+    expect(unlimited.status).toBe(200);
+    expect(unlimited.body.data.settings).toMatchObject({ maxTurns: "unlimited" });
+    const cleared = await call(`/models/providers/${plan.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(unlimited.body.data.version) },
       json: { maxTurns: null },
     });
     expect(cleared.status).toBe(200);

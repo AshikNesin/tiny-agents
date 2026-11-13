@@ -47,7 +47,9 @@ export interface ModelCatalog {
   roleIsSet(role: ModelRole): boolean;
   providers(): ProviderSummary[];
   /** The Claude plan account's state, when there is one. */
-  claudePlan(): { enabled: boolean; fallbackModelId?: string; maxTurns?: number } | undefined;
+  claudePlan():
+    | { enabled: boolean; fallbackModelId?: string; maxTurns?: number | "unlimited" }
+    | undefined;
   /** Some chat model can run now. */
   canAnswer(): boolean;
 }
@@ -190,7 +192,8 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
       return {
         enabled: account.enabled,
         ...(typeof fallback === "string" && fallback ? { fallbackModelId: fallback } : {}),
-        ...(typeof maxTurns === "number" && Number.isInteger(maxTurns) && maxTurns > 0
+        ...(maxTurns === "unlimited" ||
+        (typeof maxTurns === "number" && Number.isInteger(maxTurns) && maxTurns > 0)
           ? { maxTurns }
           : {}),
       };

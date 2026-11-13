@@ -116,7 +116,7 @@ export const modelsApi = {
       name?: string;
       enabled?: boolean;
       fallbackModelId?: string | null;
-      maxTurns?: number | null;
+      maxTurns?: number | "unlimited" | null;
     },
   ) =>
     apiClient.request<Account>("patch", `/models/providers/${account.id}`, {

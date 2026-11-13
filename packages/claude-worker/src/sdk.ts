@@ -41,7 +41,8 @@ export interface SdkQueryOptions {
   tools: readonly string[];
   strictMcpConfig: true;
   settingSources: readonly string[];
-  maxTurns: number;
+  /** Absent: Claude Code runs without a turn limit (opt-in "unlimited"). */
+  maxTurns?: number;
   permissionMode: "dontAsk";
   allowedTools: string[];
   mcpServers: Record<string, unknown>;
@@ -85,7 +86,7 @@ export function buildSdkOptions(input: {
   model: string;
   system?: string;
   resume?: string;
-  maxTurns: number;
+  maxTurns?: number;
   env: Record<string, string | undefined>;
   mcpServer: unknown;
   toolNames: readonly string[];
@@ -101,7 +102,7 @@ export function buildSdkOptions(input: {
     tools: [],
     strictMcpConfig: true,
     settingSources: [],
-    maxTurns: input.maxTurns,
+    ...(input.maxTurns ? { maxTurns: input.maxTurns } : {}),
     permissionMode: "dontAsk",
     allowedTools: input.toolNames.map((name) => `${MCP_PREFIX}${name}`),
     mcpServers: { "tiny-agents": input.mcpServer },

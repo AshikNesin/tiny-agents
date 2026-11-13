@@ -25,8 +25,8 @@ const name = z.string().trim().min(1).max(80);
 const apiKey = z.string().trim().min(1).max(4_000);
 const baseUrl = z.string().trim().min(1).max(500);
 const id = z.string().trim().min(1).max(100);
-/** Claude plan: Claude Code `maxTurns` per turn; the worker's limit is 1,000. */
-const maxTurns = z.number().int().min(1).max(1_000);
+/** Claude plan: Claude Code `maxTurns` per turn, up to the worker's 1,000, or opt-in `"unlimited"`. */
+const maxTurns = z.union([z.number().int().min(1).max(1_000), z.literal("unlimited")]);
 
 /** Kind-specific, non-secret settings. */
 const settings = z.strictObject({

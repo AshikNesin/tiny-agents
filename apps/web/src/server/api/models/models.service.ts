@@ -528,7 +528,7 @@ export async function patchAccount(
     name?: string;
     enabled?: boolean;
     fallbackModelId?: string | null;
-    maxTurns?: number | null;
+    maxTurns?: number | "unlimited" | null;
   },
   ifMatch: number | undefined,
 ) {

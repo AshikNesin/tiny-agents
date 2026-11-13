@@ -206,7 +206,7 @@ describe("tool proxy, caps, eviction", () => {
   });
 
   it("starts Claude with the turn's maxTurns, and restarts it when the limit changes", async () => {
-    const limits: number[] = [];
+    const limits: (number | undefined)[] = [];
     const factory: QueryFactory = async (ctx) => {
       limits.push(ctx.maxTurns);
       for await (const turn of ctx.turns) {
@@ -214,7 +214,7 @@ describe("tool proxy, caps, eviction", () => {
       }
     };
     const book = new SessionBook(factory, DEFAULT_TIMINGS);
-    const open = (maxTurns?: number) => ({
+    const open = (maxTurns?: number | "unlimited") => ({
       sessionId: "s",
       model: "claude-sonnet-4-6",
       tools: [] as const,
@@ -224,8 +224,10 @@ describe("tool proxy, caps, eviction", () => {
     await book.runTurn(open(), { turnId: "2", text: "b" }, 1);
     await book.runTurn(open(250), { turnId: "3", text: "c" }, 2);
     await book.runTurn(open(250), { turnId: "4", text: "d" }, 3);
+    await book.runTurn(open("unlimited"), { turnId: "5", text: "e" }, 4);
     expect(DEFAULT_TIMINGS.maxTurns).toBe(100);
-    expect(limits).toEqual([100, 250]);
+    // "unlimited" starts Claude with no maxTurns at all.
+    expect(limits).toEqual([100, 250, undefined]);
   });
 
   it("allows two live processes and one running turn", async () => {
@@ -339,11 +341,25 @@ describe("SDK lockdown", () => {
     });
   });
 
-  it("accepts a turn's maxTurns up to 1,000", () => {
+  it("accepts a turn's maxTurns up to 1,000, or opt-in unlimited", () => {
     const turn = { type: "turn", sessionId: "s", turnId: "t", text: "hi", model: "m" };
     expect(parseClientMessage({ ...turn, maxTurns: 1_000 })).toMatchObject({ maxTurns: 1_000 });
+    expect(parseClientMessage({ ...turn, maxTurns: "unlimited" })).toMatchObject({
+      maxTurns: "unlimited",
+    });
+    expect(parseClientMessage({ ...turn, maxTurns: "lots" })).toBeUndefined();
     expect(parseClientMessage({ ...turn, maxTurns: 1_001 })).toBeUndefined();
     expect(parseClientMessage({ ...turn, maxTurns: 0 })).toBeUndefined();
+  });
+
+  it("sets no maxTurns at all when the turn has no limit", () => {
+    const options = buildSdkOptions({
+      model: "claude-sonnet-4-6",
+      env: { PATH: "/usr/bin" },
+      mcpServer: {},
+      toolNames: [],
+    });
+    expect("maxTurns" in options).toBe(false);
   });
 
   it("refuses to build options when an override is present", () => {

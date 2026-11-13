@@ -103,7 +103,7 @@ describe("Model catalog", () => {
     expect(catalog.claudePlan()).toEqual({ enabled: true });
   });
 
-  it("reads the Claude plan's max turns, ignoring a value that is not a positive integer", () => {
+  it("reads the Claude plan's max turns or unlimited, ignoring anything else", () => {
     const withMaxTurns = (maxTurns: unknown) =>
       catalogOf({
         ...base,
@@ -112,6 +112,7 @@ describe("Model catalog", () => {
         ),
       }).catalog.claudePlan();
     expect(withMaxTurns(250)).toEqual({ enabled: true, maxTurns: 250 });
+    expect(withMaxTurns("unlimited")).toEqual({ enabled: true, maxTurns: "unlimited" });
     expect(withMaxTurns("250")).toEqual({ enabled: true });
     expect(withMaxTurns(0)).toEqual({ enabled: true });
   });
