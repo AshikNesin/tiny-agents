@@ -178,7 +178,7 @@ export class Supervisor {
     this.ports.log(`Release ${target.sha.slice(0, 7)} did not start; rolling back`);
     await this.stopServer();
     this.running = from;
-    await this.launch(from.sha);
+    if (!(await this.launch(from.sha))) this.scheduleRestart(null);
     this.fail(
       `Release ${target.sha.slice(0, 7)} did not start, so ${from.sha.slice(0, 7)} is running again. See the terminal running pnpm local.`,
     );
@@ -196,6 +196,7 @@ export class Supervisor {
     this.server = server;
     const startedAt = Date.now();
     let exited = false;
+    let up = false;
 
     const ready = new Promise<boolean>((resolve) => {
       let settled = false;
@@ -220,11 +221,11 @@ export class Supervisor {
       server.onExit((code) => {
         exited = true;
         done(false);
-        this.onServerExit(server, code, startedAt);
+        this.onServerExit(server, code, startedAt, up);
       });
     });
 
-    const up = await ready;
+    up = await ready;
     if (up) this.broadcast();
     else if (!exited) await server.stop();
     return up;
@@ -235,17 +236,35 @@ export class Supervisor {
     if (message.type === "update-apply") void this.apply();
   }
 
-  private onServerExit(server: ServerHandle, code: number | null, startedAt: number): void {
+  /**
+   * A server exited. One that had come up and was not stopped on purpose
+   * crashed: start the release again. One that never came up is its
+   * launcher's to handle (rollback, or the next restart attempt).
+   */
+  private onServerExit(
+    server: ServerHandle,
+    code: number | null,
+    startedAt: number,
+    wasUp: boolean,
+  ): void {
     if (this.server !== server) return;
     this.server = undefined;
-    if (this.stopping || this.swapping) return;
-    // Crashed on its own: start the same release again, backing off.
+    if (this.stopping || this.swapping || !wasUp) return;
     if (Date.now() - startedAt > HEALTHY_MS) this.backoff = this.options.crashBackoffMs;
+    this.scheduleRestart(code);
+  }
+
+  /** Start the running release again after the backoff, and again until it comes up. */
+  private scheduleRestart(code: number | null): void {
+    clearTimeout(this.restartTimer);
     const delay = this.backoff;
     this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
     this.ports.log(`Server exited (code ${code ?? "signal"}); restarting in ${delay / 1000}s`);
     this.restartTimer = setTimeout(() => {
-      if (!this.stopping) void this.launch(this.running.sha);
+      if (this.stopping || this.server) return;
+      void this.launch(this.running.sha).then((up) => {
+        if (!up && !this.stopping && !this.server) this.scheduleRestart(null);
+      });
     }, delay);
   }
 

@@ -32,7 +32,15 @@ interface FakeServer extends ServerHandle {
   deliver(message: unknown): void;
 }
 
-function harness(options: { brokenBuild?: string; brokenStart?: string; auto?: boolean } = {}) {
+function harness(
+  options: {
+    brokenBuild?: string;
+    brokenStart?: string;
+    /** Launches (by index) that exit before they are ready. */
+    failedLaunches?: number[];
+    auto?: boolean;
+  } = {},
+) {
   const built = new Set([OLD]);
   const servers: FakeServer[] = [];
   const saved: string[] = [];
@@ -64,7 +72,8 @@ function harness(options: { brokenBuild?: string; brokenStart?: string; auto?: b
       deliver: (message) => onMessage(message),
     };
     servers.push(server);
-    if (sha === options.brokenStart) queueMicrotask(() => server.crash());
+    const fails = options.failedLaunches?.includes(servers.length - 1);
+    if (sha === options.brokenStart || fails) queueMicrotask(() => server.crash());
     else queueMicrotask(() => onMessage({ type: "server-ready" }));
     return server;
   };
@@ -152,6 +161,10 @@ describe("local supervisor", () => {
 
     expect(servers.map((server) => server.sha)).toEqual([OLD, NEW, OLD]);
     expect(live().map((server) => server.sha)).toEqual([OLD]);
+    // The broken release's exit is the rollback's, not a crash to restart:
+    // a second server would fight the first for the port and the agent store.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(servers).toHaveLength(3);
     expect(saved).toEqual([OLD]);
     expect(supervisor.status()).toMatchObject({
       phase: "failed",
@@ -174,6 +187,17 @@ describe("local supervisor", () => {
     await until(() => supervisor.updateAvailable(), "the check");
     servers[0].deliver({ type: "update-apply" });
     await until(() => live()[0]?.sha === NEW && supervisor.status().phase === "idle", "the update");
+  });
+
+  it("keeps restarting a crashed server until it comes up", async () => {
+    // Launch 1, the first restart, exits before it is ready; launch 2 works.
+    const { supervisor, servers, live } = harness({ failedLaunches: [1] });
+    await supervisor.start(OLD);
+    servers[0].crash();
+    await until(() => live().length === 1 && servers.length === 3, "the second restart");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(servers).toHaveLength(3);
+    await supervisor.shutdown();
   });
 
   it("restarts a server that crashed", async () => {

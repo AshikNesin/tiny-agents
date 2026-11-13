@@ -197,7 +197,9 @@ export function UpdatesSettings() {
             <CardDescription>
               {status.commits.length === 50
                 ? "The latest 50 commits"
-                : `${status.commits.length} commits`}{" "}
+                : status.commits.length === 1
+                  ? "1 commit"
+                  : `${status.commits.length} commits`}{" "}
               since the running version.
             </CardDescription>
           </CardHeader>
