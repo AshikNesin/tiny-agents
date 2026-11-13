@@ -505,7 +505,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             </DropdownMenu>
             <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
               {models.length > 0 && (
-                <ModelChip models={models} value={bot.modelId} onChange={onModelChange} />
+                <ModelChip
+                  models={models}
+                  value={model?.id ?? bot.modelId}
+                  onChange={onModelChange}
+                />
               )}
             </div>
             {busy && !showStop && (

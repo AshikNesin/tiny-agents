@@ -14,6 +14,7 @@
  * hands the browser back; the agent continues from the tab the owner left in
  * front.
  */
+import type { ReactNode } from "react";
 import {
   Bot as BotIcon,
   ClipboardPaste,
@@ -58,7 +59,16 @@ import { VncView } from "./browser/VncView";
 const WIDTH_KEY = "tiny-agents:browser-panel-width";
 const DEFAULT_WIDTH = 640;
 
-export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }) {
+export function BrowserPanel({
+  bot,
+  onClose,
+  tabs,
+}: {
+  bot: Bot;
+  onClose: () => void;
+  /** The live view's Browser / Computer switch, in place of the title, when the chat has both. */
+  tabs?: ReactNode;
+}) {
   const guest = useIsGuest();
   // Desktop only: drag the left edge to size the panel.
   const { width, startResize } = usePanelWidth(WIDTH_KEY, DEFAULT_WIDTH);
@@ -156,7 +166,7 @@ export function BrowserPanel({ bot, onClose }: { bot: Bot; onClose: () => void }
       <Card size="sm" className={cn("min-h-0 flex-1 gap-0 py-0", surface)}>
         <header className="@container flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
           <div className="min-w-0 flex-1">
-            <CardTitle>Browser</CardTitle>
+            {tabs ?? <CardTitle>Browser</CardTitle>}
             <Text variant="meta" className="flex min-w-0 items-center gap-1.5" aria-live="polite">
               <span className={cn("size-1.5 shrink-0 rounded-full", connection.dot)} aria-hidden />
               <span className="shrink-0 font-medium text-foreground">{connection.label}</span>

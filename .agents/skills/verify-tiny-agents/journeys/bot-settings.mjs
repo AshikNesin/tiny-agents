@@ -1,5 +1,5 @@
 // Feature: bot-settings (features/bot-settings.md). Edit a bot's profile (name,
-// description, system prompt) from the chat header, the taken-name error, the
+// description, system prompt) from the chat header's bot menu, the taken-name error, the
 // sidebar row's actions menu (Pin/Unpin, Edit bot), and deleting the bot.
 import { journey, expect } from "../scripts/lib.mjs";
 
@@ -35,7 +35,8 @@ await journey("bot-settings", async ({ page, step, proof, cleanup, api, stamp })
   });
 
   await step("the chat header's name opens Edit <bot> on the Profile tab", async () => {
-    await page.getByRole("button", { name: `Edit ${original}` }).click();
+    await page.getByRole("button", { name: `${original} menu` }).click();
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     const dialog = page.getByRole("dialog", { name: `Edit ${original}` });
     await expect(dialog).toBeVisible();
     for (const tab of ["Profile", "Tools", "Skills", "Sharing"])
@@ -67,12 +68,15 @@ await journey("bot-settings", async ({ page, step, proof, cleanup, api, stamp })
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Bot updated")).toBeVisible();
     await expect(dialog).toHaveCount(0);
-    // Header, composer and sidebar follow the new name; the description shows in the header.
-    await expect(page.getByRole("button", { name: `Edit ${renamed}` })).toBeVisible();
+    // Header, composer and sidebar follow the new name.
+    await expect(page.getByRole("button", { name: `${renamed} menu` })).toBeVisible();
     await expect(page.getByPlaceholder(`Message ${renamed}`)).toBeVisible();
     await expect(rowOf(renamed)).toBeVisible();
-    // The description shows under the header name and in the empty chat's greeting.
-    await expect(page.getByText(description)).toHaveCount(2);
+    // The description shows in the empty chat's greeting and atop the bot menu.
+    await expect(page.getByText(description)).toHaveCount(1);
+    await page.getByRole("button", { name: `${renamed} menu` }).click();
+    await expect(page.getByRole("menu").getByText(description)).toBeVisible();
+    await page.keyboard.press("Escape");
     const full = await api.get(`/bots/${botId}`);
     expect(full).toMatchObject({ name: renamed, description, systemPrompt: prompt });
   });
@@ -80,7 +84,8 @@ await journey("bot-settings", async ({ page, step, proof, cleanup, api, stamp })
 
   await step("reload: the dialog reopens with the saved values", async () => {
     await page.reload();
-    await page.getByRole("button", { name: `Edit ${renamed}` }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: `${renamed} menu` }).click({ timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     const dialog = page.getByRole("dialog", { name: `Edit ${renamed}` });
     await expect(dialog.getByLabel("Name")).toHaveValue(renamed);
     await expect(dialog.getByLabel("Description")).toHaveValue(description);

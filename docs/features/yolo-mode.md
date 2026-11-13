@@ -4,10 +4,11 @@ A bot's **Ask** tools wait for your approval card. With **YOLO mode** on in a
 chat, they run straight away instead, except anything that uses a vault item
 (issue #151).
 
-Turn it on with the lightning button in the chat header. It asks you to
-confirm, then stays on for **that chat only** until you turn it off or start a
-**New chat** (continuing a past chat brings back the state it had). While it
-is on, the button is highlighted and a banner above the composer says so.
+Turn it on from the bot menu (click the bot's name in the chat header) →
+**YOLO mode**. It asks you to confirm, then stays on for **that chat only**
+until you turn it off or start a **New chat** (continuing a past chat brings
+back the state it had). While it is on, the menu row is ticked and a banner
+above the composer says so, with a **Turn off** button.
 
 ### On by default for a bot
 

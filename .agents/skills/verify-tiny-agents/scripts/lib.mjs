@@ -65,6 +65,20 @@ export async function login(page) {
   await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 }
 
+/**
+ * Bring a chat's Browser or Computer live view on screen: the header's one
+ * live view button opens the panel, and with a computer its tabs pick which.
+ */
+export async function showLiveView(page, which) {
+  const panel = page.getByTestId(`${which}-panel`);
+  const other = page.getByTestId(`${which === "browser" ? "computer" : "browser"}-panel`);
+  if (!(await panel.isVisible()) && !(await other.isVisible()))
+    await page.getByTestId("live-view-toggle").click();
+  const tab = page.getByTestId(`live-view-tab-${which}`);
+  if (await tab.isVisible()) await tab.click();
+  await expect(panel).toBeVisible();
+}
+
 /** GET/POST/... through the page's cookie; returns the envelope's `data`. */
 function makeApi(page) {
   const call = async (method, url, data) => {

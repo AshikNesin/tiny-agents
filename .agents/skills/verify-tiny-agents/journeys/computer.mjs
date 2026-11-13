@@ -4,7 +4,7 @@
 // proof is the VNC socket (RFB banner, framebuffer bytes, key events sent), ARIA state
 // and read-backs of the desktop's windows on the VM (`wmctrl -l`).
 import { execFileSync } from "node:child_process";
-import { journey, expect } from "../scripts/lib.mjs";
+import { journey, expect, showLiveView } from "../scripts/lib.mjs";
 
 // The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
 const LOADED = { waitUntil: "domcontentloaded" };
@@ -153,7 +153,7 @@ await journey(
 
     await step("chat: the Computer panel shows the same live desktop", async () => {
       await page.goto(`/chats/${botId}`, LOADED);
-      await page.getByTestId("computer-toggle").click();
+      await showLiveView(page, "computer");
       const panel = page.getByTestId("computer-panel");
       await expect(panel).toBeVisible();
       await streamed(new RegExp(`/bots/${botId}/computer/vnc`));

@@ -75,7 +75,7 @@ test.describe("Bot to bot", () => {
       .getByRole("link", { name: new RegExp(`^${guest}`) })
       .first()
       .click();
-    await expect(page.getByRole("button", { name: `Edit ${guest}` })).toBeVisible({
+    await expect(page.getByRole("button", { name: `${guest} menu` })).toBeVisible({
       timeout: 15_000,
     });
     // The mention arrives as the owner's labeled bubble, not a raw prefix.

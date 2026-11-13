@@ -142,7 +142,8 @@ await journey("message-paging", async ({ page, step, proof, cleanup, api, stamp 
 
   await step("open it from Chat history: again only the newest 60 messages", async () => {
     pages.length = 0;
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     const item = page.getByTestId("past-chat-item").filter({ hasText: text(1) });
     await expect(item).toContainText(`${2 * EXCHANGES} messages`);
     await item.click();

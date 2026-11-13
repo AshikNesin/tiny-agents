@@ -10,7 +10,7 @@
  * so no server is involved.
  */
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
@@ -297,12 +297,38 @@ describe("ChatPane composer — one action button", () => {
 });
 
 describe("ChatPane header", () => {
-  it("keeps the header to the name and two quiet icons, no overflow menu", () => {
+  it("keeps the header to the bot menu and two quiet icons: live view and New chat", () => {
     seedStore();
-    renderPane();
-    expect(screen.getByRole("button", { name: "Edit Host Bot" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start a new chat" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Bot menu" })).toBeNull();
+    renderPane({ ...HOST, description: "Plans trips" });
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("button", { name: "Host Bot menu" })).toBeInTheDocument();
+    expect(
+      within(header)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Open menu", "Host Bot menu", "Open live view", "Start a new chat"]);
+    // The model is the composer's chip and the description the menu's: not repeated here.
+    expect(within(header).queryByText("Test Model")).toBeNull();
+    expect(within(header).queryByText("Plans trips")).toBeNull();
+  });
+
+  it("opens Bot settings and the YOLO confirm from the bot menu", async () => {
+    seedStore();
+    const onEditBot = vi.fn();
+    render(
+      <BrowserRouter>
+        <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={onEditBot} />
+      </BrowserRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Bot settings" }));
+    expect(onEditBot).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    const yolo = await screen.findByTestId("yolo-toggle");
+    expect(yolo).toHaveAttribute("aria-checked", "false");
+    await user.click(yolo);
+    expect(await screen.findByRole("dialog", { name: "Turn on YOLO mode?" })).toBeInTheDocument();
   });
 
   it("disables new chat on an empty conversation and confirms it otherwise", async () => {
@@ -345,7 +371,7 @@ describe("ChatPane header", () => {
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
   });
 
-  it("shows Chat history only once the bot has a past chat, and lists it", async () => {
+  it("lists past chats on the bot menu's Chat history page", async () => {
     seedStore();
     pastChatsMock.mockResolvedValue([
       {
@@ -358,9 +384,20 @@ describe("ChatPane header", () => {
       },
     ]);
     renderPane();
-    const toggle = await screen.findByRole("button", { name: "Chat history" });
-    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
     expect(await screen.findByText("Goa trip")).toBeInTheDocument();
     expect(screen.getByText(/34 messages/)).toBeInTheDocument();
+  });
+
+  it("says so on the history page when there is no past chat yet", async () => {
+    seedStore();
+    renderPane();
+    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
+    expect(
+      await screen.findByText("No past chats yet. Starting a new chat keeps this one here."),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("past-chat-item")).toBeNull();
   });
 });

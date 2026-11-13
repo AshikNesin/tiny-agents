@@ -68,7 +68,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
 
   await step("share the bot from Edit bot → Sharing", async () => {
     await page.goto(`/chats/${ids[shared]}`);
-    await page.getByRole("button", { name: `Edit ${shared}` }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: `${shared} menu` }).click({ timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await editDialog.getByRole("tab", { name: "Sharing" }).click();
     const share = editDialog.getByRole("switch", { name: `Share with ${guest.name}` });
     await expect(share).toHaveAttribute("aria-checked", "false");
@@ -134,8 +135,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     await expect(
       guestPage.locator(`[data-author="Demo User"]`).filter({ hasText: `owner hello ${stamp}` }),
     ).toBeVisible();
-    await expect(guestPage.getByRole("button", { name: shared, exact: true })).toBeDisabled();
-    await expect(guestPage.getByRole("button", { name: `Edit ${shared}` })).toHaveCount(0);
+    await expect(guestPage.getByRole("heading", { level: 1, name: shared })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: `${shared} menu` })).toHaveCount(0);
     await expect(guestPage.getByTestId("yolo-toggle")).toHaveCount(0);
     await expect(guestPage.getByRole("button", { name: "Start a new chat" })).toHaveCount(0);
   });
@@ -181,7 +182,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
 
   await step("owner unshares: the bot leaves the guest's sidebar", async () => {
     await page.goto(`/chats/${ids[shared]}`);
-    await page.getByRole("button", { name: `Edit ${shared}` }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: `${shared} menu` }).click({ timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await editDialog.getByRole("tab", { name: "Sharing" }).click();
     await editDialog.getByRole("switch", { name: `Share with ${guest.name}` }).click();
     await editDialog.getByRole("button", { name: "Save changes" }).click();

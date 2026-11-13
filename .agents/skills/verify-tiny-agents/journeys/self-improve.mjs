@@ -37,7 +37,8 @@ await journey("self-improve", async ({ page, step, proof, cleanup, api, stamp })
   });
 
   await step("Tools tab: Update own instructions offers only Ask (always) and Off", async () => {
-    await page.getByRole("button", { name: `Edit ${name}` }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await dialog.getByRole("tab", { name: "Tools" }).click();
     const group = dialog.getByRole("radiogroup", { name: "Update own instructions permission" });
     await expect(group).toBeVisible({ timeout: 15_000 });
@@ -85,7 +86,8 @@ await journey("self-improve", async ({ page, step, proof, cleanup, api, stamp })
   });
   await step("second view: Edit bot → System prompt shows the new instructions", async () => {
     await page.reload();
-    await page.getByRole("button", { name: `Edit ${name}` }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: `${name} menu` }).click({ timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     const field = dialog.getByLabel("System prompt");
     await expect(field).toHaveValue(new RegExp(`${base}[\\s\\S]*${line}`));
   });

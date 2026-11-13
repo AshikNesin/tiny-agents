@@ -31,7 +31,8 @@ test("Allow/Ask/Off toggle changes on click and the selection is visible", async
   await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 15_000 });
 
   // Open its edit dialog and go to Tools.
-  await page.getByRole("button", { name: `Edit ${name}` }).click({ timeout: 15_000 });
+  await page.getByRole("button", { name: `${name} menu` }).click({ timeout: 15_000 });
+  await page.getByRole("menuitem", { name: "Bot settings" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab", { name: "Tools" }).click();

@@ -52,7 +52,8 @@ await journey("chats", async ({ page, step, proof, cleanup, api, stamp }) => {
     await expect(page.getByText(new RegExp(`Echo: hello ${stamp}`, "i"))).toHaveCount(0);
   });
   await step("old chat is readable from Chat history", async () => {
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     await page
       .getByTestId("past-chat-item")
       .filter({ hasText: `hello ${stamp}` })

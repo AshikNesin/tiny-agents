@@ -150,7 +150,8 @@ test.describe("Chats — past chats (issue #101)", () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page.getByText(/Echo: plan the goa trip/i)).toHaveCount(0);
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     await page.getByTestId("past-chat-item").filter({ hasText: "plan the goa trip" }).click();
 
     // Read-only: the old transcript, no composer, Continue in its place.
@@ -172,13 +173,18 @@ test.describe("Chats — past chats (issue #101)", () => {
     // Delete: a second New chat, then delete that past chat.
     await page.getByRole("button", { name: "Start a new chat" }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     await page.getByTestId("past-chat-item").first().click();
     await page.getByRole("button", { name: "Past chat actions" }).click();
     await page.getByRole("menuitem", { name: "Delete chat" }).click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page).not.toHaveURL(/\/history\//);
-    await expect(page.getByRole("button", { name: "Chat history" })).toHaveCount(0);
+    // Nothing left to list: the bot menu's history page says so.
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
+    await expect(page.getByText("No past chats yet.", { exact: false })).toBeVisible();
+    await expect(page.getByTestId("past-chat-item")).toHaveCount(0);
   });
 });
 
