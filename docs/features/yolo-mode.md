@@ -9,6 +9,17 @@ confirm, then stays on for **that chat only** until you turn it off or start a
 **New chat** (continuing a past chat brings back the state it had). While it
 is on, the button is highlighted and a banner above the composer says so.
 
+### On by default for a bot
+
+In the bot's settings (**Tools** tab), switch on **YOLO mode by default**.
+Every new chat with that bot (the bot's first chat, and each **New chat**)
+then starts with YOLO on, trusting your messages. You can still turn it off
+in any chat; the next New chat starts with it on again. Changing the setting
+leaves the current chat as it is, and routines never use it. Stored as
+`bots.yolo_by_default`; `startBotConversation`
+(`apps/web/src/server/api/bots/bots.conversation.ts`) calls
+`AgentRuntime.setYolo(ref, true, owner)` on each new chat conversation.
+
 ## What it covers
 
 - Every tool call that would show an approval card, including **Ask (always)**

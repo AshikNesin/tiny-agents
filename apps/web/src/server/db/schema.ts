@@ -91,6 +91,8 @@ export const bots = sqliteTable("bots", {
   memoryEnabled: bool("memory_enabled").notNull().default(true),
   /** Auto-review switch (issue #65): a classifier may approve "ask" tool calls. */
   autoReview: bool("auto_review").notNull().default(false),
+  /** Every new chat of the bot starts with YOLO mode on (issue #151); routines never use it. */
+  yoloByDefault: bool("yolo_by_default").notNull().default(false),
   /** Transcript watermark: owner turns captured through this instant (issue #22). */
   memoryCapturedThrough: ms("memory_captured_through"),
   /** Set when the owner pins the bot to the top of the sidebar; pinned bots sort by this, oldest first. */

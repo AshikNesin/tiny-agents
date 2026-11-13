@@ -131,6 +131,7 @@ describe("Past chat transcript", () => {
     connectionIds: [],
     memoryEnabled: true,
     autoReview: false,
+    yoloByDefault: false,
     browserProfile: "shared",
     pinnedAt: null,
     guestIds: [],

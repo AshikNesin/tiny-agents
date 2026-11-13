@@ -685,6 +685,30 @@ describe("Bots API routes", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("starts every new chat of a YOLO-by-default bot with YOLO on, trusting the owner", async () => {
+    const bot = await createBot({ yoloByDefault: true });
+    expect(bot.yoloByDefault).toBe(true);
+    expect(await rt.yolo(conv(bot))).toBe(true);
+    const owner = (await db.query.users.findFirst())!.id;
+    expect(agentRuntime.setYolo).toHaveBeenCalledWith(conv(bot), true, owner);
+
+    // Turned off in this chat, a New chat starts with it on again.
+    await call(`/api/v1/bots/${bot.id}/yolo`, { method: "PUT", json: { on: false } });
+    await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" });
+    const fresh = await findBot(bot.id);
+    expect(await rt.yolo(Number(fresh!.conversationId))).toBe(true);
+
+    // Switched off on the bot, the next New chat starts with it off.
+    const updated = await call(`/api/v1/bots/${bot.id}`, {
+      method: "PATCH",
+      json: { yoloByDefault: false },
+    });
+    expect(updated.body.data.yoloByDefault).toBe(false);
+    await call(`/api/v1/bots/${bot.id}/reset`, { method: "POST" });
+    const after = await findBot(bot.id);
+    expect(await rt.yolo(Number(after!.conversationId))).toBe(false);
+  });
+
   it("rejects an invalid pin body and an unknown bot", async () => {
     const bot = await createBot();
     const invalid = await call(`/api/v1/bots/${bot.id}/pin`, {

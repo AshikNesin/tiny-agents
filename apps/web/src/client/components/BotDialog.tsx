@@ -84,8 +84,16 @@ export function BotDialog({
   const [draft, setDraft] = useState<BotDraft>(() => draftFrom(bot, fallbackModel));
   const edit = <K extends keyof BotDraft>(key: K, value: BotDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
-  const { name, description, systemPrompt, modelId, toolPermissions, browserProfile, autoReview } =
-    draft;
+  const {
+    name,
+    description,
+    systemPrompt,
+    modelId,
+    toolPermissions,
+    browserProfile,
+    autoReview,
+    yoloByDefault,
+  } = draft;
   const setToolPermissions = (
     next: (current: Record<string, ToolPermission>) => Record<string, ToolPermission>,
   ) => setDraft((current) => ({ ...current, toolPermissions: next(current.toolPermissions) }));
@@ -511,6 +519,21 @@ export function BotDialog({
               checked={autoReview}
               onCheckedChange={(on) => edit("autoReview", on)}
               aria-label="Auto-review"
+            />
+          </div>
+          <div className="bg-secondary/50 flex items-start gap-3 rounded-2xl p-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">YOLO mode by default</p>
+              <p className="text-muted-foreground text-xs">
+                Every new chat with this bot starts with YOLO mode on: Ask tools run without a card.
+                Vault use, turns you did not start and routines still ask. You can turn it off in
+                any chat.
+              </p>
+            </div>
+            <Switch
+              checked={yoloByDefault}
+              onCheckedChange={(on) => edit("yoloByDefault", on)}
+              aria-label="YOLO mode by default"
             />
           </div>
         </>
