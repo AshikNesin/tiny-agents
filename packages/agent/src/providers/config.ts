@@ -22,7 +22,7 @@ export interface ProviderAccount {
    * Kind-specific, non-secret settings:
    * - cloudflare-ai-gateway: `{ accountId, gatewayId }`
    * - gateway route: `{ upstream, basePath? }`
-   * - claude-plan: `{ fallbackModelId? }`
+   * - claude-plan: `{ fallbackModelId?, maxTurns? }`
    */
   settings: Record<string, unknown>;
   enabled: boolean;

@@ -142,6 +142,15 @@ A fallback spends that account's key, not the subscription. The conversation the
 pi transcript. Turns already completed on the subscription remain in the
 worker's session and are not replayed into that transcript.
 
+## Max turns
+
+Each tool call Claude makes is one turn of Claude Code's `maxTurns`, so a
+browser task can take dozens in one reply. The account's **Max turns** sets
+the limit (1 to 1,000; blank: 100). It is read on each turn, so a change needs
+no release: the next message restarts an idle Claude process with the new
+limit and resumes the same conversation. A reply that runs out stops with
+"Reached maximum number of turns" and says where to raise it.
+
 ## Max plan, without this engine
 
 If you only want Claude models on API keys, do not use this

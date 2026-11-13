@@ -25,6 +25,8 @@ const name = z.string().trim().min(1).max(80);
 const apiKey = z.string().trim().min(1).max(4_000);
 const baseUrl = z.string().trim().min(1).max(500);
 const id = z.string().trim().min(1).max(100);
+/** Claude plan: Claude Code `maxTurns` per turn; the worker's limit is 1,000. */
+const maxTurns = z.number().int().min(1).max(1_000);
 
 /** Kind-specific, non-secret settings. */
 const settings = z.strictObject({
@@ -57,6 +59,8 @@ const settings = z.strictObject({
     .optional(),
   /** claude-plan: a pi model a turn moves to when the plan is off or unreachable */
   fallbackModelId: id.nullable().optional(),
+  /** claude-plan: Claude Code `maxTurns` per turn; absent: the worker's default */
+  maxTurns: maxTurns.nullable().optional(),
 });
 
 /** Capability overrides: a key present wins over the catalog. */
@@ -103,8 +107,10 @@ export const createAccountSchema = z.strictObject({
 export const patchAccountSchema = z.strictObject({
   name: name.optional(),
   enabled: z.boolean().optional(),
-  /** Only the Claude plan's fallback can change without step-up. */
+  /** Only the Claude plan's fallback and max turns can change without step-up. */
   fallbackModelId: id.nullable().optional(),
+  /** Claude plan: null goes back to the worker's default. */
+  maxTurns: maxTurns.nullable().optional(),
 });
 
 export const updateConnectionSchema = z.strictObject({

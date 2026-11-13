@@ -218,6 +218,43 @@ describe("models routes", () => {
     expect(checked.body.error?.message).toMatch(/no sandbox/i);
   });
 
+  it("sets and clears the Claude plan's max turns without step-up, for that account only", async () => {
+    const plan = (
+      await call("/models/providers", {
+        method: "POST",
+        stepUp: await stepUp(),
+        json: { kind: "claude-plan", allowPrivateNetwork: false, models: [] },
+      })
+    ).body.data;
+    const set = await call(`/models/providers/${plan.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(plan.version) },
+      json: { maxTurns: 250 },
+    });
+    expect(set.status).toBe(200);
+    expect(set.body.data.settings).toMatchObject({ maxTurns: 250 });
+    const tooMany = await call(`/models/providers/${plan.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(set.body.data.version) },
+      json: { maxTurns: 1_001 },
+    });
+    expect(tooMany.status).toBe(400);
+    const cleared = await call(`/models/providers/${plan.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(set.body.data.version) },
+      json: { maxTurns: null },
+    });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data.settings.maxTurns).toBeUndefined();
+    const other = (await createAccount(await stepUp())).body.data;
+    const refused = await call(`/models/providers/${other.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(other.version) },
+      json: { maxTurns: 50 },
+    });
+    expect(refused.status).toBe(400);
+  });
+
   it("puts a new account's models in the picker at once, without a restart", async () => {
     await createAccount(await stepUp());
     const listedModels = (await call("/models")).body.data.models as Data[];

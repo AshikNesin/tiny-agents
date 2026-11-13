@@ -213,6 +213,7 @@ export class AgentRuntime {
       enabled: plan?.enabled ?? false,
       fallback:
         plan?.fallbackModelId && this.#catalog.route(plan.fallbackModelId) ? "gateway" : "pause",
+      ...(plan?.maxTurns ? { maxTurns: plan.maxTurns } : {}),
     };
   }
 

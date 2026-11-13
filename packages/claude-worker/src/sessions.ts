@@ -42,6 +42,8 @@ export interface SessionOpen {
   system?: string;
   resume?: string;
   tools: readonly ToolSpec[];
+  /** Claude Code `maxTurns`; the worker's default when absent. */
+  maxTurns?: number;
 }
 
 interface TurnWaiter {
@@ -58,6 +60,8 @@ export class Session {
   model: string;
   system?: string;
   tools: readonly ToolSpec[];
+  /** Claude Code `maxTurns` the next process starts with; the worker's default when absent. */
+  maxTurns?: number;
   alive = false;
   running = false;
   /** Every event of this session, numbered, kept for resume and followed by the sockets. */
@@ -83,6 +87,7 @@ export class Session {
     this.system = open.system;
     this.claudeSessionId = open.resume;
     this.tools = open.tools;
+    this.maxTurns = open.maxTurns;
     this.createdAt = now;
     this.lastUsed = now;
     this.log = new SessionLog(open.sessionId, timings.eventBuffer);
@@ -145,7 +150,7 @@ export class Session {
         this.claudeSessionId = id;
         this.publish({ type: "session", claudeSessionId: id });
       },
-      maxTurns: this.timings.maxTurns,
+      maxTurns: this.maxTurns ?? this.timings.maxTurns,
     }).then(
       () => {
         if (generation !== this.generation) return;
@@ -295,6 +300,12 @@ export class SessionBook {
       existing.system = input.system;
       if (input.tools.length > 0) existing.tools = input.tools;
       if (input.resume) existing.claudeSessionId = input.resume;
+      if (input.maxTurns !== existing.maxTurns) {
+        existing.maxTurns = input.maxTurns;
+        // maxTurns is fixed when the process starts: restart it (Claude resumes
+        // the same conversation) so the new limit applies from this turn.
+        if (existing.alive && !existing.running) existing.recycle();
+      }
       existing.touch(now);
       return existing;
     }

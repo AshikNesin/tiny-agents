@@ -310,9 +310,7 @@ export function createSdkQueryFactory(
       }
       if (message.type === "result") {
         if (message.session_id) ctx.setClaudeSessionId(message.session_id);
-        const error = message.is_error
-          ? message.errors?.join("\n") || message.result || "Claude Code returned an error"
-          : undefined;
+        const error = message.is_error ? resultError(message) : undefined;
         ctx.publish({
           type: "turn_end",
           turnId,
@@ -323,4 +321,12 @@ export function createSdkQueryFactory(
       }
     }
   };
+}
+
+/** A failed result's message; running out of turns says where to raise the limit. */
+function resultError(message: SdkMessage): string {
+  const text = message.errors?.join("\n") || message.result || "Claude Code returned an error";
+  return message.subtype === "error_max_turns"
+    ? `${text}. Raise "Max turns" in Settings → Models → Claude plan, then send a message to continue.`
+    : text;
 }

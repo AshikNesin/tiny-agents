@@ -39,6 +39,7 @@ export function createBotHandler(deps: {
       system: message.system,
       resume: message.resume,
       tools: message.tools ?? book.get(message.sessionId)?.tools ?? [],
+      ...(message.maxTurns ? { maxTurns: message.maxTurns } : {}),
     };
     try {
       await assertSessionMayStart(deps.env, deps.authStatus);

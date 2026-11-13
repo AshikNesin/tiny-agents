@@ -113,4 +113,6 @@ export type ClaudeEngineFallback = "gateway" | "pause";
 export interface ClaudePlanState {
   enabled: boolean;
   fallback: ClaudeEngineFallback;
+  /** Claude Code `maxTurns` for a turn; the worker's default when absent. */
+  maxTurns?: number;
 }

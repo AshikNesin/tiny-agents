@@ -428,7 +428,10 @@ function settingsFor(input: CreateAccountDTO): Record<string, unknown> {
       };
     }
     case "claude-plan":
-      return s.fallbackModelId ? { fallbackModelId: s.fallbackModelId } : {};
+      return {
+        ...(s.fallbackModelId ? { fallbackModelId: s.fallbackModelId } : {}),
+        ...(s.maxTurns ? { maxTurns: s.maxTurns } : {}),
+      };
     default:
       if (input.viaProviderId) {
         if (!s.upstream) throw Boom.badRequest("Name the gateway's upstream provider.");
@@ -521,7 +524,12 @@ export async function createAccount(input: CreateAccountDTO) {
 
 export async function patchAccount(
   id: string,
-  input: { name?: string; enabled?: boolean; fallbackModelId?: string | null },
+  input: {
+    name?: string;
+    enabled?: boolean;
+    fallbackModelId?: string | null;
+    maxTurns?: number | null;
+  },
   ifMatch: number | undefined,
 ) {
   const row = await accountOrThrow(id);
@@ -539,6 +547,11 @@ export async function patchAccount(
       }
       settings.fallbackModelId = input.fallbackModelId;
     } else delete settings.fallbackModelId;
+  }
+  if (input.maxTurns !== undefined) {
+    if (row.kind !== "claude-plan") throw Boom.badRequest("Only the Claude plan has max turns.");
+    if (input.maxTurns) settings.maxTurns = input.maxTurns;
+    else delete settings.maxTurns;
   }
   const [updated] = await db
     .update(providers)
