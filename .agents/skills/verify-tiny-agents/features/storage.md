@@ -9,7 +9,7 @@ The owner browses files on `/storage`: creates folders, uploads several files at
 - `storage-download` downloads through the row's `Download <name>` button with the exact uploaded bytes.
 - `storage-view` opens the file in a new tab (`View`).
 - `storage-rename` renames through the `Rename File` dialog.
-- `storage-delete` deletes one file from its row (no confirm) or the selected files (`Select All Files` / row checkboxes → `Delete` → `Delete N file(s)?`).
+- `storage-delete` deletes one file from its row after confirming (alertdialog `Delete "<name>"?`) or the selected files (`Select All Files` / row checkboxes → `Delete` → `Delete "<name>"?` for one, `Delete N files?` for more).
 - `storage-folder-delete` deletes a folder and its contents after `Delete folder "<name>/"?`.
 - `storage-persist` keeps folder, files and names across a reload.
 
@@ -29,7 +29,7 @@ Preconditions:
 - **Download.** `Download bytes-<stamp>.bin` → a browser download named the same whose bytes equal the upload; toast `File downloaded successfully`. Second view: `GET /api/v1/storage/files/download?filePath=…` returns the same bytes.
 - **View.** Row `View` → a new tab whose body shows the file's text (expected `second line ✓`).
 - **Rename.** `Rename hello-<stamp>.txt` → dialog `Rename File`, `New Name` prefilled; set `renamed-<stamp>.txt`, `Rename`. New row, old row gone; `GET /storage/files?folder=…` agrees. Reload: rows still there.
-- **Delete.** `Delete renamed-<stamp>.txt` removes it at once. `Select All Files` shows `Clear (2)` (the folder's `.keep` marker counts); `Clear (2)` resets. Tick the binary row's checkbox → `Clear (1)` → `Delete` → alertdialog `Delete 1 file?` → `Delete`.
+- **Delete.** `Delete renamed-<stamp>.txt` → alertdialog `Delete "renamed-<stamp>.txt"?` → `Delete` removes it. `Select All Files` shows `Clear (2)` (the folder's `.keep` marker counts); `Clear (2)` resets. Tick the binary row's checkbox → `Clear (1)` → `Delete` → alertdialog `Delete "bytes-<stamp>.bin"?` → `Delete`.
 - **Folder delete.** `Go to root folder`, `Delete folder verify-folder-<stamp>` → alertdialog `Delete folder "verify-folder-<stamp>/"?` → `Delete`. Cell gone; the root listing no longer has it.
 - **Proof.** `ta-verify drive $S/journeys/storage.mjs` → `storage/uploaded`, `storage/renamed-after-reload`, `storage/folder-deleted`, `storage/view-tab.png`.
 

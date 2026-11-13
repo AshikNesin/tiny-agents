@@ -5,8 +5,8 @@ import { journey, expect } from "../scripts/lib.mjs";
 
 await journey("command-palette", async ({ page, step, proof, cleanup, api, stamp }) => {
   const name = `Palette Bot ${stamp}`;
-  const palette = page.getByRole("dialog", { name: "Command Menu" });
-  const input = palette.getByPlaceholder("Type a command or search...");
+  const palette = page.getByRole("dialog", { name: "Command menu" });
+  const input = palette.getByRole("combobox", { name: "Type a command or search…" });
   let botId;
 
   const openWithButton = async () => {
@@ -87,7 +87,8 @@ await journey("command-palette", async ({ page, step, proof, cleanup, api, stamp
     const option = palette.getByRole("option", { name: "Settings", exact: true }).first();
     await expect(option).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/settings$/);
+    // The bare /settings opens its first section.
+    await expect(page).toHaveURL(/\/settings\/account$/);
   });
 
   await step("Actions → New bot opens the New bot dialog", async () => {

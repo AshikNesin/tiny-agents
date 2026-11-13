@@ -8,13 +8,13 @@ The owner adds guests (accounts they hand a password to) and shares individual b
 - `share-toggle` `Edit <bot>` → tab `Sharing` → switch `Share with <guest name>` → `Save changes`; the header shows `Shared`.
 - `share-guest-view` guest sidebar lists only shared bots, no `New bot`, no row actions, no Tasks/Terminal/Computer/Browser; chat header has the bot name (disabled), no YOLO toggle, no New chat.
 - `share-live-chat` the guest sees the existing history; each side sees the other's messages labeled with the sender's name, live, and the bot's replies.
-- `share-guards` owner pages (`/tasks`, `/memory`, `/routines`) redirect a guest to `/chats`; guest Settings shows only theme and sign-in; the API answers 403 for owner routes and 404 for unshared bots.
+- `share-guards` owner pages (`/tasks`, `/memory`, `/routines`) redirect a guest to `/chats`; guest Settings has only the Appearance and Security sections; the API answers 403 for owner routes and 404 for unshared bots.
 - `share-unshare` switching sharing off removes the bot from the guest (`Nothing shared with you yet.`).
 - `share-remove-guest` `Remove <guest>` → alert dialog `Remove <guest>?` → `Remove`: row gone, the guest can no longer sign in, and their open session is signed out.
 
 ## How to get to it (user POV)
 
-- Owner: account menu → Settings → tab `People`; a bot's `Edit <bot>` → `Sharing`.
+- Owner: account menu → Settings → `People` (`/settings/people`); a bot's `Edit <bot>` → `Sharing`.
 - Guest: sign in at `/login` with the email and password the owner chose; the shared bot is in the `Bots` sidebar region.
 
 ## Driving it with ta-verify
@@ -22,14 +22,14 @@ The owner adds guests (accounts they hand a password to) and shares individual b
 Preconditions:
 
 - Baseline run, doctor OK, owner signed in in `page`. Two faux bots `Shared Bot <stamp>` and `Private Bot <stamp>` (API setup).
-- The guest uses a second browser context (`page.context().browser().newContext({ baseURL })`); its login is a second sign-in against the rate limit.
+- The guest uses a second browser context (`page.context().browser().newContext({ baseURL })`); its login is a second sign-in (the run's auth rate limit is lifted, `AUTH_RATE_LIMIT_MAX`).
 
-- **Add guest.** People tab: fill `Name` / `Email` / `Password` (exact names), `Add guest` → toast, row `No bots shared`; `GET /people` lists them.
+- **Add guest.** `/settings/people`: fill `Name` / `Email` / `Password` (exact names), `Add guest` → toast, row `No bots shared`; `GET /people` lists them.
 - **Share.** Sharing tab switch → `Save changes` → `Shared` in the header; `GET /bots/:id` `guestIds: [guestId]`; People row `Shared: <bot>`.
 - **Owner message.** Send `owner hello <stamp>` → `Echo: Demo User: owner hello <stamp>`.
 - **Guest.** Sign in; sidebar has only the shared bot; open it: the owner's message is labeled `Demo User` (`[data-author="Demo User"]`); no owner controls.
 - **Live.** Guest sends `guest hello <stamp>` → the owner's page shows it under `[data-author="Guest <stamp>"]` without a reload; both see `Echo: Guest <stamp>: guest hello <stamp>`.
-- **Guards.** Guest `/tasks`, `/memory`, `/routines` → `/chats`; `/settings` shows `Your theme and sign-in.` and no `People` tab; guest API `GET /tasks` 403, `GET /people` 403, `PATCH /bots/<shared>` 403, `GET /bots/<private>` 404, `GET /bots/<shared>` 200.
+- **Guards.** Guest `/tasks`, `/memory`, `/routines` → `/chats`; `/settings` lists only the `Appearance` and `Security` section links, and `/settings/people` lands on `/settings/appearance`; guest API `GET /tasks` 403, `GET /people` 403, `PATCH /bots/<shared>` 403, `GET /bots/<private>` 404, `GET /bots/<shared>` 200.
 - **Unshare / remove.** Owner switches sharing off → guest `/chats` shows `Nothing shared with you yet.`, `GET /bots/<shared>` 404. Owner removes the guest → row gone; guest `POST /auth/login` 401; the guest's open session lands on `/login` from `/vault` and `/settings`, and its `GET /people` and `GET /vault` answer 401.
 - **Proof.** `ta-verify drive $S/journeys/shared-bots.mjs` → owner `guest-added`, `owner-shared-chat`, `owner-sees-guest`, `guest-removed`; guest `guest-view`, `guest-chat`, `guest-unshared`, `guest-signed-out`.
 

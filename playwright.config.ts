@@ -1,4 +1,18 @@
-import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { chromium, defineConfig, devices } from "@playwright/test";
+
+/**
+ * The Chromium to launch: `PLAYWRIGHT_CHROMIUM_PATH` when set, else
+ * Playwright's own build, else the one containers pre-install for another
+ * Playwright version (the same fallback as the verify skill's `lib.mjs`).
+ */
+function chromiumPath(): string | undefined {
+  const explicit = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  if (explicit) return explicit;
+  const preinstalled = "/opt/pw-browsers/chromium";
+  if (!existsSync(chromium.executablePath()) && existsSync(preinstalled)) return preinstalled;
+  return undefined;
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -14,6 +28,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     // Use headed mode for local development (works better on macOS)
     headless: !!process.env.CI,
+    launchOptions: { executablePath: chromiumPath() },
   },
   projects: [
     {
@@ -31,11 +46,12 @@ export default defineConfig({
     // TINY_AGENTS_FAUX=1 swaps the Cloudflare gateway for a scripted echo
     // model: no network, no keys — e2e exercises the durable pipeline
     // itself. The token speed keeps every reply busy for a real window so
-    // steering/queueing tests can send mid-reply.
+    // steering/queueing tests can send mid-reply. Every test signs in from
+    // 127.0.0.1, so AUTH_RATE_LIMIT_MAX lifts the 20-per-15-minutes limit.
     command:
       "rm -f data/e2e.db data/e2e.db-shm data/e2e.db-wal && " +
       "DATABASE_URL=file:./data/e2e.db pnpm exec tsx scripts/seed.ts && " +
-      "DATABASE_URL=file:./data/e2e.db TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 " +
+      "DATABASE_URL=file:./data/e2e.db TINY_AGENTS_FAUX=1 TINY_AGENTS_FAUX_TOKENS_PER_SECOND=6 AUTH_RATE_LIMIT_MAX=1000 " +
       "pnpm exec tsx watch --max-old-space-size=1024 apps/web/src/server/entry.node.ts",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,

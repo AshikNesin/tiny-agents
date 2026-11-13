@@ -11,7 +11,7 @@ A user manages key/value app settings on `/settings`: add a key, give it a descr
 
 ## How to get to it (user POV)
 
-- Sidebar button `Account and navigation` → menuitem `Settings` (`/settings`); also the ⌘K palette (`Search`).
+- Sidebar button `Account and navigation` → menuitem `Settings` (`/settings`, which opens Account) → `Configuration` (`/settings/configuration`); also the ⌘K palette (`Search`).
 
 ## Driving it with ta-verify
 

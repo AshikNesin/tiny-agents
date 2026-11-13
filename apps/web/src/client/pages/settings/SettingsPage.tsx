@@ -6,6 +6,7 @@
  * Security only.
  */
 import { useMemo } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { AccountSettings } from "@groot/shell/components/AccountSettings";
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import { NotificationSettings } from "@groot/shell/components/NotificationSettings";
@@ -59,8 +60,17 @@ const SECURITY: SettingsSection = {
 /** A guest sees only their own theme and sign-in (issue #145). */
 const GUEST_SECTIONS: SettingsSection[] = [APPEARANCE, SECURITY];
 
+/**
+ * Settings were tabs on `/settings?tab=<id>` before the full-page screen;
+ * those links (bookmarks, older docs) land on the section they meant. A
+ * section the viewer lacks falls through to `Settings`' first-section redirect.
+ */
+const LEGACY_TABS: Record<string, string> = { general: "account", claude: "models" };
+
 /** The owner's settings, in sidebar order. */
 export function SettingsPage() {
+  const { pathname, search } = useLocation();
+  const legacyTab = new URLSearchParams(search).get("tab");
   const guest = useIsGuest();
   const sections = useMemo<SettingsSection[]>(
     () =>
@@ -136,5 +146,8 @@ export function SettingsPage() {
           ],
     [guest],
   );
+  if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
+    return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;
+  }
   return <Settings sections={sections} />;
 }

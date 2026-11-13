@@ -138,8 +138,13 @@ by the skill; remove old ones under `data/verify-evidence/` by hand.
 | `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                                                  |
 | `scripts/full-pass.sh`  | `full-pass.sh`                                  | every journey on six fresh parallel runs, plus a `--prod` smoke run, then teardown |
 
-Full pass: `up --sandbox --shelley` → `doctor` → `drive $S/journeys/*.mjs` → `down`,
-then `up --empty` → `drive` the `requires: ["empty"]` journeys → `down`. With
-several agents or terminals, always pass `--run <id>`: `current` is whichever run
-started last.
-Keep this map honest with `/maintain-verification-skill`.
+Full pass: run `scripts/full-pass.sh`. By hand it is `up --sandbox --shelley` →
+`doctor` → `drive $S/journeys/*.mjs` → `down`, then `up --empty` → `drive` the
+`requires: ["empty"]` journeys → `down`. `up` sets `AUTH_RATE_LIMIT_MAX=1000`, so
+one instance can sign in for every journey; a login that still gets 429 fails
+with that message, not as "stuck on /login". With several agents or terminals,
+always pass `--run <id>`: `current` is whichever run started last.
+Keep this map honest with `/maintain-verification-skill`. CI never drives the
+journeys, but `tests/client/verify-journey-routes.test.ts` (part of
+`pnpm test:client`) fails when a journey or recipe names a page or settings
+section the app no longer has.

@@ -55,7 +55,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `passkey.rpName`            | `"Groot"`                                           | `RP_NAME`                                      |
 | `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                        |
 | `passkey.origin`            | `"http://localhost:3000"`                           | `ORIGIN`                                       |
-| `rateLimits.auth`           | 20 requests / 15 min per IP                         |                                                |
+| `rateLimits.auth`           | 20 requests / 15 min per IP                         | tiny-agents: `AUTH_RATE_LIMIT_MAX` (max only)  |
 | `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                                |
 | `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                                |
 | `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                                   |

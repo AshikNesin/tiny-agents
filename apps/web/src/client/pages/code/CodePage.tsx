@@ -105,18 +105,28 @@ export function CodePage() {
   if (slug) return <SlugRedirect slug={slug} />;
   if (harnessList !== null && harnessList.length === 0) {
     return (
-      <div className="mx-auto max-w-xl p-6">
-        <EmptyState
-          icon={Code2}
-          title="No coding agent is connected"
-          description={
-            <>
-              Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for example{" "}
-              <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and restart, or
-              add the Claude plan in Settings → Models. See docs/features/code.md.
-            </>
-          }
-        />
+      <div className="flex h-dvh min-h-0 flex-col">
+        <CodeHeader brand={brand} />
+        <div className="mx-auto max-w-xl p-6">
+          <EmptyState
+            icon={Code2}
+            title="No coding agent is connected"
+            description={
+              <>
+                Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for
+                example <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and
+                restart, or add the Claude plan in{" "}
+                <Link
+                  to="/settings/models"
+                  className="text-foreground underline underline-offset-2"
+                >
+                  Settings → Models
+                </Link>
+                . See docs/features/code.md.
+              </>
+            }
+          />
+        </div>
       </div>
     );
   }
@@ -133,20 +143,7 @@ export function CodePage() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      {/* The workspace owns the full column (the app sidebar stays away), so
-          it carries its own way back to the app — like the settings screen. */}
-      <header className="border-border bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        <Link
-          to={brand.to}
-          className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="size-4" />
-          Back to {brand.label}
-        </Link>
-        <div className="ml-auto">
-          <CommandPaletteTrigger />
-        </div>
-      </header>
+      <CodeHeader brand={brand} />
       {offline.map((h) => (
         <div
           key={h.id}
@@ -242,5 +239,27 @@ export function CodePage() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The workspace owns the full column (the app sidebar stays away), so it
+ * carries its own way back to the app — like the settings screen. The
+ * not-configured state shows it too, or a direct link to `/code` is a dead end.
+ */
+function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
+  return (
+    <header className="border-border bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-4">
+      <Link
+        to={brand.to}
+        className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <ArrowLeft className="size-4" />
+        Back to {brand.label}
+      </Link>
+      <div className="ml-auto">
+        <CommandPaletteTrigger />
+      </div>
+    </header>
   );
 }

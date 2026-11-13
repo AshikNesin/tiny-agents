@@ -186,8 +186,8 @@ await journey(
         options: AUTHENTICATOR,
       });
       await signInForm(guestPage, guest);
-      // A guest's Settings has no tabs: theme and passkeys only.
-      await guestPage.goto("/settings");
+      // A guest's Settings has two sections: Appearance and Security.
+      await guestPage.goto("/settings/security");
       await expect(guestPage.getByRole("heading", { name: "Add a passkey" })).toBeVisible();
       await guestPage.getByLabel("Name (optional)").fill(guestPasskey);
       await guestPage.getByRole("button", { name: "Add passkey" }).click();
@@ -258,8 +258,7 @@ await journey(
       "register the owner's own passkey on their device (Settings → Security)",
       async () => {
         shared = await swapAuthenticator(shared);
-        await page.goto("/settings");
-        await page.getByRole("tab", { name: "Security" }).click();
+        await page.goto("/settings/security");
         await page.getByLabel("Name (optional)").fill(ownerPasskey);
         await page.getByRole("button", { name: "Add passkey" }).click();
         await expect(page.getByText("Passkey added successfully")).toBeVisible();

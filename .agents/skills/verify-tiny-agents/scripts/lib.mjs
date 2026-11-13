@@ -51,7 +51,17 @@ export async function login(page) {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email", { exact: true }).fill(DEMO.email);
   await page.getByLabel(/password/i).fill(DEMO.password);
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().endsWith("/api/v1/auth/login") && r.request().method() === "POST",
+    ),
+    page.getByRole("button", { name: "Sign In", exact: true }).click(),
+  ]);
+  // Name the cause: otherwise a rate-limited login reads as "still on /login".
+  if (response.status() === 429)
+    throw new Error(
+      "login was rate-limited (429): `ta-verify up` sets AUTH_RATE_LIMIT_MAX; relaunch",
+    );
   await expect(page).toHaveURL(/\/chats(\/[^/]+)?$/);
 }
 

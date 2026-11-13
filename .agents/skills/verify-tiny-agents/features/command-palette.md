@@ -4,7 +4,7 @@ The ⌘K / Ctrl+K search palette jumps anywhere from anywhere. It opens from the
 
 ## Sub-features
 
-- `palette-open` sidebar button `Search (⌘K)` or Ctrl+K opens dialog `Command Menu` with the input `Type a command or search...` focused; groups `Actions`, `Bots`, `Navigation`, `Theme`, `Account`.
+- `palette-open` sidebar button `Search (⌘K)` or Ctrl+K opens dialog `Command menu` with the combobox `Type a command or search…` (an ellipsis character) focused; groups `Actions`, `Bots`, `Navigation`, `Theme`, `Account`.
 - `palette-close` Escape, Ctrl+K again, and a pointer click outside the dialog close it.
 - `palette-filter` typing filters the options; nothing matching shows `No results found.`
 - `palette-bot` picking a bot (Enter on the highlighted option) opens `/chats/<botId>`.
@@ -22,7 +22,7 @@ Preconditions:
 
 - Baseline run, doctor OK, signed in. A bot of the journey's own to jump to (`setup:` via the API). Start on `/tasks` so the bot jump is a real navigation.
 
-- **Open.** Click `Search (⌘K)`: dialog `Command Menu`, input focused, the five group headings, option `<bot>`.
+- **Open.** Click `Search (⌘K)`: dialog `Command menu`, input focused, the five group headings, option `<bot>`.
 - **Close.** Escape → gone. Ctrl+K → open, Ctrl+K → gone. Open, `page.mouse.click(8, 400)` → gone.
 - **Empty.** Fill the input with nonsense: `No results found.`, no options.
 - **Bot.** Fill the bot's name: its option is `aria-selected=true`; Enter → URL `/chats/<botId>`, composer `Message <bot>`.
@@ -35,6 +35,6 @@ Preconditions:
 
 - Regression check for #166 (fixed 2026-11): the shell used to list its built-in `Navigation`, `Theme` and `Account` groups next to the app's own, so every destination appeared twice and `Code` showed with no coding agent configured. The last step asserts one listing and nothing unconfigured.
 - Headless Chromium on Linux: use `Control+k`, not `Meta+k`.
-- The dialog's accessible name is the screen-reader title `Command Menu`, not the input's placeholder.
+- The dialog's accessible name is the screen-reader title `Command menu`, not the input's placeholder.
 - `New coding thread` and the Code threads group only appear when Claude Code is configured (not in the baseline); `Log out` in Account is covered by `auth.mjs`'s sign-out path, not run here (it would end the session).
 - The outside click must be a real pointer click on the overlay (left of the centred dialog), not a click on the sidebar behind it via a locator.

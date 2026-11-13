@@ -1,5 +1,5 @@
 // Feature: account-shell (features/account-shell.md). Account menu, ⌘K palette, theme switching
-// (settings, palette), sidebar collapse to a rail (persisted), guests (People tab), the Claude
+// (settings, palette), sidebar collapse to a rail (persisted), guests (Settings → People), the Claude
 // plan card's no-sandbox state, and the phone layout (drawer nav, back buttons).
 import { journey, expect } from "../scripts/lib.mjs";
 
@@ -10,6 +10,9 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   const account = page.getByRole("button", { name: "Account and navigation" });
   const isDark = () => page.evaluate(() => document.documentElement.classList.contains("dark"));
   const storedTheme = () => page.evaluate(() => localStorage.getItem("groot.theme"));
+  const sections = page.getByRole("navigation", { name: "Settings sections" });
+  // The settings screen's own content column, inside the app's main.
+  const content = page.getByRole("main").getByRole("main");
   // A product bug fails the drive at the end but lets the rest of the recipe run.
   const bugs = [];
   const bugStep = async (name, body) => {
@@ -64,7 +67,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   });
   await step("⌘K palette opens (Ctrl+K) and filters", async () => {
     await page.keyboard.press("Control+k");
-    const palette = page.getByRole("dialog", { name: "Command Menu" });
+    const palette = page.getByRole("dialog", { name: "Command menu" });
     await expect(palette).toBeVisible();
     await palette.getByRole("combobox").fill("Tasks");
     await expect(palette.getByRole("option", { name: "Tasks" }).first()).toBeVisible();
@@ -77,13 +80,13 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     });
   });
   await step("choosing a palette entry navigates and closes it", async () => {
-    const palette = page.getByRole("dialog", { name: "Command Menu" });
+    const palette = page.getByRole("dialog", { name: "Command menu" });
     await palette.getByRole("option", { name: "Tasks" }).first().click();
     await expect(page).toHaveURL(/\/tasks$/);
     await expect(palette).toHaveCount(0);
   });
-  await step("theme: Settings → General → Appearance switches and persists", async () => {
-    await page.goto("/settings");
+  await step("theme: Settings → Appearance switches and persists", async () => {
+    await page.goto("/settings/appearance");
     const theme = page.getByRole("group", { name: "Theme" });
     await theme.getByRole("button", { name: "Light" }).click();
     await expect(theme.getByRole("button", { name: "Light" })).toHaveAttribute(
@@ -114,6 +117,8 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   });
   await proof("theme-dark");
   await step("sidebar collapses to an icon rail, persists across reload, expands", async () => {
+    // Settings is a full page with its own chrome: the app sidebar lives elsewhere.
+    await page.goto("/tasks");
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
     await expect(sidebar.getByText("Demo User")).toBeHidden();
@@ -127,24 +132,38 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
     await expect(sidebar.getByText("Demo User")).toBeVisible();
   });
-  await step("Settings tabs: the Claude plan lives in Models, not a tab of its own", async () => {
-    await page.goto("/settings");
-    const tabs = page.getByRole("tab");
-    await expect(tabs).toHaveText(["General", "Models", "Notifications", "Security", "People"]);
-    // An old `?tab=claude` link lands on Models.
-    await page.goto("/settings?tab=claude");
-    await expect(page.getByRole("tab", { name: "Models" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-  });
-  await proof("settings-tabs");
-  await step("People tab: add a guest", async () => {
-    await page.getByRole("tab", { name: "People" }).click();
-    const panel = page.getByRole("tabpanel", { name: "People" });
-    await panel.getByLabel("Name").fill(guestName);
-    await panel.getByLabel("Email").fill(guestEmail);
-    await panel.getByLabel("Password").fill(`pw-${stamp}`); // gitleaks:allow (throwaway test password)
+  await step(
+    "Settings sections: the Claude plan lives in Models, not a section of its own",
+    async () => {
+      await page.goto("/settings");
+      await expect(page).toHaveURL(/\/settings\/account$/);
+      await expect(sections.getByRole("link")).toHaveText([
+        "Account",
+        "Appearance",
+        "Security",
+        "Models",
+        "Notifications",
+        "People",
+        "Configuration",
+        "Updates",
+      ]);
+      // An old `?tab=claude` link (from the tabbed settings) lands on Models.
+      await page.goto("/settings?tab=claude");
+      await expect(page).toHaveURL(/\/settings\/models$/);
+      await expect(sections.getByRole("link", { name: "Models" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    },
+  );
+  await proof("settings-sections");
+  await step("Settings → People: add a guest", async () => {
+    await sections.getByRole("link", { name: "People" }).click();
+    await expect(page).toHaveURL(/\/settings\/people$/);
+    const panel = content;
+    await panel.getByLabel("Name", { exact: true }).fill(guestName);
+    await panel.getByLabel("Email", { exact: true }).fill(guestEmail);
+    await panel.getByLabel("Password", { exact: true }).fill(`pw-${stamp}`); // gitleaks:allow (throwaway test password)
     await panel.getByRole("button", { name: "Add guest" }).click();
     cleanup(async () => {
       const guests = await api.get("/people");
@@ -157,7 +176,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     );
   });
   await proof("guest-added");
-  await step("People tab: remove the guest after confirming", async () => {
+  await step("Settings → People: remove the guest after confirming", async () => {
     await page.getByRole("button", { name: `Remove ${guestName}` }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
     await expect(page.getByTestId("guest-row").filter({ hasText: guestEmail })).toHaveCount(0);
@@ -169,15 +188,24 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await expect(sidebar).not.toBeInViewport();
     await page.getByRole("button", { name: "Open menu" }).click();
     await expect(sidebar).toBeInViewport();
-    // The drawer surfaces the account-menu pages directly (issue #127).
-    for (const name of ["Routines", "Skills", "Memory", "Connections", "Vault"]) {
+    // The drawer matches the desktop sidebar (#234): primary pages and bots;
+    // Routines, Skills, ... stay in the account menu.
+    for (const name of ["Tasks", "Terminal", "Computer", "Browser"]) {
       await expect(sidebar.getByRole("link", { name })).toBeVisible();
     }
+    await expect(sidebar.getByRole("link", { name: "Routines" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeHidden();
   });
   await proof("phone-drawer");
   await step("phone: a drawer link navigates and closes the drawer", async () => {
-    await sidebar.getByRole("link", { name: "Routines" }).click();
+    await sidebar.getByRole("link", { name: "Terminal" }).click();
+    await expect(page).toHaveURL(/\/terminal$/);
+    await expect(sidebar).not.toBeInViewport();
+  });
+  await step("phone: the drawer's account menu opens the secondary pages", async () => {
+    await page.getByRole("button", { name: "Open menu" }).click();
+    await account.click();
+    await page.getByRole("menuitem", { name: "Routines" }).click();
     await expect(page).toHaveURL(/\/routines$/);
     await expect(sidebar).not.toBeInViewport();
   });
@@ -189,12 +217,12 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByRole("button", { name: "Open menu" })).toBeVisible();
   });
   await proof("phone-back");
-  await step("phone: Settings tabs stay reachable (scrollable strip)", async () => {
+  await step("phone: Settings sections stay reachable (scrollable strip)", async () => {
     await page.goto("/settings");
-    await page.getByRole("tab", { name: "People" }).click();
-    await expect(page.getByRole("tabpanel", { name: "People" })).toBeVisible();
-    await page.getByRole("tab", { name: "General" }).click();
-    await expect(page.getByRole("tabpanel", { name: "General" })).toBeVisible();
+    await sections.getByRole("link", { name: "People" }).click();
+    await expect(content.getByRole("heading", { name: "People", level: 1 })).toBeVisible();
+    await sections.getByRole("link", { name: "Account" }).click();
+    await expect(content.getByRole("heading", { name: "Account", level: 1 })).toBeVisible();
   });
   await proof("phone-settings");
   if (bugs.length) throw new Error(`product bug(s): ${bugs.join("; ")}`);

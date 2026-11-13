@@ -58,7 +58,8 @@ a variable involves.
 
 The table above covers the core (groot) variables. tiny-agents adds its own —
 the sandbox VM, the browser and computer toolkits, the secrets key, 1Password
-Connect, TinyFish web search, the faux model — each with a comment in
+Connect, TinyFish web search, the faux model, `AUTH_RATE_LIMIT_MAX` for test
+servers — each with a comment in
 [`.env.example`](../.env.example), validated in `apps/web/src/server/env.ts`.
 All are optional in development.
 

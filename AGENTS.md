@@ -33,6 +33,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Each kind of resource a bot owns is in `BOT_RESOURCES`.            | `tests/server/api/bot-resources.test.ts`          |
 | Only the session guard throws `sessionInvalid()`.                  | R9                                                |
 | A status column is a typed machine; its writes guard on it.        | `tests/server/api/state-machines.test.ts`         |
+| Verify journeys and recipes name real pages and settings sections. | `tests/client/verify-journey-routes.test.ts`      |
 | Turn each operator correction into a row here.                     | Judgment, see below                               |
 
 An `apps/` transaction is a sync `db.transaction()` with no `await` inside. Guest

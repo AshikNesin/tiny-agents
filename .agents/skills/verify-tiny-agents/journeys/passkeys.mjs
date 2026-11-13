@@ -43,8 +43,12 @@ await journey("passkeys", async ({ page, context, step, proof, cleanup, api, sta
   await step("open Settings → Security from the account menu", async () => {
     await page.getByRole("button", { name: "Account and navigation" }).click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
-    await expect(page).toHaveURL(/\/settings$/);
-    await page.getByRole("tab", { name: "Security" }).click();
+    await expect(page).toHaveURL(/\/settings\/account$/);
+    await page
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("link", { name: "Security" })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/security$/);
     await expect(page.getByRole("heading", { name: "Add a passkey" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Your passkeys" })).toBeVisible();
   });
@@ -59,7 +63,10 @@ await journey("passkeys", async ({ page, context, step, proof, cleanup, api, sta
   });
   await step("a second passkey on the same device is refused with a toast", async () => {
     await addPasskey(`verify-key-${stamp}-dup`);
-    await expect(page.getByText("Unable to add passkey")).toBeVisible();
+    // The browser's InvalidStateError, worded by the shell's WEBAUTHN_MESSAGES.
+    await expect(
+      page.getByText("This passkey is already registered to your account."),
+    ).toBeVisible();
     expect((await ours()).map((p) => p.credentialName)).toEqual([first]);
   });
   await step("setup: switch to virtual authenticator B (a second device)", async () => {
@@ -93,7 +100,6 @@ await journey("passkeys", async ({ page, context, step, proof, cleanup, api, sta
   });
   await step("reload: the remaining passkey persists; the last one cannot be deleted", async () => {
     await page.reload();
-    await page.getByRole("tab", { name: "Security" }).click();
     await expect(item(second)).toBeVisible();
     const all = await api.get("/passkey/list");
     if (all.length === 1) {
@@ -103,6 +109,8 @@ await journey("passkeys", async ({ page, context, step, proof, cleanup, api, sta
   });
   await proof("last-passkey-guard");
   await step("log out from the account menu", async () => {
+    // Settings is a full page with its own chrome; the account menu is in the app sidebar.
+    await page.goto("/chats");
     await page.getByRole("button", { name: "Account and navigation" }).click();
     await page.getByRole("menuitem", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login/);
@@ -118,8 +126,7 @@ await journey("passkeys", async ({ page, context, step, proof, cleanup, api, sta
     expect((await me.json()).data.email).toBe("demo@example.com");
   });
   await step("the passkey now shows Last used", async () => {
-    await page.goto("/settings");
-    await page.getByRole("tab", { name: "Security" }).click();
+    await page.goto("/settings/security");
     await expect(item(second)).toContainText(/Last used /);
     const used = (await ours()).find((p) => p.credentialName === second);
     expect(used.lastUsedAt).toBeTruthy();

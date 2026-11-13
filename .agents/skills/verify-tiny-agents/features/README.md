@@ -39,7 +39,7 @@ Accounts and shell
 - [Sign in and out](./auth.md): login form, wrong-password error, logout, protected-route redirect.
 - [First-run setup](./setup.md) [`--empty`]: `/setup` creates the first account, then closes.
 - [Passkeys](./passkeys.md): add, rename, delete, sign in with a passkey (CDP virtual authenticators).
-- [Account and shell](./account-shell.md): account menu, theme, sidebar rail, People tab, phone layout.
+- [Account and shell](./account-shell.md): account menu, theme, sidebar rail, Settings sections and People, phone layout.
 - [Command palette](./command-palette.md): ⌘K open/close, search, navigation and actions.
 - [App settings](./settings.md): create, edit, persist and delete a JSON setting.
 - [Notifications](./notifications.md): not-configured state, event settings, attention badges and tab title.
@@ -90,7 +90,7 @@ Sandbox and code
 
 ## A full pass
 
-Run `../scripts/full-pass.sh` (it refuses to start if a journey is missing from its groups). The auth rate limit and the shared sandbox mean one instance can't drive everything, so it runs these in parallel:
+Run `../scripts/full-pass.sh` (it refuses to start if a journey is missing from its groups). The shared sandbox and the empty-database setup need their own instances, and parallel groups finish sooner, so it runs these in parallel (the auth rate limit is lifted on every run: `up` sets `AUTH_RATE_LIMIT_MAX=1000`):
 
 1. Three plain runs on spaced ports, each driving about a third of the non-sandbox journeys.
 2. One `up --sandbox --shelley` run for terminal, computer, browser, code and claude-plan.

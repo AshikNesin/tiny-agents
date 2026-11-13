@@ -4,6 +4,7 @@ import { ErrorCode, reportError, toHttpError } from "../errors";
 import { env } from "../env";
 import { getBreadcrumbs, logger } from "../logger";
 import { getRequestContext } from "../context";
+import { isSessionInvalid } from "../session";
 import { fail } from "../utils/api-response.utils";
 import type { AppEnv } from "../types";
 
@@ -13,6 +14,7 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
   const duration = context ? `${Date.now() - context.startTime}ms` : undefined;
   const http = toHttpError(error);
   const endpoint = `${c.req.method} ${c.req.path}`;
+  const operational = http?.isOperational ?? false;
 
   const errorContext = {
     type: "application_error",
@@ -20,8 +22,9 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
     error: {
       name: error.name,
       message: error.message,
-      stack: error.stack,
-      isOperational: http?.isOperational ?? false,
+      // A 4xx is the client's mistake, thrown on purpose: its stack only says where.
+      ...(operational ? {} : { stack: error.stack }),
+      isOperational: operational,
     },
     request: { method: c.req.method, path: c.req.path, userAgent: c.req.header("user-agent") },
     performance: duration ? { requestDuration: duration } : undefined,
@@ -30,8 +33,11 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
 
   // One line per failure: the request logger adds the `→ status` line. The
   // record already carries the request, the timing and the breadcrumbs.
-  if (http?.isOperational) {
-    log.warn(errorContext, `Operational error: ${error.message}`);
+  if (http && operational) {
+    // The session guard's 401 is the normal signed-out state: every signed-out
+    // page load asks `/auth/me`. The request logger's `→ 401` line still shows it.
+    const level = isSessionInvalid(http) ? "debug" : "warn";
+    log[level](errorContext, `Operational error: ${error.message}`);
   } else {
     log.error(errorContext, `System error: ${error.message}`);
     reportError(error, { requestId: context?.requestId, endpoint });

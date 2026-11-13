@@ -5,7 +5,7 @@ A signed-in owner adds passkeys under Settings → Security (optionally named), 
 ## Sub-features
 
 - `passkey-add` registers a passkey on this device (`Add passkey`, toast `Passkey added successfully`), listed as `Device-bound passkey` with `Added <date>`.
-- `passkey-same-device` refuses a second passkey from the same authenticator with toast `Unable to add passkey`.
+- `passkey-same-device` refuses a second passkey from the same authenticator with toast `This passkey is already registered to your account.`
 - `passkey-rename` renames through the `Edit passkey name` dialog.
 - `passkey-delete` deletes after the `Delete passkey` confirmation.
 - `passkey-last-guard` disables `Delete` on the only remaining passkey (`canDelete: false`).
@@ -13,7 +13,7 @@ A signed-in owner adds passkeys under Settings → Security (optionally named), 
 
 ## How to get to it (user POV)
 
-- Account menu (`Account and navigation`) → `Settings` → tab `Security`.
+- Account menu (`Account and navigation`) → `Settings` → `Security` (`/settings/security`).
 - Sign in: `/login` → `Sign in with passkey`.
 
 ## Driving it with ta-verify
@@ -23,14 +23,14 @@ Preconditions:
 - Baseline run (it sets `RP_ID=localhost`, `ORIGIN=http://localhost:<port>`), doctor OK, signed in as demo.
 - A Chromium virtual authenticator from CDP: `const cdp = await context.newCDPSession(page); await cdp.send("WebAuthn.enable"); await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true } })`. A second "device" is a second virtual authenticator (`removeVirtualAuthenticator` the first).
 
-- **Open.** Account menu → `Settings` (URL `/settings`) → tab `Security`: headings `Add a passkey`, `Your passkeys`.
+- **Open.** Account menu → `Settings` (URL `/settings/account`) → section link `Security` (`/settings/security`): headings `Add a passkey`, `Your passkeys`.
 - **Add (device A).** `Name (optional)` = `verify-key-<stamp>-a`, `Add passkey`. Toast; list item with the name, `Device-bound passkey`, `Added …`; the field clears.
-- **Same device.** Add `…-dup` again on device A: toast `Unable to add passkey`; `GET /api/v1/passkey/list` still has only `-a`.
+- **Same device.** Add `…-dup` again on device A: toast `This passkey is already registered to your account.`; `GET /api/v1/passkey/list` still has only `-a`.
 - **Add (device B).** Switch authenticators, add `verify-key-<stamp>-b`. API lists both.
 - **Rename.** On `-a`: `Edit` → dialog `Edit passkey name`, `Passkey name` prefilled → `verify-key-<stamp>-renamed` → `Save`. Toast `Passkey name updated successfully`.
 - **Delete.** On the renamed one: `Delete` → alertdialog naming it → `Delete`. Toast `Passkey deleted successfully`; API lists only `-b`.
-- **Guard.** Reload, tab `Security`: `-b` listed; when it is the user's only passkey its `Delete` is disabled and the API says `canDelete: false`.
-- **Passkey login.** Account menu → `Log out` → `/login` → `Sign in with passkey`. URL `/settings` (where the session ended), heading `Settings`; `GET /api/v1/auth/me` is the demo email. Tab `Security`: `-b` shows `Last used …`; API `lastUsedAt` set.
+- **Guard.** Reload `/settings/security`: `-b` listed; when it is the user's only passkey its `Delete` is disabled and the API says `canDelete: false`.
+- **Passkey login.** `/chats` (Settings has no account button) → account menu → `Log out` → `/login` → `Sign in with passkey`. URL `/settings/security` or `/chats` (where the session ended, or the default); `GET /api/v1/auth/me` is the demo email. `/settings/security`: `-b` shows `Last used …`; API `lastUsedAt` set.
 - **Proof.** `ta-verify drive $S/journeys/passkeys.mjs` → `passkeys/security-tab`, `passkeys/two-passkeys`, `passkeys/last-passkey-guard`, `passkeys/signed-in-with-passkey`.
 
 ## Gotchas

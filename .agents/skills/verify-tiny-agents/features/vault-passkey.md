@@ -13,7 +13,7 @@ Before a vault write or reveal, `Confirm it's you` also offers `Use a passkey`: 
 ## How to get to it (user POV)
 
 - Any vault write or reveal (e.g. an item's `Reveal` on `/vault/items/<handle>`) after a full page load → dialog `Confirm it's you` → `Use a passkey`.
-- Passkeys are added under account menu → `Settings` → tab `Security` (a guest's Settings shows `Add a passkey` directly, no tabs).
+- Passkeys are added under account menu → `Settings` → `Security` (`/settings/security`; a guest's Settings has only Appearance and Security).
 
 ## Driving it with ta-verify
 
@@ -35,6 +35,6 @@ Preconditions:
 - Regression check for #174 (fixed 2026-11): `POST /vault/step-up` with a passkey the server does not know answers core's 401 `Passkey not found`, and the shell used to sign the owner out on any 401. It now signs out only on the session guard's 401 (`error.code` `SESSION_INVALID`). If it regresses, the journey records the bug step, signs in again and finishes the rest.
 - Residue per drive: the fresh owner account and its passkey (owners cannot be deleted through the API, and the last passkey cannot be deleted). Harmless on a disposable run.
 - With `allowCredentials` empty (an owner without passkeys) a virtual authenticator answers with any discoverable credential it holds for the RP; once the owner has a passkey, the browser offers only theirs, so the someone-else and leftover paths are reachable only before registering.
-- Step-up costs auth attempts (options and verify both count, about 11 for the drive including the logins): drive it on a run with budget left, or `up` a new run.
+- Step-up costs auth attempts (options and verify both count, about 11 for the drive including the logins). `up` lifts the limit to 1000 (`AUTH_RATE_LIMIT_MAX`), so any run has budget.
 - The item update path the UI uses is `PUT /vault/items/<handle>`; `PATCH /vault/items/<handle>` (one value) has no caller in the UI.
 - Password step-up, masking, policy and delete are in `vault.mjs`; passkey add/rename/delete and passkey login in `passkeys.mjs`.

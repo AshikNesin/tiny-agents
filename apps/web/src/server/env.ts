@@ -50,6 +50,11 @@ const appEnvSchema = z.object({
   SHELLEY_URL: z.string().optional(),
   /** "1" boots the faux agent runtime (no network, no keys): dev and e2e only. */
   TINY_AGENTS_FAUX: z.string().optional(),
+  /**
+   * Sign-in attempts per IP per 15 minutes (default 20, `rateLimits.auth`).
+   * Throwaway test servers raise it: e2e and verify runs sign in once per test.
+   */
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().optional(),
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;

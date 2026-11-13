@@ -1,11 +1,12 @@
 // Feature: models (features/models.md). Settings → Models on the faux run: the Faux account,
-// Add models → Claude plan → Check models (static list, no network) → Connect behind step-up,
-// the new account card, the default-models table, and the plan's models in the New bot picker.
+// Add models → Claude plan → Check models → Connect behind step-up (no key, no models until Claude Code signs
+// in on the sandbox, #232), the new account card, the default-models table, and the New bot
+// picker, which offers only models that exist (the plan adds none yet).
 import { journey, expect, DEMO } from "../scripts/lib.mjs";
 
 await journey("models", async ({ page, step, proof, cleanup, api }) => {
   await step("open Settings → Models", async () => {
-    await page.goto("/settings?tab=models");
+    await page.goto("/settings/models");
     await expect(page.getByText("Model providers")).toBeVisible();
     await expect(page.getByRole("button", { name: "Faux", exact: true })).toBeVisible();
   });
@@ -31,8 +32,11 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
     const dialog = page.getByRole("dialog", { name: "Add models" });
     await dialog.getByLabel("Kind").click();
     await page.getByRole("option", { name: "Claude plan" }).click();
+    // No key and no hardcoded models: Claude Code lists them once signed in (#232).
+    await expect(dialog).toContainText("The Claude plan needs no key here");
     await dialog.getByRole("button", { name: "Check models" }).click();
-    await expect(dialog.getByText("3 of 3 selected")).toBeVisible();
+    // A toast: Check models finds none until Claude Code is signed in.
+    await expect(page.getByText(/Claude Code lists its models once it is signed in/)).toBeVisible();
     await proof("models-checked");
     await dialog.getByRole("button", { name: "Connect" }).click();
     // Step-up: creating an account asks for the password.
@@ -45,11 +49,13 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
   });
   await proof("models-plan-added");
 
-  await step("open the plan's card: three models, a fallback picker", async () => {
+  await step("open the plan's card: no models until Claude Code lists them", async () => {
     await page.getByRole("button", { name: "Claude plan", exact: true }).click();
-    await expect(page.getByText("Claude Sonnet 4.6")).toBeVisible();
-    await expect(page.getByLabel("Fallback model")).toBeVisible();
-    await expect(page.getByText("Default models")).toBeVisible();
+    const { accounts } = await api.get("/models/providers");
+    expect(accounts.find((a) => a.id === planId)?.modelCount ?? 0).toBe(0);
+    await expect(page.getByText("Claude plan · 0 models")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fallback model" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Default models" })).toBeVisible();
     // The Claude plan's engine and sign-in live in its card (no separate tab).
     const engine = page.getByRole("region", { name: "Claude plan engine" });
     await expect(engine).toContainText("The engine is on.");
@@ -77,19 +83,19 @@ await journey("models", async ({ page, step, proof, cleanup, api }) => {
   );
   await proof("models-plan-engine-off");
 
-  await step("the New bot picker groups the plan's models under the account", async () => {
-    const { models } = await api.get("/models");
-    expect(models.some((m) => m.providerName === "Claude plan" && m.engine === "claude-code")).toBe(
-      true,
-    );
-    await page.goto("/chats");
-    const create = page.getByRole("button", { name: /Create your first bot|New bot/ }).first();
-    await create.click();
-    // Unset, the default role is the first available chat model: the plan's sorts first.
-    const dialog = page.getByRole("dialog", { name: "New bot" });
-    await dialog.getByRole("button", { name: "Claude Haiku 4.5" }).click();
-    await expect(page.getByRole("option", { name: /Claude Sonnet 4\.6/ })).toBeVisible();
-    await expect(page.getByRole("option", { name: /Test Model \(faux\)/ })).toBeVisible();
-  });
+  await step(
+    "the New bot picker offers only models that exist: none from the plan yet",
+    async () => {
+      const { models } = await api.get("/models");
+      expect(models.some((m) => m.providerName === "Claude plan")).toBe(false);
+      await page.goto("/chats");
+      const create = page.getByRole("button", { name: /Create your first bot|New bot/ }).first();
+      await create.click();
+      const dialog = page.getByRole("dialog", { name: "New bot" });
+      await dialog.getByRole("button", { name: "Test Model (faux)" }).click();
+      await expect(page.getByRole("option", { name: /Test Model \(faux\)/ })).toBeVisible();
+      await expect(page.getByRole("option", { name: /Claude/ })).toHaveCount(0);
+    },
+  );
   await proof("models-picker");
 });

@@ -12,7 +12,7 @@ The Claude plan account's card in Settings → Models (region `Claude plan engin
 
 ## How to get to it (user POV)
 
-- Account menu → Settings → tab `Models` (`/settings?tab=models`) → expand the `Claude plan` account card.
+- Account menu → Settings → `Models` (`/settings/models`) → expand the `Claude plan` account card.
 - `/code/new` → harness picker (only when both Shelley and Claude Code are configured).
 
 ## Driving it with ta-verify
@@ -22,7 +22,7 @@ Preconditions:
 - `ta-verify up --sandbox` (journey requires `sandbox`; with `--shelley` it also checks `/code`). Verify runs start with no Claude plan account, and no Claude credentials exist in a verify run.
 
 - **Engine off.** `GET /api/v1/claude-code/status` → `enabled: false`, `fallback: "pause"`.
-- **Card.** The journey adds a Claude plan account (step-up) and disables it at once, then `/settings?tab=models` → expand `Claude plan`: in region `Claude plan engine` the engine-off line, `turns pause.`, the token note; no `claude-plan-account`; no `claude-plan-sign-in` button.
+- **Card.** The journey adds a Claude plan account (step-up) and disables it at once, then `/settings/models` → expand `Claude plan`: in region `Claude plan engine` the engine-off line, `turns pause.`, the token note; no `claude-plan-account`; no `claude-plan-sign-in` button.
 - **Code.** With `shelley`: `/code/new` has no `code-harness`; `GET /api/v1/code/status` harness ids are exactly `["shelley"]`. Without it: no `Code` link in `Primary`.
 - **Account line.** With the engine off there is no `claude-plan-account` line at all, and with a working sandbox (`GET /api/v1/terminal/sessions` status `ready`) the card must not say `No sandbox is configured` (regression check for #171).
 - **Proof.** `ta-verify drive $S/journeys/claude-plan.mjs` → `claude-plan/settings-engine-off`, `code-no-claude-harness`.

@@ -6,7 +6,7 @@ which seeds a `Faux` account with one model, `Test Model (faux)`.
 
 ## Sub-features
 
-- `models-settings`: Settings → Models (`/settings?tab=models`): the `Faux` card, Add models → Claude plan → `Check models` (three static models, no network) → `Connect` behind step-up → a `Claude plan` card with its models, `Fallback model` and the `Claude plan engine` region (engine on; `Disable` → `The engine is off. Enable this account to turn it on.`, no `claude-plan-account`, no `claude-plan-sign-in`); `Default models` table.
+- `models-settings`: Settings → Models (`/settings/models`): the `Faux` card, Add models → Claude plan → `Check models` (finds none: toast `Claude Code lists its models once it is signed in…`, #232) → `Connect` behind step-up → a `Claude plan` card with `0 models`, `Fallback model` and the `Claude plan engine` region (engine on; `Disable` → `The engine is off. Enable this account to turn it on.`, no `claude-plan-account`, no `claude-plan-sign-in`); `Default models` table.
 
 - `models-catalog`: `GET /api/v1/models` returns `models` (each with `providerName`, `available`, `unavailableReason`), `defaultModelId`, `canAnswer` and `providers` (`id`, `name`, `kind`, `status`, `enabled`, `modelCount`).
 - `models-picker`: the bot dialog's model button opens a menu grouped by account name (`Faux`); a model that can't run is greyed out with its reason.
@@ -23,7 +23,7 @@ which seeds a `Faux` account with one model, `Test Model (faux)`.
 - **Catalog.** `GET /api/v1/models`: `canAnswer: true`, `defaultModelId: "test-model"`, one `Faux` provider.
 - **Picker.** Open the New bot dialog; button `Test Model (faux)` → a searchable list (`Search models…`), options grouped by account (`Faux`).
 - **Configured.** No banner; send `model <stamp>` → `Echo: model <stamp>`.
-- **Settings.** `ta-verify drive $S/journeys/models.mjs` → `models-tab`, `models-checked`, `models-plan-added`, `models-plan-card`, `models-picker`. With the plan added and no default set, New bot preselects `Claude Haiku 4.5` (the first available chat model by account name).
+- **Settings.** `ta-verify drive $S/journeys/models.mjs` → `models-tab`, `models-checked`, `models-plan-added`, `models-plan-card`, `models-picker`. The plan adds no models until Claude Code is signed in on the sandbox, so New bot still preselects `Test Model (faux)` and offers no Claude model.
 
 ## Against a real gateway
 
@@ -33,5 +33,5 @@ which seeds a `Faux` account with one model, `Test Model (faux)`.
 
 ## Gotchas
 
-- Real providers (Anthropic, OpenAI, the gateway) need network and keys: unreachable here. The Claude plan account lists statically, so the dialog's whole path is drivable; sending on it needs Claude Code signed in on the sandbox.
+- Real providers (Anthropic, OpenAI, the gateway) need network and keys: unreachable here. The Claude plan account connects with no key and no models, so the dialog's whole path is drivable; its models and sending on it need Claude Code signed in on the sandbox.
 - The faux account always answers, so the "No model is set up" banner needs a boot without `TINY_AGENTS_FAUX` and with no accounts.

@@ -44,7 +44,7 @@ await journey(
     };
 
     await step("connect the gateway with its custom provider", async () => {
-      await page.goto("/settings?tab=models");
+      await page.goto("/settings/models");
       await page.getByRole("button", { name: "Add models" }).click();
       await dialog.getByLabel("Kind").click();
       await page.getByRole("option", { name: "Cloudflare AI Gateway" }).click();

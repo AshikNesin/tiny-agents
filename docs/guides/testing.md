@@ -213,15 +213,21 @@ it("renders", () => {
 
 `pnpm test:e2e` runs `tests/e2e/*.spec.ts` in Chromium, headed locally and
 headless when `CI` is set (`playwright test -c playwright.headless.config.ts`
-forces headless with a list reporter). Playwright starts the server itself on
+forces headless with a list reporter). It launches Playwright's own Chromium,
+or `PLAYWRIGHT_CHROMIUM_PATH` when set; a container that pre-installs Chromium
+for another Playwright version at `/opt/pw-browsers/chromium` gets that one
+without `playwright install`. Playwright starts the server itself on
 `http://localhost:3000` against a throwaway database: it deletes
 `data/e2e.db*`, seeds it with `scripts/seed.ts` and runs
 `tsx watch apps/web/src/server/entry.node.ts` with
-`DATABASE_URL=file:./data/e2e.db`; `tests/e2e/global-setup.ts` runs the same
-`seed()`, so the demo user exists. Your `data/dev.db` is never touched.
+`DATABASE_URL=file:./data/e2e.db` and `AUTH_RATE_LIMIT_MAX=1000` (every spec
+signs in from 127.0.0.1, past the default 20 logins per 15 minutes);
+`tests/e2e/global-setup.ts` runs the same `seed()`, so the demo user exists.
+Your `data/dev.db` is never touched.
 
 Outside CI an already running server on port 3000 is reused (for example
-`PORTLESS=0 pnpm dev`); the specs then run against that server's database.
+`PORTLESS=0 pnpm dev`); the specs then run against that server's database and
+its rate limit, so start it with `AUTH_RATE_LIMIT_MAX=1000` too.
 CI does not run Playwright.
 
 ## Continuous integration

@@ -347,6 +347,8 @@ function serverEnv(run) {
     UPLOADS_DIR: path.join(run.stateDir, "uploads"),
     TINY_AGENTS_FAUX: "1",
     TINY_AGENTS_FAUX_TOKENS_PER_SECOND: "6",
+    // Every journey signs in from 127.0.0.1: lift the 20-per-15-minutes login limit.
+    AUTH_RATE_LIMIT_MAX: "1000",
     // Per-run key for vault items and connection secrets (scaffolding, dies with the run).
     SECRETS_KEY: run.secretsKey,
     // Per-run admin key for X-Admin-Auth-Key routes (e.g. creating a second user).

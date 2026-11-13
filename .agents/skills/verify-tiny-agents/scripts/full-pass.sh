@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Full pass: every journey on fresh runs, in parallel, each group up -> doctor -> drive -> down,
 # plus a smoke group against the production build (--prod).
-# Groups stay under the auth rate limit (20 per 15 min per instance); the sandbox
+# Groups run in parallel to save time (`up` lifts the auth rate limit with
+# AUTH_RATE_LIMIT_MAX, so any group could share an instance); the sandbox
 # group needs `pnpm sandbox:up`. Logs: data/verify-evidence/full-pass-<time>/<run>.log
 #   .agents/skills/verify-tiny-agents/scripts/full-pass.sh
 set -u
@@ -15,8 +16,7 @@ GROUP_A="auth account-shell command-palette settings notifications passkeys task
 GROUP_B="chats past-chats chat-attachments message-steering questions bot-settings memory message-paging"
 GROUP_C="tool-permissions yolo self-improve bot-builder auto-review bot-to-bot shared-bots routines"
 GROUP_D="skills connections vault models storage jobs jobs-admin"
-# vault-passkey spends ~11 auth attempts (logins, passkey options/verify); the
-# two scheduled-routine journeys each wait ~2 min for a fire: their own group.
+# The two scheduled-routine journeys each wait ~2 min for a fire: their own group.
 GROUP_E="vault-passkey routine-schedule workflow-e2e"
 GROUP_SBX="terminal computer browser code claude-plan bot-profiles code-extras code-select"
 GROUP_EMPTY="setup"

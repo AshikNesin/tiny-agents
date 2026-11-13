@@ -24,6 +24,14 @@ function sessionInvalid(message: string): HttpError {
 }
 
 /**
+ * True for the guard's own 401: the normal signed-out state (every signed-out
+ * page load asks `/auth/me`), which the error handler logs at debug.
+ */
+export function isSessionInvalid(error: HttpError): boolean {
+  return error.code === ErrorCode.SESSION_INVALID.code;
+}
+
+/**
  * Sign `account` in: mint its token, set the session cookie, and return the
  * response body every sign-in route sends, `{ token, user }`. `account` may be
  * any user record; `user` is always exactly the `SessionUser` fields.

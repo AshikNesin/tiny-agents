@@ -43,7 +43,7 @@ Preconditions:
 ## Gotchas
 
 - Regression check for #164 (fixed 2026-11): `/vault/step-up` answers a wrong password with 401, and the shell used to sign the owner out on any 401. It now signs out only on the session guard's 401 (`error.code` `SESSION_INVALID`); the last step asserts the dialog stays open and the session survives.
-- Step-up calls count toward the auth rate limit (20 per 15 min per instance) like logins.
+- Step-up calls count toward the auth rate limit like logins (20 per 15 min by default; `up` raises it to 1000 with `AUTH_RATE_LIMIT_MAX`).
 - Toasts stack (`Saved`, `Key saved`, `Key copied…`); assert the stored state rather than a toast that may be hidden under newer ones.
 - The contact form has two `Name` fields (item name and the contact's name) and the feedback widget has its own `Email (optional)`; use `exact` names / `first()`.
 - A real credential request needs a bot calling `request_credentials` on a live browser page (sandbox VM, `up --sandbox`, plus a model that calls the tool): unreachable with the faux model. Bot use of a vault item (`browser_fill_secret`, `http_request`, `vault_list`, approval cards) needs a real model too. 1Password needs `OP_CONNECT_*` and a Connect server: unreachable. Passkey step-up needs a registered passkey: not driven.

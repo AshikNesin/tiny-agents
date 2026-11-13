@@ -18,14 +18,14 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
       const res = await page.request.put("/api/v1/notifications/settings", { data: original });
       if (!res.ok()) throw new Error(`restore notification settings -> ${res.status()}`);
     });
-    await page.goto("/settings");
-    await page.getByRole("tab", { name: "Notifications" }).click();
+    await page.goto("/settings/notifications");
     await expect(page.getByRole("heading", { name: "Push notifications" })).toBeVisible();
   });
   await step(
     "off state: Not configured, names the env vars, no test/re-check buttons",
     async () => {
-      const panel = page.getByRole("tabpanel", { name: "Notifications" });
+      // The settings screen's own content column, inside the app's main.
+      const panel = page.getByRole("main").getByRole("main");
       await expect(panel.getByText("Not configured", { exact: true })).toBeVisible();
       await expect(panel).toContainText("PUSHOVER_API_TOKEN");
       await expect(panel).toContainText("PUSHOVER_USER_KEY");
@@ -57,7 +57,6 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
   });
   await step("reload: the saved preferences come back (UI and API)", async () => {
     await page.reload();
-    await page.getByRole("tab", { name: "Notifications" }).click();
     await expect(page.getByRole("checkbox", { name: "Long reply finished" })).not.toBeChecked();
     await expect(
       page.getByRole("checkbox", { name: "Hold updates during quiet hours" }),

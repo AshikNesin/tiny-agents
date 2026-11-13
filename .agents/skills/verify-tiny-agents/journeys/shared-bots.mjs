@@ -21,9 +21,8 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
   let guestPage;
   let guestContext;
 
-  const peopleTab = async () => {
-    await page.goto("/settings");
-    await page.getByRole("tab", { name: "People" }).click();
+  const openPeople = async () => {
+    await page.goto("/settings/people");
   };
   const guestRow = () => page.getByTestId("guest-row").filter({ hasText: guest.email });
   const ownerComposer = page.getByRole("textbox", { name: `Message ${shared}` });
@@ -50,7 +49,7 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
   });
 
   await step("Settings → People: add a guest", async () => {
-    await peopleTab();
+    await openPeople();
     // exact: the feedback embed also has an "Email (optional)" field.
     await page.getByRole("textbox", { name: "Name", exact: true }).fill(guest.name);
     await page.getByRole("textbox", { name: "Email", exact: true }).fill(guest.email);
@@ -81,7 +80,7 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     expect((await api.get(`/bots/${ids[shared]}`)).guestIds).toEqual([guestId]);
   });
   await step("second view: People lists the shared bot for the guest", async () => {
-    await peopleTab();
+    await openPeople();
     await expect(guestRow()).toContainText(`Shared: ${shared}`);
   });
 
@@ -164,8 +163,13 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
       await expect(guestPage).toHaveURL(/\/chats(\/[^/]+)?$/, { timeout: 15_000 });
     }
     await guestPage.goto("/settings");
-    await expect(guestPage.getByText("Your theme and sign-in.")).toBeVisible({ timeout: 15_000 });
-    await expect(guestPage.getByRole("tab", { name: "People" })).toHaveCount(0);
+    // A guest's settings are Appearance and Security only; /settings/people is not theirs.
+    const sections = guestPage.getByRole("navigation", { name: "Settings sections" });
+    await expect(sections.getByRole("link")).toHaveText(["Appearance", "Security"], {
+      timeout: 15_000,
+    });
+    await guestPage.goto("/settings/people");
+    await expect(guestPage).toHaveURL(/\/settings\/appearance$/);
   });
   await step("the server refuses a guest's owner-only and unshared routes", async () => {
     expect(await guestApi("GET", "/tasks")).toBe(403);
@@ -191,7 +195,7 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
   });
   await guestProof("guest-unshared");
   await step("owner removes the guest: account gone, sign-in refused", async () => {
-    await peopleTab();
+    await openPeople();
     await guestRow()
       .getByRole("button", { name: `Remove ${guest.name}` })
       .click();

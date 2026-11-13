@@ -110,8 +110,11 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
     await expect(row(binName)).toBeVisible();
   });
   await proof("renamed-after-reload");
-  await step("delete one file from its row (no confirm)", async () => {
+  await step("delete one file from its row, after confirming", async () => {
     await page.getByRole("button", { name: `Delete ${renamed}` }).click();
+    const confirm = page.getByRole("alertdialog", { name: `Delete "${renamed}"?` });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Delete" }).click();
     await expect(row(renamed)).toHaveCount(0);
     await expect.poll(async () => (await listFolder()).map((f) => f.name)).not.toContain(renamed);
   });
@@ -131,7 +134,8 @@ await journey("storage", async ({ page, step, proof, cleanup, api, stamp }) => {
       await expect(page.getByRole("button", { name: "Clear (1)" })).toBeVisible();
       await page.getByRole("button", { name: "Delete", exact: true }).click();
       const confirm = page.getByRole("alertdialog");
-      await expect(confirm).toContainText("Delete 1 file?");
+      // One selected file is named, like a row delete; more read "Delete N files?".
+      await expect(confirm).toContainText(`Delete "${binName}"?`);
       await confirm.getByRole("button", { name: "Delete" }).click();
       await expect(row(binName)).toHaveCount(0);
       // The row leaves the UI before the DELETE resolves: poll the server.

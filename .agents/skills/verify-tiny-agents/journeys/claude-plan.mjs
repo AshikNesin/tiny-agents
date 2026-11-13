@@ -50,7 +50,7 @@ await journey(
         planId = (await created.json()).data.id;
         await api.patch(`/models/providers/${planId}`, { enabled: false });
         expect((await api.get("/claude-code/status")).enabled).toBe(false);
-        await page.goto("/settings?tab=models", LOADED);
+        await page.goto("/settings/models", LOADED);
         await card.getByRole("button", { name: "Claude plan", exact: true }).click();
         await expect(engine.getByText(/The engine is off\. Enable this account/)).toBeVisible();
         await expect(engine.getByText(/turns pause\./)).toBeVisible();
