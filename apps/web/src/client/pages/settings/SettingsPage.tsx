@@ -1,7 +1,7 @@
 /**
  * The app's settings: the shell's full-page settings screen
  * (`@groot/shell/pages/settings/Settings`) with tiny-agents' own sections —
- * Models (issue #179), Notifications, People — beside Account, Appearance,
+ * Models (issue #179), Notifications, People, Updates — beside Account, Appearance,
  * Security and Configuration. A guest (issue #145) gets Appearance and
  * Security only.
  */
@@ -12,8 +12,18 @@ import { NotificationSettings } from "@groot/shell/components/NotificationSettin
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Settings, type SettingsSection } from "@groot/shell/pages/settings/Settings";
-import { Bell, Cpu, FileJson, Palette, ShieldCheck, UserRound, Users } from "lucide-react";
+import {
+  Bell,
+  Cpu,
+  Download,
+  FileJson,
+  Palette,
+  ShieldCheck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { PeopleSettings } from "../../components/PeopleSettings";
+import { UpdatesSettings } from "../../components/UpdatesSettings";
 import { useIsGuest } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
 
@@ -113,6 +123,15 @@ export function SettingsPage() {
               keywords: ["app settings", "json", "config", "key", "value", "feature flags"],
               element: <AppSettings />,
               wide: true,
+            },
+            {
+              id: "updates",
+              label: "Updates",
+              group: "App",
+              icon: Download,
+              description: "Update a local install from git and restart it.",
+              keywords: ["update", "upgrade", "version", "restart", "release", "git", "pnpm local"],
+              element: <UpdatesSettings />,
             },
           ],
     [guest],

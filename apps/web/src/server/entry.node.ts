@@ -46,6 +46,7 @@ import { closeSandboxConnections } from "./api/bots/sandbox-host";
 import { attachTerminalWs } from "./api/terminal/terminal.ws";
 import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
+import { processChannel, startUpdates, SUPERVISED_ENV } from "./api/system/updates.service";
 
 /**
  * Node entry: SQLite on disk, uploads on the local filesystem, jobs on a
@@ -319,6 +320,18 @@ async function main(): Promise<void> {
     start: () => {
       if (isProduction) notificationService.notify(systemStarted(env.NODE_ENV));
     },
+  });
+
+  // Under `pnpm local` (scripts/local.ts): tells the supervisor the server is
+  // up and relays update checks and restarts (docs/guides/local-updates.md).
+  // Last, so "ready" means everything above started.
+  let stopUpdates = () => {};
+  add({
+    name: "local updates",
+    start: () => {
+      stopUpdates = startUpdates(processChannel(process.env[SUPERVISED_ENV] === "1"));
+    },
+    stop: () => stopUpdates(),
   });
 
   await lifecycle.start();
