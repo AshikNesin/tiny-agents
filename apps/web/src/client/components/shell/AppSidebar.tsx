@@ -121,8 +121,10 @@ function NavRow({
  * the everyday nav (Tasks, Terminal), the Bots section (the way into
  * chats; /chats itself opens the last bot), and the
  * account menu, which also holds the set-up-and-forget pages (Routines,
- * Skills, Memory, Connections, Settings). Desktop collapses to an icon rail (persisted); on mobile it is
- * an off-canvas drawer driven by `mobileOpen`.
+ * Skills, Memory, Connections, Settings) on desktop and in the mobile drawer
+ * alike, so mobile does not list them all the time (issue #227).
+ * Desktop collapses to an icon rail (persisted); on mobile it is an
+ * off-canvas drawer driven by `mobileOpen`.
  */
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -237,22 +239,6 @@ export function AppSidebar() {
                 badge={item.to === "/code" ? codeUnread : undefined}
               />
             ))}
-          {/* On mobile the account menu is two taps deep behind an unlabeled
-              avatar (issue #127): surface the secondary pages directly in the
-              drawer. Desktop keeps them in the account menu. */}
-          <div className="mt-1 border-t border-sidebar-border pt-1 md:hidden">
-            {secondaryNav.map((item) => (
-              <NavRow
-                key={item.to}
-                icon={item.icon}
-                label={item.label}
-                rail={false}
-                to={item.to}
-                active={isActive(item.to)}
-                onClick={closeDrawer}
-              />
-            ))}
-          </div>
         </nav>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>
