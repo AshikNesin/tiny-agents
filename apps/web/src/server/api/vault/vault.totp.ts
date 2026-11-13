@@ -1,6 +1,6 @@
 /**
  * RFC 6238 one-time codes from an item's seed: an `otpauth://totp/…` URI or
- * a bare base32 secret (what 1Password stores in an OTP field).
+ * a bare base32 secret (what password managers store in an OTP field).
  */
 import { createHmac } from "node:crypto";
 

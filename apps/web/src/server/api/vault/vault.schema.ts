@@ -87,7 +87,7 @@ export const createItemSchema = z.object({
 });
 
 export const linkItemSchema = z.object({
-  backend: z.enum(["onepassword-connect", "local"]),
+  backend: z.enum(["local"]),
   externalId: z.string().min(1).max(200),
   policy: policySchema,
 });
@@ -111,7 +111,7 @@ export const revealSchema = z.object({
 });
 
 export const deleteQuerySchema = z.object({
-  /** Also delete it in the backend (1Password); otherwise only unlink. */
+  /** Also delete its value in the backend; otherwise only unlink. */
   purge: z
     .enum(["true", "false"])
     .default("false")

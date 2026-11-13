@@ -45,7 +45,6 @@ const SECTIONS: { kind: VaultKind; title: string }[] = [
 const KIND_ICON = { login: KeyRound, card: CreditCard, identity: User, api_key: ShieldCheck };
 
 const BACKEND_LABEL: Record<VaultBackendView["name"], string> = {
-  "onepassword-connect": "1Password",
   local: "Local",
 };
 
@@ -61,22 +60,9 @@ function lastUsed(item: VaultItem): string | undefined {
   return `used ${formatRelativeTime(item.lastUsedAt)}${item.lastUsedBy ? ` by ${item.lastUsedBy}` : ""}`;
 }
 
-function expiryWarning(at: string | null | undefined): string | undefined {
-  if (!at) return undefined;
-  const days = Math.floor((new Date(at).getTime() - Date.now()) / 86_400_000);
-  if (days < 0) return "expired";
-  return days <= 14 ? `expires in ${days} day${days === 1 ? "" : "s"}` : undefined;
-}
-
 function BackendCard({ backend }: { backend: VaultBackendView }) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
-  const warnings = [
-    expiryWarning(backend.readTokenExpiresAt) &&
-      `Read token ${expiryWarning(backend.readTokenExpiresAt)}`,
-    expiryWarning(backend.writeTokenExpiresAt) &&
-      `Write token ${expiryWarning(backend.writeTokenExpiresAt)}`,
-  ].filter(Boolean);
   return (
     <Card size="sm">
       <CardContent className="space-y-1">
@@ -87,28 +73,8 @@ function BackendCard({ backend }: { backend: VaultBackendView }) {
           </Badge>
         </div>
         {backend.configured && (
-          <p className="text-xs text-muted-foreground">
-            {problem?.detail ?? backend.read.detail}
-            {problem?.extraVaults?.length
-              ? ` Extra vaults: ${problem.extraVaults.join(", ")}.`
-              : ""}
-          </p>
+          <p className="text-xs text-muted-foreground">{problem?.detail ?? backend.read.detail}</p>
         )}
-        {backend.name === "onepassword-connect" && !backend.configured && (
-          <p className="text-xs text-muted-foreground">
-            Set OP_CONNECT_HOST, OP_CONNECT_VAULT_ID and both tokens to keep secrets in 1Password.
-          </p>
-        )}
-        {backend.vaultId && (
-          <p className={cn(monoClass, "truncate text-muted-foreground")}>
-            {backend.host} · {backend.vaultId}
-          </p>
-        )}
-        {warnings.map((warning) => (
-          <p key={warning as string} className="text-xs text-destructive">
-            {warning}
-          </p>
-        ))}
       </CardContent>
     </Card>
   );
@@ -332,7 +298,7 @@ export function VaultList() {
             <EmptyState
               icon={KeyRound}
               title="No vault items yet"
-              description="Add a login, card or API key, or link one from 1Password. Bots only ever get its handle."
+              description="Add a login, card or API key. Bots only ever get its handle."
             />
           )}
 

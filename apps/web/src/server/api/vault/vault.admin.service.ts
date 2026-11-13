@@ -1,8 +1,6 @@
 /**
  * The owner's Vault UI (issue #56 D16): list, create, link, edit, reveal and
- * delete items, round-tripping to the backend. The only module that loads the
- * read+write Connect token (`OP_CONNECT_ADMIN_TOKEN`); never wired into a
- * toolkit. Values pass through in the request scope only: nothing here stores
+ * delete items, round-tripping to the backend. Never wired into a toolkit. Values pass through in the request scope only: nothing here stores
  * one, and every reveal is registered with the redactor and audited.
  */
 import { asc, desc, eq, sql } from "drizzle-orm";
@@ -11,10 +9,8 @@ import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems } from "../../db";
-import { appEnv } from "../../env";
-import { connectConfig, primaryBackend, readBackends } from "./backends";
+import { readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
-import { createConnectBackend } from "./backends/onepassword-connect";
 import {
   BackendError,
   type BackendItemSummary,
@@ -38,32 +34,16 @@ import {
   type VaultItemRow,
 } from "./vault.service";
 
-const unquote = (value: string | undefined) =>
-  value
-    ?.trim()
-    .replace(/^(['"])([\s\S]*)\1$/, "$2")
-    .trim() || undefined;
-
 let adminBackends: Map<BackendName, VaultBackend> | undefined;
 
-/** Write-path backends: Connect with the read+write token, and the local store. */
+/** Write-path backends: the local store. */
 function writeBackends(): Map<BackendName, VaultBackend> {
-  if (adminBackends) return adminBackends;
-  const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
-  const connect = connectConfig();
-  if (connect) {
-    map.set(
-      "onepassword-connect",
-      createConnectBackend({
-        ...connect,
-        token: unquote(appEnv().OP_CONNECT_ADMIN_TOKEN) ?? "",
-        writable: true,
-      }),
-    );
-  }
-  adminBackends = map;
-  return map;
+  adminBackends ??= new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
+  return adminBackends;
 }
+
+/** Where new items go. */
+const PRIMARY_BACKEND: BackendName = "local";
 
 /** Test seam. */
 export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
@@ -154,8 +134,7 @@ function itemView(row: VaultItemRow) {
 
 async function backendsView() {
   const views = [];
-  const connect = connectConfig();
-  for (const name of ["onepassword-connect", "local"] as BackendName[]) {
+  for (const name of ["local"] as BackendName[]) {
     const read = readBackends().get(name);
     if (!read) {
       views.push({ name, configured: false, read: { state: "unconfigured" } as BackendStatus });
@@ -163,24 +142,12 @@ async function backendsView() {
     }
     const write = writeBackends().get(name);
     const readStatus = await backendStatus(name);
-    const writeStatus = name === "local" ? readStatus : await write!.status();
-    const expiry = (backend?: VaultBackend) =>
-      (backend as { tokenExpiresAt?: () => Date | undefined } | undefined)?.tokenExpiresAt?.() ??
-      null;
     views.push({
       name,
       configured: true,
       read: readStatus,
-      write: writeStatus,
+      write: readStatus,
       capabilities: write?.capabilities ?? read.capabilities,
-      ...(name === "onepassword-connect" && connect
-        ? {
-            host: connect.host,
-            vaultId: connect.vaultId,
-            readTokenExpiresAt: expiry(read),
-            writeTokenExpiresAt: expiry(write),
-          }
-        : {}),
     });
   }
   return views;
@@ -209,7 +176,7 @@ export async function overview(options: { refresh?: boolean } = {}) {
     }));
   return {
     backends: await backendsView(),
-    primaryBackend: primaryBackend(),
+    primaryBackend: PRIMARY_BACKEND,
     items: rows.map(itemView),
     unlinked,
     kindDefaults: KIND_DEFAULT_TOOLS,
@@ -339,7 +306,7 @@ export async function createItem(
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
 ) {
   await assertHandleFree(input.policy.handle);
-  const name = primaryBackend();
+  const name = PRIMARY_BACKEND;
   const backend = backendFor(name);
   if (!backend.create) throw Boom.badRequest(`The ${name} backend is read-only`);
   const draft: ItemDraft = {
@@ -455,8 +422,7 @@ export async function linkItem(input: {
   } catch (error) {
     backendFailure(error);
   }
-  if (summary.kind === "other")
-    throw Boom.badRequest("This kind of 1Password item can't be used by bots");
+  if (summary.kind === "other") throw Boom.badRequest("This kind of item can't be used by bots");
   const origins =
     input.policy.origins.length > 0 ? input.policy.origins : originsFrom(summary.urls);
   const [inserted] = await db
