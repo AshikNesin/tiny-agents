@@ -25,7 +25,7 @@ import {
 import { db, bots } from "../../db";
 import { resolveAttachments } from "../uploads/uploads.attach";
 import { sentInBot } from "../uploads/uploads.service";
-import { participantNames } from "../people/people.service";
+import { ownerUserId, participantNames } from "../people/people.service";
 import { botModelId, botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
 
 /** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
@@ -48,6 +48,8 @@ export interface BotRow {
   memoryEnabled: boolean;
   /** Auto-review switch (issue #65). */
   autoReview: boolean;
+  /** Every new chat starts with YOLO mode on (issue #151). */
+  yoloByDefault: boolean;
   /** Transcript watermark: owner turns captured through this instant. */
   memoryCapturedThrough: Date | null;
   /** Set while the bot is pinned to the top of the sidebar. */
@@ -132,7 +134,7 @@ export async function findBotRow(id: string): Promise<BotWithLinks> {
 /** What the conversation module needs from the runtime. */
 export type BotConversationRuntime = Pick<
   AgentRuntime,
-  "createConversation" | "configure" | "submit" | "catalog"
+  "createConversation" | "configure" | "submit" | "catalog" | "setYolo"
 >;
 
 /** A bot that does not exist yet: the fields its first conversation is created from. */
@@ -141,6 +143,8 @@ export interface BotDraft {
   systemPrompt: string;
   toolPermissions: Record<string, ToolPermission>;
   autoReview?: boolean;
+  /** The new chat starts with YOLO mode on. */
+  yoloByDefault?: boolean;
 }
 
 /**
@@ -217,6 +221,8 @@ async function rowConfig(
  * Open a fresh durable conversation for a new bot (from its draft) or an
  * existing one (by id, from its row). Returns the id to store on the row.
  * `unattended`: a routine's conversation (issue #63) rather than a chat.
+ * A chat of a bot with `yoloByDefault` starts with YOLO mode on, trusting
+ * the owner's messages; a routine's conversation never does.
  */
 export async function startBotConversation(
   bot: string | BotDraft,
@@ -224,11 +230,14 @@ export async function startBotConversation(
   options: { unattended?: boolean } = {},
 ): Promise<string> {
   const unattended = options.unattended ?? false;
-  const config =
-    typeof bot === "string"
-      ? await rowConfig(await findBotRow(bot), rt, unattended)
-      : agentConfig(bot, rt, unattended);
-  return String(await rt.createConversation(config));
+  const row = typeof bot === "string" ? await findBotRow(bot) : undefined;
+  const config = row
+    ? await rowConfig(row, rt, unattended)
+    : agentConfig(bot as BotDraft, rt, unattended);
+  const ref = await rt.createConversation(config);
+  const yolo = (row ?? (bot as BotDraft)).yoloByDefault === true;
+  if (yolo && !unattended) await rt.setYolo(ref, true, await ownerUserId());
+  return String(ref);
 }
 
 /** Re-apply a bot's stored configuration to its conversation (after row or link changes). */

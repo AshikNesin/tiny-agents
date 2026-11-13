@@ -17,6 +17,8 @@ export const createBotSchema = z.object({
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
   autoReview: z.boolean().optional(),
+  /** Every new chat starts with YOLO mode on (issue #151). */
+  yoloByDefault: z.boolean().optional(),
   browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),
@@ -32,6 +34,8 @@ export const updateBotSchema = z.object({
   toolPermissions: toolPermissions.optional(),
   memoryEnabled: z.boolean().optional(),
   autoReview: z.boolean().optional(),
+  /** Every new chat starts with YOLO mode on (issue #151). */
+  yoloByDefault: z.boolean().optional(),
   browserProfile: browserProfile.optional(),
   skillIds: z.array(z.string()).max(200).optional(),
   connectionIds: z.array(z.string()).max(100).optional(),

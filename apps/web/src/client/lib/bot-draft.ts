@@ -18,6 +18,8 @@ export interface BotDraft {
   connectionIds: string[];
   browserProfile: BrowserProfile;
   autoReview: boolean;
+  /** Every new chat starts with YOLO mode on. */
+  yoloByDefault: boolean;
   /** Guests the bot is shared with (issue #145). */
   guestIds: number[];
 }
@@ -45,6 +47,7 @@ export function draftFrom(bot: Bot | null | undefined, modelId: string | undefin
     connectionIds: bot?.connectionIds ?? [],
     browserProfile: bot?.browserProfile ?? "shared",
     autoReview: bot?.autoReview ?? false,
+    yoloByDefault: bot?.yoloByDefault ?? false,
     guestIds: bot?.guestIds ?? [],
   };
 }

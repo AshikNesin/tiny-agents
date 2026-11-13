@@ -212,12 +212,23 @@ export async function participantNames(botId: string): Promise<string[]> {
     orderBy: (row, { asc }) => [asc(row.createdAt)],
   });
   if (shared.length === 0) return [];
+  const owner = await ownerRow();
+  return [...(owner ? [displayName(owner)] : []), ...shared.map((row) => displayName(row.user))];
+}
+
+/** The owner's account: the first one without a `guests` row. */
+async function ownerRow() {
   const guestIds = db.select({ userId: guests.userId }).from(guests);
   const [owner] = await db
-    .select({ name: users.name, email: users.email })
+    .select({ id: users.id, name: users.name, email: users.email })
     .from(users)
     .where(notInArray(users.id, guestIds))
     .orderBy(asc(users.id))
     .limit(1);
-  return [...(owner ? [displayName(owner)] : []), ...shared.map((row) => displayName(row.user))];
+  return owner;
+}
+
+/** The owner's user id, or undefined before anyone signed up. */
+export async function ownerUserId(): Promise<number | undefined> {
+  return (await ownerRow())?.id;
 }

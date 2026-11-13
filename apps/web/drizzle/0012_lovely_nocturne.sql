@@ -1,0 +1,1 @@
+ALTER TABLE `bots` ADD `yolo_by_default` integer DEFAULT false NOT NULL;

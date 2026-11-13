@@ -105,6 +105,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       systemPrompt: data.systemPrompt,
       toolPermissions,
       autoReview: data.autoReview,
+      yoloByDefault: data.yoloByDefault,
     },
     rt,
   );
@@ -122,6 +123,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       toolPermissions: JSON.stringify(toolPermissions),
       ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
       ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
+      ...(data.yoloByDefault !== undefined ? { yoloByDefault: data.yoloByDefault } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
     })
     .returning();
@@ -195,6 +197,7 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
     ...(data.memoryEnabled !== undefined ? { memoryEnabled: data.memoryEnabled } : {}),
     ...(memoryResumed ? { memoryCapturedThrough: new Date() } : {}),
     ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
+    ...(data.yoloByDefault !== undefined ? { yoloByDefault: data.yoloByDefault } : {}),
     ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
   });
   return reconcileBotConversation(id, rt);

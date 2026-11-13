@@ -67,6 +67,8 @@ export interface Bot {
   memoryEnabled: boolean;
   /** Auto-review (issue #65): a classifier may approve "ask" tool calls. */
   autoReview: boolean;
+  /** Every new chat starts with YOLO mode on (issue #151). */
+  yoloByDefault: boolean;
   /** `shared`: the browser (and logins) every such bot uses; `own`: a browser of its own. */
   browserProfile: BrowserProfile;
   pinnedAt: string | null;
@@ -147,6 +149,7 @@ export interface BotInput {
   guestIds?: number[];
   memoryEnabled?: boolean;
   autoReview?: boolean;
+  yoloByDefault?: boolean;
   browserProfile?: BrowserProfile;
 }
 
