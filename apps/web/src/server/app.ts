@@ -24,6 +24,7 @@ import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
 import peopleRoutes from "./api/people/people.routes";
+import updatesRoutes from "./api/system/updates.routes";
 import { guestGuard } from "./api/people/guest.guard";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
@@ -63,6 +64,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", connectionsRoutes);
       api.route("/", codeRoutes);
       api.route("/", modelsRoutes);
+      api.route("/", updatesRoutes);
       api.use("/vault/*", vaultNoStore);
       api.route("/", vaultRoutes);
       api.route("/jobs", jobRoutes);

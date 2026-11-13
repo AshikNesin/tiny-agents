@@ -104,6 +104,10 @@ in-flight job tick). Workspace packages are inlined; npm dependencies and
 `better-sqlite3` stay external and come from `pnpm install --prod` on the host.
 See [Deploy on Node](./guides/deploy.md).
 
+On your own machine, `pnpm local` does both and keeps the server up to date
+from git, with an **Update & restart** button in Settings → Updates. See
+[Local updates](./guides/local-updates.md).
+
 ## Database
 
 One engine, SQLite, through Drizzle. The schema is TypeScript
