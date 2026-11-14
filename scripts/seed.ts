@@ -11,6 +11,7 @@ import { bootstrap } from "@groot/core/bootstrap";
 import { db, users } from "@groot/core/database";
 import { hashPassword } from "@groot/core/utils/password.utils";
 import { applyDatabaseDefaults, openNodeAppDatabase } from "../apps/web/src/server/db/open";
+import { installFixedClock } from "../apps/web/src/server/fixed-clock";
 
 export const SEED_USER = {
   email: "demo@example.com",
@@ -20,6 +21,8 @@ export const SEED_USER = {
 
 /** Boot against `DATABASE_URL` (migrations applied) and make sure the demo data exists. */
 export async function seed(): Promise<void> {
+  // A frozen verify run seeds at the same instant the server runs at.
+  installFixedClock(process.env);
   applyDatabaseDefaults();
   bootstrap({
     env: process.env,

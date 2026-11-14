@@ -20,13 +20,13 @@ import { db } from "../../../apps/web/src/server/db";
 
 const TRACES = path.join(import.meta.dirname, "traces");
 
-export type TraceStep =
+type TraceStep =
   | { http: string; method: string; path: string; status: number; body: unknown }
   | { sse: string; path: string; frames: unknown[] }
   | { db: string; tables: Record<string, unknown[]> }
   | { note: string; value: unknown };
 
-export interface RequestInit {
+interface RequestInit {
   method?: string;
   json?: unknown;
   token?: string;
@@ -66,7 +66,7 @@ const ID_PATTERNS = [
  */
 const TIMING_KEYS = new Set(["durationMs", "waitedMs"]);
 
-export function normalize(value: unknown): unknown {
+function normalize(value: unknown): unknown {
   const ids = new Map<string, string>();
   const name = (id: string) => {
     if (!ids.has(id)) ids.set(id, `<id${ids.size + 1}>`);
