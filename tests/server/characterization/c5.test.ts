@@ -5,9 +5,9 @@
  * Preserve: this pins today's behavior, quirk included; change it only with
  * a signed-off register row.
  */
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { ModelUnavailableError, type AgentRuntime } from "../../../packages/agent/src/runtime";
-import { eq } from "drizzle-orm";
 import { submitToBot } from "../../../apps/web/src/server/api/bots/bots.conversation";
 import { db, models, providers } from "../../../apps/web/src/server/db";
 import { engineModelConfig, openEngine } from "../app/agent/engine-harness";

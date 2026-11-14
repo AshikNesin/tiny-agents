@@ -36,7 +36,7 @@ function manualClock() {
     clock,
     advance(ms: number) {
       now += ms;
-      for (const [id, timeout] of [...timeouts]) {
+      for (const [id, timeout] of timeouts) {
         if (timeout.at <= now) {
           timeouts.delete(id);
           timeout.fn();
