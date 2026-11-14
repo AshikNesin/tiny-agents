@@ -12,7 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@groo
 import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { useConfirm } from "@groot/ui/primitives";
-import { peopleApi, type Guest } from "../lib/people-api";
+import type { Guest } from "../../shared/api/people";
+import { peopleApi } from "../lib/people-api";
 import { useBotsStore } from "../store/bots";
 import { errorMessage } from "../lib/errors";
 

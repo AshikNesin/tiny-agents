@@ -12,7 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
-import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { BrowserStatus } from "../../../apps/web/src/shared/api/live";
+import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
 import { usePeopleStore } from "@/store/people";
 
@@ -68,6 +70,7 @@ const render = (ui: React.ReactElement) =>
 
 const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
   active: true,
+  profile: "shared",
   url: "https://example.com/",
   driver: "agent",
   mode: "vnc",

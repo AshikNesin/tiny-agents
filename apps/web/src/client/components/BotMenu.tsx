@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import type { Bot } from "../lib/bots-api";
+import type { Bot } from "../../shared/api/bots";
 import { BotAvatar } from "./BotAvatar";
 import { PastChatItems, usePastChats } from "./ChatHistoryMenu";
 

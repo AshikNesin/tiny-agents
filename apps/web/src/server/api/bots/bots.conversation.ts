@@ -23,6 +23,8 @@ import {
   type ToolPermission,
 } from "@tiny-agents/agent";
 import { db, bots } from "../../db";
+import type { BotData } from "../../../shared/api/bots";
+import type { BrowserProfile } from "../../../shared/api/live";
 import { resolveAttachments } from "../uploads/uploads.attach";
 import { sentInBot } from "../uploads/uploads.service";
 import { ownerUserId, participantNames } from "../people/people.service";
@@ -55,21 +57,17 @@ export interface BotRow {
   /** Set while the bot is pinned to the top of the sidebar. */
   pinnedAt: Date | null;
   /** "shared" (the default browser profile) or "own". */
-  browserProfile: string;
+  browserProfile: BrowserProfile;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** The bot as the API returns it: capability columns parsed, skills and connections by id. */
-export type Bot = Omit<BotRow, "toolPermissions"> & {
-  toolPermissions: Record<string, ToolPermission>;
-  skillIds: string[];
-  connectionIds: string[];
-  /** Capability ids of the bot's connections (`mcp:<slug>`). */
-  connectionCapabilities: string[];
-  /** Guests the bot is shared with (issue #145): they are in its chat. */
-  guestIds: number[];
-};
+/**
+ * The bot as the API returns it: capability columns parsed, skills and
+ * connections by id. The wire type (`shared/api/bots.ts`), which must stay
+ * the row plus those fields.
+ */
+export type Bot = BotData & Omit<BotRow, "toolPermissions">;
 
 type ConnectionLink = {
   connectionId: string;

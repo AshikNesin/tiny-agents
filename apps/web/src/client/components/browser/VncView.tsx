@@ -13,6 +13,7 @@ import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
 import { createRfb, type RfbClient } from "../../lib/novnc";
 import { reconnectingSocket } from "../../lib/reconnecting-socket";
 import { remoteWindowSize } from "../../lib/remote-window";
+import type { VncTicket } from "../../../shared/api/live";
 
 export type VncState = "connecting" | "live" | "reconnecting";
 
@@ -22,12 +23,6 @@ export interface VncHandle {
   /** Press a chord the local browser would otherwise keep (Alt+Tab, Alt+F4). */
   sendKeys(strokes: KeyStroke[]): void;
   focus(): void;
-}
-
-/** A one-time viewer ticket: a same-origin WebSocket path and its pixel density. */
-export interface VncTicket {
-  path: string;
-  scale: number;
 }
 
 interface VncViewProps {

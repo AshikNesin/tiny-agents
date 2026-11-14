@@ -29,7 +29,8 @@ import {
 import { Button, EmptyState, ErrorState, LoadingSpinner, LoadingState } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { browserPageApi, type PageBrowser, type PageBrowserList } from "../../lib/browser-page-api";
+import type { PageBrowser, PageBrowserList } from "../../../shared/api/live";
+import { browserPageApi } from "../../lib/browser-page-api";
 import { errorMessage } from "../../lib/errors";
 import { connectionOf, useLiveView } from "../../lib/live-view";
 import { VncView } from "../../components/browser/VncView";

@@ -12,7 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { ComputerPage } from "@/pages/computer";
-import { computerApi, type Desktop, type DesktopList } from "@/lib/computer-api";
+import type { Desktop, DesktopList } from "../../../apps/web/src/shared/api/live";
+import { computerApi } from "@/lib/computer-api";
 import { createRfb } from "@/lib/novnc";
 
 interface FakeRfb extends EventTarget {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { BotListEntry } from "@/lib/bots-api";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 import {
   attentionOf,
   BADGED_FAVICON,

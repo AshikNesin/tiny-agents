@@ -21,17 +21,15 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
-import {
-  apiError,
-  KIND_LABEL,
-  vaultApi,
-  type UnlinkedItem,
-  type VaultBackendView,
-  type VaultItem,
-  type VaultKind,
-  type VaultOverview,
-  type VaultPolicy,
-} from "../../lib/vault-api";
+import type {
+  UnlinkedItem,
+  VaultBackendView,
+  VaultItem,
+  VaultKind,
+  VaultOverview,
+  VaultPolicy,
+} from "../../../shared/api/vault";
+import { apiError, KIND_LABEL, vaultApi } from "../../lib/vault-api";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
 

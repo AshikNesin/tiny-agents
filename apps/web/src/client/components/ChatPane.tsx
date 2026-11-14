@@ -21,7 +21,9 @@ import {
 } from "@groot/ui/dialog";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
-import { botsApi, type Bot, type CatalogModel } from "../lib/bots-api";
+import type { Bot } from "../../shared/api/bots";
+import type { CatalogModel } from "../../shared/api/models";
+import { botsApi } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import type { OwnerSubmission } from "../store/chats";
 import { useChat } from "../store/use-chat";

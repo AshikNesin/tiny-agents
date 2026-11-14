@@ -1,5 +1,5 @@
 import { StatusBadge } from "@groot/ui/status-badge";
-import type { Connection, ConnectionStatus } from "../../lib/connections-api";
+import type { Connection, ConnectionStatus } from "../../../shared/api/connections";
 
 const STATUS_BADGE: Record<ConnectionStatus, { variant: string; label: string }> = {
   connected: { variant: "success", label: "Connected" },

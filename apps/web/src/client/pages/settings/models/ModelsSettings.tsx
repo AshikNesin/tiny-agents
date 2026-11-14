@@ -35,15 +35,15 @@ import { monoClass, Text } from "@groot/ui/typography";
 import { StepUpProvider, useStepUp } from "../../../components/vault/StepUp";
 import { ApiError } from "@groot/shell/lib/api";
 import { errorMessage } from "../../../lib/errors";
-import {
-  modelsApi,
-  type Account,
-  type AccountModel,
-  type DiscoveredModel,
-  type ModelRole,
-  type ProviderTemplate,
-  type Roles,
-} from "../../../lib/models-api";
+import type {
+  Account,
+  AccountModel,
+  DiscoveredModel,
+  ModelRole,
+  ProviderTemplate,
+  Roles,
+} from "../../../../shared/api/models";
+import { modelsApi } from "../../../lib/models-api";
 import { useBotsStore } from "../../../store/bots";
 import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
 import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";

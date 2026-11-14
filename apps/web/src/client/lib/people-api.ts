@@ -1,24 +1,16 @@
 /** Guests and sharing (issue #145): who is signed in, and the owner's guest list. */
 import { apiClient } from "@groot/shell/lib/api";
-
-export interface Guest {
-  id: number;
-  email: string;
-  name: string | null;
-  createdAt: string;
-  /** Bots shared with this guest. */
-  botIds: string[];
-}
-
-export interface NewGuest {
-  name: string;
-  email: string;
-  password: string;
-}
+import type {
+  Guest,
+  GuestCreateBody,
+  GuestList,
+  GuestRemoved,
+  PeopleMe,
+} from "../../shared/api/people";
 
 export const peopleApi = {
-  me: () => apiClient.get<{ guest: boolean }>("/people/me"),
-  list: () => apiClient.get<{ guests: Guest[] }>("/people"),
-  add: (input: NewGuest) => apiClient.post<Guest>("/people", input),
-  remove: (id: number) => apiClient.delete<{ removed: true }>(`/people/${id}`),
+  me: () => apiClient.get<PeopleMe>("/people/me"),
+  list: () => apiClient.get<GuestList>("/people"),
+  add: (input: GuestCreateBody) => apiClient.post<Guest>("/people", input),
+  remove: (id: number) => apiClient.delete<GuestRemoved>(`/people/${id}`),
 };

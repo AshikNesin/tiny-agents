@@ -31,13 +31,9 @@ import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { Switch } from "../../components/ui/switch";
-import {
-  botsApi,
-  CATEGORY_ORDER,
-  type BotListEntry,
-  type MemoryCategory,
-  type MemoryRecord,
-} from "../../lib/bots-api";
+import type { BotListEntry } from "../../../shared/api/bots";
+import type { MemoryCategory, MemoryRecord } from "../../../shared/api/memories";
+import { botsApi, CATEGORY_ORDER } from "../../lib/bots-api";
 import { errorMessage } from "../../lib/errors";
 import { useBotsStore } from "../../store/bots";
 

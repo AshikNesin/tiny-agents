@@ -2,7 +2,7 @@
  * Past chats (issue #101): how the history list and the past-chat view name
  * and date a chat.
  */
-import type { PastChat } from "./bots-api";
+import type { PastChat } from "../../shared/api/bots";
 
 function day(iso: string, now: number): string {
   const date = new Date(iso);

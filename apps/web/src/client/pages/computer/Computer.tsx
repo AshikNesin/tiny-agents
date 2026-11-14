@@ -38,12 +38,8 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import {
-  computerApi,
-  type Desktop,
-  type DesktopApp,
-  type DesktopList,
-} from "../../lib/computer-api";
+import type { Desktop, DesktopApp, DesktopList } from "../../../shared/api/live";
+import { computerApi } from "../../lib/computer-api";
 import { DESKTOP_SHORTCUTS } from "../../lib/desktop-keys";
 import { errorMessage } from "../../lib/errors";
 import { useLiveView } from "../../lib/live-view";

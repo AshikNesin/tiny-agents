@@ -14,23 +14,22 @@ import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { Switch } from "./ui/switch";
-import { peopleApi, type Guest } from "../lib/people-api";
+import type { Bot, CapabilityInfo, ToolPermission } from "../../shared/api/bots";
+import type { ConnectionSummary } from "../../shared/api/connections";
+import type { BrowserProfile } from "../../shared/api/live";
+import type { CatalogModel } from "../../shared/api/models";
+import type { Guest } from "../../shared/api/people";
+import type { SkillSummary } from "../../shared/api/skills";
+import { peopleApi } from "../lib/people-api";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { ModelSelector } from "./ai-elements/ModelSelector";
 import { toast } from "sonner";
 import { ApiError } from "@groot/shell/lib/api";
 import { ChevronRight, Search, Wrench } from "lucide-react";
 import { metaLabelClass } from "@groot/ui/typography";
-import {
-  botsApi,
-  type Bot,
-  type BrowserProfile,
-  type CapabilityInfo,
-  type CatalogModel,
-  type ToolPermission,
-} from "../lib/bots-api";
-import { skillsApi, type SkillSummary } from "../lib/skills-api";
-import { connectionsApi, type ConnectionSummary } from "../lib/connections-api";
+import { botsApi } from "../lib/bots-api";
+import { skillsApi } from "../lib/skills-api";
+import { connectionsApi } from "../lib/connections-api";
 import { BotAvatar } from "./BotAvatar";
 import { errorMessage } from "../lib/errors";
 import {
@@ -268,7 +267,9 @@ export function BotDialog({
           models={models}
           value={modelId}
           onChange={(next) => edit("modelId", next)}
-          unknownValue={modelMissing ? bot?.modelId : undefined}
+          // A bot on the default model sends `modelId: null` (README §4.5,
+          // wire mismatch W1); the selector's falsy check skips it.
+          unknownValue={modelMissing ? (bot?.modelId as string | undefined) : undefined}
         />
       </div>
 

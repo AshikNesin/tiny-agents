@@ -17,7 +17,9 @@ import {
   DialogTitle,
 } from "@groot/ui/dialog";
 import { Table, TableBody, TableCell, TableRow } from "@groot/ui/table";
-import { botsApi, type AttachmentRef, type UploadStatus, type UploadText } from "../lib/bots-api";
+import type { UploadMeta, UploadStatus, UploadText } from "../../shared/api/uploads";
+import type { AttachmentRef } from "../lib/chat-types";
+import { botsApi } from "../lib/bots-api";
 
 const POLL_MS = 2_000;
 const MAX_POLLS = 90;
@@ -61,7 +63,7 @@ export function statusLabel(status: UploadStatus | undefined): string | undefine
   if (status.status === "pending" || status.status === "none") return "extracting…";
   if (status.status === "failed") return "can't read";
   if (status.status === "unsupported") return "download only";
-  const meta = status.meta ?? {};
+  const meta: Partial<UploadMeta> = status.meta ?? {};
   if (meta.format === "archive" && meta.entries !== undefined) return `${meta.entries} files`;
   if (meta.sheets) return `${meta.sheets} sheet${meta.sheets === 1 ? "" : "s"}`;
   if (meta.pages && meta.format !== "text" && meta.format !== "document") {

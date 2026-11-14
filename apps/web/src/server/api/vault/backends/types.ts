@@ -6,30 +6,11 @@
  */
 import type { SecretValue, VaultKind } from "@tiny-agents/agent";
 
-export type BackendName = "local";
+import type { BackendStatus, ValueField, VaultBackendName } from "../../../../shared/api/vault";
 
-/** Value fields an item can carry, across kinds. */
-export type ValueField =
-  | "username"
-  | "password"
-  | "totp"
-  | "notes"
-  | "card_number"
-  | "card_expiry"
-  | "card_cvc"
-  | "card_holder"
-  | "card_billing_address"
-  | "identity_name"
-  | "identity_email"
-  | "identity_phone"
-  | "identity_address"
-  | "value";
+export type { BackendStatus, ValueField };
 
-export interface BackendStatus {
-  state: "ready" | "unconfigured" | "error";
-  code?: string;
-  detail?: string;
-}
+export type BackendName = VaultBackendName;
 
 /** What a backend says about an item without any value. */
 export interface BackendItemSummary {

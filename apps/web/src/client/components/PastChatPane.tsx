@@ -10,7 +10,8 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { useConfirm } from "@groot/ui/primitives";
 import { toast } from "sonner";
-import { botsApi, type Bot, type PastChatView } from "../lib/bots-api";
+import type { Bot, PastChatView } from "../../shared/api/bots";
+import { botsApi } from "../lib/bots-api";
 import { useBotsStore } from "../store/bots";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";

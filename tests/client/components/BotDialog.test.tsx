@@ -6,7 +6,8 @@ import { ApiError } from "@groot/shell/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
-import type { Bot, CatalogModel } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 
 const removeMock = vi.fn().mockResolvedValue(undefined);
 const createMock = vi.fn();

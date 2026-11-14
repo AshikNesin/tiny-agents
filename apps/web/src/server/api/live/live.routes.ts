@@ -22,15 +22,27 @@ import { computerSetupHint, getComputerSessions } from "../bots/computer.session
 import { issueComputerVncTicket, issueDesktopVncTicket } from "../bots/computer.vnc";
 import { listProfiles } from "../bots/profiles";
 import { liveRouter, OWNER_TAB, type LiveAddress, type LiveSurface } from "./live.router";
+import type {
+  BrowserProfile,
+  BrowserStatus,
+  ComputerStatus,
+  DesktopList,
+  OpenPhase,
+  PageBrowserList,
+} from "../../../shared/api/live";
 
 type LiveBrowser = NonNullable<ReturnType<BrowserSessions["get"]>>;
 type OpenState = ReturnType<BrowserSessions["openState"]>;
 
 /** "shared" when other bots use this browser or desktop (and its logins) too. */
-const profileKind = (profile: string) => (profile === SHARED_BROWSER_PROFILE ? "shared" : "own");
+const profileKind = (profile: string): BrowserProfile =>
+  profile === SHARED_BROWSER_PROFILE ? "shared" : "own";
 
 /** Opening, and why the last open failed; `phase` is `installing` during the one-time VM setup. */
-function openFields(live: unknown, opening: OpenState) {
+function openFields(
+  live: unknown,
+  opening: OpenState,
+): { starting: boolean; phase: OpenPhase | null; error: string | null } {
   return {
     starting: opening.opening,
     phase: opening.opening ? opening.phase : null,
@@ -64,7 +76,7 @@ const browser: LiveSurface<LiveBrowser> = {
     notRunning: "This browser is not running.",
     issueTicket: ({ userId, at }) =>
       issueBrowserPageVncTicket({ userId, profile: at.profile, target: at }),
-    async list() {
+    async list(): Promise<PageBrowserList> {
       const sessions = getBrowserSessions();
       const hint = browserLiveViewHint();
       const list = await listProfiles();
@@ -90,7 +102,7 @@ const browser: LiveSurface<LiveBrowser> = {
     notRunning: "No browser session for this bot yet.",
     issueTicket: ({ userId, scope, at, viewOnly }) =>
       issueVncTicket({ userId, botId: scope, target: at, viewOnly }),
-    status(at: LiveAddress) {
+    status(at: LiveAddress): BrowserStatus {
       const sessions = getBrowserSessions();
       const live = sessions.get(at);
       const opening = sessions.openState(at);
@@ -140,7 +152,7 @@ const computer: LiveSurface<LiveComputer> = {
     lookupInWrapper: false,
     notRunning: "This desktop is not running.",
     issueTicket: ({ userId, at }) => issueDesktopVncTicket({ userId, profile: at.profile }),
-    async list() {
+    async list(): Promise<DesktopList> {
       const sessions = getComputerSessions();
       const list = await listProfiles();
       return {
@@ -165,7 +177,7 @@ const computer: LiveSurface<LiveComputer> = {
     notRunning: "No desktop is running for this bot yet.",
     issueTicket: ({ userId, scope, at, viewOnly }) =>
       issueComputerVncTicket({ userId, botId: scope, profile: at.profile, viewOnly }),
-    status(at: LiveAddress) {
+    status(at: LiveAddress): ComputerStatus {
       const sessions = getComputerSessions();
       const live = sessions?.get(at.profile);
       return {

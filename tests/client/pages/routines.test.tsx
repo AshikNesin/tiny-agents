@@ -10,7 +10,7 @@ import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { Routines } from "@/pages/routines/Routines";
 import { GrootUIProvider } from "@groot/ui";
-import type { Routine, RoutineRun } from "@/lib/routines-api";
+import type { Routine, RoutineRun } from "../../../apps/web/src/shared/api/routines";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -53,6 +53,7 @@ const routine: Routine = {
   enabled: true,
   // 2026-10-21T03:30:00Z = 09:00 IST Wed; crosses the UTC day boundary.
   nextRunAt: "2026-10-21T03:30:00.000Z",
+  done: false,
   blockedStreak: 0,
   pausedReason: null,
   createdAt: "2026-10-01T00:00:00.000Z",
@@ -67,6 +68,7 @@ const run: RoutineRun = {
   scheduledFor: "2026-10-21T03:30:00.000Z",
   status: "succeeded",
   trigger: "manual",
+  requestId: "routine:r1:2026-10-21T03:30:00.000Z",
   submittedAt: "2026-10-21T03:30:00.000Z",
   startedAt: "2026-10-21T03:30:00.000Z",
   finishedAt: "2026-10-21T03:31:04.000Z",

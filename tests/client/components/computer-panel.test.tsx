@@ -12,7 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ComputerPanel } from "@/components/ComputerPanel";
-import { botsApi, type Bot, type ComputerStatus } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
+import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as (EventTarget & { viewOnly: boolean })[] }));

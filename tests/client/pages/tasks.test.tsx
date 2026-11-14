@@ -10,7 +10,7 @@ import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { Tasks } from "@/pages/tasks/Tasks";
-import type { Task } from "@/lib/tasks-api";
+import type { Task } from "../../../apps/web/src/shared/api/tasks";
 
 const listMock = vi.fn();
 const createMock = vi.fn();

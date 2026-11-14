@@ -30,12 +30,8 @@ import { Button, EmptyState, ErrorState, LoadingState, monoClass } from "@groot/
 import { cn } from "@groot/ui/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import {
-  terminalApi,
-  closeBlockedReason,
-  type TerminalSession,
-  type TerminalStatusWire,
-} from "../../lib/terminal-api";
+import type { TerminalSession, TerminalStatusWire } from "../../../shared/api/terminal";
+import { terminalApi, closeBlockedReason } from "../../lib/terminal-api";
 import type { TerminalConnectionState } from "../../lib/terminal-ws";
 import { TerminalView, type TerminalControls } from "./TerminalView";
 import { TerminalKeysPanel } from "./TerminalKeysPanel";

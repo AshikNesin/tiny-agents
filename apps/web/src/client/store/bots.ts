@@ -16,13 +16,9 @@
  */
 import { create } from "zustand";
 import { toast } from "sonner";
-import {
-  botsApi,
-  type Bot,
-  type BotListEntry,
-  type CatalogModel,
-  type ProviderSummary,
-} from "../lib/bots-api";
+import type { Bot, BotListEntry } from "../../shared/api/bots";
+import type { CatalogModel, ProviderSummary } from "../../shared/api/models";
+import { botsApi } from "../lib/bots-api";
 import { subscribeSse } from "../lib/sse";
 import type { EventsFeedEvent } from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";

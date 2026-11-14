@@ -24,11 +24,19 @@ import {
 } from "@tiny-agents/sandbox/terminal";
 import { issueTerminalTicket } from "./terminal.ws";
 import { getTerminalService } from "./terminal.instance";
+import type { Deleted } from "../../../shared/api/common";
+import type {
+  TerminalCreateBody,
+  TerminalList,
+  TerminalSession,
+  TerminalStatusWire,
+  TerminalTicket,
+} from "../../../shared/api/terminal";
 
 const router = new Hono<AppEnv>();
 
 // xterm.js is legible from 2x2 up; the ceilings bound a hostile client.
-const createSchema = z.object({
+const createSchema: z.ZodType<TerminalCreateBody> = z.object({
   cols: z.number().int().min(2).max(500).optional(),
   rows: z.number().int().min(2).max(300).optional(),
   /** A fixed command the tab starts typing; never free text from the client. */
@@ -50,7 +58,7 @@ const nameParam = (raw: string): SessionName => {
 };
 
 /** One tab as the client sees it (the frozen wire DTO). */
-function sessionDto(row: TerminalSessionRow) {
+function sessionDto(row: TerminalSessionRow): TerminalSession {
   return {
     name: row.name,
     process: row.foreground,
@@ -59,7 +67,7 @@ function sessionDto(row: TerminalSessionRow) {
   };
 }
 
-const statusDto = (status: TerminalStatus) =>
+const statusDto = (status: TerminalStatus): TerminalStatusWire =>
   status.kind === "tmux-missing"
     ? { kind: status.kind, installCommand: status.installCommand }
     : status.kind === "unreachable"
@@ -68,7 +76,7 @@ const statusDto = (status: TerminalStatus) =>
 
 router.get("/terminal/sessions", async (c) => {
   const { status, sessions } = await getTerminalService().list();
-  return ok(c, { status: statusDto(status), sessions: sessions.map(sessionDto) });
+  return ok<TerminalList>(c, { status: statusDto(status), sessions: sessions.map(sessionDto) });
 });
 
 router.post("/terminal/sessions", async (c) => {
@@ -90,7 +98,7 @@ router.delete("/terminal/sessions/:name", async (c) => {
   const force = c.req.query("force") === "1";
   try {
     await getTerminalService().kill(name, { force });
-    return ok(c, { deleted: true });
+    return ok<Deleted>(c, { deleted: true });
   } catch (error) {
     if (error instanceof SessionNotFoundError) throw Boom.notFound(error.message);
     if (error instanceof SessionBusyError) {
@@ -106,7 +114,7 @@ router.delete("/terminal/sessions/:name", async (c) => {
 // tmux prints why, and the bridge closes 1000, so the client stops.
 router.post("/terminal/sessions/:name/ticket", async (c) => {
   const name = nameParam(parseStringParam(c.req.param("name"), "name"));
-  return ok(c, {
+  return ok<TerminalTicket>(c, {
     path: `/api/v1/terminal/ws/${encodeURIComponent(name)}?ticket=${issueTerminalTicket({
       userId: requireUser(c).userId,
       name,

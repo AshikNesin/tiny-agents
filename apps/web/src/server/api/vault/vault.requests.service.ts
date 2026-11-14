@@ -30,6 +30,11 @@ import { onOwnerWait } from "../bots/bots.chat";
 import { createItem, updateItem } from "./vault.admin.service";
 import { audit } from "./vault.service";
 import { app } from "../../app-root";
+import type {
+  CredentialCancelled,
+  CredentialRequestView,
+  CredentialSubmitted,
+} from "../../../shared/api/vault";
 
 type RequestRuntime = Pick<AgentRuntime, "credentialRequest" | "settleCredentialRequest">;
 
@@ -39,7 +44,10 @@ function pending(taskId: number, runtime: RequestRuntime) {
 }
 
 /** The sheet's content: metadata only. */
-export async function requestView(taskId: number, runtime: RequestRuntime = getAgentRuntime()) {
+export async function requestView(
+  taskId: number,
+  runtime: RequestRuntime = getAgentRuntime(),
+): Promise<CredentialRequestView> {
   const { conversation, request, expiresAt } = await pending(taskId, runtime);
   const owner = await conversationOwner(conversation);
   const bot = owner ? { id: owner.bot.id, name: owner.bot.name } : undefined;
@@ -180,7 +188,7 @@ export async function submitRequest(
   taskId: number,
   input: { values: Record<string, string>; save: boolean },
   runtime: RequestRuntime = getAgentRuntime(),
-) {
+): Promise<CredentialSubmitted> {
   const submitting = app().submittingRequests;
   if (submitting.has(taskId)) throw Boom.conflict("This request is being filled already.");
   submitting.add(taskId);
@@ -271,7 +279,10 @@ async function fillRequest(
   return { filled: result.filled, savedHandle: savedHandle ?? null, saveFailed };
 }
 
-export async function cancelRequest(taskId: number, runtime: RequestRuntime = getAgentRuntime()) {
+export async function cancelRequest(
+  taskId: number,
+  runtime: RequestRuntime = getAgentRuntime(),
+): Promise<CredentialCancelled> {
   const { conversation, request } = await pending(taskId, runtime);
   await runtime.settleCredentialRequest(taskId, { status: "cancelled" });
   await audit({

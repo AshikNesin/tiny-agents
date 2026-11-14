@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { landingBotId, rememberLastBot } from "@/lib/last-bot";
-import type { BotListEntry } from "@/lib/bots-api";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 function bot(id: string, lastActivityAt: string, pinnedAt: string | null = null): BotListEntry {
   return { id, name: id, lastActivityAt, pinnedAt } as unknown as BotListEntry;

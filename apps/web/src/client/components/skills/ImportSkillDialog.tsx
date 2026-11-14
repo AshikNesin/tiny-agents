@@ -22,7 +22,8 @@ import { Label } from "@groot/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { DataField, DataFields } from "@groot/ui/display";
 import { Streamdown } from "streamdown";
-import { skillsApi, type Skill, type SkillPreview } from "../../lib/skills-api";
+import type { Skill, SkillPreview } from "../../../shared/api/skills";
+import { skillsApi } from "../../lib/skills-api";
 import { SkillFileList } from "./SkillFileList";
 import { errorMessage } from "../../lib/errors";
 

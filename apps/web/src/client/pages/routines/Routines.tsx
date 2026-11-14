@@ -48,10 +48,12 @@ import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { Switch } from "../../components/ui/switch";
-import { botsApi, type BotListEntry } from "../../lib/bots-api";
+import type { BotListEntry } from "../../../shared/api/bots";
+import type { Routine, RoutineRun, Schedule } from "../../../shared/api/routines";
+import { botsApi } from "../../lib/bots-api";
 import { landingBotId } from "../../lib/last-bot";
 import { markdownToPlainText } from "../../lib/plain-text";
-import { routinesApi, type Routine, type RoutineRun, type Schedule } from "../../lib/routines-api";
+import { routinesApi } from "../../lib/routines-api";
 import {
   MAX_INTERVAL_MINUTES,
   MAX_NAME_CHARS,

@@ -12,6 +12,7 @@ import type { Middleware } from "@groot/core/types";
 import { verifyPassword as checkPassword } from "@groot/core/utils/password.utils";
 import { db, users } from "../../db";
 import { app } from "../../app-root";
+import type { StepUpToken } from "../../../shared/api/vault";
 
 const STEP_UP_HEADER = "x-vault-step-up";
 const STEP_UP_TTL_MS = 5 * 60_000;
@@ -22,7 +23,7 @@ function prune(): void {
   for (const [token, grant] of tokens) if (grant.expiresAt <= now) tokens.delete(token);
 }
 
-export function issueStepUp(userId: number): { token: string; expiresAt: number } {
+export function issueStepUp(userId: number): StepUpToken {
   prune();
   const token = randomBytes(32).toString("base64url");
   const expiresAt = Date.now() + STEP_UP_TTL_MS;

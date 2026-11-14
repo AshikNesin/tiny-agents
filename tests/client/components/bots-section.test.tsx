@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { BotRail, BotsSection } from "@/components/shell/BotsSection";
 import { useBotsStore } from "@/store/bots";
-import type { BotListEntry } from "@/lib/bots-api";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 const pinMock = vi.fn();
 

@@ -4,7 +4,7 @@
  */
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { Bot } from "../lib/bots-api";
+import type { Bot } from "../../shared/api/bots";
 import { errorMessage } from "../lib/errors";
 import { useBotsStore } from "./bots";
 

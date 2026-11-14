@@ -6,7 +6,7 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { vaultAlert } from "./vault.alerts";
-import { secretRedactor, type VaultKind } from "@tiny-agents/agent";
+import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems } from "../../db";
 import { readBackends } from "./backends";
@@ -21,6 +21,14 @@ import {
   type VaultBackend,
 } from "./backends/types";
 import type { CreateItemDTO, PolicyDTO, UpdateItemDTO } from "./vault.schema";
+import type { Deleted } from "../../../shared/api/common";
+import type {
+  VaultBackendView,
+  VaultItemData,
+  VaultItemDetailData,
+  VaultOverviewData,
+  VaultRevealed,
+} from "../../../shared/api/vault";
 import {
   audit,
   backendStatus,
@@ -101,14 +109,15 @@ function parseList(raw: string | null): string[] {
 }
 
 /** An item as the Vault UI shows it: metadata and policy, never a value. */
-function itemView(row: VaultItemRow) {
+function itemView(row: VaultItemRow): VaultItemData {
   const meta = toMeta(row);
   return {
     id: row.id,
     handle: row.handle,
-    kind: row.kind,
-    backend: row.backend,
-    audience: row.audience,
+    // Text columns only the schema's enums and this module write.
+    kind: row.kind as VaultKind,
+    backend: row.backend as BackendName,
+    audience: row.audience as VaultItemData["audience"],
     label: row.label,
     username: row.username,
     origins: meta.origins,
@@ -117,14 +126,14 @@ function itemView(row: VaultItemRow) {
     tools: parseList(row.toolsJson),
     effectiveTools: effectiveTools(row),
     bots: row.botsJson === null ? null : parseList(row.botsJson),
-    approval: row.approval,
+    approval: row.approval as VaultApproval,
     effectiveApproval: effectiveApproval(row),
     allowUnattended: row.allowUnattended,
     whenToUse: row.whenToUse,
     card: meta.card ?? null,
     hasTotp: row.hasTotp,
     disabled: row.disabled,
-    field: row.field,
+    field: row.field as ValueField | null,
     lastUsedAt: row.lastUsedAt,
     lastUsedBy: row.lastUsedBy,
     createdAt: row.createdAt,
@@ -132,8 +141,8 @@ function itemView(row: VaultItemRow) {
   };
 }
 
-async function backendsView() {
-  const views = [];
+async function backendsView(): Promise<VaultBackendView[]> {
+  const views: VaultBackendView[] = [];
   for (const name of ["local"] as BackendName[]) {
     const read = readBackends().get(name);
     if (!read) {
@@ -153,7 +162,7 @@ async function backendsView() {
   return views;
 }
 
-export async function overview(options: { refresh?: boolean } = {}) {
+export async function overview(options: { refresh?: boolean } = {}): Promise<VaultOverviewData> {
   if (options.refresh) {
     clearStatusCache();
     await syncMetadata();
@@ -215,7 +224,7 @@ function metadataOf(summary: BackendItemSummary) {
   };
 }
 
-export async function detail(handle: string) {
+export async function detail(handle: string): Promise<VaultItemDetailData> {
   const row = await findOrThrow(handle);
   const backend = readBackends().get(row.backend as BackendName);
   let fields: ValueField[] = [];
@@ -304,7 +313,7 @@ async function assertHandleFree(handle: string, except?: string): Promise<void> 
 export async function createItem(
   input: CreateItemDTO,
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
-) {
+): Promise<VaultItemData> {
   await assertHandleFree(input.policy.handle);
   const name = PRIMARY_BACKEND;
   const backend = backendFor(name);
@@ -412,7 +421,7 @@ export async function linkItem(input: {
   backend: BackendName;
   externalId: string;
   policy: PolicyDTO;
-}) {
+}): Promise<VaultItemData> {
   await assertHandleFree(input.policy.handle);
   const backend = readBackends().get(input.backend);
   if (!backend) throw Boom.badRequest(`The ${input.backend} backend is not configured`);
@@ -463,7 +472,7 @@ export async function updateItem(
   handle: string,
   input: UpdateItemDTO,
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
-) {
+): Promise<VaultItemData> {
   const row = await findOrThrow(handle);
   if (row.audience === "app") {
     throw Boom.conflict(
@@ -562,7 +571,7 @@ async function updateItemRow(
   return itemView(updated);
 }
 
-export async function deleteItem(handle: string, options: { purge: boolean }) {
+export async function deleteItem(handle: string, options: { purge: boolean }): Promise<Deleted> {
   const row = await findOrThrow(handle);
   if (row.audience === "app") {
     throw Boom.conflict(
@@ -573,7 +582,10 @@ export async function deleteItem(handle: string, options: { purge: boolean }) {
 }
 
 /** Delete a vault item (and, with `purge`, its value in the backend). */
-export async function deleteItemRow(row: VaultItemRow, options: { purge: boolean }) {
+export async function deleteItemRow(
+  row: VaultItemRow,
+  options: { purge: boolean },
+): Promise<Deleted> {
   if (options.purge) {
     const backend = backendFor(row.backend);
     if (!backend.remove)
@@ -618,7 +630,11 @@ export async function forgetBotInVault(botId: string): Promise<void> {
 }
 
 /** One value for the owner's browser. Registered with the redactor and audited. */
-export async function reveal(handle: string, field: ValueField, purpose: "reveal" | "copy") {
+export async function reveal(
+  handle: string,
+  field: ValueField,
+  purpose: "reveal" | "copy",
+): Promise<VaultRevealed> {
   const row = await findOrThrow(handle);
   const backend = backendFor(row.backend);
   if (!backend.capabilities.reveal) throw Boom.badRequest("This backend can't reveal values");

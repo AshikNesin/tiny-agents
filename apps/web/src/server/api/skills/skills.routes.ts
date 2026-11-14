@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
+import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as skillsService from "./skills.service";
 import { createSkillSchema, previewSkillSchema, updateSkillSchema } from "./skills.schema";
@@ -29,7 +30,7 @@ router.patch("/skills/:id", async (c) => {
 
 router.delete("/skills/:id", async (c) => {
   await skillsService.remove(parseStringParam(c.req.param("id"), "id"));
-  return ok(c, { deleted: true });
+  return ok<Deleted>(c, { deleted: true });
 });
 
 export default router;

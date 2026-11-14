@@ -98,7 +98,7 @@ export const bots = sqliteTable("bots", {
   /** Set when the owner pins the bot to the top of the sidebar; pinned bots sort by this, oldest first. */
   pinnedAt: ms("pinned_at"),
   /** "shared" (one browser, and its logins, for every such bot) or "own" (a browser of its own). */
-  browserProfile: text("browser_profile").notNull().default("shared"),
+  browserProfile: text("browser_profile").$type<"shared" | "own">().notNull().default("shared"),
   ...timestamps,
 });
 
@@ -676,7 +676,7 @@ export const routineRuns = sqliteTable(
     /** The routine-run machine (shared/machines/routine-run.ts). */
     status: text("status").$type<RoutineRunStatus>().notNull(),
     /** schedule | manual */
-    trigger: text("trigger").notNull().default("schedule"),
+    trigger: text("trigger").$type<"schedule" | "manual">().notNull().default("schedule"),
     /** pi-durable submit id: "routine:<routineId>:<scheduledFor ISO>". */
     requestId: text("request_id").notNull().unique(),
     submittedAt: ms("submitted_at"),

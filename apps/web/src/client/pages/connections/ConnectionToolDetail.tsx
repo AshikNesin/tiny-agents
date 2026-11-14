@@ -28,11 +28,11 @@ import { monoClass } from "@groot/ui/typography";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
-import {
-  connectionsApi,
-  type ConnectionToolDetail as ToolDetail,
-  type ToolCallResult,
-} from "../../lib/connections-api";
+import type {
+  ConnectionToolDetail as ToolDetail,
+  ToolCallResult,
+} from "../../../shared/api/connections";
+import { connectionsApi } from "../../lib/connections-api";
 import { onConnectionChange } from "../../store/bots";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../components/connections/connection-status";

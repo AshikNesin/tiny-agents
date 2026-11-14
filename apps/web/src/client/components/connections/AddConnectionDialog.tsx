@@ -14,7 +14,8 @@ import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
-import { connectionsApi, type Connection, type TestResult } from "../../lib/connections-api";
+import type { Connection, ConnectionTestResult } from "../../../shared/api/connections";
+import { connectionsApi } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
 import { useStepUp } from "../vault/StepUp";
 import { errorMessage } from "./connection-status";
@@ -62,7 +63,7 @@ export function AddConnectionDialog({
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [touched, setTouched] = useState({ name: false, url: false, secret: false });
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   /** Why the last test failed; cleared by the next edit or a passing test. */
   const [testError, setTestError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);

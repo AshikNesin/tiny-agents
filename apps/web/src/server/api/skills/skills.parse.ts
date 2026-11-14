@@ -5,21 +5,7 @@
  */
 import { SKILL_NAME } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
-
-export interface SkillFile {
-  path: string;
-  content: string;
-}
-
-export interface ParsedSkill {
-  name: string;
-  description: string;
-  body: string;
-  files: SkillFile[];
-  sourceUrl?: string;
-  /** Things the owner should know before installing. */
-  warnings: string[];
-}
+import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
 
 export const MAX_FILES = 50;
 export const MAX_FILE_BYTES = 200_000;

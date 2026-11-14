@@ -54,6 +54,16 @@ import type {
   UpdateConnectionDTO,
 } from "./models.schema";
 import { ROLES } from "./models.schema";
+import type { Deleted } from "../../../shared/api/common";
+import type {
+  AccountData,
+  AccountListData,
+  AccountModel,
+  AccountRefreshData,
+  DiscoveredModels,
+  Roles,
+  RolesResponse,
+} from "../../../shared/api/models";
 
 type Kind = Exclude<ProviderKind, "faux">;
 
@@ -106,13 +116,14 @@ function outbound(error: unknown): never {
 
 // ── Reading ─────────────────────────────────────────────────────────────
 
-function modelView(row: ModelRowRecord, usedBy: number) {
+function modelView(row: ModelRowRecord, usedBy: number): AccountModel {
   return {
     id: row.id,
     upstreamId: row.upstreamId,
     name: row.name,
-    type: row.type,
-    source: row.source,
+    // Text columns only the schema's enums write.
+    type: row.type as AccountModel["type"],
+    source: row.source as AccountModel["source"],
     enabled: row.enabled,
     contextWindow: row.contextWindow,
     maxOutputTokens: row.maxOutputTokens,
@@ -125,7 +136,7 @@ function modelView(row: ModelRowRecord, usedBy: number) {
   };
 }
 
-async function accountView(row: ProviderRow, usage: Map<string, number>) {
+async function accountView(row: ProviderRow, usage: Map<string, number>): Promise<AccountData> {
   const [rows, item] = await Promise.all([
     db.select().from(models).where(eq(models.providerId, row.id)),
     row.credentialItemId
@@ -142,10 +153,11 @@ async function accountView(row: ProviderRow, usage: Map<string, number>) {
     baseUrl: row.baseUrl,
     viaProviderId: row.viaProviderId,
     settings: parseObject(row.settingsJson),
-    discovery: row.discovery,
+    // Text columns only the schema's enums and this module's literals write.
+    discovery: row.discovery as AccountData["discovery"],
     allowPrivateNetwork: row.allowPrivateNetwork,
     enabled: row.enabled,
-    status: row.status,
+    status: row.status as AccountData["status"],
     statusDetail: row.statusDetail,
     checkedAt: row.checkedAt,
     version: row.version,
@@ -166,7 +178,7 @@ async function botUsage(): Promise<Map<string, number>> {
   return new Map(rows.map((row) => [row.modelId!, row.n]));
 }
 
-export async function listAccounts() {
+export async function listAccounts(): Promise<AccountListData> {
   const [usage, rows] = await Promise.all([botUsage(), db.select().from(providers)]);
   return {
     accounts: await Promise.all(
@@ -350,7 +362,7 @@ async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
 }
 
 /** Discover without saving (the dialog's "Check models"). */
-export async function discover(input: DiscoverDTO) {
+export async function discover(input: DiscoverDTO): Promise<DiscoveredModels> {
   refuseClaudeToken(input.apiKey);
   const found = await discoverNew({ ...input, kind: input.kind, baseUrl: input.baseUrl ?? null });
   return { models: found };
@@ -440,7 +452,7 @@ function settingsFor(input: CreateAccountDTO): Record<string, unknown> {
   }
 }
 
-export async function createAccount(input: CreateAccountDTO) {
+export async function createAccount(input: CreateAccountDTO): Promise<AccountData> {
   refuseClaudeToken(input.apiKey);
   const kind = input.kind;
   if (kind === "claude-plan") {
@@ -530,7 +542,7 @@ export async function patchAccount(
     maxTurns?: number | "unlimited" | null;
   },
   ifMatch: number | undefined,
-) {
+): Promise<AccountData> {
   const row = await accountOrThrow(id);
   if (ifMatch !== undefined && ifMatch !== row.version) {
     throw new HttpError(412, "The account changed meanwhile. Reload and try again.");
@@ -604,7 +616,10 @@ async function markListed(providerId: string, found: readonly DiscoveredModel[])
   }
 }
 
-export async function updateConnection(id: string, input: UpdateConnectionDTO) {
+export async function updateConnection(
+  id: string,
+  input: UpdateConnectionDTO,
+): Promise<AccountData> {
   refuseClaudeToken(input.apiKey);
   const row = await accountOrThrow(id);
   const kind = row.kind as Kind;
@@ -707,7 +722,7 @@ export async function availableModels(id: string): Promise<DiscoveredModel[]> {
 }
 
 /** Discover again with the stored key: marks models the endpoint stopped listing. */
-export async function refreshAccount(id: string) {
+export async function refreshAccount(id: string): Promise<AccountRefreshData> {
   const row = await accountOrThrow(id);
   let found: DiscoveredModel[];
   try {
@@ -803,7 +818,7 @@ async function moveOrRefuse(from: readonly string[], moveTo: string | undefined)
   }
 }
 
-export async function deleteAccount(id: string, moveTo: string | undefined) {
+export async function deleteAccount(id: string, moveTo: string | undefined): Promise<Deleted> {
   const [row, routes] = await Promise.all([
     accountOrThrow(id),
     db.select({ id: providers.id }).from(providers).where(eq(providers.viaProviderId, id)),
@@ -831,7 +846,7 @@ export async function addModel(
     overrides: Overrides;
     compat?: Record<string, unknown> | null;
   },
-) {
+): Promise<AccountModel> {
   const [row, existing] = await Promise.all([
     accountOrThrow(providerId),
     db.query.models.findFirst({
@@ -867,7 +882,7 @@ export async function patchModel(
     overrides?: Overrides;
     compat?: Record<string, unknown> | null;
   },
-) {
+): Promise<AccountModel> {
   const row = await modelOrThrow(id);
   const account = await accountOrThrow(row.providerId);
   let capabilities = {};
@@ -897,7 +912,7 @@ export async function patchModel(
   return modelView(updated!, (await botUsage()).get(id) ?? 0);
 }
 
-export async function deleteModel(id: string, moveTo: string | undefined) {
+export async function deleteModel(id: string, moveTo: string | undefined): Promise<Deleted> {
   await modelOrThrow(id);
   await moveOrRefuse([id], moveTo);
   await db.delete(models).where(eq(models.id, id));
@@ -907,7 +922,7 @@ export async function deleteModel(id: string, moveTo: string | undefined) {
 
 // ── Roles ───────────────────────────────────────────────────────────────
 
-export async function getRoles() {
+export async function getRoles(): Promise<RolesResponse> {
   const catalog = getAgentRuntime().catalog;
   return {
     roles: Object.fromEntries(
@@ -921,11 +936,14 @@ export async function getRoles() {
           },
         ];
       }),
-    ),
+      // One entry per role in ROLES: the record is complete.
+    ) as Roles,
   };
 }
 
-export async function putRoles(input: Partial<Record<(typeof ROLES)[number], string | null>>) {
+export async function putRoles(
+  input: Partial<Record<(typeof ROLES)[number], string | null>>,
+): Promise<RolesResponse> {
   const entries = Object.entries(input);
   const cleared = entries.filter(([, modelId]) => !modelId).map(([role]) => role);
   const set = entries.filter((entry): entry is [string, string] => Boolean(entry[1]));

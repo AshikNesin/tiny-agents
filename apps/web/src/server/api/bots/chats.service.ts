@@ -28,6 +28,7 @@ import { previewText } from "./bots.list";
 import { requireApprovalAnswer, type Viewer } from "../people/access";
 import { authorOf } from "../people/people.service";
 import { getBot, updateBotRow, type BotAgentRuntime } from "./bots.service";
+import type { YoloState } from "../../../shared/api/bots";
 
 function runtime(): BotAgentRuntime {
   return getAgentRuntime();
@@ -226,7 +227,7 @@ export async function setYolo(
   on: boolean,
   ownerId: number,
   rt: BotAgentRuntime = runtime(),
-): Promise<{ on: boolean; approved: number[] }> {
+): Promise<YoloState> {
   const chat = await openBotChat(id, rt);
   const result = await chat.setYolo(on, ownerId);
   publishBotChatEvent(chat.bot.id, { type: "yolo", on });

@@ -8,7 +8,7 @@ import { Field } from "@groot/ui/form";
 import { Input } from "@groot/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { Textarea } from "@groot/ui/textarea";
-import type { VaultApproval, VaultKind, VaultPolicy } from "../../lib/vault-api";
+import type { VaultApproval, VaultKind, VaultPolicy } from "../../../shared/api/vault";
 import { useBotsStore } from "../../store/bots";
 import { Switch } from "../ui/switch";
 

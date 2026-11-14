@@ -1,77 +1,29 @@
 /**
- * Typed client for the routines API (issue #18, PRD 5.7). Mirrors the server's
- * response shapes; `apiClient` unwraps the { success, data } envelope.
+ * Typed client for the routines API (issue #18, PRD 5.7). The shapes are the
+ * server's own (`shared/api/routines.ts`); `apiClient` unwraps the
+ * { success, data } envelope.
  */
 import { apiClient } from "@groot/shell/lib/api";
-import type { RoutineRunStatus } from "../../shared/machines/routine-run";
-
-/** The schedule union as it travels on the wire (PRD 5.1). */
-export type Schedule =
-  | { kind: "once"; at: string }
-  | { kind: "cron"; expr: string }
-  | { kind: "interval"; minutes: number };
-
-export interface Routine {
-  id: string;
-  botId: string;
-  botName: string;
-  name: string;
-  prompt: string;
-  schedule: Schedule;
-  scheduleDescription: string;
-  enabled: boolean;
-  nextRunAt: string | null;
-  /** A one-time routine whose time has passed: finished, not paused. */
-  done?: boolean;
-  /** Runs in a row that ended blocked (issue #87); 3 pause the routine. */
-  blockedStreak: number;
-  /** Why the app paused it ("Paused after 3 blocked runs: …"); null otherwise. */
-  pausedReason: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Create/patch responses add the pre-rendered next fire times (PRD 5.2). */
-export type RoutineWithPreview = Routine & { nextFireTimes: string[] };
-
-export type RoutineInput = {
-  botId?: string;
-  name?: string;
-  prompt?: string;
-  schedule?: Schedule;
-  enabled?: boolean;
-};
-
-export interface RoutineRun {
-  id: string;
-  routineId: string;
-  /** Present on recentRuns rows; absent from per-routine runs. */
-  routineName?: string;
-  botName?: string;
-  scheduledFor: string;
-  /** `blocked`: it finished but could not do its job; `error` says why (issue #87). */
-  status: RoutineRunStatus;
-  trigger: "schedule" | "manual";
-  submittedAt: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  output: string | null;
-  error: string | null;
-}
+import type { Deleted } from "../../shared/api/common";
+import type {
+  Routine,
+  RoutineCreateBody,
+  RoutineRuns,
+  RoutineRunStarted,
+  RoutineUpdateBody,
+  RoutineWithPreview,
+} from "../../shared/api/routines";
 
 export const routinesApi = {
   list: () => apiClient.get<Routine[]>("/routines"),
-  create: (
-    input: RoutineInput & Pick<Routine, "botId" | "name" | "prompt"> & { schedule: Schedule },
-  ) => apiClient.post<RoutineWithPreview>("/routines", input),
-  update: (id: string, input: RoutineInput) =>
+  create: (input: RoutineCreateBody) => apiClient.post<RoutineWithPreview>("/routines", input),
+  update: (id: string, input: RoutineUpdateBody) =>
     apiClient.patch<RoutineWithPreview>(`/routines/${id}`, input),
-  remove: (id: string) => apiClient.delete<{ deleted: boolean }>(`/routines/${id}`),
+  remove: (id: string) => apiClient.delete<Deleted>(`/routines/${id}`),
   pause: (id: string) => apiClient.post<Routine>(`/routines/${id}/pause`),
   resume: (id: string) => apiClient.post<Routine>(`/routines/${id}/resume`),
-  runNow: (id: string) => apiClient.post<{ runId: string }>(`/routines/${id}/run`),
+  runNow: (id: string) => apiClient.post<RoutineRunStarted>(`/routines/${id}/run`),
   listRuns: (id: string, limit = 20) =>
-    apiClient.get<{ runs: RoutineRun[] }>(`/routines/${id}/runs`, { limit }),
-  recentRuns: (limit = 20) =>
-    apiClient.get<{ runs: RoutineRun[] }>("/routines/runs/recent", { limit }),
+    apiClient.get<RoutineRuns>(`/routines/${id}/runs`, { limit }),
+  recentRuns: (limit = 20) => apiClient.get<RoutineRuns>("/routines/runs/recent", { limit }),
 };

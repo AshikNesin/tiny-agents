@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { ConnectionToolDetail } from "@/pages/connections/ConnectionToolDetail";
-import type { ConnectionToolDetail as ToolDetail } from "@/lib/connections-api";
+import type { ConnectionToolDetail as ToolDetail } from "../../../apps/web/src/shared/api/connections";
 
 const getToolMock = vi.fn();
 const updateToolMock = vi.fn();

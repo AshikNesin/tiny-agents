@@ -1,4 +1,4 @@
-import type { CatalogModel } from "../../lib/bots-api";
+import type { CatalogModel } from "../../../shared/api/models";
 import { ModelPicker } from "../ModelPicker";
 
 interface ModelSelectorProps {

@@ -11,7 +11,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ModelsSettings } from "@/pages/settings/models/ModelsSettings";
 import { ConfirmProvider } from "@groot/ui/primitives";
-import type { Account, AccountModel, ProviderTemplate } from "@/lib/models-api";
+import type {
+  Account,
+  AccountModel,
+  ProviderTemplate,
+} from "../../../apps/web/src/shared/api/models";
 
 const api = vi.hoisted(() => ({
   accounts: vi.fn(),

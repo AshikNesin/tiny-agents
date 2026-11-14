@@ -10,7 +10,6 @@ import { Boom } from "@groot/core/errors";
 import {
   connectMcp,
   mcpToolName,
-  type McpCallResult,
   type McpToolInfo,
   type McpTransportKind,
 } from "@tiny-agents/agent";
@@ -23,7 +22,15 @@ import {
   vaultItems,
   type Connection,
 } from "../../db";
-import { getConnectionManager, type ConnectionStatus } from "./connections.manager";
+import { getConnectionManager } from "./connections.manager";
+import type {
+  ConnectionData,
+  ConnectionAuthorization,
+  ConnectionTestResult,
+  ConnectionTool,
+  ConnectionToolDetail,
+  ToolCallResult,
+} from "../../../shared/api/connections";
 import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
 import { createId } from "@groot/core/utils/id.utils";
 import { hasSecretsKey } from "../../crypto/secret-box";
@@ -36,54 +43,13 @@ import type {
   UpdateToolDTO,
 } from "./connections.schema";
 
-export interface ConnectionDTO {
-  id: string;
-  name: string;
-  slug: string;
-  url: string;
-  transport: string;
-  authType: string;
-  headerName: string | null;
-  hasSecret: boolean;
-  /** Vault handle the header value is read from, when set. */
-  secretRef: string | null;
-  /** The server's tools from the last listing, including those turned off. */
-  tools: ConnectionToolDTO[];
-  botIds: string[];
-  status: ConnectionStatus;
-  error?: string;
-  createdAt: Date;
-}
-
-interface ConnectionToolDTO {
-  /** As bots see it: `mcp__<slug>__<tool>`. */
-  name: string;
-  /** As the server names it; the id in tool routes. */
-  serverName: string;
-  label: string;
-  description: string;
-  readOnly: boolean;
-  /** Off: no bot gets the tool, whatever its own permissions say. */
-  enabled: boolean;
-}
-
-/** One tool with everything the server declared about it. */
-export interface ConnectionToolDetailDTO extends ConnectionToolDTO {
-  idempotent: boolean;
-  destructive: boolean;
-  openWorld: boolean;
-  inputSchema: Record<string, unknown>;
-  outputSchema?: Record<string, unknown>;
-  connection: Pick<ConnectionDTO, "id" | "name" | "slug" | "status">;
-}
-
 type Row = Connection & {
   bots: { botId: string }[];
 };
 
 type ConnectionRow = Pick<Row, "slug" | "disabledTools">;
 
-function toToolDTO(row: ConnectionRow, tool: McpToolInfo, disabled: Set<string>) {
+function toToolDTO(row: ConnectionRow, tool: McpToolInfo, disabled: Set<string>): ConnectionTool {
   return {
     name: mcpToolName(row.slug, tool.name),
     serverName: tool.name,
@@ -94,7 +60,7 @@ function toToolDTO(row: ConnectionRow, tool: McpToolInfo, disabled: Set<string>)
   };
 }
 
-function toDTO(row: Row): ConnectionDTO {
+function toDTO(row: Row): ConnectionData {
   const live = getConnectionManager().status(row.id);
   const disabled = parseDisabledTools(row.disabledTools);
   return {
@@ -170,7 +136,7 @@ async function setBots(connectionId: string, botIds: string[]): Promise<void> {
   await getConnectionManager().botsChanged(affected);
 }
 
-export async function list(): Promise<ConnectionDTO[]> {
+export async function list(): Promise<ConnectionData[]> {
   const rows = await db.query.connections.findMany({
     with: withBots,
     orderBy: asc(connections.name),
@@ -178,7 +144,7 @@ export async function list(): Promise<ConnectionDTO[]> {
   return rows.map(toDTO);
 }
 
-export async function get(id: string): Promise<ConnectionDTO> {
+export async function get(id: string): Promise<ConnectionData> {
   const row = await db.query.connections.findFirst({
     where: eq(connections.id, id),
     with: withBots,
@@ -187,7 +153,7 @@ export async function get(id: string): Promise<ConnectionDTO> {
   return toDTO(row);
 }
 
-export async function create(data: CreateConnectionDTO): Promise<ConnectionDTO> {
+export async function create(data: CreateConnectionDTO): Promise<ConnectionData> {
   checkUrl(data.url);
   const manualClient = data.authType === "oauth" && data.clientId;
   if (data.authType === "header" || data.authType === "oauth") requireSecretsKey();
@@ -223,7 +189,7 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionDTO> 
   return get(id);
 }
 
-export async function update(id: string, data: UpdateConnectionDTO): Promise<ConnectionDTO> {
+export async function update(id: string, data: UpdateConnectionDTO): Promise<ConnectionData> {
   const current = await get(id);
   if (data.url) checkUrl(data.url);
   if (data.secret) requireSecretsKey();
@@ -281,7 +247,7 @@ export async function remove(id: string): Promise<void> {
   await getConnectionManager().remove(id, connection.slug, connection.botIds);
 }
 
-export async function reconnect(id: string): Promise<ConnectionDTO> {
+export async function reconnect(id: string): Promise<ConnectionData> {
   await get(id);
   await getConnectionManager().rowChanged(id);
   return get(id);
@@ -295,7 +261,7 @@ async function findTool(id: string, serverName: string) {
   return { row, tool };
 }
 
-export async function getTool(id: string, serverName: string): Promise<ConnectionToolDetailDTO> {
+export async function getTool(id: string, serverName: string): Promise<ConnectionToolDetail> {
   const { row, tool } = await findTool(id, serverName);
   return {
     ...toToolDTO(row, tool, parseDisabledTools(row.disabledTools)),
@@ -321,7 +287,7 @@ export async function updateTool(
   id: string,
   serverName: string,
   data: UpdateToolDTO,
-): Promise<ConnectionToolDetailDTO> {
+): Promise<ConnectionToolDetail> {
   const { row } = await findTool(id, serverName);
   const disabled = parseDisabledTools(row.disabledTools);
   if (disabled.has(serverName) === !data.enabled) return getTool(id, serverName);
@@ -343,7 +309,7 @@ export async function callTool(
   id: string,
   serverName: string,
   data: CallToolDTO,
-): Promise<{ result: McpCallResult; durationMs: number }> {
+): Promise<ToolCallResult> {
   await findTool(id, serverName);
   const started = Date.now();
   try {
@@ -355,7 +321,7 @@ export async function callTool(
 }
 
 /** Start the OAuth sign-in: the consent URL to open, or none when already authorized. */
-export async function authorize(id: string): Promise<{ authorizationUrl?: string }> {
+export async function authorize(id: string): Promise<ConnectionAuthorization> {
   const connection = await get(id);
   if (connection.authType !== "oauth") throw Boom.badRequest("This connection doesn't use sign-in");
   requireSecretsKey();
@@ -370,7 +336,7 @@ export async function authorize(id: string): Promise<{ authorizationUrl?: string
 }
 
 /** Connect once with the given settings and list the server's tools, without saving. */
-export async function test(data: TestConnectionDTO) {
+export async function test(data: TestConnectionDTO): Promise<ConnectionTestResult> {
   checkUrl(data.url);
   try {
     const connection = await connectMcp({

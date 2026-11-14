@@ -61,7 +61,7 @@ const refOf = (runId: string, routine: RunRoutine): RoutineRunRef => ({
 async function upsertRun(
   routine: RunRoutine,
   scheduledFor: Date,
-  trigger: string,
+  trigger: RoutineRun["trigger"],
   fields: Partial<Pick<RoutineRun, "submittedAt" | "startedAt" | "finishedAt" | "error">> & {
     /** Only a state a run may be recorded in at its fire. */
     status: (typeof routineRunMachine.initial)[number];
@@ -108,7 +108,7 @@ async function pruneRuns(routineId: string): Promise<void> {
 export async function recordMissed(
   routine: RunRoutine,
   scheduledFor: Date,
-  trigger: string,
+  trigger: RoutineRun["trigger"],
   now: Date,
   lateMinutes: number,
 ): Promise<string> {
@@ -143,7 +143,7 @@ function pausedError(error: unknown): string {
 export async function recordSubmitFailed(
   routine: RunRoutine,
   scheduledFor: Date,
-  trigger: string,
+  trigger: RoutineRun["trigger"],
   now: Date,
   error: unknown,
 ): Promise<string> {
@@ -161,7 +161,7 @@ export async function recordSubmitFailed(
 export async function recordAwaiting(
   routine: RunRoutine,
   scheduledFor: Date,
-  trigger: string,
+  trigger: RoutineRun["trigger"],
   now: Date,
 ): Promise<string> {
   const runId = await upsertRun(routine, scheduledFor, trigger, {

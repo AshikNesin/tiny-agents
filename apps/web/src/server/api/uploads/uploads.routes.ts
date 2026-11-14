@@ -12,11 +12,13 @@ import { uploadRateLimiter } from "@groot/core/middlewares/rate-limit.middleware
 import { sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { AppContext, AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
+import type { Deleted } from "../../../shared/api/common";
 import { parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { z } from "zod";
 import { loadContent } from "./uploads.extraction";
 import { sniffImage } from "./uploads.prepare";
 import * as uploadsService from "./uploads.service";
+import type { UploadText } from "../../../shared/api/uploads";
 
 const router = new Hono<AppEnv>();
 
@@ -97,14 +99,18 @@ router.get("/uploads/:id/text", async (c) => {
   const id = parseUploadId(c);
   const { page, sheet } = parseQuery(c, textQuerySchema);
   const status = await uploadsService.uploadStatus(id);
-  if (status.status !== "ready") return ok(c, { status: status.status, error: status.error });
+  if (status.status !== "ready") {
+    return ok<UploadText>(c, { status: status.status, error: status.error });
+  }
   const content = await loadContent(id);
-  if (!content) return ok(c, { status: "failed", error: "The extracted text is missing." });
+  if (!content) {
+    return ok<UploadText>(c, { status: "failed", error: "The extracted text is missing." });
+  }
   if (content.sheets) {
     const index = (sheet ?? 1) - 1;
     const chosen = content.sheets[index];
     if (!chosen) throw Boom.notFound("No such sheet");
-    return ok(c, {
+    return ok<UploadText>(c, {
       status: "ready",
       format: content.format,
       sheets: content.sheets.map((s) => ({ name: s.name, hidden: s.hidden ?? false })),
@@ -114,7 +120,7 @@ router.get("/uploads/:id/text", async (c) => {
     });
   }
   if (content.entries) {
-    return ok(c, {
+    return ok<UploadText>(c, {
       status: "ready",
       format: content.format,
       entries: content.entries.slice(0, 2000),
@@ -122,7 +128,7 @@ router.get("/uploads/:id/text", async (c) => {
   }
   const chosen = content.pages[page - 1];
   if (!chosen && content.pages.length > 0) throw Boom.notFound("No such page");
-  return ok(c, {
+  return ok<UploadText>(c, {
     status: "ready",
     format: content.format,
     page,
@@ -151,7 +157,7 @@ router.get("/uploads/:id/content", async (c) => {
 router.delete("/uploads/:id", async (c) => {
   const id = parseUploadId(c);
   await uploadsService.deleteUpload(id);
-  return ok(c, { deleted: true });
+  return ok<Deleted>(c, { deleted: true });
 });
 
 export default router;

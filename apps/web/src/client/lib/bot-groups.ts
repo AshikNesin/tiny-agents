@@ -1,4 +1,4 @@
-import type { BotListEntry } from "./bots-api";
+import type { BotListEntry } from "../../shared/api/bots";
 
 /** Recent bots shown before the sidebar folds the rest behind "Show more". */
 export const RECENT_FOLD_LIMIT = 8;
