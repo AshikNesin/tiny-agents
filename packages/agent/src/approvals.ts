@@ -13,10 +13,11 @@
  *   decision for a running call that never asked is refused. An engine
  *   without task documents (the Claude plan) has the gate hold the answer
  *   instead, with the same card details.
- * - A tool can carry a gate plan (`withGatePlan`, used by vault sinks, issue
- *   #56): decided once per call before anything runs, it may refuse the call,
- *   ask even where the tool is allowed, add to the card, offer a standing
- *   grant for the conversation and let the approval expire.
+ * - A tool can carry a gate plan (its declaration's `gate`, used by vault
+ *   sinks, issue #56): decided once per call before anything runs, it may
+ *   refuse the call, ask even where the tool is allowed, add to the card,
+ *   offer a standing grant for the conversation and let the approval
+ *   expire.
  * - YOLO mode switched on approves calls already waiting
  *   (`recordYoloDecision`), never a vault use.
  */
@@ -266,20 +267,27 @@ export interface GateHooks<TArgs = never> {
   replaySafe?(args: TArgs): boolean;
 }
 
-const gateHooks = new WeakMap<ToolRegistration, GateHooks<unknown>>();
+/**
+ * A tool registration with its gate plan as a field: `tool()` (`toolkit.ts`)
+ * sets it from the tool's declaration, and both engines hand it to the Tool
+ * gate. pi-durable ignores the field.
+ */
+type GatedRegistration = ToolRegistration & { readonly gate?: GateHooks<unknown> };
 
-/** Attach gate hooks to a tool registration (identity otherwise). */
+/**
+ * The registration with gate hooks attached, for tools not yet declared with
+ * `tool()` (rewrite step 3.2 migrates them).
+ */
 export function withGatePlan<T extends ToolRegistration>(
   tool: T,
   hooks: GateHooks<Parameters<T["execute"]>[0]>,
 ): T {
-  gateHooks.set(tool, hooks);
-  return tool;
+  return { ...tool, gate: hooks };
 }
 
-/** The gate hooks `withGatePlan` attached to a tool, if any. */
+/** The gate hooks a tool registration carries, if any. */
 export function gateHooksOf(tool: ToolRegistration): GateHooks<unknown> | undefined {
-  return gateHooks.get(tool);
+  return (tool as GatedRegistration).gate;
 }
 
 /** Whether the owner approved this call at its gate (for tools whose sink re-checks). */
