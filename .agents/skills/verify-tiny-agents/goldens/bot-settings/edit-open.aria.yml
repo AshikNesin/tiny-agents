@@ -1,0 +1,27 @@
+# http://localhost:3310/chats/<id1>
+- region "Notifications alt+T"
+- dialog "Edit Settings Bot fixed":
+    - heading "Edit Settings Bot fixed" [level=2]
+    - paragraph: Prompt and model changes apply from the next turn; history is kept.
+    - tablist:
+        - tab "Profile" [selected]
+        - tab "Tools"
+        - tab "Skills"
+        - tab "Sharing"
+    - tabpanel "Profile":
+        - text: Name
+        - textbox "Name":
+            - /placeholder: e.g. Research helper
+            - text: Settings Bot fixed
+        - text: Description
+        - textbox "Description":
+            - /placeholder: One line, shown under the name
+        - text: Model
+        - button "Test Model (faux)"
+        - text: System prompt
+        - textbox "System prompt":
+            - /placeholder: Who is this bot? How should it reply?
+    - button "Delete bot"
+    - button "Cancel"
+    - button "Save changes"
+    - button "Close"

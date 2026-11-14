@@ -1,0 +1,18 @@
+# http://localhost:3330/settings/models
+- region "Notifications alt+T":
+    - list:
+        - listitem: Claude Code lists its models once it is signed in. Connect, sign in from the account's card, then check again.
+- dialog "Add models":
+    - heading "Add models" [level=2]
+    - paragraph: Keys go straight into the vault. Bots never see them.
+    - tablist:
+        - tab "Connect a provider" [selected]
+        - tab "Add a single model"
+    - tabpanel "Connect a provider":
+        - text: Kind
+        - combobox "Kind": Claude plan
+        - text: "The Claude plan needs no key here: Claude Code signs in on the sandbox (sign in from this account's card once it is added). Its models are the ones your subscription offers, listed by Claude Code. Account name"
+        - textbox "Account name"
+        - paragraph: How pickers name it.
+    - button "Connect"
+    - button "Close"

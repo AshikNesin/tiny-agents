@@ -1,0 +1,25 @@
+# http://localhost:3330/vault/requests/999999
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - paragraph: No bots yet.
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Credential request" [level=1]
+    - paragraph: Nothing to fill
+    - paragraph: This request was answered, cancelled or expired
+- region "Notifications alt+T"

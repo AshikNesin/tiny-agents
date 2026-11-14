@@ -1,0 +1,37 @@
+# http://localhost:3330/skills
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Skill Bot fixed":
+                    - /url: /chats/<id1>
+                - button "Skill Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Skills" [level=1]
+    - text: Reusable instructions your bots load when a task needs them.
+    - button "Import"
+    - button "New skill"
+    - searchbox "Search skills": verify-skill-fixed
+    - list:
+        - listitem:
+            - button "verify-skill-fixed Edited by verify fixed manual used by 1 bot updated a few seconds ago":
+                - paragraph: verify-skill-fixed
+                - paragraph: Edited by verify fixed
+                - paragraph: manual used by 1 bot updated a few seconds ago
+- region "Notifications alt+T"

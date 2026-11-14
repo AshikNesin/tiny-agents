@@ -1,0 +1,34 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary"
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - list:
+            - listitem:
+                - link "Shared Bot fixed":
+                    - /url: /chats/<id1>
+                    - text: "Shared Bot fixed Nov 6 Echo: Demo User: owner hello fixed"
+    - button "Account and navigation": G Guest fixed
+- main:
+    - heading "Shared Bot fixed Shared" [level=1]
+    - button "Open live view"
+    - region "Messages":
+        - log:
+            - text: Nov 6
+            - paragraph: D Demo User
+            - paragraph: owner hello fixed
+            - button "Copy message"
+            - time: Nov 6, 06:30 AM
+            - paragraph: "Echo: Demo User: owner hello fixed"
+            - button "Copy message"
+            - time: Nov 6, 06:30 AM
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Shared Bot fixed"
+    - button "Add files or mention a bot"
+    - text: Test Model (faux)
+    - button "Send message" [disabled]
+- region "Notifications alt+T"

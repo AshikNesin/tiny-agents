@@ -1,0 +1,59 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Relay Peer fixed":
+                    - /url: /chats/<id2>
+                    - text: "Relay Peer fixed now Echo: [From the owner, in Relay Host fixed's chat] what do you think @Relay Peer fixed ping fixed"
+                - button "Relay Peer fixed actions"
+            - listitem:
+                - link "Relay Host fixed, replying":
+                    - /url: /chats/<id1>
+                    - text: "Relay Host fixed now Echo: what do you think @Relay Peer fixed ping fixed"
+                    - status "Replying"
+                - button "Relay Host fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Relay Host fixed menu" [level=1]:
+        - button "Relay Host fixed menu": Relay Host fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: what do you think @Relay Peer fixed ping fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: what do you think @Relay Peer fixed ping fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: Relay Peer fixed reply relayed into this chat
+            - paragraph: "Echo: [From the owner, in Relay Host fixed's chat] what do you think @Relay Peer fixed ping fixed"
+            - button "Copy message"
+            - paragraph:
+                - text: "Echo: Reply from Relay Peer fixed: Echo:"
+                - button "From the owner, in Relay Host fixe"
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Relay Host fixed": second thought @Relay Peer fixed
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Queue for after this reply"
+    - button "Steer the reply"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

@@ -1,0 +1,16 @@
+# http://localhost:3300/tasks
+- region "Notifications alt+T"
+- dialog "Command menu":
+    - heading "Command menu" [level=2]
+    - paragraph: Search for a command to run.
+    - combobox "Type a command or search…" [expanded]: zzz-no-such-thing-fixed
+    - tablist "Filter results":
+        - tab "All" [selected]
+        - tab "Actions"
+        - tab "Bots"
+        - tab "Navigation"
+        - tab "Theme"
+        - tab "Account"
+    - listbox:
+        - status: No results found.
+    - text: Select ↑ ↓ Tabs ← → Close Esc

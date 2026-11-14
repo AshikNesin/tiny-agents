@@ -1,0 +1,48 @@
+# http://localhost:3300/settings/appearance
+- main:
+    - link "Back to tiny-agents":
+        - /url: /chats
+    - button "Search (⌘K)"
+    - complementary:
+        - combobox "Search settings"
+        - navigation "Settings sections":
+            - text: Personal
+            - list:
+                - listitem:
+                    - link "Account":
+                        - /url: /settings/account
+                - listitem:
+                    - link "Appearance":
+                        - /url: /settings/appearance
+                - listitem:
+                    - link "Security":
+                        - /url: /settings/security
+            - text: App
+            - list:
+                - listitem:
+                    - link "Models":
+                        - /url: /settings/models
+                - listitem:
+                    - link "Notifications":
+                        - /url: /settings/notifications
+                - listitem:
+                    - link "People":
+                        - /url: /settings/people
+                - listitem:
+                    - link "Configuration":
+                        - /url: /settings/configuration
+                - listitem:
+                    - link "Updates":
+                        - /url: /settings/updates
+    - main:
+        - heading "Appearance" [level=1]
+        - text: Customize how the app looks.
+        - paragraph: Theme
+        - text: Choose how the app looks on this device.
+        - group "Theme":
+            - button "Light" [pressed]
+            - button "Dark"
+            - button "System"
+- region "Notifications alt+T"
+- button "Feedback":
+    - img

@@ -1,0 +1,12 @@
+# http://localhost:3330/vault/items/verify-login-fixed
+- region "Notifications alt+T":
+    - list:
+        - listitem: Wrong password
+- dialog "Confirm it's you":
+    - heading "Confirm it's you" [level=2]
+    - paragraph: Changing or revealing vault items needs your password again. You stay confirmed for 5 minutes.
+    - text: Password
+    - textbox "Password": not-the-password
+    - button "Use a passkey"
+    - button "Confirm"
+    - button "Close"

@@ -1,0 +1,26 @@
+# http://localhost:3420/connections
+- region "Notifications alt+T"
+- dialog "Add connection":
+    - heading "Add connection" [level=2]
+    - paragraph: Connect a remote MCP server for your bots.
+    - text: Name
+    - textbox "Name":
+        - /placeholder: e.g. GitHub
+        - text: Verify MCP fixed
+    - text: URL
+    - textbox "URL":
+        - /placeholder: https://example.com/mcp
+        - text: http://127.0.0.1:44639/mcp
+    - text: Authentication
+    - combobox "Authentication type": API key or header
+    - text: Header name
+    - textbox "Header name": x-api-key
+    - text: Secret
+    - textbox "Secret": wrong-secret
+    - alert:
+        - paragraph: Test failed
+        - paragraph: 'Couldn''t connect: Streamable HTTP error: Error POSTing to endpoint: {"jsonrpc":"2.0","error":{"code":-32001,"message":"Unauthorized"},"id":null}'
+    - button "Test connection"
+    - button "Cancel"
+    - button "Save"
+    - button "Close"

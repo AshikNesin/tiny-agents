@@ -1,0 +1,45 @@
+# http://localhost:3310/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Verify Bot fixed":
+                    - /url: /chats/<id1>
+                    - text: "Verify Bot fixed now Echo: hello fixed"
+                - button "Verify Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Verify Bot fixed menu" [level=1]:
+        - button "Verify Bot fixed menu": Verify Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: hello fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: hello fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Verify Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Send message" [disabled]
+- region "Notifications alt+T"

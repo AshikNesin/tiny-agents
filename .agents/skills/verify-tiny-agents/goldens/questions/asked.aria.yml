@@ -1,0 +1,55 @@
+# http://localhost:3310/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Ask Bot fixed, 1 question for you":
+                    - /url: /chats/<id1>
+                    - text: Ask Bot fixed 1
+                - button "Ask Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Ask Bot fixed menu" [level=1]:
+        - button "Ask Bot fixed menu": Ask Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /ask fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - group "Questions from Ask Bot fixed":
+                - text: Ask Bot fixed has 3 questions for you Question 1 of 3
+                - button "Dismiss"
+                - heading "Which stack should the project use?" [level=3]
+                - radiogroup "Which stack should the project use?":
+                    - radio "React With Vite and Tailwind"
+                    - radio "Svelte"
+                    - radio "Plain HTML"
+                    - 'textbox "Other answer to: Which stack should the project use?"':
+                        - /placeholder: Something else…
+                - button "Skip"
+                - paragraph: Or reply in the chat to skip these questions.
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Ask Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Stop generating"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

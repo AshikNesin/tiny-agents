@@ -1,0 +1,37 @@
+# http://localhost:3330/storage
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - paragraph: No bots yet.
+    - button "Account and navigation": D Demo User
+- main:
+    - navigation "breadcrumb":
+        - list:
+            - listitem:
+                - button "Go to root folder"
+    - heading "Storage" [level=1]
+    - text: Browse and manage your files and folders
+    - button "Refresh files"
+    - button "Upload"
+    - button "New Folder"
+    - paragraph: No files found
+    - paragraph: This folder is empty. Upload files or create a new folder to get started.
+- region "Notifications alt+T":
+    - list:
+        - listitem: Folder deleted verify-folder-fixed/
+        - listitem: Deleted File removed
+        - listitem: Deleted File removed

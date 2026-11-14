@@ -1,0 +1,55 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Review Bot fixed, 1 awaiting approval":
+                    - /url: /chats/<id1>
+                    - text: Review Bot fixed now /improve 1
+                - button "Review Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Review Bot fixed menu" [level=1]:
+        - button "Review Bot fixed menu": Review Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /browse 1 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page denied by you 119ms"
+            - paragraph: "Echo: The owner denied this browser_snapshot call. Do not retry it unless asked."
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - text: "Review Bot fixed wants to update own instructions: “Self-improvement e2e: append this line.”"
+            - paragraph: Nothing runs until you answer.
+            - button "Deny"
+            - button "Approve"
+            - button "Always allow"
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Review Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Stop generating"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

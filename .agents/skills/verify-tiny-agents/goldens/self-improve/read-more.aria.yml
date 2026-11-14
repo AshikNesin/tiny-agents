@@ -1,0 +1,78 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Improve Bot fixed, 1 awaiting approval":
+                    - /url: /chats/<id1>
+                    - text: Improve Bot fixed now /improve long 1
+                - button "Improve Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Improve Bot fixed menu" [level=1]:
+        - button "Improve Bot fixed menu": Improve Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - 'button "Updated own instructions “Self-improvement e2e: append this line.” denied by you 344ms"'
+            - paragraph: "Echo: The owner denied this update_instructions call. Do not retry it unless asked."
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - 'button "Updated own instructions “Self-improvement e2e: append this line.” 404ms"'
+            - paragraph: "Echo: /improve"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - 'button "Updated own instructions “Self-improvement e2e: append this line.” 281ms"'
+            - paragraph: "Echo: /improve"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - 'button "Updated own instructions “Self-improvement e2e: append this line.” denied by you 643ms"'
+            - paragraph: "Echo: The owner denied this update_instructions call. Do not retry it unless asked."
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /improve long
+            - button "Copy message"
+            - time: 06:30 AM
+            - text: "Improve Bot fixed wants to update own instructions: “Self-improvement e2e: a deliberately long change so the appr”"
+            - button "Read less" [expanded]
+            - text: "Self-improvement e2e: a deliberately long change so the approval card folds it behind Read more. The owner must be able to read the whole proposal before approving it — a 60-character slice of a 700-word rewrite is rubber-stamping. This line exists only to push the payload over the fold threshold."
+            - paragraph: Nothing runs until you answer.
+            - button "Deny"
+            - button "Approve"
+            - button "Always allow"
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Improve Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Stop generating"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

@@ -1,0 +1,35 @@
+# http://localhost:3370/settings/security
+- main:
+    - link "Back to tiny-agents":
+        - /url: /chats
+    - button "Search (⌘K)"
+    - complementary:
+        - combobox "Search settings"
+        - navigation "Settings sections":
+            - text: Personal
+            - list:
+                - listitem:
+                    - link "Appearance":
+                        - /url: /settings/appearance
+                - listitem:
+                    - link "Security":
+                        - /url: /settings/security
+    - main:
+        - heading "Security" [level=1]
+        - text: Passkeys for passwordless sign-in.
+        - heading "Add a passkey" [level=3]
+        - text: Use biometrics (Face ID / Touch ID) or a security key for passwordless sign-in. Name (optional)
+        - textbox "Name (optional)":
+            - /placeholder: e.g. My iPhone, Work Laptop
+        - button "Add passkey"
+        - heading "Your passkeys" [level=3]
+        - text: Devices currently authorised to sign in to your account.
+        - list:
+            - listitem:
+                - paragraph: vault-guest-pk-fixed
+                - text: Device-bound passkey Added Nov 6, 2026
+                - button "Edit"
+                - button "Delete" [disabled]
+- region "Notifications alt+T":
+    - list:
+        - listitem: Passkey added successfully

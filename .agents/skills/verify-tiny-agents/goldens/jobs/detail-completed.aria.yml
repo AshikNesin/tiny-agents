@@ -1,0 +1,66 @@
+# http://localhost:3330/jobs/routine-fire/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Jobs Bot fixed":
+                    - /url: /chats/<id2>
+                - button "Jobs Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - navigation "breadcrumb":
+        - list:
+            - listitem:
+                - link "Jobs":
+                    - /url: /jobs
+            - listitem: routine-fire
+    - heading "routine-fire" [level=1]
+    - text: Completed <id1>
+    - button "Re-run"
+    - button "Delete"
+    - heading "Overview" [level=3]
+    - term: Priority
+    - definition: "0"
+    - term: Retries
+    - definition: 0 / 3
+    - term: Retry Delay
+    - definition: 60s
+    - term: Created
+    - definition: a few seconds ago
+    - term: Run At
+    - definition: a few seconds ago
+    - term: Started
+    - definition: a few seconds ago
+    - term: Completed
+    - definition: a few seconds ago
+    - term: Duration
+    - definition: 0.00s
+    - heading "Data" [level=3]
+    - textbox
+    - heading "Logs" [level=3]
+    - text: "[11/6/2026, 6:30:00 AM] Starting job routine-fire"
+    - tree:
+        - 'treeitem "▶ {data: Object, attempt: 1}"':
+            - text: "▶ {data: Object, attempt: 1}"
+            - group
+    - text: "[11/6/2026, 6:30:00 AM] Job routine-fire completed"
+    - tree:
+        - 'treeitem "▶ {duration: \"0ms\"}"':
+            - text: '▶ {duration: "0ms"}'
+            - group
+- region "Notifications alt+T"

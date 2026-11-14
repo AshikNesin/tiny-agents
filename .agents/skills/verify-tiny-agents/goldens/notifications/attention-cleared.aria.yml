@@ -1,0 +1,47 @@
+# http://localhost:3300/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Notify Bot fixed, replying":
+                    - /url: /chats/<id1>
+                    - text: Notify Bot fixed now /ask set up the project
+                    - status "Replying"
+                - button "Notify Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Notify Bot fixed menu" [level=1]:
+        - button "Notify Bot fixed menu": Notify Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /ask set up the project
+            - button "Copy message"
+            - time: 06:30 AM
+            - text: New messages
+            - button "Asked you 3 questions"
+            - status "thinking…"
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Notify Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Stop generating"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

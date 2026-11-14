@@ -1,0 +1,101 @@
+# http://localhost:3300/settings/notifications
+- main:
+    - link "Back to tiny-agents":
+        - /url: /chats
+    - button "Search (⌘K)"
+    - complementary:
+        - combobox "Search settings"
+        - navigation "Settings sections":
+            - text: Personal
+            - list:
+                - listitem:
+                    - link "Account":
+                        - /url: /settings/account
+                - listitem:
+                    - link "Appearance":
+                        - /url: /settings/appearance
+                - listitem:
+                    - link "Security":
+                        - /url: /settings/security
+            - text: App
+            - list:
+                - listitem:
+                    - link "Models":
+                        - /url: /settings/models
+                - listitem:
+                    - link "Notifications":
+                        - /url: /settings/notifications
+                - listitem:
+                    - link "People":
+                        - /url: /settings/people
+                - listitem:
+                    - link "Configuration":
+                        - /url: /settings/configuration
+                - listitem:
+                    - link "Updates":
+                        - /url: /settings/updates
+    - main:
+        - heading "Notifications" [level=1]
+        - text: Push notifications for waiting bots and routine results.
+        - heading "Push notifications" [level=3]
+        - text: Pushover alerts when a bot needs you or unattended work finishes. Not configured Set PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY in the server environment (a Pushover application token and your user key), then restart. Bots work the same without them.
+        - heading "What to send" [level=3]
+        - text: Messages never include tool arguments, outputs or secrets.
+        - region "System":
+            - text: System
+            - checkbox "App started" [checked]
+            - text: App started A silent ping when the server boots in production.
+        - region "Needs you":
+            - text: Needs you
+            - checkbox "Approval needed" [checked]
+            - text: Approval needed A bot wants to run a tool that asks first.
+            - checkbox "Question asked" [checked]
+            - text: Question asked A bot asked you clarifying questions and is waiting.
+            - checkbox "Sign-in needed" [checked]
+            - text: Sign-in needed A bot asked you to fill in a login it does not have.
+            - checkbox "Still waiting reminder" [checked]
+            - text: Still waiting reminder One reminder when an approval or question is still unanswered.
+        - region "Updates":
+            - text: Updates
+            - checkbox "Routine finished" [checked]
+            - text: Routine finished A quiet push with a preview of the routine's reply.
+            - checkbox "Routine failed" [checked]
+            - text: Routine failed A routine failed, was missed or was paused.
+            - checkbox "Reply failed" [checked]
+            - text: Reply failed A bot's reply ended in a model error while you were away.
+            - checkbox "Long reply finished"
+            - text: Long reply finished A long-running reply finished while you were away.
+            - checkbox "Code updates" [checked]
+            - text: Code updates A coding agent's conversation you follow (Shelley, Claude Code) finished, failed or asked for you while you were away.
+        - region "Security":
+            - text: Security
+            - checkbox "Vault alerts" [checked] [disabled]
+            - text: Vault alerts A vault value was revealed or an item deleted, or a bot was refused a fill. Always on.
+        - region "Quiet hours":
+            - text: Quiet hours
+            - checkbox "Hold updates during quiet hours" [checked]
+            - text: Hold updates during quiet hours Updates arrive as one digest when quiet hours end. Requests for your input still arrive, silently. From
+            - textbox "From": 22:30
+            - text: Until
+            - textbox "Until": 07:15
+            - text: Time zone
+            - textbox "Time zone": Asia/Kolkata
+            - checkbox "Requests for your input still make a sound"
+            - text: Requests for your input still make a sound
+        - region "Timing":
+            - text: Timing Long reply (minutes)
+            - spinbutton "Long reply (minutes)": "12"
+            - text: Replies this long notify when they finish. Reminder (minutes)
+            - spinbutton "Reminder (minutes)": "15"
+            - text: One reminder for unanswered requests. 0 turns it off. Grouping window (seconds)
+            - spinbutton "Grouping window (seconds)": "30"
+            - text: Requests from one chat within it arrive as one. Device (optional)
+            - textbox "Device (optional)":
+                - /placeholder: All devices
+                - text: verify-device-fixed
+        - button "Save"
+        - heading "Recent notifications" [level=3]
+        - text: The last 20, kept for 30 days. Titles only. Nothing sent yet.
+- region "Notifications alt+T"
+- button "Feedback":
+    - img

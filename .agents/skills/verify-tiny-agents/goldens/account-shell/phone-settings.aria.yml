@@ -1,0 +1,49 @@
+# http://localhost:3300/settings/account
+- main:
+    - link "Back to tiny-agents":
+        - /url: /chats
+    - button "Search (⌘K)"
+    - complementary:
+        - combobox "Search settings"
+        - navigation "Settings sections":
+            - list:
+                - listitem:
+                    - link "Account":
+                        - /url: /settings/account
+                - listitem:
+                    - link "Appearance":
+                        - /url: /settings/appearance
+                - listitem:
+                    - link "Security":
+                        - /url: /settings/security
+            - list:
+                - listitem:
+                    - link "Models":
+                        - /url: /settings/models
+                - listitem:
+                    - link "Notifications":
+                        - /url: /settings/notifications
+                - listitem:
+                    - link "People":
+                        - /url: /settings/people
+                - listitem:
+                    - link "Configuration":
+                        - /url: /settings/configuration
+                - listitem:
+                    - link "Updates":
+                        - /url: /settings/updates
+    - main:
+        - button "Open menu"
+        - heading "Account" [level=1]
+        - text: Your profile and sign-in identity. D
+        - paragraph: Demo User
+        - text: demo@example.com
+        - term: Name
+        - definition: Demo User
+        - term: Email
+        - definition: demo@example.com
+        - term: User ID
+        - definition: "1"
+- region "Notifications alt+T"
+- button "Feedback":
+    - img

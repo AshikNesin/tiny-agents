@@ -1,0 +1,19 @@
+# http://localhost:3300/settings/account
+- region "Notifications alt+T"
+- dialog "New bot":
+    - heading "New bot" [level=2]
+    - paragraph: A bot is a contact with its own persona and model.
+    - text: Name
+    - textbox "Name":
+        - /placeholder: e.g. Research helper
+    - text: Description
+    - textbox "Description":
+        - /placeholder: One line, shown under the name
+    - text: Model
+    - button "Test Model (faux)"
+    - text: System prompt
+    - textbox "System prompt":
+        - /placeholder: Who is this bot? How should it reply?
+    - button "Cancel"
+    - button "Create bot" [disabled]
+    - button "Close"

@@ -1,0 +1,19 @@
+# http://localhost:3330/chats/<id1>
+- region "Notifications alt+T"
+- dialog "Edit Skill Bot fixed":
+    - heading "Edit Skill Bot fixed" [level=2]
+    - paragraph: Prompt and model changes apply from the next turn; history is kept.
+    - tablist:
+        - tab "Profile"
+        - tab "Tools"
+        - tab "Skills" [selected]
+        - tab "Sharing"
+    - tabpanel "Skills":
+        - paragraph: Skills from your library the bot can load when a task needs them.
+        - paragraph: verify-skill-fixed
+        - paragraph: Edited by verify fixed
+        - switch "Assign verify-skill-fixed" [checked]
+    - button "Delete bot"
+    - button "Cancel"
+    - button "Save changes"
+    - button "Close"

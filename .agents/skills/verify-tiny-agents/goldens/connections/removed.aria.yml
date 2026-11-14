@@ -1,0 +1,41 @@
+# http://localhost:3420/connections
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "MCP Bot fixed":
+                    - /url: /chats/<id1>
+                - button "MCP Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Connections" [level=1]
+    - text: MCP servers your bots can use.
+    - button "Add connection"
+    - heading "Needs attention" [level=2]
+    - text: "1"
+    - list:
+        - listitem:
+            - link "Verify Broken fixed http://127.0.0.1:40973/mcp 0 tools · used by 0 bots Error":
+                - /url: /connections/<id2>
+                - paragraph: Verify Broken fixed
+                - paragraph: http://127.0.0.1:40973/mcp
+                - paragraph: 0 tools · used by 0 bots
+                - text: Error
+- region "Notifications alt+T":
+    - list:
+        - listitem: Connection removed

@@ -1,0 +1,70 @@
+# http://localhost:3330/jobs
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Jobs Bot fixed":
+                    - /url: /chats/<id2>
+                - button "Jobs Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Jobs" [level=1]
+    - text: Updated a few seconds ago
+    - button "Refresh"
+    - button "Schedule"
+    - button "Add Job"
+    - button "Total 1"
+    - button "Active 0"
+    - button "Created 1"
+    - button "Failed 0"
+    - button "Completed 0"
+    - button "Cancelled 0"
+    - tablist:
+        - tab "All" [selected]
+        - tab "Active"
+        - tab "Failed"
+        - tab "Completed"
+    - button "More job states"
+    - textbox "Search..."
+    - button "Queue"
+    - button "Date"
+    - heading "All jobs" [level=2]
+    - text: 1 of 1
+    - table "Jobs":
+        - rowgroup:
+            - row "Select all Job Status Created Started Actions":
+                - columnheader "Select all Job":
+                    - checkbox "Select all"
+                    - text: Job
+                - columnheader "Status"
+                - columnheader "Created"
+                - columnheader "Started"
+                - columnheader "Actions"
+        - rowgroup:
+            - row "Job routine-fire (f6a350)":
+                - cell "View details for job routine-fire (f6a350) Select job routine-fire (f6a350) routine-fire f6a350":
+                    - link "View details for job routine-fire (f6a350)":
+                        - /url: /jobs/<id1>
+                    - checkbox "Select job routine-fire (f6a350)"
+                    - text: routine-fire f6a350
+                - cell "Created"
+                - cell "a few seconds ago"
+                - cell "-"
+                - cell "Actions for job routine-fire (f6a350)":
+                    - button "Actions for job routine-fire (f6a350)"
+- region "Notifications alt+T"

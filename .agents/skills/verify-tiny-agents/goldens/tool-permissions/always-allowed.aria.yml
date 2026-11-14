@@ -1,0 +1,26 @@
+# http://localhost:3320/chats/<id1>
+- region "Notifications alt+T"
+- dialog "Edit Perm Bot fixed":
+    - heading "Edit Perm Bot fixed" [level=2]
+    - paragraph: Prompt and model changes apply from the next turn; history is kept.
+    - tablist:
+        - tab "Profile"
+        - tab "Tools" [selected]
+        - tab "Skills"
+        - tab "Sharing"
+    - tabpanel "Tools":
+        - searchbox "Search tools": browser snapshot
+        - text: 11 allow · 20 ask
+        - button "Allow read-only"
+        - button "Ask for everything"
+        - button "Browser 1 tool · 1 allow" [disabled] [expanded]
+        - paragraph: Read the page
+        - paragraph: Snapshot the page's interactive elements with refs.
+        - radiogroup "Read the page permission":
+            - radio "Allow" [checked]
+            - radio "Ask"
+            - radio "Off"
+    - button "Delete bot"
+    - button "Cancel"
+    - button "Save changes"
+    - button "Close"

@@ -1,0 +1,9 @@
+# http://localhost:3310/chats/<id1>
+- region "Notifications alt+T":
+    - list:
+        - listitem: Chat deleted
+        - listitem: Chat continued. The one you left is in Chat history.
+- menu "Past Bot fixed menu":
+    - menuitem "Chat history"
+    - separator
+    - paragraph: No past chats yet. Starting a new chat keeps this one here.

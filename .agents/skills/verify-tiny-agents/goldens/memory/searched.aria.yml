@@ -1,0 +1,41 @@
+# http://localhost:3310/memory
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Memory Bot fixed":
+                    - /url: /chats/<id1>
+                - button "Memory Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Memory" [level=1]
+    - text: What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
+    - searchbox "Search memories"
+    - region "Memory Bot fixed memories":
+        - heading "Memory Bot fixed" [level=2]
+        - text: 1 memory
+        - button "Add memory"
+        - switch "Turn off memory for Memory Bot fixed" [checked]
+        - heading "Preferences1" [level=3]
+        - list:
+            - listitem:
+                - paragraph: Prefers oolong tea fixed
+                - text: Added manually
+                - button "Edit memory \"Prefers oolong tea fixed\""
+                - button "Delete memory \"Prefers oolong tea fixed\""
+- region "Notifications alt+T"

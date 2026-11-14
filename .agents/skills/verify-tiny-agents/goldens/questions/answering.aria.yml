@@ -1,0 +1,55 @@
+# http://localhost:3310/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Ask Bot fixed, 1 question for you":
+                    - /url: /chats/<id1>
+                    - text: Ask Bot fixed now /ask fixed 1
+                - button "Ask Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Ask Bot fixed menu" [level=1]:
+        - button "Ask Bot fixed menu": Ask Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /ask fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - text: New messages
+            - group "Questions from Ask Bot fixed":
+                - text: Ask Bot fixed has 3 questions for you Question 3 of 3
+                - button "Dismiss"
+                - heading "Anything else I should know?" [level=3]
+                - textbox "Anything else I should know?":
+                    - /placeholder: Your answer…
+                    - text: Ship it Friday fixed
+                - button "Back"
+                - button "Skip"
+                - button "Send answers"
+                - paragraph: Or reply in the chat to skip these questions.
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Ask Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Stop generating"
+    - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

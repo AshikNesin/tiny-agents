@@ -1,0 +1,16 @@
+# http://localhost:3320/chats
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary"
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - paragraph: Nothing shared with you yet.
+    - button "Account and navigation": G Guest fixed
+- main:
+    - heading "Create your first bot" [level=2]
+    - paragraph: Every contact here is an AI agent you chat with. Pick a persona and a model, and it remembers the whole conversation.
+    - button "Create your first bot"
+- region "Notifications alt+T"

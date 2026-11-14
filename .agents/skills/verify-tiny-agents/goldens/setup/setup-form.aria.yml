@@ -1,0 +1,20 @@
+# http://localhost:3340/setup
+- text: tiny-agents
+- heading "Create your account" [level=1]
+- paragraph: No users exist yet. The account you create here signs you in, and this page closes once it exists.
+- text: Name (optional)
+- textbox "Name (optional)":
+    - /placeholder: Ada Lovelace
+- text: Email
+- textbox "Email":
+    - /placeholder: you@example.com
+- text: Password
+- textbox "Password":
+    - /placeholder: ••••••••
+- text: Confirm password
+- textbox "Confirm password":
+    - /placeholder: ••••••••
+- button "Create account"
+- region "Notifications alt+T"
+- button "Feedback":
+    - img

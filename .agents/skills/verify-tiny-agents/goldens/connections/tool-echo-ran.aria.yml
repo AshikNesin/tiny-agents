@@ -1,0 +1,76 @@
+# http://localhost:3420/connections/<id1>/tools/echo
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "MCP Bot fixed":
+                    - /url: /chats/<id2>
+                - button "MCP Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - navigation "breadcrumb":
+        - list:
+            - listitem:
+                - link "Connections":
+                    - /url: /connections
+            - listitem:
+                - link "Verify MCP fixed":
+                    - /url: /connections/<id1>
+            - listitem: echo
+    - heading "echo" [level=1]
+    - text: mcp__verify-mcp-fixed__echo
+    - switch "Available to bots" [checked]
+    - text: Available to bots
+    - paragraph: Echo a value back
+    - term: Server name
+    - definition: echo
+    - term: Connection
+    - definition:
+        - link "Verify MCP fixed":
+            - /url: /connections/<id1>
+    - term: Behavior
+    - definition: read-only
+    - paragraph: Behavior comes from the server's hints. Each bot still decides whether it may run the tool or must ask first.
+    - heading "Input" [level=2]
+    - paragraph: The arguments the tool accepts.
+    - tablist:
+        - tab "Fields" [selected]
+        - tab "JSON Schema"
+    - tabpanel "Fields":
+        - list:
+            - listitem:
+                - text: value string required
+                - paragraph: What to echo
+    - heading "Output" [level=2]
+    - paragraph: The server declares no output schema; results come back as content blocks.
+    - heading "Playground" [level=2]
+    - paragraph: Call the tool on Verify MCP fixed as yourself. Nothing is sent to a bot.
+    - tablist:
+        - tab "Form" [selected]
+        - tab "JSON"
+    - tabpanel "Form":
+        - text: value string *
+        - paragraph: What to echo
+        - textbox "value string *": hi fixed
+    - button "Run tool"
+    - text: Runs on the live server. Success 0 ms
+    - tablist:
+        - tab "Content" [selected]
+        - tab "Raw"
+    - tabpanel "Content": echo:hi fixed
+- region "Notifications alt+T"

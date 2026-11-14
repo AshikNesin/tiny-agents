@@ -1,0 +1,399 @@
+# http://localhost:3310/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Paging Bot fixed":
+                    - /url: /chats/<id1>
+                    - text: "Paging Bot fixed now Echo: msg 060 fixed"
+                - button "Paging Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Paging Bot fixed menu" [level=1]:
+        - button "Paging Bot fixed menu": Paging Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: msg 001 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 001 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 002 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 002 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 003 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 003 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 004 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 004 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 005 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 005 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 006 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 006 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 007 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 007 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 008 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 008 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 009 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 009 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 010 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 010 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 011 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 011 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 012 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 012 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 013 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 013 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 014 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 014 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 015 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 015 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 016 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 016 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 017 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 017 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 018 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 018 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 019 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 019 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 020 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 020 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 021 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 021 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 022 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 022 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 023 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 023 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 024 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 024 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 025 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 025 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 026 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 026 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 027 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 027 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 028 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 028 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 029 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 029 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 030 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 030 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 031 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 031 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 032 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 032 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 033 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 033 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 034 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 034 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 035 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 035 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 036 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 036 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 037 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 037 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 038 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 038 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 039 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 039 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 040 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 040 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 041 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 041 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 042 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 042 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 043 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 043 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 044 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 044 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 045 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 045 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 046 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 046 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 047 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 047 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 048 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 048 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 049 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 049 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 050 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 050 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 051 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 051 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 052 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 052 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 053 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 053 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 054 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 054 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 055 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 055 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 056 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 056 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 057 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 057 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 058 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 058 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 059 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 059 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: msg 060 fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: "Echo: msg 060 fixed"
+            - button "Copy message"
+            - time: 06:30 AM
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Paging Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Send message" [disabled]
+- region "Notifications alt+T"

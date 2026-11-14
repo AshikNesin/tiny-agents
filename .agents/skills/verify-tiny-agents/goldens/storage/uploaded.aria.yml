@@ -1,0 +1,81 @@
+# http://localhost:3330/storage?path=verify-folder-fixed/
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - paragraph: No bots yet.
+    - button "Account and navigation": D Demo User
+- main:
+    - navigation "breadcrumb":
+        - list:
+            - listitem:
+                - button "Go to root folder"
+            - listitem: verify-folder-fixed
+    - heading "Storage" [level=1]
+    - text: Browse and manage your files and folders
+    - button "Refresh files"
+    - button "Upload"
+    - button "New Folder"
+    - button "Select All Files"
+    - table:
+        - rowgroup:
+            - row "Select file Name Size Modified Actions":
+                - columnheader "Select file"
+                - columnheader "Name"
+                - columnheader "Size"
+                - columnheader "Modified"
+                - columnheader "Actions"
+        - rowgroup:
+            - row "Select .keep .keep 0 Bytes 2026-11-14 View .keep Download .keep Rename .keep Delete .keep":
+                - cell "Select .keep":
+                    - checkbox "Select .keep"
+                - cell ".keep":
+                    - button ".keep" [disabled]
+                - cell "0 Bytes"
+                - cell "2026-11-14"
+                - cell "View .keep Download .keep Rename .keep Delete .keep":
+                    - button "View .keep": View
+                    - button "Download .keep"
+                    - button "Rename .keep"
+                    - button "Delete .keep"
+            - row "Select bytes-fixed.bin bytes-fixed.bin 512 Bytes 2026-11-14 View bytes-fixed.bin Download bytes-fixed.bin Rename bytes-fixed.bin Delete bytes-fixed.bin":
+                - cell "Select bytes-fixed.bin":
+                    - checkbox "Select bytes-fixed.bin"
+                - cell "bytes-fixed.bin":
+                    - button "bytes-fixed.bin" [disabled]
+                - cell "512 Bytes"
+                - cell "2026-11-14"
+                - cell "View bytes-fixed.bin Download bytes-fixed.bin Rename bytes-fixed.bin Delete bytes-fixed.bin":
+                    - button "View bytes-fixed.bin": View
+                    - button "Download bytes-fixed.bin"
+                    - button "Rename bytes-fixed.bin"
+                    - button "Delete bytes-fixed.bin"
+            - row "Select hello-fixed.txt hello-fixed.txt 40 Bytes 2026-11-14 View hello-fixed.txt Download hello-fixed.txt Rename hello-fixed.txt Delete hello-fixed.txt":
+                - cell "Select hello-fixed.txt":
+                    - checkbox "Select hello-fixed.txt"
+                - cell "hello-fixed.txt":
+                    - button "hello-fixed.txt" [disabled]
+                - cell "40 Bytes"
+                - cell "2026-11-14"
+                - cell "View hello-fixed.txt Download hello-fixed.txt Rename hello-fixed.txt Delete hello-fixed.txt":
+                    - button "View hello-fixed.txt": View
+                    - button "Download hello-fixed.txt"
+                    - button "Rename hello-fixed.txt"
+                    - button "Delete hello-fixed.txt"
+- region "Notifications alt+T":
+    - list:
+        - listitem: Upload complete 2 uploaded
+        - listitem: Folder created verify-folder-fixed/

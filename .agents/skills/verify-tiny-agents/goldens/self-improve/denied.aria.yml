@@ -1,0 +1,45 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Improve Bot fixed":
+                    - /url: /chats/<id1>
+                - button "Improve Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Improve Bot fixed menu" [level=1]:
+        - button "Improve Bot fixed menu": Improve Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /improve
+            - button "Copy message"
+            - time: 06:30 AM
+            - 'button "Updated own instructions “Self-improvement e2e: append this line.” denied by you 344ms"'
+            - paragraph: "Echo: The owner denied this update_instructions call. Do not retry it unless asked."
+            - button "Copy message"
+            - time: 06:30 AM
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Improve Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Send message" [disabled]
+- region "Notifications alt+T"

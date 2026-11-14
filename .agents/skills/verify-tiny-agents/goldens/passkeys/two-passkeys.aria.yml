@@ -1,0 +1,64 @@
+# http://localhost:3300/settings/security
+- main:
+    - link "Back to tiny-agents":
+        - /url: /chats
+    - button "Search (⌘K)"
+    - complementary:
+        - combobox "Search settings"
+        - navigation "Settings sections":
+            - text: Personal
+            - list:
+                - listitem:
+                    - link "Account":
+                        - /url: /settings/account
+                - listitem:
+                    - link "Appearance":
+                        - /url: /settings/appearance
+                - listitem:
+                    - link "Security":
+                        - /url: /settings/security
+            - text: App
+            - list:
+                - listitem:
+                    - link "Models":
+                        - /url: /settings/models
+                - listitem:
+                    - link "Notifications":
+                        - /url: /settings/notifications
+                - listitem:
+                    - link "People":
+                        - /url: /settings/people
+                - listitem:
+                    - link "Configuration":
+                        - /url: /settings/configuration
+                - listitem:
+                    - link "Updates":
+                        - /url: /settings/updates
+    - main:
+        - heading "Security" [level=1]
+        - text: Passkeys for passwordless sign-in.
+        - heading "Add a passkey" [level=3]
+        - text: Use biometrics (Face ID / Touch ID) or a security key for passwordless sign-in. Name (optional)
+        - textbox "Name (optional)":
+            - /placeholder: e.g. My iPhone, Work Laptop
+        - button "Add passkey"
+        - heading "Your passkeys" [level=3]
+        - text: Devices currently authorised to sign in to your account.
+        - list:
+            - listitem:
+                - paragraph: verify-key-fixed-a
+                - text: Device-bound passkey Added Nov 6, 2026
+                - button "Edit"
+                - button "Delete"
+            - listitem:
+                - paragraph: verify-key-fixed-b
+                - text: Device-bound passkey Added Nov 6, 2026
+                - button "Edit"
+                - button "Delete"
+- region "Notifications alt+T":
+    - list:
+        - listitem: Passkey added successfully
+        - listitem: Add failed This passkey is already registered to your account.
+        - listitem: Passkey added successfully
+- button "Feedback":
+    - img

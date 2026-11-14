@@ -1,0 +1,37 @@
+# http://localhost:3300/memory
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Palette Bot fixed":
+                    - /url: /chats/<id1>
+                - button "Palette Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Memory" [level=1]
+    - text: What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
+    - searchbox "Search memories"
+    - region "Bots without memories":
+        - heading "No memories yet" [level=2]
+        - paragraph: These bots pick things up as you chat with them, or you can add a memory yourself. Each bot keeps its own memories.
+        - list:
+            - listitem:
+                - text: Palette Bot fixed
+                - button "Add memory for Palette Bot fixed": Add
+                - switch "Turn off memory for Palette Bot fixed" [checked]
+- region "Notifications alt+T"

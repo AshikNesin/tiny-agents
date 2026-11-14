@@ -1,0 +1,15 @@
+# http://localhost:3300/chats
+- region "Notifications alt+T"
+- menu "Account and navigation":
+    - menuitem "Log out"
+    - separator
+    - menuitem "Command palette Ctrl+K"
+    - separator
+    - menuitem "Routines"
+    - menuitem "Skills"
+    - menuitem "Memory"
+    - menuitem "Connections"
+    - menuitem "Vault"
+    - menuitem "Settings"
+    - separator
+    - menuitem "Send feedback"

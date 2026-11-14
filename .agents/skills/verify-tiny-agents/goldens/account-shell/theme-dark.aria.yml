@@ -1,0 +1,38 @@
+# http://localhost:3300/settings/appearance
+- region "Notifications alt+T"
+- dialog "Command menu":
+    - heading "Command menu" [level=2]
+    - paragraph: Search for a command to run.
+    - combobox "Type a command or search…" [expanded]
+    - tablist "Filter results":
+        - tab "All" [selected]
+        - tab "Actions"
+        - tab "Navigation"
+        - tab "Theme"
+        - tab "Account"
+    - listbox:
+        - group "Actions":
+            - text: Actions
+            - option "New bot" [selected]
+        - group "Navigation":
+            - text: Navigation
+            - option "Chats"
+            - option "Tasks"
+            - option "Terminal"
+            - option "Computer"
+            - option "Browser"
+            - option "Routines"
+            - option "Skills"
+            - option "Memory"
+            - option "Connections"
+            - option "Vault"
+            - option "Settings"
+        - group "Theme":
+            - text: Theme
+            - option "Light"
+            - option "Dark ✓"
+            - option "System"
+        - group "Account":
+            - text: Account
+            - option "Log out"
+    - text: Select ↑ ↓ Tabs ← → Close Esc New bot Enter

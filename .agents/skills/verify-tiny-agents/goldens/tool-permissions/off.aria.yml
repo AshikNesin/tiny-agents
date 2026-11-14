@@ -1,0 +1,83 @@
+# http://localhost:3320/chats/<id1>
+- complementary "Sidebar":
+    - link "tiny-agents":
+        - /url: /chats
+    - button "Search"
+    - button "Collapse sidebar"
+    - navigation "Primary":
+        - link "Tasks":
+            - /url: /tasks
+        - link "Terminal":
+            - /url: /terminal
+        - link "Computer":
+            - /url: /computer
+        - link "Browser":
+            - /url: /browser
+    - region "Bots":
+        - heading "Bots" [level=2]
+        - button "New bot"
+        - list:
+            - listitem:
+                - link "Perm Bot fixed":
+                    - /url: /chats/<id1>
+                    - text: "Perm Bot fixed now Echo: <harness [error] Tool browsersnapshot is not available </harness"
+                - button "Perm Bot fixed actions"
+    - button "Account and navigation": D Demo User
+- main:
+    - heading "Perm Bot fixed menu" [level=1]:
+        - button "Perm Bot fixed menu": Perm Bot fixed
+    - button "Open live view"
+    - button "Start a new chat"
+    - region "Messages":
+        - log:
+            - text: Today
+            - paragraph: /browse 1 deny fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page denied by you 450ms"
+            - paragraph: "Echo: The owner denied this browser_snapshot call. Do not retry it unless asked."
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /browse 1 approve fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page 858ms"
+            - paragraph:
+                - text: 'Echo: No browser is installed on the server. Install one and redeploy: either add "chromium" to railpack.json aptPackages (self-hosted deploys), or run'
+                - code: pnpm exec playwright install chromium --with-deps
+                - text: in the build, or set BROWSER_EXECUTABLE_PATH to an existing system binary.
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /browse 1 always fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page 505ms"
+            - paragraph:
+                - text: 'Echo: No browser is installed on the server. Install one and redeploy: either add "chromium" to railpack.json aptPackages (self-hosted deploys), or run'
+                - code: pnpm exec playwright install chromium --with-deps
+                - text: in the build, or set BROWSER_EXECUTABLE_PATH to an existing system binary.
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /browse 1 after fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page 18ms"
+            - paragraph:
+                - text: 'Echo: No browser is installed on the server. Install one and redeploy: either add "chromium" to railpack.json aptPackages (self-hosted deploys), or run'
+                - code: pnpm exec playwright install chromium --with-deps
+                - text: in the build, or set BROWSER_EXECUTABLE_PATH to an existing system binary.
+            - button "Copy message"
+            - time: 06:30 AM
+            - paragraph: /browse 1 off fixed
+            - button "Copy message"
+            - time: 06:30 AM
+            - button "Read the page"
+            - paragraph: "Echo: [error] Tool browser_snapshot is not available"
+            - button "Copy message"
+            - time: 06:30 AM
+    - button "Jump to the latest message": Scroll to end
+    - textbox "Message Perm Bot fixed"
+    - button "Add files or mention a bot"
+    - button "Model": Test Model (faux)
+    - button "Send message" [disabled]
+- region "Notifications alt+T"
