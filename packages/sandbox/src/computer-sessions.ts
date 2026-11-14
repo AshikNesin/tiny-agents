@@ -5,23 +5,29 @@
  * takeover, reset, the VNC bridge), like `browser-sessions.ts`.
  *
  * One desktop per profile (a bot's browser profile: `shared`, or its own),
- * so bots on the shared profile share one screen. The manager owns:
- * - lazy open per profile; concurrent callers share one launch; a close
- *   cancels an in-flight open;
- * - the driver flag: action tools wait while the owner drives (bounded),
- *   read tools refuse outright so nothing the owner types reaches the model;
- * - the bot's own takeover request, which the owner's hand-back answers;
- * - the idle sweep, on an injectable clock (an open takeover is activity);
- * - dropping a desktop that died under the app, so the next call relaunches.
+ * so bots on the shared profile share one screen. The lifecycle rules (lazy
+ * shared open, cancel-on-close, the driver flag, the idle sweep, dropping a
+ * desktop that died) are `LiveSessions`' (`live-sessions.ts`). This instance
+ * adds the bot's own takeover request, which the owner's hand-back answers.
+ * Its options keep the computer's side of the drift (docs/rewrite/README.md
+ * §4.2): read tools refuse outright while the owner drives, so nothing the
+ * owner types reaches the model, and the errors are `OwnerDrivingError`.
  */
 import type { Duplex } from "node:stream";
 import { VaultTargetMovedError } from "./vault-target";
 import type { BrowserClock } from "./browser-sessions";
+import {
+  createLiveSessions,
+  realClock,
+  type LiveDriver,
+  type LiveOpenState,
+  type LivePhase,
+} from "./live-sessions";
 
 /** Where a desktop is while it opens; `installing` is the one-time VM setup. */
-type ComputerPhase = "installing" | "starting";
+type ComputerPhase = LivePhase;
 
-type ComputerDriver = "agent" | "human";
+type ComputerDriver = LiveDriver;
 
 export type MouseButton = "left" | "right" | "middle";
 export type ScrollDirection = "up" | "down" | "left" | "right";
@@ -148,9 +154,7 @@ export interface LiveComputer {
   takeover?: { reason: string; since: number };
 }
 
-type ComputerOpenState =
-  | { opening: true; phase: ComputerPhase }
-  | { opening: false; error?: string };
+type ComputerOpenState = LiveOpenState;
 
 export interface ComputerSessionsOptions {
   transport: ComputerTransport;
@@ -193,24 +197,6 @@ export interface ComputerSessions {
   closeAll(): Promise<void>;
 }
 
-const realClock: BrowserClock = {
-  now: () => Date.now(),
-  setTimeout: (fn, ms) => {
-    const handle = setTimeout(fn, ms);
-    handle.unref?.();
-    return handle;
-  },
-  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  setInterval: (fn, ms) => {
-    const handle = setInterval(fn, ms);
-    handle.unref?.();
-    return handle;
-  },
-  clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
-};
-
-const IDLE_SWEEP_MS = 60_000;
-
 /** What a tool says while the owner drives: the bot learns to wait or move on. */
 const OWNER_DRIVING =
   "The owner is driving the computer, so screenshots are paused. Wait for them to hand it back, or continue without the computer.";
@@ -233,222 +219,80 @@ export function takeoverOf(details: unknown): ChatTakeover | undefined {
 
 const managers = new Set<ComputerSessions>();
 
-interface Opening {
-  promise: Promise<LiveComputer>;
-  readonly phase: ComputerPhase;
-  cancel(wipe: boolean): void;
-}
-
 export function createComputerSessions(options: ComputerSessionsOptions): ComputerSessions {
   const clock = options.clock ?? realClock;
   const width = options.width ?? 1280;
   const height = options.height ?? 800;
-  const idleMs = (options.idleMinutes ?? 10) * 60_000;
-  const humanWaitMs = options.humanDriverWaitMs ?? 10 * 60_000;
-  const live = new Map<string, LiveComputer>();
-  const opening = new Map<string, Opening>();
-  const openErrors = new Map<string, string>();
-  const handBacks = new WeakMap<LiveComputer, Set<() => void>>();
-  let sweeper: unknown;
 
-  const checkProfile = (profile: string) => {
-    if (!/^[\w-]{1,64}$/.test(profile)) throw new Error(`Invalid computer profile "${profile}".`);
-  };
-
-  function ensureSweeper() {
-    if (sweeper !== undefined) return;
-    sweeper = clock.setInterval(() => {
-      const now = clock.now();
-      for (const [key, entry] of live) {
-        if (entry.driver === "human") continue; // an open takeover is activity
-        if (entry.lastActivity < now - entry.idleMs) {
-          live.delete(key);
-          release(entry);
-          void entry.desktop.close().catch(() => {});
-        }
-      }
-    }, IDLE_SWEEP_MS);
-  }
-
-  function release(entry: LiveComputer) {
-    entry.takeover = undefined;
-    const waiters = handBacks.get(entry);
-    if (!waiters) return;
-    handBacks.delete(entry);
-    for (const wake of waiters) wake();
-  }
-
-  /** Resolves true when the owner hands back, false after `ms`. */
-  function handBack(entry: LiveComputer, ms: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const waiters = handBacks.get(entry) ?? new Set<() => void>();
-      handBacks.set(entry, waiters);
-      const timer = clock.setTimeout(() => {
-        waiters.delete(wake);
-        resolve(false);
-      }, ms);
-      const wake = () => {
-        clock.clearTimeout(timer);
-        resolve(true);
-      };
-      waiters.add(wake);
-    });
-  }
-
-  function dropDead(profile: string, entry: LiveComputer) {
-    if (live.get(profile) !== entry) return;
-    live.delete(profile);
-    entry.driver = "agent";
-    release(entry);
-    void entry.desktop.close().catch(() => {});
-  }
-
-  function acquire(profile: string): Promise<LiveComputer> {
-    try {
-      checkProfile(profile);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    ensureSweeper();
-    const entry = live.get(profile);
-    if (entry) {
-      entry.lastActivity = clock.now();
-      return Promise.resolve(entry);
-    }
-    let pending = opening.get(profile);
-    if (!pending) {
-      let phase: ComputerPhase = "starting";
-      let cancelled: { wipe: boolean } | undefined;
-      const promise = options.transport
-        .open(profile, { width, height, onPhase: (next) => (phase = next) })
-        .then(async (desktop) => {
-          if (cancelled) {
-            await desktop.close().catch(() => {});
-            if (cancelled.wipe) await options.transport.wipe(profile).catch(() => {});
-            throw new Error("The computer was closed while it was starting.");
-          }
-          const opened: LiveComputer = {
-            desktop,
-            driver: "agent",
-            lastActivity: clock.now(),
-            idleMs,
-          };
-          live.set(profile, opened);
-          openErrors.delete(profile);
-          desktop.onDisconnect?.(() => dropDead(profile, opened));
-          return opened;
-        })
-        .catch((error: unknown) => {
-          if (!cancelled) {
-            openErrors.set(profile, error instanceof Error ? error.message : String(error));
-          }
-          throw error;
-        })
-        .finally(() => {
-          if (opening.get(profile) === pending) opening.delete(profile);
-        });
-      pending = {
-        promise,
-        get phase() {
-          return phase;
-        },
-        cancel(wipe) {
-          cancelled = { wipe: wipe || cancelled?.wipe === true };
-        },
-      };
-      opening.set(profile, pending);
-    }
-    return pending.promise;
-  }
+  const live = createLiveSessions<ComputerDesktop, LiveComputer>({
+    clock,
+    idleMs: (options.idleMinutes ?? 10) * 60_000,
+    humanDriverWaitMs: options.humanDriverWaitMs ?? 10 * 60_000,
+    launch: (profile, onPhase) => options.transport.open(profile, { width, height, onPhase }),
+    enter: (desktop, base) => ({ desktop, ...base }),
+    surfaceOf: (entry) => entry.desktop,
+    wipe: (profile) => options.transport.wipe(profile),
+    checkProfile(profile) {
+      if (!/^[\w-]{1,64}$/.test(profile)) throw new Error(`Invalid computer profile "${profile}".`);
+    },
+    touchOnOpen: true,
+    touchOnHandBack: true,
+    openWaitsForClose: false,
+    sweepReleases: true,
+    wipeCancelledOpen: true,
+    closeErrors: "swallow",
+    closedWhileOpening: "The computer was closed while it was starting.",
+    describeOpenError: (error) => (error instanceof Error ? error.message : String(error)),
+    // Reads are refused so nothing the owner types reaches the model (U11).
+    ownerDriving: (kind) =>
+      new OwnerDrivingError(
+        kind === "read"
+          ? OWNER_DRIVING
+          : "The owner is driving the computer; nothing was done. Wait and retry, or continue without the computer.",
+      ),
+    // A hand-back (or close) ends the bot's takeover request; a timeout does not (C28).
+    onRelease: (entry) => {
+      entry.takeover = undefined;
+    },
+  });
 
   const manager: ComputerSessions = {
     width,
     height,
-    acquire,
-    get: (profile) => live.get(profile),
+    acquire: (profile) => live.open(profile),
+    get: (profile) => live.peek(profile),
     async start(profile) {
-      openErrors.delete(profile);
-      return acquire(profile);
+      live.forgetOpenError(profile);
+      return live.open(profile);
     },
-    openState(profile) {
-      const pending = opening.get(profile);
-      if (pending) return { opening: true, phase: pending.phase };
-      return { opening: false, error: openErrors.get(profile) };
-    },
-    profiles: () => [...live.keys()],
-    async readTurn(profile) {
-      const entry = await acquire(profile);
-      if (entry.driver === "human") throw new OwnerDrivingError(OWNER_DRIVING);
-      return entry;
-    },
-    async actionTurn(profile) {
-      const entry = await acquire(profile);
-      const deadline = clock.now() + humanWaitMs;
-      while (entry.driver === "human") {
-        const left = deadline - clock.now();
-        if (left <= 0) {
-          throw new OwnerDrivingError(
-            "The owner is driving the computer; nothing was done. Wait and retry, or continue without the computer.",
-          );
-        }
-        await handBack(entry, left);
-      }
-      entry.lastActivity = clock.now();
-      return entry;
-    },
+    openState: (profile) => live.openState(profile),
+    profiles: () => live.profiles(),
+    // No `pick`: the driver is checked as soon as the open resolves.
+    readTurn: (profile) => live.read(profile, { allowWhileHuman: false }),
+    actionTurn: (profile) =>
+      live.act(profile, {
+        finish: (entry) => {
+          entry.lastActivity = clock.now();
+        },
+      }),
     async setDriver(profile, driver) {
-      const entry = live.get(profile);
-      if (!entry) return;
-      const released = entry.driver === "human" && driver === "agent";
-      entry.driver = driver;
-      entry.lastActivity = clock.now();
-      if (released) release(entry);
+      if (driver === "human") live.takeOver(profile);
+      else live.handBack(profile);
     },
     async requestTakeover(profile, reason, ms) {
-      const entry = await acquire(profile);
+      const entry = await live.open(profile);
       // Closed or reset between the open and now: nobody is driving it.
-      if (live.get(profile) !== entry) return "released";
-      entry.driver = "human";
+      if (live.peek(profile) !== entry) return "released";
+      live.takeOver(profile);
       entry.takeover = { reason, since: clock.now() };
-      entry.lastActivity = clock.now();
-      return (await handBack(entry, ms)) ? "released" : "timeout";
+      return (await live.waitForHandBack(entry, ms)) ? "released" : "timeout";
     },
     drop(profile, desktop) {
-      const entry = live.get(profile);
-      if (entry?.desktop === desktop) dropDead(profile, entry);
+      const entry = live.peek(profile);
+      if (entry?.desktop === desktop) live.drop(profile, entry);
     },
-    async close(profile, { wipe = false } = {}) {
-      const pending = opening.get(profile);
-      if (pending) {
-        pending.cancel(wipe);
-        await pending.promise.catch(() => undefined);
-      }
-      const entry = live.get(profile);
-      if (entry) {
-        live.delete(profile);
-        entry.driver = "agent";
-        release(entry);
-        await entry.desktop.close().catch(() => {});
-      }
-      openErrors.delete(profile);
-      if (wipe) await options.transport.wipe(profile);
-    },
-    async closeAll() {
-      for (const pending of opening.values()) pending.cancel(false);
-      await Promise.allSettled([...opening.values()].map((pending) => pending.promise));
-      const entries = [...live.values()];
-      live.clear();
-      for (const entry of entries) {
-        entry.driver = "agent";
-        release(entry);
-      }
-      await Promise.allSettled(entries.map((entry) => entry.desktop.close()));
-      openErrors.clear();
-      if (sweeper !== undefined) {
-        clock.clearInterval(sweeper);
-        sweeper = undefined;
-      }
-    },
+    close: (profile, { wipe = false } = {}) => live.close(profile, { wipe }),
+    closeAll: () => live.closeAll(),
   };
   managers.add(manager);
   return manager;

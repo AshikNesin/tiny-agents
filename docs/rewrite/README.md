@@ -305,6 +305,48 @@ interface VmStack {
 the owner drives and the computer refuses them. Making them uniform is a
 register item.
 
+As built in 3.5 (`packages/sandbox/src/live-sessions.ts`), `S` is the live
+entry (the surface plus its driver bookkeeping). The driver stays
+`"agent" | "human"`, the value the takeover routes and entries already carry.
+`setDriver` maps onto `takeOver` and `handBack`. The core also has `act`
+(the bounded wait), `release`, `waitForHandBack`, `drop`, `dispose` and
+`closeAll`. `read` and `act` take a `LiveTurn` (`pick` before the driver
+check, `finish` after it), so each instance keeps its own awaits. Both
+managers keep their public shape and settle at the same microtask as before.
+Each difference between the two old copies is one option, pinned by
+`live-sessions-drift.test.ts` unless named:
+
+| Drift                                 | Browser                                                                 | Computer                                                 | Option                                     | Why kept                                          |
+| ------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| Read while the owner drives           | allowed (`u11.test.ts`)                                                 | refused                                                  | `read(…, { allowWhileHuman })`             | U11, Preserve                                     |
+| Error when the owner drives           | plain `Error`                                                           | `OwnerDrivingError`, one text for reads, one for actions | `ownerDriving(kind)`                       | the computer toolkit maps the class to its result |
+| When the driver is checked            | after the open and the agent's tab (three microtasks in)                | as soon as the open resolves (one in)                    | `read`/`act` with or without `pick`        | a takeover in the same tick wins or loses by it   |
+| Open during a close in progress       | waits for it (`browser-sessions.test.ts`)                               | launches at once, so a wipe can land after               | `openWaitsForClose`                        | no behavior change in 3.5                         |
+| Close with wipe while opening         | closes on arrival, wipes once after                                     | closes and wipes on arrival, then wipes again            | `wipeCancelledOpen`                        | no behavior change in 3.5                         |
+| Message of a cancelled open           | "…closed while it was opening."                                         | "…closed while it was starting."                         | `closedWhileOpening`                       | tool results show it                              |
+| Last open error                       | `describeBrowserError` (install hint)                                   | the raw message                                          | `describeOpenError`                        | the status routes show it                         |
+| Invalid profile name                  | refused inside the open: the last open error                            | refused before anything starts: no sweep, no open error  | `checkProfile` (computer only)             | no behavior change in 3.5                         |
+| A failing surface `close()`           | fails `close` (the wipe is skipped)                                     | swallowed (the wipe still runs)                          | `closeErrors`                              | no behavior change in 3.5                         |
+| Open of a live session                | activity only once the agent's tab is ready                             | activity at once                                         | `touchOnOpen`                              | a sweep during a tab open closes the browser      |
+| Hand-back, or setting the same driver | not activity: idle counts from the takeover                             | activity: the idle window restarts                       | `touchOnHandBack`                          | no behavior change in 3.5                         |
+| Hand-back extra step                  | adopt the owner's front tab, then wake waiters                          | wake at once                                             | `handBack(profile, false)`, then `release` | `browser-toolkit.test.ts`                         |
+| Idle sweep of a session               | closes it without waking waiters (a hand-back still adopting keeps its) | closes it and wakes waiters                              | `sweepReleases`                            | an idle window shorter than the hand-back wait    |
+| What a release clears                 | nothing                                                                 | the bot's `takeover` request (C28 keeps it on a timeout) | `onRelease`                                | C22, C28                                          |
+| Bot asks the owner to take over       | none                                                                    | `requestTakeover` on `takeOver` and `waitForHandBack`    | computer instance code                     | `computer-toolkit.test.ts`, `c22.test.ts`         |
+| Tabs, bring-to-front, `closeTab`      | per agent tab in a shared profile                                       | none                                                     | browser instance code                      | `browser-toolkit.test.ts`                         |
+| `takeoverOf`                          | none                                                                    | reads a takeover card from tool details                  | stays in `computer-sessions.ts`            | not session state                                 |
+| Idle and hand-back wait defaults      | 10 min, 10 min                                                          | 10 min, 10 min                                           | `idleMs`, `humanDriverWaitMs`              | same today                                        |
+
+Unified with no option, because no caller can tell: what `peek` returns
+during an open (nothing, for both), when `onDisconnect` is registered, and
+the order of forgetting and releasing on a close. Neither manager emits
+events. One accepted difference, reachable only by a `close()` that throws
+synchronously (no transport does): the computer's `closeAll` used to release
+every desktop first and then reject on that throw; now, as the browser's
+always did, each close runs in its own async step, so the throw rejects only
+that entry, every other desktop is still released and closed, and `closeAll`
+resolves.
+
 ### 4.3 Models (`@tiny-agents/models`, new package, pi-ai only)
 
 `providers/*` moves here:
