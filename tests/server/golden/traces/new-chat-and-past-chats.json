@@ -1,0 +1,351 @@
+[
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Historian",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "22",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "new chat",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/reset",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Historian",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "34",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": "2026-11-06T06:30:00.000Z",
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "past chats",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/chats",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "chats": [
+          {
+            "id": "<id2>",
+            "title": "first chat",
+            "startedAt": "2026-11-06T06:30:00.000Z",
+            "endedAt": "2026-11-06T06:30:00.000Z",
+            "lastMessagePreview": "Echo: first chat",
+            "messageCount": 2
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "past chat",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/chats/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "chat": {
+          "id": "<id2>",
+          "title": "first chat",
+          "startedAt": "2026-11-06T06:30:00.000Z",
+          "endedAt": "2026-11-06T06:30:00.000Z",
+          "lastMessagePreview": "Echo: first chat",
+          "messageCount": 2
+        },
+        "state": {
+          "messages": [
+            {
+              "id": "e29",
+              "role": "user",
+              "text": "first chat",
+              "requestId": "golden-past-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e33",
+              "role": "assistant",
+              "text": "Echo: first chat",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e29"
+        },
+        "runs": []
+      }
+    }
+  },
+  {
+    "http": "past chat messages",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/chats/<id2>/messages?before=e100",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "BAD_REQUEST",
+        "message": "Unknown message cursor"
+      }
+    }
+  },
+  {
+    "http": "send in the new chat",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "continue the past chat",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/chats/<id2>/continue",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Historian",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "22",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": "2026-11-06T06:30:00.000Z",
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": "Echo: first chat",
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "past chats after continue",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/chats",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "chats": [
+          {
+            "id": "<id3>",
+            "title": "second chat",
+            "startedAt": "2026-11-06T06:30:00.000Z",
+            "endedAt": "2026-11-06T06:30:00.000Z",
+            "lastMessagePreview": "Echo: second chat",
+            "messageCount": 2
+          }
+        ]
+      }
+    }
+  },
+  {
+    "sse": "stream on the continued chat",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e29",
+              "role": "user",
+              "text": "first chat",
+              "requestId": "golden-past-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e33",
+              "role": "assistant",
+              "text": "Echo: first chat",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e29"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "past chats now",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/chats",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "chats": [
+          {
+            "id": "<id3>",
+            "title": "second chat",
+            "startedAt": "2026-11-06T06:30:00.000Z",
+            "endedAt": "2026-11-06T06:30:00.000Z",
+            "lastMessagePreview": "Echo: second chat",
+            "messageCount": 2
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "delete a past chat",
+    "method": "DELETE",
+    "path": "/api/v1/bots/<id1>/chats/<id3>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "db": "after the moves",
+    "tables": {
+      "bots": [
+        {
+          "id": "<id4>",
+          "name": "Turner",
+          "description": "Says it back",
+          "systemPrompt": "Be brief.",
+          "modelId": "test-model",
+          "conversationId": "9",
+          "chatStartedAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": "2026-11-06T06:30:00.000Z",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastMessagePreview": "hello there",
+          "toolPermissions": "{}",
+          "memoryEnabled": true,
+          "autoReview": false,
+          "yoloByDefault": false,
+          "memoryCapturedThrough": null,
+          "pinnedAt": null,
+          "browserProfile": "shared",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id1>",
+          "name": "Historian",
+          "description": "Says it back",
+          "systemPrompt": "Be brief.",
+          "modelId": "test-model",
+          "conversationId": "22",
+          "chatStartedAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": "2026-11-06T06:30:00.000Z",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastMessagePreview": "Echo: first chat",
+          "toolPermissions": "{}",
+          "memoryEnabled": true,
+          "autoReview": false,
+          "yoloByDefault": false,
+          "memoryCapturedThrough": null,
+          "pinnedAt": null,
+          "browserProfile": "shared",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "bot_chats": []
+    }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "http": "create without a name",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": {
+          "name": ["Name is required"]
+        }
+      }
+    }
+  },
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "create a duplicate name",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 409,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "CONFLICT",
+        "message": "A bot named \"Echo\" already exists"
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id1>",
+          "conversationId": "2",
+          "name": "Echo",
+          "description": "Says it back",
+          "modelId": "test-model",
+          "lastMessagePreview": null,
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": false,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "http": "get",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "edit",
+    "method": "PATCH",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo Two",
+        "description": "Says it back",
+        "systemPrompt": "Be very brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": false,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "pin",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/pin",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo Two",
+        "description": "Says it back",
+        "systemPrompt": "Be very brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": false,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": "2026-11-06T06:30:00.000Z",
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "list pinned",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id1>",
+          "conversationId": "2",
+          "name": "Echo Two",
+          "description": "Says it back",
+          "modelId": "test-model",
+          "lastMessagePreview": null,
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": false,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "unpin",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/pin",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo Two",
+        "description": "Says it back",
+        "systemPrompt": "Be very brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": false,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "db": "after edits",
+    "tables": {
+      "bots": [
+        {
+          "id": "<id1>",
+          "name": "Echo Two",
+          "description": "Says it back",
+          "systemPrompt": "Be very brief.",
+          "modelId": "test-model",
+          "conversationId": "2",
+          "chatStartedAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastMessagePreview": null,
+          "toolPermissions": "{}",
+          "memoryEnabled": false,
+          "autoReview": false,
+          "yoloByDefault": false,
+          "memoryCapturedThrough": null,
+          "pinnedAt": null,
+          "browserProfile": "shared",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "prompt_revisions": [
+        {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "prompt": "Be very brief.",
+          "source": "manual",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Echo Two",
+        "description": "Says it back",
+        "systemPrompt": "Be very brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": false,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "get deleted",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>",
+    "status": 404,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "NOT_FOUND",
+        "message": "Bot not found"
+      }
+    }
+  },
+  {
+    "http": "list after delete",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": []
+    }
+  }
+]

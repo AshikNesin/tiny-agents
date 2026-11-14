@@ -25,6 +25,8 @@
     "check:dead": "knip --no-progress || { echo 'Dead code. If a flagged file is loaded by URL, dynamic import or a script, add it to `entry` in knip.json. Otherwise delete it: `pnpm exec tsx scripts/codemods/remove-dead-code.ts` (add --remove-files to delete unused files).'; exit 1; }",
     "test": "NODE_ENV=test vp test run --config vitest.config.server.ts",
     "test:client": "vp test run",
+    "golden:check": "NODE_ENV=test vp test run --config vitest.config.server.ts tests/server/golden",
+    "golden:update": "GOLDEN_UPDATE=1 NODE_ENV=test vp test run --config vitest.config.server.ts tests/server/golden",
     "test:all": "pnpm test && pnpm test:client",
     "verify": "pnpm verify:static && pnpm test && pnpm test:client",
     "verify:static": "node scripts/gates.mjs",
