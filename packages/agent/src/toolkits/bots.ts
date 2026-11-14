@@ -7,14 +7,10 @@
  * deterministically from the durable tool task (same key as `tasks`), so a
  * replay recomputes both and the store's unique columns dedupe the row.
  */
-import {
-  defineExtension,
-  defineTool,
-  section,
-  type ToolExecutionResult,
-} from "@earendil-works/pi-durable";
+import { section, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 import { CUSTODY_RULE, sanitizePeerText } from "./peer-text";
 
@@ -55,8 +51,11 @@ const noDeliver = (to: string, reason: string): ToolExecutionResult =>
 
 /** The `bots` toolkit: message other bots (`apps/web` bots.runtime.ts). */
 export function createBotsToolkit(store: BotMessagingStore): Capability {
-  const messageBot = defineTool({
+  const messageBot = tool({
     name: "message_bot",
+    label: "Messaged bot",
+    askLabel: "message another bot",
+    summary: "Send a message to another bot",
     description:
       "Send a message to another bot by name, to ask for help or information or to collaborate. " +
       'Fire-and-forget: the reply arrives later in your conversation as "Reply from <name>", ' +
@@ -99,19 +98,11 @@ export function createBotsToolkit(store: BotMessagingStore): Capability {
     );
   });
 
-  return {
+  return defineToolkit({
     id: "bots",
-    kind: "toolkit",
     name: "Bots",
     description: "Message other bots",
-    extension: defineExtension({ name: "bots", tools: [messageBot], sections: [roster] }),
-    tools: [
-      {
-        name: "message_bot",
-        label: "Messaged bot",
-        askLabel: "message another bot",
-        description: "Send a message to another bot",
-      },
-    ],
-  };
+    tools: [messageBot],
+    sections: [roster],
+  });
 }

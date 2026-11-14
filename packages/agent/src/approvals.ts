@@ -274,17 +274,6 @@ export interface GateHooks<TArgs = never> {
  */
 type GatedRegistration = ToolRegistration & { readonly gate?: GateHooks<unknown> };
 
-/**
- * The registration with gate hooks attached, for tools not yet declared with
- * `tool()` (rewrite step 3.2 migrates them).
- */
-export function withGatePlan<T extends ToolRegistration>(
-  tool: T,
-  hooks: GateHooks<Parameters<T["execute"]>[0]>,
-): T {
-  return { ...tool, gate: hooks };
-}
-
 /** The gate hooks a tool registration carries, if any. */
 export function gateHooksOf(tool: ToolRegistration): GateHooks<unknown> | undefined {
   return (tool as GatedRegistration).gate;

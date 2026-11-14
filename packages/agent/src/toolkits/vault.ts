@@ -8,17 +8,12 @@
  */
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
-import {
-  defineExtension,
-  defineTool,
-  type JsonObject,
-  type ToolExecutionApi,
-  type ToolExecutionResult,
-} from "@earendil-works/pi-durable";
+import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { gateApproved, type GateHooks, type GatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
 import { durableMemo, toJson } from "../durable-json";
+import { defineToolkit, tool } from "../toolkit";
 import {
   hasGrant,
   VAULT_RULE,
@@ -291,8 +286,12 @@ export function safeMessage(error: unknown): string {
 
 export function createVaultToolkit(options: VaultToolkitOptions = {}): Capability {
   const broker = options.broker;
-  const vaultList = defineTool({
+  const vaultList = tool({
     name: "vault_list",
+    label: "Listed vault items",
+    askLabel: "list vault items",
+    summary: "List the vault items the bot may use (handles only)",
+    policy: { readOnly: true },
     description:
       "List the owner's vault items you may use: logins, cards and API keys, by handle. " +
       "Pass a handle to browser_fill_secret, browser_enter_code or http_request (auth) to use one; " +
@@ -338,21 +337,12 @@ export function createVaultToolkit(options: VaultToolkitOptions = {}): Capabilit
     },
   });
 
-  return {
+  return defineToolkit({
     id: "vault",
-    kind: "toolkit",
     name: "Vault",
     description: "Uses your saved logins, cards and API keys without seeing them",
-    extension: defineExtension({ name: "vault", tools: broker ? [vaultList] : [] }),
-    tools: [
-      {
-        name: "vault_list",
-        label: "Listed vault items",
-        askLabel: "list vault items",
-        description: "List the vault items the bot may use (handles only)",
-        readOnly: true,
-      },
-    ],
+    tools: [vaultList],
+    offered: () => Boolean(broker),
     ...(broker ? {} : { setupHint: "Configure the vault (see docs/features/vault.md)." }),
-  };
+  });
 }

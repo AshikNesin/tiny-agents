@@ -10,8 +10,9 @@
  * discipline as the skills listing.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
+import { section } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 
 /** An injectable memory (active, unexpired), as the app's store returns it. */
 export interface MemoryLine {
@@ -113,8 +114,11 @@ function refused(why: keyof typeof REFUSED) {
 
 export function createMemoryCapability(store: MemoryStore): Capability {
   const save = store.remember?.bind(store);
-  const remember = defineTool({
+  const remember = tool({
     name: "remember",
+    label: "Saved memory",
+    askLabel: "save a memory",
+    summary: "Remember a fact about the owner",
     description:
       "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions. The owner approves saves unless they have allowed this tool.",
     parameters: Type.Object({
@@ -154,8 +158,11 @@ export function createMemoryCapability(store: MemoryStore): Capability {
   });
 
   const drop = store.forget?.bind(store);
-  const forget = defineTool({
+  const forget = tool({
     name: "forget",
+    label: "Forgot memory",
+    askLabel: "forget a memory",
+    summary: "Forget a fact about the owner",
     description:
       "Forget memories about the owner when they ask you to (\"forget that I'm moving to Pune\"). Pass the distinctive words of the memory: every memory containing all of them, as whole words, is removed for good. Tell the owner exactly which memories went, from this tool's result; if nothing matched, say so.",
     parameters: Type.Object({ text: Type.String({ minLength: 1, maxLength: 300 }) }),
@@ -184,37 +191,11 @@ export function createMemoryCapability(store: MemoryStore): Capability {
     return renderMemoryBlock(await store.list(Number(input.conversationId))) ?? undefined;
   });
 
-  return {
+  return defineToolkit({
     id: "memory",
-    kind: "toolkit",
     name: "Memory",
     description: "Long-term memories this bot keeps about the owner",
-    extension: defineExtension({
-      name: "memory",
-      tools: [...(save ? [remember] : []), ...(drop ? [forget] : [])],
-      sections: [listing],
-    }),
-    tools: [
-      ...(save
-        ? [
-            {
-              name: "remember",
-              label: "Saved memory",
-              askLabel: "save a memory",
-              description: "Remember a fact about the owner",
-            },
-          ]
-        : []),
-      ...(drop
-        ? [
-            {
-              name: "forget",
-              label: "Forgot memory",
-              askLabel: "forget a memory",
-              description: "Forget a fact about the owner",
-            },
-          ]
-        : []),
-    ],
-  };
+    tools: [Boolean(save) && remember, Boolean(drop) && forget],
+    sections: [listing],
+  });
 }

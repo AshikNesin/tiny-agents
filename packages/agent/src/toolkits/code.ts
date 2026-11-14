@@ -14,8 +14,6 @@
  * bots and approval settings from before the harness layer keep working.
  */
 import {
-  defineExtension,
-  defineTool,
   section,
   type ToolExecutionApi,
   type ToolExecutionResult,
@@ -23,6 +21,7 @@ import {
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 import { sanitizePeerText } from "./peer-text";
 
@@ -209,8 +208,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     ),
   };
 
-  const start = defineTool({
+  const start = tool({
     name: "code_start",
+    label: "Started a coding task",
+    askLabel: "start a coding task",
+    summary: "Start a coding task in a coding agent",
+    policy: { allowByDefault: true },
     description:
       "Start a coding task in one of the owner's coding agents (Shelley by default). Returns immediately with the thread id and a link; the result arrives later in this chat as a reply from that agent.",
     parameters: Type.Object({ ...startParams, harness: Type.Optional(harnessSchema) }),
@@ -219,8 +222,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
       startTool(args, Number(api.conversationId), await toolIdempotencyKey(api, context)),
   });
 
-  const shelleyStart = defineTool({
+  const shelleyStart = tool({
     name: "shelley_start",
+    label: "Started Shelley",
+    askLabel: "start a coding task in Shelley",
+    summary: "Start a coding task in Shelley (same as code_start)",
+    policy: { allowByDefault: true },
     description: "Start a coding task in Shelley. Same as code_start with harness shelley.",
     parameters: Type.Object(startParams),
     replay: "safe",
@@ -264,8 +271,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     );
   }
 
-  const send = defineTool({
+  const send = tool({
     name: "code_send",
+    label: "Messaged a coding agent",
+    askLabel: "message a coding agent",
+    summary: "Steer or follow up a coding thread",
+    policy: { allowByDefault: true },
     description:
       "Send a message to a coding thread (one you started, or an existing one by id): steers it if it is working (queue: true waits for its turn to end), or asks a follow-up if it is idle. The outcome arrives here as a reply.",
     parameters: Type.Object({ threadId: threadIdSchema, ...sendParams }),
@@ -273,8 +284,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     execute: async (args, api, context) => sendTool(args.threadId, args, api, context),
   });
 
-  const shelleySend = defineTool({
+  const shelleySend = tool({
     name: "shelley_send",
+    label: "Messaged Shelley",
+    askLabel: "send Shelley a message",
+    summary: "Steer or follow up a Shelley conversation (same as code_send)",
+    policy: { allowByDefault: true },
     description: "Message a Shelley conversation. Same as code_send.",
     parameters: Type.Object({
       conversationId: Type.String({ pattern: "^[A-Za-z0-9_:.-]{1,170}$" }),
@@ -285,8 +300,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
       sendTool(shelleyThread(args.conversationId), args, api, context),
   });
 
-  const status = defineTool({
+  const status = tool({
     name: "code_status",
+    label: "Checked a coding thread",
+    askLabel: "check a coding thread",
+    summary: "Check a coding hand-off",
+    policy: { readOnly: true },
     description:
       "Check a coding thread: working or idle, its last answer and the uncommitted changes in its directory. Only when the owner asks; finishes arrive on their own.",
     parameters: Type.Object({ threadId: threadIdSchema }),
@@ -308,8 +327,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     },
   });
 
-  const list = defineTool({
+  const list = tool({
     name: "code_list",
+    label: "Listed coding hand-offs",
+    askLabel: "list coding hand-offs",
+    summary: "List this bot's coding hand-offs",
+    policy: { readOnly: true },
     description: "List the coding hand-offs this bot started, newest first.",
     parameters: Type.Object({}),
     replay: "safe",
@@ -320,8 +343,12 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     },
   });
 
-  const models = defineTool({
+  const models = tool({
     name: "code_models",
+    label: "Listed coding models",
+    askLabel: "list a coding agent's models",
+    summary: "List the models a coding agent can use",
+    policy: { readOnly: true },
     description: "List the models a coding agent can use, its default first.",
     parameters: Type.Object({ harness: Type.Optional(harnessSchema) }),
     replay: "safe",
@@ -348,67 +375,14 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     return harnesses.length ? rules(harnesses) : undefined;
   });
 
-  return {
+  return defineToolkit({
     id: "code",
-    kind: "toolkit",
     name: "Code",
     description: "Hand coding work to the owner's coding agents (Shelley, Claude Code)",
-    extension: defineExtension({
-      name: "code",
-      tools: store ? [start, send, status, list, models, shelleyStart, shelleySend] : [],
-      sections: [guidance],
-    }),
-    tools: [
-      {
-        name: "code_start",
-        label: "Started a coding task",
-        askLabel: "start a coding task",
-        description: "Start a coding task in a coding agent",
-        allowByDefault: true,
-      },
-      {
-        name: "code_send",
-        label: "Messaged a coding agent",
-        askLabel: "message a coding agent",
-        description: "Steer or follow up a coding thread",
-        allowByDefault: true,
-      },
-      {
-        name: "code_status",
-        label: "Checked a coding thread",
-        askLabel: "check a coding thread",
-        description: "Check a coding hand-off",
-        readOnly: true,
-      },
-      {
-        name: "code_list",
-        label: "Listed coding hand-offs",
-        askLabel: "list coding hand-offs",
-        description: "List this bot's coding hand-offs",
-        readOnly: true,
-      },
-      {
-        name: "code_models",
-        label: "Listed coding models",
-        askLabel: "list a coding agent's models",
-        description: "List the models a coding agent can use",
-        readOnly: true,
-      },
-      {
-        name: "shelley_start",
-        label: "Started Shelley",
-        askLabel: "start a coding task in Shelley",
-        description: "Start a coding task in Shelley (same as code_start)",
-        allowByDefault: true,
-      },
-      {
-        name: "shelley_send",
-        label: "Messaged Shelley",
-        askLabel: "send Shelley a message",
-        description: "Steer or follow up a Shelley conversation (same as code_send)",
-        allowByDefault: true,
-      },
-    ],
+    tools: [start, send, status, list, models, shelleyStart, shelleySend],
+    // Without a harness the tools are listed (with the setup hint) but not offered.
+    offered: () => Boolean(store),
+    sections: [guidance],
     ...(options.setupHint ? { setupHint: options.setupHint } : {}),
-  };
+  });
 }

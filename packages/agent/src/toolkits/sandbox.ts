@@ -19,9 +19,10 @@
  * configured, every command runs confined to it.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
-import { withGatePlan, type GateHooks } from "../approvals";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { GateHooks } from "../approvals";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, VaultError, type VaultBroker, type VaultItemMeta } from "../vault";
 import {
   checkEnvName,
@@ -219,104 +220,110 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
             : { ask: toolAsks },
       };
 
-  const runCommand = withGatePlan(
-    defineTool({
-      name: "run_command",
-      description:
-        "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. " +
-        "One command string per call — chain with && or ; for steps. " +
-        "Set detached:true for long builds or servers: the command keeps running after this call returns." +
-        (broker
-          ? " To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; " +
-            'the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), every such call is approved by the owner, ' +
-            "and the command can only reach the item's hosts. " +
-            VAULT_RULE
-          : "") +
-        (egress.entries.length > 0
-          ? " Commands can only connect to the owner's allowlist: " +
-            egress.entries.map((e) => ("host" in e ? e.host : e.cidr)).join(", ") +
-            "."
-          : ""),
-      parameters: Type.Object({
-        command: Type.String({ minLength: 1, maxLength: 20_000 }),
-        detached: Type.Optional(Type.Boolean()),
-        timeout_secs: Type.Optional(Type.Integer({ minimum: 1, maximum: 600 })),
-        ...(broker
-          ? {
-              secrets: Type.Optional(
-                Type.Array(secretSchema, { minItems: 1, maxItems: MAX_COMMAND_SECRETS }),
-              ),
-            }
-          : {}),
-      }),
-      replay: "unsafe",
-      execute: async (raw, api, context) => {
-        const args = raw as RunArgs;
-        const timeoutSecs = args.timeout_secs ?? options.defaultTimeoutSecs ?? 120;
-        const timeoutMs = timeoutSecs * 1000;
-        // The whole command runs as one sh -c argument, so chains (&&, ;) stay
-        // inside the detached session and the redirect covers every step.
-        const detach = (command: string) =>
-          `setsid nohup sh -c ${shellQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
-        const shaped = args.detached ? detach(args.command) : args.command;
-        const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) =>
-          exec(
-            allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped,
-            { timeoutMs, ...(stdin !== undefined ? { stdin } : {}) },
+  const runCommand = tool({
+    name: "run_command",
+    label: "Ran a command",
+    askLabel: "run a command",
+    summary: "Run a shell command on the sandbox VM",
+    vault: true,
+    description:
+      "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. " +
+      "One command string per call — chain with && or ; for steps. " +
+      "Set detached:true for long builds or servers: the command keeps running after this call returns." +
+      (broker
+        ? " To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; " +
+          'the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), every such call is approved by the owner, ' +
+          "and the command can only reach the item's hosts. " +
+          VAULT_RULE
+        : "") +
+      (egress.entries.length > 0
+        ? " Commands can only connect to the owner's allowlist: " +
+          egress.entries.map((e) => ("host" in e ? e.host : e.cidr)).join(", ") +
+          "."
+        : ""),
+    parameters: Type.Object({
+      command: Type.String({ minLength: 1, maxLength: 20_000 }),
+      detached: Type.Optional(Type.Boolean()),
+      timeout_secs: Type.Optional(Type.Integer({ minimum: 1, maximum: 600 })),
+      ...(broker
+        ? {
+            secrets: Type.Optional(
+              Type.Array(secretSchema, { minItems: 1, maxItems: MAX_COMMAND_SECRETS }),
+            ),
+          }
+        : {}),
+    }),
+    replay: "unsafe",
+    // The schema's args type `secrets` loosely (it exists only with a broker).
+    gate: runGate as GateHooks<never>,
+    execute: async (raw, api, context) => {
+      const args = raw as RunArgs;
+      const timeoutSecs = args.timeout_secs ?? options.defaultTimeoutSecs ?? 120;
+      const timeoutMs = timeoutSecs * 1000;
+      // The whole command runs as one sh -c argument, so chains (&&, ;) stay
+      // inside the detached session and the redirect covers every step.
+      const detach = (command: string) =>
+        `setsid nohup sh -c ${shellQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
+      const shaped = args.detached ? detach(args.command) : args.command;
+      const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) =>
+        exec(allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped, {
+          timeoutMs,
+          ...(stdin !== undefined ? { stdin } : {}),
+        });
+      try {
+        let result: CommandResult;
+        if (args.secrets?.length) {
+          const problem = secretsProblem(args);
+          if (problem) return fail(problem);
+          const env = args.secrets.map((s) => s.env);
+          result = await useAllFromSink(
+            broker!,
+            api,
+            context,
+            usesOf(args),
+            ["value"],
+            async (values, items) => {
+              const lines = values.map((value) => value.value!.reveal());
+              if (lines.some((line) => /[\r\n\0]/.test(line))) {
+                throw new Error("A multi-line secret can't be passed as an env var.");
+              }
+              return run(allowedFor(items), env, `${lines.join("\n")}\n`);
+            },
           );
-        try {
-          let result: CommandResult;
-          if (args.secrets?.length) {
-            const problem = secretsProblem(args);
-            if (problem) return fail(problem);
-            const env = args.secrets.map((s) => s.env);
-            result = await useAllFromSink(
-              broker!,
-              api,
-              context,
-              usesOf(args),
-              ["value"],
-              async (values, items) => {
-                const lines = values.map((value) => value.value!.reveal());
-                if (lines.some((line) => /[\r\n\0]/.test(line))) {
-                  throw new Error("A multi-line secret can't be passed as an env var.");
-                }
-                return run(allowedFor(items), env, `${lines.join("\n")}\n`);
-              },
-            );
-          } else {
-            result = await run(egress.entries.length > 0 ? egress.entries : undefined);
-          }
-          if (result.exitCode === CONFINE_UNAVAILABLE) {
-            return fail(
-              `The sandbox VM can't confine commands (it needs systemd and passwordless sudo):\n${result.output}`,
-            );
-          }
-          if (result.exitCode === SECRETS_MISSING && args.secrets?.length) {
-            return fail("The secrets did not reach the command. Nothing ran.");
-          }
-          if (result.exitCode !== 0) {
-            return {
-              output: [{ type: "text", text: `exit ${result.exitCode}\n${result.output}` }],
-              isError: true,
-              details: { exitCode: result.exitCode },
-            };
-          }
+        } else {
+          result = await run(egress.entries.length > 0 ? egress.entries : undefined);
+        }
+        if (result.exitCode === CONFINE_UNAVAILABLE) {
+          return fail(
+            `The sandbox VM can't confine commands (it needs systemd and passwordless sudo):\n${result.output}`,
+          );
+        }
+        if (result.exitCode === SECRETS_MISSING && args.secrets?.length) {
+          return fail("The secrets did not reach the command. Nothing ran.");
+        }
+        if (result.exitCode !== 0) {
           return {
-            output: [{ type: "text", text: result.output }],
+            output: [{ type: "text", text: `exit ${result.exitCode}\n${result.output}` }],
+            isError: true,
             details: { exitCode: result.exitCode },
           };
-        } catch (error) {
-          return fail(error instanceof VaultError ? safeMessage(error) : message(error));
         }
-      },
-    }),
-    // The schema's args type `secrets` loosely (it exists only with a broker).
-    runGate as GateHooks<never>,
-  );
+        return {
+          output: [{ type: "text", text: result.output }],
+          details: { exitCode: result.exitCode },
+        };
+      } catch (error) {
+        return fail(error instanceof VaultError ? safeMessage(error) : message(error));
+      }
+    },
+  });
 
-  const readFile = defineTool({
+  const readFile = tool({
     name: "read_file",
+    label: "Read a file",
+    askLabel: "read a file",
+    summary: "Read a file from the sandbox VM",
+    policy: { readOnly: true },
     description:
       "Read a file from the sandbox VM. Binary-safe; non-UTF-8 bytes are described, not corrupted. " +
       "Use max_bytes to cap huge files.",
@@ -345,8 +352,11 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     },
   });
 
-  const writeFile = defineTool({
+  const writeFile = tool({
     name: "write_file",
+    label: "Wrote a file",
+    askLabel: "write a file",
+    summary: "Write a file on the sandbox VM",
     description:
       "Create or overwrite a file on the sandbox VM with UTF-8 content. Written to a temp name " +
       "then renamed, so a crash mid-write never leaves a half file.",
@@ -365,41 +375,19 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     },
   });
 
-  return {
+  return defineToolkit({
     id: "sandbox",
-    kind: "toolkit",
     name: "Sandbox",
     description: "Keyless shell and files on the sandbox VM over Tailscale SSH",
-    extension: defineExtension({ name: "sandbox", tools: [runCommand, readFile, writeFile] }),
-    tools: [
-      {
-        name: "run_command",
-        label: "Ran a command",
-        askLabel: "run a command",
-        description: "Run a shell command on the sandbox VM",
-        vault: true,
-      },
-      {
-        name: "read_file",
-        label: "Read a file",
-        askLabel: "read a file",
-        description: "Read a file from the sandbox VM",
-        readOnly: true,
-      },
-      {
-        name: "write_file",
-        label: "Wrote a file",
-        askLabel: "write a file",
-        description: "Write a file on the sandbox VM",
-      },
-    ],
-    ...(connection ? {} : { setupHint: "Set SANDBOX_HOST to enable the sandbox." }),
-    ...(egress.invalid.length > 0
-      ? {
-          setupHint: `SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: ${egress.invalid.join(", ")}`,
-        }
-      : {}),
-  };
+    tools: [runCommand, readFile, writeFile],
+    // A bad allowlist outranks a missing host: it must be fixed either way.
+    setupHint:
+      egress.invalid.length > 0
+        ? `SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: ${egress.invalid.join(", ")}`
+        : connection
+          ? undefined
+          : "Set SANDBOX_HOST to enable the sandbox.",
+  });
 }
 
 /** POSIX single-quoting for embedding one argument in a remote shell line. */
