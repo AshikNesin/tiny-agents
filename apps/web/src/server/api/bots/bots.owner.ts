@@ -10,6 +10,16 @@
  * routine's turn gets its bot's skills, browser, memories and vault items
  * like the chat does; writes the owner must make themselves (vault uses,
  * memory changes) ask `isUnattended`.
+ *
+ * This is the app's one reverse lookup from a conversation to its owner
+ * (docs/rewrite/README.md §4.4, `Conversations.ownerOf`). Three kinds of
+ * query still name `bots.conversationId` directly, on purpose:
+ * - writes that must land only while the conversation is still the bot's
+ *   chat (`recordReply` in bots.list.ts): the column is their guard;
+ * - `followsConversation` (people.service.ts), which the SSE filter needs
+ *   synchronous;
+ * - set-based joins over many rows (deliveries, routine runs), with their
+ *   `coalesce` for legacy rows.
  */
 import { eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
