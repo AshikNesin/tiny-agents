@@ -20,10 +20,11 @@ interface SdkToolResult {
 }
 
 export interface ClaudeSdkModule {
+  /** `close()` ends the Claude Code process (older SDKs lack it: the loop stops reading instead). */
   query: (args: {
     prompt: AsyncIterable<SdkUserMessage>;
     options: SdkQueryOptions;
-  }) => AsyncIterable<SdkMessage>;
+  }) => AsyncIterable<SdkMessage> & { close?(): void };
   tool: (
     name: string,
     description: string,
@@ -288,6 +289,11 @@ export function createSdkQueryFactory(
       }
     })();
     const stream = sdk.query({ prompt, options });
+    // A stop (or a recycle) ends the Claude Code process itself, not only
+    // this loop: the turn must not go on running tools nobody reads.
+    const stop = () => stream.close?.();
+    if (ctx.signal.aborted) stop();
+    else ctx.signal.addEventListener("abort", stop, { once: true });
     let text = "";
     for await (const message of stream) {
       if (ctx.signal.aborted) return;

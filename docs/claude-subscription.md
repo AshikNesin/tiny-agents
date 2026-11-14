@@ -97,6 +97,19 @@ A model id `claude-code/<model>` (the picker labels these "uses your
 Claude plan") selects `ClaudeCodeEngine`. Every other bot stays on the
 pi-durable harness.
 
+The transcript lives in the agent store (`agent.db`), in the bot's own
+durable conversation ([ADR 0018](adr/0018-claude-plan-transcripts-are-durable-entries.md)).
+A send is admitted as a `claude.user` entry and the send returns; sending
+the same request id again does not add it twice. Turns run one at a time per
+chat: a message sent while Claude replies waits above the composer, where you
+can withdraw it, and the next turn answers it. Claude Code cannot take a
+message into a running turn, so a steer waits too. The reply streams in
+memory and is written as a `claude.assistant` entry when a tool call finishes
+and when the turn ends. **Stop** ends the turn once, as stopped, and
+withdraws the waiting messages; nothing the worker sends for that turn
+afterwards changes it. A turn does not survive an app restart: its message
+then reads as unanswered, or its reply as cut off.
+
 The app opens one WebSocket to the worker, through the same Worker
 connection (`@tiny-agents/claude-worker/client`) the Claude Code harness
 uses. The worker keeps one Claude Code `query()` per conversation and
@@ -111,7 +124,10 @@ restarted, and a turn it was running ends with "The Claude worker
 restarted" instead of waiting forever. Send the message again; the
 conversation resumes the same Claude session. A turn still waiting to be
 sent goes to the new worker. Tool calls are idempotent on `tool_use_id`. A tool result that
-does not arrive in 120 seconds becomes an error result. An idle Claude
+does not arrive in 120 seconds becomes an error result, except while the call
+waits for you (an approval, a question, a sign-in form): the app tells the
+worker so every 30 seconds and the timer starts over. Stop ends the Claude
+Code process with the turn; the next message resumes the session. An idle Claude
 process is evicted after 15 minutes. A process older than 6 hours is
 recycled and resumed. At most two Claude processes are live, and one turn
 runs at a time. Those timings are the defaults; the `CLAUDE_WORKER_*`
@@ -120,8 +136,14 @@ variables in [config](reference/config.md) override them.
 If Claude Code reports a rate limit with status `rejected`, error code
 `credits_required`, or `isUsingOverage` (that last field is undocumented
 and only checked when it is present), the turn pauses and is not retried.
+Your message stays in the chat with the pause under it.
 
 A turn sent before you sign in pauses with the sign-in hint.
+
+Before this transcript moved into the agent store, the app kept it in
+`<agent.db>.claude.json`. On the first start after the upgrade the app
+imports that file into the store once and renames it `.claude.json.imported`.
+A file it cannot read is left where it is and logged.
 
 ## Kill switch
 
@@ -184,4 +206,4 @@ point a real bot at it.
 6. Kill the worker on the sandbox (`pkill -f claude-worker/worker.mjs`).
    The next turn starts it again and resumes the same Claude session.
 7. Search the tiny-agents host for `sk-ant-oat`. The app database, the
-   agent store, and `.claude.json` session file must not contain one.
+   agent store, and any `.claude.json.imported` file must not contain one.

@@ -108,6 +108,9 @@ export function createBotHandler(deps: {
         case "abort":
           book.get(message.sessionId)?.abortTurn();
           return;
+        case "tool_waiting":
+          book.get(message.sessionId)?.holdTool(message.toolUseId);
+          return;
         case "tool_result":
           book.settle(message.sessionId, message.toolUseId, {
             content: message.content,

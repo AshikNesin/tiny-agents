@@ -96,7 +96,7 @@ connection. See [Use your Claude subscription](../claude-subscription.md).
 | `CLAUDE_WORKER_SILENCE_MS`       | `60000`    | Close the socket after this much silence.                      |
 | `CLAUDE_WORKER_RECONNECT_MIN_MS` | `1000`     | First reconnect delay. Doubles until the max.                  |
 | `CLAUDE_WORKER_RECONNECT_MAX_MS` | `30000`    | Cap on reconnect delay.                                        |
-| `CLAUDE_WORKER_TOOL_TIMEOUT_MS`  | `120000`   | Tool result deadline. The worker then returns an error result. |
+| `CLAUDE_WORKER_TOOL_TIMEOUT_MS`  | `120000`   | Error result after this. Each 30s owner-wait ping restarts it. |
 | `CLAUDE_WORKER_IDLE_MS`          | `900000`   | Evict an idle Claude process (15 minutes).                     |
 | `CLAUDE_WORKER_MAX_AGE_MS`       | `21600000` | Recycle a process older than 6 hours.                          |
 | `CLAUDE_WORKER_MAX_PROCESSES`    | `2`        | Live Claude processes.                                         |

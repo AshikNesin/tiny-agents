@@ -109,6 +109,11 @@ export class Session {
     return this.proxy.settle(toolUseId, result);
   }
 
+  /** The app says the call still waits on the owner: its result timer starts over. */
+  holdTool(toolUseId: string): boolean {
+    return this.proxy.extend(toolUseId);
+  }
+
   /** Stop the process. The session id and Claude resume id stay. */
   recycle(): void {
     this.generation += 1;
@@ -131,10 +136,16 @@ export class Session {
     return done;
   }
 
+  /**
+   * Stop the running turn: it ends `aborted` and the Claude process stops
+   * with it (the SDK query is closed), so nothing of it runs or reports
+   * later. The session keeps its Claude session id: the next turn resumes it.
+   */
   abortTurn(): void {
     const turnId = this.pendingTurns[0]?.turnId;
     if (!turnId) return;
     this.onFactoryEvent({ type: "turn_end", turnId, stopReason: "aborted" });
+    this.recycle();
   }
 
   private async ensureProcess(): Promise<void> {
@@ -207,6 +218,10 @@ export class Session {
         stopReason: "paused",
         error: usagePauseMessage(event.reason),
       });
+      // The turn is over: its waiter resolves (the running-turn slot frees),
+      // and the process stops, as it does on a stop.
+      this.finishTurn(event.turnId);
+      this.recycle();
       return;
     }
     if (event.type === "turn_end") {

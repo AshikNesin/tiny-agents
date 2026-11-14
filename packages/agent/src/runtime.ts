@@ -227,21 +227,28 @@ export class AgentRuntime {
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
-    persistPath?: string,
+    legacyPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
+    onReport?: (error: unknown) => void,
   ) {
     this.#harness = harness;
     this.#gate = gate;
     this.#pi = new PiEngine(harness, { onBusy: (ref) => this.#busyChanged(ref) });
     this.#claude = new ClaudeCodeEngine({
+      harness,
       plan: () => this.#claudePlan(),
-      persistPath,
+      ...(legacyPath ? { legacyPath } : {}),
       worker: claudeWorker,
       ...(claudeConnect ? { connect: claudeConnect } : {}),
       onBusy: (ref) => this.#busyChanged(ref),
+      // A queued Claude plan turn found the plan unavailable with the gateway
+      // fallback: the conversation left the plan, and pi answers the message.
+      fallback: async (ref, input) => {
+        await this.#pi.submit(ref, input);
+      },
+      ...(onReport ? { onReport } : {}),
       gate,
-      docs: harness,
     });
     this.#engines = [this.#pi, this.#claude];
     this.#models = models;
@@ -336,9 +343,11 @@ export class AgentRuntime {
         approvals,
         questions,
         capabilities,
+        // The Claude plan's transcripts before ADR 0018: imported once at start.
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
+        options.onReport,
       );
       opened.applyModelConfig(options.modelConfig ?? EMPTY_MODEL_CONFIG);
       runtime = opened;
@@ -347,6 +356,7 @@ export class AgentRuntime {
         if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
       });
       await opened.#pi.start();
+      await opened.#claude.start();
       opened.#busy = new Set(opened.#pi.busyConversations());
       harness.resume();
       return opened;
@@ -654,18 +664,18 @@ export class AgentRuntime {
   }
 
   /**
-   * Durably admit a user message. Retrying with the same `requestId` never
-   * submits twice. While a reply is running, the message is queued: a steer
-   * (`whenBusy: "steer"`) joins the reply after its current tool round; the
-   * default follow-up is answered by the next run. On the Claude plan this
-   * runs the whole turn.
+   * Durably admit a user message and return; the reply runs after. Retrying
+   * with the same `requestId` never submits twice. While a reply is running,
+   * the message is queued: on pi a steer (`whenBusy: "steer"`) joins the
+   * reply after its current tool round; the default follow-up (and, on the
+   * Claude plan, a steer too) is answered by the next turn.
    */
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<void> {
     const engine = this.#engineFor(ref);
     if ((await engine.submit(ref, input)) === "accepted") return;
     // The engine cannot run the turn and its fallback is the gateway: the
     // conversation moves onto its pi transcript for good (ADR 0008).
-    this.#claude.leave(ref);
+    await this.#claude.leave(ref);
     await this.#pi.submit(ref, input);
   }
 
@@ -675,12 +685,14 @@ export class AgentRuntime {
   }
 
   /**
-   * Withdraw a message by its request id. A queued input leaves the inbox
-   * (settling `unanswered`, reason `aborted`); a placed one is already part
-   * of the running reply, and a settled one is done. Only pi queues.
+   * Withdraw a message by its request id. A queued input leaves the queue
+   * (on pi, settling `unanswered`, reason `aborted`); a placed one is
+   * already part of the running reply, and a settled one is done.
    */
   withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
-    return this.#pi.withdraw(ref, requestId);
+    return this.#claude.runs(ref)
+      ? this.#claude.withdraw(ref, requestId)
+      : this.#pi.withdraw(ref, requestId);
   }
 
   isBusy(ref: ConversationRef): boolean {

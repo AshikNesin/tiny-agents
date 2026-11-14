@@ -10,8 +10,12 @@ A contact the owner chats with: persona, model, tool permissions and links, stor
 _Avoid_: agent, assistant, contact
 
 **Bot conversation**:
-The durable pi-durable conversation a bot runs on, linked by `Bot.conversationId`. It runs on the config from its last configure, so it is reconciled from the row before every submit.
+The durable pi-durable conversation a bot runs on, linked by `Bot.conversationId`. It runs on the config from its last configure, so it is reconciled from the row before every submit. It holds the transcript on either engine: pi's entries, or the Claude plan transcript.
 _Avoid_: thread, session, chat (for the durable side)
+
+**Claude plan transcript**:
+A Claude plan conversation's messages as entries of its bot conversation (ADR 0018): `claude.user` for each admitted message (deduplicated by request id in the admitting commit), `claude.assistant` for each turn's reply (written when a tool call finishes and when the turn ends; the newest per turn wins) and `claude.withdrawn` for queued messages withdrawn before their turn. None carries model context, so pi neither reads nor shows them. `packages/agent/src/engines/claude-code/transcript.ts` owns their shapes and the chat they project to; the old `<agent.db>.claude.json` is imported into them once.
+_Avoid_: Claude session (that is Claude Code's own, which the worker resumes), claude.json
 
 **Reconcile**:
 Re-apply a bot's row (model, persona, permissions, toolkits, connections) to its bot conversation. Only `bots.conversation.ts` does this.

@@ -5,11 +5,15 @@
  * its callers read (chat state, streams, pages, the Bot list preview, busy
  * activity, Finished replies) must not depend on which one runs.
  */
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { finishedReplyTo } from "../../../../packages/agent/src/replies";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import { TEST_MODEL } from "../../../../packages/agent/src/testing";
 import type { ActivityChange, ChatToolCall } from "../../../../packages/agent/src/types";
@@ -19,15 +23,27 @@ import {
   ENGINES,
   mailCapability,
   openEngine,
+  SILENT,
   watch,
   type EngineKind,
 } from "./engine-harness";
 
 const runtimes: AgentRuntime[] = [];
+const directories: string[] = [];
 afterEach(async () => {
   await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
+  for (const directory of directories.splice(0)) {
+    await rm(directory, { recursive: true, force: true });
+  }
   vi.unstubAllEnvs();
 });
+
+/** A file store (agent.db) in a fresh directory, for cases that close and reopen it. */
+async function storeFile(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "tiny-agents-engine-"));
+  directories.push(directory);
+  return join(directory, "agent.db");
+}
 
 async function setup(kind: EngineKind) {
   const engine = await openEngine(kind, { capabilities: [mailCapability([])] });
@@ -177,6 +193,166 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     await until(() => !runtime.isBusy(ref), "the reply to stop");
     expect((await runtime.readChat(ref)).busy).toBe(false);
   }, 15_000);
+
+  // Register C1: a retry is one message, a send while busy waits its turn.
+  it("admits a retried request id once", async () => {
+    const { runtime, worker, ref, send, replied } = await setup(kind);
+    await send(ref, { requestId: "r1", text: "hello" });
+    await send(ref, { requestId: "r1", text: "hello" });
+    await replied("hello");
+    await send(ref, { requestId: "r1", text: "hello" });
+    await until(() => !runtime.isBusy(ref), "the conversation to stay idle");
+    const state = await runtime.readChat(ref);
+    expect(state.messages.map((m) => [m.role, m.text, m.requestId])).toEqual([
+      ["user", "hello", "r1"],
+      ["assistant", "Echo: hello", undefined],
+    ]);
+    if (kind === "claude-code") expect(worker.turns.map((turn) => turn.text)).toEqual(["hello"]);
+  }, 15_000);
+
+  it("answers a message sent while a reply runs with the next turn, in order", async () => {
+    const { runtime, worker, ref, send, replied } = await setup(kind);
+    const chat = await watch(runtime, ref);
+    await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    const waiting = await awaitingApproval(chat, "send_email");
+    // The send returns while the first reply still waits on the owner.
+    await send(ref, { requestId: "r2", text: "two" });
+    const busy = await runtime.readChat(ref);
+    expect(busy.busy).toBe(true);
+    expect(busy.queued).toEqual([expect.objectContaining({ requestId: "r2", text: "two" })]);
+    expect(busy.messages.some((m) => m.requestId === "r2")).toBe(false);
+
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    const state = await replied("two");
+    expect(state.queued).toEqual([]);
+    const texts = state.messages.map((m) => m.text);
+    expect(texts.filter((_, i) => state.messages[i]!.role === "user")).toEqual([
+      "send_email ana@x.dev",
+      "two",
+    ]);
+    expect(texts.indexOf("RESULT:Sent to ana@x.dev")).toBeLessThan(texts.indexOf("two"));
+    expect(finishedReplyTo(state, "r1")).toMatchObject({
+      status: "answered",
+      reply: { text: "RESULT:Sent to ana@x.dev" },
+    });
+    expect(finishedReplyTo(state, "r2")).toMatchObject({
+      status: "answered",
+      reply: { text: "Echo: two" },
+    });
+    if (kind === "claude-code") {
+      expect(worker.turns.map((turn) => turn.text)).toEqual(["send_email ana@x.dev", "two"]);
+    }
+    await chat.stop();
+  }, 15_000);
+
+  it("withdraws a message still waiting for its turn, and only that one", async () => {
+    const { runtime, ref, send } = await setup(kind);
+    const chat = await watch(runtime, ref);
+    await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    const waiting = await awaitingApproval(chat, "send_email");
+    await send(ref, { requestId: "r2", text: "two" });
+    expect(await runtime.withdraw(ref, "r2")).toBe("withdrawn");
+    expect(await runtime.withdraw(ref, "r1")).toBe("already_placed");
+    expect((await runtime.readChat(ref)).queued).toEqual([]);
+
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    const state = await until(async () => {
+      const read = await runtime.readChat(ref);
+      return !read.busy && read.messages.at(-1)?.text === "RESULT:Sent to ana@x.dev"
+        ? read
+        : undefined;
+    }, "the first reply");
+    expect(state.messages.filter((m) => m.role === "user").map((m) => m.text)).toEqual([
+      "send_email ana@x.dev",
+    ]);
+    expect(await runtime.withdraw(ref, "r1")).toBe("settled");
+    expect(await runtime.withdraw(ref, "r2")).toBe("withdrawn");
+    expect(await runtime.withdraw(ref, "nope")).toBe("not_found");
+    await chat.stop();
+  }, 15_000);
+
+  // Register C2: a stopped reply stays stopped.
+  it("keeps a stopped reply as it stopped, whatever arrives for it later", async () => {
+    const { runtime, worker, ref, send } = await setup(kind);
+    const chat = await watch(runtime, ref);
+    await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    await awaitingApproval(chat, "send_email");
+    await runtime.abort(ref);
+    await until(() => !runtime.isBusy(ref), "the reply to stop");
+    const stopped = (await runtime.readChat(ref)).messages.at(-1);
+    if (kind === "claude-code") {
+      expect(stopped).toMatchObject({ role: "assistant", status: "stopped" });
+      expect(stopped?.toolCalls).toEqual([
+        expect.objectContaining({ name: "send_email", status: "aborted" }),
+      ]);
+      // The worker still answers the stopped turn: its call's result, its text, its end.
+      await until(() => worker.ended.includes("r1"), "the stopped turn's late events");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const after = await runtime.readChat(ref);
+    expect(after.messages.at(-1)).toEqual(stopped);
+    expect(after.busy).toBe(false);
+    expect(runtime.isBusy(ref)).toBe(false);
+    await chat.stop();
+  }, 15_000);
+
+  it("finishes a reply with nothing in it, so its request has a Finished reply", async () => {
+    const { runtime, ref, send } = await setup(kind);
+    await send(ref, { requestId: "r1", text: SILENT });
+    const state = await until(async () => {
+      const read = await runtime.readChat(ref);
+      return !read.busy && read.messages.at(-1)?.role === "assistant" ? read : undefined;
+    }, "the empty reply");
+    expect(state.messages.at(-1)).toMatchObject({ role: "assistant", text: "", status: "done" });
+    expect(finishedReplyTo(state, "r1")).toMatchObject({ status: "answered", reply: { text: "" } });
+    expect(await runtime.finishedReplies(ref)).toEqual([]);
+  }, 15_000);
+
+  // Register C4: after a restart the same engine answers reads, from the store.
+  it("keeps the transcript across a restart, and the same engine answers", async () => {
+    const storePath = await storeFile();
+    const config = {
+      modelId: kind === "pi" ? TEST_MODEL : "claude-sonnet",
+      systemPrompt: "Be brief.",
+    };
+    const first = await openEngine(kind, { storePath });
+    const ref = await first.runtime.createConversation(config);
+    await first.send(ref, { requestId: "r1", text: "before" });
+    await until(async () => {
+      const state = await first.runtime.readChat(ref);
+      return !state.busy && state.messages.at(-1)?.text === "Echo: before";
+    }, "the reply before the restart");
+    await first.runtime.close();
+
+    const second = await openEngine(kind, { storePath });
+    runtimes.push(second.runtime);
+    // No configure yet: reads come from the store alone.
+    const read = await second.runtime.readChat(ref);
+    expect(read.messages.map((m) => [m.role, m.text])).toEqual([
+      ["user", "before"],
+      ["assistant", "Echo: before"],
+    ]);
+    expect(await second.runtime.lastMessage(ref)).toMatchObject({ text: "Echo: before" });
+
+    await second.runtime.configure(ref, config);
+    await second.send(ref, { requestId: "r2", text: "after" });
+    const state = await until(async () => {
+      const current = await second.runtime.readChat(ref);
+      return !current.busy && current.messages.at(-1)?.text === "Echo: after" ? current : undefined;
+    }, "the reply after the restart");
+    expect(state.messages.map((m) => m.text)).toEqual([
+      "before",
+      "Echo: before",
+      "after",
+      "Echo: after",
+    ]);
+    if (kind === "claude-code") {
+      // The turn resumes the Claude session the first process recorded.
+      expect(second.worker.turns).toEqual([
+        expect.objectContaining({ text: "after", resume: `claude-${ref}` }),
+      ]);
+    }
+  }, 20_000);
 });
 
 // ── Owner wait cards ────────────────────────────────────────────────────
@@ -296,6 +472,135 @@ describe.each(ENGINES)("Owner wait cards on %s", (kind) => {
   );
 });
 
+// ── The Claude plan's old transcript file ─────────────────────────────────
+
+describe("importing the Claude plan's old .claude.json", () => {
+  const onClaude = { modelId: "claude-sonnet", systemPrompt: "Be brief." };
+
+  /** A store with one Claude plan conversation, closed again. */
+  async function storeWithConversation() {
+    const storePath = await storeFile();
+    const first = await openEngine("claude-code", { storePath });
+    const ref = await first.runtime.createConversation(onClaude);
+    const piRef = await first.runtime.createConversation(onClaude);
+    await first.runtime.close();
+    return { storePath, ref, piRef };
+  }
+
+  it("imports the file into entries once, then renames it", async () => {
+    const { storePath, ref, piRef } = await storeWithConversation();
+    const legacy = `${storePath}.claude.json`;
+    const messages = [
+      { id: "u-1", role: "user", text: "remember the number 42", status: "done", createdAt: 1 },
+      { id: "a-1", role: "assistant", text: "Got it.", status: "done", createdAt: 2 },
+      // A retry the old engine stored twice (register C1): imported once.
+      { id: "u-1", role: "user", text: "remember the number 42", status: "done", createdAt: 3 },
+      { id: "a-1", role: "assistant", text: "Got it again.", status: "done", createdAt: 4 },
+    ];
+    await writeFile(
+      legacy,
+      JSON.stringify({
+        sessions: {
+          [String(ref)]: {
+            model: "claude-sonnet-4-6",
+            surface: "claude",
+            claudeSessionId: "sess-abc",
+            messages,
+            nextTask: 2_000_000_005,
+          },
+          // A conversation that had fallen back to pi stays there.
+          [String(piRef)]: { surface: "pi", messages: [] },
+          // One the store no longer has is skipped.
+          "999999": { surface: "claude", messages },
+        },
+      }),
+    );
+
+    const second = await openEngine("claude-code", { storePath });
+    runtimes.push(second.runtime);
+    const expected = [
+      { id: "u-1", role: "user", text: "remember the number 42", requestId: "1" },
+      { id: "a-1", role: "assistant", text: "Got it.", status: "done" },
+    ];
+    const state = await second.runtime.readChat(ref);
+    expect(state.messages).toEqual([
+      expect.objectContaining(expected[0]),
+      expect.objectContaining(expected[1]),
+    ]);
+    await expect(stat(legacy)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(`${legacy}.imported`, "utf8")).sessions).toBeDefined();
+
+    // The next turn resumes the imported Claude session.
+    await second.runtime.configure(ref, onClaude);
+    await second.send(ref, { requestId: "r2", text: "still there?" });
+    await until(async () => {
+      const current = await second.runtime.readChat(ref);
+      return !current.busy && current.messages.at(-1)?.text === "Echo: still there?";
+    }, "the reply after the import");
+    expect(second.worker.turns).toEqual([
+      expect.objectContaining({ text: "still there?", resume: "sess-abc" }),
+    ]);
+    // The conversation that had left the plan runs on pi.
+    await second.runtime.configure(piRef, onClaude);
+    await second.send(piRef, { requestId: "p1", text: "on pi" });
+    await until(async () => {
+      const current = await second.runtime.readChat(piRef);
+      return !current.busy && current.messages.at(-1)?.text === "Echo: on pi";
+    }, "the pi reply");
+    expect(second.worker.turns).toHaveLength(1);
+    await second.runtime.close();
+
+    // Imported once: a later start finds nothing to import and no duplicate.
+    const third = await openEngine("claude-code", { storePath });
+    runtimes.push(third.runtime);
+    expect((await third.runtime.readChat(ref)).messages.map((m) => m.text)).toEqual([
+      "remember the number 42",
+      "Got it.",
+      "still there?",
+      "Echo: still there?",
+    ]);
+  }, 20_000);
+
+  it("shows a message whose turn a restart cut off as unanswered", async () => {
+    const storePath = await storeFile();
+    const first = await openEngine("claude-code", { storePath });
+    const ref = await first.runtime.createConversation(onClaude);
+    first.worker.hold();
+    await first.send(ref, { requestId: "r1", text: "hello" });
+    await until(() => first.worker.turns.length === 1, "the worker to get the turn");
+    await first.runtime.close();
+
+    const second = await openEngine("claude-code", { storePath });
+    runtimes.push(second.runtime);
+    const state = await second.runtime.readChat(ref);
+    expect(state.busy).toBe(false);
+    expect(state.messages).toEqual([
+      expect.objectContaining({
+        role: "user",
+        text: "hello",
+        status: "unanswered",
+        error: "No reply was produced for this message.",
+      }),
+    ]);
+  }, 20_000);
+
+  it("leaves a file it cannot read as it is, and says so", async () => {
+    const { storePath, ref } = await storeWithConversation();
+    const legacy = `${storePath}.claude.json`;
+    await writeFile(legacy, "{ not json");
+    const reports: unknown[] = [];
+    const second = await openEngine("claude-code", {
+      storePath,
+      onReport: (error) => reports.push(error),
+    });
+    runtimes.push(second.runtime);
+    expect((await second.runtime.readChat(ref)).messages).toEqual([]);
+    expect(await readFile(legacy, "utf8")).toBe("{ not json");
+    await expect(stat(`${legacy}.imported`)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(String(reports[0])).toMatch(/left as it is/);
+  }, 20_000);
+});
+
 describe("choosing the engine", () => {
   it("runs a Claude plan conversation on the worker, and a pi one on the harness", async () => {
     const { runtime, worker, ref, reply, config } = await setup("claude-code");
@@ -318,6 +623,9 @@ describe("choosing the engine", () => {
     await runtime.submit(ref, { requestId: "r1", text: "hi" });
     const state = await runtime.readChat(ref);
     expect(state.messages.at(-1)?.error).toMatch(/Claude plan is turned off/);
+    // Register C2: the paused turn keeps the owner's message.
+    expect(state.messages[0]).toMatchObject({ role: "user", text: "hi", requestId: "r1" });
+    expect(finishedReplyTo(state, "r1")).toMatchObject({ status: "answered" });
     expect(worker.turns).toEqual([]);
   }, 15_000);
 

@@ -8,7 +8,9 @@
   the worker now runs on the sandbox, set up by the app and reached over
   SSH; the hand-run worker behind `tailscale serve` described below is gone.
   Amended by [0014](0014-tool-gate-and-engine-seam.md): "through the approval
-  gate" is one Tool gate shared with the pi engine.
+  gate" is one Tool gate shared with the pi engine. Amended by
+  [0018](0018-claude-plan-transcripts-are-durable-entries.md): the transcript
+  is entries in the conversation's pi-durable store.
 - Date: 2026-11-02
 
 ## Context

@@ -2,7 +2,10 @@
 
 - Status: **accepted** (amends [0008](0008-claude-code-engine.md); amended by
   [0016](0016-models-are-owner-data.md): the engine comes from the model's
-  provider kind)
+  provider kind; amended by [0018](0018-claude-plan-transcripts-are-durable-entries.md):
+  the Claude plan's transcript is durable entries in the conversation, and its
+  `submit` returns on admit. Its turns and owner waits still do not survive a
+  restart)
 - Date: 2026-11-05
 
 ## Context
