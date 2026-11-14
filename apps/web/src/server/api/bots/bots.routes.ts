@@ -7,6 +7,7 @@ import { Boom } from "@groot/core/errors";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
 import * as botsService from "./bots.service";
+import * as chatsService from "./chats.service";
 import * as pastChats from "./chats.history";
 import { openSse } from "./bots.sse";
 import { followBotChat } from "./bots.stream";
@@ -144,7 +145,7 @@ router.delete("/bots/:id", async (c) => {
 router.get("/bots/:id/messages", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const query = parseQuery(c, chatHistorySchema);
-  return ok(c, await botsService.chatHistory(id, query));
+  return ok(c, await chatsService.chatHistory(id, query));
 });
 
 router.post("/bots/:id/messages", async (c) => {
@@ -156,25 +157,25 @@ router.post("/bots/:id/messages", async (c) => {
       throw Boom.notFound(`Unknown attachment "${uploadId}"`);
     }
   }
-  await botsService.sendMessage(id, payload, undefined, viewer.userId);
+  await chatsService.sendMessage(id, payload, undefined, viewer.userId);
   return ok(c, { submitted: true });
 });
 
 router.delete("/bots/:id/messages/:requestId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const requestId = parseStringParam(c.req.param("requestId"), "requestId");
-  return ok(c, await botsService.withdrawMessage(id, { requestId }));
+  return ok(c, await chatsService.withdrawMessage(id, { requestId }));
 });
 
 router.post("/bots/:id/abort", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  await botsService.abortReply(id);
+  await chatsService.abortReply(id);
   return ok(c, { aborted: true });
 });
 
 router.post("/bots/:id/reset", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  return ok(c, await botsService.resetConversation(id));
+  return ok(c, await chatsService.resetConversation(id));
 });
 
 // ── Past chats (issue #101) ───────────────────────────────────────────
@@ -201,7 +202,7 @@ router.get("/bots/:id/chats/:chatId/messages", async (c) => {
 router.post("/bots/:id/chats/:chatId/continue", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const chatId = parseStringParam(c.req.param("chatId"), "chatId");
-  return ok(c, await botsService.continuePastChat(id, chatId));
+  return ok(c, await chatsService.continuePastChat(id, chatId));
 });
 
 router.delete("/bots/:id/chats/:chatId", async (c) => {
@@ -214,7 +215,7 @@ router.post("/bots/:id/approvals/:taskId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, approvalSchema);
-  await botsService.decideApproval(id, { taskId, ...payload }, undefined, c.get("viewer"));
+  await chatsService.decideApproval(id, { taskId, ...payload }, undefined, c.get("viewer"));
   return ok(c, { decided: payload.decision });
 });
 
@@ -222,7 +223,7 @@ router.post("/bots/:id/questions/:taskId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, answerQuestionsSchema);
-  await botsService.answerQuestions(id, { taskId, answers: payload.answers ?? null });
+  await chatsService.answerQuestions(id, { taskId, answers: payload.answers ?? null });
   return ok(c, payload.answers ? { answered: true } : { dismissed: true });
 });
 
@@ -236,7 +237,7 @@ router.post("/bots/:id/pin", async (c) => {
 router.put("/bots/:id/yolo", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, yoloSchema);
-  return ok(c, await botsService.setYolo(id, payload.on, c.get("viewer").userId));
+  return ok(c, await chatsService.setYolo(id, payload.on, c.get("viewer").userId));
 });
 
 router.post("/bots/:id/read", async (c) => {

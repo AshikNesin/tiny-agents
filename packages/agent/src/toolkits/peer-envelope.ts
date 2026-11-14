@@ -1,7 +1,7 @@
 /**
  * Attribution-envelope parser for cross-bot deliveries (Grok-style UI).
  * The delivery pipeline wraps peer payloads in system provenance prefixes
- * (bots.messaging.ts, bots.relay.ts, bots.service.ts mentions); the client
+ * (bots.messaging.ts, bots.relay.ts, chats.service.ts mentions); the client
  * and list previews use this parser to render an attributed card instead of
  * the raw prefix, while the model keeps reading the raw prefix (issue #13
  * custody — sanitizePeerText guards these shapes).

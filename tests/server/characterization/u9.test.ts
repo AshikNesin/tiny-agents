@@ -11,7 +11,7 @@ import { listPastChats, readPastChat } from "../../../apps/web/src/server/api/bo
 import {
   continuePastChat,
   resetConversation,
-} from "../../../apps/web/src/server/api/bots/bots.service";
+} from "../../../apps/web/src/server/api/bots/chats.service";
 import { bots, db, routineRuns, routines } from "../../../apps/web/src/server/db";
 import { installFakeRuntime, resetAppTables, seedBot } from "../fixtures";
 
