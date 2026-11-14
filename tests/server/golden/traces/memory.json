@@ -1,0 +1,303 @@
+[
+  {
+    "http": "create a bot",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Rememberer",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "2",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "add",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/memories",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "memory": {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "text": "Prefers window seats",
+          "category": "preference",
+          "status": "active",
+          "source": "manual",
+          "confidence": null,
+          "until": null,
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      }
+    }
+  },
+  {
+    "http": "add the same text",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/memories",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "memory": {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "text": "Prefers window seats",
+          "category": "preference",
+          "status": "active",
+          "source": "manual",
+          "confidence": null,
+          "until": null,
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      }
+    }
+  },
+  {
+    "http": "add expiring",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/memories",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "memory": {
+          "id": "<id3>",
+          "botId": "<id1>",
+          "text": "In Tokyo this week",
+          "category": "fact",
+          "status": "active",
+          "source": "manual",
+          "confidence": null,
+          "until": "2026-11-01T00:00:00.000Z",
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/memories",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "memories": [
+          {
+            "id": "<id2>",
+            "botId": "<id1>",
+            "text": "Prefers window seats",
+            "category": "preference",
+            "status": "active",
+            "source": "manual",
+            "confidence": null,
+            "until": null,
+            "supersededById": null,
+            "supersededAt": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "list with archived",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/memories?includeArchived=true",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "memories": [
+          {
+            "id": "<id2>",
+            "botId": "<id1>",
+            "text": "Prefers window seats",
+            "category": "preference",
+            "status": "active",
+            "source": "manual",
+            "confidence": null,
+            "until": null,
+            "supersededById": null,
+            "supersededAt": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          },
+          {
+            "id": "<id3>",
+            "botId": "<id1>",
+            "text": "In Tokyo this week",
+            "category": "fact",
+            "status": "expired",
+            "source": "manual",
+            "confidence": null,
+            "until": "2026-11-01T00:00:00.000Z",
+            "supersededById": null,
+            "supersededAt": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "edit",
+    "method": "PATCH",
+    "path": "/api/v1/memories/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "memory": {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "text": "Prefers aisle seats",
+          "category": "preference",
+          "status": "active",
+          "source": "manual",
+          "confidence": null,
+          "until": null,
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      }
+    }
+  },
+  {
+    "http": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/memories/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "http": "restore a deleted one",
+    "method": "PATCH",
+    "path": "/api/v1/memories/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "memory": {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "text": "Prefers aisle seats",
+          "category": "preference",
+          "status": "deleted",
+          "source": "manual",
+          "confidence": null,
+          "until": null,
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      }
+    }
+  },
+  {
+    "http": "list after",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/memories?includeArchived=true",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "memories": [
+          {
+            "id": "<id3>",
+            "botId": "<id1>",
+            "text": "In Tokyo this week",
+            "category": "fact",
+            "status": "expired",
+            "source": "manual",
+            "confidence": null,
+            "until": "2026-11-01T00:00:00.000Z",
+            "supersededById": null,
+            "supersededAt": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "db": "memories",
+    "tables": {
+      "memories": [
+        {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "text": "Prefers aisle seats",
+          "category": "preference",
+          "status": "deleted",
+          "source": "manual",
+          "confidence": null,
+          "until": null,
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id3>",
+          "botId": "<id1>",
+          "text": "In Tokyo this week",
+          "category": "fact",
+          "status": "expired",
+          "source": "manual",
+          "confidence": null,
+          "until": "2026-11-01T00:00:00.000Z",
+          "supersededById": null,
+          "supersededAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  }
+]

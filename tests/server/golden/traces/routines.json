@@ -1,0 +1,535 @@
+[
+  {
+    "http": "create a bot",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Routiner",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "23",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "create with a bad schedule",
+    "method": "POST",
+    "path": "/api/v1/routines",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": {
+          "schedule.minutes": ["Interval must be at least 15 minutes"]
+        }
+      }
+    }
+  },
+  {
+    "http": "create an interval routine",
+    "method": "POST",
+    "path": "/api/v1/routines",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Hourly check",
+        "prompt": "Check the weather",
+        "schedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "scheduleDescription": "Every hour",
+        "enabled": true,
+        "nextRunAt": "2026-11-06T07:30:00.000Z",
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "nextFireTimes": [
+          "Fri, 06 Nov 2026, 13:00 IST",
+          "Fri, 06 Nov 2026, 14:00 IST",
+          "Fri, 06 Nov 2026, 15:00 IST"
+        ]
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/routines",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "botName": "Routiner",
+          "name": "Hourly check",
+          "prompt": "Check the weather",
+          "schedule": {
+            "kind": "interval",
+            "minutes": 60
+          },
+          "scheduleDescription": "Every hour",
+          "enabled": true,
+          "nextRunAt": "2026-11-06T07:30:00.000Z",
+          "done": false,
+          "blockedStreak": 0,
+          "pausedReason": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "get",
+    "method": "GET",
+    "path": "/api/v1/routines/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Hourly check",
+        "prompt": "Check the weather",
+        "schedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "scheduleDescription": "Every hour",
+        "enabled": true,
+        "nextRunAt": "2026-11-06T07:30:00.000Z",
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "pause",
+    "method": "POST",
+    "path": "/api/v1/routines/<id2>/pause",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Hourly check",
+        "prompt": "Check the weather",
+        "schedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "scheduleDescription": "Every hour",
+        "enabled": false,
+        "nextRunAt": null,
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "resume",
+    "method": "POST",
+    "path": "/api/v1/routines/<id2>/resume",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Hourly check",
+        "prompt": "Check the weather",
+        "schedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "scheduleDescription": "Every hour",
+        "enabled": true,
+        "nextRunAt": "2026-11-06T07:30:00.000Z",
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "edit",
+    "method": "PATCH",
+    "path": "/api/v1/routines/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Morning check",
+        "prompt": "Check the weather",
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 9 * * *"
+        },
+        "scheduleDescription": "At 09:00",
+        "enabled": true,
+        "nextRunAt": "2026-11-07T03:30:00.000Z",
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "nextFireTimes": [
+          "Sat, 07 Nov 2026, 09:00 IST",
+          "Sun, 08 Nov 2026, 09:00 IST",
+          "Mon, 09 Nov 2026, 09:00 IST"
+        ]
+      }
+    }
+  },
+  {
+    "http": "run now",
+    "method": "POST",
+    "path": "/api/v1/routines/<id2>/run",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "runId": "<id3>"
+      }
+    }
+  },
+  {
+    "note": "tick after run now",
+    "value": {
+      "scheduled": 0,
+      "claimed": 0,
+      "completed": 0,
+      "retried": 0,
+      "failed": 0
+    }
+  },
+  {
+    "http": "runs",
+    "method": "GET",
+    "path": "/api/v1/routines/<id2>/runs",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "runs": [
+          {
+            "id": "<id3>",
+            "routineId": "<id2>",
+            "scheduledFor": "2026-11-06T06:30:00.000Z",
+            "status": "succeeded",
+            "trigger": "manual",
+            "requestId": "routine:<id2>:2026-11-06T06:30:00.000Z",
+            "submittedAt": "2026-11-06T06:30:00.000Z",
+            "startedAt": "2026-11-06T06:30:00.000Z",
+            "finishedAt": "2026-11-06T06:30:00.000Z",
+            "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
+            "error": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "create a once routine in a minute",
+    "method": "POST",
+    "path": "/api/v1/routines",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id4>",
+        "botId": "<id1>",
+        "botName": "Routiner",
+        "name": "Soon",
+        "prompt": "Say good morning",
+        "schedule": {
+          "kind": "once",
+          "at": "2026-11-06T06:31:00.000Z"
+        },
+        "scheduleDescription": "Once, Fri, 06 Nov 2026, 12:01 IST",
+        "enabled": true,
+        "nextRunAt": "2026-11-06T06:31:00.000Z",
+        "done": false,
+        "blockedStreak": 0,
+        "pausedReason": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "nextFireTimes": ["Fri, 06 Nov 2026, 12:01 IST"]
+      }
+    }
+  },
+  {
+    "note": "tick",
+    "value": {
+      "scheduled": 0,
+      "claimed": 1,
+      "completed": 1,
+      "retried": 0,
+      "failed": 0
+    }
+  },
+  {
+    "http": "scheduled runs",
+    "method": "GET",
+    "path": "/api/v1/routines/<id4>/runs",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "runs": [
+          {
+            "id": "<id5>",
+            "routineId": "<id4>",
+            "scheduledFor": "2026-11-06T06:31:00.000Z",
+            "status": "succeeded",
+            "trigger": "schedule",
+            "requestId": "routine:<id4>:2026-11-06T06:31:00.000Z",
+            "submittedAt": "2026-11-06T06:32:00.000Z",
+            "startedAt": "2026-11-06T06:32:00.000Z",
+            "finishedAt": "2026-11-06T06:32:00.000Z",
+            "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
+            "error": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "recent runs",
+    "method": "GET",
+    "path": "/api/v1/routines/runs/recent?limit=10",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "runs": [
+          {
+            "id": "<id5>",
+            "routineId": "<id4>",
+            "scheduledFor": "2026-11-06T06:31:00.000Z",
+            "status": "succeeded",
+            "trigger": "schedule",
+            "requestId": "routine:<id4>:2026-11-06T06:31:00.000Z",
+            "submittedAt": "2026-11-06T06:32:00.000Z",
+            "startedAt": "2026-11-06T06:32:00.000Z",
+            "finishedAt": "2026-11-06T06:32:00.000Z",
+            "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
+            "error": null,
+            "routineName": "Soon",
+            "botName": "Routiner"
+          },
+          {
+            "id": "<id3>",
+            "routineId": "<id2>",
+            "scheduledFor": "2026-11-06T06:30:00.000Z",
+            "status": "succeeded",
+            "trigger": "manual",
+            "requestId": "routine:<id2>:2026-11-06T06:30:00.000Z",
+            "submittedAt": "2026-11-06T06:30:00.000Z",
+            "startedAt": "2026-11-06T06:30:00.000Z",
+            "finishedAt": "2026-11-06T06:30:00.000Z",
+            "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
+            "error": null,
+            "routineName": "Morning check",
+            "botName": "Routiner"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "list after the runs",
+    "method": "GET",
+    "path": "/api/v1/routines",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "botName": "Routiner",
+          "name": "Morning check",
+          "prompt": "Check the weather",
+          "schedule": {
+            "kind": "cron",
+            "expr": "0 9 * * *"
+          },
+          "scheduleDescription": "At 09:00",
+          "enabled": true,
+          "nextRunAt": "2026-11-07T03:30:00.000Z",
+          "done": false,
+          "blockedStreak": 0,
+          "pausedReason": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id4>",
+          "botId": "<id1>",
+          "botName": "Routiner",
+          "name": "Soon",
+          "prompt": "Say good morning",
+          "schedule": {
+            "kind": "once",
+            "at": "2026-11-06T06:31:00.000Z"
+          },
+          "scheduleDescription": "Once, Fri, 06 Nov 2026, 12:01 IST",
+          "enabled": false,
+          "nextRunAt": null,
+          "done": false,
+          "blockedStreak": 0,
+          "pausedReason": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:32:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "db": "routines",
+    "tables": {
+      "routines": [
+        {
+          "id": "<id2>",
+          "botId": "<id1>",
+          "name": "Morning check",
+          "prompt": "Check the weather",
+          "schedule": {
+            "kind": "cron",
+            "expr": "0 9 * * *"
+          },
+          "enabled": true,
+          "nextRunAt": "2026-11-07T03:30:00.000Z",
+          "pendingJobId": "<id6>",
+          "sourceKey": null,
+          "conversationId": "30",
+          "blockedStreak": 0,
+          "pausedReason": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id4>",
+          "botId": "<id1>",
+          "name": "Soon",
+          "prompt": "Say good morning",
+          "schedule": {
+            "kind": "once",
+            "at": "2026-11-06T06:31:00.000Z"
+          },
+          "enabled": false,
+          "nextRunAt": null,
+          "pendingJobId": null,
+          "sourceKey": null,
+          "conversationId": "42",
+          "blockedStreak": 0,
+          "pausedReason": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:32:00.000Z"
+        }
+      ],
+      "routine_runs": [
+        {
+          "id": "<id3>",
+          "routineId": "<id2>",
+          "scheduledFor": "2026-11-06T06:30:00.000Z",
+          "status": "succeeded",
+          "trigger": "manual",
+          "requestId": "routine:<id2>:2026-11-06T06:30:00.000Z",
+          "submittedAt": "2026-11-06T06:30:00.000Z",
+          "startedAt": "2026-11-06T06:30:00.000Z",
+          "finishedAt": "2026-11-06T06:30:00.000Z",
+          "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
+          "error": null
+        },
+        {
+          "id": "<id5>",
+          "routineId": "<id4>",
+          "scheduledFor": "2026-11-06T06:31:00.000Z",
+          "status": "succeeded",
+          "trigger": "schedule",
+          "requestId": "routine:<id4>:2026-11-06T06:31:00.000Z",
+          "submittedAt": "2026-11-06T06:32:00.000Z",
+          "startedAt": "2026-11-06T06:32:00.000Z",
+          "finishedAt": "2026-11-06T06:32:00.000Z",
+          "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
+          "error": null
+        }
+      ]
+    }
+  },
+  {
+    "http": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/routines/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "http": "get deleted",
+    "method": "GET",
+    "path": "/api/v1/routines/<id2>",
+    "status": 404,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "NOT_FOUND",
+        "message": "Routine not found"
+      }
+    }
+  }
+]
