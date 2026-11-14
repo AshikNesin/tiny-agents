@@ -16,7 +16,7 @@ Every bot has every tool, and the owner sets each one to Allow (runs unattended)
 
 ## How to get to it (user POV)
 
-- A bot's chat → header button `Edit <bot>` (or the sidebar row's `<bot> actions` → `Edit bot`) → tab `Tools` → `Save changes`.
+- A bot's chat → header `<bot> menu` → `Bot settings` (or the sidebar row's `<bot> actions` → `Edit bot`) → tab `Tools` → `Save changes`.
 - The card appears in the chat whenever the bot calls an Ask tool.
 
 ## Driving it with ta-verify

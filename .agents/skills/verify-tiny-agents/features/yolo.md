@@ -5,16 +5,16 @@ In a bot's chat the owner can switch on YOLO mode: tool calls that would show an
 ## Sub-features
 
 - `yolo-confirm` dialog `Turn on YOLO mode?` with `Cancel` / `Turn on`.
-- `yolo-state` header button `data-testid=yolo-toggle` (`aria-pressed`, name `Turn on YOLO mode` / `Turn off YOLO mode`) and banner `data-testid=yolo-banner` (`YOLO on — tools run without asking (vault items still ask)`).
+- `yolo-state` bot menu (header `<bot> menu`) row `data-testid=yolo-toggle` (`menuitemcheckbox`, `aria-checked`, `YOLO mode`) and banner `data-testid=yolo-banner` (`YOLO on: tools run without asking (vault items still ask)`).
 - `yolo-persist` the switch is server-side per chat: kept across reloads.
 - `yolo-run` an Ask (always) call runs without a card; its row reads `auto-approved (YOLO)`.
 - `yolo-waiting` switching on approves a card that is already waiting.
-- `yolo-off` banner `Turn off` (or the header button) brings cards back.
+- `yolo-off` banner `Turn off` (or the bot menu's `YOLO mode` row) brings cards back.
 - `yolo-new-chat` New chat starts with YOLO off.
 
 ## How to get to it (user POV)
 
-- A bot's chat → header lightning button (title `YOLO mode: run tools in this chat without asking`). Owners only; guests do not see it.
+- A bot's chat → header `<bot> menu` (the bot's name) → `YOLO mode`. Owners only; guests have no bot menu.
 
 ## Driving it with ta-verify
 

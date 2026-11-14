@@ -12,13 +12,13 @@ The owner watches and uses the bots' XFCE desktops on the sandbox from `/compute
 - `computer-keys` `Keys` menu (`Send to the desktop`): Applications menu, Run a program, Open a terminal, Switch windows, Close window, Close tab, Escape, Super.
 - `computer-fullscreen` `Full screen` / `Exit full screen`.
 - `computer-reset` `Reset desktop` → alertdialog `Reset the <label> desktop?` → `Reset`; toast `Desktop reset; it starts fresh next time.`
-- `computer-panel` the chat's `computer-toggle` opens the Computer panel (`Take control`, `Release control`, `Open the Computer page`, `Close computer panel`).
+- `computer-panel` the chat's `live-view-toggle`, then tab `Computer` (`live-view-tab-computer`), opens the Computer panel (`Take control`, `Release control`, `Open the Computer page`, `Close computer panel`).
 - Not driven: `Paste from your clipboard` (needs clipboard permission), a bot's `computer_*` tools and its takeover request (`Needs you`, "A bot asked you:"): the faux model cannot call `computer_*` tools, so the agent side and the takeover card are unreachable here.
 
 ## How to get to it (user POV)
 
 - Sidebar navigation `Primary` → `Computer` (`/computer`).
-- From a chat: header button `Open computer panel` (shown when the server has a sandbox).
+- From a chat: header button `Open live view`, then the panel's `Computer` tab (shown when the server has a sandbox). Journeys call `showLiveView(page, "computer")` from `scripts/lib.mjs`.
 - Without a sandbox the page shows `No computer on this server`.
 
 ## Driving it with ta-verify
@@ -35,7 +35,7 @@ Preconditions:
 - **Keys.** `computer-keys` → menuitem `Open a terminal`: the socket sends ≥6 key events (RFB type 4, or QEMU extended type 255/0) and a new `terminal` window shows in `wmctrl -l -x`.
 - **Release.** `Release control` → `Take control` back, Apps disabled, driver not `human`.
 - **Full screen.** `document.fullscreenElement` is `computer-region`; leave via `exitFullscreen()`.
-- **Chat panel.** `/chats/<botId>` → `computer-toggle`: `computer-panel` streams over `/api/v1/bots/<id>/computer/vnc`; `Take control` → `computer-driver` reads `You drive`; `Release control`; `Close computer panel`.
+- **Chat panel.** `/chats/<botId>` → `live-view-toggle` → tab `Computer`: `computer-panel` streams over `/api/v1/bots/<id>/computer/vnc`; `Take control` → `computer-driver` reads `You drive`; `Release control`; `Close computer panel`.
 - **Reset.** `/computer` → `Reset desktop` → `Reset the Shared desktop?` → `Reset`: toast, `Start desktop` returns, API `active: false`, no `Xtigervnc` left on the VM.
 - **Proof.** `ta-verify drive $S/journeys/computer.mjs` → `computer/open`, `live-view-only`, `app-opened`, `keys-terminal`, `chat-panel`, `reset`.
 

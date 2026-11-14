@@ -97,7 +97,7 @@ await journey("memory", async ({ page, step, proof, cleanup, api, stamp }) => {
     await expect(
       section.getByRole("switch", { name: `Turn on memory for ${name}` }),
     ).toHaveAttribute("aria-checked", "false");
-    await expect(section.getByText(/Off — this bot no longer learns from chats/)).toBeVisible();
+    await expect(section.getByText(/Off\. This bot no longer learns from chats/)).toBeVisible();
     await expect.poll(async () => (await api.get(`/bots/${botId}`)).memoryEnabled).toBe(false);
     await page.reload();
     await expect(

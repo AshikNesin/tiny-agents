@@ -125,7 +125,7 @@ export function ChatWorkspace() {
               <div>
                 <h2 className="text-lg font-semibold">Create your first bot</h2>
                 <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-                  Every contact here is an AI agent you chat with — pick a persona and a model, and
+                  Every contact here is an AI agent you chat with. Pick a persona and a model, and
                   it remembers the whole conversation.
                 </p>
               </div>

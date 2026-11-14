@@ -13,7 +13,7 @@ A long conversation opens on its newest messages only. When the owner scrolls up
 ## How to get to it (user POV)
 
 - Any bot's chat with more than 60 messages (`/chats/<botId>`): scroll the transcript up.
-- A past chat with more than 60 messages: header `Chat history` → the chat → scroll up.
+- A past chat with more than 60 messages: header `<bot> menu` → `Chat history` → the chat → scroll up.
 
 ## Driving it with ta-verify
 

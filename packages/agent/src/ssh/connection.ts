@@ -101,7 +101,7 @@ async function verifyHostKey(store: HostKeyStore, host: string, raw: Buffer): Pr
   if (known !== hash) {
     throw new HostKeyChangedError(
       `Sandbox host key changed for ${host} (pinned ${known}, now ${hash}). ` +
-        "Either the VM was reinstalled — clear the pinned key — or the endpoint is being intercepted.",
+        "Either the VM was reinstalled (clear the pinned key) or the endpoint is being intercepted.",
     );
   }
 }

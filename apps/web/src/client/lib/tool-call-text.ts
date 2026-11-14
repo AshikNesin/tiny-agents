@@ -157,7 +157,7 @@ export function approvalText(
   const summary = argSummary(call);
   const payload = approvalPayload(call);
   return {
-    title: `${botName} wants to ${ask}${summary ? ` — “${summary}”` : ""}`,
+    title: `${botName} wants to ${ask}${summary ? `: “${summary}”` : ""}`,
     alwaysAllowHint: `Approve, and let ${botName} ${ask} without asking`,
     ...(call.name === "create_bot" ? { facts: newBotFacts(call.args ?? {}) } : {}),
     ...(payload.length > PAYLOAD_FOLD ? { foldedPayload: payload } : {}),

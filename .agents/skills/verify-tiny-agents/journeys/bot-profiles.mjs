@@ -6,7 +6,7 @@
 // the status API (`profile: "own"`), the Browser/Computer pages' `bot-<id>` entries and
 // read-backs on the VM (Chrome's --user-data-dir, the desktop's profile directory).
 import { execFileSync } from "node:child_process";
-import { journey, expect } from "../scripts/lib.mjs";
+import { journey, expect, showLiveView } from "../scripts/lib.mjs";
 
 // The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
 const LOADED = { waitUntil: "domcontentloaded" };
@@ -98,7 +98,8 @@ await journey(
     // ---- bot settings: its own browser profile ---------------------------------
     await step("bot settings: Tools → Browser → Browser profile → Own, save", async () => {
       await page.goto(`/chats/${botId}`, LOADED);
-      await page.getByRole("button", { name: `Edit ${name}` }).click();
+      await page.getByRole("button", { name: `${name} menu` }).click();
+      await page.getByRole("menuitem", { name: "Bot settings" }).click();
       const dialog = page.getByRole("dialog", { name: `Edit ${name}` });
       await dialog.getByRole("tab", { name: "Tools" }).click();
       const group = dialog.getByRole("button", { name: /^Browser\s*\d+ tools?/ });
@@ -121,7 +122,8 @@ await journey(
       expect((await pageDesktop(profile))?.active).toBe(false);
       // Reopen the dialog: the choice persisted.
       await page.reload(LOADED);
-      await page.getByRole("button", { name: `Edit ${name}` }).click();
+      await page.getByRole("button", { name: `${name} menu` }).click();
+      await page.getByRole("menuitem", { name: "Bot settings" }).click();
       const dialog = page.getByRole("dialog", { name: `Edit ${name}` });
       await dialog.getByRole("tab", { name: "Tools" }).click();
       const group = dialog.getByRole("button", { name: /^Browser\s*\d+ tools?/ });
@@ -139,7 +141,7 @@ await journey(
     const browserPanel = page.getByTestId("browser-panel");
     await step("chat Browser panel: Open browser starts the bot's own Chrome", async () => {
       expect(procs(`browser-profiles/${profile}`)).toBe(0);
-      await page.getByTestId("browser-toggle").click();
+      await showLiveView(page, "browser");
       await expect(browserPanel).toBeVisible();
       await expect(browserPanel.getByText("No browser is open.")).toBeVisible({ timeout: 20_000 });
       const started = page.waitForResponse(
@@ -184,7 +186,7 @@ await journey(
       async () => {
         await page.goto(`/chats/${botId}`, LOADED);
         if (!(await browserPanel.isVisible().catch(() => false)))
-          await page.getByTestId("browser-toggle").click();
+          await showLiveView(page, "browser");
         await expect(browserPanel).toContainText("Live", { timeout: 60_000 });
         const reset = page.waitForResponse(
           (r) =>
@@ -220,7 +222,7 @@ await journey(
       ". ~/.tiny-agents/computer-profiles/shared/.desktop-env 2>/dev/null && echo up || echo off",
     ).trim();
     await step("chat Computer panel: Open computer starts the bot's own desktop", async () => {
-      await page.getByTestId("computer-toggle").click();
+      await showLiveView(page, "computer");
       await expect(computerPanel).toBeVisible();
       await expect(computerPanel.getByText("The computer is off.")).toBeVisible({
         timeout: 20_000,
@@ -277,7 +279,7 @@ await journey(
       async () => {
         await page.goto(`/chats/${botId}`, LOADED);
         if (!(await computerPanel.isVisible().catch(() => false)))
-          await page.getByTestId("computer-toggle").click();
+          await showLiveView(page, "computer");
         await expect(computerPanel.getByTestId("computer-driver")).toBeVisible({ timeout: 60_000 });
         const reset = page.waitForResponse(
           (r) =>
@@ -304,12 +306,12 @@ await journey(
 
     // ---- deleting the bot releases what it owned ------------------------------------
     await step("open the bot's browser and desktop again", async () => {
-      await page.getByTestId("browser-toggle").click();
+      await showLiveView(page, "browser");
       await browserPanel.getByRole("button", { name: "Open browser" }).click();
       await expect
         .poll(async () => (await browserStatus()).active, { timeout: 120_000 })
         .toBe(true);
-      await page.getByTestId("computer-toggle").click();
+      await showLiveView(page, "computer");
       await computerPanel.getByRole("button", { name: "Open computer" }).click();
       await expect
         .poll(async () => (await computerStatus()).active, { timeout: 120_000 })
@@ -318,7 +320,8 @@ await journey(
       expect(exists(`${desktopDir}/.desktop-env`)).toBe(true);
     });
     await step("bot settings → Delete bot removes the bot", async () => {
-      await page.getByRole("button", { name: `Edit ${name}` }).click();
+      await page.getByRole("button", { name: `${name} menu` }).click();
+      await page.getByRole("menuitem", { name: "Bot settings" }).click();
       const dialog = page.getByRole("dialog", { name: `Edit ${name}` });
       await dialog.getByRole("button", { name: "Delete bot" }).click();
       await expect(dialog.getByText(`Delete ${name}? This cannot be undone.`)).toBeVisible();

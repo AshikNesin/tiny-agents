@@ -1,5 +1,5 @@
 // Feature: past-chats (features/past-chats.md). Titles + counts in Chat history,
-// the empty-history toast, opening from the sidebar row menu, Continue (footer and
+// the empty history page of the bot menu, opening from the sidebar row menu, Continue (footer and
 // actions menu), Back to current chat, and Delete chat with its confirmation.
 // New chat itself and the read-only view are proven by chats.mjs.
 import { journey, expect } from "../scripts/lib.mjs";
@@ -43,22 +43,36 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
     await expect(composer).toBeVisible({ timeout: 15_000 });
   });
 
-  await step("no past chats yet: header has no Chat history, the row menu says so", async () => {
-    await expect(page.getByRole("button", { name: "Chat history" })).toHaveCount(0);
-    const row = page.getByRole("region", { name: "Bots" }).locator("li").filter({ hasText: name });
-    await row.hover();
-    await page.getByRole("button", { name: `${name} actions` }).click();
-    await page.getByRole("menuitem", { name: "Chat history" }).click();
-    await expect(
-      page.getByText("No past chats yet. Starting a new chat keeps this one here."),
-    ).toBeVisible();
-  });
+  await step(
+    "no past chats yet: the bot menu's history page says so, from the row menu too",
+    async () => {
+      await page.getByRole("button", { name: `${name} menu` }).click();
+      await page.getByRole("menuitem", { name: "Chat history" }).click();
+      await expect(
+        page.getByText("No past chats yet. Starting a new chat keeps this one here."),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      const row = page
+        .getByRole("region", { name: "Bots" })
+        .locator("li")
+        .filter({ hasText: name });
+      await row.hover();
+      await page.getByRole("button", { name: `${name} actions` }).click();
+      await page.getByRole("menuitem", { name: "Chat history" }).click();
+      await expect(
+        page.getByText("No past chats yet. Starting a new chat keeps this one here."),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("menu")).toHaveCount(0);
+    },
+  );
 
   await step("chat, then New chat: the old chat is listed under its first message", async () => {
     await say(first);
     await newChat();
     await expect(page.getByText(`Echo: ${first}`)).toHaveCount(0);
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     const item = items.filter({ hasText: first });
     await expect(item).toHaveCount(1);
     // Faux mode makes no title side-call: the title is the first owner message.
@@ -82,7 +96,8 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
   });
 
   await step("Continue this chat (footer): live again on the old conversation", async () => {
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     await items.filter({ hasText: first }).click();
     await expect(page.getByTestId("past-chat-footer")).toBeVisible();
     await page
@@ -112,7 +127,7 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
     await row.hover();
     await page.getByRole("button", { name: `${name} actions` }).click();
     await page.getByRole("menuitem", { name: "Chat history" }).click();
-    // The history menu opens itself.
+    // The bot menu opens itself on its history page.
     await expect(items).toHaveCount(2);
     await items.filter({ hasText: third }).click();
     await expect(echo(third)).toBeVisible({ timeout: 15_000 });
@@ -125,7 +140,8 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
   });
 
   await step("delete a past chat through the confirmation", async () => {
-    await page.getByRole("button", { name: "Chat history" }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
     await items.filter({ hasText: first }).click();
     await expect(echo(second)).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Past chat actions" }).click();
@@ -140,8 +156,11 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
     await expect(page.getByText("Chat deleted")).toBeVisible();
     await expect(page).not.toHaveURL(/\/history\//);
     expect(await pastChats()).toHaveLength(0);
-    // Nothing left to list: the header button is gone again.
-    await expect(page.getByRole("button", { name: "Chat history" })).toHaveCount(0);
+    // Nothing left to list: the bot menu's history page is empty again.
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Chat history" }).click();
+    await expect(page.getByText(/^No past chats yet/)).toBeVisible();
+    await expect(items).toHaveCount(0);
   });
   await proof("deleted");
 });

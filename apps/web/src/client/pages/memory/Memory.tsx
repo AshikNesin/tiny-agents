@@ -337,7 +337,7 @@ function BotMemorySection({
       </div>
       {!memoryEnabled && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Off — this bot no longer learns from chats or uses what it knows.
+          Off. This bot no longer learns from chats or uses what it knows.
         </p>
       )}
       <div className="mt-3 space-y-4">

@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
-  ChevronDown,
-  Cpu,
   Globe,
   Menu,
-  Monitor,
+  MonitorPlay,
   Paperclip,
   SquarePen,
   Users,
@@ -30,9 +28,9 @@ import { useChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
 import { useIsGuest } from "../store/people";
 import { BotAvatar } from "./BotAvatar";
+import { BotMenu, type BotMenuView } from "./BotMenu";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
-import { ChatHistoryMenu } from "./ChatHistoryMenu";
 import { TypingIndicator } from "./ui/transcript-parts";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { Transcript, type TranscriptPages } from "./Transcript";
@@ -112,12 +110,12 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const [confirmYolo, setConfirmYolo] = useState(false);
   // A guest (issue #145) chats; settings, New chat and Chat history stay the owner's.
   const guest = useIsGuest();
-  // `?history=1` (the sidebar row's "Chat history") opens the history menu.
+  // `?history=1` (the sidebar row's "Chat history") opens the bot menu on its history page.
   const [searchParams, setSearchParams] = useSearchParams();
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [menuView, setMenuView] = useState<BotMenuView>(null);
   useEffect(() => {
     if (searchParams.get("history") !== "1") return;
-    setHistoryOpen(true);
+    setMenuView("history");
     const next = new URLSearchParams(searchParams);
     next.delete("history");
     setSearchParams(next, { replace: true });
@@ -187,10 +185,38 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   }, [bot.id]);
   const showBrowser = browser.open && (!computer.open || front === "browser");
   const showComputer = computer.open && (!browser.open || front === "computer");
-  const toggleBrowser = () =>
-    browser.open && !showBrowser ? setFront("browser") : browser.toggle();
-  const toggleComputer = () =>
-    computer.open && !showComputer ? setFront("computer") : computer.toggle();
+  // One header button for both live views; with a computer, tabs in the
+  // panel switch between them.
+  const hasComputer = computerConfigured || computer.open || computerActive;
+  const liveShown = showBrowser || showComputer;
+  const liveBusy = (browserActive && !showBrowser) || (computerActive && !showComputer);
+  const closeLive = () => {
+    if (browser.open) browser.close();
+    if (computer.open) computer.close();
+  };
+  const toggleLive = () => {
+    if (liveShown) closeLive();
+    // Open what the bot is using, else the view last in front.
+    else if (hasComputer && !browserActive && (computerActive || front === "computer"))
+      computer.show();
+    else browser.show();
+  };
+  const liveLabel = liveShown
+    ? "Close live view"
+    : browserActive
+      ? `Open live view, ${bot.name} is using the browser`
+      : computerActive
+        ? `Open live view, ${bot.name} is using the computer`
+        : "Open live view";
+  const liveTabs = hasComputer ? (
+    <LiveViewTabs
+      front={showComputer ? "computer" : "browser"}
+      browserBusy={browserActive && !showBrowser}
+      computerBusy={computerActive && !showComputer}
+      onBrowser={browser.show}
+      onComputer={computer.show}
+    />
+  ) : undefined;
   // "Open computer" on a takeover card in the transcript.
   const showComputerPanel = computer.show;
   useEffect(() => {
@@ -301,9 +327,9 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
             Drop files to attach
           </div>
         )}
-        {/* Header: one line, as on the Code page — the bot's name (opens its
-            settings), what it runs on, then the live views and the chat's
-            actions as quiet icons. */}
+        {/* Header: one line — the bot's name (its menu: settings, Chat
+            history, YOLO), then two quiet icons: the live view and New chat.
+            The model is the composer's chip, not repeated here. */}
         <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
           <Button
             variant="ghost"
@@ -314,20 +340,26 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           >
             <Menu />
           </Button>
-          {/* The page's heading is the bot's name; the name opens its settings. */}
+          {/* The page's heading is the bot's name; for the owner it opens the bot menu. */}
           <h1 className="flex min-w-0 items-center text-sm">
-            <button
-              type="button"
-              onClick={guest ? undefined : onEditBot}
-              disabled={guest}
-              className="text-foreground enabled:hover:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3 disabled:cursor-default"
-              aria-label={guest ? bot.name : `Edit ${bot.name}`}
-              title={guest ? undefined : "Bot settings"}
-            >
-              <BotAvatar name={bot.name} className="size-5" />
-              <span className="truncate">{bot.name}</span>
-              {!guest && <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />}
-            </button>
+            {guest ? (
+              <span
+                className="text-foreground flex h-8 min-w-0 items-center gap-2 px-2 font-medium"
+                title={bot.description || undefined}
+              >
+                <BotAvatar name={bot.name} className="size-5" />
+                <span className="truncate">{bot.name}</span>
+              </span>
+            ) : (
+              <BotMenu
+                bot={bot}
+                view={menuView}
+                onViewChange={setMenuView}
+                onEditBot={onEditBot}
+                yolo={yolo}
+                onYoloChange={(on) => (on ? setConfirmYolo(true) : void setYolo(false))}
+              />
+            )}
             {(bot.guestIds?.length ?? 0) > 0 && (
               <span
                 className="text-muted-foreground flex items-center gap-1 px-1 text-xs"
@@ -338,112 +370,29 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
               </span>
             )}
           </h1>
-          {(bot.description || model) && (
-            <span className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-2 overflow-hidden text-xs lg:flex">
-              {bot.description && <span className="truncate">{bot.description}</span>}
-              {bot.description && model && (
-                <span className="text-muted-foreground/60" aria-hidden>
-                  ·
-                </span>
-              )}
-              {model && (
-                <span className="flex shrink-0 items-center gap-1" title={model.providerName}>
-                  <Cpu className="size-3.5 shrink-0" />
-                  {model.name}
-                </span>
-              )}
-            </span>
-          )}
           <span className="min-w-2 flex-1" />
           <div className="flex shrink-0 items-center gap-0.5">
             <Button
               variant="ghost"
               size="icon-sm"
               className={`text-muted-foreground hover:text-foreground relative ${
-                showBrowser ? "bg-accent text-foreground" : ""
+                liveShown ? "bg-accent text-foreground" : ""
               }`}
-              onClick={toggleBrowser}
-              aria-label={
-                showBrowser
-                  ? "Close browser panel"
-                  : browserActive
-                    ? `Open browser panel, ${bot.name} is using the browser`
-                    : "Open browser panel"
-              }
-              aria-pressed={showBrowser}
-              title={browserActive && !showBrowser ? `${bot.name} is using the browser` : "Browser"}
-              data-testid="browser-toggle"
+              onClick={toggleLive}
+              aria-label={liveLabel}
+              aria-pressed={liveShown}
+              title={liveBusy ? liveLabel.replace("Open live view, ", "") : "Live view"}
+              data-testid="live-view-toggle"
             >
-              <Globe className="size-4" />
-              {browserActive && !showBrowser && (
+              {hasComputer ? <MonitorPlay className="size-4" /> : <Globe className="size-4" />}
+              {liveBusy && (
                 <span
                   className="bg-success absolute top-1 right-1 size-1.5 animate-pulse rounded-full"
                   aria-hidden
-                  data-testid="browser-activity"
+                  data-testid="live-view-activity"
                 />
               )}
             </Button>
-            {(computerConfigured || computer.open || computerActive) && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={`text-muted-foreground hover:text-foreground relative ${
-                  showComputer ? "bg-accent text-foreground" : ""
-                }`}
-                onClick={toggleComputer}
-                aria-label={
-                  showComputer
-                    ? "Close computer panel"
-                    : computerActive
-                      ? `Open computer panel, ${bot.name} is using the computer`
-                      : "Open computer panel"
-                }
-                aria-pressed={showComputer}
-                title={
-                  computerActive && !showComputer ? `${bot.name} is using the computer` : "Computer"
-                }
-                data-testid="computer-toggle"
-              >
-                <Monitor className="size-4" />
-                {computerActive && !showComputer && (
-                  <span
-                    className="bg-success absolute top-1 right-1 size-1.5 animate-pulse rounded-full"
-                    aria-hidden
-                    data-testid="computer-activity"
-                  />
-                )}
-              </Button>
-            )}
-            {!guest && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={
-                  yolo
-                    ? "bg-warning/15 text-warning hover:text-warning"
-                    : "text-muted-foreground hover:text-foreground"
-                }
-                onClick={() => (yolo ? void setYolo(false) : setConfirmYolo(true))}
-                aria-label={yolo ? "Turn off YOLO mode" : "Turn on YOLO mode"}
-                aria-pressed={yolo}
-                title={
-                  yolo
-                    ? "YOLO mode is on: tools run without asking (vault still asks)"
-                    : "YOLO mode: run tools in this chat without asking"
-                }
-                data-testid="yolo-toggle"
-              >
-                <Zap className="size-4" />
-              </Button>
-            )}
-            {!guest && (
-              <ChatHistoryMenu
-                botId={bot.id}
-                conversationId={bot.conversationId}
-                open={historyOpen}
-                onOpenChange={setHistoryOpen}
-              />
-            )}
             {!guest && (
               <Button
                 variant="ghost"
@@ -569,7 +518,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
             <span className="bg-warning/10 text-warning flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1.5">
               <Zap className="size-3.5 shrink-0" aria-hidden />
               <span className="truncate">
-                YOLO on — tools run without asking (vault items still ask)
+                YOLO on: tools run without asking (vault items still ask)
               </span>
             </span>
             {!guest && (
@@ -595,9 +544,9 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
       </div>
       {/* Browser live view (issue #24): beside the conversation on desktop,
           full-screen overlay on mobile. */}
-      {showBrowser && <BrowserPanel bot={bot} onClose={browser.close} />}
+      {showBrowser && <BrowserPanel bot={bot} onClose={closeLive} tabs={liveTabs} />}
       {/* Computer live view (issue #108): same place, one panel at a time. */}
-      {showComputer && <ComputerPanel bot={bot} onClose={computer.close} />}
+      {showComputer && <ComputerPanel bot={bot} onClose={closeLive} tabs={liveTabs} />}
 
       {/* Confirmations */}
       <Dialog open={confirmYolo} onOpenChange={setConfirmYolo}>
@@ -635,6 +584,52 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * The live view's switch between the bot's browser and its computer, in the
+ * open panel's title. A dot marks the one the bot is using out of sight.
+ */
+function LiveViewTabs({
+  front,
+  browserBusy,
+  computerBusy,
+  onBrowser,
+  onComputer,
+}: {
+  front: "browser" | "computer";
+  browserBusy: boolean;
+  computerBusy: boolean;
+  onBrowser: () => void;
+  onComputer: () => void;
+}) {
+  const tab = (key: "browser" | "computer", label: string, busy: boolean, onClick: () => void) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={front === key}
+      onClick={onClick}
+      className="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+      data-testid={`live-view-tab-${key}`}
+    >
+      {label}
+      {busy && (
+        <>
+          <span
+            className="bg-success absolute top-0.5 right-0.5 size-1.5 animate-pulse rounded-full"
+            aria-hidden
+          />
+          <span className="sr-only">, in use</span>
+        </>
+      )}
+    </button>
+  );
+  return (
+    <div role="tablist" aria-label="Live view" className="bg-muted inline-flex rounded-lg p-0.5">
+      {tab("browser", "Browser", browserBusy, onBrowser)}
+      {tab("computer", "Computer", computerBusy, onComputer)}
     </div>
   );
 }

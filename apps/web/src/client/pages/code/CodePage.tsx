@@ -162,7 +162,7 @@ export function CodePage() {
             <TriangleAlert className="size-3.5" />
           )}
           {h.status.state === "reconnecting"
-            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""} — retrying…`
+            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}}, retrying…`
             : h.status.state === "connecting"
               ? `Connecting to ${h.label}…`
               : `${h.label}: ${h.status.detail ?? "not ready"}`}

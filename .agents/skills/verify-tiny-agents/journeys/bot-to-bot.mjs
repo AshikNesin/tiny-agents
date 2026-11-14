@@ -69,7 +69,7 @@ await journey("bot-to-bot", async ({ page, step, proof, cleanup, api, stamp }) =
       .getByRole("link", { name: new RegExp(`^${peer}`) })
       .first()
       .click();
-    await expect(page.getByRole("button", { name: `Edit ${peer}` })).toBeVisible({
+    await expect(page.getByRole("button", { name: `${peer} menu` })).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByText(`You · in ${host}'s chat`).first()).toBeVisible({

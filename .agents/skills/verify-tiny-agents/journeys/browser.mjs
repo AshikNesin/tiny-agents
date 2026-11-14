@@ -4,7 +4,7 @@
 // desktop and on a 390x844 phone. Live views are canvas: proof is the VNC socket
 // (RFB handshake + framebuffer bytes), ARIA state and a read-back of Chrome on the VM.
 import { execFileSync } from "node:child_process";
-import { journey, expect } from "../scripts/lib.mjs";
+import { journey, expect, showLiveView } from "../scripts/lib.mjs";
 
 // The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
 const LOADED = { waitUntil: "domcontentloaded" };
@@ -134,7 +134,6 @@ await journey(
     // ---- chat Browser panel, desktop ---------------------------------------
     const composer = page.getByPlaceholder(new RegExp(`(?:ask|message) ${name}`, "i"));
     const panel = page.getByTestId("browser-panel");
-    const toggle = page.getByTestId("browser-toggle");
     // Count replies in the transcript only: the sidebar's last-message preview
     // ("<bot> now Echo:") also matches, and on a phone it sits in the closed drawer.
     const echoes = (n) =>
@@ -171,7 +170,7 @@ await journey(
       await browse(1);
       await echoes(2);
       await expect(panel).toHaveCount(0);
-      await toggle.click();
+      await showLiveView(page, "browser");
       await expect(panel).toBeVisible();
       await expect(panel.getByRole("link", { name: "Open in the Browser page" })).toBeVisible();
       await panel.getByRole("button", { name: "Close browser panel" }).click();
@@ -205,7 +204,7 @@ await journey(
       await page.reload(LOADED);
       await echoes(2);
       await expect(panel).toHaveCount(0);
-      await toggle.click();
+      await showLiveView(page, "browser");
       await expect(panel).toBeVisible();
     });
     await proof("panel-phone-reopened");

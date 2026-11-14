@@ -264,7 +264,7 @@ function JobRow({
         className="hidden text-muted-foreground md:col-span-2 md:block"
         title={job.startedAt ? formatLocaleDateTime(job.startedAt) : "N/A"}
       >
-        {job.startedAt ? formatRelativeTime(job.startedAt) : "—"}
+        {job.startedAt ? formatRelativeTime(job.startedAt) : "-"}
       </div>
       <div role="cell" className="flex items-center justify-end gap-2 md:col-span-1">
         <DropdownMenu>

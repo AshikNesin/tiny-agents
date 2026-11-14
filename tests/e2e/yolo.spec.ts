@@ -30,12 +30,20 @@ test.describe("YOLO mode", () => {
     const name = `Yolo ${Date.now()}`;
     await createBot(page, name);
 
+    // The switch is a checkbox row in the bot menu (the header's bot name).
     const toggle = page.getByTestId("yolo-toggle");
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    const expectYolo = async (on: boolean) => {
+      await page.getByRole("button", { name: `${name} menu` }).click();
+      await expect(toggle).toHaveAttribute("aria-checked", String(on));
+      await page.keyboard.press("Escape");
+      await expect(toggle).toHaveCount(0);
+    };
+    await expectYolo(false);
+    await page.getByRole("button", { name: `${name} menu` }).click();
     await toggle.click();
     await page.getByRole("button", { name: "Turn on", exact: true }).click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("yolo-banner")).toBeVisible();
+    await expectYolo(true);
 
     // The switch survives a reload: it is the chat's, on the server.
     await page.reload();
@@ -50,7 +58,7 @@ test.describe("YOLO mode", () => {
 
     await page.getByTestId("yolo-banner").getByRole("button", { name: "Turn off" }).click();
     await expect(page.getByTestId("yolo-banner")).not.toBeVisible();
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expectYolo(false);
 
     await composer.fill("/improve");
     await composer.press("Enter");

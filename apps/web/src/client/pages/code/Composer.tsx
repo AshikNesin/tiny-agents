@@ -415,9 +415,9 @@ export function Composer({
               : (placeholder ??
                 (working
                   ? steers
-                    ? `Steer ${name} — goes into the running turn`
-                    : `Message ${name} — sent when this turn ends`
-                  : `Message ${name}${canFind ? " — @ for files" : ""}${commands.length ? `${canFind ? "," : " —"} / for commands` : ""}`))
+                    ? `Steer ${name}: goes into the running turn`
+                    : `Message ${name}: sent when this turn ends`
+                  : `Message ${name}${canFind ? ": @ for files" : ""}${commands.length ? `${canFind ? "," : ":"} / for commands` : ""}`))
           }
           onChange={(e) => {
             setDraft((current) => editText(current, e.target.value));

@@ -135,10 +135,7 @@ export async function preview(input: PreviewSkillDTO): Promise<ParsedSkill & { e
     ...parsed,
     exists,
     warnings: exists
-      ? [
-          `A skill named "${parsed.name}" already exists — rename it to install.`,
-          ...parsed.warnings,
-        ]
+      ? [`A skill named "${parsed.name}" already exists. Rename it to install.`, ...parsed.warnings]
       : parsed.warnings,
   };
 }

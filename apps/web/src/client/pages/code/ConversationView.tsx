@@ -465,7 +465,7 @@ export function ConversationView({
         <div className="mx-auto max-w-3xl space-y-2 px-3 sm:px-5">
           {state.error && (
             <p className="text-destructive px-1 text-xs" role="status">
-              {state.error} — reconnecting…
+              {state.error}, reconnecting…
             </p>
           )}
           {archived && (

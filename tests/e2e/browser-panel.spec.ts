@@ -46,8 +46,8 @@ test.describe("Browser panel on mobile", () => {
     await page.setViewportSize(PHONE);
 
     const panel = page.getByTestId("browser-panel");
-    const toggle = page.getByTestId("browser-toggle");
-    // The toggle is the way back in on a phone too.
+    // The header's live view button is the way back in on a phone too.
+    const toggle = page.getByTestId("live-view-toggle");
     await expect(toggle).toBeVisible();
 
     // First browser use in this conversation: the panel opens over the chat.

@@ -9,7 +9,7 @@ function jobDuration(start: string | null, end: string | null): string {
 }
 
 /** Relative time with the full locale timestamp as the hover title. */
-function Timestamp({ value, empty = "—" }: { value: string | null; empty?: string }) {
+function Timestamp({ value, empty = "-" }: { value: string | null; empty?: string }) {
   if (!value) return <span title="N/A">{empty}</span>;
   return <span title={formatLocaleDateTime(value)}>{formatRelativeTime(value)}</span>;
 }

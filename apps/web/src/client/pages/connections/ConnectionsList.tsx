@@ -112,7 +112,7 @@ export function ConnectionsList() {
         <EmptyState
           icon={Plug}
           title="No connections yet"
-          description="Any remote MCP server works — add one to give your bots its tools."
+          description="Any remote MCP server works. Add one to give your bots its tools."
         />
       ) : (
         <>

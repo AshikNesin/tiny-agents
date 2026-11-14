@@ -532,6 +532,25 @@ const FIXTURES: Record<string, Fixture> = {
       'import { requireSession, startSession } from "@groot/core/session";\nexport const g = [requireSession, startSession];\n',
     rules: [],
   },
+  "apps/web/src/client/r10-fail.tsx": {
+    source:
+      'export const a = "Saved \u2014 done";\nexport const b = (n: string) => `Hi ${n} \u2014 welcome`;\nexport const C = () => <p>Off \u2014 paused</p>;\n',
+    rules: ["R10", "R10", "R10"],
+    mentions: "\\u2014",
+  },
+  "packages/jobs/src/client/r10-fail.tsx": {
+    source: 'export const empty = "\u2014";\n',
+    rules: ["R10"],
+  },
+  "apps/web/src/client/r10-pass.tsx": {
+    source:
+      '// A comment may hold one \u2014 like this.\nexport const a = "Saved. Done";\nexport const quoted = "Window \\u2014 title";\n',
+    rules: [],
+  },
+  "apps/web/src/server/r10-elsewhere-pass.ts": {
+    source: 'export const toModel = "clicked \u2014 now on the page";\n',
+    rules: [],
+  },
   "apps/web/src/server/r8b-pass.ts": {
     source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
     rules: [],
@@ -569,7 +588,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe("boundary lint rules", () => {
   it.each(Object.entries(FIXTURES))("%s", (file, { rules, mentions }) => {
     const texts = findings.get(file) ?? [];
-    const fired = texts.map((t) => /\b(R\d[a-z]?): /.exec(t)?.[1]).toSorted();
+    const fired = texts.map((t) => /\b(R\d+[a-z]?): /.exec(t)?.[1]).toSorted();
     expect(fired, texts.join("\n")).toEqual(rules);
     if (mentions) expect(texts.join("\n")).toContain(mentions);
   });

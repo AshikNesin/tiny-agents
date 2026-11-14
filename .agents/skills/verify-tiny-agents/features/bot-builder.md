@@ -4,7 +4,7 @@ A bot can create a new bot when the owner asks for one. The request always waits
 
 ## Sub-features
 
-- `builder-card` card `<bot> wants to create a new bot — “<new name>”` with `Description`, `Model` (`default model` when none is named) and `Instructions`; instructions over 120 characters fold behind `Read more` instead.
+- `builder-card` card `<bot> wants to create a new bot: “<new name>”` with `Description`, `Model` (`default model` when none is named) and `Instructions`; instructions over 120 characters fold behind `Read more` instead.
 - `builder-deny` Deny: row `Created bot “<new name>” … denied by you`, no bot with that name.
 - `builder-approve` Approve: row `Created bot “<new name>”`; expanding it shows `The owner can open it at /chats/<id>`; the sidebar lists the new bot without a reload.
 - `builder-result` the new bot's chat opens; `Edit <new bot>` shows the proposed description, the creating bot's model and the instructions as `System prompt`.

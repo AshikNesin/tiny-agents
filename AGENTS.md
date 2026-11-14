@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R10 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                               | Enforcer                                          |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
@@ -20,6 +20,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | No unused file or export.                                          | `pnpm check:dead`                                 |
 | Every path, link and `pnpm` script a doc names exists.             | `pnpm check:doc-refs`                             |
 | UI colors come from design tokens.                                 | `pnpm check:tokens`                               |
+| UI copy has no em dash; a needed one is written `\u2014`.          | R10                                               |
 | A new check is one line in `scripts/gates.mjs`.                    | `pnpm check:coverage`                             |
 | Change a `schema.ts`, then commit `pnpm db:generate`'s SQL.        | Migrations gate in `scripts/gates.mjs`            |
 | Never edit an applied migration.                                   | `pnpm check:migrations-immutable`                 |

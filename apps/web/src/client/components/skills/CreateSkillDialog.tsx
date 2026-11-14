@@ -112,7 +112,7 @@ export function CreateSkillDialog({
                 </p>
               ) : (
                 <p className="text-muted-foreground text-xs">
-                  Lowercase letters, digits and hyphens — bots reference the skill by this name.
+                  Lowercase letters, digits and hyphens. Bots reference the skill by this name.
                 </p>
               )}
             </div>

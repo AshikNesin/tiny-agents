@@ -6,7 +6,7 @@ The owner adds guests (accounts they hand a password to) and shares individual b
 
 - `share-add-guest` Settings → `People` → card `Add a guest` (`Name`, `Email`, `Password`) → `Add guest`; toast `Guest added`; `data-testid=guest-row` reads `No bots shared` / `Shared: <bots>`.
 - `share-toggle` `Edit <bot>` → tab `Sharing` → switch `Share with <guest name>` → `Save changes`; the header shows `Shared`.
-- `share-guest-view` guest sidebar lists only shared bots, no `New bot`, no row actions, no Tasks/Terminal/Computer/Browser; chat header has the bot name (disabled), no YOLO toggle, no New chat.
+- `share-guest-view` guest sidebar lists only shared bots, no `New bot`, no row actions, no Tasks/Terminal/Computer/Browser; chat header has the bot name as plain text (no `<bot> menu`, so no settings, history or YOLO), no New chat.
 - `share-live-chat` the guest sees the existing history; each side sees the other's messages labeled with the sender's name, live, and the bot's replies.
 - `share-guards` owner pages (`/tasks`, `/memory`, `/routines`) redirect a guest to `/chats`; guest Settings has only the Appearance and Security sections; the API answers 403 for owner routes and 404 for unshared bots.
 - `share-unshare` switching sharing off removes the bot from the guest (`Nothing shared with you yet.`).

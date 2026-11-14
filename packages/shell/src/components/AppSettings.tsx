@@ -165,7 +165,7 @@ export function AppSettings() {
           <CardHeader className="border-b">
             <CardTitle className="text-sm">New setting</CardTitle>
             <CardDescription className="text-xs">
-              Give it a descriptive key — you can edit the value next.
+              Give it a descriptive key. You can edit the value next.
             </CardDescription>
           </CardHeader>
           <CardContent>

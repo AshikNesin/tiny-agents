@@ -207,7 +207,7 @@ export function SkillDetail({ id }: { id: string }) {
           <p className="text-muted-foreground py-4 text-center text-sm">Loading…</p>
         ) : bots.length === 0 ? (
           <p className="text-muted-foreground py-4 text-center text-sm">
-            No bots yet — create a bot to assign this skill to it.
+            No bots yet. Create a bot to assign this skill to it.
           </p>
         ) : (
           <div className="space-y-2">

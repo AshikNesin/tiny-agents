@@ -39,7 +39,8 @@ await journey("bot-builder", async ({ page, step, proof, cleanup, api, stamp }) 
   });
 
   await step("Tools tab: Create a new bot offers only Ask (always) and Off", async () => {
-    await page.getByRole("button", { name: `Edit ${name}` }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await dialog.getByRole("tab", { name: "Tools" }).click();
     const group = dialog.getByRole("radiogroup", { name: "Create a new bot permission" });
     await expect(group).toBeVisible({ timeout: 15_000 });
@@ -110,7 +111,8 @@ await journey("bot-builder", async ({ page, step, proof, cleanup, api, stamp }) 
     await expect(page.getByRole("textbox", { name: `Message ${child}` })).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByRole("button", { name: `Edit ${child}` }).click();
+    await page.getByRole("button", { name: `${child} menu` }).click();
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     const editor = page.getByRole("dialog", { name: `Edit ${child}` });
     await expect(editor.getByLabel("System prompt")).toHaveValue(instructions);
   });

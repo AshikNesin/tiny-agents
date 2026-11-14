@@ -18,7 +18,8 @@ await journey("auto-review", async ({ page, step, proof, cleanup, api, stamp }) 
   };
   const bot = () => api.get(`/bots/${botId}`);
   const openTools = async () => {
-    await page.getByRole("button", { name: `Edit ${name}` }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: `${name} menu` }).click({ timeout: 15_000 });
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole("tab", { name: "Tools" }).click();
     await expect(autoReview).toBeVisible({ timeout: 15_000 });

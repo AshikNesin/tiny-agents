@@ -16,7 +16,8 @@ await journey("tool-permissions", async ({ page, step, proof, cleanup, api, stam
     await composer.press("Enter");
   };
   const openTools = async () => {
-    await page.getByRole("button", { name: `Edit ${name}` }).click();
+    await page.getByRole("button", { name: `${name} menu` }).click();
+    await page.getByRole("menuitem", { name: "Bot settings" }).click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole("tab", { name: "Tools" }).click();
   };

@@ -3,7 +3,7 @@
 // and profile go with the bot, also after the bot switched to the shared browser),
 // a delete while the bot is replying, and a second delete from another tab.
 import { execFileSync } from "node:child_process";
-import { journey, expect } from "../scripts/lib.mjs";
+import { journey, expect, showLiveView } from "../scripts/lib.mjs";
 
 const LOADED = { waitUntil: "domcontentloaded" };
 const CONTAINER = process.env.TA_VERIFY_SANDBOX_CONTAINER ?? "tiny-agents-sandbox-sandbox-1";
@@ -46,7 +46,8 @@ await journey(
       return id;
     };
     const deleteInUi = async (p, name) => {
-      await p.getByRole("button", { name: `Edit ${name}` }).click();
+      await p.getByRole("button", { name: `${name} menu` }).click();
+      await p.getByRole("menuitem", { name: "Bot settings" }).click();
       const dialog = p.getByRole("dialog", { name: `Edit ${name}` });
       await dialog.getByRole("button", { name: "Delete bot" }).click();
       await expect(dialog.getByText(`Delete ${name}? This cannot be undone.`)).toBeVisible();
@@ -59,7 +60,7 @@ await journey(
     const openBrowser = async (id) => {
       await page.goto(`/chats/${id}`, LOADED);
       const panel = page.getByTestId("browser-panel");
-      await page.getByTestId("browser-toggle").click();
+      await showLiveView(page, "browser");
       const open = panel.getByRole("button", { name: "Open browser" });
       await expect(panel.getByText("Live").or(open)).toBeVisible({ timeout: 30_000 });
       // A live shared browser gives the bot its tab without the button, which can vanish mid-click.
@@ -102,7 +103,7 @@ await journey(
     await step("#173 setup: an own-profile bot opens its browser and desktop", async () => {
       await openBrowser(own);
       const panel = page.getByTestId("computer-panel");
-      await page.getByTestId("computer-toggle").click();
+      await showLiveView(page, "computer");
       await panel.getByRole("button", { name: "Open computer" }).click();
       await expect
         .poll(async () => (await api.get(`/bots/${own}/computer`)).active, { timeout: 120_000 })
