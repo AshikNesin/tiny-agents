@@ -144,3 +144,14 @@ The approach for 2.4 (D4, owner sign-off Q2, #250):
   cases on both engines; characterization tests C5, C6 and C16 are updated
   only where the register rows they pin are the ones this fixes (C1, C2, C4,
   C23).
+
+## D12: 2.3 (settling on a TurnSettled edge) waits for a decision on C16 (accepted under autopilot, 2026-11-14)
+
+The settled pipeline settles on every idle `onActivity` change, including a
+wait count that changes after the idle edge. Register row C16 pins exactly
+that second settle (a Claude plan turn stopped while a call waits for
+approval), and its decision is Preserve. A real once-per-turn edge would
+change it; an edge event that also re-fires on those changes would rename
+today's behavior and gain nothing. So 2.3 is not done until C16 is decided:
+settling stays level-triggered, its pinned double run included. If C16 is
+set to Fix, 2.3 becomes that fix.
