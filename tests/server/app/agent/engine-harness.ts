@@ -23,7 +23,7 @@ import {
   TEST_MODEL,
   TEST_MODEL_2,
 } from "../../../../packages/agent/src/testing";
-import type { ModelConfig } from "../../../../packages/agent/src/providers/config";
+import type { ModelConfig } from "../../../../packages/models/src/config";
 import type {
   ChatEvent,
   ChatState,

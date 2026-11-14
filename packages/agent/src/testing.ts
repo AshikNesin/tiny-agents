@@ -18,7 +18,7 @@ export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";
-import type { ModelConfig, ModelRow } from "./providers/config";
+import type { ModelConfig, ModelRow } from "@tiny-agents/models";
 
 export const TEST_PROVIDER = "faux";
 export const TEST_MODEL = "test-model";

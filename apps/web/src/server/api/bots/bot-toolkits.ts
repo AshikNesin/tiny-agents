@@ -12,7 +12,8 @@
  * here too, so the ConnectionManager (which installs a connection's tools and
  * tool search) and the selection count a connection's tools the same way.
  */
-import { MCP_DEFER_THRESHOLD, type McpToolInfo, type ModelCatalog } from "@tiny-agents/agent";
+import { MCP_DEFER_THRESHOLD, type McpToolInfo } from "@tiny-agents/agent";
+import type { ModelCatalog } from "@tiny-agents/models";
 
 /**
  * The built-in toolkits every bot gets. There is no per-bot selection: a bot

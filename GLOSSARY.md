@@ -106,7 +106,7 @@ A one-shot model call the app makes off the reply path: memory capture, Past cha
 _Avoid_: background call, LLM call
 
 **Model catalog**:
-A projection of the owner's Provider accounts, model rows and Model roles (`ModelCatalog`, `model-catalog.ts`, `runtime.catalog`): what each model row is, whether it can run now and why not, its Model route, the model a role resolves to, and the accounts' status. A model is named by its row id, so there is no id grammar.
+A projection of the owner's Provider accounts, model rows and Model roles (`ModelCatalog`, `packages/models/src/model-catalog.ts`, `runtime.catalog`): what each model row is, whether it can run now and why not, its Model route, the model a role resolves to, and the accounts' status. A model is named by its row id, so there is no id grammar.
 _Avoid_: model list, model registry (that is pi-ai's, which the catalog reads)
 
 **Provider account**:
@@ -114,7 +114,7 @@ One way of reaching models, owned by the owner (`providers` row): a Provider kin
 _Avoid_: provider (alone: ambiguous with pi-ai's), integration
 
 **Provider kind**:
-What a Provider account speaks (`PROVIDER_KINDS`, `providers/kinds.ts`): `anthropic`, `openai-chat`, `openai-responses`, `gemini`, `cloudflare-ai-gateway`, `claude-plan` or `faux`. It fixes the wire API, how the key is sent, the defaults and the engine.
+What a Provider account speaks (`PROVIDER_KINDS`, `packages/models/src/kinds.ts`): `anthropic`, `openai-chat`, `openai-responses`, `gemini`, `cloudflare-ai-gateway`, `claude-plan` or `faux`. It fixes the wire API, how the key is sent, the defaults and the engine.
 _Avoid_: provider type
 
 **Gateway custom provider**:

@@ -7,11 +7,12 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R10 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R12 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                               | Enforcer                                          |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
 | Packages never import from `apps/`.                                | R1                                                |
+| `packages/models` imports neither pi-durable nor `packages/agent`. | R11                                               |
 | `packages/core/src` uses Web APIs, not `node:` modules.            | R2                                                |
 | Read env through `appEnv()` or core `env`, never `process.env`.    | R3                                                |
 | Import `cn` from `@groot/ui/lib/utils`.                            | R4                                                |

@@ -4,7 +4,7 @@
  * the caller runs them through `useStepUp().run`. Nothing here receives a key.
  */
 import { apiClient } from "@groot/shell/lib/api";
-import type { ProviderKind } from "@tiny-agents/agent";
+import type { ProviderKind } from "@tiny-agents/models";
 import { stepped } from "./vault-api";
 
 export type { ProviderKind };

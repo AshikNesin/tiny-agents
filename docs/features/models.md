@@ -11,7 +11,7 @@ A provider account is a row in `providers`: a kind, an endpoint, a key and a
 name the owner chooses ("Anthropic · Work"). Its row id is also its pi-ai
 provider id. The kind fixes the wire API, how the key is sent, the default
 endpoint and capabilities, and the engine
-(`packages/agent/src/providers/kinds.ts`):
+(`packages/models/src/kinds.ts`):
 
 | Kind                    | Wire API                     | Engine      | Key                                  |
 | ----------------------- | ---------------------------- | ----------- | ------------------------------------ |
@@ -164,14 +164,17 @@ aren't mistaken for the owner's own providers.
 
 The app reads the tables into a `ModelConfig` snapshot
 (`apps/web/src/server/api/models/models.config.ts`) and hands it to
-`AgentRuntime` with a `CredentialResolver` that asks the vault.
-`packages/agent` never reads the database or env for models.
+`AgentRuntime` with a `CredentialResolver` that asks the vault. Provider
+kinds, discovery, test calls, `buildProviders` and the Model catalog live in
+`@tiny-agents/models` (`packages/models`), which uses pi-ai only: it imports
+neither pi-durable nor `@tiny-agents/agent` (lint R11). Neither package
+reads the database or env for models.
 `runtime.applyModelConfig` replaces the pi-ai providers in place, so a change
 applies from the next request without a restart; running turns keep the
 model they resolved. After every committed change the app calls
 `reloadModels()`.
 
-The Model catalog (`packages/agent/src/model-catalog.ts`) is a projection of
+The Model catalog (`packages/models/src/model-catalog.ts`) is a projection of
 the snapshot: `list`, `get`, `route` (engine, pi provider, upstream id),
 `piModel`, `forRole`, `providers` and `canAnswer`. `GET /api/v1/models`
 returns `{ models, defaultModelId, canAnswer, providers }`.

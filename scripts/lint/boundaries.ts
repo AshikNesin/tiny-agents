@@ -263,6 +263,21 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       ],
     },
   },
+  {
+    id: "R11",
+    kind: "import",
+    scope: "packages/models/**",
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
+          message:
+            "R11: @tiny-agents/models imports neither pi-durable nor @tiny-agents/agent (docs/rewrite/DECISIONS.md D7). Move the pi-durable-free code it needs into packages/models, or have the caller pass it in.",
+        },
+      ],
+    },
+  },
   // UI copy: strings and JSX text in code that renders the app's screens.
   ...[
     "apps/web/src/client/**",

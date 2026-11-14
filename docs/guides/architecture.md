@@ -24,6 +24,10 @@ packages/core/src/                 # Boilerplate (synced)
 
 packages/jobs/src/server/          # queue, transitions, tick (runner), worker, dashboard API — see features/jobs.md
 
+packages/agent/src/                # @tiny-agents/agent: the only pi-durable boundary (runtime, toolkits) — see docs/README.md
+packages/models/src/               # @tiny-agents/models: provider kinds, discovery, test calls, buildProviders, ModelCatalog;
+                                   #   pi-ai only, never pi-durable or @tiny-agents/agent (lint R11) — see features/models.md
+
 apps/web/src/server/               # App-owned (not synced)
 ├── app.ts                         # registerJobHandlers() + createWebApp()
 ├── config.ts                      # defineConfig() overrides

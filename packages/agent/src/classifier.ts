@@ -11,7 +11,7 @@
  */
 import type { ClassifierAnswer, ClassifierContext } from "@earendil-works/pi-ai";
 import type { Models } from "@earendil-works/pi-ai/models";
-import type { ModelCatalog } from "./model-catalog";
+import type { ModelCatalog } from "@tiny-agents/models";
 
 export type { ClassifierAnswer, ClassifierQuestion } from "@earendil-works/pi-ai";
 

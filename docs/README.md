@@ -87,20 +87,28 @@ package's `exports` and in the root `tsconfig.json` `paths` (which the server
 build also resolves through). No subpath loads pi-durable code: the URL
 guards the browser and the web toolkit share live in `toolkits/public-url.ts`.
 
-| Import                             | What it holds                                                                                                            |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `@tiny-agents/agent`               | `AgentRuntime`, the conversation and chat types, the toolkits and capabilities, vault and MCP types, the gateway catalog |
-| `@tiny-agents/agent/sandbox`       | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint                                          |
-| `@tiny-agents/agent/terminal`      | `createTerminalService`, its errors, tmux session names                                                                  |
-| `@tiny-agents/agent/browser`       | Browser sessions, the Chromium and remote CDP transports (the browser toolkit stays on the root)                         |
-| `@tiny-agents/agent/computer`      | Desktop sessions, the X11 transport, desktop settings parsers (the computer toolkit stays on the root)                   |
-| `@tiny-agents/agent/claude-worker` | `createSandboxClaudeWorker` and its locator types (ADR 0010), the Claude sign-in shell line                              |
-| `@tiny-agents/agent/peer-envelope` | Peer envelope parser; client-safe, imported by the client and the server                                                 |
-| `@tiny-agents/agent/testing`       | The faux-provider test runtime                                                                                           |
+| Import                             | What it holds                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `@tiny-agents/agent`               | `AgentRuntime`, the conversation and chat types, the toolkits and capabilities, vault and MCP types    |
+| `@tiny-agents/agent/sandbox`       | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint                        |
+| `@tiny-agents/agent/terminal`      | `createTerminalService`, its errors, tmux session names                                                |
+| `@tiny-agents/agent/browser`       | Browser sessions, the Chromium and remote CDP transports (the browser toolkit stays on the root)       |
+| `@tiny-agents/agent/computer`      | Desktop sessions, the X11 transport, desktop settings parsers (the computer toolkit stays on the root) |
+| `@tiny-agents/agent/claude-worker` | `createSandboxClaudeWorker` and its locator types (ADR 0010), the Claude sign-in shell line            |
+| `@tiny-agents/agent/peer-envelope` | Peer envelope parser; client-safe, imported by the client and the server                               |
+| `@tiny-agents/agent/testing`       | The faux-provider test runtime                                                                         |
 
 The root exports only what something outside the package imports. Tests of
 the package's internals import the source module directly
 (`tests/server/app/agent/*`).
+
+Provider accounts and models are their own package, `@tiny-agents/models`
+(`packages/models`, one root entry): provider kinds and templates,
+discovery, test calls, `buildProviders` and the `ModelCatalog` the runtime
+takes. It uses pi-ai only and imports neither pi-durable nor
+`@tiny-agents/agent` (lint R11). The agent root still re-exports what it
+exported before the move, marked `@deprecated`; code in this repo imports
+from `@tiny-agents/models`.
 
 ## API surface
 

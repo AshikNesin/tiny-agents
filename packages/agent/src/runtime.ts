@@ -30,9 +30,15 @@ import {
 } from "./credentials";
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
 import { acquireStoreLock, type StoreLock } from "./lock";
-import { createModelCatalog, type ModelCatalog } from "./model-catalog";
-import { EMPTY_MODEL_CONFIG, type CredentialResolver, type ModelConfig } from "./providers/config";
-import { buildProviders } from "./providers/kinds";
+import {
+  buildProviders,
+  createModelCatalog,
+  EMPTY_MODEL_CONFIG,
+  type CredentialResolver,
+  type ModelCatalog,
+  type ModelConfig,
+  type ModelUnavailableReason,
+} from "@tiny-agents/models";
 import { gateExtension, PiEngine } from "./engines/pi";
 import { ConversationStore } from "./conversation-store";
 import type { AgentEngine, CompiledConversation, EngineSubmission } from "./engine";
@@ -54,7 +60,6 @@ import { lastMessageOf, pageBefore } from "./transcript";
 import type {
   ActivityChange,
   BotAgentConfig,
-  ModelUnavailableReason,
   ChatEvent,
   ChatPage,
   ChatState,

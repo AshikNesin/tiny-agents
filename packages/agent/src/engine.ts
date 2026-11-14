@@ -11,10 +11,10 @@
  */
 import type { MaxTurns } from "@tiny-agents/claude-worker";
 import type { AgentChange } from "@earendil-works/pi-durable";
+import type { AgentEngineKind } from "@tiny-agents/models";
 import type { ClaudeSessionSync } from "./engines/claude-code/engine";
 import type { GateUserMessage, Permissions } from "./policy";
 import type {
-  AgentEngineKind,
   AttachmentRef,
   ChatEvent,
   ChatMessage,

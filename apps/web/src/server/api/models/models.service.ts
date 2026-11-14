@@ -7,13 +7,12 @@
 import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
+import { secretRedactor, SecretValue } from "@tiny-agents/agent";
 import {
   discoverModels,
   DiscoveryError,
   gatewayCustomBaseUrl,
   type GatewayCustomProvider,
-  secretRedactor,
-  SecretValue,
   testClassifierCall,
   testModelCall,
   testUnsavedModel,
@@ -24,7 +23,7 @@ import {
   resolveCapabilities,
   type DiscoveredModel,
   type ProviderKind,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/models";
 import { listClaudeCodeModels } from "@tiny-agents/agent/claude-worker";
 import {
   bots,

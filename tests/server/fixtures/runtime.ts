@@ -23,10 +23,9 @@ import {
   type ChatMessage,
   type ChatState,
   type FinishedReply,
-  type ModelCatalog,
-  type CatalogModel,
   type WaitEvent,
 } from "../../../packages/agent/src/index";
+import type { CatalogModel, ModelCatalog } from "../../../packages/models/src/index";
 import { openTestRuntime, type TestRuntimeOptions } from "../../../packages/agent/src/testing";
 import {
   appStoreCapabilities,

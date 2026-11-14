@@ -83,6 +83,9 @@ it. Short version:
   connection, terminal, browser, computer and Claude worker, which do not
   use pi-durable, are subpaths (`@tiny-agents/agent/sandbox` and so on; see
   [docs/README.md](docs/README.md#tiny-agentsagent-entry-points))
+- `packages/models` — provider kinds and templates, discovery, test calls,
+  `buildProviders` and the Model catalog, on pi-ai only (it imports neither
+  pi-durable nor `packages/agent`, lint R11; excluded from groot sync)
 - `packages/claude-worker` — loopback daemon that drives Claude Code. It
   does not run inside the tiny-agents process
 - `packages/code` — the Code page's harness adapters: one contract every

@@ -20,6 +20,7 @@
     "@earendil-works/pi-durable": "1.4.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@tiny-agents/claude-worker": "workspace:*",
+    "@tiny-agents/models": "workspace:*",
     "playwright-core": "1.64.1",
     "ssh2": "1.17.0",
     "ws": "8.22.0",

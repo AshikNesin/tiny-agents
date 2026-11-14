@@ -6,13 +6,8 @@
  */
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import type { Models } from "@earendil-works/pi-ai/models";
-import type { ModelConfig, ModelRow, ProviderAccount } from "./providers/config";
-import {
-  CLAUDE_PLAN_NOTE,
-  classifierProviderId,
-  gatewayModelRoute,
-  PROVIDER_KINDS,
-} from "./providers/kinds";
+import type { ModelConfig, ModelRow, ProviderAccount } from "./config";
+import { CLAUDE_PLAN_NOTE, classifierProviderId, gatewayModelRoute, PROVIDER_KINDS } from "./kinds";
 import type {
   CatalogModel,
   ModelRole,

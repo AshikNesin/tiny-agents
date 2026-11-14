@@ -7,17 +7,16 @@
  */
 import { asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
+import { VaultError, type AgentRuntime } from "@tiny-agents/agent";
 import {
   PROVIDER_KINDS,
-  VaultError,
-  type AgentRuntime,
   type CredentialResolver,
   type ModelConfig,
   type ModelRole,
   type ProviderAccount,
   type ProviderKind,
   type ProviderStatus,
-} from "@tiny-agents/agent";
+} from "@tiny-agents/models";
 import { db, modelRoles, models, providers, vaultItems, type ProviderRow } from "../../db";
 import { resolveProviderSecret } from "../vault/vault.service";
 import { app } from "../../app-root";

@@ -17,7 +17,7 @@
  */
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import { logger } from "@groot/core/logger";
-import type { ModelCatalog } from "@tiny-agents/agent";
+import type { ModelCatalog } from "@tiny-agents/models";
 
 /** What a side-caller needs from the runtime: its Model catalog and the registry that calls models. */
 export interface SideCallRuntime {

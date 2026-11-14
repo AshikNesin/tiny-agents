@@ -27,7 +27,7 @@ import { TOGETHER_MODELS } from "@earendil-works/pi-ai/providers/together.models
 import { XAI_MODELS } from "@earendil-works/pi-ai/providers/xai.models";
 import { ZAI_MODELS } from "@earendil-works/pi-ai/providers/zai.models";
 import type { ClaudeCodeModel } from "@tiny-agents/claude-worker";
-import type { ProviderKind } from "../types";
+import type { ProviderKind } from "./types";
 import { PROVIDER_KINDS } from "./kinds";
 
 /** A model an endpoint lists, with its resolved capabilities. */

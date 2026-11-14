@@ -6,7 +6,7 @@
  */
 import type { MemoryStatus } from "../../shared/machines/memory";
 import { apiClient } from "@groot/shell/lib/api";
-import type { CatalogModel, ProviderSummary } from "@tiny-agents/agent";
+import type { CatalogModel, ProviderSummary } from "@tiny-agents/models";
 import type { BotListEntry as BotListRow } from "../../shared/bot-list";
 import type { Jsonified } from "../../shared/json";
 import type { AttachmentRef, ChatPage, OwnerAnswer, RoutineRunCard } from "./chat-types";
