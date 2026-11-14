@@ -54,6 +54,8 @@ export interface Recorder {
 const ID_PATTERNS = [
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
   /\bc[a-z0-9]{23,31}\b/g,
+  // Upload ids: 24 random hex digits (a 64-digit sha256 stays as it is).
+  /\b[0-9a-f]{24}\b/g,
   // The faux model's tool-call ids: `tool:<time>:<random>`.
   /\btool:\d+:[a-z0-9]+\b/g,
 ];
