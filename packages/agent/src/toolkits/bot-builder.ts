@@ -12,8 +12,9 @@
  * name); the model sees the interruption and can check the roster.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 
 /** Why a new bot was not created, as the model reads it. */
 export type BotCreationRefusal =
@@ -93,8 +94,12 @@ function refusal(
 }
 
 export function createBotBuilderCapability(store: BotCreationStore): Capability {
-  const createBot = defineTool({
+  const createBot = tool({
     name: "create_bot",
+    label: "Created bot",
+    askLabel: "create a new bot",
+    summary: "Create a new bot",
+    policy: { askOnly: true },
     description:
       "Create a new bot for the owner: its name, a one-line description and its instructions (system prompt). " +
       'Use only when the owner asks for a new bot. Write the instructions in the second person ("You help the owner with …"), ' +
@@ -148,20 +153,10 @@ export function createBotBuilderCapability(store: BotCreationStore): Capability 
     },
   });
 
-  return {
+  return defineToolkit({
     id: "bot-builder",
-    kind: "toolkit",
     name: "Bot builder",
     description: "Create new bots, with owner approval",
-    extension: defineExtension({ name: "bot-builder", tools: [createBot] }),
-    tools: [
-      {
-        name: "create_bot",
-        label: "Created bot",
-        askLabel: "create a new bot",
-        description: "Create a new bot",
-        askOnly: true,
-      },
-    ],
-  };
+    tools: [createBot],
+  });
 }

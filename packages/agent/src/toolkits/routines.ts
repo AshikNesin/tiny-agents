@@ -20,11 +20,11 @@
  * call's `reason` argument is the record (`FinishedReply.blocked`); the tool
  * itself stores nothing.
  */
-import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import type { Extension, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import { isUnattendedConversation } from "../approvals";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 
 /** The tool a routine run calls when it cannot do its job (issue #87). */
@@ -172,17 +172,20 @@ function present(routine: RoutineRecord): string {
 const notFound = (id: string) => fail(`No routine with id "${id}".`);
 
 /**
- * The `routines` extension. `store` is the app-side adapter (see
- * apps/web routines.toolkit-store.ts). The tools are created per extension
- * so they close over the store.
+ * The `routines` toolkit: schedule this bot from chat (issue #18 phase C).
+ * `store` is the app-side adapter (see apps/web routines.toolkit-store.ts).
+ * The tools are created per toolkit so they close over the store.
  */
-function createRoutinesExtension(
+export function createRoutinesToolkit(
   store: RoutineStore,
   options: { now?: () => Date } = {},
-): Extension {
+): Capability {
   const now = options.now ?? (() => new Date());
-  const createRoutine = defineTool({
+  const createRoutine = tool({
     name: "create_routine",
+    label: "Created routine",
+    askLabel: "create a routine",
+    summary: "Create a routine",
     description:
       "Create a routine: this bot runs the prompt on a schedule and replies in this chat. " +
       "Use it for reminders and recurring work (in 30 minutes, every weekday at 9am). " +
@@ -205,8 +208,12 @@ function createRoutinesExtension(
       }),
   });
 
-  const listRoutines = defineTool({
+  const listRoutines = tool({
     name: "list_routines",
+    label: "Listed routines",
+    askLabel: "list routines",
+    summary: "List routines",
+    policy: { readOnly: true },
     description: "List the owner's routines with their schedules and next runs.",
     parameters: Type.Object({}),
     replay: "safe",
@@ -217,8 +224,11 @@ function createRoutinesExtension(
       }),
   });
 
-  const updateRoutine = defineTool({
+  const updateRoutine = tool({
     name: "update_routine",
+    label: "Updated routine",
+    askLabel: "update a routine",
+    summary: "Update a routine",
     description:
       "Update a routine by id; omit the fields that stay. enabled false pauses it, true resumes it.",
     parameters: Type.Object({
@@ -240,8 +250,11 @@ function createRoutinesExtension(
 
   const report = (id: string, removed: boolean) =>
     removed ? ok(`Deleted routine ${id}.`) : notFound(id);
-  const deleteRoutine = defineTool({
+  const deleteRoutine = tool({
     name: "delete_routine",
+    label: "Deleted routine",
+    askLabel: "delete a routine",
+    summary: "Delete a routine",
     description: "Permanently delete a routine (and its run history) by id.",
     parameters: Type.Object({ id: idSchema }),
     replay: "safe",
@@ -258,8 +271,11 @@ function createRoutinesExtension(
       }),
   });
 
-  const runRoutineNow = defineTool({
+  const runRoutineNow = tool({
     name: "run_routine_now",
+    label: "Ran routine now",
+    askLabel: "run a routine now",
+    summary: "Run a routine now",
     description: "Run a routine once now, e.g. to test it.",
     parameters: Type.Object({ id: idSchema }),
     replay: "safe",
@@ -272,8 +288,13 @@ function createRoutinesExtension(
       }),
   });
 
-  const reportBlocked = defineTool({
+  const reportBlocked = tool({
     name: REPORT_ROUTINE_BLOCKED,
+    label: "Reported the routine blocked",
+    askLabel: "report this routine run blocked",
+    summary: "Flag a routine run that can't do its job",
+    // Writes nothing (it only marks the run), and a routine can't ask for approval.
+    policy: { readOnly: true, unattendedOnly: true },
     description:
       "Only in a scheduled routine run: report that this run cannot do its job until the owner " +
       "fixes something (a missing vault login, an approval routines can't get, an account it " +
@@ -294,8 +315,10 @@ function createRoutinesExtension(
     },
   });
 
-  return defineExtension({
-    name: "routines",
+  return defineToolkit({
+    id: "routines",
+    name: "Routines",
+    description: "Schedule recurring or one-time routines for the owner",
     tools: [
       createRoutine,
       listRoutines,
@@ -305,60 +328,4 @@ function createRoutinesExtension(
       reportBlocked,
     ],
   });
-}
-
-/** The `routines` toolkit: schedule this bot from chat (issue #18 phase C). */
-export function createRoutinesToolkit(
-  store: RoutineStore,
-  options: { now?: () => Date } = {},
-): Capability {
-  return {
-    id: "routines",
-    kind: "toolkit",
-    name: "Routines",
-    description: "Schedule recurring or one-time routines for the owner",
-    extension: createRoutinesExtension(store, options),
-    tools: [
-      {
-        name: "create_routine",
-        label: "Created routine",
-        askLabel: "create a routine",
-        description: "Create a routine",
-      },
-      {
-        name: "list_routines",
-        label: "Listed routines",
-        askLabel: "list routines",
-        description: "List routines",
-        readOnly: true,
-      },
-      {
-        name: "update_routine",
-        label: "Updated routine",
-        askLabel: "update a routine",
-        description: "Update a routine",
-      },
-      {
-        name: "delete_routine",
-        label: "Deleted routine",
-        askLabel: "delete a routine",
-        description: "Delete a routine",
-      },
-      {
-        name: "run_routine_now",
-        label: "Ran routine now",
-        askLabel: "run a routine now",
-        description: "Run a routine now",
-      },
-      {
-        name: REPORT_ROUTINE_BLOCKED,
-        label: "Reported the routine blocked",
-        askLabel: "report this routine run blocked",
-        description: "Flag a routine run that can't do its job",
-        // Writes nothing (it only marks the run), and a routine can't ask for approval.
-        readOnly: true,
-        unattendedOnly: true,
-      },
-    ],
-  };
 }

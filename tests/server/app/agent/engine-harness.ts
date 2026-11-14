@@ -9,7 +9,6 @@
 import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { withGatePlan } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import type { WebSocketLike } from "../../../../packages/agent/src/engines/claude-code/client";
 import type { ClaudeWorkerLocator } from "../../../../packages/agent/src/engines/claude-code/sandbox-worker";
@@ -116,8 +115,9 @@ export function mailCapability(sent: string[]): Capability {
       return text("Saved");
     },
   });
-  const payInvoice = withGatePlan(
-    defineTool({
+  // A registration's gate plan is its `gate` field (what `tool()` sets).
+  const payInvoice = {
+    ...defineTool({
       name: "pay_invoice",
       description: "Pay with the card on file",
       parameters: Type.Object({ amount: Type.Number() }),
@@ -126,7 +126,7 @@ export function mailCapability(sent: string[]): Capability {
         return text("Paid");
       },
     }),
-    {
+    gate: {
       plan: async () => ({
         ask: true,
         details: {
@@ -141,9 +141,9 @@ export function mailCapability(sent: string[]): Capability {
         },
       }),
     },
-  );
-  const forwardAll = withGatePlan(
-    defineTool({
+  };
+  const forwardAll = {
+    ...defineTool({
       name: "forward_all",
       description: "Forward every message",
       parameters: Type.Object({}),
@@ -152,8 +152,8 @@ export function mailCapability(sent: string[]): Capability {
         return text("Forwarded");
       },
     }),
-    { plan: async () => ({ refuse: "Forwarding everything is not allowed.", ask: false }) },
-  );
+    gate: { plan: async () => ({ refuse: "Forwarding everything is not allowed.", ask: false }) },
+  };
   const readToken = defineTool({
     name: "read_token",
     description: "Read the deploy token",

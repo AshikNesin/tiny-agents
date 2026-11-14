@@ -10,8 +10,9 @@
  * Reverting is restoring a revision's text through another approved change.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
+import { section } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 
 /** Why an instructions change was refused, as the model reads it. */
 type InstructionsRefusal = "disabled" | "unattended" | "shared";
@@ -36,8 +37,12 @@ const REFUSED = {
 } as const;
 
 export function createSelfImproveCapability(store: InstructionsStore): Capability {
-  const update = defineTool({
+  const update = tool({
     name: "update_instructions",
+    label: "Updated own instructions",
+    askLabel: "update own instructions",
+    summary: "Edit this bot's system prompt",
+    policy: { askOnly: true },
     description:
       "Update your own instructions (system prompt). Pass exactly one of `instructions` (the complete new text, replacing the current one) or `append` (lines added to the end). " +
       "Use when the owner asks you to change how you work, or when you both agreed on an improvement. " +
@@ -91,24 +96,11 @@ export function createSelfImproveCapability(store: InstructionsStore): Capabilit
     );
   });
 
-  return {
+  return defineToolkit({
     id: "self-improve",
-    kind: "toolkit",
     name: "Self-improve",
     description: "Update this bot's own instructions, with owner approval",
-    extension: defineExtension({
-      name: "self-improve",
-      tools: [update],
-      sections: [current],
-    }),
-    tools: [
-      {
-        name: "update_instructions",
-        label: "Updated own instructions",
-        askLabel: "update own instructions",
-        description: "Edit this bot's system prompt",
-        askOnly: true,
-      },
-    ],
-  };
+    tools: [update],
+    sections: [current],
+  });
 }

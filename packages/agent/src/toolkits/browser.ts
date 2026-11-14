@@ -16,8 +16,9 @@
  * sinks and the credential request sheet live in `browser-vault.ts`.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
-import type { Capability, ToolInfo } from "../capabilities";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import type { VaultBroker } from "../vault";
 import type { WaitTracker } from "../waiting";
 import { assertRefShape, checkNavigableUrl } from "./browser-guard";
@@ -29,7 +30,7 @@ import {
   type BrowserSessionsOptions,
   type BrowserTarget,
 } from "./browser-sessions";
-import { browserVaultToolInfos, createBrowserVaultTools } from "./browser-vault";
+import { createBrowserVaultTools } from "./browser-vault";
 
 export {
   closeAllBrowserSessions,
@@ -82,233 +83,201 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
     sessions.actionTurn(await targetOf(conversationId));
   const describe = describeBrowserError;
 
-  const tools: ToolInfo[] = [
-    {
-      name: "browser_navigate",
-      label: "Opened a page",
-      askLabel: "open a page",
-      description: "Open a URL in the bot's browser.",
-    },
-    {
-      name: "browser_snapshot",
-      label: "Read the page",
-      askLabel: "read the page",
-      description: "Snapshot the page's interactive elements with refs.",
-      readOnly: true,
-    },
-    {
-      name: "browser_click",
-      label: "Clicked",
-      askLabel: "click on the page",
-      description: "Click an element by ref.",
-    },
-    {
-      name: "browser_type",
-      label: "Typed into",
-      askLabel: "type into the page",
-      description: "Type text into an element by ref.",
-    },
-    {
-      name: "browser_press_key",
-      label: "Pressed a key",
-      askLabel: "press a key",
-      description: "Press a key (Enter, Tab, Escape, arrows).",
-    },
-    {
-      name: "browser_scroll",
-      label: "Scrolled",
-      askLabel: "scroll the page",
-      description: "Scroll the page up or down.",
-    },
-    {
-      name: "browser_screenshot",
-      label: "Captured the screen",
-      askLabel: "capture the screen",
-      description: "JPEG screenshot for visual questions.",
-      readOnly: true,
-    },
-    ...browserVaultToolInfos(options),
-  ];
-
-  return {
+  return defineToolkit({
     id: "browser",
-    kind: "toolkit",
     name: "Browser",
     description: "A real browser the bot drives: navigate, read, click, type, scroll.",
-    tools,
-    extension: defineExtension({
-      name: "browser",
-      tools: [
-        defineTool({
-          name: "browser_navigate",
-          description:
-            "Open a public http(s) URL in the browser. Private and local addresses are refused. " +
-            "Returns the final URL (after redirects) and the HTTP status.",
-          parameters: Type.Object({
-            url: Type.String({ minLength: 8, maxLength: 2000 }),
-          }),
-          replay: "unsafe",
-          execute: async (args, api) => {
-            let url: URL;
-            try {
-              url = checkNavigableUrl(args.url, sessions.exemptHosts);
-            } catch (error) {
-              return fail((error as Error).message);
-            }
-            try {
-              // Navigation is an action: it must respect takeover like every
-              // other effect (navigating away mid-secret breaks the contract).
-              const s = await actionTurn(Number(api.conversationId));
-              const result = await s.session.navigate(url.href);
-              return {
-                output: [{ type: "text", text: `${result.status ?? "no status"} ${result.url}` }],
-                details: { url: result.url, status: result.status ?? null },
-              };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
+    tools: [
+      tool({
+        name: "browser_navigate",
+        label: "Opened a page",
+        askLabel: "open a page",
+        summary: "Open a URL in the bot's browser.",
+        description:
+          "Open a public http(s) URL in the browser. Private and local addresses are refused. " +
+          "Returns the final URL (after redirects) and the HTTP status.",
+        parameters: Type.Object({
+          url: Type.String({ minLength: 8, maxLength: 2000 }),
         }),
-        defineTool({
-          name: "browser_snapshot",
-          description:
-            "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). " +
-            "Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
-          parameters: Type.Object({}),
-          replay: "safe",
-          execute: async (_args, api) => {
-            try {
-              const s = await readTurn(Number(api.conversationId));
-              const text = await s.session.snapshot();
-              const capped = text.length > 20_000 ? text.slice(0, 20_000) + "\n…(truncated)" : text;
-              return { output: [{ type: "text", text: capped }] };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
+        replay: "unsafe",
+        execute: async (args, api) => {
+          let url: URL;
+          try {
+            url = checkNavigableUrl(args.url, sessions.exemptHosts);
+          } catch (error) {
+            return fail((error as Error).message);
+          }
+          try {
+            // Navigation is an action: it must respect takeover like every
+            // other effect (navigating away mid-secret breaks the contract).
+            const s = await actionTurn(Number(api.conversationId));
+            const result = await s.session.navigate(url.href);
+            return {
+              output: [{ type: "text", text: `${result.status ?? "no status"} ${result.url}` }],
+              details: { url: result.url, status: result.status ?? null },
+            };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_snapshot",
+        label: "Read the page",
+        askLabel: "read the page",
+        summary: "Snapshot the page's interactive elements with refs.",
+        policy: { readOnly: true },
+        description:
+          "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). " +
+          "Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
+        parameters: Type.Object({}),
+        replay: "safe",
+        execute: async (_args, api) => {
+          try {
+            const s = await readTurn(Number(api.conversationId));
+            const text = await s.session.snapshot();
+            const capped = text.length > 20_000 ? text.slice(0, 20_000) + "\n…(truncated)" : text;
+            return { output: [{ type: "text", text: capped }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_click",
+        label: "Clicked",
+        askLabel: "click on the page",
+        summary: "Click an element by ref.",
+        description:
+          "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+        parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 32 }) }),
+        replay: "unsafe",
+        execute: async (args, api) => {
+          try {
+            assertRefShape(args.ref);
+            const s = await actionTurn(Number(api.conversationId));
+            const result = await s.session.click(args.ref);
+            return { output: [{ type: "text", text: `clicked ${args.ref} — ${result.url}` }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_type",
+        label: "Typed into",
+        askLabel: "type into the page",
+        summary: "Type text into an element by ref.",
+        description:
+          "Replace the text in an editable element by ref. The whole string is inserted at once. " +
+          "For a dropdown (combobox), pass the label or value of the option to choose. " +
+          "Never type credentials: use browser_fill_secret with a vault handle (see vault_list), " +
+          "or request_credentials if no item exists.",
+        parameters: Type.Object({
+          ref: Type.String({ minLength: 2, maxLength: 32 }),
+          text: Type.String({ minLength: 1, maxLength: 5000 }),
         }),
-        defineTool({
-          name: "browser_click",
-          description:
-            "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
-          parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 32 }) }),
-          replay: "unsafe",
-          execute: async (args, api) => {
-            try {
-              assertRefShape(args.ref);
-              const s = await actionTurn(Number(api.conversationId));
-              const result = await s.session.click(args.ref);
-              return { output: [{ type: "text", text: `clicked ${args.ref} — ${result.url}` }] };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
+        replay: "unsafe",
+        execute: async (args, api) => {
+          try {
+            assertRefShape(args.ref);
+            const s = await actionTurn(Number(api.conversationId));
+            const result = await s.session.type(args.ref, args.text);
+            return { output: [{ type: "text", text: `typed into ${args.ref} — ${result.url}` }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_press_key",
+        label: "Pressed a key",
+        askLabel: "press a key",
+        summary: "Press a key (Enter, Tab, Escape, arrows).",
+        description:
+          "Press a key: Enter, Tab, Escape, Backspace, arrows, Home, End, PageUp, PageDown.",
+        parameters: Type.Object({
+          key: Type.Union(
+            [
+              "Enter",
+              "Tab",
+              "Escape",
+              "Backspace",
+              "Delete",
+              "ArrowUp",
+              "ArrowDown",
+              "ArrowLeft",
+              "ArrowRight",
+              "Home",
+              "End",
+              "PageUp",
+              "PageDown",
+            ].map((k) => Type.Literal(k)),
+          ),
         }),
-        defineTool({
-          name: "browser_type",
-          description:
-            "Replace the text in an editable element by ref. The whole string is inserted at once. " +
-            "For a dropdown (combobox), pass the label or value of the option to choose. " +
-            "Never type credentials: use browser_fill_secret with a vault handle (see vault_list), " +
-            "or request_credentials if no item exists.",
-          parameters: Type.Object({
-            ref: Type.String({ minLength: 2, maxLength: 32 }),
-            text: Type.String({ minLength: 1, maxLength: 5000 }),
-          }),
-          replay: "unsafe",
-          execute: async (args, api) => {
-            try {
-              assertRefShape(args.ref);
-              const s = await actionTurn(Number(api.conversationId));
-              const result = await s.session.type(args.ref, args.text);
-              return { output: [{ type: "text", text: `typed into ${args.ref} — ${result.url}` }] };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
+        replay: "unsafe",
+        execute: async (args, api) => {
+          try {
+            const s = await actionTurn(Number(api.conversationId));
+            await s.session.press(args.key);
+            return { output: [{ type: "text", text: `pressed ${args.key}` }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_scroll",
+        label: "Scrolled",
+        askLabel: "scroll the page",
+        summary: "Scroll the page up or down.",
+        description: "Scroll the page up or down.",
+        parameters: Type.Object({
+          direction: Type.Union([Type.Literal("up"), Type.Literal("down")]),
+          amount: Type.Optional(
+            Type.Integer({ minimum: 50, maximum: 3000, description: "Pixels; default 600" }),
+          ),
         }),
-        defineTool({
-          name: "browser_press_key",
-          description:
-            "Press a key: Enter, Tab, Escape, Backspace, arrows, Home, End, PageUp, PageDown.",
-          parameters: Type.Object({
-            key: Type.Union(
-              [
-                "Enter",
-                "Tab",
-                "Escape",
-                "Backspace",
-                "Delete",
-                "ArrowUp",
-                "ArrowDown",
-                "ArrowLeft",
-                "ArrowRight",
-                "Home",
-                "End",
-                "PageUp",
-                "PageDown",
-              ].map((k) => Type.Literal(k)),
-            ),
-          }),
-          replay: "unsafe",
-          execute: async (args, api) => {
-            try {
-              const s = await actionTurn(Number(api.conversationId));
-              await s.session.press(args.key);
-              return { output: [{ type: "text", text: `pressed ${args.key}` }] };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
+        replay: "unsafe",
+        execute: async (args, api) => {
+          try {
+            const s = await actionTurn(Number(api.conversationId));
+            await s.session.scroll(args.direction, args.amount ?? 600);
+            return { output: [{ type: "text", text: `scrolled ${args.direction}` }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_screenshot",
+        label: "Captured the screen",
+        askLabel: "capture the screen",
+        summary: "JPEG screenshot for visual questions.",
+        policy: { readOnly: true },
+        description:
+          "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+        parameters: Type.Object({
+          question: Type.Optional(Type.String({ maxLength: 500, description: "What to look for" })),
         }),
-        defineTool({
-          name: "browser_scroll",
-          description: "Scroll the page up or down.",
-          parameters: Type.Object({
-            direction: Type.Union([Type.Literal("up"), Type.Literal("down")]),
-            amount: Type.Optional(
-              Type.Integer({ minimum: 50, maximum: 3000, description: "Pixels; default 600" }),
-            ),
-          }),
-          replay: "unsafe",
-          execute: async (args, api) => {
-            try {
-              const s = await actionTurn(Number(api.conversationId));
-              await s.session.scroll(args.direction, args.amount ?? 600);
-              return { output: [{ type: "text", text: `scrolled ${args.direction}` }] };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
-        }),
-        defineTool({
-          name: "browser_screenshot",
-          description:
-            "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
-          parameters: Type.Object({
-            question: Type.Optional(
-              Type.String({ maxLength: 500, description: "What to look for" }),
-            ),
-          }),
-          replay: "safe",
-          execute: async (_args, api) => {
-            try {
-              const s = await readTurn(Number(api.conversationId));
-              const shot = await s.session.screenshot();
-              return {
-                output: [
-                  { type: "text", text: "Screenshot captured as an attachment." },
-                  { type: "image", data: shot.data, mimeType: "image/jpeg" },
-                ],
-                details: { screenshot: true },
-              };
-            } catch (error) {
-              return fail(describe(error));
-            }
-          },
-        }),
-        ...createBrowserVaultTools(options, sessions, targetOf),
-      ],
-    }),
-  };
+        replay: "safe",
+        execute: async (_args, api) => {
+          try {
+            const s = await readTurn(Number(api.conversationId));
+            const shot = await s.session.screenshot();
+            return {
+              output: [
+                { type: "text", text: "Screenshot captured as an attachment." },
+                { type: "image", data: shot.data, mimeType: "image/jpeg" },
+              ],
+              details: { screenshot: true },
+            };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      ...createBrowserVaultTools(options, sessions, targetOf),
+    ],
+  });
 }

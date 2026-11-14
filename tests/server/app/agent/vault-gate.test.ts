@@ -16,7 +16,6 @@ import {
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { withGatePlan } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -347,8 +346,9 @@ describe("vault sinks behind the gate", () => {
 
 describe("expiring approvals", () => {
   function expiringCapability(ran: string[]): Capability {
-    const tool = withGatePlan(
-      defineTool({
+    // A registration's gate plan is its `gate` field (what `tool()` sets).
+    const tool = {
+      ...defineTool({
         name: "pay",
         description: "Pay",
         parameters: Type.Object({}),
@@ -357,10 +357,10 @@ describe("expiring approvals", () => {
           return { output: [{ type: "text", text: "paid" }] };
         },
       }),
-      {
+      gate: {
         plan: async () => ({ ask: true, details: { vault: { handle: "amex" } }, expiresInMs: 300 }),
       },
-    );
+    };
     return {
       id: "shop",
       kind: "toolkit",

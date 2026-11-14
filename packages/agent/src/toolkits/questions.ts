@@ -14,17 +14,12 @@
  */
 import type { JsonValue } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
-import {
-  defineDoc,
-  defineExtension,
-  defineTool,
-  type TaskId,
-  type ToolExecutionResult,
-} from "@earendil-works/pi-durable";
+import { defineDoc, type TaskId, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { innerDetails } from "../approvals";
 import type { Capability } from "../capabilities";
 import { parseStored, toJson } from "../durable-json";
+import { defineToolkit, tool } from "../toolkit";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
 import {
   pendingToolTask,
@@ -249,8 +244,12 @@ const DISMISSED =
   "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.";
 
 export function createQuestionsCapability(tracker: WaitTracker): Capability {
-  const askOwner = defineTool({
+  const askOwner = tool({
     name: ASK_OWNER,
+    label: "Asked you questions",
+    askLabel: "ask you questions",
+    summary: "Ask you clarifying questions and wait for your answers",
+    policy: { readOnly: true },
     description:
       "Ask the owner 1-4 clarifying questions and wait for their answers. Use it when a request is ambiguous and a wrong guess would waste real work, or when a decision is the owner's to make (preferences, trade-offs, details you cannot look up). Don't ask what your other tools can find out or what you can sensibly assume, and don't ask permission to run a tool (tools that need approval ask for it themselves). Your reply pauses until the owner answers.",
     parameters: Type.Object({
@@ -290,20 +289,10 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     },
   });
 
-  return {
+  return defineToolkit({
     id: "questions",
-    kind: "toolkit",
     name: "Questions",
     description: "Asks you clarifying questions mid-reply",
-    extension: defineExtension({ name: "questions", tools: [askOwner] }),
-    tools: [
-      {
-        name: ASK_OWNER,
-        label: "Asked you questions",
-        askLabel: "ask you questions",
-        description: "Ask you clarifying questions and wait for your answers",
-        readOnly: true,
-      },
-    ],
-  };
+    tools: [askOwner],
+  });
 }

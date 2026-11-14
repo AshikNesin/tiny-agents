@@ -39,8 +39,11 @@ interface ToolDeclaration<TParameters extends TSchema> {
   policy?: ToolPolicy;
   /** The tool can put a vault item's value somewhere (`ToolInfo.vault`). */
   vault?: boolean;
-  /** Whether an interrupted call may run again after a restart. */
-  replay: "safe" | "unsafe";
+  /**
+   * Whether an interrupted call may run again after a restart. Left out, the
+   * registration has no `replay` and pi-durable treats the tool as `unsafe`.
+   */
+  replay?: "safe" | "unsafe";
   parameters: TParameters;
   /** The tool's own say in its gate, decided once per call. */
   gate?: GateHooks<Static<TParameters>>;
@@ -69,7 +72,7 @@ export function tool<TParameters extends TSchema>(
       name,
       description,
       parameters,
-      replay,
+      ...(replay ? { replay } : {}),
       execute,
       ...(gate ? { gate } : {}),
     }),
@@ -79,12 +82,17 @@ export function tool<TParameters extends TSchema>(
 interface ToolkitDeclaration {
   /** The extension name, stored per conversation by pi-durable. */
   id: string;
+  /** Default `toolkit`; the bot's skills are a capability of their own kind. */
+  kind?: "toolkit" | "skills";
   name: string;
   description: string;
   /** Switched on and off by the app itself, never a choice in a bot's settings. */
   auto?: boolean;
-  /** Listed in order; `false` or `undefined` is a tool this toolkit does not have here. */
-  tools: readonly (DeclaredTool | false | undefined)[];
+  /**
+   * Listed in order; `false` or `undefined` is a tool this toolkit does not
+   * have here. Left out, the toolkit only adds prompt sections.
+   */
+  tools?: readonly (DeclaredTool | false | undefined)[];
   /**
    * Which listed tools the model is offered (default: all). A toolkit that is
    * not configured still lists its tools, so the owner can set their
@@ -97,17 +105,22 @@ interface ToolkitDeclaration {
 }
 
 export function defineToolkit(declaration: ToolkitDeclaration): Capability {
-  const { id, name, description, auto, offered = () => true, sections, setupHint } = declaration;
-  const tools = declaration.tools.filter((declared): declared is DeclaredTool => Boolean(declared));
+  const { id, kind = "toolkit", name, description, auto, offered = () => true } = declaration;
+  const { sections, setupHint } = declaration;
+  const tools = (declaration.tools ?? []).filter((declared): declared is DeclaredTool =>
+    Boolean(declared),
+  );
   return {
     id,
-    kind: "toolkit",
+    kind,
     name,
     description,
     ...(auto !== undefined ? { auto } : {}),
     extension: defineExtension({
       name: id,
-      tools: tools.filter((t) => offered(t.info.name)).map((t) => t.registration),
+      ...(declaration.tools
+        ? { tools: tools.filter((t) => offered(t.info.name)).map((t) => t.registration) }
+        : {}),
       ...(sections ? { sections } : {}),
     }),
     tools: tools.map((t) => t.info),

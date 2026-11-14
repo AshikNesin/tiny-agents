@@ -8,10 +8,10 @@
  * with the reason, never a thrown exception, so the bot keeps its turn and
  * can tell the owner what happened.
  */
-import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import type { Transcriber } from "./vision-transcribe";
 
 /** What the app provides: the prepared image bytes for a send's attachment. */
@@ -35,8 +35,12 @@ const fail = (text: string): ToolExecutionResult => ({
 
 /** The `vision` toolkit: `see_image` (apps/web bots.runtime.ts wires the store). */
 export function createVisionToolkit(store: VisionStore, transcriber: Transcriber): Capability {
-  const seeImage = defineTool({
+  const seeImage = tool({
     name: "see_image",
+    label: "Looked at an image",
+    askLabel: "look at an image",
+    summary: "Transcribe an attached image through a vision model",
+    policy: { readOnly: true },
     description:
       "See an image the owner attached. The image reaches you only as a filename and an id; " +
       "this tool sends it to a vision model and returns a faithful transcription you can reason about. " +
@@ -89,34 +93,21 @@ export function createVisionToolkit(store: VisionStore, transcriber: Transcriber
     },
   });
 
-  return {
+  return defineToolkit({
     id: "vision",
-    kind: "toolkit",
     name: "Vision",
     description: "See attached images through a vision model (for models without native vision)",
     // On exactly when the bot's model cannot see images itself.
     auto: true,
-    extension: defineExtension({
-      name: "vision",
-      tools: [seeImage],
-      sections: [
-        {
-          key: "vision",
-          render: () =>
-            `## Vision\n\nYour model cannot see images. When the owner attaches one, their message lists it as ` +
-            `[image attached: <name> (<uploadId>)]. Call see_image with that uploadId before answering anything ` +
-            `about that image. If the tool errors, say plainly you cannot see images.`,
-        },
-      ],
-    }),
-    tools: [
+    tools: [seeImage],
+    sections: [
       {
-        name: "see_image",
-        label: "Looked at an image",
-        askLabel: "look at an image",
-        description: "Transcribe an attached image through a vision model",
-        readOnly: true,
+        key: "vision",
+        render: () =>
+          `## Vision\n\nYour model cannot see images. When the owner attaches one, their message lists it as ` +
+          `[image attached: <name> (<uploadId>)]. Call see_image with that uploadId before answering anything ` +
+          `about that image. If the tool errors, say plainly you cannot see images.`,
       },
     ],
-  };
+  });
 }

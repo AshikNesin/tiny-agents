@@ -11,14 +11,10 @@
  */
 import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
-import {
-  defineExtension,
-  defineTool,
-  type ToolExecutionResult,
-  type ToolRegistration,
-} from "@earendil-works/pi-durable";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import type { SandboxConnection } from "../ssh/sandbox-connection";
+import { defineToolkit, tool } from "../toolkit";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
 
@@ -223,8 +219,12 @@ export function createAttachmentsToolkit(
   const unknown = (uploadId: string) =>
     fail(`No attachment "${uploadId}" in this chat. Use list_attachments for the ids.`);
 
-  const listAttachments = defineTool({
+  const listAttachments = tool({
     name: "list_attachments",
+    label: "Listed attachments",
+    askLabel: "list attachments",
+    summary: "List the files attached in this chat",
+    policy: { readOnly: true },
     description:
       "List the files the owner attached in this chat (newest first): id, name, type, size, pages/sheets, and whether its contents are ready to read.",
     parameters: Type.Object({}),
@@ -240,8 +240,12 @@ export function createAttachmentsToolkit(
     },
   });
 
-  const readAttachment = defineTool({
+  const readAttachment = tool({
     name: "read_attachment",
+    label: "Read an attachment",
+    askLabel: "read an attachment",
+    summary: "Read an attached file's contents",
+    policy: { readOnly: true },
     description:
       "Read an attached file's extracted contents, a part at a time. PDFs, slides and long text are split into pages (page / pages); " +
       "spreadsheets by sheet and row range; archives return their file listing. Start with no range to see the outline and the first part.",
@@ -342,8 +346,12 @@ export function createAttachmentsToolkit(
     },
   });
 
-  const searchAttachment = defineTool({
+  const searchAttachment = tool({
     name: "search_attachment",
+    label: "Searched an attachment",
+    askLabel: "search an attachment",
+    summary: "Search an attached file",
+    policy: { readOnly: true },
     description:
       "Search an attached file for text (case-insensitive) and get the matching lines with their page/sheet and line numbers. Use it to find the parts of a long file worth reading.",
     parameters: Type.Object({
@@ -416,35 +424,15 @@ export function createAttachmentsToolkit(
     },
   });
 
-  const tools: ToolRegistration[] = [listAttachments, readAttachment, searchAttachment];
-  const toolInfo = [
-    {
-      name: "list_attachments",
-      label: "Listed attachments",
-      askLabel: "list attachments",
-      description: "List the files attached in this chat",
-      readOnly: true,
-    },
-    {
-      name: "read_attachment",
-      label: "Read an attachment",
-      askLabel: "read an attachment",
-      description: "Read an attached file's contents",
-      readOnly: true,
-    },
-    {
-      name: "search_attachment",
-      label: "Searched an attachment",
-      askLabel: "search an attachment",
-      description: "Search an attached file",
-      readOnly: true,
-    },
-  ];
-
   const sandbox = options.sandbox;
-  if (sandbox) {
-    const copy = defineTool({
+  const copy =
+    sandbox &&
+    tool({
       name: "copy_attachment_to_sandbox",
+      label: "Copied an attachment to the sandbox",
+      askLabel: "copy an attachment to the sandbox",
+      summary: "Copy an attached file to the sandbox VM",
+      policy: { readOnly: false },
       description:
         "Copy an attached file's original bytes to the sandbox VM so you can work on it with real tools (pandas, unzip, pdftotext, ffprobe, …) via run_command. " +
         "Default destination: attachments/<id>/<name> under the sandbox user's home. Returns the path and SHA-256.",
@@ -485,37 +473,23 @@ export function createAttachmentsToolkit(
         };
       },
     });
-    tools.push(copy);
-    toolInfo.push({
-      name: "copy_attachment_to_sandbox",
-      label: "Copied an attachment to the sandbox",
-      askLabel: "copy an attachment to the sandbox",
-      description: "Copy an attached file to the sandbox VM",
-      readOnly: false,
-    });
-  }
 
-  return {
+  return defineToolkit({
     id: "attachments",
-    kind: "toolkit",
     name: "Attachments",
     description: "Read, search and copy the files you attach",
-    extension: defineExtension({
-      name: "attachments",
-      tools,
-      sections: [
-        {
-          key: "attachments",
-          render: () =>
-            "## Attachments\n\nWhen the owner attaches files, their message lists each one as " +
-            "[file attached: <name> (id <uploadId>) …], sometimes with its contents inline inside " +
-            "<attachment … untrusted> … </attachment>. For anything not inline, use read_attachment " +
-            "(outline first, then the pages you need) and search_attachment to find passages; cite page " +
-            "or sheet and row numbers. Never guess a file's contents from its name. " +
-            UNTRUSTED_RULE,
-        },
-      ],
-    }),
-    tools: toolInfo,
-  };
+    tools: [listAttachments, readAttachment, searchAttachment, copy],
+    sections: [
+      {
+        key: "attachments",
+        render: () =>
+          "## Attachments\n\nWhen the owner attaches files, their message lists each one as " +
+          "[file attached: <name> (id <uploadId>) …], sometimes with its contents inline inside " +
+          "<attachment … untrusted> … </attachment>. For anything not inline, use read_attachment " +
+          "(outline first, then the pages you need) and search_attachment to find passages; cite page " +
+          "or sheet and row numbers. Never guess a file's contents from its name. " +
+          UNTRUSTED_RULE,
+      },
+    ],
+  });
 }

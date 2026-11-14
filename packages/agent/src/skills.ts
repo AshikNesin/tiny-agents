@@ -13,13 +13,9 @@
  * Skill scripts are stored as text and never executed.
  */
 import { Type } from "@earendil-works/pi-ai";
-import {
-  defineExtension,
-  defineTool,
-  section,
-  type ToolExecutionResult,
-} from "@earendil-works/pi-durable";
+import { section, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "./capabilities";
+import { defineToolkit, tool } from "./toolkit";
 
 interface SkillSummary {
   name: string;
@@ -56,8 +52,12 @@ const fail = (text: string): ToolExecutionResult => ({
 });
 
 export function createSkillsCapability(store: SkillStore): Capability {
-  const loadSkill = defineTool({
+  const loadSkill = tool({
     name: "load_skill",
+    label: "Using skill",
+    askLabel: "use a skill",
+    summary: "Load a skill",
+    policy: { readOnly: true },
     description:
       "Load a skill's full instructions by name. Do this before a task one of your skills covers, then follow them.",
     parameters: Type.Object({ name: Type.String() }),
@@ -73,8 +73,12 @@ export function createSkillsCapability(store: SkillStore): Capability {
     },
   });
 
-  const readSkillFile = defineTool({
+  const readSkillFile = tool({
     name: "read_skill_file",
+    label: "Read skill file",
+    askLabel: "read a skill file",
+    summary: "Read a skill's file",
+    policy: { readOnly: true },
     description: "Read a file bundled with a skill (paths as listed by load_skill).",
     parameters: Type.Object({ name: Type.String(), path: Type.String() }),
     replay: "safe",
@@ -86,8 +90,12 @@ export function createSkillsCapability(store: SkillStore): Capability {
     },
   });
 
-  const saveSkill = defineTool({
+  const saveSkill = tool({
     name: "save_skill",
+    label: "Saved skill",
+    askLabel: "save a skill",
+    summary: "Save a workflow as a skill",
+    policy: { askOnly: true },
     description:
       "Save a reusable workflow as a skill (create, or update one you saved before). Use when the owner shows you how they like a task done. The owner approves every save.",
     parameters: Type.Object({
@@ -118,38 +126,12 @@ export function createSkillsCapability(store: SkillStore): Capability {
     return `You have these skills (reusable instructions). When a task matches one, call load_skill with its name first and follow it.\n${lines.join("\n")}`;
   });
 
-  return {
+  return defineToolkit({
     id: "skills",
     kind: "skills",
     name: "Skills",
     description: "Reusable instructions from your skill library",
-    extension: defineExtension({
-      name: "skills",
-      tools: [loadSkill, readSkillFile, saveSkill],
-      sections: [listing],
-    }),
-    tools: [
-      {
-        name: "load_skill",
-        label: "Using skill",
-        askLabel: "use a skill",
-        description: "Load a skill",
-        readOnly: true,
-      },
-      {
-        name: "read_skill_file",
-        label: "Read skill file",
-        askLabel: "read a skill file",
-        description: "Read a skill's file",
-        readOnly: true,
-      },
-      {
-        name: "save_skill",
-        label: "Saved skill",
-        askLabel: "save a skill",
-        description: "Save a workflow as a skill",
-        askOnly: true,
-      },
-    ],
-  };
+    tools: [loadSkill, readSkillFile, saveSkill],
+    sections: [listing],
+  });
 }

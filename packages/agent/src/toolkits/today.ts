@@ -6,8 +6,9 @@
  * conversation. Relative reminders ("in 30 minutes") are resolved by the
  * routines tool itself.
  */
-import { defineExtension, section } from "@earendil-works/pi-durable";
+import { section } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
+import { defineToolkit } from "../toolkit";
 
 export interface TodayOptions {
   /** IANA zone for the date. Default: the server's zone. */
@@ -30,16 +31,11 @@ export function createTodayCapability(options: TodayOptions = {}): Capability {
     format = new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "full" });
   }
 
-  return {
+  return defineToolkit({
     id: "today",
-    kind: "toolkit",
     name: "Today",
     description: "Today's date in the owner's timezone",
     auto: true,
-    extension: defineExtension({
-      name: "today",
-      sections: [section("today", async () => `Today is ${format.format(now())} (${zone}).`)],
-    }),
-    tools: [],
-  };
+    sections: [section("today", async () => `Today is ${format.format(now())} (${zone}).`)],
+  });
 }
