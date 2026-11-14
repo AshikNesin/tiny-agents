@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Menu, MessageSquareReply, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -10,21 +10,17 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { useConfirm } from "@groot/ui/primitives";
 import { toast } from "sonner";
-import type { Bot, PastChatView } from "../../shared/api/bots";
+import type { Bot } from "../../shared/api/bots";
 import { botsApi } from "../lib/bots-api";
+import { PAST_CHAT } from "../lib/chat-mode";
 import { useBotsStore } from "../store/bots";
+import { usePastChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
 import { BotAvatar } from "./BotAvatar";
 import { ChatHistoryMenu } from "./ChatHistoryMenu";
-import { Transcript, type TranscriptPages } from "./Transcript";
-import { oldestEntryId, prependOlder } from "../lib/chat-history";
-import { chatTimeline } from "../lib/chat-timeline";
+import { ChatScrollerProvider, ChatSessionTranscript } from "./ChatSessionTranscript";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { Spinner } from "./ui/spinner";
-import type { ChatMessage, RoutineRunCard } from "../lib/chat-types";
-
-const NO_RUNS: RoutineRunCard[] = [];
-import { MessageScrollerProvider } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
 
 interface PastChatPaneProps {
@@ -33,16 +29,17 @@ interface PastChatPaneProps {
 }
 
 /**
- * A past chat (issue #101), read-only: the transcript as it was, opening on
- * its newest messages with older ones loading on scroll, and the routine
+ * A past chat (issue #101), read-only: the chat session in its past-chat
+ * mode (lib/chat-mode.ts), so the transcript as it was, opening on its
+ * newest messages with older ones loading on scroll, and the routine
  * results that landed while it was the bot's chat. The composer's place
  * holds "Continue this chat", which moves the bot back onto it.
  */
 export function PastChatPane(props: PastChatPaneProps) {
   return (
-    <MessageScrollerProvider defaultScrollPosition="end">
+    <ChatScrollerProvider mode={PAST_CHAT}>
       <PastChatPaneBody {...props} />
-    </MessageScrollerProvider>
+    </ChatScrollerProvider>
   );
 }
 
@@ -51,61 +48,15 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
   const confirm = useConfirm();
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const adoptBot = useBotsStore((s) => s.adoptBot);
-  const [view, setView] = useState<PastChatView | null>(null);
-  const [loaded, setLoaded] = useState<{ messages: ChatMessage[]; hasMore: boolean }>({
-    messages: [],
-    hasMore: false,
-  });
-  const [loadingOlder, setLoadingOlder] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setView(null);
-    void botsApi
-      .pastChat(bot.id, chatId)
-      .then((next) => {
-        if (cancelled) return;
-        setView(next);
-        setLoaded({ messages: next.state.messages, hasMore: Boolean(next.state.hasMore) });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        toast.error(errorMessage(error, "Failed to open the past chat"));
-        navigate(`/chats/${bot.id}`, { replace: true });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [bot.id, chatId, navigate]);
-
-  // The transcript's pages: the first came with the view, older ones load on
-  // scroll. A page that no longer fits (another chat opened meanwhile) is dropped.
-  const pages: TranscriptPages = {
-    hasMore: loaded.hasMore,
-    loadingOlder,
-    loadOlder: async () => {
-      const before = oldestEntryId(loaded.messages);
-      if (!before) return;
-      setLoadingOlder(true);
-      try {
-        const page = await botsApi.pastChatHistory(bot.id, chatId, before);
-        setLoaded((current) =>
-          oldestEntryId(current.messages) === before
-            ? prependOlder(current.messages, page)
-            : current,
-        );
-      } catch {
-        // Stay loadable: the next scroll to the top tries again.
-      } finally {
-        setLoadingOlder(false);
-      }
-    },
-  };
-
-  const runs = view?.runs ?? NO_RUNS;
-  const timeline = useMemo(() => chatTimeline(loaded.messages, runs), [loaded.messages, runs]);
-  const chat = view?.chat;
+  // The session, read once: one that can't be read (the reason toasted) goes back to the live chat.
+  const leave = useCallback(
+    () => navigate(`/chats/${bot.id}`, { replace: true }),
+    [navigate, bot.id],
+  );
+  const session = usePastChat(bot.id, chatId, leave);
+  const chat = session.chat;
   const title = chat ? pastChatTitle(chat) : "";
 
   const goToCurrent = () => navigate(`/chats/${bot.id}`);
@@ -211,20 +162,8 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1">
-        {!view && (
-          <div className="text-muted-foreground absolute inset-0 flex items-center justify-center">
-            <Spinner className="size-5" />
-          </div>
-        )}
-        {/* No owner actions: what still waits in a past chat can no longer be answered. */}
-        <Transcript
-          botName={bot.name}
-          timeline={timeline}
-          pages={pages}
-          contentTestId="past-chat-transcript"
-        />
-      </div>
+      {/* No owner actions: what still waits in a past chat can no longer be answered. */}
+      <ChatSessionTranscript bot={bot} chat={session} mode={PAST_CHAT} />
 
       {/* The composer's place: this chat has ended, and how to pick it up again. */}
       <footer className="mx-auto w-full max-w-3xl shrink-0 px-2.5 pb-4 sm:px-5">

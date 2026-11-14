@@ -790,6 +790,40 @@ Duplicated client code becomes one piece each:
 Visible markup, roles and labels stay identical, because the verify journeys
 and e2e specs select on them.
 
+Step 5.4 made a past chat a read-only mode of the chat session. It is a
+session in the same store (`store/chats.ts`, keyed by `pastChatKey`), changed
+by the same reducer (a `past-chat` action: the read's window as a snapshot,
+its routine cards, its record), paged by the same `loadOlder` and rendered by
+the same `ChatSessionTranscript`. `usePastChat` hands it to the pane without
+send, stop, withdraw or YOLO. Every way the two render the same messages
+stays one explicit flag in `lib/chat-mode.ts` (`LIVE_CHAT`, `PAST_CHAT`):
+
+| #   | What                                                    | Live chat                                                                      | Past chat                                                                                                                  | Kept by                       |
+| --- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| P1  | A waiting approval, vault, credentials or takeover card | the card, acting through the owner's actions                                   | no card: the tool row with a clock and "not answered"                                                                      | `ownerActions`                |
+| P2  | A waiting Question card                                 | the questionnaire, answered or dismissed                                       | the asked questions, "not answered"                                                                                        | `ownerActions`                |
+| P3  | Where the transcript opens                              | the newest read message (`last-anchor`), read messages anchoring for 2 frames  | the newest message (`end`), no anchors                                                                                     | `openAt`, `scrollAnchors`     |
+| P4  | A new message at the bottom                             | followed (`autoScroll`)                                                        | not followed                                                                                                               | `autoScroll`                  |
+| P5  | "New messages" divider                                  | above the first reply since the last visit                                     | never                                                                                                                      | `unreadDivider`               |
+| P6  | No messages                                             | the bot's avatar, name and description, else "Say hi to start…"                | nothing                                                                                                                    | `emptyState`                  |
+| P7  | Typing dots                                             | while the bot works with nothing on screen                                     | never                                                                                                                      | `typing`                      |
+| P8  | "Reconnecting…" and offline pill                        | after 1 s of a dropped stream, or offline                                      | never: no stream                                                                                                           | `streamHealth`                |
+| P9  | First-load spinner                                      | after 300 ms, only over an empty transcript                                    | at once, until the chat is read                                                                                            | `loadingSpinner`              |
+| P10 | The transcript content's test id                        | none                                                                           | `past-chat-transcript`                                                                                                     | `contentTestId`               |
+| P11 | Echo bubbles, "Waiting to send" rows, the YOLO banner   | from the owner's sends and the stream                                          | none: its handle cannot send, and the pane renders no held rows or banner                                                  | `usePastChat`'s handle        |
+| P12 | Older pages                                             | `GET /bots/:id/messages?before=`                                               | `GET /bots/:id/chats/:chatId/messages?before=`; both 50 at a time, a failure retried on the next scroll                    | the session key (`loadOlder`) |
+| P13 | Routine cards                                           | the stream's `routine-runs`                                                    | the read's `runs`                                                                                                          | the `past-chat` action        |
+| P14 | Where the session comes from                            | the bot stream, reconnecting with a fresh snapshot; opening marks the bot read | one read per mount, dropped on unmount; a failed read toasts "Failed to open the past chat" and goes back to the live chat | `open` / `openPast`           |
+
+Everything else in a message (bubbles, attachments and their preview, tool
+rows and groups, peer and hand-off cards, markers, day dividers, "Earlier
+messages", the jump-to-latest button) was already the one `Transcript` and
+`ChatMessageView` path and stays it. Each pane keeps its own chrome: the live
+chat its header (bot menu, live view, New chat), model warning, composer,
+file drop, live panels and confirmations; a past chat its header (back,
+bot / title, Chat history, Continue and Delete) and footer ("Past chat ·
+title", dates and count, Current chat, Continue this chat).
+
 ### 4.6 Module boundaries and their enforcers
 
 | Rule                                                                                                | Enforcer                                                           |

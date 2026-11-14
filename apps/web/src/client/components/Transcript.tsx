@@ -8,8 +8,8 @@
  * The transcript is fed a timeline (lib/chat-timeline.ts: the messages
  * loaded so far and the routine cards, plus the live chat's Echoes) and a
  * page source: whether older messages exist and how to load the page
- * above. The live chat feeds both from its session (`useChat`); a Past chat
- * from its own pages.
+ * above. Both come from the chat session's view, through
+ * `ChatSessionTranscript`, which sets the rest by the session's mode.
  *
  * It must render inside a `MessageScrollerProvider` (the pane drives the
  * scroller too: send → scroll to the end).
