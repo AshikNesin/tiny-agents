@@ -4,7 +4,7 @@
  * to a `GateCall` and hands the gate the tool's run; the gate decides, in
  * this order and once per call:
  *
- * 1. The tool's gate plan (`withGatePlan`, vault sinks and the like) may
+ * 1. The tool's gate plan (its `gate`, vault sinks and the like) may
  *    refuse the call, or ask whatever the tool's permission says.
  * 2. Otherwise the conversation's permissions (`tiny.permissions`) say
  *    whether the call asks the owner.
@@ -46,7 +46,7 @@ export interface GateCall {
   readonly args: unknown;
   /** The tool may run again after a restart (pi's `replay: "safe"`). */
   readonly replaySafe: boolean;
-  /** The tool's own say in its gate (`withGatePlan`), if any. */
+  /** The tool's own say in its gate (its registration's `gate`), if any. */
   readonly hooks: GateHooks<unknown> | undefined;
   /**
    * The call's tool api: its decided-once memos, the conversation's

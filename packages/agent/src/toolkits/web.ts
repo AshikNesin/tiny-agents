@@ -12,9 +12,9 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
-import { withGatePlan } from "../approvals";
+import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
+import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, type VaultBroker } from "../vault";
 import { checkPublicUrl, isPrivateAddress } from "./public-url";
 import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
@@ -105,8 +105,12 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
 
   const notConfigured = () => fail("Web tools are not configured: set TINYFISH_API_KEY.");
 
-  const webSearch = defineTool({
+  const webSearch = tool({
     name: "web_search",
+    label: "Searched the web",
+    askLabel: "search the web",
+    summary: "Search the web",
+    policy: { readOnly: true },
     description:
       "Search the web. Returns the top results with title, URL and a snippet. Use web_fetch to read a result.",
     parameters: Type.Object({
@@ -141,8 +145,12 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     },
   });
 
-  const webFetch = defineTool({
+  const webFetch = tool({
     name: "web_fetch",
+    label: "Read page",
+    askLabel: "read a page",
+    summary: "Read a URL as markdown",
+    policy: { readOnly: true },
     description: "Read a public web page as markdown.",
     parameters: Type.Object({ url: Type.String({ minLength: 1 }) }),
     replay: "safe",
@@ -209,90 +217,35 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
 
   const broker = options.vault;
   const httpRequest = broker
-    ? withGatePlan(
-        defineTool({
-          name: "http_request",
-          description:
-            "Make an HTTP request from the server to a public API and read the response. " +
-            "To authenticate, pass `auth` with a vault handle (see vault_list): the server adds the " +
-            "key as a header, only for the hosts its item allows, and you never see it. " +
-            "Use web_fetch to read pages. " +
-            VAULT_RULE,
-          parameters: Type.Object({
-            url: Type.String({ minLength: 8, maxLength: 2000 }),
-            method: Type.Optional(
-              Type.Union(
-                ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].map((m) => Type.Literal(m)),
-              ),
+    ? tool({
+        name: "http_request",
+        label: "Called an API",
+        askLabel: "call an API",
+        summary: "Make an HTTP request, optionally with a vault API key",
+        vault: true,
+        description:
+          "Make an HTTP request from the server to a public API and read the response. " +
+          "To authenticate, pass `auth` with a vault handle (see vault_list): the server adds the " +
+          "key as a header, only for the hosts its item allows, and you never see it. " +
+          "Use web_fetch to read pages. " +
+          VAULT_RULE,
+        parameters: Type.Object({
+          url: Type.String({ minLength: 8, maxLength: 2000 }),
+          method: Type.Optional(
+            Type.Union(
+              ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].map((m) => Type.Literal(m)),
             ),
-            headers: Type.Optional(
-              Type.Record(Type.String({ maxLength: 100 }), Type.String({ maxLength: 2000 })),
-            ),
-            body: Type.Optional(Type.String({ maxLength: 100_000 })),
-            auth: Type.Optional(
-              Type.String({ minLength: 1, maxLength: 64, description: "Vault handle" }),
-            ),
-          }),
-          replay: "unsafe",
-          execute: async (args, api, context) => {
-            let url: URL;
-            try {
-              url = await publicTarget(args.url);
-            } catch (error) {
-              return fail((error as Error).message);
-            }
-            const headers: Record<string, string> = {};
-            for (const [name, value] of Object.entries(args.headers ?? {})) {
-              if (RESERVED_HEADERS.has(name.toLowerCase())) {
-                return fail(
-                  `The ${name} header can't be set; pass a vault handle as auth instead.`,
-                );
-              }
-              headers[name] = value;
-            }
-            const send = (auth?: { name: string; value: string }) =>
-              requestFollowingRedirects(url, args.method ?? "GET", headers, args.body, auth);
-            try {
-              const response = args.auth
-                ? await useFromSink(
-                    broker,
-                    api,
-                    context,
-                    {
-                      handle: args.auth,
-                      tool: "http_request",
-                      targetKind: "host",
-                      target: url.host,
-                    },
-                    ["value"],
-                    async (values, item) => {
-                      const inject = item.inject ?? {
-                        as: "header" as const,
-                        name: "Authorization",
-                        format: "Bearer {value}",
-                      };
-                      const value = values.value?.reveal() ?? "";
-                      return send({
-                        name: inject.name,
-                        value: inject.format.includes("{value}")
-                          ? inject.format.split("{value}").join(value)
-                          : value,
-                      });
-                    },
-                  )
-                : await send();
-              return response;
-            } catch (error) {
-              if (error instanceof Error && error.name === "HttpRequestError") {
-                return fail(error.message);
-              }
-              return fail(
-                args.auth ? safeMessage(error) : `Request failed: ${describeError(error)}`,
-              );
-            }
-          },
+          ),
+          headers: Type.Optional(
+            Type.Record(Type.String({ maxLength: 100 }), Type.String({ maxLength: 2000 })),
+          ),
+          body: Type.Optional(Type.String({ maxLength: 100_000 })),
+          auth: Type.Optional(
+            Type.String({ minLength: 1, maxLength: 64, description: "Vault handle" }),
+          ),
         }),
-        vaultGatePlan(broker, true, async (args: { url: string; auth?: string }) => {
+        replay: "unsafe",
+        gate: vaultGatePlan(broker, true, async (args: { url: string; auth?: string }) => {
           if (!args.auth) return undefined;
           let host: string;
           try {
@@ -302,7 +255,60 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
           }
           return { handle: args.auth, tool: "http_request", targetKind: "host", target: host };
         }),
-      )
+        execute: async (args, api, context) => {
+          let url: URL;
+          try {
+            url = await publicTarget(args.url);
+          } catch (error) {
+            return fail((error as Error).message);
+          }
+          const headers: Record<string, string> = {};
+          for (const [name, value] of Object.entries(args.headers ?? {})) {
+            if (RESERVED_HEADERS.has(name.toLowerCase())) {
+              return fail(`The ${name} header can't be set; pass a vault handle as auth instead.`);
+            }
+            headers[name] = value;
+          }
+          const send = (auth?: { name: string; value: string }) =>
+            requestFollowingRedirects(url, args.method ?? "GET", headers, args.body, auth);
+          try {
+            const response = args.auth
+              ? await useFromSink(
+                  broker,
+                  api,
+                  context,
+                  {
+                    handle: args.auth,
+                    tool: "http_request",
+                    targetKind: "host",
+                    target: url.host,
+                  },
+                  ["value"],
+                  async (values, item) => {
+                    const inject = item.inject ?? {
+                      as: "header" as const,
+                      name: "Authorization",
+                      format: "Bearer {value}",
+                    };
+                    const value = values.value?.reveal() ?? "";
+                    return send({
+                      name: inject.name,
+                      value: inject.format.includes("{value}")
+                        ? inject.format.split("{value}").join(value)
+                        : value,
+                    });
+                  },
+                )
+              : await send();
+            return response;
+          } catch (error) {
+            if (error instanceof Error && error.name === "HttpRequestError") {
+              return fail(error.message);
+            }
+            return fail(args.auth ? safeMessage(error) : `Request failed: ${describeError(error)}`);
+          }
+        },
+      })
     : undefined;
 
   /**
@@ -365,46 +371,16 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     }
   }
 
-  return {
+  // Every bot has the web toolkit; until it is configured it offers the
+  // model nothing rather than tools that can only fail.
+  return defineToolkit({
     id: "web",
-    kind: "toolkit",
     name: "Web",
     description: "Search and read web pages",
-    // Every bot has the web toolkit; until it is configured it offers the
-    // model nothing rather than tools that can only fail.
-    extension: defineExtension({
-      name: "web",
-      tools: [...(configured ? [webSearch, webFetch] : []), ...(httpRequest ? [httpRequest] : [])],
-    }),
-    tools: [
-      {
-        name: "web_search",
-        label: "Searched the web",
-        askLabel: "search the web",
-        description: "Search the web",
-        readOnly: true,
-      },
-      {
-        name: "web_fetch",
-        label: "Read page",
-        askLabel: "read a page",
-        description: "Read a URL as markdown",
-        readOnly: true,
-      },
-      ...(httpRequest
-        ? [
-            {
-              name: "http_request",
-              label: "Called an API",
-              askLabel: "call an API",
-              description: "Make an HTTP request, optionally with a vault API key",
-              vault: true,
-            },
-          ]
-        : []),
-    ],
+    tools: [webSearch, webFetch, httpRequest],
+    offered: (name) => configured || name === "http_request",
     ...(configured ? {} : { setupHint: "Set TINYFISH_API_KEY to enable web search." }),
-  };
+  });
 }
 
 function httpError(message: string): Error {

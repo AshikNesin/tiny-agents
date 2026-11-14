@@ -16,11 +16,14 @@
  * so it is salted with the conversation's persisted UUIDv7 (`pi.provider`):
  * a fresh agent.db next to an old app.db must never hit old rows.
  */
-import { defineExtension, defineTool, ProviderDoc } from "@earendil-works/pi-durable";
+import { ProviderDoc } from "@earendil-works/pi-durable";
 import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
+import { z } from "zod";
 import type { Capability } from "../capabilities";
+import { durableMemo } from "../durable-json";
+import { defineToolkit, tool } from "../toolkit";
 
 type TaskStatus = "todo" | "in_progress" | "done";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -91,6 +94,10 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
+/** delete_task's memos: an attempt started, and whether it removed the row. */
+const startedMemo = durableMemo("delete_task:started", z.boolean());
+const removedMemo = durableMemo("delete_task:removed", z.boolean());
+
 /** Replay-stable, store-independent idempotency key for a tool call's side effect (see header). */
 export async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Promise<string> {
   const provider = await api.snapshot(ProviderDoc, api.conversationId, context);
@@ -98,13 +105,16 @@ export async function toolIdempotencyKey(api: ToolExecutionApi, context: Context
 }
 
 /**
- * The "tasks" extension: task tools. `store` is the app-side
- * adapter over its task table (see apps/web bots.runtime.ts). The tools are
- * created per extension so they close over the store.
+ * The `tasks` toolkit: the owner's task list (`apps/web` Tasks page). `store`
+ * is the app-side adapter over its task table (see apps/web
+ * bots.runtime.ts); the tools close over it.
  */
-export function createTasksExtension(store: TaskStore): Extension {
-  const createTask = defineTool({
+export function createTasksToolkit(store: TaskStore): Capability {
+  const createTask = tool({
     name: "create_task",
+    label: "Added task",
+    askLabel: "add a task",
+    summary: "Create a task",
     description:
       "Create a task (to-do) for the owner. Use for action items the owner mentions. Returns the task with its id.",
     parameters: Type.Object({
@@ -127,10 +137,14 @@ export function createTasksExtension(store: TaskStore): Extension {
     },
   });
 
-  const listTasks = defineTool({
+  const listTasks = tool({
     name: "list_tasks",
+    label: "Listed tasks",
+    askLabel: "list tasks",
+    summary: "List tasks",
     description:
       "List the owner's tasks. Filter by status ('todo', 'in_progress', 'done'); default: open tasks.",
+    policy: { readOnly: true },
     parameters: Type.Object({ status: Type.Optional(statusSchema) }),
     replay: "safe",
     execute: async (args) => {
@@ -139,8 +153,11 @@ export function createTasksExtension(store: TaskStore): Extension {
     },
   });
 
-  const updateTask = defineTool({
+  const updateTask = tool({
     name: "update_task",
+    label: "Updated task",
+    askLabel: "update a task",
+    summary: "Update a task",
     description:
       "Update a task by id: title, notes, status, priority or due date. 'done' marks it complete.",
     parameters: Type.Object({
@@ -159,8 +176,11 @@ export function createTasksExtension(store: TaskStore): Extension {
     },
   });
 
-  const completeTask = defineTool({
+  const completeTask = tool({
     name: "complete_task",
+    label: "Completed task",
+    askLabel: "complete a task",
+    summary: "Mark a task done",
     description: "Mark a task done by id.",
     parameters: Type.Object({ id: Type.String() }),
     replay: "safe",
@@ -172,8 +192,11 @@ export function createTasksExtension(store: TaskStore): Extension {
 
   const report = (id: string, removed: boolean) =>
     removed ? ok(`Deleted task ${id}.`) : fail(`No task with id "${id}".`);
-  const deleteTask = defineTool({
+  const deleteTask = tool({
     name: "delete_task",
+    label: "Deleted task",
+    askLabel: "delete a task",
+    summary: "Delete a task",
     description:
       "Permanently delete a task by id. Use only when the owner clearly asks; prefer complete_task.",
     parameters: Type.Object({ id: Type.String() }),
@@ -183,63 +206,26 @@ export function createTasksExtension(store: TaskStore): Extension {
       // the row already gone and tell the model "no task" for a delete that
       // succeeded. Durable memos (per tool task) remember that an attempt
       // started and how it ended, so the rerun reports the real outcome.
-      const outcome = await api.memo<boolean>("delete_task:removed", context);
+      const outcome = await removedMemo.read(api, context);
       if (outcome === undefined) {
-        const resumed = (await api.memo<boolean>("delete_task:started", context)) === true;
-        await api.memo("delete_task:started", true, context);
+        const resumed = (await startedMemo.read(api, context)) === true;
+        await startedMemo.keep(api, true, context);
         const removed = (await store.remove(args.id)) || resumed;
-        return report(args.id, await api.memo("delete_task:removed", removed, context));
+        return report(args.id, await removedMemo.keep(api, removed, context));
       }
       return report(args.id, outcome);
     },
   });
 
-  return defineExtension({
-    name: "tasks",
+  return defineToolkit({
+    id: "tasks",
+    name: "Tasks",
+    description: "Create and manage your tasks",
     tools: [createTask, listTasks, updateTask, completeTask, deleteTask],
   });
 }
 
-/** The `tasks` toolkit: the owner's task list (`apps/web` Tasks page). */
-export function createTasksToolkit(store: TaskStore): Capability {
-  return {
-    id: "tasks",
-    kind: "toolkit",
-    name: "Tasks",
-    description: "Create and manage your tasks",
-    extension: createTasksExtension(store),
-    tools: [
-      {
-        name: "create_task",
-        label: "Added task",
-        askLabel: "add a task",
-        description: "Create a task",
-      },
-      {
-        name: "list_tasks",
-        label: "Listed tasks",
-        askLabel: "list tasks",
-        description: "List tasks",
-        readOnly: true,
-      },
-      {
-        name: "update_task",
-        label: "Updated task",
-        askLabel: "update a task",
-        description: "Update a task",
-      },
-      {
-        name: "complete_task",
-        label: "Completed task",
-        askLabel: "complete a task",
-        description: "Mark a task done",
-      },
-      {
-        name: "delete_task",
-        label: "Deleted task",
-        askLabel: "delete a task",
-        description: "Delete a task",
-      },
-    ],
-  };
+/** The "tasks" extension alone (tests run it on a bare harness). */
+export function createTasksExtension(store: TaskStore): Extension {
+  return createTasksToolkit(store).extension;
 }
