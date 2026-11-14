@@ -181,3 +181,36 @@ viewers close). A set taken when the stream opened would keep sending an
 unshared bot's activity and miss a newly shared one, a behavior change and a
 leak; `access-checks.test.ts` pins the live reading. The access functions
 read the shares instead, as before, and the `Viewer` is only who is asking.
+
+## D15: S8 lands as an atomic `addGuest`; a positive owner marker waits for the owner (proposed, 2026-11-14)
+
+Register row S8 names two things: any account without a `guests` row is an
+owner, and `addGuest` writes the account and then its `guests` row in two
+statements, so a failure between them leaves an account that is the owner.
+4.5 fixes the second. `addGuest` hashes the password first, then writes both
+rows in one sync `db.transaction()` (R7), so a failure leaves neither
+(`sharing.routes.test.ts` makes the `guests` insert fail and finds no
+account).
+
+It does not make owner-ness positive. The smallest positive design is an
+`owners` table, one row per owner, filled by a data migration from today's
+non-guest accounts. It is not small here:
+
+- The first account is made by the groot kit's first-run setup
+  (`setupFirstUser` in `packages/core`, outside the rewrite by D1), which
+  can't write an app row. The app would have to replace the kit's
+  `/auth/setup` route, or claim an owner on first use, which is an absence
+  rule again.
+- The kit's admin API (`POST /auth/users`) makes accounts that are owners
+  today. They would become neither owner nor guest, a change S8 does not
+  name.
+- Every fixture, seed and harness that makes an account directly would need
+  the marker: the `authToken` and `signIn` test fixtures, six suites,
+  `scripts/seed.ts`, the e2e setup and the verify skill. That is far beyond
+  this row's tests (D2).
+
+With `addGuest` atomic, the app makes accounts in one place, and every one
+it makes is a guest. The kit's setup and admin routes make owners, as they
+are meant to. If the owner wants owner-ness positive anyway, it becomes its
+own register row with the `owners` table, the kit-route question and the
+fixture changes above.
