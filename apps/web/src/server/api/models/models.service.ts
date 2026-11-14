@@ -770,7 +770,21 @@ async function moveOrRefuse(from: readonly string[], moveTo: string | undefined)
   }
   if (from.includes(moveTo)) throw Boom.badRequest("Move them to another model.");
   const target = await modelOrThrow(moveTo);
-  if (target.type !== "chat") throw Boom.badRequest("Move them to a chat model.");
+  // Each user moves only where it could have been set (putRoles, patchAccount).
+  const classifierRole = users.roles.includes("classifier");
+  const chatUsers =
+    users.bots.length > 0 || users.roles.some((role) => role !== "classifier") || fallsBack;
+  if (classifierRole && chatUsers) {
+    // Nothing is both: the account's classifier and chat models move apart.
+    throw Boom.badRequest("Move the classifier role to another classifier model first.");
+  }
+  if (classifierRole && target.type !== "classifier") {
+    throw Boom.badRequest("The classifier role needs a classifier model.");
+  }
+  if (chatUsers && target.type !== "chat") throw Boom.badRequest("Move them to a chat model.");
+  if (fallsBack && (await accountOrThrow(target.providerId)).kind === "claude-plan") {
+    throw Boom.badRequest("The fallback must be a chat model that runs on pi.");
+  }
   await db
     .update(bots)
     .set({ modelId: moveTo })

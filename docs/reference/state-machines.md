@@ -50,8 +50,12 @@ on the edges:
 - **Task.** Any status moves to any other. Entering `done` stamps
   `completedAt`, leaving it clears it, and completing a task that is already
   `done` keeps its first stamp.
-- **Hand-off.** `running → finished` is delivered once; a follow-up reopens
-  a finished hand-off.
+- **Hand-off.** A start claims its row as `starting` before the harness
+  makes the thread, so a replayed start never makes a second one;
+  `starting → running` records the thread. `running → finished` writes the
+  finish it owes the bot in the same transaction (`code_handoff_finishes`),
+  sent until it lands and taken once. A follow-up reopens a finished
+  hand-off before its message is sent.
 - **Routine.** Not stored as one column: `routineState()` reads `scheduled`,
   `struggling`, `auto_paused`, `done` or `paused` off the routine's fields,
   so the Routines page asks one question instead of combining four.
@@ -74,6 +78,7 @@ Some status-like fields were looked at and left as they are:
 | -------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `providers.status`                     | A health probe's last result: any check may write any value, so there are no edges to guard. |
 | `bot_messages` delivered / answered    | Two timestamps (pending → delivered → answered) owned by `bots.delivery.ts`.                 |
+| `code_handoff_finishes.delivered_at`   | One timestamp (owed → delivered) owned by `code.watcher.ts`.                                 |
 | `notification_log.status`              | `packages/core` is groot-owned: change it upstream, then `pnpm groot:sync`.                  |
 | `shelley_handoffs.status`              | Legacy, read once by `copyShelleyTables()` into `code_handoffs`, never written.              |
 | Staged uploads, connection-auth popups | In-memory UI flows inside one component or hook, with their own status unions.               |

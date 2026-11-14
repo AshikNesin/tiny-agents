@@ -2,9 +2,10 @@
  * What tiny-agents keeps about Code threads (ADR 0011): the thread index
  * (`code_threads`) — followed threads and how far the owner has read them,
  * plus the rows of harnesses that keep no list of their own — and bot
- * hand-offs (`code_handoffs`). Every harness keeps its own transcript.
+ * hand-offs (`code_handoffs`) with the finishes they owe the bots
+ * (`code_handoff_finishes`). Every harness keeps its own transcript.
  */
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   LEGACY_INSTANCE_ID,
   parseThreadId,
@@ -13,6 +14,7 @@ import {
   type ThreadIndex,
 } from "@tiny-agents/code/server";
 import {
+  codeHandoffFinishes,
   codeHandoffs,
   codeThreads,
   db,
@@ -148,6 +150,12 @@ export async function isFollowed(threadId: string): Promise<boolean> {
 
 // --- hand-offs -------------------------------------------------------------------
 
+/** A hand-off past `starting`: its thread exists. */
+export type ThreadHandoff = CodeHandoff & { threadId: string };
+
+const hasThread = (row: CodeHandoff | undefined): row is ThreadHandoff =>
+  row !== undefined && row.threadId !== null;
+
 export interface HandoffInput {
   botId: string;
   idempotencyKey: string;
@@ -161,7 +169,8 @@ export async function findHandoffByKey(key: string): Promise<CodeHandoff | undef
   return db.query.codeHandoffs.findFirst({ where: eq(codeHandoffs.idempotencyKey, key) });
 }
 
-export async function recordHandoff(input: HandoffInput): Promise<CodeHandoff> {
+/** A hand-off of a thread that already exists (an adopted one): `running` at once. */
+export async function recordHandoff(input: HandoffInput): Promise<ThreadHandoff> {
   await db
     .insert(codeHandoffs)
     .values({
@@ -175,21 +184,71 @@ export async function recordHandoff(input: HandoffInput): Promise<CodeHandoff> {
     })
     .onConflictDoNothing();
   const row = await findHandoffByKey(input.idempotencyKey);
-  if (!row) throw new Error("hand-off row missing after insert");
+  if (!hasThread(row)) throw new Error("hand-off row missing after insert");
   return row;
+}
+
+/**
+ * Claim a start for its idempotency key before the harness makes the thread
+ * (`starting`, no thread yet): true for the caller that won. A key already
+ * claimed, by this start or an earlier run of it, makes no second thread.
+ */
+export async function claimHandoff(
+  input: Omit<HandoffInput, "threadId" | "title">,
+): Promise<boolean> {
+  const claimed = await db
+    .insert(codeHandoffs)
+    .values({
+      botId: input.botId,
+      idempotencyKey: input.idempotencyKey,
+      task: input.task,
+      cwd: input.cwd ?? null,
+      threadId: null,
+      status: "starting",
+    })
+    .onConflictDoNothing()
+    .returning({ id: codeHandoffs.id });
+  return claimed.length > 0;
+}
+
+/** starting → running, with the thread the harness made. */
+export async function startedHandoff(key: string, threadId: string): Promise<ThreadHandoff> {
+  await db
+    .update(codeHandoffs)
+    .set({ threadId, status: "running" })
+    .where(and(eq(codeHandoffs.idempotencyKey, key), eq(codeHandoffs.status, "starting")));
+  const row = await findHandoffByKey(key);
+  if (!hasThread(row)) throw new Error("hand-off row missing after start");
+  return row;
+}
+
+/** Drop a claim whose thread was never made (the harness refused), so nothing waits on it. */
+export async function dropHandoffClaim(key: string): Promise<void> {
+  await db
+    .delete(codeHandoffs)
+    .where(and(eq(codeHandoffs.idempotencyKey, key), eq(codeHandoffs.status, "starting")));
+}
+
+/** Forget an adopted hand-off whose first send failed (nothing ran for it). */
+export async function forgetHandoff(id: string): Promise<void> {
+  await db
+    .delete(codeHandoffs)
+    .where(and(eq(codeHandoffs.id, id), eq(codeHandoffs.status, "running")));
 }
 
 /** A bot's hand-offs, newest first (optionally to one harness instance). */
 export async function listHandoffs(
   botId: string,
   options: { limit?: number; instanceId?: string } = {},
-): Promise<CodeHandoff[]> {
-  const rows = await db
-    .select()
-    .from(codeHandoffs)
-    .where(eq(codeHandoffs.botId, botId))
-    .orderBy(desc(codeHandoffs.createdAt))
-    .limit(options.instanceId ? 200 : (options.limit ?? 20));
+): Promise<ThreadHandoff[]> {
+  const rows = (
+    await db
+      .select()
+      .from(codeHandoffs)
+      .where(and(eq(codeHandoffs.botId, botId), isNotNull(codeHandoffs.threadId)))
+      .orderBy(desc(codeHandoffs.createdAt))
+      .limit(options.instanceId ? 200 : (options.limit ?? 20))
+  ).filter(hasThread);
   const filtered = options.instanceId
     ? rows.filter(
         (r) => parseThreadId(r.threadId, LEGACY_INSTANCE_ID)?.instanceId === options.instanceId,
@@ -201,21 +260,24 @@ export async function listHandoffs(
 export async function findHandoff(
   botId: string,
   threadId: string,
-): Promise<CodeHandoff | undefined> {
-  return db.query.codeHandoffs.findFirst({
+): Promise<ThreadHandoff | undefined> {
+  const row = await db.query.codeHandoffs.findFirst({
     where: and(eq(codeHandoffs.botId, botId), eq(codeHandoffs.threadId, threadId)),
     orderBy: desc(codeHandoffs.createdAt),
   });
+  return hasThread(row) ? row : undefined;
 }
 
 /**
  * Mark a hand-off running again (the bot sent a follow-up), so its next
  * finish is delivered. A hand-off still running is left as it is.
+ * `finishedAt` becomes the reopen time, so a reconnect before the new turn
+ * starts never owes the turn that ended before it again (`endsHandoff`).
  */
 export async function reopenHandoff(id: string): Promise<void> {
   await db
     .update(codeHandoffs)
-    .set({ status: "running", finishedAt: null })
+    .set({ status: "running", finishedAt: new Date() })
     .where(
       and(
         eq(codeHandoffs.id, id),
@@ -224,16 +286,28 @@ export async function reopenHandoff(id: string): Promise<void> {
     );
 }
 
+/**
+ * Whether a turn that ended at `endedAt` (harness time, ms) is this running
+ * hand-off's to report: it ended after the hand-off started or, once a
+ * follow-up reopened it, after the reopen.
+ */
+export function endsHandoff(handoff: CodeHandoff, endedAt: number): boolean {
+  return handoff.finishedAt
+    ? endedAt > handoff.finishedAt.getTime()
+    : endedAt >= handoff.createdAt.getTime();
+}
+
 /** Running hand-offs of these threads (all when omitted). */
-export async function runningHandoffs(threadIds?: string[]): Promise<CodeHandoff[]> {
+export async function runningHandoffs(threadIds?: string[]): Promise<ThreadHandoff[]> {
   const running = eq(codeHandoffs.status, "running");
-  return db
+  const rows = await db
     .select()
     .from(codeHandoffs)
     .where(threadIds ? and(running, inArray(codeHandoffs.threadId, threadIds)) : running);
+  return rows.filter(hasThread);
 }
 
-/** running → finished, once: true for the caller that won. */
+/** running → finished, once, owing nothing: true for the caller that won (a reopen undone). */
 export async function finishHandoffOnce(id: string): Promise<boolean> {
   const updated = await db
     .update(codeHandoffs)
@@ -246,6 +320,80 @@ export async function finishHandoffOnce(id: string): Promise<boolean> {
     )
     .returning({ id: codeHandoffs.id });
   return updated.length > 0;
+}
+
+/** A finish owed to a bot's chat, with what its delivery needs. */
+export interface OwedFinish {
+  id: string;
+  botId: string;
+  threadId: string | null;
+  requestId: string;
+  harness: string;
+  text: string;
+}
+
+/**
+ * The turn ended: running → finished, once, and the finish it owes the bot
+ * written in the same transaction, so a crash before the delivery leaves it
+ * owed rather than lost. Returns the owed finish for the caller that won.
+ * A turn whose finish is already recorded (the same outcome read again, as
+ * after a follow-up reopened the hand-off) finishes nothing.
+ */
+export function oweFinish(
+  handoff: ThreadHandoff,
+  finish: { requestId: string; harness: string; text: string },
+): OwedFinish | undefined {
+  return db.transaction((tx) => {
+    const recorded = tx
+      .select({ id: codeHandoffFinishes.id })
+      .from(codeHandoffFinishes)
+      .where(eq(codeHandoffFinishes.requestId, finish.requestId))
+      .get();
+    if (recorded) return undefined;
+    const won = tx
+      .update(codeHandoffs)
+      .set({ status: "finished", finishedAt: new Date() })
+      .where(
+        and(
+          eq(codeHandoffs.id, handoff.id),
+          inArray(codeHandoffs.status, handoffMachine.sourcesOf("finished")),
+        ),
+      )
+      .returning({ id: codeHandoffs.id })
+      .all();
+    if (won.length === 0) return undefined;
+    const row = tx
+      .insert(codeHandoffFinishes)
+      .values({ handoffId: handoff.id, ...finish })
+      .returning({ id: codeHandoffFinishes.id })
+      .get();
+    return { id: row.id, botId: handoff.botId, threadId: handoff.threadId, ...finish };
+  });
+}
+
+/** Finishes not yet delivered, oldest first (boot, reconnects, retries). */
+export async function owedFinishes(): Promise<OwedFinish[]> {
+  return db
+    .select({
+      id: codeHandoffFinishes.id,
+      botId: codeHandoffs.botId,
+      threadId: codeHandoffs.threadId,
+      requestId: codeHandoffFinishes.requestId,
+      harness: codeHandoffFinishes.harness,
+      text: codeHandoffFinishes.text,
+    })
+    .from(codeHandoffFinishes)
+    .innerJoin(codeHandoffs, eq(codeHandoffs.id, codeHandoffFinishes.handoffId))
+    .where(isNull(codeHandoffFinishes.deliveredAt))
+    .orderBy(asc(codeHandoffFinishes.createdAt));
+}
+
+/** The submit into the bot's chat returned: the finish is delivered. */
+export async function markFinishDelivered(id: string): Promise<void> {
+  await db
+    .update(codeHandoffFinishes)
+    .set({ deliveredAt: new Date() })
+    .where(eq(codeHandoffFinishes.id, id));
 }
 
 // --- the Shelley-only tables before ADR 0011 -------------------------------------

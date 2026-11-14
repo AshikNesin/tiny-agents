@@ -16,6 +16,7 @@ import {
   memories,
   routineRuns,
   routines,
+  codeHandoffFinishes,
   codeHandoffs,
   codeThreads,
   shelleyHandoffs,
@@ -63,6 +64,7 @@ export async function seedBot(
 
 /** Delete every app row, children before parents. */
 export async function resetAppTables(): Promise<void> {
+  await db.delete(codeHandoffFinishes);
   await db.delete(codeHandoffs);
   await db.delete(codeThreads);
   await db.delete(shelleyHandoffs);

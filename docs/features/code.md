@@ -134,9 +134,23 @@ another with `harness` (the bot's prompt lists the configured ones).
 The chat shows a hand-off as a card with the live state and **Open in Code**.
 When the turn ends, the outcome arrives in the bot's chat once as "Reply from
 <harness>" (untrusted peer text); nothing polls. A finish missed while a
-harness was unreachable is delivered when it reconnects. Claude Code
+harness was unreachable is delivered when it reconnects. A finish is
+recorded as owed before it is sent, so one cut off by a restart or a failed
+send is sent again (at boot, on reconnect, and every 30 seconds) until it
+lands; the chat takes it once. A replayed `code_start` makes one thread, and
+a follow-up is armed to report back before the harness hears it. Claude Code
 hand-offs start in Accept edits; anything else they ask (commands, questions)
 waits for the owner on the Code page.
+
+Known limits (register row C7):
+
+- A start whose `createThread` call fails after the harness already made the
+  thread (a client timeout, say) drops its claim, so a replay of that tool
+  call can make a second thread. Harnesses take no idempotency key to prevent
+  it.
+- A finish that can never be delivered (its bot's chat keeps refusing the
+  submit) is retried, and logged, every 30 seconds for as long as the app
+  runs. Deleting the bot removes it.
 
 ## How it works
 
@@ -187,7 +201,9 @@ waits for the owner on the Code page.
 - **Tables:**
   - `code_threads`: the index. Followed threads and how far you have read
     them, plus the rows of harnesses without their own list.
-  - `code_handoffs`: the hand-offs, `running → finished` compare-and-set.
+  - `code_handoffs`: the hand-offs, `starting → running → finished`
+    compare-and-set.
+  - `code_handoff_finishes`: finishes owed to bots' chats, until delivered.
   - The old `shelley_seen` and `shelley_handoffs` rows are copied in at
     boot.
 - **Client:**

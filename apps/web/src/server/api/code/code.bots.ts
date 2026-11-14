@@ -19,12 +19,18 @@ import type { CodeHandoff } from "../../db";
 import { conversationOwner } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
 import {
+  claimHandoff,
+  dropHandoffClaim,
   findHandoff,
   findHandoffByKey,
+  finishHandoffOnce,
   follow,
+  forgetHandoff,
   listHandoffs,
   recordHandoff,
   reopenHandoff,
+  startedHandoff,
+  type ThreadHandoff,
 } from "./code.store";
 
 /** The harness bots hand work to when they name none. */
@@ -42,7 +48,7 @@ function labelOf(threadId: string): string {
   return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? threadId;
 }
 
-function toRecord(row: CodeHandoff): CodeHandoffRecord {
+function toRecord(row: ThreadHandoff): CodeHandoffRecord {
   return {
     threadId: row.threadId,
     harness: labelOf(row.threadId),
@@ -88,6 +94,117 @@ async function outcomeOf(threadId: string): Promise<{
   }
 }
 
+type StartInput = Parameters<CodeStore["start"]>[0];
+type SendInput = Parameters<CodeStore["send"]>[0];
+
+/** What a start whose key was already claimed returns: its hand-off, if it got a thread. */
+function claimedBefore(row: CodeHandoff): CodeHandoffRecord | { error: string } {
+  if (row.threadId !== null) return toRecord({ ...row, threadId: row.threadId });
+  return {
+    error:
+      "This start was interrupted by a restart before its thread was recorded, so it was not repeated (that could start the work twice). Tell the owner, and start it again only if they ask.",
+  };
+}
+
+/**
+ * Start a hand-off once per idempotency key: the row is claimed before the
+ * harness makes the thread, so a replay never makes a second one. A claim
+ * left `starting` by a run that died before recording its thread is not
+ * repeated: the harness may have made the thread already.
+ */
+async function startOnce(
+  botId: string,
+  input: StartInput,
+): Promise<CodeHandoffRecord | { error: string }> {
+  const existing = await findHandoffByKey(input.idempotencyKey);
+  if (existing) return claimedBefore(existing);
+  const instance = pickHarness(input.harness);
+  if ("error" in instance) return instance;
+  const caps = instance.capabilities();
+  if (caps.workspace.requiresCwd && !input.cwd) {
+    return { error: `${instance.label} needs a working directory: pass cwd (the repo's path).` };
+  }
+  const claimed = await claimHandoff({
+    botId,
+    idempotencyKey: input.idempotencyKey,
+    task: input.task,
+    cwd: input.cwd,
+  });
+  if (!claimed) return claimedBefore((await findHandoffByKey(input.idempotencyKey))!);
+  let nativeId: string;
+  try {
+    ({ nativeId } = await instance.createThread({
+      message: input.task,
+      ...(input.cwd ? { cwd: input.cwd } : {}),
+      ...(input.model ? { model: input.model } : {}),
+      // Hand-offs edit without asking, like owner-started threads (issue #157).
+      ...(caps.settings.defaultPermissionMode
+        ? { permissionMode: caps.settings.defaultPermissionMode }
+        : {}),
+    }));
+  } catch (error) {
+    // The harness made nothing: the call may be tried again.
+    await dropHandoffClaim(input.idempotencyKey);
+    throw error;
+  }
+  const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
+  await follow(instance.id, nativeId);
+  const hub = codeHub();
+  void hub?.refresh(instance.id);
+  // A turn that ended before the row was running found nothing to report to.
+  hub?.handedOff(row.threadId);
+  return toRecord(row);
+}
+
+/**
+ * Send on a thread with its hand-off armed first: adopt a thread this bot
+ * has no hand-off for, or reopen a finished one. If the harness refuses the
+ * message, the hand-off goes back to how it was.
+ */
+async function sendArmed(
+  botId: string,
+  target: { instance: HarnessInstance; nativeId: string },
+  threadId: string,
+  input: SendInput,
+): Promise<{ status: "accepted" | "queued" } | { error: "not_found" }> {
+  const handoff = await findHandoff(botId, threadId);
+  let undo: (() => Promise<unknown>) | undefined;
+  let adopted = false;
+  if (!handoff) {
+    // An existing thread (started earlier, in the harness or on the Code
+    // page): check the harness has it, then adopt it so its finish comes back.
+    const found = await outcomeOf(threadId);
+    if (!found) return { error: "not_found" };
+    const row = await recordHandoff({
+      botId,
+      idempotencyKey: input.idempotencyKey,
+      task: input.message,
+      ...(found.outcome.cwd ? { cwd: found.outcome.cwd } : {}),
+      threadId,
+      title: found.outcome.title,
+    });
+    undo = () => forgetHandoff(row.id);
+    adopted = true;
+  } else if (handoff.status === "finished") {
+    // The follow-up's turn ends with a finish the bot should hear about too.
+    await reopenHandoff(handoff.id);
+    undo = () => finishHandoffOnce(handoff.id);
+  }
+  let result: { status: "accepted" | "queued" };
+  try {
+    result = await target.instance.send(target.nativeId, {
+      message: input.message,
+      ...(input.queue ? { queue: true } : {}),
+    });
+  } catch (error) {
+    await undo?.();
+    if (error instanceof HarnessError && error.status === 404) return { error: "not_found" };
+    throw error;
+  }
+  if (adopted) await follow(target.instance.id, target.nativeId);
+  return result;
+}
+
 export const codeStore: CodeStore = {
   async harnesses() {
     const fallback = pickHarness();
@@ -100,76 +217,21 @@ export const codeStore: CodeStore = {
 
   async start(input) {
     const botId = await botOf(input.conversationId);
-    // A replayed call (pi-durable re-ran the tool task) returns the first start.
-    const existing = await findHandoffByKey(input.idempotencyKey);
-    if (existing) return toRecord(existing);
-    const instance = pickHarness(input.harness);
-    if ("error" in instance) return instance;
-    const caps = instance.capabilities();
-    if (caps.workspace.requiresCwd && !input.cwd) {
-      return { error: `${instance.label} needs a working directory: pass cwd (the repo's path).` };
-    }
-    const { nativeId } = await instance.createThread({
-      message: input.task,
-      ...(input.cwd ? { cwd: input.cwd } : {}),
-      ...(input.model ? { model: input.model } : {}),
-      // Hand-offs edit without asking, like owner-started threads (issue #157).
-      ...(caps.settings.defaultPermissionMode
-        ? { permissionMode: caps.settings.defaultPermissionMode }
-        : {}),
-    });
-    const threadId = threadIdOf(instance.id, nativeId);
-    const row = await recordHandoff({
-      botId,
-      idempotencyKey: input.idempotencyKey,
-      task: input.task,
-      cwd: input.cwd,
-      threadId,
-    });
-    await follow(instance.id, nativeId);
-    void codeHub()?.refresh(instance.id);
-    return toRecord(row);
+    const work = () => startOnce(botId, input);
+    // A replayed call (pi-durable re-ran the tool task) waits for the first
+    // run in this process, then returns what it started.
+    return codeHub()?.serial(`start:${input.idempotencyKey}`, work) ?? work();
   },
 
   async send(input) {
     const botId = await botOf(input.conversationId);
-    const target = codeHub()?.resolve(input.threadId);
-    if (!target) return { error: "not_found" };
+    const hub = codeHub();
+    const target = hub?.resolve(input.threadId);
+    if (!hub || !target) return { error: "not_found" };
     const threadId = threadIdOf(target.instance.id, target.nativeId);
-    let handoff = await findHandoff(botId, threadId);
-    // An existing thread (started earlier, in the harness or on the Code
-    // page): check the harness has it, then adopt it so its finish comes back.
-    let adopt: TurnOutcome | undefined;
-    if (!handoff) {
-      const found = await outcomeOf(threadId);
-      if (!found) return { error: "not_found" };
-      adopt = found.outcome;
-    }
-    let result: { status: "accepted" | "queued" };
-    try {
-      result = await target.instance.send(target.nativeId, {
-        message: input.message,
-        ...(input.queue ? { queue: true } : {}),
-      });
-    } catch (error) {
-      if (error instanceof HarnessError && error.status === 404) return { error: "not_found" };
-      throw error;
-    }
-    if (adopt) {
-      handoff = await recordHandoff({
-        botId,
-        idempotencyKey: input.idempotencyKey,
-        task: input.message,
-        ...(adopt.cwd ? { cwd: adopt.cwd } : {}),
-        threadId,
-        title: adopt.title,
-      });
-      await follow(target.instance.id, target.nativeId);
-    } else if (handoff?.status === "finished") {
-      // The follow-up's turn ends with a finish the bot should hear about too.
-      await reopenHandoff(handoff.id);
-    }
-    return result;
+    // One send at a time per thread, each arming the hand-off before the
+    // harness hears the message: a turn that ends at once still finds it running.
+    return hub.serial(`send:${threadId}`, () => sendArmed(botId, target, threadId, input));
   },
 
   async status(input) {
