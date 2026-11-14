@@ -16,7 +16,7 @@
  * query still name `bots.conversationId` directly, on purpose:
  * - writes that must land only while the conversation is still the bot's
  *   chat (`recordReply` in bots.list.ts): the column is their guard;
- * - `followsConversation` (people.service.ts), which the SSE filter needs
+ * - `followsConversation` (people/access.ts), which the SSE filter needs
  *   synchronous;
  * - set-based joins over many rows (deliveries, routine runs), with their
  *   `coalesce` for legacy rows.

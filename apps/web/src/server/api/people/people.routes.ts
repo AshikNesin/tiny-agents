@@ -9,7 +9,7 @@ const router = new Hono<AppEnv>();
 
 /** Whether the signed-in account is a guest (the client shows a guest's shell). */
 router.get("/people/me", (c) => {
-  return ok(c, { guest: c.get("viewer").guest });
+  return ok(c, { guest: c.get("viewer").kind === "guest" });
 });
 
 // Owner only (guest.guard.ts): managing guests.

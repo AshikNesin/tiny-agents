@@ -25,7 +25,8 @@ import { findPastChat, leaveChat } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
 import { publishBotChatEvent } from "./bots.events";
 import { previewText } from "./bots.list";
-import { authorOf, type Viewer } from "../people/people.service";
+import { requireApprovalAnswer, type Viewer } from "../people/access";
+import { authorOf } from "../people/people.service";
 import { getBot, updateBotRow, type BotAgentRuntime } from "./bots.service";
 
 function runtime(): BotAgentRuntime {
@@ -191,13 +192,7 @@ export async function decideApproval(
     (await chat.read()).messages
       .flatMap((message) => message.toolCalls ?? [])
       .find((toolCall) => toolCall.taskId === input.taskId);
-  if (viewer?.guest) {
-    // A guest answers the bot's approvals, but the vault holds the owner's
-    // secrets and "always allow" changes the bot: both stay the owner's.
-    if (input.alwaysAllow || input.grant) throw Boom.forbidden("Only the owner can do that");
-    const call = await waitingCall();
-    if (call?.vault) throw Boom.forbidden("Only the owner can approve vault use");
-  }
+  await requireApprovalAnswer(viewer, input, waitingCall);
   // "Always allow" switches on the tool of the call being approved, never
   // whatever name the request carries (S5), and never a vault use. A call
   // that isn't there changes nothing; the decision below answers 409.

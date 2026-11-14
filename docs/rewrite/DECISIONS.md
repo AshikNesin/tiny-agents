@@ -169,3 +169,15 @@ would churn imports for nothing. The list keeps the paths that really go
 away; `check:old-modules` (6.1) also checks that the three narrowed files
 stay narrow (no chat action in `bots.service.ts`, no manager logic outside
 `live-sessions.ts`).
+
+## D14: The `Viewer` carries no shares; checks read them when they run (accepted under autopilot, 2026-11-14)
+
+§4.4 drew a guest `Viewer` with `bots: ReadonlySet<string>`, the bots shared
+with them, resolved once per request. 4.2 builds it without the set. Today
+every check reads the shares when it runs, and one reader outlives its
+request: `/events` filters each activity change by the shares at that
+moment, and stays open when a bot is unshared (only that bot's streams and
+viewers close). A set taken when the stream opened would keep sending an
+unshared bot's activity and miss a newly shared one, a behavior change and a
+leak; `access-checks.test.ts` pins the live reading. The access functions
+read the shares instead, as before, and the `Viewer` is only who is asking.

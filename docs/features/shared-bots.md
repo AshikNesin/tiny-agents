@@ -59,7 +59,8 @@ it is listed.
 - `bot_guests` (`bot_id`, `user_id`, `last_read_at`): who a bot is shared with,
   and each guest's read marker.
 
-Code: `apps/web/src/server/api/people/` (service, routes, guard),
+Code: `apps/web/src/server/api/people/` (`access.ts` for the viewer and
+every check past the guard, the guard, live access, service, routes),
 `bots.conversation.ts` (`sharedChatGuidance`), `bots.owner.ts` (`shared`),
 `apps/web/src/client/components/PeopleSettings.tsx`, the Sharing tab in
 `BotDialog.tsx`, `store/people.ts`.
