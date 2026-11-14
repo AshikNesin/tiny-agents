@@ -1,0 +1,77 @@
+/**
+ * Characterization of behavior-register row U12: a guest briefly renders
+ * owner pages until `/people/me` answers, and a failed `/people/me` means
+ * owner.
+ * Preserve: this pins today's behavior, quirk included; change it only with
+ * a signed-off register row.
+ */
+import React from "react";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
+import { appRoutes } from "@/App";
+import { peopleApi } from "@/lib/people-api";
+import { useIsGuest, usePeopleStore } from "@/store/people";
+
+/** The app's own guest gate (route id `guest-gate`), around stand-in pages. */
+function gateElement(routes: RouteObject[]): React.ReactNode {
+  for (const route of routes) {
+    if (route.id === "guest-gate") return route.element;
+    const found = gateElement(route.children ?? []);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function renderAt(path: string) {
+  const router = createMemoryRouter(
+    [
+      {
+        element: gateElement(appRoutes),
+        children: [
+          { path: "/chats", element: <p>Chats page</p> },
+          { path: "/vault", element: <p>Vault page (owner only)</p> },
+        ],
+      },
+    ],
+    { initialEntries: [path] },
+  );
+  render(<RouterProvider router={router} />);
+  return router;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  usePeopleStore.setState({ guest: null });
+});
+
+describe("U12: who the shell thinks is signed in", () => {
+  it("shows a guest the owner's page until /people/me answers, then sends them away", async () => {
+    let answer: (value: { guest: boolean }) => void = () => undefined;
+    vi.spyOn(peopleApi, "me").mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    usePeopleStore.setState({ guest: null });
+    const router = renderAt("/vault");
+    const loading = usePeopleStore.getState().load();
+
+    // Not answered yet: the guest sees the owner-only page.
+    expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
+    expect(renderHook(() => useIsGuest()).result.current).toBe(false);
+
+    await act(async () => {
+      answer({ guest: true });
+      await loading;
+    });
+    expect(await screen.findByText("Chats page")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/chats");
+  });
+
+  it("takes a failed /people/me as the owner", async () => {
+    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
+    usePeopleStore.setState({ guest: null });
+    renderAt("/vault");
+    await act(() => usePeopleStore.getState().load());
+
+    expect(usePeopleStore.getState().guest).toBe(false);
+    expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
+  });
+});
