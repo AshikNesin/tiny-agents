@@ -9,6 +9,7 @@ import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import * as authService from "@groot/core/auth/auth.service";
 import type { CreateUserDTO } from "@groot/core/auth/auth.schema";
+import { hashPassword } from "@groot/core/utils/password.utils";
 import { db, botGuests, guests, users } from "../../db";
 import { isGuestAccount } from "./access";
 import { revokeLiveAccess } from "./live-access";
@@ -55,10 +56,28 @@ export async function listGuests(): Promise<GuestEntry[]> {
   }));
 }
 
-/** Add a guest: a new account the owner hands its password to. 409 for a taken email. */
+/**
+ * Add a guest: a new account the owner hands its password to. 409 for a
+ * taken email. The account and its `guests` row are written in one
+ * transaction (S8): an account without the row would be the owner, so a
+ * failure between the two must leave neither.
+ */
 export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
-  const user = await authService.createUser(data);
-  await db.insert(guests).values({ userId: user.id });
+  const taken = () => Boom.conflict("User with this email already exists");
+  if (await authService.findUserByEmail(data.email)) throw taken();
+  const password = await hashPassword(data.password);
+  const user = db.transaction((tx) => {
+    if (tx.select({ id: users.id }).from(users).where(eq(users.email, data.email)).get()) {
+      throw taken();
+    }
+    const created = tx
+      .insert(users)
+      .values({ email: data.email, password, name: data.name })
+      .returning({ id: users.id, email: users.email, name: users.name })
+      .get();
+    tx.insert(guests).values({ userId: created.id }).run();
+    return created;
+  });
   return {
     id: user.id,
     email: user.email,

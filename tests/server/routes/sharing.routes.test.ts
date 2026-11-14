@@ -3,7 +3,7 @@
  * them; both write in the same chat, the bot reads who said what, and the
  * guest reaches nothing but the bots shared with them and Code.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { db, users } from "../../../apps/web/src/server/db";
 import { matchGuestRoute } from "../../../apps/web/src/server/api/people/guest.guard";
@@ -374,6 +374,41 @@ describe("shared bots", () => {
     expect((await asOwner(`/api/v1/bots/${bot.id}`)).body.data.guestIds).toEqual([]);
     // An owner account is never removed through People.
     expect((await asOwner("/api/v1/people/990001", { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("adds a guest in one transaction: a failed guests row leaves no account to act as the owner (S8)", async () => {
+    const person = { name: "Half", email: "half-made@example.com", password: "secret-pass" };
+    db.run(
+      sql.raw(
+        "CREATE TEMP TRIGGER s8_refuse_guests BEFORE INSERT ON guests BEGIN SELECT RAISE(ABORT, 's8: guests row refused'); END",
+      ),
+    );
+    try {
+      const failed = await asOwner("/api/v1/people", { method: "POST", json: person });
+      expect(failed.status).toBe(500);
+    } finally {
+      db.run(sql.raw("DROP TRIGGER IF EXISTS temp.s8_refuse_guests"));
+    }
+    // The account went with the row: nobody to sign in as, so nobody taken for the owner.
+    expect(await db.$count(users, eq(users.email, person.email))).toBe(0);
+    const login = await api<Data>(app, "/api/v1/auth/login", {
+      method: "POST",
+      json: { email: person.email, password: person.password },
+    });
+    expect(login.status).toBe(401);
+
+    // The email is free again, and the account it makes is a guest.
+    const added = await asOwner("/api/v1/people", { method: "POST", json: person });
+    expect(added.status).toBe(201);
+    made.push(added.body.data.id);
+    const token = await authToken(person.email, added.body.data.id);
+    expect((await api<Data>(app, "/api/v1/people/me", { token })).body.data).toEqual({
+      guest: true,
+    });
+    // A taken email is still a 409 that writes nothing.
+    const again = await asOwner("/api/v1/people", { method: "POST", json: person });
+    expect(again.status).toBe(409);
+    expect(await db.$count(users, eq(users.email, person.email))).toBe(1);
   });
 
   it("signs a removed guest out instead of treating them as the owner", async () => {

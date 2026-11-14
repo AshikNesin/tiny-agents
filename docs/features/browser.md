@@ -260,8 +260,36 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   The viewer is already trusted with the whole browser (it is you); the agent
   absorbs whatever changed at its next snapshot.
 - Navigation by the agent passes the same private-address rules as `web_fetch`
-  (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts. The
-  owner can browse anywhere in the streamed Chrome, like any browser.
+  (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts and
+  addresses. The guard (`navigation-guard.ts`) checks every main-frame request
+  of a tab while an agent holds it, before the request is sent: the URL, each
+  redirect hop, and what the page does later on its own (a meta refresh, a
+  script setting `location`, a click). Popups such a tab opens are guarded the
+  same way. A refused request never leaves the browser. Once no agent holds a
+  tab (it switched away, handed back, or `closeTab` blanked the first tab),
+  the tab and its popups are let through again; the next agent action on it
+  guards it again. The owner can browse anywhere in tabs no agent holds, like
+  any browser; in a tab an agent holds, the owner's navigations pass the
+  guard too.
+- On the local transport, where Chrome uses the server's resolver, the guard
+  also refuses a name that resolves to a private address, unless the name or
+  that address is exempt. On the VM transport it checks literals and local
+  names only: Chrome resolves names on the VM, so the server's answers are
+  the wrong oracle both ways (VM-only names such as `http://router/` don't
+  resolve on the server, and split-horizon or Docker-only names resolve
+  privately only there).
+- Known limits of the guard: subframes (iframes) and subresources (images,
+  scripts, `fetch` from the page) are not checked; on the VM transport a name
+  that resolves to a private address on the VM is not caught; on the local
+  transport Chrome resolves the name again after the guard did, so DNS
+  rebinding between the two lookups is not caught (only `http_request` pins
+  its connection); a name that does not resolve on the server, or not within
+  3 seconds, is left to Chrome. Guarding a tab asks the browser process for
+  the tab's id; when it doesn't answer within 5 seconds, the agent's action
+  fails with "The browser tab is not responding" rather than hanging.
+- Every main-frame document load in the browser pauses for one DevTools round
+  trip while the guard decides, in the owner's tabs too (they are continued
+  at once). On the VM transport that round trip crosses the SSH tunnel.
 - Typing a secret while you drive goes to Chrome as keystrokes. Tool results
   never echo typed text, and the bridge never logs the bytes it relays.
 - Bots sign in, enter 2FA codes and pay through the [vault](./vault.md):

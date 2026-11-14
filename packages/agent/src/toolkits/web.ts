@@ -10,7 +10,8 @@
  * the hosts its item allows. Offered once the app gives the toolkit a vault.
  */
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
+import { Agent, fetch as undiciFetch } from "undici";
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
@@ -22,7 +23,7 @@ import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 export interface WebToolkitOptions {
   /** TinyFish API key. Search and Fetch stay hidden without it. */
   apiKey?: string;
-  /** Override for tests. */
+  /** TinyFish's fetch (tests). Never used by `http_request`, which connects through `sendPinned`. */
   fetch?: typeof fetch;
   /** Alternate Search API origin. */
   searchBase?: string;
@@ -32,6 +33,35 @@ export interface WebToolkitOptions {
   vault?: VaultBroker;
   /** Resolve a hostname for the private-address check (tests). */
   resolveHost?: (hostname: string) => Promise<string[]>;
+  /**
+   * Send one `http_request` hop (tests). It must connect only to
+   * `addresses`, the ones `resolveHost` gave and the check passed. Default:
+   * `pinnedFetch`, a connection pinned to those addresses; nothing else
+   * sends an `http_request`.
+   */
+  sendPinned?: PinnedFetch;
+}
+
+/** One request to `url`, connecting only to the already-checked `addresses`. */
+export type PinnedFetch = (
+  url: URL,
+  addresses: readonly string[],
+  init: RequestInit,
+) => Promise<HopResponse>;
+
+/** What `http_request` reads of a hop's response: the global or undici's `Response`. */
+interface HopResponse {
+  readonly status: number;
+  readonly statusText: string;
+  readonly ok: boolean;
+  readonly headers: { get(name: string): string | null };
+  readonly body: {
+    getReader(): {
+      read(): Promise<{ done: boolean; value?: Uint8Array | undefined }>;
+      cancel(): Promise<void>;
+    };
+    cancel(): Promise<void>;
+  } | null;
 }
 
 /** Longest page text handed to the model. */
@@ -203,8 +233,13 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   });
 
   const resolveHost = options.resolveHost ?? defaultResolve;
-  /** The URL, checked again after DNS: a public name must not resolve to a private address. */
-  async function publicTarget(raw: string): Promise<URL> {
+  const sendPinned: PinnedFetch = options.sendPinned ?? pinnedFetch;
+  /**
+   * The URL, checked again after DNS: a public name must not resolve to a
+   * private address. Resolved once: the request connects to these addresses
+   * (`sendPinned`), so a second lookup can't swap in a private one (S7).
+   */
+  async function publicTarget(raw: string): Promise<{ url: URL; addresses: string[] }> {
     const url = checkPublicUrl(raw);
     const host = url.hostname.replace(/^\[|\]$/g, "");
     const addresses = isIP(host) ? [host] : await resolveHost(host).catch(() => []);
@@ -212,7 +247,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     if (addresses.some(isPrivateAddress)) {
       throw new Error("Private and local addresses can't be requested.");
     }
-    return url;
+    return { url, addresses };
   }
 
   const broker = options.vault;
@@ -256,12 +291,13 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
           return { handle: args.auth, tool: "http_request", targetKind: "host", target: host };
         }),
         execute: async (args, api, context) => {
-          let url: URL;
+          let target: { url: URL; addresses: string[] };
           try {
-            url = await publicTarget(args.url);
+            target = await publicTarget(args.url);
           } catch (error) {
             return fail((error as Error).message);
           }
+          const { url } = target;
           const headers: Record<string, string> = {};
           for (const [name, value] of Object.entries(args.headers ?? {})) {
             if (RESERVED_HEADERS.has(name.toLowerCase())) {
@@ -270,7 +306,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
             headers[name] = value;
           }
           const send = (auth?: { name: string; value: string }) =>
-            requestFollowingRedirects(url, args.method ?? "GET", headers, args.body, auth);
+            requestFollowingRedirects(target, args.method ?? "GET", headers, args.body, auth);
           try {
             const response = args.auth
               ? await useFromSink(
@@ -313,22 +349,23 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
 
   /**
    * One request with manual redirects: every hop is re-checked against the
-   * private-address rules, and the vault header is dropped on any hop that
-   * leaves the original host.
+   * private-address rules and connects only to the addresses it was checked
+   * with, and the vault header is dropped on any hop that leaves the
+   * original host.
    */
   async function requestFollowingRedirects(
-    start: URL,
+    start: { url: URL; addresses: string[] },
     method: string,
     headers: Record<string, string>,
     body: string | undefined,
     auth?: { name: string; value: string },
   ): Promise<ToolExecutionResult> {
-    let url = start;
+    let { url, addresses } = start;
     let currentMethod = method;
     let currentBody = body;
     for (let hop = 0; ; hop++) {
-      const sameHost = url.host === start.host;
-      const response = await doFetch(url.href, {
+      const sameHost = url.host === start.url.host;
+      const response = await sendPinned(url, addresses, {
         method: currentMethod,
         headers: { ...headers, ...(auth && sameHost ? { [auth.name]: auth.value } : {}) },
         body: currentMethod === "GET" || currentMethod === "HEAD" ? undefined : currentBody,
@@ -337,9 +374,11 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       });
       const location = response.headers.get("location");
       if (response.status >= 300 && response.status < 400 && location) {
+        // Not read: let the connection go before the next hop (or the error).
+        await response.body?.cancel().catch(() => undefined);
         if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
         try {
-          url = await publicTarget(new URL(location, url).href);
+          ({ url, addresses } = await publicTarget(new URL(location, url).href));
         } catch (error) {
           throw httpError(`Blocked redirect: ${(error as Error).message}`);
         }
@@ -383,6 +422,48 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   });
 }
 
+/**
+ * A lookup that answers only with the addresses already checked, whatever
+ * the name: the connection can't be steered to an address DNS gives later.
+ */
+function pinnedLookup(addresses: readonly string[]): LookupFunction {
+  const entries = addresses.map((address) => ({ address, family: isIP(address) }));
+  return (hostname, options, callback) => {
+    const family = options.family;
+    const wanted = entries.filter(
+      (entry) => !family || family === entry.family || family === `IPv${entry.family}`,
+    );
+    if (wanted.length === 0) {
+      const error = Object.assign(new Error(`No checked address for ${hostname}.`), {
+        code: "ENOTFOUND",
+      });
+      callback(error, "", 0);
+    } else if (options.all) {
+      callback(null, wanted);
+    } else {
+      callback(null, wanted[0]!.address, wanted[0]!.family);
+    }
+  };
+}
+
+/**
+ * `fetch` over a connection pinned to `addresses`: TLS still verifies the
+ * URL's hostname, but no new DNS lookup chooses where to connect.
+ */
+export const pinnedFetch: PinnedFetch = async (url, addresses, init) => {
+  const dispatcher = new Agent({ connect: { lookup: pinnedLookup(addresses) } });
+  try {
+    const response = await undiciFetch(url.href, {
+      ...(init as Parameters<typeof undiciFetch>[1]),
+      dispatcher,
+    });
+    return response;
+  } finally {
+    // Graceful: the body still streams, and the agent closes once it is read or cancelled.
+    dispatcher.close().catch(() => undefined);
+  }
+};
+
 function httpError(message: string): Error {
   const error = new Error(message);
   error.name = "HttpRequestError";
@@ -394,14 +475,14 @@ function describeError(error: unknown): string {
 }
 
 /** The response body as text, reading at most MAX_HTTP_BYTES. */
-async function readCapped(response: Response): Promise<string> {
+async function readCapped(response: HopResponse): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done || !value) break;
     chunks.push(value);
     size += value.byteLength;
     if (size >= MAX_HTTP_BYTES) {

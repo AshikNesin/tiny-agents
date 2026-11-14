@@ -33,7 +33,7 @@ import {
   vaultGatePlan,
   type IntendedUse,
 } from "../../../../packages/agent/src/toolkits/vault";
-import { createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
+import { createWebToolkit, type PinnedFetch } from "../../../../packages/agent/src/toolkits/web";
 import type { ChatEvent, ChatState, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
   GrantsDoc,
@@ -177,10 +177,16 @@ async function openWith(capability: Capability, respondWith: ReturnType<typeof c
   return { runtime, ref, events };
 }
 
+/** An `http_request` hop sent through a stub fetch: these tests check headers, not the pin. */
+const viaFetch =
+  (stub: typeof fetch): PinnedFetch =>
+  (url, _addresses, init) =>
+    stub(url.href, init);
+
 const webWith = (broker: VaultBroker, calls: { url: string; auth?: string }[]) =>
   createWebToolkit({
     vault: broker,
-    fetch: echoFetch(calls),
+    sendPinned: viaFetch(echoFetch(calls)),
     resolveHost: async () => ["93.184.216.34"],
   });
 
@@ -291,7 +297,7 @@ describe("vault sinks behind the gate", () => {
     }) as typeof fetch;
     const web = createWebToolkit({
       vault: broker,
-      fetch: redirecting,
+      sendPinned: viaFetch(redirecting),
       resolveHost: async () => ["93.184.216.34"],
     });
     const runtime = await openTestRuntime({
@@ -322,7 +328,7 @@ describe("vault sinks behind the gate", () => {
     const calls: { url: string; auth?: string }[] = [];
     const web = createWebToolkit({
       vault: broker,
-      fetch: echoFetch(calls),
+      sendPinned: viaFetch(echoFetch(calls)),
       resolveHost: async () => ["10.0.0.5"],
     });
     const { runtime, ref, events } = await openWith(

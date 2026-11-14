@@ -17,6 +17,7 @@ import { chromium } from "playwright-core";
 import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { pageSession } from "./browser-chromium";
+import { navigationGuard } from "./navigation-guard";
 import { failureDetail } from "./shell";
 import { browserVmStack, launchedStack } from "./browser-vm-setup";
 import type {
@@ -241,6 +242,9 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       };
 
       return pageSession(page, open, {
+        // Chrome resolves names on the VM, so this server's DNS answers
+        // say nothing about where it connects: literals and local names only.
+        guard: await navigationGuard(browser, { resolveHost: null }),
         vnc,
         onDisconnect: (listener) => {
           // Already gone before anyone could listen: report it after the

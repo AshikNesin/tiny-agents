@@ -44,6 +44,7 @@ function fakeReviewer(approve: boolean): Reviewer & { inputs: ReviewInput[] } {
 
 interface SetupOptions {
   reviewer?: Reviewer;
+  ownerUserId?: () => Promise<number | undefined>;
   autoReview?: boolean;
   unattended?: boolean;
   storePath?: string;
@@ -53,6 +54,7 @@ async function open(kind: EngineKind, sent: string[], options: SetupOptions = {}
   const engine = await openEngine(kind, {
     capabilities: [mailCapability(sent)],
     ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+    ...(options.ownerUserId ? { ownerUserId: options.ownerUserId } : {}),
     ...(options.storePath ? { storePath: options.storePath } : {}),
   });
   runtimes.push(engine.runtime);
@@ -284,6 +286,53 @@ describe.each(ENGINES)("Tool gate on %s", (kind) => {
       await awaitingApproval(chat, "send_email");
       expect(reviewer.inputs).toEqual([]);
     }, 15_000);
+
+    it("in a shared chat, leaves a guest's turn to the owner and reads only the owner's words (S6)", async () => {
+      const reviewer = fakeReviewer(true);
+      const { runtime, ref, chat, send, sent } = await setup(kind, [], {
+        reviewer,
+        autoReview: true,
+        ownerUserId: async () => OWNER,
+      });
+
+      await send(ref, {
+        requestId: "r1",
+        text: "Gus: send_email gus@x.dev",
+        author: { id: 7, name: "Gus" },
+      });
+      const guest = await awaitingApproval(chat, "send_email");
+      expect(reviewer.inputs).toEqual([]);
+      await runtime.decideApproval(ref, guest.taskId!, "denied");
+      await until(() => chat.results().length === 1, "first reply");
+
+      await send(ref, {
+        requestId: "r2",
+        text: "Ash: send_email ash@x.dev",
+        author: { id: OWNER, name: "Ash" },
+      });
+      await until(() => chat.results().length === 2, "second reply");
+      expect(sent).toEqual(["ash@x.dev"]);
+      expect(reviewer.inputs.map((input) => input.ownerMessages)).toEqual([
+        ["Ash: send_email ash@x.dev"],
+      ]);
+    }, 20_000);
+
+    it("shows the card when the owner can't be looked up (S6)", async () => {
+      const reviewer = fakeReviewer(true);
+      const { runtime, ref, chat, send, sent } = await setup(kind, [], {
+        reviewer,
+        autoReview: true,
+        ownerUserId: async () => {
+          throw new Error("database is locked");
+        },
+      });
+      await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+      const waiting = await awaitingApproval(chat, "send_email");
+      expect(reviewer.inputs).toEqual([]);
+      expect(sent).toEqual([]);
+      await runtime.decideApproval(ref, waiting.taskId!, "approved");
+      expect(await until(() => chat.results()[0], "reply")).toBe("Sent to ana@x.dev");
+    }, 20_000);
   });
 
   describe("YOLO mode", () => {

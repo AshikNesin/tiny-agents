@@ -79,6 +79,12 @@ export interface BrowserSession {
    * the agents then share the one tab.
    */
   openTab?(): Promise<BrowserSession>;
+  /**
+   * No agent holds this tab any more, but it stays open (the browser's first
+   * tab, blanked): its navigations are no longer guarded. Acting on it again
+   * guards it again.
+   */
+  release?(): void;
   /** Bring this tab to the front, where the live view (and the owner) sees it. */
   focus?(): Promise<void>;
   /**
@@ -406,6 +412,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
         // The browser's first tab cannot close without closing the browser:
         // blank it and leave it unassigned.
         await tab.navigate("about:blank").catch(() => undefined);
+        tab.release?.();
         return;
       }
       await tab.close().catch(() => undefined);

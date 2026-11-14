@@ -5,11 +5,12 @@
  * The reviewer only ever removes a card: it answers "approve" or "ask the
  * owner", never "deny", and any failure (no answer, timeout, malformed reply)
  * is "ask the owner". It sees the owner's own messages and the pending call,
- * never tool results or fetched content, where injected instructions arrive.
+ * never tool results or fetched content, where injected instructions arrive,
+ * and never a guest's messages in a shared chat.
  */
 import type { JsonObject } from "@earendil-works/pi-durable";
 import type { Classifier, ClassifierAnswer, ClassifierQuestion } from "./classifier";
-import type { GateUserMessage } from "./policy";
+import { fromOwner, type GateUserMessage } from "./policy";
 import { secretRedactor } from "./redact";
 
 /** What the reviewer judges: the pending call and what the owner asked for. */
@@ -150,13 +151,18 @@ export function createReviewer(
 /**
  * The owner's latest messages (oldest first) from a conversation's user
  * messages (newest first). `undefined` when the turn was started by another
- * bot (a peer delivery) or no owner message is in reach: nothing to judge
- * the call against.
+ * bot (a peer delivery) or, in a shared chat, by a guest, or no owner
+ * message is in reach: nothing to judge the call against. `owner` is the
+ * owner's user id; whose message it is follows YOLO's rule (`fromOwner`),
+ * so a guest's words never count as the owner's request (S6).
  */
-export function ownerMessages(newestFirst: readonly GateUserMessage[]): string[] | undefined {
+export function ownerMessages(
+  newestFirst: readonly GateUserMessage[],
+  owner: number | undefined,
+): string[] | undefined {
   const messages: string[] = [];
   for (const message of newestFirst) {
-    if (message.peer) {
+    if (!fromOwner(message, owner)) {
       if (messages.length === 0) return undefined;
       continue;
     }

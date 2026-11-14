@@ -7,10 +7,11 @@
  */
 import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
-import type { Locator, Page } from "playwright-core";
+import type { Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
+import { navigationGuard, type NavigationGuard } from "./navigation-guard";
 
 export interface ChromiumTransportOptions {
   /** Overrides the browser binary; default: the VM's headless shell if
@@ -60,7 +61,10 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
       ...(options.args?.length ? { args: options.args } : {}),
     });
     const page: Page = context.pages()[0] ?? (await context.newPage());
+    const browser = context.browser();
+    if (!browser) throw new Error("Chromium started without a browser to guard.");
     return pageSession(page, open, {
+      guard: await navigationGuard(browser),
       onDisconnect: (listener) => context.once("close", listener),
       close: async () => {
         await context.close().catch(() => {});
@@ -70,8 +74,9 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
 }
 
 /**
- * The page-level session every chromium transport shares: navigation with
- * the redirect guard and ref snapshot/click/type.
+ * The page-level session every chromium transport shares: navigation
+ * behind the browser's navigation guard (every main-frame request of the
+ * tab checked before it is sent) and ref snapshot/click/type.
  * `teardown.close` disposes the transport-specific resources around the
  * page (local context vs a remote chromium + tunnel). `openTab` gives
  * another agent a tab of its own in the same browser; `claimed` is the set
@@ -86,22 +91,42 @@ export function pageSession(
     /** Subscribe to the browser dying; see `BrowserSession.onDisconnect`. */
     onDisconnect?: (listener: () => void) => void;
     vnc?: BrowserVnc;
+    /**
+     * The browser's navigation guard (`navigationGuard`): every tab the
+     * session drives is watched while the session holds it. Without one
+     * (stub pages in tests) `navigate` refuses to run.
+     */
+    guard?: NavigationGuard;
   },
   claimed: Set<Page> = new Set(),
 ): BrowserSession {
   const exempt = parseExemptHosts(open.allowedPrivateHosts);
+  const guard = teardown.guard;
   // The tab the agent drives. With a streamed desktop the owner can open
   // and close tabs, so this follows them (see `follow`).
   let page = initialPage;
   let closing = false;
   claimed.add(page);
+  /** Guard the tab before the agent acts on it (once while held). */
+  const watch = (target: Page) => guard?.watch(target, exempt);
+  void watch(page)?.catch(() => undefined);
 
+  // Never waits on the tab: a hand-back must not hang on a busy page. The
+  // next action waits for the guard instead (`guarded`).
   const switchTo = async (next: Page) => {
     if (next === page) return;
     claimed.delete(page);
+    guard?.unwatch(page); // no agent holds it any more
     claimed.add(next);
     page = next;
     follow(next);
+    void watch(next)?.catch(() => undefined);
+  };
+  /** Run an action on the current tab once it is guarded. */
+  const guarded = async <T>(action: (current: Page) => Promise<T>): Promise<T> => {
+    const current = page;
+    await watch(current);
+    return action(current);
   };
 
   // When the current tab closes, move to the most recent tab no other agent
@@ -137,48 +162,84 @@ export function pageSession(
       return pageSession(
         tab,
         open,
-        { close: (current) => current.close().catch(() => {}) },
+        { close: (current) => current.close().catch(() => {}), ...(guard ? { guard } : {}) },
         claimed,
       );
     },
     focus: () => page.bringToFront(),
     url: () => page.url(),
     navigate: async (url) => {
-      // Redirect guard: validate every hop of the redirect chain. Route
-      // interception never sees redirect hops here, but the response's
-      // request chain does (redirectedFrom). A private hop bails to
-      // about:blank before any private byte is rendered.
-      const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      // The guard (S7, `navigation-guard.ts`) fails every main-frame request
+      // of this tab to a private target before it is sent: the URL itself
+      // (a name that resolves privately), each redirect hop, and whatever
+      // the page does next. The response's request chain is checked again
+      // after the load, as before. A refused load bails to about:blank.
+      if (!guard) throw new Error("This browser has no navigation guard.");
+      const current = page;
+      const frameId = await guard.watch(current, exempt);
+      const mark = guard.mark();
+      let response: Response | null = null;
+      try {
+        response = await current.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      } catch (error) {
+        // The refused hop fails the load; say why rather than the net error.
+        if (!guard.refusedSince(frameId, mark)) throw error;
+      }
       const hops: string[] = [];
       for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
-      const bad = hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
+      const bad =
+        guard.refusedSince(frameId, mark) ?? hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
       if (bad) {
-        await page.goto("about:blank").catch(() => {});
+        await leaveForBlank(current);
+        if (bad === url || bad === new URL(url).href) {
+          throw new Error("Private and local addresses can't be fetched.");
+        }
         throw new Error(
           `Blocked: the page redirected to a private address (${new URL(bad).host}).`,
         );
       }
-      return { url: page.url(), status: response?.status() ?? null };
+      return { url: current.url(), status: response?.status() ?? null };
     },
     snapshot: () => snapshotOf(page),
     origin: () => pageOrigin(page),
-    fillSecret: (fill) => fillSecretFields(page, fill),
-    click: (ref) => clickRef(page, ref),
-    type: (ref, text) => typeRef(page, ref, text),
-    press: (key) => page.keyboard.press(key),
-    scroll: (direction, amount) => scrollPage(page, open, direction, amount),
+    fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
+    click: (ref) => guarded((current) => clickRef(current, ref)),
+    type: (ref, text) => guarded((current) => typeRef(current, ref, text)),
+    press: (key) => guarded((current) => current.keyboard.press(key)),
+    scroll: (direction, amount) =>
+      guarded((current) => scrollPage(current, open, direction, amount)),
     screenshot: async () => ({
       // CSS scale: on a 2x desktop the default would double both dimensions
       // and the model would pay for pixels it cannot use.
       data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
     }),
+    release: () => {
+      guard?.unwatch(page);
+    },
     close: async () => {
       closing = true;
       claimed.delete(page);
+      guard?.unwatch(page);
       await teardown.close(page);
     },
   };
   return session;
+}
+
+/**
+ * Leave a refused load for about:blank. The refusal fails `goto` before
+ * Chrome commits its error page, and that commit interrupts a navigation
+ * started meanwhile, so try once more after it.
+ */
+async function leaveForBlank(page: Page): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.goto("about:blank");
+      return;
+    } catch {
+      await page.waitForLoadState("load", { timeout: 5_000 }).catch(() => undefined);
+    }
+  }
 }
 
 /** The tab Chrome is showing: the one whose document reports itself visible. */
