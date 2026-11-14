@@ -16,7 +16,7 @@ export const monoClass = "font-mono text-[0.9em]";
 
 /** In-page heading (a `Section` title, card title, or standalone label). */
 const titleClass = "font-heading text-base leading-snug font-medium";
-/** Routed-page title — the one sanctioned `<h1>` treatment (`PageLayout`). */
+/** Routed-page title: the one sanctioned `<h1>` treatment (`PageLayout`). */
 export const h1Class = "text-xl font-semibold text-foreground sm:text-2xl";
 /** Standalone numeric value (a metric, not a heading). */
 export const statClass = "text-xl font-semibold tabular-nums";
@@ -28,7 +28,7 @@ const textVariants = cva("text-foreground", {
     variant: {
       /** In-page heading (a `Section` title, card title, or standalone label). */
       title: titleClass,
-      /** Default reading size — body, labels, buttons, data. */
+      /** Default reading size: body, labels, buttons, data. */
       body: "text-sm",
       /** Support text: timestamps, counts, helper copy. */
       meta: "text-xs text-muted-foreground",
@@ -57,7 +57,7 @@ interface TextProps extends React.ComponentProps<"span">, VariantProps<typeof te
 
 /**
  * Text owns the type scale. Semantic markup stays the caller's job: wrap it
- * in (or render inside) an `h1`–`h6`, `p`, `dt`, … as appropriate — `Text`
+ * in (or render inside) an `h1`–`h6`, `p`, `dt`, … as appropriate: `Text`
  * only locks the size/weight so pages can't drift.
  *
  * @example

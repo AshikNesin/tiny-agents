@@ -181,7 +181,7 @@ const scenes = {
     await stage("zoom", c.x, c.y, 1);
     await stage("caption", "Human in the loop", "…then carry on with your answers");
     await moveTo(REST.x, REST.y, 600);
-    await fast(2.5, () => app.getByText(/Indiranagar — walkable/).waitFor({ timeout: 40_000 }));
+    await fast(2.5, () => app.getByText(/Indiranagar: walkable/).waitFor({ timeout: 40_000 }));
     await sleep(900);
   },
 

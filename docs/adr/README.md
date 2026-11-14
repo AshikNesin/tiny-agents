@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-ADRs record _why_ a decision was made — not what the code does. They are
+ADRs record _why_ a decision was made, not what the code does. They are
 written once, never edited (except status changes), and superseded rather
 than deleted, so future sessions (human or AI) can reconstruct the reasoning
 that the code alone cannot show.

@@ -1,6 +1,6 @@
 /**
  * The `attachments` toolkit (issue #58): bots read the files the owner
- * attached — PDFs, documents, spreadsheets, text and code, archive listings —
+ * attached: PDFs, documents, spreadsheets, text and code, archive listings,
  * through tools instead of having whole files pasted into context.
  *
  * The app extracts every upload in the background and serves the result
@@ -147,7 +147,7 @@ function describe(summary: AttachmentSummary): string {
         : summary.kind === "image"
           ? "image (use see_image)"
           : "extracting";
-  return `${summary.name} (id ${summary.uploadId}) — ${parts.join(", ")} — ${status}`;
+  return `${summary.name} (id ${summary.uploadId}): ${parts.join(", ")}; ${status}`;
 }
 
 function notReady(summary: AttachmentSummary): ToolExecutionResult {
@@ -286,7 +286,7 @@ export function createAttachmentsToolkit(
         body = sheetTable(sheet, from, to);
         where = `sheet "${sheet.name}" rows ${from}–${to} of ${sheet.totalRows} (${sheet.totalColumns} columns)${
           sheet.truncated
-            ? `; ${sheet.rows.length} rows extracted — copy the file to the sandbox for the rest`
+            ? `; ${sheet.rows.length} rows extracted; copy the file to the sandbox for the rest`
             : ""
         }`;
         if (args.sheet === undefined && content.sheets.length > 1) {

@@ -229,14 +229,14 @@ class ApiClient {
 
   /**
    * DELETE. Unlike the other verbs, DELETE may legitimately return no body
-   * (204 No Content), so this does not throw on missing data — it returns
+   * (204 No Content), so this does not throw on missing data: it returns
    * whatever data is present (typed by the caller) or `undefined`.
    */
   async delete<T = unknown>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
     return this.request<T>("DELETE", url, { ...options, body: data, emptyOk: true });
   }
 
-  /** Upload `FormData` — the browser sets the multipart Content-Type + boundary. */
+  /** Upload `FormData`: the browser sets the multipart Content-Type + boundary. */
   async postForm<T>(url: string, formData: FormData): Promise<T> {
     return this.call<T>("POST", url, { body: formData });
   }

@@ -179,7 +179,7 @@ function DirectoryBrowser({
   );
 }
 
-/** "now", "4m", "5h", "3d" — how long ago, compactly. */
+/** "now", "4m", "5h", "3d": how long ago, compactly. */
 export function shortAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";

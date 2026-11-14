@@ -43,7 +43,7 @@ const ThinkingIndicator = forwardRef<HTMLDivElement, ThinkingIndicatorProps>(
   ) => {
     const compactStep = useSize(size).variant === "compact";
     const [index, setIndex] = useState(0);
-    // Reduced motion drops the infinite glyph morph and the word cycling — a
+    // Reduced motion drops the infinite glyph morph and the word cycling: a
     // static glyph and label carry the same meaning without the movement.
     const reduceMotion = useReducedMotion() ?? false;
 
@@ -62,7 +62,7 @@ const ThinkingIndicator = forwardRef<HTMLDivElement, ThinkingIndicatorProps>(
         className={cn("flex items-center gap-2 px-3 py-2", className)}
         {...props}
       >
-        {/* Static announcement — the cycling word display below is aria-hidden
+        {/* Static announcement: the cycling word display below is aria-hidden
           so screen readers hear one "Thinking…" instead of a re-announcement
           every 4 seconds. */}
         <span className="sr-only">{label}</span>

@@ -76,9 +76,9 @@
   drives any coding agent through one adapter contract, starting with Shelley
   and Claude Code.
   
-  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `@tiny-agents/code` (new) holds the contract: `HarnessInstance`,
   `TranscriptItem` rows upserted by id, thread and instance events, honest
-  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  `Capabilities`, `HarnessHost`, the drivers (`drivers/shelley`: Shelley's
   stream2, snapshot list, normalizer and usage report moved off the client;
   `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
   mode), and a test kit (`capabilityProblems`, an in-memory thread index).

@@ -1,7 +1,7 @@
 /**
  * Self-improvement: a bot can propose edits to its own
- * system prompt through `update_instructions`. The tool is `askOnly` — the owner
- * approves every change in chat before it lands — and the app's store adapter
+ * system prompt through `update_instructions`. The tool is `askOnly`: the owner
+ * approves every change in chat before it lands, and the app's store adapter
  * refuses unattended turns (routine runs, peer deliveries), so a planted
  * prompt can never reach a later request without the owner watching.
  *

@@ -5,8 +5,8 @@ A real shell on the sandbox VM, inside the app (issue #28): a top-level
 each attached to its own tmux session on the VM. Tabs keep running when the
 browser closes, the network roams, the app redeploys or the phone takes
 over. The design target is the four ingredients exe.dev's
-[exe-scroll](https://blog.exe.dev/exe-scroll) names for a remote terminal —
-network roaming, session management, scrollback, modern terminal support —
+[exe-scroll](https://blog.exe.dev/exe-scroll) names for a remote terminal:
+network roaming, session management, scrollback, modern terminal support:
 delivered on this repo's own stack (tmux instead of a ghostty session
 manager; the WS bridge and page do not change if the session manager swaps
 later).
@@ -24,13 +24,13 @@ Browser: /terminal page
 WebSocket bridge on the Node server (apps/web/src/server/api/terminal/terminal.ws.ts)
    single-use 60s ticket · Origin check · slow-client pause · bytes never logged
    ▼
-terminal service (packages/agent/src/terminal) — stateless, port-shaped
+terminal service (packages/agent/src/terminal): stateless, port-shaped
    list/create/kill run one tmux command per exec;
    attach opens a pty channel on the app's one sandbox connection
    ▼
 sandbox VM
    tmux -L ta-terminal: one session (ta-term-<n>) per tab, history-limit
-   50000, mouse on, status off — sessions outlive every layer above
+   50000, mouse on, status off: sessions outlive every layer above
 ```
 
 Server code: `apps/web/src/server/api/terminal/` (routes, ticket WS bridge,
@@ -49,7 +49,7 @@ strip, `TerminalView.tsx` one terminal) and `apps/web/src/client/lib/`
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Network roaming       | The WS drops, the view retries with backoff (1, 3, 5, 10, 20, 30 s) and a **fresh single-use ticket per attempt**, and keeps the xterm buffer; the tab strip shows a pulsing dot while reconnecting. Output from the outage lands in tmux history and appears in the re-attach redraw.                                                                                |
 | Session management    | A tab **is** a tmux session on the VM. The tab list is read from the VM and polled every 5 s, so tabs survive the browser, the app process and the device, and tabs opened from another device appear on their own. Every browser tab is its own tmux client (no `-d`: it closed the other device's view for good); `window-size latest` lets the one typing size it. |
-| Scrollback            | tmux history (`history-limit 50000`) with `mouse on` — the wheel scrolls into history on the VM; the attach redraw repaints the visible pane. The buffer living on the VM is the design, not an accident.                                                                                                                                                             |
+| Scrollback            | tmux history (`history-limit 50000`) with `mouse on`: the wheel scrolls into history on the VM; the attach redraw repaints the visible pane. The buffer living on the VM is the design, not an accident.                                                                                                                                                              |
 | Modern terminal       | xterm.js 6 renders (WebGL, DOM fallback) with unicode11 widths so emoji/CJK agree with tmux; tmux gets `RGB`/`clipboard`/`hyperlinks` features, so truecolor, OSC 52 copy and OSC 8 links pass through; resize propagates as a control frame through `setWindow` and tmux follows the SIGWINCH.                                                                       |
 
 ## Transport: the sandbox connection
@@ -69,9 +69,9 @@ connection, and new channels go to a fresh one.
 ttyd-shaped, two frame kinds:
 
 - **Binary frames are raw pty bytes**, both directions, untouched. The
-  bridge never parses or logs them — they are everything the owner types.
+  bridge never parses or logs them: they are everything the owner types.
 - **Text frames are control** (malformed or unknown ones are ignored, not
-  fatal — a buggy client must not lose its terminal):
+  fatal, a buggy client must not lose its terminal):
   - `{"t":"resize","cols":120,"rows":34}`, clamped 2..500 cols, 2..300 rows.
   - `{"t":"pause"}` / `{"t":"resume"}`: client flow control. The client
     counts bytes received but not yet parsed by xterm; past 512 KB it
@@ -98,7 +98,7 @@ page first calls `POST /terminal/sessions/:name/ticket` (normal session
 JWT), then upgrades with `?ticket=`. The ticket is random 24-byte
 base64url, **single-use, 60 s TTL, bound to one tab name and user**, spent
 on first redeem. Ticket mints are rate-limited to 30 per user per minute
-(the answer to abuse is 429, never 409 — the client reads ticket-409 as
+(the answer to abuse is 429, never 409: the client reads ticket-409 as
 "tab gone, stop forever"). The upgrade checks `Origin` like the VNC bridge.
 Ping/pong every 30 s; a slow client is handled by pausing the SSH read side
 past 4 MB queued, then resuming (the VNC bridge's constant).
@@ -192,7 +192,7 @@ line.
   host collapses box changes into the last one; `fit()` changes the grid,
   `onResize` reports it, and the handler sends the control frame. The first
   fit usually lands while the socket is still opening, so the grid is
-  re-sent once the socket is live — the pty always starts at the rendered
+  re-sent once the socket is live: the pty always starts at the rendered
   size. "New tab" opens at the current grid (`initialSize`).
 - **Close asks when real work would die.** `DELETE` answers 409 with the
   foreground process name when the pane runs anything besides the login
@@ -245,7 +245,7 @@ SANDBOX_HOST=tiny-agents-vm pnpm test:e2e -- tests/e2e/terminal.live.spec.ts
 ```
 
 It asserts on WS frames (`page.on("websocket")` → framereceived /
-framesent), never canvas pixels — xterm renders on WebGL, which no DOM
+framesent), never canvas pixels: xterm renders on WebGL, which no DOM
 query can see into. Server tests (`tests/server/routes/terminal.*.test.ts`,
 `tests/server/app/agent/terminal-*.test.ts`) run against an in-process SSH
 server, no VM either.

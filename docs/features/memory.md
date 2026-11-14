@@ -10,12 +10,12 @@ the reply path.
 delete. The domain object is a fact with a lifecycle, so the typed row makes
 supersession, expiry, and the never-re-add tombstone structural:
 
-- `category` — `preference | fact | goal | habit`
-- `status` — `active | superseded | archived | expired | deleted`; only
+- `category`: `preference | fact | goal | habit`
+- `status`: `active | superseded | archived | expired | deleted`; only
   `active` ever injects
-- `source` — `capture | manual` (the page's source line)
-- `until` — optional expiry; expired rows stay rows, leave the prompt
-- `supersededById/At` — strike-through chain when a newer fact replaces one
+- `source`: `capture | manual` (the page's source line)
+- `until`: optional expiry; expired rows stay rows, leave the prompt
+- `supersededById/At`: strike-through chain when a newer fact replaces one
 
 `Bot.memoryEnabled` gates capture, chat-side saves and forgets, and injection. `Bot.memoryCapturedThrough`
 is the transcript watermark: capture commits it in the same transaction as
@@ -47,7 +47,7 @@ change, so provider prompt caching survives between captures.
 `memories.capture.ts` + `memories.runner.ts`. Memory capture is the last step
 of the settled pipeline (`bots.settled.ts`): each settled Turn of a bot's own
 chat with memory on arms a per-conversation debounce; 2 minutes quiet or 6
-settled Turns (any reply completing, including peer deliveries — extraction
+settled Turns (any reply completing, including peer deliveries: extraction
 still filters to owner-authored turns) fires one side-call through the
 side-caller (`side-call.ts`, on the `memory_capture` model role: the model set
 in Settings → Models, else the bot's own model when it runs on pi, else the
@@ -56,8 +56,8 @@ Captures never overlap per conversation. Skip rules run
 before any model call: no side-caller (faux mode disables capture), memory
 off, no owner turns since the watermark, trivial window (advances the
 watermark without a call). A bot with no resolvable model gets no call; the
-side-caller logs it and the window retries. Peer deliveries are not memory sources — only owner-authored
-turns count — and a routine's own conversation is never captured (its runs
+side-caller logs it and the window retries. Peer deliveries are not memory sources, only owner-authored
+turns count, and a routine's own conversation is never captured (its runs
 never enter the chat, see [routines](./routines.md)). One capture reads at most the newest
 24 000 characters of whole lines; when the cap applies (a long backlog, or a
 bot that predates memory with no watermark) the watermark still advances to
@@ -74,7 +74,7 @@ temporary expiries, and returns JSON. The memory ledger
 trimmed, case-insensitive text dedupe against all rows including tombstones
 (a deleted fact is never re-added), supersession of the same bot's active
 rows only, expiry, budget archival of the oldest active rows and the
-watermark bump — one transaction. Unparseable output
+watermark bump: one transaction. Unparseable output
 returns null and leaves the watermark unchanged, so the next capture retries.
 The prompt also lists the 30 most recently deleted memories as "never add
 these again, reworded or not": exact-text dedupe only blocks a literal
@@ -119,18 +119,18 @@ existing automatic expiry; restoring an expired memory clears the past
 expiry so it can stay active. Capture can still expire temporary facts, and
 the API retains `until` support for compatibility.
 
-- `GET /api/v1/bots/:id/memories?includeArchived=` — list (default hides
+- `GET /api/v1/bots/:id/memories?includeArchived=`: list (default hides
   archived and expired)
-- `POST /api/v1/bots/:id/memories` — manual add (`source: manual`). It goes
+- `POST /api/v1/bots/:id/memories`, manual add (`source: manual`). It goes
   through the memory ledger too: text the bot already has active returns that
   memory; text of a deleted, archived, expired or superseded one brings that
   row back as a new active memory (the owner may undo their own delete, which
   capture and chat never do). Never a second row with the same text.
-- `PATCH /api/v1/memories/:id` — edit, or `restore: true` to un-supersede;
+- `PATCH /api/v1/memories/:id`, edit, or `restore: true` to un-supersede;
   a restored memory is kept even when the budget is full (the oldest other
   active memory is archived instead)
-- `DELETE /api/v1/memories/:id` — tombstone, not a row removal
-- `PATCH /api/v1/bots/:id` — `memoryEnabled`
+- `DELETE /api/v1/memories/:id`: tombstone, not a row removal
+- `PATCH /api/v1/bots/:id`: `memoryEnabled`
 
 ## Lifecycle
 

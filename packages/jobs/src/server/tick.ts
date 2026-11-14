@@ -107,7 +107,7 @@ export class JobRunner {
     }
     if (this.#handlers.size === 0) {
       logger.error(
-        "No job handlers registered — workers NOT started. Register handlers with registerJobHandler() before startWorkers().",
+        "No job handlers registered: workers NOT started. Register handlers with registerJobHandler() before startWorkers().",
       );
       return;
     }

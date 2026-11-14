@@ -123,7 +123,7 @@ export function SidebarNav({
           collapsed ? "lg:w-16" : "lg:w-56",
         )}
       >
-        {/* Mobile drawer — always expanded content. Hidden on desktop. */}
+        {/* Mobile drawer, always expanded content. Hidden on desktop. */}
         <div className={cn("flex h-full flex-col", open ? "flex" : "hidden", "lg:hidden")}>
           <div className="flex h-14 shrink-0 items-center justify-between gap-1 px-3">
             <Link
@@ -155,7 +155,7 @@ export function SidebarNav({
           {footer && <div className="shrink-0 p-2.5">{footer}</div>}
         </div>
 
-        {/* Desktop collapsed rail — only on desktop when collapsed. */}
+        {/* Desktop collapsed rail, only on desktop when collapsed. */}
         <div className={cn("hidden h-full flex-col", collapsed ? "lg:flex" : "lg:hidden")}>
           <div className="flex shrink-0 flex-col items-center gap-1 px-3 py-3">
             <button
@@ -174,7 +174,7 @@ export function SidebarNav({
           {footer && <div className="flex shrink-0 justify-center p-2.5">{footer}</div>}
         </div>
 
-        {/* Desktop expanded — only on desktop when not collapsed. */}
+        {/* Desktop expanded, only on desktop when not collapsed. */}
         <div className={cn("hidden h-full flex-col", !collapsed ? "lg:flex" : "lg:hidden")}>
           <div className="flex h-14 shrink-0 items-center justify-between gap-1 px-3">
             <Link to={brandTo} className="flex min-w-0 items-center gap-2 text-sm font-semibold">

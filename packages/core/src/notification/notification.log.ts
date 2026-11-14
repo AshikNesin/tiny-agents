@@ -1,6 +1,6 @@
 /**
  * The notification log (`NotificationLog`): one metadata row per accepted
- * notification — event, title, path, status — never the message body.
+ * notification (event, title, path, status) never the message body.
  */
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "@groot/core/database";

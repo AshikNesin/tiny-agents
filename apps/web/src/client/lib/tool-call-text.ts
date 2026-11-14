@@ -137,7 +137,7 @@ function newBotFacts(args: Record<string, unknown>): ApprovalFact[] {
 
 /** An approval card's sentences. */
 export interface ApprovalText {
-  /** `<bot> wants to <ask> — “<summary>”`. */
+  /** `<bot> wants to <ask>: “<summary>”`. */
   title: string;
   /** Labelled lines the owner must read before approving; only create_bot has them. */
   facts?: ApprovalFact[];
@@ -157,7 +157,7 @@ export function approvalText(
   const summary = argSummary(call);
   const payload = approvalPayload(call);
   return {
-    title: `${botName} wants to ${ask}${summary ? ` — “${summary}”` : ""}`,
+    title: `${botName} wants to ${ask}${summary ? `: “${summary}”` : ""}`,
     alwaysAllowHint: `Approve, and let ${botName} ${ask} without asking`,
     ...(call.name === "create_bot" ? { facts: newBotFacts(call.args ?? {}) } : {}),
     ...(payload.length > PAYLOAD_FOLD ? { foldedPayload: payload } : {}),

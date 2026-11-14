@@ -22,7 +22,7 @@ import {
 } from "react";
 
 /**
- * Imperative confirmation dialog — a thin convenience layer over the
+ * Imperative confirmation dialog: a thin convenience layer over the
  * {@link AlertDialog} primitive (shadcn alert-dialog / Radix AlertDialog). It
  * exposes a promise-returning `confirm()` so callers can replace
  * `window.confirm()` without restructuring async handlers:

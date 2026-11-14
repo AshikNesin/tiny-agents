@@ -55,7 +55,7 @@ export function buildCapturePrompt(input: {
 
 /**
  * Parse the side-call's text: a JSON array, validated whole. Null means
- * unparseable — distinct from a valid empty extraction, so the caller leaves
+ * unparseable: distinct from a valid empty extraction, so the caller leaves
  * the watermark alone and the window retries later.
  */
 export function parseExtraction(reply: string | undefined): ExtractedMemory[] | null {

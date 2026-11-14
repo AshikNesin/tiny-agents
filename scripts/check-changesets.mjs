@@ -76,8 +76,8 @@ const syncedFromBoilerplate = (file) => file.startsWith("packages/") || file.sta
 // can observe: a different value under any top-level key except name,
 // version, and private. Version is excepted because the release bot owns it
 // and its commits are already exempt by author, so a bot bump never reaches
-// this test. Every other key counts — exports, main, types, files,
-// dependencies, peerDependencies, or a field invented later — so a new
+// this test. Every other key counts: exports, main, types, files,
+// dependencies, peerDependencies, or a field invented later, so a new
 // publishing-relevant key cannot slip through an allowlist. An allowlist
 // would also invert the gate's meaning: unlisted would mean safe.
 export function pkgJsonChangeIsReleaseRelevant(beforeJson, afterJson) {

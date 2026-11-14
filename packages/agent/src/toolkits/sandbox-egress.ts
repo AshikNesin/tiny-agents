@@ -18,7 +18,7 @@
  *   before the run: there is no DNS to tunnel a secret through.
  *
  * Secrets travel over the SSH channel's stdin, one line each, and are read
- * into the named env vars inside the unit — never argv (`/proc/*\/cmdline`),
+ * into the named env vars inside the unit, never argv (`/proc/*\/cmdline`),
  * never a file, never ssh `AcceptEnv`. Everything here is a pure string
  * builder so it can be tested without a VM.
  */

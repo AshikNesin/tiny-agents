@@ -13,7 +13,7 @@ import { Toaster } from "./sonner";
  *   <GrootUIProvider>{children}</GrootUIProvider>
  *
  * It composes the individual providers currently exported by this package so
- * consumers don't need to know which (or how many) must be mounted — today that
+ * consumers don't need to know which (or how many) must be mounted: today that
  * is {@link ConfirmProvider} plus the {@link Toaster}. New cross-cutting UI
  * providers added later should be wired in here rather than surfaced
  * individually to app authors.

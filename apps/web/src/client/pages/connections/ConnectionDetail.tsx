@@ -46,7 +46,7 @@ function toolsEmptyDescription(connection: Connection): string {
     case "needs_auth":
       return "Sign in to load this server's tools.";
     case "error":
-      return "Tools couldn't be loaded — try reconnecting.";
+      return "Tools couldn't be loaded. Try reconnecting.";
     default:
       return "This server exposes no tools.";
   }

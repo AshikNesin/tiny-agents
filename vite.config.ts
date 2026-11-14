@@ -157,7 +157,7 @@ export default defineConfig({
     // Changesets emits a blank line between a header and its following list
     // (## @groot/core\n\n- item), but Oxfmt (Prettier-compatible) collapses it
     // (## @groot/core\n- item). Excluding them avoids a format-check failure on
-    // every "chore: version packages" merge — the release workflow commits the
+    // every "chore: version packages" merge, the release workflow commits the
     // raw changeset output with VITE_GIT_HOOKS=0, so the pre-commit formatter
     // never gets a chance to normalize them.
     ignorePatterns: [

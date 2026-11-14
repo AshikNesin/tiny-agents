@@ -1,6 +1,6 @@
 /**
  * Capabilities: what a bot can be given (issue #1 D2). A capability is one
- * pi-durable extension plus the metadata the app shows for it — a built-in
+ * pi-durable extension plus the metadata the app shows for it: a built-in
  * toolkit (`tasks`, `web`, `browser`), the bot's skills, or a remote MCP
  * connection. The app gives every bot every built-in toolkit; the owner
  * shapes a bot with a permission per tool (D3): `allow` runs it, `ask` waits

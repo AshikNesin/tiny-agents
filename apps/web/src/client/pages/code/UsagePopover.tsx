@@ -1,6 +1,6 @@
 /**
  * The context usage popup (issue #143), opened from the composer's context
- * ring: the harness's usage report (ADR 0011) as a table — total and
+ * ring: the harness's usage report (ADR 0011) as a table, total and
  * subtotal, one row group per model with its token bands (cache
  * read/write, input, output), "Other (indirect)" rows for usage a thread
  * incurs outside its own turns, a subagent column when children exist, and
@@ -32,7 +32,7 @@ function TokenBandCell({ band }: { band: UsageBand }) {
             : ""}
       </span>
       <span className="w-14 shrink-0 text-right">
-        {band.priced || band.costUsd > 0 ? formatUsd(band.costUsd) : "—"}
+        {band.priced || band.costUsd > 0 ? formatUsd(band.costUsd) : "-"}
       </span>
     </span>
   );
@@ -256,7 +256,7 @@ export function UsagePopover({
                               {p.calls ?? 0} {p.calls === 1 ? "call" : "calls"}
                             </span>
                             <span className="w-14 shrink-0 text-right">
-                              {p.priced || p.costUsd > 0 ? formatUsd(p.costUsd) : "—"}
+                              {p.priced || p.costUsd > 0 ? formatUsd(p.costUsd) : "-"}
                             </span>
                           </span>
                         </TableCell>

@@ -7,7 +7,7 @@
 - `code-new` `/code` (`/code/new`): composer `Message Shelley`, chips `Model` (`predictable`) and `Reasoning`; `Start`.
 - `code-cwd` `Working directory` picker: recent dirs, `Use “<path>”`, `Browse folders…`; a bad path shows an alert (`directory does not exist`); a git repo enables `New worktree`; the last directory is remembered.
 - `code-turn` a thread page (`/code/shelley%3A<id>`) with transcript region `Messages`, `Worked for …` footer, live over `GET /api/v1/code/threads/:id/events` (SSE).
-- `code-steer` while working, Enter steers (placeholder `Steer Shelley — goes into the running turn`).
+- `code-steer` while working, Enter steers (placeholder `Steer Shelley: goes into the running turn`).
 - `code-queue` Alt+Enter queues; `code-queued` lists it with `Send now` / `Cancel queued message`.
 - `code-stop` `Stop Shelley` → `[Operation cancelled]`.
 - `code-rename` thread actions (`<title>: thread actions`) → `Rename` dialog; `/code/s/<title>` opens a thread by title.

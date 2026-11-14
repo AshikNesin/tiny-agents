@@ -1,7 +1,7 @@
 /**
  * tiny-agents notification events (issue #57): the switches Settings shows
  * and one typed template per event. Templates are the only place a
- * notification's text is built — tool names and bot/routine names come from
+ * notification's text is built: tool names and bot/routine names come from
  * the app, every piece of model-authored or error text goes through
  * `scrubText`, and nothing ever includes tool arguments or outputs.
  */

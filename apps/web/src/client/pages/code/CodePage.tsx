@@ -1,9 +1,9 @@
 /**
  * Code (issue #143, ADR 0011): one workspace for the owner's coding agents
  * ("harnesses": Shelley, Claude Code). tiny-agents runs no agent loop; each
- * harness is driven through its adapter on the server — every thread and
+ * harness is driven through its adapter on the server, every thread and
  * subagent, live transcripts, steering, approvals and the diff of what
- * changed — and the page shows only what a thread's harness can do.
+ * changed, and the page shows only what a thread's harness can do.
  *
  * Layout: list | thread | changes on wide screens (the list steps aside for
  * Changes until 2xl); one column at a time on phones (`/code` →
@@ -162,7 +162,7 @@ export function CodePage() {
             <TriangleAlert className="size-3.5" />
           )}
           {h.status.state === "reconnecting"
-            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""} — retrying…`
+            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}}, retrying…`
             : h.status.state === "connecting"
               ? `Connecting to ${h.label}…`
               : `${h.label}: ${h.status.detail ?? "not ready"}`}
@@ -244,7 +244,7 @@ export function CodePage() {
 
 /**
  * The workspace owns the full column (the app sidebar stays away), so it
- * carries its own way back to the app — like the settings screen. The
+ * carries its own way back to the app, like the settings screen. The
  * not-configured state shows it too, or a direct link to `/code` is a dead end.
  */
 function CodeHeader({ brand }: { brand: { to: string; label: string } }) {

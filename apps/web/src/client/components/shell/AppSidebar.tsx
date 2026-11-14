@@ -289,8 +289,8 @@ export function AppSidebar() {
                 openFeedback({ keyboard: request === "keyboard" });
               }}
             >
-              {/* Amp-style order (upstream): Log out on top — farthest from
-                  the trigger, safe to reach for — then the palette, the
+              {/* Amp-style order (upstream): Log out on top, farthest from
+                  the trigger, safe to reach for, then the palette, the
                   destinations and Settings last, next to the trigger. */}
               <DropdownMenuItem
                 onSelect={() => {

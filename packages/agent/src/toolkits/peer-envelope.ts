@@ -4,7 +4,7 @@
  * (bots.messaging.ts, bots.relay.ts, bots.service.ts mentions); the client
  * and list previews use this parser to render an attributed card instead of
  * the raw prefix, while the model keeps reading the raw prefix (issue #13
- * custody — sanitizePeerText guards these shapes).
+ * custody: sanitizePeerText guards these shapes).
  *
  * Lives in the agent package so the app server and the client lib share one
  * definition of what an envelope looks like.

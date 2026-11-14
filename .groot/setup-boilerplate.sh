@@ -50,7 +50,7 @@ setup_portless() {
     read -rp "Install portless globally via npm? (Y/n): " -r
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        npm install -g portless || { print_warning "Failed — run 'npm install -g portless' manually."; return; }
+        npm install -g portless || { print_warning "Failed: run 'npm install -g portless' manually."; return; }
         command -v portless &> /dev/null && print_success "portless installed" || print_warning "Installation may have failed"
     else
         print_warning "Skipped. pnpm dev needs it: npm install -g portless"

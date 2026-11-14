@@ -36,7 +36,7 @@ window.setTimeout(() => {
 
 // tiny-agents stays dark unless the user picks otherwise (PRD §6.1).
 setDefaultTheme("dark");
-// Apply before first render — no theme flash.
+// Apply before first render: no theme flash.
 initTheme();
 // The FeedbackBee panel closes on an outside click, like the app's modals.
 installFeedbackDismiss();

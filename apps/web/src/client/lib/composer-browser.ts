@@ -51,7 +51,7 @@ export function markMentionTipSeen(): void {
 /**
  * Primary-pointer media query (pointer: coarse = touch, e.g. phones and
  * tablets). On such devices Enter inserts a newline and only the send
- * button sends — Enter-to-send is a physical-keyboard affordance (issue #1).
+ * button sends: Enter-to-send is a physical-keyboard affordance (issue #1).
  */
 export function prefersCoarsePointer(): boolean {
   return (

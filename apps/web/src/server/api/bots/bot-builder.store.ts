@@ -2,7 +2,7 @@
  * BotCreationStore adapter (issue #149): the agent's `bot-builder`
  * capability creates bots through here, with the same `createBot` the
  * owner's "New bot" dialog uses, so names stay unique and the new bot's
- * conversation is set up the same way. Dependency direction stays one-way —
+ * conversation is set up the same way. Dependency direction stays one-way:
  * `@tiny-agents/agent` defines the port, apps/web implements it.
  *
  * Creates happen only in the owner's own turns in a chat that is not shared

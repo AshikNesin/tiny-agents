@@ -38,7 +38,7 @@ const exitFallbackMs = (tier: Tier) => Math.round(tier.exit.duration * 1000) + 1
 /**
  * Keeps a modal surface mounted through its exit animation. `mounted` turns
  * true in the render that opens it (so the portal and `open` land in one
- * commit) and false once the exit completes — on `onExitComplete`, or after a
+ * commit) and false once the exit completes: on `onExitComplete`, or after a
  * timer, because rAF-driven animations stall in throttled background tabs and
  * would otherwise leave an invisible overlay (and the scroll lock) in place.
  * Under reduced motion the transition is instant.

@@ -7,7 +7,7 @@ import type {
 } from "@simplewebauthn/browser";
 import type { PasskeySummary } from "@groot/core/passkey/passkey.schema";
 
-/** A passkey as the server presents it — `PasskeySummary` in
+/** A passkey as the server presents it: `PasskeySummary` in
  *  `@groot/core/passkey/passkey.schema` is the source of truth (type-only
  *  import, erased at build). */
 type Passkey = PasskeySummary;

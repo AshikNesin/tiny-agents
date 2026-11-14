@@ -36,7 +36,7 @@ interface FormProps<TValues extends FieldValues> extends Omit<
  *     <Button type="submit">Log in</Button>
  *   </Form>
  *
- * Pass any Zod schema (e.g. one mirroring a server validation schema) — the
+ * Pass any Zod schema (e.g. one mirroring a server validation schema): the
  * inferred value type flows through to `onSubmit`.
  */
 function FormRoot<TValues extends FieldValues>({
@@ -48,7 +48,7 @@ function FormRoot<TValues extends FieldValues>({
 }: FormProps<TValues>) {
   const form = useForm<TValues>({
     // zodResolver's overloads don't line up with a caller-supplied generic
-    // value type, so cast through `never` + `unknown` — the schema's output
+    // value type, so cast through `never` + `unknown`: the schema's output
     // IS `TValues`, which useForm then binds throughout.
     resolver: zodResolver(schema as never) as unknown as Resolver<TValues>,
     defaultValues: defaultValues as DefaultValues<TValues>,
@@ -65,7 +65,7 @@ function FormRoot<TValues extends FieldValues>({
 }
 
 interface FormFieldProps<TValues extends FieldValues> {
-  /** Typed field path — invalid names are caught at compile time. */
+  /** Typed field path: invalid names are caught at compile time. */
   name: FieldPath<TValues>;
   label?: string;
   /** Help text shown directly under the label, above the input. */
@@ -80,7 +80,7 @@ interface FormFieldProps<TValues extends FieldValues> {
 /**
  * A labeled field that auto-binds its child input to the form (label, value,
  * change handling, and the validation error message). The child receives the
- * react-hook-form `field` props via clone — no manual `register`/`Controller`
+ * react-hook-form `field` props via clone: no manual `register`/`Controller`
  * wiring needed for the common single-input case.
  *
  * Generic over the form's values: leave untyped for a plain string name, or

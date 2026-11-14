@@ -35,7 +35,7 @@ function oauthCallbackUrl(): string {
   return `${appOrigin()}/api/v1/connections/oauth/callback`;
 }
 
-/** Public Client ID Metadata Document URL — only usable on an https origin. */
+/** Public Client ID Metadata Document URL, only usable on an https origin. */
 export function clientMetadataUrl(): string | undefined {
   const origin = appOrigin();
   return origin.startsWith("https://")

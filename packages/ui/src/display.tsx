@@ -6,7 +6,7 @@ import { cn } from "./lib/utils";
 /**
  * Read-only display field: the `dt` label + `dd` value idiom.
  *
- * This is the *display* counterpart to form-`Field` (`@groot/ui/form`) —
+ * This is the *display* counterpart to form-`Field` (`@groot/ui/form`):
  * that one wraps a control inside a form; this one renders a read-only
  * label/value pair. Label typography is `tableColumnHeaderClass` (the one
  * meta-label treatment); values default to `text-sm` body size.

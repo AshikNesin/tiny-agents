@@ -1,7 +1,7 @@
 /**
  * Vault sinks behind the approval gate (issue #56), on real pi-durable turns:
  * item-level approval on top of tool permissions, "for this chat" grants,
- * refusals that never ask, expiring approvals, and the canary invariant —
+ * refusals that never ask, expiring approvals, and the canary invariant:
  * a resolved value never reaches the model or the transcript. Then the use
  * sequence every sink follows (`vaultGatePlan`, `useFromSink`,
  * `useAllFromSink`) at its own interface, on a fake broker and tool API.
@@ -103,7 +103,7 @@ function fakeBroker(approval: VaultApproval) {
   return { broker, recorded };
 }
 
-/** A fake API that echoes the auth header it got — the page "leaking" the key. */
+/** A fake API that echoes the auth header it got: the page "leaking" the key. */
 function echoFetch(calls: { url: string; auth?: string }[]): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const headers = new Headers(init?.headers);

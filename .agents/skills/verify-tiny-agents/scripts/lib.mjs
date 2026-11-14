@@ -235,7 +235,7 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
       } catch (error) {
         ok = false;
         steps.push({ cleanup: true, ok: false, error: String(error).slice(0, 500) });
-        console.log(`  FAIL ${feature}: cleanup — ${String(error).split("\n")[0]}`);
+        console.log(`  FAIL ${feature}: cleanup: ${String(error).split("\n")[0]}`);
       }
     }
     writeFileSync(

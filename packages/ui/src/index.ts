@@ -1,5 +1,5 @@
 /**
- * UI component barrel — single import surface for all primitives.
+ * UI component barrel: single import surface for all primitives.
  *
  *   import { Button, Dialog, Input } from "@groot/ui";
  *
@@ -9,7 +9,7 @@
  * colors (gray-*, red-*, …) outside index.css.
  *
  * This is the component **kit shipped to child projects**, not groot's own
- * app surface — some primitives (alert, pagination, select, tooltip) may have
+ * app surface: some primitives (alert, pagination, select, tooltip) may have
  * no importers inside this repo. That is not dead code: they exist so child
  * apps can consume them from `@groot/ui` instead of vendoring. Removal
  * decisions for this package must weigh child-project demand (see

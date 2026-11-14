@@ -25,7 +25,7 @@ export interface AcquiredRepo {
 export interface AcquireOptions {
   /** Boilerplate repository URL (HTTPS or SSH). */
   repoUrl: string;
-  /** Boilerplate name from config — used to locate `~/Code/<name>`. */
+  /** Boilerplate name from config: used to locate `~/Code/<name>`. */
   name: string;
   /** Default branch to ensure the checkout is on. */
   defaultBranch: string;
@@ -34,7 +34,7 @@ export interface AcquireOptions {
   /**
    * Optional commit SHA that must be reachable. If missing from a temp clone we
    * own, we deepen it with `fetch --unshallow`. For reused local checkouts we
-   * never mutate history — we just warn.
+   * never mutate history: we just warn.
    */
   ensureCommitReachable?: string;
   /** Whether to fetch tags after acquiring (needed for version resolution). */
@@ -96,7 +96,7 @@ async function isClean(dir: string): Promise<boolean> {
  *      This avoids re-cloning on every sync.
  *   2. Fall back to a fresh shallow clone into a temp directory.
  *
- * Callers must only clean up when the returned `owned` flag is true — use
+ * Callers must only clean up when the returned `owned` flag is true: use
  * {@link releaseBoilerplate} to handle that conditionally.
  */
 export async function acquireBoilerplate(opts: AcquireOptions): Promise<AcquiredRepo> {
@@ -118,7 +118,7 @@ export async function acquireBoilerplate(opts: AcquireOptions): Promise<Acquired
       if (originMatches) {
         if (!(await isClean(localPath))) {
           console.log(
-            `Found local boilerplate at ${localPath} but it has uncommitted changes — ` +
+            `Found local boilerplate at ${localPath} but it has uncommitted changes: ` +
               `falling back to a fresh clone.`,
           );
         } else {
@@ -130,12 +130,12 @@ export async function acquireBoilerplate(opts: AcquireOptions): Promise<Acquired
           try {
             await exec("git", ["-C", localPath, "checkout", defaultBranch]);
           } catch {
-            /* detached HEAD or branch absent — leave as-is */
+            /* detached HEAD or branch absent: leave as-is */
           }
           try {
             await exec("git", ["-C", localPath, "pull", "--ff-only", "origin", defaultBranch]);
           } catch {
-            console.log(`  (could not fast-forward — using current state)`);
+            console.log(`  (could not fast-forward: using current state)`);
           }
 
           if (fetchTags) {
@@ -149,7 +149,7 @@ export async function acquireBoilerplate(opts: AcquireOptions): Promise<Acquired
           if (ensureCommitReachable && !(await hasCommit(localPath, ensureCommitReachable))) {
             console.log(
               `  (warning: last sync commit ${ensureCommitReachable.slice(0, 7)} is not ` +
-                `reachable in the local checkout; not mutating your clone — consider a full fetch.)`,
+                `reachable in the local checkout; not mutating your clone: consider a full fetch.)`,
             );
           }
 
@@ -157,7 +157,7 @@ export async function acquireBoilerplate(opts: AcquireOptions): Promise<Acquired
         }
       } else {
         console.log(
-          `Found ${localPath} but its origin does not match ${repoUrl} — falling back to a fresh clone.`,
+          `Found ${localPath} but its origin does not match ${repoUrl}: falling back to a fresh clone.`,
         );
       }
     }
@@ -197,7 +197,7 @@ export async function acquireBoilerplate(opts: AcquireOptions): Promise<Acquired
     try {
       await exec("git", ["-C", tempDir, "fetch", "--unshallow"]);
     } catch {
-      /* already complete or offline — leave as-is */
+      /* already complete or offline: leave as-is */
     }
   }
 

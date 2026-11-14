@@ -1,7 +1,7 @@
 /**
  * The watch-thread protocol (`ThreadEvent`, `contracts/events.ts`), in one
- * place. A driver tells its feed what the thread is now — a full snapshot,
- * the full row list, the streaming text, a state change — and the feed
+ * place. A driver tells its feed what the thread is now: a full snapshot,
+ * the full row list, the streaming text, a state change, and the feed
  * decides what each watcher is sent:
  *
  * - a watcher gets nothing but errors until a snapshot reaches it;

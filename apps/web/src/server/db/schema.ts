@@ -242,7 +242,7 @@ export const shelleySeen = sqliteTable("shelley_seen", {
 /**
  * The Code page's thread index (ADR 0011): one row per harness thread
  * tiny-agents tracks. Every harness keeps its own transcript; this row holds
- * pointers and metadata only — what the owner follows and has read
+ * pointers and metadata only: what the owner follows and has read
  * (unread, pushes), and, for harnesses that keep no list of their own
  * (Claude Code), the thread itself (title, cwd, settings, driver `data`).
  */
@@ -610,7 +610,7 @@ export const memories = sqliteTable(
 /**
  * Full-snapshot revisions of a bot's system prompt (self-improvement):
  * every applied `update_instructions` change lands here before the
- * row is updated — append-only history, the database analog of committing
+ * row is updated: append-only history, the database analog of committing
  * an instructions file. The current prompt is `bots.system_prompt`; this
  * table is the log that makes every change revertable.
  */

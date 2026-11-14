@@ -57,7 +57,7 @@ describe("ChatMessageView reply card", () => {
   });
 
   it("renders the reply card for a settled turn with text", () => {
-    render(<ChatMessageView message={msg({ text: "Done — deleted." })} {...base} />);
+    render(<ChatMessageView message={msg({ text: "Done, deleted." })} {...base} />);
     expect(document.querySelector('[data-slot="reply-card"]')).toBeInTheDocument();
     expect(screen.getByText(/Done/)).toBeInTheDocument();
   });

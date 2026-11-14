@@ -1,7 +1,7 @@
 /**
  * The app's settings: the shell's full-page settings screen
- * (`@groot/shell/pages/settings/Settings`) with tiny-agents' own sections —
- * Models (issue #179), Notifications, People, Updates — beside Account, Appearance,
+ * (`@groot/shell/pages/settings/Settings`) with tiny-agents' own sections:
+ * Models (issue #179), Notifications, People, Updates: beside Account, Appearance,
  * Security and Configuration. A guest (issue #145) gets Appearance and
  * Security only.
  */

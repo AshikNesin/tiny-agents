@@ -109,7 +109,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
     },
     rt,
   );
-  // If the row insert fails the durable conversation is left orphaned — the
+  // If the row insert fails the durable conversation is left orphaned: the
   // same end state as bot deletion, which Phase 2 cleanup will sweep.
   const [row] = await db
     .insert(bots)
@@ -293,7 +293,7 @@ export async function abortReply(id: string, rt: BotAgentRuntime = runtime()) {
 /**
  * Withdraw a message queued behind (or steering into) a busy reply: the x on
  * a queued bubble. Inputs already placed into the running reply, or answered,
- * are refused with 409 — they are part of the conversation.
+ * are refused with 409: they are part of the conversation.
  */
 export async function withdrawMessage(
   id: string,

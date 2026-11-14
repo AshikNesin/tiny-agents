@@ -3,16 +3,16 @@
  * tmux attach on the sandbox VM. The page first calls the JWT-protected
  * ticket route and presents the ticket here; tickets and the Origin check
  * are shared with the VNC bridge (../ws/upgrade.ts). Binary
- * frames are raw pty bytes both ways and are never logged — they are
+ * frames are raw pty bytes both ways and are never logged: they are
  * everything the owner types.
  *
  * Close codes are a contract with the client's reconnect logic:
- *   1000 permanent — this tmux client was detached (Ctrl+B d), the session died, or
+ *   1000 permanent: this tmux client was detached (Ctrl+B d), the session died, or
  *        it never existed (tmux's "can't find session" reaches the pane
  *        first); the client stops, the tab strip shows it.
- *   4000 idle      — ten minutes with no frames either way; the client
+ *   4000 idle     : ten minutes with no frames either way; the client
  *        reconnects with a fresh ticket when the user returns.
- *   1011 attach    — the SSH attach failed after the ticket was spent (the
+ *   1011 attach   : the SSH attach failed after the ticket was spent (the
  *        sandbox is unreachable); the client retries with backoff.
  *
  * Text frames are JSON control messages, client to server:
@@ -200,7 +200,7 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
       resolve();
     };
     // The pty ended: the session was killed, or this client was detached
-    // (Ctrl+B d). Either way an automatic retry is wrong — close 1000 so the
+    // (Ctrl+B d). Either way an automatic retry is wrong: close 1000 so the
     // client stops; its overlay offers a manual Reconnect for the detach.
     stream.once("close", () => {
       if (ws.readyState === ws.OPEN) ws.close(1000, "Terminal session ended");

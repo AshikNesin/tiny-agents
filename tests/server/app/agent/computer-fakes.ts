@@ -108,7 +108,7 @@ export function fakeComputer(): FakeComputer {
             !classes.includes(binding.windowClass.toLowerCase()) ||
             !active.title.toLowerCase().includes((binding.title ?? "").toLowerCase())
           ) {
-            throw new WindowMismatchError(`${active?.windowClass} — ${active?.title}`);
+            throw new WindowMismatchError(`${active?.windowClass}: ${active?.title}`);
           }
           typedSecrets.push({ value, binding });
         },

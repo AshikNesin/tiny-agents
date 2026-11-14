@@ -41,7 +41,7 @@ export function CreateSkillDialog({
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  /** Fields the user has interacted with — errors show only after that. */
+  /** Fields the user has interacted with: errors show only after that. */
   const [touched, setTouched] = useState({ name: false, description: false });
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export function CreateSkillDialog({
                 </p>
               ) : (
                 <p className="text-muted-foreground text-xs">
-                  Lowercase letters, digits and hyphens — bots reference the skill by this name.
+                  Lowercase letters, digits and hyphens. Bots reference the skill by this name.
                 </p>
               )}
             </div>

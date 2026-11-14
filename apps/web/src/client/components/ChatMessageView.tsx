@@ -916,7 +916,7 @@ function assistantView(
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
-        {/* Reply card: renders only when there is something to show — text,
+        {/* Reply card: renders only when there is something to show, text,
             or a terminal status notice. A tool-only turn (empty text, not
             streaming) shows just its trace rows; rendering the card anyway
             painted an empty box. */}

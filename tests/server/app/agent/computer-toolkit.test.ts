@@ -208,8 +208,8 @@ describe("computer toolkit", () => {
   it("lists windows with their ids and marks the active one", async () => {
     const { toolkit } = setup();
     const result = await run(toolkit, "computer_list_windows");
-    expect(result.text).toContain("0x02200003 (active) mousepad.Mousepad — Untitled 1");
-    expect(result.text).toContain("0x02400004 Thunar.Thunar — Home");
+    expect(result.text).toContain("0x02200003 (active) mousepad.Mousepad: Untitled 1");
+    expect(result.text).toContain("0x02400004 Thunar.Thunar: Home");
   });
 
   it("refuses screenshots while the owner drives, so nothing they type is seen", async () => {
@@ -333,7 +333,7 @@ describe("computer toolkit", () => {
   });
 
   it("binds vault targets to a window by class and title", () => {
-    expect(windowTarget("firefox", "  Sign in ")).toBe("firefox — “Sign in”");
+    expect(windowTarget("firefox", "  Sign in ")).toBe("firefox: “Sign in”");
     expect(windowTarget("mousepad")).toBe("mousepad");
   });
 });

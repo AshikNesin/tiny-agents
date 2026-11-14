@@ -97,8 +97,8 @@ export function parseShortcut(shortcut: string): ParsedShortcut {
 }
 
 /** Whether a keydown is the parsed combo. The physical key (`code`) stands
- *  in when `key` is not a Latin letter or digit — non-Latin layouts
- *  (Cyrillic, Greek) — or whenever ⌥ is held, since a Mac ⌥ combo usually
+ *  in when `key` is not a Latin letter or digit: non-Latin layouts
+ *  (Cyrillic, Greek), or whenever ⌥ is held, since a Mac ⌥ combo usually
  *  turns `key` into a symbol but not on every layout. Without ⌥ a Latin
  *  letter is taken at face value, so on Dvorak or AZERTY the key that types
  *  "t" is never read as the physical K. */
@@ -172,7 +172,7 @@ export function formatShortcut(shortcut: string, mac: boolean): string[] {
   return caps;
 }
 
-/** Whether the page runs on a Mac — the platform that draws ⌘ and ⌥. */
+/** Whether the page runs on a Mac: the platform that draws ⌘ and ⌥. */
 export function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false;
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } };

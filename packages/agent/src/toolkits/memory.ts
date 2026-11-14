@@ -72,7 +72,7 @@ export function renderMemoryBlock(
 
 /**
  * The app's adapter over its memory store, scoped to the bot behind a
- * conversation. Dependency direction stays one-way — `@tiny-agents/agent`
+ * conversation. Dependency direction stays one-way: `@tiny-agents/agent`
  * defines the port, apps/web implements it.
  */
 export interface MemoryStore {

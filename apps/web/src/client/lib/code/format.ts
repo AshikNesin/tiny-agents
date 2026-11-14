@@ -17,7 +17,7 @@ export function formatTokenCount(tokens: number): string {
   return String(tokens);
 }
 
-/** "$1.40/M", "$0.079/M" — a band's unit price. */
+/** "$1.40/M", "$0.079/M": a band's unit price. */
 export function formatUnitPrice(usdPerMtok: number): string {
   let s: string;
   if (Number.isInteger(usdPerMtok)) s = String(usdPerMtok);

@@ -17,7 +17,7 @@ import {
 /**
  * Public routes: reachable without a session. The OAuth metadata document is
  * fetched by authorization servers (no credentials possible), and the OAuth
- * redirect target is a cross-site browser navigation — the session cookie
+ * redirect target is a cross-site browser navigation: the session cookie
  * (SameSite=Strict in production) is not attached and a navigation carries no
  * Authorization header. The callback is authorized by the `state` parameter,
  * which matches only a pending sign-in started by the connection's owner.

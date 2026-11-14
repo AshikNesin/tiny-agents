@@ -1,7 +1,7 @@
 /**
  * The `self-improve` capability: the bot's current instructions render as a
  * prompt section, and `update_instructions` always waits for the owner's
- * approval — even when the tool is set to `allow`.
+ * approval, even when the tool is set to `allow`.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";

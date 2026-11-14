@@ -4,14 +4,14 @@
  *
  * Guards two classes of drift that a type-checker and a linter can't see:
  *
- *  1. **Token drift** — raw Tailwind palette colors (gray-*, red-*, blue-*, …)
+ *  1. **Token drift**: raw Tailwind palette colors (gray-*, red-*, blue-*, …)
  *     outside the token layer (packages/shell/src/index.css, Tailwind v4
  *     CSS-first `@theme inline` oklch variables). Colors must come from
  *     semantic classes: bg-primary, text-foreground, text-destructive,
  *     text-success, text-warning, text-info, text-muted-foreground,
  *     border-border, bg-muted, …
  *
- *  2. **Structural drift** — hand-rolling a surface/state that already exists
+ *  2. **Structural drift**: hand-rolling a surface/state that already exists
  *     as a shared primitive. This is what let the UI diverge in the first
  *     place: `Card`, `Table`, `EmptyState`, and the component `gap` were all
  *     available, but re-implementing them inline was easier than importing
@@ -68,7 +68,7 @@ interface Rule {
   /**
    * Absolute paths exempt from this rule. A single file (`…/card.tsx`), or a
    * whole layer by prefix when the entry ends with `/` (e.g. `…/packages/ui/src/`
-   * — the primitive layer that defines the sanctioned treatment).
+   *: the primitive layer that defines the sanctioned treatment).
    */
   allow?: string[];
   /** Restrict the search to these dirs instead of all of SRC_DIRS. */
@@ -115,7 +115,7 @@ const RULES: Rule[] = [
     pattern: 'className="[^"]*\\bm[rl]-\\d[^"]*\\b(size-\\d|h-\\d w-\\d)',
     message:
       "Manual margin on an icon inside a gap-spaced component.\n" +
-      "   Drop the mr-*/ml-* — Button and DropdownMenuItem already apply a gap.",
+      "   Drop the mr-*/ml-*: Button and DropdownMenuItem already apply a gap.",
     pcre2: true,
   },
   {
@@ -135,7 +135,7 @@ const RULES: Rule[] = [
     pattern: "\\btracking-(tight|tighter|wide|wider|widest)\\b",
     message:
       "Modified letter tracking (DLS rule: never change tracking).\n" +
-      "   Drop the tracking-* class — the font is already optically spaced.\n" +
+      "   Drop the tracking-* class: the font is already optically spaced.\n" +
       "   Meta labels get tracking-wider via metaLabelClass (@groot/ui) only.",
     allow: [`${ROOT}packages/ui/src/typography.tsx`],
   },
@@ -152,7 +152,7 @@ const RULES: Rule[] = [
     name: "transition-colors-hover",
     // Kumo rule #7: instant color hover. @groot/ui primitives own the motion
     // language; pages never add transitions. If a primitive legitimately
-    // needs one it is added (and reviewed) there — allow-list is the whole
+    // needs one it is added (and reviewed) there: allow-list is the whole
     // packages/ui/src, pattern still applies to pages/shell/jobs/web.
     pattern: "\\btransition-(color|all)s?\\b",
     message:
@@ -188,7 +188,7 @@ function runRule(rule: Rule): { file: string; line: string }[] {
 
   if (result.error) {
     console.error(
-      "❌ Design-system check could not run: ripgrep (rg) failed to start — " +
+      "❌ Design-system check could not run: ripgrep (rg) failed to start: " +
         `${result.error.message}. Install rg before running this check.`,
     );
     process.exit(1);

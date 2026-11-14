@@ -118,7 +118,7 @@ Every `pnpm` script is listed in
 ## Production checklist
 
 - [ ] `NODE_ENV=production`
-- [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values — in production the server will not start without them
+- [ ] `JWT_SECRET_KEY` (≥ 32 chars) and `ADMIN_AUTH_KEY` set to random values: in production the server will not start without them
 - [ ] `RP_ID` and `ORIGIN` set to your public domain (also required in production; passkeys use them)
 - [ ] Node: a persistent volume at `/data` (the production default is `file:/data/app.db`; `DATA_DIR` moves it) or `DATABASE_URL` pointing at one, and one replica
 - [ ] `CORS_ALLOWED_ORIGINS` set if the API is called from another origin

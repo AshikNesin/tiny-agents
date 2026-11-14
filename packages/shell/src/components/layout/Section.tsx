@@ -14,7 +14,7 @@ interface SectionProps {
 /**
  * Content section with optional title, description, and inline meta/actions.
  *
- * The canonical in-page section heading — use this instead of hand-rolling a
+ * The canonical in-page section heading: use this instead of hand-rolling a
  * `<span className="text-sm font-medium">` plus a count span.
  *
  * @example

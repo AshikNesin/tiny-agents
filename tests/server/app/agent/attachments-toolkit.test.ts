@@ -143,7 +143,7 @@ describe("attachments toolkit", () => {
 
   it("lists the chat's files with their state", async () => {
     const { text } = await run(capability, "list_attachments", {});
-    expect(text).toContain("contract.pdf (id u-pdf) — application/pdf, 812 KB, 3 pages — ready");
+    expect(text).toContain("contract.pdf (id u-pdf): application/pdf, 812 KB, 3 pages; ready");
     expect(text).toContain("big.pdf (id u-pending)");
     expect(text).toContain("extracting");
     expect(text).toContain("failed: The PDF is password-protected.");

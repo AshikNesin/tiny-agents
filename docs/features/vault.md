@@ -32,7 +32,7 @@ model ── handle ──▶ sink tool ── gate (tool permission + item poli
    approval card). Otherwise it says whether the owner must approve.
 3. **Approve.** One card in the chat shows the bot, the item (cards: brand
    ••last 4), the tool and the **target** (origin or host), with **Deny**,
-   **Approve once** and — except for cards and every-use items — **For this
+   **Approve once** and (except for cards and every-use items) **For this
    chat** (a `vault:<handle>` grant kept in the conversation's
    `tiny.grants` document; a new chat starts without grants). Vault approvals
    **expire after 10 minutes** and the call fails closed. A Pushover
@@ -42,7 +42,7 @@ model ── handle ──▶ sink tool ── gate (tool permission + item poli
    audits the outcome. The tool result says which fields were filled, never
    what.
 
-Every attempted use — refusals, denials and expiries included — writes a
+Every attempted use (refusals, denials and expiries included) writes a
 `VaultAuditEvent` (no values, ever). The Vault page shows each item's trail
 and "last used … by …".
 
@@ -125,7 +125,7 @@ one sink where model-written code holds the secret, so it is the strictest:
 - A command that names a URL host outside those hosts is refused before
   anyone is asked (a heuristic; the confinement below is the real control).
 - Values travel over the SSH channel's **stdin**, one line each, and are read
-  into the env vars inside the command's shell — never argv, a file or ssh
+  into the env vars inside the command's shell, never argv, a file or ssh
   `AcceptEnv`. Multi-line values and detached commands are refused, and env
   names like `PATH` or `LD_PRELOAD` are not allowed.
 - The command runs **confined**: in a transient systemd unit (`sudo
@@ -157,7 +157,7 @@ When no item exists (or a code arrives by SMS or email), the bot calls
 to the page's **current top-level origin** (https only, except hosts in
 `BROWSER_ALLOWED_PRIVATE_HOSTS`), validates the form (1–8 fields, slug keys,
 short labels; text, email and select fields need an identifier `autocomplete`
-such as `username`, `email` or `postal-code` — no free text, so the form
+such as `username`, `email` or `postal-code`: no free text, so the form
 can't become a side channel), and waits like an approval. One request may be
 open per chat, three per chat per hour, each for 10 minutes.
 
@@ -188,18 +188,18 @@ are never logged, and Sentry drops the bodies of vault requests.
 
 | Method & path                                | Step-up | Does                                                   |
 | -------------------------------------------- | ------- | ------------------------------------------------------ |
-| `GET /api/v1/vault[?refresh=1]`              | —       | Backends, items (metadata + policy), unlinked items    |
-| `GET /api/v1/vault/items/:handle`            | —       | Item, which fields hold a value, audit trail           |
-| `POST /api/v1/vault/step-up[/options]`       | —       | `{password}` or `{passkey}` → `{token, expiresAt}`     |
+| `GET /api/v1/vault[?refresh=1]`              | -       | Backends, items (metadata + policy), unlinked items    |
+| `GET /api/v1/vault/items/:handle`            | -       | Item, which fields hold a value, audit trail           |
+| `POST /api/v1/vault/step-up[/options]`       | -       | `{password}` or `{passkey}` → `{token, expiresAt}`     |
 | `POST /api/v1/vault/items`                   | yes     | Create in the primary backend + policy row             |
 | `POST /api/v1/vault/links`                   | yes     | Link an existing backend item                          |
 | `PUT /api/v1/vault/items/:handle`            | yes     | Update title, urls, values and/or policy               |
 | `PATCH /api/v1/vault/items/:handle`          | yes     | `{field, value}`: change one value (rotate a password) |
 | `DELETE /api/v1/vault/items/:handle`         | yes     | Unlink; `?purge=true` deletes it in the backend too    |
 | `POST /api/v1/vault/items/:handle/reveal`    | yes     | `{field, purpose: reveal \| copy}` → one value         |
-| `GET /api/v1/vault/requests/:taskId`         | —       | A pending credential request (metadata)                |
-| `POST /api/v1/vault/requests/:taskId/submit` | —       | `{values, save}`: fill, optionally save, resume        |
-| `POST /api/v1/vault/requests/:taskId/cancel` | —       | Cancel the request                                     |
+| `GET /api/v1/vault/requests/:taskId`         | -       | A pending credential request (metadata)                |
+| `POST /api/v1/vault/requests/:taskId/submit` | -       | `{values, save}`: fill, optionally save, resume        |
+| `POST /api/v1/vault/requests/:taskId/cancel` | -       | Cancel the request                                     |
 
 ## Redaction
 
@@ -230,8 +230,8 @@ zero-knowledge, and its access tokens are scoped per vault and expire.
    access to **only** that vault and download `1password-credentials.json`.
 3. Issue two tokens for it, both limited to that vault and set to expire
    (30, 90 or 180 days):
-   - `OP_CONNECT_TOKEN` — **read** (the agent runtime resolves with it);
-   - `OP_CONNECT_ADMIN_TOKEN` — **read + write** (only the Vault UI's
+   - `OP_CONNECT_TOKEN`: **read** (the agent runtime resolves with it);
+   - `OP_CONNECT_ADMIN_TOKEN`: **read + write** (only the Vault UI's
      routes load it; no agent tool ever does).
 4. Set on the app: `OP_CONNECT_HOST`, `OP_CONNECT_VAULT_ID` (the vault's
    UUID), and both tokens. Redeploy.
@@ -246,7 +246,7 @@ pinned to `OP_CONNECT_VAULT_ID`, and an item whose `vault.id` differs is
 refused.
 
 **Rotation.** Values: change them in 1Password (or the Vault UI); the next
-use picks them up — nothing is cached. Tokens: issue a new one, update the
+use picks them up: nothing is cached. Tokens: issue a new one, update the
 env var, redeploy, revoke the old one. The Vault page warns 14 days before a
 token's `exp` claim (when the token carries one).
 

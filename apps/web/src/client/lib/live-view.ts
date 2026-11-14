@@ -1,7 +1,7 @@
 /**
  * The Live view (GLOSSARY): the owner's noVNC view of a bot's browser or
- * desktop. Four surfaces show one — the chat's `BrowserPanel` and
- * `ComputerPanel`, and the Browser and Computer pages — and this module owns
+ * desktop. Four surfaces show one: the chat's `BrowserPanel` and
+ * `ComputerPanel`, and the Browser and Computer pages, and this module owns
  * what they share, so each surface keeps only its source and its copy:
  *
  * - the status poll and its cadence (`pollInterval`: every 1.5s while

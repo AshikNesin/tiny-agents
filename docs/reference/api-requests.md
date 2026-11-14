@@ -30,7 +30,7 @@ Wrong credentials → `401`; more than 20 attempts in 15 minutes → `429`.
 ## Health
 
 ```bash
-curl $BASE/health   # 200 { status: "ok", timestamp } — 503 while shutting down
+curl $BASE/health   # 200 { status: "ok", timestamp }, 503 while shutting down
 curl $BASE/ready    # 200 { ready: true }
 ```
 

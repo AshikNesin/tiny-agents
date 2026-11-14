@@ -3,8 +3,8 @@
  * a one-time code or a card into a sheet the server fills into the page.
  *
  * The `request_credentials` call waits on its task-scoped document like an
- * approval (`waiting.ts`). The document holds only metadata — the origin, the
- * form, and afterwards which keys were filled — never a typed value: the
+ * approval (`waiting.ts`). The document holds only metadata: the origin, the
+ * form, and afterwards which keys were filled, never a typed value: the
  * owner's submit goes to an app route that fills the browser in the same
  * request and then settles the document (`AgentRuntime.settleCredentialRequest`).
  */

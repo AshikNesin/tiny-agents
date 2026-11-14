@@ -270,7 +270,7 @@ describe("computer tools behind the gate", () => {
     );
     expect(waiting.vault).toMatchObject({
       handle: "mail",
-      target: "mousepad — “untitled”",
+      target: "mousepad: “untitled”",
       grantable: false,
     });
     await runtime.decideApproval(ref, waiting.taskId!, "approved");

@@ -25,7 +25,7 @@ straight away.
 
 1. **The owner approves every new bot.** The tool is `askOnly` (like
    `update_instructions`): it waits in chat even when its permission says
-   `allow`. The approval card reads "<bot> wants to create a new bot —
+   `allow`. The approval card reads "<bot> wants to create a new bot:
    “<name>”" and lists the description, the model ("default model" when
    the bot names none) and the full instructions; instructions longer than
    120 characters fold behind Read more. In YOLO mode

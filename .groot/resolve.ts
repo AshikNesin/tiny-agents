@@ -72,7 +72,7 @@ async function checkPiCli(): Promise<void> {
         "resolution. Install it with:",
         `  ${PI_INSTALL_CMD}`,
         "",
-        "Then authenticate with your provider — either an API key env var (e.g.",
+        "Then authenticate with your provider: either an API key env var (e.g.",
         "`export ZAI_API_KEY=...` for the ZAI Coding Plan) or run `pi` and use /login.",
       ].join("\n"),
     );
@@ -144,7 +144,7 @@ export async function ensureMarkers(
   if (CONFLICT_MARKER_RE.test(ours)) return "ready";
 
   const theirs = await readTheirs(manifest, file, sides);
-  if (theirs === null) return "clean"; // deleted upstream — nothing to merge
+  if (theirs === null) return "clean"; // deleted upstream: nothing to merge
   if (ours === theirs) return "clean";
 
   const base = await readBase(sides, file);
@@ -166,10 +166,10 @@ const RESOLVE_SYSTEM_PROMPT = [
   "diff3-style git conflict markers and must produce the fully resolved file.",
   "",
   "Marker layout:",
-  "  <<<<<<< <file> (current_repo)      — this repo's current version (PRESERVE its customizations)",
-  "  ||||||| <file> (last_sync)         — groot at the commit last synced from (common ancestor)",
+  "  <<<<<<< <file> (current_repo)      this repo's current version (PRESERVE its customizations)",
+  "  ||||||| <file> (last_sync)         groot at the commit last synced from (common ancestor)",
   "  =======",
-  "  >>>>>>> <file> (groot_boilerplate)  — latest upstream groot boilerplate (ADOPT its improvements)",
+  "  >>>>>>> <file> (groot_boilerplate)  latest upstream groot boilerplate (ADOPT its improvements)",
   "",
   "Merge both sides intelligently: keep the local project's intent and customizations",
   "while incorporating the upstream improvements, and follow the conventions in AGENTS.md",
@@ -250,7 +250,7 @@ export function extractFileContent(raw: string): string | null {
 
 /**
  * Resolve one conflicted file via a locked-down, single-shot `pi -p` run: no
- * session, no tools, no extensions/skills/context files — just the merge
+ * session, no tools, no extensions/skills/context files, just the merge
  * prompt in, the resolved file out. The output is validated (non-empty, no
  * conflict markers) before the caller writes it; one retry with feedback is
  * attempted when validation fails. Returns the resolved content, or null.
@@ -297,7 +297,7 @@ async function runPi(
     console.log(`  → attempt ${attempt} produced invalid output, retrying...`);
     feedback =
       "\n\nYour previous attempt was empty or still contained conflict markers. " +
-      "Respond with ONLY the complete resolved file content — no fences, no commentary, " +
+      "Respond with ONLY the complete resolved file content: no fences, no commentary, " +
       "and absolutely no conflict markers.";
   }
   return null;
@@ -344,7 +344,7 @@ async function main() {
 
   const manifest = await readManifest(projectRoot);
   if (manifest === null) {
-    console.log(`No conflicts to resolve — \`${MANIFEST_RELATIVE_PATH}\` not found.\n`);
+    console.log(`No conflicts to resolve: \`${MANIFEST_RELATIVE_PATH}\` not found.\n`);
     console.log("Run `pnpm groot:sync` first if you expect pending conflicts.\n");
     return;
   }
@@ -412,12 +412,12 @@ async function main() {
       const state = await ensureMarkers(c.file, projectRoot, manifest, sides);
 
       if (state === "missing-local") {
-        console.log(`  ⚠ ${c.file} does not exist locally — skipping.`);
+        console.log(`  ⚠ ${c.file} does not exist locally: skipping.`);
         skipped.push(c.file);
         continue;
       }
       if (state === "clean") {
-        console.log(`  ✓ ${c.file} has no conflict markers — already resolved.`);
+        console.log(`  ✓ ${c.file} has no conflict markers: already resolved.`);
         resolved.push(c.file);
         continue;
       }
@@ -435,7 +435,7 @@ async function main() {
         console.log(`\n  ✓ Resolved ${c.file}`);
         resolved.push(c.file);
       } else {
-        console.log(`\n  ✗ ${c.file} still has conflict markers — needs manual attention.`);
+        console.log(`\n  ✗ ${c.file} still has conflict markers: needs manual attention.`);
         failed.push(c.file);
       }
     }
@@ -465,7 +465,7 @@ async function main() {
     if (code === 0) {
       console.log(`\n✓ Checks passed.`);
     } else {
-      console.log(`\n⚠ 'pnpm check' reported issues — review the resolved files.`);
+      console.log(`\n⚠ 'pnpm check' reported issues: review the resolved files.`);
     }
   }
 }

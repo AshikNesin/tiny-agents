@@ -269,7 +269,7 @@ export function memoryLedger(botId: string): MemoryLedger {
     const current = (await active(now))
       .map(
         (m) =>
-          `- ${m.id} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
+          `- ${m.id}: ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
       )
       .join("\n");
     const removed = db

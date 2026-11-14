@@ -228,7 +228,7 @@ describe("sandbox connection: ptys, files and forwards share the connection", ()
 
   it("writes atomically and reads back over SFTP on the same connection", async () => {
     const { server, connection } = await sandbox();
-    const payload = "line one\nline two — ünïcödé ✓\n";
+    const payload = "line one\nline two · ünïcödé ✓\n";
     await connection.writeFile("/notes.txt", payload);
     await connection.writeFile("/notes.txt", payload); // overwrite: temp name, then rename
     const file = await connection.readFile("/notes.txt");

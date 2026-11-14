@@ -582,7 +582,7 @@ export function BotDialog({
       </p>
       {skills.length === 0 && (
         <p className="text-muted-foreground py-6 text-center text-sm">
-          No skills yet — create or import one on the Skills page.
+          No skills yet. Create or import one on the Skills page.
         </p>
       )}
       {skills.map((skill) => {

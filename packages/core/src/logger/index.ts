@@ -5,7 +5,7 @@
  *
  * Two seams let apps and packages plug in without forking:
  * - a child logger can carry a **record sink** (`child(bindings, { sink })`),
- *   which receives every emitted record on top of the global output — the
+ *   which receives every emitted record on top of the global output: the
  *   jobs package persists its trail that way;
  * - a process-wide **scrubber** (`setScrubber`) runs every field and message
  *   through the app's secret redaction before anything is written.

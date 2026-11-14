@@ -93,7 +93,7 @@ runtime.
   `mention-{hostRequestId}-{botId}`, text `[From the owner, in {hostName}'s
   chat] {text}` … the host's own submit gets the text unchanged.
 - Tagged bot sees the same `[From the owner, in {hostName}'s chat] {text}`
-  prefix — one mention format everywhere (the model-facing custody line).
+  prefix: one mention format everywhere (the model-facing custody line).
 
 ### 4. Agent runtime additions (packages/agent/src/runtime.ts)
 
@@ -109,7 +109,7 @@ runtime.
 - Mentions ship as `mentions: [botId, …]` on send.
 - Transcript rendering (Grok-style cards): attribution is **trusted entry
   metadata** (`peer` on the `chat.user` entry, set by relay/message_bot/mention
-  delivery), not parsed from the message text — a typed text that merely looks
+  delivery), not parsed from the message text: a typed text that merely looks
   like a prefix renders as a plain bubble. The prefix itself stays in the
   stored text for the model (issue #13 custody) and is stripped for the card;
   cards are drawn only when the `peer` metadata is present.

@@ -54,16 +54,16 @@ function printResult(result: SyncResult, command: "check" | "apply"): void {
   }
 
   printSection(
-    "Auto-Apply — clean",
+    "Auto-Apply: clean",
     result.autoApply.map((f) => f.file),
   );
   printSection(
-    "Auto-Merged — 3-way",
+    "Auto-Merged: 3-way",
     result.autoMerged.map((f) => f.file),
   );
 
   if (result.conflicts.length > 0) {
-    console.log(`### Conflicts — needs resolution (${result.conflicts.length})`);
+    console.log(`### Conflicts: needs resolution (${result.conflicts.length})`);
     result.conflicts.forEach((c) => {
       const hunks = `${c.conflicts} conflict${c.conflicts === 1 ? "" : "s"}`;
       console.log(`  ${c.file} (${hunks})`);
@@ -71,16 +71,16 @@ function printResult(result: SyncResult, command: "check" | "apply"): void {
     console.log();
   }
 
-  printSection("Binary Conflicts — reconcile manually", result.binaryConflicts);
-  printSection("Deleted — removed upstream, unmodified locally", result.deleted);
-  printSection("Deletion Review — removed upstream but modified locally", result.reviewDeletions);
-  printSection("Kept Local Deletions — deleted locally, still upstream", result.keptLocalDeletions);
-  printSection("Drift — new in groot, not synced", result.drift);
+  printSection("Binary Conflicts: reconcile manually", result.binaryConflicts);
+  printSection("Deleted: removed upstream, unmodified locally", result.deleted);
+  printSection("Deletion Review: removed upstream but modified locally", result.reviewDeletions);
+  printSection("Kept Local Deletions: deleted locally, still upstream", result.keptLocalDeletions);
+  printSection("Drift: new in groot, not synced", result.drift);
 
   const immCount = result.skipped.immutable.length;
   const appCount = result.skipped.appSpecific.length;
   if (immCount + appCount > 0) {
-    console.log(`### Skipped — immutable: ${immCount}, app-specific: ${appCount}`);
+    console.log(`### Skipped: immutable: ${immCount}, app-specific: ${appCount}`);
     console.log();
   }
 

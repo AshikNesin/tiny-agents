@@ -21,14 +21,14 @@ export interface ItemRect {
 export interface UseFluidHoverOptions {
   /**
    * With `nearest`, which direction to resolve the nearest item along.
-   *   "y"  — vertical lists (default): closest by top/height
-   *   "x"  — horizontal strips: closest by left/width
-   *   "xy" — 2-D grids: closest card across both rows AND columns,
+   *   "y" , vertical lists (default): closest by top/height
+   *   "x" , horizontal strips: closest by left/width
+   *   "xy", 2-D grids: closest card across both rows AND columns,
    *          measured by Euclidean distance to each item's center
    */
   axis?: "x" | "y" | "xy";
   /**
-   * Makes an item invisible to hit-testing without unregistering it — for
+   * Makes an item invisible to hit-testing without unregistering it: for
    * rows that stay mounted while clipped away (a collapsed sub-tree).
    * Unregistering would invalidate every measurement; a skipped item keeps
    * the set stable. Consulted per mouse move, so keep it cheap.
@@ -299,7 +299,7 @@ export function useFluidHover<T extends HTMLElement>(
   /**
    * Publishes a rect for every registered item. Returns false when the
    * measurement could not be completed (no container, or an item without a
-   * layout box) — nothing is published in that case, so the last complete
+   * layout box): nothing is published in that case, so the last complete
    * measurement stands instead of being overwritten with zeroes.
    */
   const runMeasurement = useCallback(() => {
@@ -400,14 +400,14 @@ export function useFluidHover<T extends HTMLElement>(
   const remeasure = useCallback(() => {
     // Readiness drops first: until the pass below settles, the published rects
     // may not describe what is on screen, and an overlay positioned from them
-    // would be corrected after mounting — which animates as a slide.
+    // would be corrected after mounting, which animates as a slide.
     setIsMeasured(false);
     scheduleMeasurement(measurementAttempts);
   }, [scheduleMeasurement]);
 
   // Observes the registered items themselves (not just the container): rows
-  // that change size in place — e.g. the site-wide size step flipping while a
-  // selection background is up — must invalidate the published rects even when
+  // that change size in place: e.g. the site-wide size step flipping while a
+  // selection background is up: must invalidate the published rects even when
   // the container the effect below captured has since been remounted and the
   // ref points at a different element than the one being observed.
   const itemRoRef = useRef<ResizeObserver | null>(null);
@@ -564,7 +564,7 @@ export function useFluidHover<T extends HTMLElement>(
     [isItemDisabled, gapClick, gapClickMaxDistance, nearest],
   );
 
-  // Remeasure when the container resizes — a reflow moves items even though
+  // Remeasure when the container resizes: a reflow moves items even though
   // the registered set is unchanged, which would otherwise leave itemRects
   // stale. Coalesced through the same rAF as register/unregister. Readiness is
   // deliberately not dropped: the item set is unchanged, so the published rects

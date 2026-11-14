@@ -67,7 +67,7 @@ applyDatabaseDefaults();
 // Sentry is loaded below only when a DSN is configured: importing @sentry/node
 // costs tens of MB of RSS even with nothing to send, and most self-hosted
 // instances run without error reporting. Until it initialises, this slot is a
-// no-op — the same outcome as calling Sentry before init().
+// no-op: the same outcome as calling Sentry before init().
 let captureException: ErrorReporter | undefined;
 
 bootstrap({
@@ -118,7 +118,7 @@ const clientRoot = path.resolve(process.cwd(), "apps/web");
  */
 async function openRuntime(): Promise<AgentRuntime> {
   mkdirSync(path.dirname(agentDbPath()), { recursive: true });
-  // pi-durable error rules: a storage error ends the Harness (fatal — exit so
+  // pi-durable error rules: a storage error ends the Harness (fatal, exit so
   // the orchestrator restarts us and resume() picks the work back up); a
   // throwing hook/listener/tool result is only reported (log, keep running).
   const durableHandlers = {

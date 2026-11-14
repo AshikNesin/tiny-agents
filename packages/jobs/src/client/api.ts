@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 /**
- * Jobs API client. Thin typed wrappers over the shared `apiClient` — the
+ * Jobs API client. Thin typed wrappers over the shared `apiClient`: the
  * envelope unwrapping and 401 handling live in one place (@groot/shell/lib/api).
  */
 export const jobsApi = {
@@ -97,7 +97,7 @@ export const jobsApi = {
     return apiClient.post<JobSchedule>("/jobs/schedule", { jobName, data, cron, options });
   },
 
-  /** Schedules are keyed by job name — one per name — so this removes that name's schedule. */
+  /** Schedules are keyed by job name (one per name) so this removes that name's schedule. */
   async cancelScheduledJob(jobName: string): Promise<void> {
     await apiClient.delete(`/jobs/schedule/${encodeURIComponent(jobName)}`);
   },

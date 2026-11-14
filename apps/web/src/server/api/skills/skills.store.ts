@@ -1,7 +1,7 @@
 /**
  * SkillStore adapter: the agent's `skills` capability reads the skills
  * assigned to the bot behind a conversation from app.db. Dependency direction
- * stays one-way — `@tiny-agents/agent` defines the port, apps/web implements it.
+ * stays one-way: `@tiny-agents/agent` defines the port, apps/web implements it.
  */
 import { asc, eq } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";

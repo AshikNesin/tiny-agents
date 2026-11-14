@@ -90,7 +90,7 @@ export async function resolveDefaultBranch(repoUrl: string): Promise<string> {
 
 /**
  * Paths (from `paths`) that have uncommitted changes or are untracked in the
- * working tree — i.e. writing to them could destroy un-versioned work.
+ * working tree: i.e. writing to them could destroy un-versioned work.
  */
 export async function dirtyPaths(dir: string, paths: string[]): Promise<string[]> {
   if (paths.length === 0) return [];
@@ -195,7 +195,7 @@ export const CONFLICT_MARKER_RE = /^<{7} /m;
  *
  * Used to tell a *real* local deletion (file was tracked at some point and is
  * now gone) from a *phantom* one (a prior sync wrote it into the working tree
- * but it was never committed, then swept — e.g. by `git clean -fd`). The two
+ * but it was never committed, then swept: e.g. by `git clean -fd`). The two
  * look identical to the baseline (which is a snapshot of groot's tree, not
  * this repo's history); only this repo's own history distinguishes them.
  *

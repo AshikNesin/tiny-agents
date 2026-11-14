@@ -1,6 +1,6 @@
 /**
  * The `bot-builder` capability (issue #149): `create_bot` always waits for
- * the owner's approval — even when the tool is set to `allow` — and the
+ * the owner's approval (even when the tool is set to `allow`) and the
  * store's refusals reach the model.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";

@@ -573,7 +573,7 @@ function report(run, checks, quiet) {
   const okAll = checks.every((c) => c.pass);
   if (!quiet || !okAll) {
     for (const c of checks)
-      console.log(`  ${c.pass ? "ok  " : "FAIL"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
+      console.log(`  ${c.pass ? "ok  " : "FAIL"} ${c.name}${c.detail ? `: ${c.detail}` : ""}`);
     log(`doctor ${okAll ? "OK" : "FAILED"} run=${run.id} url=${run.url}`);
   }
   return okAll;

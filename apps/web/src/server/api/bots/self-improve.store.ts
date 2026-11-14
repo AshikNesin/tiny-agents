@@ -1,13 +1,13 @@
 /**
  * InstructionsStore adapter: the agent's `self-improve` capability reads and
  * rewrites the bot's `system_prompt` row through here. Dependency direction
- * stays one-way — `@tiny-agents/agent` defines the port, apps/web implements
+ * stays one-way: `@tiny-agents/agent` defines the port, apps/web implements
  * it.
  *
  * Writes happen only in the owner's own turns (the same rule as `remember`):
  * a routine run or another bot's message is refused even when the owner set
  * the tool to Always allow, and the `askOnly` flag means there is no "always
- * allow" in the first place — every change waits for the owner in chat.
+ * allow" in the first place, every change waits for the owner in chat.
  *
  * Every applied change appends a full-snapshot `prompt_revisions` row before
  * the bot row is updated, so history survives further edits (and deleting a

@@ -4,7 +4,7 @@ import { cn } from "./lib/utils";
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 /**
- * Skeleton loader component — the atom every placeholder is built from.
+ * Skeleton loader component: the atom every placeholder is built from.
  * Reach for the composites below ({@link SkeletonCard}, {@link SkeletonList},
  * {@link SkeletonTable}) before composing one-off layouts with this.
  */

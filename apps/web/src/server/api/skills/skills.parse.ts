@@ -1,7 +1,7 @@
 /**
  * Agent Skills parsing and GitHub import (issue #1 D5). A skill is a
- * directory with a `SKILL.md` — YAML frontmatter (`name`, `description`) plus
- * a markdown body — and optional bundled files, imported as text only.
+ * directory with a `SKILL.md`: YAML frontmatter (`name`, `description`) plus
+ * a markdown body, and optional bundled files, imported as text only.
  */
 import { SKILL_NAME } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";

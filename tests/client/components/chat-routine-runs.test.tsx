@@ -115,7 +115,7 @@ function renderWith(runs: RoutineRunCard[]) {
   );
 }
 
-describe("ChatPane — routine runs", () => {
+describe("ChatPane: routine runs", () => {
   it("folds back-to-back runs into one quiet line between the messages", async () => {
     renderWith([
       run("a", 20),

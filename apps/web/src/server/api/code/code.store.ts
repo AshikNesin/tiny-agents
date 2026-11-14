@@ -1,7 +1,7 @@
 /**
  * What tiny-agents keeps about Code threads (ADR 0011): the thread index
- * (`code_threads`) — followed threads and how far the owner has read them,
- * plus the rows of harnesses that keep no list of their own — and bot
+ * (`code_threads`): followed threads and how far the owner has read them,
+ * plus the rows of harnesses that keep no list of their own, and bot
  * hand-offs (`code_handoffs`). Every harness keeps its own transcript.
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";

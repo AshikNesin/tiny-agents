@@ -1,6 +1,6 @@
 /**
  * "Import" dialog (issue #1 M2): paste a SKILL.md or point at a GitHub skill
- * folder, preview the parse, then install. Review happens in the same dialog —
+ * folder, preview the parse, then install. Review happens in the same dialog:
  * Back returns to the input step, Install POSTs the parsed fields.
  */
 import { useEffect, useState } from "react";

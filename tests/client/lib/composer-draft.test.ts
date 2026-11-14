@@ -1,8 +1,8 @@
 /**
  * The composer draft model (lib/composer-draft.ts): text, picked mentions
  * and staged attachments as one value. The offsets that move under the
- * owner's edits — a pick after trimming, a refused send put back ahead of
- * what was typed meanwhile — are pinned here rather than through the UI.
+ * owner's edits: a pick after trimming, a refused send put back ahead of
+ * what was typed meanwhile: are pinned here rather than through the UI.
  */
 import { describe, expect, it } from "vite-plus/test";
 import {

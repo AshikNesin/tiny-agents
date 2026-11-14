@@ -1,6 +1,6 @@
 /**
  * The Changes panel (issue #143, ADR 0011): what the agent changed in the thread's
- * working directory — uncommitted changes or a recent commit (searchable),
+ * working directory: uncommitted changes or a recent commit (searchable),
  * every changed file as a card with its +/− and its diff, stacked in one
  * scroll (generated files folded). Selecting lines and pressing Comment puts
  * "`path:lines` " in the composer, so review feedback goes straight back to

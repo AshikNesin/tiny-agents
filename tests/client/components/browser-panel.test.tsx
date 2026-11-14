@@ -1,9 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * BrowserPanel (issue #24): the VNC-streamed browser — connect/reconnect,
+ * BrowserPanel (issue #24): the VNC-streamed browser, connect/reconnect,
  * take control and release, clipboard, full screen, fitting the remote
- * window — plus the headless and closed states. noVNC itself is faked; its
+ * window, plus the headless and closed states. noVNC itself is faked; its
  * canvas needs a real browser (covered by the live check against the VM).
  */
 import React from "react";

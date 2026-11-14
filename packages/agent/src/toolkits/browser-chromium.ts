@@ -52,7 +52,7 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
     const executablePath = resolveExecutable(options.executablePath);
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: true,
-      // The new headless renderer. Only for Playwright's own browser — an
+      // The new headless renderer. Only for Playwright's own browser: an
       // explicit executable (VM headless shell) brings its own channel and
       // must not be overridden.
       ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
@@ -225,8 +225,8 @@ async function clickRef(page: Page, ref: string) {
  * `selectOption` picks a dropdown's option by label or value (`fill` throws
  * on a <select>). A click on those opens the native picker, so they are
  * never clicked. Text fields go through CDP insertion, which on headful
- * Chrome lands on whichever surface has browser focus — often the address
- * bar — so those are clicked first.
+ * Chrome lands on whichever surface has browser focus: often the address
+ * bar, so those are clicked first.
  */
 async function fieldKind(locator: Locator, ref: string): Promise<"text" | "set" | "select"> {
   const kind = await locator.evaluate((el) => {

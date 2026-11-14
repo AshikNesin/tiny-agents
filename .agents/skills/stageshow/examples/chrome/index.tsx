@@ -26,7 +26,7 @@ const specimens: Specimen[] = [
   { id: 'glass', title: 'Glass', note: 'Frosted frame and inset page.', props: { chrome: 'glass', url: 'files.example' } },
   { id: 'card', title: 'Card', note: 'Pale address field and a soft lifted edge.', props: { chrome: 'card', url: 'files.example' } },
   { id: 'hairline', title: 'Hairline', note: 'A short bar with a fine separator.', props: { chrome: 'hairline', url: <span className="wc-address">files.example</span> } },
-  { id: 'terminal', title: 'Terminal', note: 'One dark surface, without a bar divider.', props: { chrome: 'terminal', title: 'workspace — zsh', lights: 'grey' } },
+  { id: 'terminal', title: 'Terminal', note: 'One dark surface, without a bar divider.', props: { chrome: 'terminal', title: 'workspace - zsh', lights: 'grey' } },
   { id: 'browser', title: 'Browser', note: 'Native address bar.', props: { url: 'files.example' } },
   { id: 'tabs', title: 'Browser with tabs', note: 'Tabs and back/forward controls.', props: { url: 'files.example', nav: true, tabs: ['Files', 'Docs'] } },
   { id: 'app', title: 'App toolbar', note: 'Title and controls in one bar.', props: { title: 'Files', toolbar: <Tool /> } },

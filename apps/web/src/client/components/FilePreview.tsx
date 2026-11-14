@@ -1,7 +1,7 @@
 /**
  * Attached files' live state and a read-only preview (issue #58). The
- * preview shows extracted text only — monospace text, a plain table for
- * sheets, a path list for archives — and never renders HTML, PDF or Office
+ * preview shows extracted text only: monospace text, a plain table for
+ * sheets, a path list for archives, and never renders HTML, PDF or Office
  * content. The original stays a download.
  */
 import { useEffect, useState } from "react";

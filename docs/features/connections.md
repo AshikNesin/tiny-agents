@@ -39,7 +39,7 @@ hint ask for confirmation first, because the call runs for real.
 
 | Method & path                                   | Body                     | Returns                                                             |
 | ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------- |
-| `GET /api/v1/connections/:id/tools/:tool`       | —                        | The tool with `inputSchema`, `outputSchema?`, hints, `enabled`      |
+| `GET /api/v1/connections/:id/tools/:tool`       | -                        | The tool with `inputSchema`, `outputSchema?`, hints, `enabled`      |
 | `PATCH /api/v1/connections/:id/tools/:tool`     | `{ "enabled": boolean }` | The updated tool                                                    |
 | `POST /api/v1/connections/:id/tools/:tool/call` | `{ "arguments": {…} }`   | `{ result: { content, structuredContent?, isError? }, durationMs }` |
 

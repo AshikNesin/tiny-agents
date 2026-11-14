@@ -435,7 +435,7 @@ echo "0x00004000 -1 xfce4-panel.Xfce4-panel  vm xfce4-panel"
       );
       const refused = await run(wrong, { ...env, PATH: path }, 10_000, secret);
       expect(refused.code).toBe(WINDOW_MISMATCH_EXIT);
-      expect(refused.stderr).toContain("evolution.Evolution — Sign in - Mail");
+      expect(refused.stderr).toContain("evolution.Evolution: Sign in - Mail");
       expect(existsSync(join(root, "typed"))).toBe(false);
 
       const wrongTitle = aimAtFakeX(

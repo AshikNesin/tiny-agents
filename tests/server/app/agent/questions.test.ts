@@ -1,6 +1,6 @@
 /**
  * Questions for the owner (ask_owner): a bot asks clarifying questions
- * mid-reply and waits for the answers, durably — the same wait as approvals.
+ * mid-reply and waits for the answers, durably: the same wait as approvals.
  * Real pi-durable turns on the faux model.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -56,7 +56,7 @@ function textOf(message: Message | undefined): string {
 }
 
 /**
- * Faux model: asks `questions` once, then reports the tool result it got —
+ * Faux model: asks `questions` once, then reports the tool result it got,
  * and the owner's message placed after it, if any.
  */
 function askThenReport(questions: JsonValue = QUESTIONS, tool = "ask_owner") {

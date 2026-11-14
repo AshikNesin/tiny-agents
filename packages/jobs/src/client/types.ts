@@ -8,7 +8,7 @@
 import type { BulkRerunResult, Job, JobLog, JobSchedule, JobStats } from "../server/wire-types";
 
 /**
- * A registered job/queue name. Generic string — project-specific job names
+ * A registered job/queue name. Generic string: project-specific job names
  * live with their handlers (e.g. apps/web/src/server/api/todo/todo.jobs.ts).
  */
 export type JobName = string;

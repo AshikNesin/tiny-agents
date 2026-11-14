@@ -2,7 +2,7 @@
  * An in-process SSH server for tests (issue #19): ssh2's server mode with
  * `none` auth (the way Tailscale SSH presents it), canned exec handlers and
  * a real SFTP subsystem backed by a tmpdir. Integration tests drive the
- * production ssh2 client through it — same wire protocol, no network, no VM.
+ * production ssh2 client through it: same wire protocol, no network, no VM.
  */
 import {
   mkdtempSync,
@@ -129,8 +129,8 @@ export interface FakePty {
   resizes: Array<{ cols: number; rows: number }>;
   /**
    * Set the pty's recorded geometry. SSH's window-change is a client→server
-   * request only — a server cannot push a resize at the client over the
-   * wire — so this updates what the fake reports and sends nothing.
+   * request only: a server cannot push a resize at the client over the
+   * wire, so this updates what the fake reports and sends nothing.
    */
   setWindow(cols: number, rows: number): void;
   /** Push output to the client as if the remote program had printed it. */
@@ -166,7 +166,7 @@ export function startFakeSandboxServer(
     client.on("close", () => clients.delete(client));
     client.on("error", () => {}); // a dropped link is the point of some tests
     // Tailscale-style: only `none` auth. A client that starts sending
-    // credentials is not the shape this fixture simulates — reject it.
+    // credentials is not the shape this fixture simulates: reject it.
     client.on("authentication", (ctx) =>
       ctx.method === "none" ? ctx.accept() : ctx.reject(["none"]),
     );

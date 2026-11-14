@@ -237,7 +237,7 @@ describe("memoryLedger.promptContext", () => {
     await ledger.tombstone([rows[2]!.id]);
     const context = await ledger.promptContext();
     expect(context.current).toBe(
-      `- ${rows[0]!.id} — Prefers pnpm\n- ${rows[1]!.id} — Is in Goa (until 2999-01-01)`,
+      `- ${rows[0]!.id}: Prefers pnpm\n- ${rows[1]!.id}: Is in Goa (until 2999-01-01)`,
     );
     expect(context.removed).toBe("- Likes tea");
     expect(await (await newLedger()).ledger.promptContext()).toEqual({

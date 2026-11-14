@@ -310,8 +310,8 @@
   Ships the recurring higher-order patterns the DLS audit found hand-rolled across groot and the child projects (nesins-finance-api alone had 9 files of drifting dt/dd display fields; list-row hover treatments appeared in 86 child files).
 
   - `@groot/ui/display` (new): `DataField` (label/value pair, `dt`/`dd`, meta-label typography) + `DataFields` (responsive 2→4 col grid wrapper). The display counterpart to form-`Field` from `@groot/ui/form`.
-  - `@groot/ui/stat-tile` (new): `StatTile` — meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
-  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass` — the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
+  - `@groot/ui/stat-tile` (new): `StatTile`, meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
+  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass`, the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
   - Consumers reconciled: JobOverview (local `Field` deleted), JobDetail singleton section, JobsStats (inline tile → `StatTile`), JobsTable (both row variants), ScheduledJobsPanel, Todos, PasskeyManager.
   - Docs: `docs/features/dls.md` gains a composition-components section (with the pull-don't-push doctrine); `docs/features/client.md` rules table extended.
 
@@ -319,13 +319,13 @@
 
 - [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Introduce the DLS: a closed type scale, Kumo-adapted rules, and enforcement
 
-  Establishes the repo's Design Language System as a written spec plus enforced rules — built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
+  Establishes the repo's Design Language System as a written spec plus enforced rules: built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
 
-  - `@groot/ui/typography` (new): `Text` component + exported classes — `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
+  - `@groot/ui/typography` (new): `Text` component + exported classes, `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
   - 4 new gate rules in `scripts/check-design-tokens.ts` (9 total): `tracking-modified` (no `tracking-*`, except `metaLabelClass`), `font-bold` (banned; `font-semibold` is max), `transition-colors-hover` (instant color hover in pages; primitives exempt as the motion layer), `inline-mono-full-step` (inline mono at `text-[0.9em]`). `allow` lists now support directory-prefix entries.
   - Drift reconciled: `tracking-tight` removed from 8 headings; local meta-label copies in jobs → `tableColumnHeaderClass`; inline `font-mono text-sm` → `text-[0.9em]`; `transition-colors/all` removed from 18 page/shell sites (primitives keep theirs). Login h1 uses `h1Class`; marketing h2 uses `displayClass`.
   - Docs: `docs/features/dls.md` (spec + rationale + rejected alternatives); rules table extended in `docs/features/client.md`; AGENTS.md index link.
-  - Agent skill: `.agents/skills/groot-dls/SKILL.md` — the distilled non-negotiables for AI sessions.
+  - Agent skill: `.agents/skills/groot-dls/SKILL.md`, the distilled non-negotiables for AI sessions.
 
 ## 0.6.0
 
@@ -334,7 +334,7 @@
 - [`9e5602a`](https://github.com/AshikNesin/groot/commit/9e5602a68d11df36357165df982f71cb8d6c2a79) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat: restore child-project primitives removed by the v2.6.0 dead-code audit
 
   The v2.6.0 simplification pass verified "zero importers" via the in-repo
-  import graph — the right bar for app code, the wrong bar for a boilerplate's
+  import graph: the right bar for app code, the wrong bar for a boilerplate's
   shipped surface. Child projects (nesins-finance being the reference fork)
   consumed these within months of forking, and their removal forces every
   consumer to vendor copies that then drift. Restored on proven child-project
@@ -343,11 +343,11 @@
   - `@groot/ui`: `alert`, `select`, `pagination`, `tooltip` primitives and
     barrel exports (select alone had 30 importers in the first child project).
     The barrel now documents that this package is the component kit shipped to
-    child projects — absence of in-repo importers is not dead code.
+    child projects: absence of in-repo importers is not dead code.
   - `@groot/core/logger`: `logPerformance` (duration-escalating performance
     record) and the breadcrumb subsystem (`addBreadcrumb` /
     `getBreadcrumbs` / `clearBreadcrumbs`, context wiring, `buildErrorContext`
-    attachment) — used by child projects' job and ingestion instrumentation.
+    attachment): used by child projects' job and ingestion instrumentation.
   - `@groot/core/storage`: `copyFile` (404-guarded object duplication for
     workflow/template-style derived files).
 
@@ -365,7 +365,7 @@
 
 ### Minor Changes
 
-- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass — dead code, duplication, API surface
+- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass: dead code, duplication, API surface
 
   Audit-driven cleanup, no behavior changes. Verified green across every layer: typecheck, lint, 211 unit tests, full build, 6 e2e tests. All removals were verified to have zero real consumers via import-graph resolution.
 
@@ -390,18 +390,18 @@
 
 - [`399ee35`](https://github.com/AshikNesin/groot/commit/399ee35d36a4bae5fcd3df68b481170d6f68da53) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add the missing state primitives and converge the badge/table surfaces so pages stop hand-rolling them.
 
-  - **New `EmptyState` / `ErrorState`** — one canonical icon + title + description + action shape, replacing the six divergent empty/error stacks that had grown across Todos, Jobs, Storage, Settings, and Passkeys.
+  - **New `EmptyState` / `ErrorState`**: one canonical icon + title + description + action shape, replacing the six divergent empty/error stacks that had grown across Todos, Jobs, Storage, Settings, and Passkeys.
   - **`LoadingState`** now accepts `size` and `className`, so surfaces needing a fixed height (e.g. `h-96` inside a card) can use it instead of wrapping `LoadingSpinner` in a bespoke box.
   - **`StatusBadge` is now built on `Badge`**, inheriting its pill shape and typography. It previously rendered as an unrounded rectangle at `text-[11px]`, so the same semantic looked different depending on which component a page reached for. Status pills change appearance slightly as a result.
   - **`Table` now matches the app's real table density** (`px-4 py-3` cells, `px-4 py-2.5` heads) and `TableHead` applies the shared uppercase column-header style. The new **`tableColumnHeaderClass`** export lets grid-based tables (whose rows are links, so they can't use `<th>`) share that exact token instead of redeclaring it locally.
   - `LoadingSpinner` uses `size-*` shorthand.
-  - **New generic skeleton family** — `SkeletonCard` (title bar + body lines, or a custom body via `children`), `SkeletonList` (rows with optional leading block, secondary line, trailing pill), and `SkeletonTable` (header band + per-column bars) join the base `Skeleton`. Pages compose these instead of defining per-page skeleton components. **Breaking-ish:** the old `SkeletonList` variant API (`count`/`variant` with hardcoded TableRow/Card/ListItem/Text shapes) is replaced by the new row-oriented props (`rows`/`leading`/`secondaryLine`/`trailing`); it had no consumers in this repo.
+  - **New generic skeleton family**: `SkeletonCard` (title bar + body lines, or a custom body via `children`), `SkeletonList` (rows with optional leading block, secondary line, trailing pill), and `SkeletonTable` (header band + per-column bars) join the base `Skeleton`. Pages compose these instead of defining per-page skeleton components. **Breaking-ish:** the old `SkeletonList` variant API (`count`/`variant` with hardcoded TableRow/Card/ListItem/Text shapes) is replaced by the new row-oriented props (`rows`/`leading`/`secondaryLine`/`trailing`); it had no consumers in this repo.
 
 ## 0.3.0
 
 ### Minor Changes
 
-- [#103](https://github.com/AshikNesin/groot/pull/103) [`90c30e0`](https://github.com/AshikNesin/groot/commit/90c30e02b09c3e355bd8a0aa0f431006dd55431b) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Add `GrootUIProvider` — a single root provider composing `ConfirmProvider` and the `Toaster`. App authors now mount one `<GrootUIProvider>` instead of remembering to wire up each cross-cutting UI provider individually (previously a hidden, transitive requirement for any consumer of `useConfirm()`). The individual exports remain available for callers that need finer control.
+- [#103](https://github.com/AshikNesin/groot/pull/103) [`90c30e0`](https://github.com/AshikNesin/groot/commit/90c30e02b09c3e355bd8a0aa0f431006dd55431b) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - Add `GrootUIProvider`: a single root provider composing `ConfirmProvider` and the `Toaster`. App authors now mount one `<GrootUIProvider>` instead of remembering to wire up each cross-cutting UI provider individually (previously a hidden, transitive requirement for any consumer of `useConfirm()`). The individual exports remain available for callers that need finer control.
 
 ## 0.2.2
 
@@ -410,8 +410,8 @@
 - [#102](https://github.com/AshikNesin/groot/pull/102) [`011c6d5`](https://github.com/AshikNesin/groot/commit/011c6d5595ea9e4fff8911f56e497e497aecb380) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix pg-boss jobs list showing blank metadata; replace native confirm with a styled dialog
 
   The jobs dashboard table was missing data for pg-boss (Postgres) jobs: the
-  "Started" column showed "—", "Created" showed "N/A", retry counts read 0, and
-  expire/keep-until/dead-letter were empty — for _every_ job in the list (active
+  "Started" column showed a dash, "Created" showed "N/A", retry counts read 0, and
+  expire/keep-until/dead-letter were empty: for _every_ job in the list (active
   jobs most visibly, since they always have a `started_on`). The stats counts at
   the top of the page were correct; only the per-row metadata was broken.
 
@@ -424,9 +424,9 @@
   camelCase (double-quoted so Postgres preserves case), matching the shape
   `normalizeBossJob` reads, so both paths agree.
 
-  Also replaces every native `window.confirm()` — jobs page (bulk re-run,
+  Also replaces every native `window.confirm()`: jobs page (bulk re-run,
   purge-by-state, delete job, cancel scheduled job) and storage page (delete
-  files, delete folder) — with a new shared `ConfirmProvider`/`useConfirm`, a
+  files, delete folder), with a new shared `ConfirmProvider`/`useConfirm`, a
   thin imperative convenience layer over a Radix `AlertDialog` primitive (a port
   of shadcn's `alert-dialog`). Both live under `@groot/ui/primitives` so callers
   know they are composed/Radix-backed, not direct shadcn re-exports. Using

@@ -40,7 +40,7 @@ jobs:
         # prepare) during install. GITHUB_TOKEN is auto-injected into every
         # step of this job, so a malicious postinstall could otherwise read it
         # and exfiltrate it (supply-chain). This job only versions packages and
-        # tags/releases — it never builds or runs the app — so skipping the
+        # tags/releases (it never builds or runs the app) so skipping the
         # vp config hook install here is safe.
         # react-doctor/build-pipeline-secret-boundary
         run: pnpm install --frozen-lockfile --ignore-scripts

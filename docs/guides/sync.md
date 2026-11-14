@@ -120,7 +120,7 @@ pnpm groot:resolve
 2. Reconciles the full set of synced files across three trees: ours (working
    tree), base (the `refs/groot/baseline` snapshot from the last sync, or the
    checkout at `last_sync.commit` when the snapshot is missing), and theirs
-   (boilerplate HEAD). This makes sync idempotent and self-healing — lost
+   (boilerplate HEAD). This makes sync idempotent and self-healing: lost
    state simply reconverges on the next run
 3. Categorizes each file into one bucket:
    - **Auto-apply**: New upstream, or unmodified locally since last sync → copied
@@ -158,7 +158,7 @@ JSON, or one of those sections is not an object).
 Conflicts are resolved with the [pi coding agent](https://pi.dev) CLI in a
 locked-down, single-shot run (`pi -p` with no session, no tools, no
 extensions/skills/context files). Resolution runs on whatever provider/model
-the developer has configured in pi — ZAI/GLM, Anthropic, Copilot, OpenRouter,
+the developer has configured in pi: ZAI/GLM, Anthropic, Copilot, OpenRouter,
 and more.
 
 ```bash
@@ -285,10 +285,10 @@ When you fix a bug in a synced file within a child project, push it back to groo
 ### Quick Start
 
 ```bash
-# Interactive mode — select which files to upstream
+# Interactive mode: select which files to upstream
 pnpm groot:upstream
 
-# Dry run — see what would be upstreamed
+# Dry run, see what would be upstreamed
 pnpm groot:upstream --dry-run
 
 # Upstream every file that merges cleanly onto groot
@@ -314,7 +314,7 @@ your change is the incoming one.
    since your last sync is kept rather than reverted
 3. Shows the files that merge cleanly with diff stats against groot HEAD
    (e.g., `+5 -2`). Files where groot changed the same lines are listed as
-   conflicts and left out — run `pnpm groot:sync`, resolve, then upstream
+   conflicts and left out: run `pnpm groot:sync`, resolve, then upstream
    again. Files groot has deleted since are listed and skipped
 4. In interactive mode, lets you select which files to upstream
 5. Clones groot fresh, re-merges the selected files onto that clone, and
@@ -345,7 +345,7 @@ full fetch) there, or correct `last_sync.commit`.
 A conflict means the file was modified locally **and** groot changed the same
 lines, so the three-way merge could not resolve it automatically. Options:
 
-1. **AI-resolve (recommended)**: `pnpm groot:resolve` — the pi coding agent
+1. **AI-resolve (recommended)**: `pnpm groot:resolve`, the pi coding agent
    merges both sides and removes the conflict markers.
 2. **Resolve manually**: Open the file, reconcile the `<<<<<<<` / `|||||||` /
    `=======` / `>>>>>>>` markers by hand.

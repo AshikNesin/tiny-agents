@@ -282,11 +282,11 @@
   (the VM or the local container) over the same SSH endpoint as the browser and
   terminal: Node when needed, the pinned Agent SDK and Claude Code, the bundled
   worker (`dist/server/claude-worker.mjs`), started on the sandbox's loopback and
-  reached through an SSH tunnel — no `tailscale serve`, token or unit file.
+  reached through an SSH tunnel: no `tailscale serve`, token or unit file.
   Settings → Claude plan shows the setup and login state and opens a terminal tab
   running `claude auth login` to sign in (`POST /terminal/sessions` takes
   `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
-  preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+  preinstalls Claude Code. **Breaking:** the hand-run worker is gone:
   `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
   systemd/launchd files are removed; the sandbox is the only path. The worker now
   starts without a login (each session checks it), and the launcher unsets
@@ -320,9 +320,9 @@
   drives any coding agent through one adapter contract, starting with Shelley
   and Claude Code.
   
-  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `@tiny-agents/code` (new) holds the contract: `HarnessInstance`,
   `TranscriptItem` rows upserted by id, thread and instance events, honest
-  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  `Capabilities`, `HarnessHost`, the drivers (`drivers/shelley`: Shelley's
   stream2, snapshot list, normalizer and usage report moved off the client;
   `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
   mode), and a test kit (`capabilityProblems`, an in-memory thread index).
@@ -536,8 +536,8 @@
 - [`998668e`](https://github.com/AshikNesin/tiny-agents/commit/998668e8f9612c282ce193f838bf826eab50c602) Thanks [@claude](https://github.com/claude)! - Bots can ask the owner clarifying questions mid-reply (human in the loop).
   The new `ask_owner` tool (runtime-installed `questions` capability, read-only)
   takes 1–4 questions with optional options and multiple choice, and waits
-  durably — the approval gate's wait, now shared as `waitForOwner`/`WaitTracker`
-  in `waiting.ts` — until `AgentRuntime.answerQuestions` records the answers or
+  durably: the approval gate's wait, now shared as `waitForOwner`/`WaitTracker`
+  in `waiting.ts`, until `AgentRuntime.answerQuestions` records the answers or
   a dismissal; `dismissQuestions` and `pendingQuestions` cover the rest, and
   `ActivityChange.questions` counts waiting calls. Transcript tool calls gain
   the `awaiting_answer` status and `questions`/`answers`. App side: every bot
@@ -652,9 +652,9 @@
 
 - [`514b6ef`](https://github.com/AshikNesin/tiny-agents/commit/514b6efda40bb2268920402a0f7260e06b6ba3da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - First-class capabilities per bot (issue [#1](https://github.com/AshikNesin/tiny-agents/issues/1)): approvals, skills, toolkits and remote MCP.
   
-  - **Capabilities:** `AgentRuntime.open` gains `capabilities` — a toolkit, the bot's skills or an MCP connection, each a pi-durable extension behind the approval gate, selected per conversation by `configure({ capabilities })`. `Allow · Ask · Off` per tool (`BotAgentConfig.capabilities`), with read-only tools defaulting to allow. `installCapability`/`uninstallCapability` hot-swap connections; `listCapabilities` describes them for the UI.
+  - **Capabilities:** `AgentRuntime.open` gains `capabilities`: a toolkit, the bot's skills or an MCP connection, each a pi-durable extension behind the approval gate, selected per conversation by `configure({ capabilities })`. `Allow · Ask · Off` per tool (`BotAgentConfig.capabilities`), with read-only tools defaulting to allow. `installCapability`/`uninstallCapability` hot-swap connections; `listCapabilities` describes them for the UI.
   - **Approvals:** an `ask` tool waits on a task-scoped approval document (`api.watchDoc`) and re-attaches after a restart; `decideApproval`/`pendingApprovals` answer and count them; the side effect of an unsafe tool never runs twice across a crash (memo-guarded). Chat events carry `ActivityChange.approvals`.
-  - **Tool UI data:** `ChatMessage.toolCalls` now carry id, args, status (running/awaiting*approval/done/error/denied/interrupted/aborted), output, duration, sources (web tools) — built from `pi.tool-result` entries and live `tool_execution*\*` events.
+  - **Tool UI data:** `ChatMessage.toolCalls` now carry id, args, status (running/awaiting*approval/done/error/denied/interrupted/aborted), output, duration, sources (web tools): built from `pi.tool-result` entries and live `tool_execution*\*` events.
   - **Toolkits:** `tasks` (moved to `toolkits/tasks`), `web` (Cloudflare Web Search API + Browser Rendering `/markdown`, SSRF-guarded, `CLOUDFLARE_API_BASE_URL` front door supported) and `time`.
   - **Skills:** the `skills` capability lists a bot's skills in a stable prompt section and serves `load_skill`/`read_skill_file`; `save_skill` is ask-only. `SKILL_NAME` validates Agent Skills naming.
   - **MCP:** `connectMcp` (Streamable HTTP with SSE fallback, `list_changed`, OAuth via `OAuthClientProvider`) and `createMcpCapability` (`mcp:<slug>`, tools `mcp__<slug>__<tool>`, replay from annotations). Depends on `@modelcontextprotocol/sdk` 1.29.0.
@@ -792,10 +792,10 @@
   with `parsePeerEnvelope` / `stripPeerEnvelope`, a shared parser for the
   system attribution prefixes the delivery pipeline writes ("Reply from X:",
   "Message from X (bot):", "[From the owner, in Y's chat]"). The web client
-  now renders cross-bot traffic as attributed cards — peer avatar + name
+  now renders cross-bot traffic as attributed cards: peer avatar + name
   header for relays and message_bot deliveries, a "You · in {host}'s chat"
   label for mentions, and an avatar handoff pill for the message_bot tool row
-  — instead of raw prefixed bubbles, and bot-list previews show the payload
+ : instead of raw prefixed bubbles, and bot-list previews show the payload
   rather than the prefix. The stored text and everything the model reads is
   unchanged.
 
@@ -836,14 +836,14 @@
   Also fixes a latent bug in the pg-boss queue adapter: `delaySeconds` was silently dropped (pg-boss v12 has no such option), so every delayed Postgres job ran immediately; it now maps onto `startAfter`.
 
 - [#20](https://github.com/AshikNesin/tiny-agents/pull/20) [`c1572ce`](https://github.com/AshikNesin/tiny-agents/commit/c1572cec3d397bf650cf5407fa8be8d2d689c828) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Sandbox toolkit (issue [#19](https://github.com/AshikNesin/tiny-agents/issues/19)): a keyless shell on the shared sandbox VM over
-  Tailscale SSH. Three gated tools — run_command (exec with timeout and
+  Tailscale SSH. Three gated tools: run_command (exec with timeout and
   detached mode), read_file (binary-safe SFTP; non-UTF-8 described, not corrupted)
   and write_file (UTF-8 content, written to a temp name then renamed). One pooled ssh2 connection per process, no credentials
   (the tailnet ACL is the authentication), TOFU host-key pinning persisted in
   KV. Wired as a built-in capability behind SANDBOX_HOST / SANDBOX_PORT /
   SANDBOX_USER; read_file defaults to allow, run_command and write_file ask.
 
-- [#132](https://github.com/AshikNesin/tiny-agents/pull/132) [`e7cd039`](https://github.com/AshikNesin/tiny-agents/commit/e7cd039d60bc9b9f26939931d691a2958ed308df) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds self-improvement: a `self-improve` capability whose `update_instructions` tool lets a bot propose edits to its own system prompt, taking effect from its next message. The tool is `askOnly` — the owner approves every change in chat, with the proposed text on the approval card — and the store adapter refuses writes outside the owner's own turns (routine runs, peer deliveries), the same rule as `remember`. The bot's current instructions render as a prompt section beside the tool. Every applied change (self or manual editor edit) appends a full-snapshot `prompt_revisions` row before the bot row updates, giving append-only, revertable history — the database analog of an instructions file under git.
+- [#132](https://github.com/AshikNesin/tiny-agents/pull/132) [`e7cd039`](https://github.com/AshikNesin/tiny-agents/commit/e7cd039d60bc9b9f26939931d691a2958ed308df) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds self-improvement: a `self-improve` capability whose `update_instructions` tool lets a bot propose edits to its own system prompt, taking effect from its next message. The tool is `askOnly` (the owner approves every change in chat, with the proposed text on the approval card) and the store adapter refuses writes outside the owner's own turns (routine runs, peer deliveries), the same rule as `remember`. The bot's current instructions render as a prompt section beside the tool. Every applied change (self or manual editor edit) appends a full-snapshot `prompt_revisions` row before the bot row updates, giving append-only, revertable history: the database analog of an instructions file under git.
 
 - [#49](https://github.com/AshikNesin/tiny-agents/pull/49) [`786e799`](https://github.com/AshikNesin/tiny-agents/commit/786e799d53e2a6e58f053fb49d6c228e260eb27c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bots share one browser profile by default. The browser toolkit now keys live
   browsers by profile (`BrowserTarget`: profile plus tab): bots on one profile
@@ -943,11 +943,11 @@
   no env vars. The "no browser installed" error now names all three fixes.
 
 - [`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser live view: serve frames over SSE instead of MJPEG. multipart/
-  x-mixed-replace in an <img> does not survive reverse proxies — Cloudflare
+  x-mixed-replace in an <img> does not survive reverse proxies: Cloudflare
   (in front of the production deploy) buffers or reshapes it and the panel
   stays black even though the browser session is healthy. The live route now
-  emits `event: frame` SSE messages (base64 JPEG) — the same transport the
-  chat feed already streams through — and BrowserPanel paints each frame
+  emits `event: frame` SSE messages (base64 JPEG), the same transport the
+  chat feed already streams through, and BrowserPanel paints each frame
   into the viewport <img> as a blob URL. Verified end-to-end against the
   sandbox VM chromium: first frame ~56ms after connect.
 
@@ -971,7 +971,7 @@
   the header, a header that collapses to icons when narrow, and empty, starting
   and failed states that match the rest of the app.
 
-- [#26](https://github.com/AshikNesin/tiny-agents/pull/26) [`d241660`](https://github.com/AshikNesin/tiny-agents/commit/d241660baa5767d9df7a88c8cbe5b80aa0613061) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser toolkit: with SANDBOX_HOST set, bot browsers run on the sandbox VM —
+- [#26](https://github.com/AshikNesin/tiny-agents/pull/26) [`d241660`](https://github.com/AshikNesin/tiny-agents/commit/d241660baa5767d9df7a88c8cbe5b80aa0613061) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser toolkit: with SANDBOX_HOST set, bot browsers run on the sandbox VM,
   each session launches a per-profile headless-shell there (CDP on 127.0.0.1,
   tunneled through the same keyless Tailscale SSH channel as the sandbox
   toolkit) and playwright-core connects over CDP. Closing a session kills the
@@ -1052,7 +1052,7 @@
 
 - [#23](https://github.com/AshikNesin/tiny-agents/pull/23) [`d3edec4`](https://github.com/AshikNesin/tiny-agents/commit/d3edec495049d15abdd18b5c7832224ef4a25e93) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds durable per-bot memory (issue [#22](https://github.com/AshikNesin/tiny-agents/issues/22) phase A): a `memories` table with a typed lifecycle (active/superseded/archived/expired/deleted), a `memory` capability section that injects what a bot remembers about the owner into its prompt on every send, `Bot.memoryEnabled` with capture/injection gating, and REST CRUD under `/api/v1/bots/:id/memories` with tombstone deletes that block exact-text re-capture. Overflow archives the oldest active rows at a 100-row budget, never truncating new facts.
   
-  Capture (phase B): idle chats arm a per-conversation debounce (2 minutes quiet or 6 owner turns); one gateway side-call reads the owner turns since the watermark through an anti-junk extraction contract, and code alone decides what lands — exact-text dedupe against tombstones, same-bot supersession, budget archive, watermark bump in one transaction. Trivial windows and peer/routine turns never trigger a call; faux mode and missing gateway config disable capture without affecting manual memories or injection.
+  Capture (phase B): idle chats arm a per-conversation debounce (2 minutes quiet or 6 owner turns); one gateway side-call reads the owner turns since the watermark through an anti-junk extraction contract, and code alone decides what lands, exact-text dedupe against tombstones, same-bot supersession, budget archive, watermark bump in one transaction. Trivial windows and peer/routine turns never trigger a call; faux mode and missing gateway config disable capture without affecting manual memories or injection.
 
 - [`c9fa54e`](https://github.com/AshikNesin/tiny-agents/commit/c9fa54e1d052a234608dcded83decb5fe65bbf5e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add message steering: sending while a bot is replying no longer blocks. Enter (or the send button, which stays live beside Stop) submits the message as a steer that joins the running reply after its current tool round; Alt+Enter queues a follow-up answered by the next run. Held messages render inline as tagged bubbles ("Steering into the reply" / "Queued for the next reply") with a cancel (x) that withdraws them, survive a reload from the server's durable queue, and flow into the transcript once placed. Cross-bot deliveries keep the queued-follow-up behavior.
 
@@ -1071,7 +1071,7 @@
 - [`ddedf15`](https://github.com/AshikNesin/tiny-agents/commit/ddedf1508f5cf1557b45ce75eebeaf274365f817) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sandbox toolkit is configured out of the box: the app now defaults
   SANDBOX_HOST to the verified MagicDNS name (tiny-agents-vm) when the env
   variable is unset, so the capability is live after deploy without any env
-  change. Setting SANDBOX_HOST still overrides — e.g. the Tailscale IP if
+  change. Setting SANDBOX_HOST still overrides: e.g. the Tailscale IP if
   MagicDNS breaks.
 
 - [#46](https://github.com/AshikNesin/tiny-agents/pull/46) [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Describe an unreachable sandbox once: the terminal status no longer reads

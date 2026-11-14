@@ -10,7 +10,7 @@ import { categorizeFile, TEST_AREA_OWNERSHIP } from "../../../.groot/lib/pattern
  * Classification is now derived from TEST_AREA_OWNERSHIP, not directory-name
  * pattern lists.
  */
-describe("categorizeFile — kit-owned test suites classify as sync", () => {
+describe("categorizeFile: kit-owned test suites classify as sync", () => {
   it.each([
     "tests/server/jobs/queue.test.ts",
     "tests/server/core/kv.test.ts",
@@ -40,7 +40,7 @@ describe("categorizeFile — kit-owned test suites classify as sync", () => {
   });
 });
 
-describe("categorizeFile — child-owned paths stay out", () => {
+describe("categorizeFile: child-owned paths stay out", () => {
   it("app source code stays skip-app", () => {
     // The plan wording says drift; the classifier's actual child-owned enum is
     // skip-app, which keeps app files out of sync AND out of drift noise.
@@ -58,7 +58,7 @@ describe("categorizeFile — child-owned paths stay out", () => {
   });
 });
 
-describe("TEST_AREA_OWNERSHIP — declared source exists", () => {
+describe("TEST_AREA_OWNERSHIP: declared source exists", () => {
   it("every owned source root is set and shaped like a path", () => {
     const roots = [...new Set(Object.values(TEST_AREA_OWNERSHIP).flat())];
     expect(roots.length).toBeGreaterThan(0);

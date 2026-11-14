@@ -98,7 +98,7 @@ describe("approval cards", () => {
       labels,
     );
     expect(text).toEqual({
-      title: "Engineer wants to open a page — “https://example.com”",
+      title: "Engineer wants to open a page: “https://example.com”",
       alwaysAllowHint: "Approve, and let Engineer open a page without asking",
     });
   });
@@ -113,7 +113,7 @@ describe("approval cards", () => {
       "Engineer",
       { done: {}, ask: { update_instructions: "update own instructions" } },
     );
-    expect(text.title).toBe(`Engineer wants to update own instructions — “${long.slice(0, 60)}”`);
+    expect(text.title).toBe(`Engineer wants to update own instructions: “${long.slice(0, 60)}”`);
     expect(text.foldedPayload).toBe(long);
   });
 

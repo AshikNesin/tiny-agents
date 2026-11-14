@@ -7,19 +7,19 @@ boilerplate, and each upstream change ships with its own changeset there).
 
 Upstream commits since 82e7def:
 
-- `84750cd` Docs cleanup — docs reorganized into `guides/`, `features/` and
+- `84750cd` Docs cleanup: docs reorganized into `guides/`, `features/` and
   the new `reference/` section (`config.md` → `reference/config.md`,
   `examples/api-requests.md` → `reference/api-requests.md`,
   `sentry-source-maps.md`/`sync-guide.md`/`precommit-hooks.md` →
   `guides/…`, `kv.md` → `features/kv.md`, `CHANGELOG.md` dropped).
-- `6861735` chore: ignore everything inside `data/` — `.gitignore` now uses
+- `6861735` chore: ignore everything inside `data/`, `.gitignore` now uses
   `/data/*` + `!data/.gitkeep` (covers the agent store's `.lock` sidecars and
   browser profiles too).
-- `1f33ccc` refactor jobs cleaning — `kv_expires_at_idx` and
+- `1f33ccc` refactor jobs cleaning: `kv_expires_at_idx` and
   `jobs_state_completed_at_idx` indexes (migration `0001_even_power_man.sql`
   generated here), housekeeping queries follow deletes, housekeeping test
   updated.
-- `a4b4a76` perf: sentry loading — `@sentry/node` is imported dynamically
+- `a4b4a76` perf: sentry loading, `@sentry/node` is imported dynamically
   only when `config.sentry.dsn` is set; ported to
   `apps/web/src/server/entry.node.ts` (app code, outside the sync patterns).
 - `a7a0f17` feat(ui): dialogs dismiss on outside click + Dialog test.

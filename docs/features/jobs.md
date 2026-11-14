@@ -154,16 +154,16 @@ pending re-run, no housekeeping schedule).
 
 One `runTick()` pass:
 
-1. **Schedules** — for each row in `job_schedules`, compute the next fire after
+1. **Schedules**: for each row in `job_schedules`, compute the next fire after
    `lastRunAt ?? createdAt`; if it is due, compare-and-set `lastRunAt` to now
    and enqueue a job (with the default retry settings). Two concurrent ticks can
    never enqueue the same fire, and fires missed while nothing was ticking
    collapse into one job.
-2. **Recover** — each `active` job whose `startedAt` is older than
+2. **Recover**, each `active` job whose `startedAt` is older than
    `config.jobs.activeTimeoutSeconds` gets a `timeout` event: the
    [retry policy](#transitions-packagesjobssrcservertransitionsts), with its
    backoff, log line and report, as if its handler had thrown.
-3. **Claim** — up to `config.jobs.batchSize` `created` jobs with
+3. **Claim**: up to `config.jobs.batchSize` `created` jobs with
    `runAt ≤ now` and a registered handler, ordered by priority desc, `runAt`,
    `createdAt`, moved to `active` in one `UPDATE … WHERE id IN (subquery) RETURNING`.
 4. **Run** each claimed job sequentially. Success → `completed` with `output`.

@@ -19,7 +19,7 @@ import {
 const DESTRUCTIVE_TEXT = "text-[color-mix(in_oklch,var(--destructive)_65%,var(--foreground))]";
 
 /**
- * Canonical status badge — the single source of truth for rendering a job /
+ * Canonical status badge: the single source of truth for rendering a job /
  * health status. Colors come exclusively from design tokens.
  *
  * If you need to show a status, use this instead of hand-rolling color maps.

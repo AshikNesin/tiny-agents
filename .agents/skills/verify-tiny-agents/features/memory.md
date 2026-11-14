@@ -9,7 +9,7 @@ Each bot keeps its own long-term memories about the owner. The Memory page lists
 - `memory-groups` region `<bot> memories` with a count (`1 memory`) and a heading per category.
 - `memory-edit` `Edit memory "<text>"` → dialog `Edit memory` → `Save`; toast `Memory saved`.
 - `memory-search` searchbox `Search memories` across bots; no hit shows `No matching memories`.
-- `memory-switch` switch `Turn off memory for <bot>` / `Turn on memory for <bot>`; off shows `Off — this bot no longer learns from chats or uses what it knows.`
+- `memory-switch` switch `Turn off memory for <bot>` / `Turn on memory for <bot>`; off shows `Off. This bot no longer learns from chats or uses what it knows.`
 - `memory-delete` `Delete memory "<text>"` → alert dialog `Delete this memory?` → `Delete`; toast `Memory deleted`.
 - `memory-restore` adding a deleted text by hand brings it back as one active memory.
 

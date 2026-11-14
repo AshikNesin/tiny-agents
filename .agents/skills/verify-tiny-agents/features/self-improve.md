@@ -4,7 +4,7 @@ A bot can propose a change to its own instructions (system prompt). The proposal
 
 ## Sub-features
 
-- `improve-card` card `<bot> wants to update own instructions — “<start of the change>”`.
+- `improve-card` card `<bot> wants to update own instructions: “<start of the change>”`.
 - `improve-deny` Deny: row `Updated own instructions … denied by you`, instructions unchanged.
 - `improve-approve` Approve: row `Updated own instructions …`, the text is appended to the system prompt.
 - `improve-always-asks` Always allow does not stop future asks (the tool is Ask (always)).

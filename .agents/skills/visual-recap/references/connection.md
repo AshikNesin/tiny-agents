@@ -1,4 +1,4 @@
-# Connecting & publishing — single source of truth
+# Connecting & publishing: single source of truth
 
 This file is the canonical rule for the never-inline deliverable, finding the
 Plan MCP connector, and restoring it when its tools are missing. It is shared
@@ -17,7 +17,7 @@ output is to publish through the Plan MCP connector and return its absolute URL.
 Local-files privacy mode (`references/local-files.md`) is the one exception.
 
 **The connector is usually the `plan` server**, but older installed agents may
-expose the same hosted connector as `agent-native-plans` — both names are valid,
+expose the same hosted connector as `agent-native-plans`, both names are valid,
 so never report the connector as missing just because it is named
 `agent-native-plans` instead of `plan`. Some clients also lazy-load connector
 tools through a deferred tool registry instead of showing the namespace upfront.
@@ -27,7 +27,7 @@ discovery surface (`tool_search` when available) for `create_visual_plan`,
 
 **If the tools are still missing after discovery, do NOT fall back to inline
 output.** The usual cause is a connector that did not finish connecting this
-session (it registers zero tools), NOT necessarily an auth problem — so do not
+session (it registers zero tools), NOT necessarily an auth problem, so do not
 assume the user must re-authenticate. Stop and give the user the exact restore
 step for their current client:
 
@@ -44,7 +44,7 @@ Auth is stored per client config/session, so one client's reconnect does not mak
 another running client load tools. `--client all` refreshes every local client
 config that already has the Plan entry, but each running client still has to
 reload its MCP tools afterward. Reconnect re-authenticates WITHOUT reinstalling
-and finds the entry by URL regardless of connector name — never reinstall from
+and finds the entry by URL regardless of connector name, never reinstall from
 scratch just to fix auth. Publish once the tool is reachable. Falling back to
 inline content is a defect, not a degraded mode.
 

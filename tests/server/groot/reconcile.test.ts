@@ -33,7 +33,7 @@ const conflictMerge =
   (content: string, conflicts = 1) =>
   async (): Promise<MergeFileResult> => ({ clean: false, content, conflicts });
 
-describe("reconcileFile — package.json without a baseline", () => {
+describe("reconcileFile: package.json without a baseline", () => {
   it("merges instead of writing conflict markers into JSON", async () => {
     const ours = JSON.stringify({ name: "child", scripts: { a: "1" } }, null, 2) + "\n";
     const theirs = JSON.stringify({ name: "groot", scripts: { b: "2" } }, null, 2) + "\n";
@@ -48,7 +48,7 @@ describe("reconcileFile — package.json without a baseline", () => {
   });
 });
 
-describe("reconcileFile — upstream deletions", () => {
+describe("reconcileFile: upstream deletions", () => {
   it("ignores files that never were synced (no base, no theirs)", async () => {
     const outcome = await reconcileFile(sides("a.ts", "local", null, null), neverMerge);
     expect(outcome.kind).toBe("ignore");
@@ -70,7 +70,7 @@ describe("reconcileFile — upstream deletions", () => {
   });
 });
 
-describe("reconcileFile — additions and local deletions", () => {
+describe("reconcileFile: additions and local deletions", () => {
   it("auto-applies files that are new upstream", async () => {
     const outcome = await reconcileFile(sides("a.ts", null, null, "new content"), neverMerge);
     expect(outcome).toMatchObject({ kind: "auto-apply" });
@@ -91,7 +91,7 @@ describe("reconcileFile — additions and local deletions", () => {
   });
 });
 
-describe("reconcileFile — text updates", () => {
+describe("reconcileFile: text updates", () => {
   it("reports identical content as identical", async () => {
     const outcome = await reconcileFile(sides("a.ts", "same", "old", "same"), neverMerge);
     expect(outcome.kind).toBe("identical");
@@ -139,7 +139,7 @@ describe("reconcileFile — text updates", () => {
   });
 });
 
-describe("reconcileFile — binary files", () => {
+describe("reconcileFile: binary files", () => {
   it("auto-applies binary updates when untouched locally", async () => {
     const base = Buffer.from([0x00, 0x01, 0x02]);
     const theirs = Buffer.from([0x00, 0x09, 0x08]);
@@ -172,7 +172,7 @@ describe("reconcileFile — binary files", () => {
   });
 });
 
-describe("reconcileFile — package.json deterministic merge", () => {
+describe("reconcileFile: package.json deterministic merge", () => {
   it("merges managed sections without markers", async () => {
     const base = JSON.stringify({ name: "child", dependencies: { zod: "^3.0.0" } }, null, 2);
     const ours = JSON.stringify(

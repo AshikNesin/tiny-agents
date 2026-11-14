@@ -20,6 +20,7 @@ R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | No unused file or export.                                          | `pnpm check:dead`                                 |
 | Every path, link and `pnpm` script a doc names exists.             | `pnpm check:doc-refs`                             |
 | UI colors come from design tokens.                                 | `pnpm check:tokens`                               |
+| No em dash in any file: use a colon, comma, period or parentheses. | `pnpm check:em-dash`                              |
 | A new check is one line in `scripts/gates.mjs`.                    | `pnpm check:coverage`                             |
 | Change a `schema.ts`, then commit `pnpm db:generate`'s SQL.        | Migrations gate in `scripts/gates.mjs`            |
 | Never edit an applied migration.                                   | `pnpm check:migrations-immutable`                 |

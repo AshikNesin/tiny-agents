@@ -213,7 +213,7 @@ export function AppShell() {
     pathname === "/code" ||
     pathname.startsWith("/code/");
   // The full-page settings screen (upstream) brings its own chrome: no app
-  // sidebar, no Layout main padding — only the ⌘K palette stays.
+  // sidebar, no Layout main padding, only the ⌘K palette stays.
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   // Code's workspace owns the whole column too: its thread list takes the
   // sidebar's place (issue #143, ADR 0011), and it gets its own slim top bar.

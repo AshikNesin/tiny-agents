@@ -81,14 +81,14 @@ interface ChatPaneProps {
 }
 
 /**
- * Column 3 (PRD §6.2): header, transcript, composer. Thin shell — the
+ * Column 3 (PRD §6.2): header, transcript, composer. Thin shell: the
  * transcript needs `useMessageScroller` *inside* the scroller Provider, so
  * the pane body is a child component.
  */
 export function ChatPane(props: ChatPaneProps) {
   return (
     // `last-anchor` opens the transcript on the newest read (anchored)
-    // message — WhatsApp-style first-unread positioning (issue #2b) —
+    // message: WhatsApp-style first-unread positioning (issue #2b),
     // instead of jumping to the very top of the history. `autoScroll` then
     // keeps the newest message pinned while the reader is at the bottom.
     <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
@@ -227,7 +227,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
 
   // Read/unread split (issue #3): the chat's "New messages" divider sits
   // above the first reply that arrived while the owner was away, and read
-  // messages are the scroller's anchors — `last-anchor` opens on the newest
+  // messages are the scroller's anchors: `last-anchor` opens on the newest
   // read message (WhatsApp-style), with the unread block peeking in below.
   // Read anchors only place the chat as it opens. The scroller treats
   // anchors as user turns and re-targets them whenever the transcript's
@@ -327,7 +327,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
             Drop files to attach
           </div>
         )}
-        {/* Header: one line — the bot's name (its menu: settings, Chat
+        {/* Header: one line, the bot's name (its menu: settings, Chat
             history, YOLO), then two quiet icons: the live view and New chat.
             The model is the composer's chip, not repeated here. */}
         <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
@@ -518,7 +518,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
             <span className="bg-warning/10 text-warning flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1.5">
               <Zap className="size-3.5 shrink-0" aria-hidden />
               <span className="truncate">
-                YOLO on — tools run without asking (vault items still ask)
+                YOLO on: tools run without asking (vault items still ask)
               </span>
             </span>
             {!guest && (

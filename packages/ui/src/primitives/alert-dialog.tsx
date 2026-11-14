@@ -22,7 +22,7 @@ const panelAnimate = (open: boolean) => ({
 import { Button, type ButtonProps } from "../button";
 
 /**
- * Radix AlertDialog-based confirm primitive — a faithful port of the shadcn
+ * Radix AlertDialog-based confirm primitive: a faithful port of the shadcn
  * `alert-dialog` component, restyled to match this package's `dialog.tsx`
  * (rounded-3xl, ring, viewport-capped, plain footer, and the same spring
  * enter/exit motion). Lives under `@groot/ui/primitives` so

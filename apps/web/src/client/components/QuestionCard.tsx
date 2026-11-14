@@ -151,7 +151,7 @@ export function QuestionCard({
 }
 
 function answerText(answer: OwnerAnswer | undefined): string {
-  if (!answer) return "—";
+  if (!answer) return "-";
   const parts = [...answer.selected];
   if (answer.text) parts.push(answer.selected.length > 0 ? `Other: ${answer.text}` : answer.text);
   return parts.length > 0 ? parts.join(", ") : "Skipped";

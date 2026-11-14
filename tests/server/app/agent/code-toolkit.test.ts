@@ -97,7 +97,7 @@ describe("code toolkit", () => {
       idempotencyKey: "pi:session-1:3",
     });
     expect(result?.text).toMatch(/Link: \/code\/shelley%3AcH/);
-    expect(result?.text).toMatch(/Reply from Shelley" — do not poll/);
+    expect(result?.text).toMatch(/Reply from Shelley"\. Do not poll/);
     expect(result?.details).toEqual({
       code: {
         threadId: "shelley:cH",
@@ -153,7 +153,7 @@ describe("code toolkit", () => {
     const { store } = fakeStore();
     const result = await run(store, "code_models", {});
     expect(result?.text).toBe(
-      "glm-5-3-zai-int-exe-xyz (GLM 5.3) — default\nglm-5-3-flash-zai-int-exe-xyz",
+      "glm-5-3-zai-int-exe-xyz (GLM 5.3), default\nglm-5-3-flash-zai-int-exe-xyz",
     );
   });
 

@@ -248,7 +248,7 @@
 
   - **Removed routes**: `GET /api/v1/jobs/status/failed` and `GET /api/v1/jobs/state/:state`. Both duplicated the list endpoint: use `GET /api/v1/jobs?state=failed` (and `limit`/`offset`). `DELETE /api/v1/jobs/state/:state` (purge) stays.
   - **Removed server exports**: `getFailedJobs`, `getJobsByState`, `jobConfig` (read `config.jobs` from `@groot/core/config`), `workersRunning` (`startWorkers`/`stopWorkers` are the lifecycle), and the inferred `CreateJobDTO`/`ScheduleJobDTO` types (the `createJobSchema`/`scheduleJobSchema` validators stay).
-  - **Removed client exports**: `JobDataView` and the `JobsProvider` / `useJobDataLink` / `LinkResolver` / `LinkResolution` link-resolution context, with their subpaths. `JobJsonBlock` no longer takes part in link resolution — it renders the payload as plain pretty-printed JSON, so it loses its `stringifyWithLinks` export and the offset bookkeeping behind it.
+  - **Removed client exports**: `JobDataView` and the `JobsProvider` / `useJobDataLink` / `LinkResolver` / `LinkResolution` link-resolution context, with their subpaths. `JobJsonBlock` no longer takes part in link resolution: it renders the payload as plain pretty-printed JSON, so it loses its `stringifyWithLinks` export and the offset bookkeeping behind it.
   - `JobOverview` uses the shared `formatDuration` from `@groot/shell/lib/utils`; `@groot/jobs` no longer depends on `dayjs`.
   - **Removed tests**: `tests/server/jobs/constants.test.ts` and `validation.test.ts`; their unique assertions (the state list, `?state=` validation, limit/offset and `retryLimit` coercion) moved into `queue.test.ts` and `routes.test.ts`.
 
@@ -304,15 +304,15 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
 - [`b3a2a21`](https://github.com/AshikNesin/groot/commit/b3a2a210251e7557517804feda498a711591eeb8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One wire-type source per slice: the server publishes its JSON response types once, and clients import them type-only (erased at build) instead of hand-copying shapes that drift.
 
-  - **`@groot/jobs`**: new `@groot/jobs/server/wire-types` — `Job`, `JobSchedule`, `JobLog`, `JobStats`, `BulkRerunResult`, derived from the schema rows with every timestamp as an ISO string. `@groot/jobs/client/types` re-exports them under the same names, so existing imports keep working.
+  - **`@groot/jobs`**: new `@groot/jobs/server/wire-types`, `Job`, `JobSchedule`, `JobLog`, `JobStats`, `BulkRerunResult`, derived from the schema rows with every timestamp as an ISO string. `@groot/jobs/client/types` re-exports them under the same names, so existing imports keep working.
   - **`@groot/core`**: `SessionUser` (`auth.schema`), `PasskeySummary` with string dates (`passkey.schema`), `FileInfo` with a string `lastModified` plus `UploadFilesResult` (`storage.schema`) and `AppSetting` (`app-settings.schema`) are the single sources, each declared in a zod-only leaf so the client's type graph never pulls in server modules. The passkey service now serialises dates itself, matching what JSON always sent; the service modules re-export their wire types for server-side importers.
-  - **`@groot/shell`**: local copies removed — `useStorage`'s `StorageFile`/`UploadResult`, `store/auth`'s `SessionUser`, `services/passkey`'s `Passkey` and `useAppSettings`' `AppSetting` are now aliases of the core types. `@groot/shell` gains a (type-only) `@groot/core` dependency.
+  - **`@groot/shell`**: local copies removed, `useStorage`'s `StorageFile`/`UploadResult`, `store/auth`'s `SessionUser`, `services/passkey`'s `Passkey` and `useAppSettings`' `AppSetting` are now aliases of the core types. `@groot/shell` gains a (type-only) `@groot/core` dependency.
 
   `AGENTS.md` documents the rule: type-only imports across the client/server boundary are allowed for wire types; each slice publishes them once, in a web-neutral leaf module, with dates as ISO strings.
 
 ### Patch Changes
 
-- [`2861fa1`](https://github.com/AshikNesin/groot/commit/2861fa1b43fc745c4a83117d75587ecfcfb5df47) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One logger module: `packages/core/src/logger` collapsed from five files into one `index.ts` holding the logger, levels, breadcrumbs, the performance helper and two seams — a per-child **record sink** (`child(bindings, { sink })`, inherited by grandchildren) and the process-wide **scrubber** (`setScrubber`/`scrubValue`/`scrubText`) that runs every field and message through the app's secret redaction before anything is written.
+- [`2861fa1`](https://github.com/AshikNesin/groot/commit/2861fa1b43fc745c4a83117d75587ecfcfb5df47) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One logger module: `packages/core/src/logger` collapsed from five files into one `index.ts` holding the logger, levels, breadcrumbs, the performance helper and two seams, a per-child **record sink** (`child(bindings, { sink })`, inherited by grandchildren) and the process-wide **scrubber** (`setScrubber`/`scrubValue`/`scrubText`) that runs every field and message through the app's secret redaction before anything is written.
 
   - **Breaking:** `createRequestLogger`, `logBusinessEvent`, `clearBreadcrumbs`, `sanitizeRequestBody` and the `RequestDescriptor`/`LogBusinessEventOptions` types are removed. The request-logger middleware builds its child logger inline (`reqId`, `method`, `url`, `userAgent`, `ip` bindings unchanged); a failed request now logs one error line plus the request line instead of three.
   - The jobs logger is now a core child logger with a persistence sink: `createJobLogger({ jobId, jobName, additionalContext })` and `flushJobLogs()` keep their signatures, argument handling and scrubbing come from core. Sinks fire regardless of the global console level (a `silent` console still leaves a job trail); rows are filtered by the sink, not the level.
@@ -426,20 +426,20 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   Ships the recurring higher-order patterns the DLS audit found hand-rolled across groot and the child projects (nesins-finance-api alone had 9 files of drifting dt/dd display fields; list-row hover treatments appeared in 86 child files).
 
   - `@groot/ui/display` (new): `DataField` (label/value pair, `dt`/`dd`, meta-label typography) + `DataFields` (responsive 2→4 col grid wrapper). The display counterpart to form-`Field` from `@groot/ui/form`.
-  - `@groot/ui/stat-tile` (new): `StatTile` — meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
-  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass` — the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
+  - `@groot/ui/stat-tile` (new): `StatTile`, meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
+  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass`, the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
   - Consumers reconciled: JobOverview (local `Field` deleted), JobDetail singleton section, JobsStats (inline tile → `StatTile`), JobsTable (both row variants), ScheduledJobsPanel, Todos, PasskeyManager.
   - Docs: `docs/features/dls.md` gains a composition-components section (with the pull-don't-push doctrine); `docs/features/client.md` rules table extended.
 
 - [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Introduce the DLS: a closed type scale, Kumo-adapted rules, and enforcement
 
-  Establishes the repo's Design Language System as a written spec plus enforced rules — built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
+  Establishes the repo's Design Language System as a written spec plus enforced rules: built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
 
-  - `@groot/ui/typography` (new): `Text` component + exported classes — `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
+  - `@groot/ui/typography` (new): `Text` component + exported classes, `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
   - 4 new gate rules in `scripts/check-design-tokens.ts` (9 total): `tracking-modified` (no `tracking-*`, except `metaLabelClass`), `font-bold` (banned; `font-semibold` is max), `transition-colors-hover` (instant color hover in pages; primitives exempt as the motion layer), `inline-mono-full-step` (inline mono at `text-[0.9em]`). `allow` lists now support directory-prefix entries.
   - Drift reconciled: `tracking-tight` removed from 8 headings; local meta-label copies in jobs → `tableColumnHeaderClass`; inline `font-mono text-sm` → `text-[0.9em]`; `transition-colors/all` removed from 18 page/shell sites (primitives keep theirs). Login h1 uses `h1Class`; marketing h2 uses `displayClass`.
   - Docs: `docs/features/dls.md` (spec + rationale + rejected alternatives); rules table extended in `docs/features/client.md`; AGENTS.md index link.
-  - Agent skill: `.agents/skills/groot-dls/SKILL.md` — the distilled non-negotiables for AI sessions.
+  - Agent skill: `.agents/skills/groot-dls/SKILL.md`, the distilled non-negotiables for AI sessions.
 
 - Updated dependencies [[`960a9c1`](https://github.com/AshikNesin/groot/commit/960a9c15e059e49b2edcfb837875c9efc399190d), [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112), [`81cfc6d`](https://github.com/AshikNesin/groot/commit/81cfc6d9797f3d51d6b79555ac933d1eebacb83a), [`bb4e94d`](https://github.com/AshikNesin/groot/commit/bb4e94d544ce23d4e8fe35411ff2fcc72bec4c3c), [`9477a61`](https://github.com/AshikNesin/groot/commit/9477a61b24c2f2d722ceb476cba652c34af96acb)]:
   - @groot/ui@0.7.0
@@ -453,7 +453,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 - [`9e5602a`](https://github.com/AshikNesin/groot/commit/9e5602a68d11df36357165df982f71cb8d6c2a79) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat: restore child-project primitives removed by the v2.6.0 dead-code audit
 
   The v2.6.0 simplification pass verified "zero importers" via the in-repo
-  import graph — the right bar for app code, the wrong bar for a boilerplate's
+  import graph: the right bar for app code, the wrong bar for a boilerplate's
   shipped surface. Child projects (nesins-finance being the reference fork)
   consumed these within months of forking, and their removal forces every
   consumer to vendor copies that then drift. Restored on proven child-project
@@ -462,11 +462,11 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   - `@groot/ui`: `alert`, `select`, `pagination`, `tooltip` primitives and
     barrel exports (select alone had 30 importers in the first child project).
     The barrel now documents that this package is the component kit shipped to
-    child projects — absence of in-repo importers is not dead code.
+    child projects: absence of in-repo importers is not dead code.
   - `@groot/core/logger`: `logPerformance` (duration-escalating performance
     record) and the breadcrumb subsystem (`addBreadcrumb` /
     `getBreadcrumbs` / `clearBreadcrumbs`, context wiring, `buildErrorContext`
-    attachment) — used by child projects' job and ingestion instrumentation.
+    attachment): used by child projects' job and ingestion instrumentation.
   - `@groot/core/storage`: `copyFile` (404-guarded object duplication for
     workflow/template-style derived files).
 
@@ -489,7 +489,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
 ### Minor Changes
 
-- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass — dead code, duplication, API surface
+- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass: dead code, duplication, API surface
 
   Audit-driven cleanup, no behavior changes. Verified green across every layer: typecheck, lint, 211 unit tests, full build, 6 e2e tests. All removals were verified to have zero real consumers via import-graph resolution.
 
@@ -512,7 +512,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
 - [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Simplify the jobs client: single source of truth for job types, withJobToast, shared job utils
 
-  - The jobs client `Job`/`ScheduledJob` now alias the server adapter's `QueueJob`/`ScheduledJobInfo` (type-only import, erased in the client bundle) — one source of truth instead of two drifting 19-field shapes; the dead client `JobState` enum and two re-export shims are deleted.
+  - The jobs client `Job`/`ScheduledJob` now alias the server adapter's `QueueJob`/`ScheduledJobInfo` (type-only import, erased in the client bundle): one source of truth instead of two drifting 19-field shapes; the dead client `JobState` enum and two re-export shims are deleted.
   - `withJobToast` helper replaces 15 identical try/toast/catch blocks in `useJobs`/`useJobDetail`.
   - Job-level options helpers (`todoJobOptions`) and dead validation/constant exports removed.
 
@@ -523,7 +523,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   - The scheduler loop was never started, so cron schedules never fired. The adapter now starts honker on init.
   - `schedule()` used the job name as the honker schedule name, so scheduling the same job at two different times (e.g. 9:30am and 6pm daily) overwrote the first entry. `ScheduleJobOptions.key` is now honored by naming the schedule `job:key` (plain job name when no key, back-compat), mirroring pg-boss's singleton-key schedules. `getSchedules()` maps the composite name back to `{ name, key }`; `unschedule(name, key)` removes one entry.
 
-- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - DB-persisted job logs gated by ops log level — dashboard showed nothing in production
+- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - DB-persisted job logs gated by ops log level: dashboard showed nothing in production
 
   The pino ROOT level (from config.logging.level, default `warn` in production) gated records before the JobLogStream ever saw them: info lines from job handlers were dropped, job_logs stayed empty, and the dashboard's log panel rendered nothing at all. Additionally pino.multistream's per-stream default level is `info`, so debug lines never persisted even in dev.
 
@@ -589,7 +589,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
   - **JobDataLinkContext**: New `JobsProvider` + `useJobDataLink` hook so consuming apps can configure a `linkResolver` that maps `(key, value)` to `{ to, label? }`.
   - **JobDataView**: Structured key-value renderer with recursive flattening (dot-notation keys). Linkable values render as `<Link>` with an ExternalLink icon.
-  - **JobJsonBlock**: Added Structured/JSON toggle — defaults to structured view when a linkResolver is configured, raw JSON otherwise.
+  - **JobJsonBlock**: Added Structured/JSON toggle, defaults to structured view when a linkResolver is configured, raw JSON otherwise.
 
 ### Patch Changes
 
@@ -617,8 +617,8 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 - [#102](https://github.com/AshikNesin/groot/pull/102) [`011c6d5`](https://github.com/AshikNesin/groot/commit/011c6d5595ea9e4fff8911f56e497e497aecb380) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix pg-boss jobs list showing blank metadata; replace native confirm with a styled dialog
 
   The jobs dashboard table was missing data for pg-boss (Postgres) jobs: the
-  "Started" column showed "—", "Created" showed "N/A", retry counts read 0, and
-  expire/keep-until/dead-letter were empty — for _every_ job in the list (active
+  "Started" column showed a dash, "Created" showed "N/A", retry counts read 0, and
+  expire/keep-until/dead-letter were empty: for _every_ job in the list (active
   jobs most visibly, since they always have a `started_on`). The stats counts at
   the top of the page were correct; only the per-row metadata was broken.
 
@@ -631,9 +631,9 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   camelCase (double-quoted so Postgres preserves case), matching the shape
   `normalizeBossJob` reads, so both paths agree.
 
-  Also replaces every native `window.confirm()` — jobs page (bulk re-run,
+  Also replaces every native `window.confirm()`: jobs page (bulk re-run,
   purge-by-state, delete job, cancel scheduled job) and storage page (delete
-  files, delete folder) — with a new shared `ConfirmProvider`/`useConfirm`, a
+  files, delete folder), with a new shared `ConfirmProvider`/`useConfirm`, a
   thin imperative convenience layer over a Radix `AlertDialog` primitive (a port
   of shadcn's `alert-dialog`). Both live under `@groot/ui/primitives` so callers
   know they are composed/Radix-backed, not direct shadcn re-exports. Using
@@ -758,7 +758,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
     `provider`). A unit test (`tests/server/prisma/schema-parity.test.ts`)
     guards that the two stay in sync.
   - **`Json` columns on both engines.** Array/JSON fields use Prisma's `Json`
-    type — native `JSONB` on Postgres, `TEXT` on SQLite — so the generated client
+    type (native `JSONB` on Postgres, `TEXT` on SQLite) so the generated client
     types are identical (`runtime.JsonValue`) and there is zero app-code
     branching.
   - **KV backend follows the engine.** Keyv now uses `@keyv/sqlite` on SQLite
@@ -788,7 +788,7 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   - **SQLite is the default engine.** `DATABASE_ENGINE` defaults to `sqlite`;
     set `DATABASE_ENGINE=postgres` to opt into PostgreSQL.
   - **Dual-engine CI.** `.github/workflows/test.yml` runs the full suite
-    (typecheck, lint, test, build) on both engines via a matrix — Postgres leg
+    (typecheck, lint, test, build) on both engines via a matrix: Postgres leg
     uses a `pgvector/pgvector:pg18` service container. Convenience scripts:
     `pnpm test:sqlite`, `pnpm test:postgres`, `pnpm test:all`.
   - **Build.** Native modules (`better-sqlite3`, `sqlite3`, `pg`,
@@ -849,8 +849,8 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
   Standardizes import style so cross-directory imports always use the
   package alias (`@groot/core/*`, `@groot/shell/*`, `@groot/jobs/*`) while
-  same-directory imports stay relative (`./`). Previously these were mixed —
-  even within a single file (e.g. `../kv` next to `@groot/core/logger`) —
+  same-directory imports stay relative (`./`). Previously these were mixed:
+  even within a single file (e.g. `../kv` next to `@groot/core/logger`):
   making import style inconsistent across the codebase.
 
   ## @groot/core
@@ -957,14 +957,14 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
   the `@groot/jobs` → `@groot/core` reach-through for logger exports and gives
   foundational infrastructure its own package boundary.
 
-  **Breaking — migration required for downstream repos:**
+  **Breaking: migration required for downstream repos:**
 
   - All `@groot/core/core/logger` imports must move to `@groot/core/logger`. Affected
     surfaces: server middlewares, kv store, shared services, the jobs backend,
     the app bootstrap, and tests that `vi.mock` the logger.
   - The logger no longer reads `env`/`config` eagerly. The server bootstrap must
     call `configureLogger({ level, service, nodeEnv })` once before request
-    handling — `apps/web/src/server/index.ts` now does this as the first statement
+    handling: `apps/web/src/server/index.ts` now does this as the first statement
     in `main()`:
     ```ts
     import { configureLogger } from "@groot/core/logger";
@@ -998,19 +998,19 @@ jobs)`, which read every `job_logs` row. A job deleted while its handler runs
 
 - [#60](https://github.com/AshikNesin/groot/pull/60) [`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract all jobs code into a dedicated `@groot/jobs` package
 
-  The entire jobs vertical — pg-boss backend infrastructure, HTTP admin API,
-  job logger, the dashboard UI, client types, and API methods — now lives in a
+  The entire jobs vertical: pg-boss backend infrastructure, HTTP admin API,
+  job logger, the dashboard UI, client types, and API methods, now lives in a
   single `@groot/jobs` package with two flat entry points:
 
-  - `@groot/jobs/server/*` — pg-boss queue/worker/queries, routes, job logger
-  - `@groot/jobs/client/*` — dashboard UI, `jobsApi`, types
+  - `@groot/jobs/server/*`: pg-boss queue/worker/queries, routes, job logger
+  - `@groot/jobs/client/*`: dashboard UI, `jobsApi`, types
 
   Business-specific handlers (`todo.jobs.ts`) and bootstrap wiring stay in
   `apps/web/`. This consolidates jobs code that was previously spread across
   `@groot/core` (`core/job`, `shared/jobs`, `core/logger`), `@groot/shell`
   (`types/jobs`, apiClient methods), and `apps/web` (dashboard UI).
 
-  **Breaking — migration required for downstream repos:**
+  **Breaking: migration required for downstream repos:**
 
   - `createJobLogger` / `JobLogStream` / `createJobLogStream` moved from
     `@groot/core/core/logger` → `@groot/jobs/server/logger`. The

@@ -1,4 +1,4 @@
-# Local-files privacy mode — single source of truth
+# Local-files privacy mode: single source of truth
 
 This file is the canonical contract for fully local, no-database planning and
 recaps. It is shared word for word by `/visual-plan` and `/visual-recap`. Read it
@@ -21,7 +21,7 @@ The local-files contract:
 - **Read context locally.** Read source, diff, and stat context from local files
   and shell commands only. For recaps, the
   `npx @agent-native/core@latest recap collect-diff`, `scan`, and
-  `build-prompt --local-files` helpers are safe — they operate on local files and
+  `build-prompt --local-files` helpers are safe: they operate on local files and
   do not write to the Plan database.
 - **Fetch the block catalog first** (it sends no plan content). Use the MCP
   `get-plan-blocks` tool if it is already available, or run
@@ -33,7 +33,7 @@ The local-files contract:
   registry table cannot encode: `checklist` items need `id` and `label`;
   `question-form` questions need `id`, `title`, and `mode`, and each option needs
   `id` and `label`; and `Code` / `AnnotatedCode` / `Diff` are whitespace-sensitive
-  — encode multiline code as JSON string attributes such as `code={"const x =\n  y"}`
+  : encode multiline code as JSON string attributes such as `code={"const x =\n  y"}`
   (a static template literal is accepted only when it has no `${...}`
   interpolation). `plan local check` is a quick OFFLINE lint (a subset of the
   renderer schema), so a green `check` does not guarantee the plan renders.
@@ -83,7 +83,7 @@ The local-files contract:
   `create-plan-design`, `create-visual-recap`, `create-visual-questions`,
   `import-visual-plan-source`, `update-visual-plan`, `patch-visual-plan-source`,
   `get-plan-feedback`, `export-visual-plan`, `set-resource-visibility`, or any
-  other hosted Plan tool — except the schema-only block-catalog lookup above.
+  other hosted Plan tool, except the schema-only block-catalog lookup above.
 - **Feedback is file/chat feedback.** Update the MDX files directly, rerun
   `plan local check`, and rerun `serve` or `verify` when that preview path is
   available. Summarize the new local URL when one exists; otherwise summarize the

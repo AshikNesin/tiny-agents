@@ -86,7 +86,7 @@ To check browser support first, use `browserSupportsWebAuthn()` from
 ```tsx
 import { PasskeyManager } from "@groot/shell/components/PasskeyManager";
 
-<PasskeyManager />; // list, add, rename, delete — used on the settings page
+<PasskeyManager />; // list, add, rename, delete: used on the settings page
 ```
 
 `PasskeyManager` disables Delete when `canDelete` is `false`.

@@ -15,8 +15,8 @@ layer over two job brokers (one with a native binding that needed an apt
 package on the deploy image), a YAML config loader with its own templating, an
 env loader binary, and a Node-only runtime.
 
-Meanwhile the Cloudflare free plan — Workers, D1, R2, Static Assets, cron
-triggers — had become a serious zero-cost hosting target, and none of those
+Meanwhile the Cloudflare free plan: Workers, D1, R2, Static Assets, cron
+triggers: had become a serious zero-cost hosting target, and none of those
 libraries could run on it.
 
 ## Decision
@@ -72,7 +72,7 @@ libraries could run on it.
 - **Keep Express under `nodejs_compat`.** Express can be made to run on Workers
   behind an adapter, but the app would still carry Express-era middleware
   (multer, cors, compression) built on Node streams, and nothing else in the
-  stack — Prisma's engine, pg-boss, honker's native binding, pino transports —
+  stack: Prisma's engine, pg-boss, honker's native binding, pino transports,
   would follow it there. Switching to a Web-standard framework removed the
   shim and the whole chain behind it.
 - **Cloudflare Containers.** Would run the Node image as-is, but containers are

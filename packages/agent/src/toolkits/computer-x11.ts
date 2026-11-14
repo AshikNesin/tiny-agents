@@ -236,7 +236,7 @@ export function typeSecretBody(binding: WindowBinding): string {
     "MATCH=0",
     'case ".$LC_CLASS." in *".$WANT_CLASS."*) MATCH=1 ;; esac',
     'if [ "$MATCH" = 1 ] && [ -n "$WANT_TITLE" ]; then case "$LC_TITLE" in *"$WANT_TITLE"*) ;; *) MATCH=0 ;; esac; fi',
-    `[ "$MATCH" = 1 ] || { echo "$CLASS — $TITLE" >&2; exit ${WINDOW_MISMATCH_EXIT}; }`,
+    `[ "$MATCH" = 1 ] || { echo "$CLASS: $TITLE" >&2; exit ${WINDOW_MISMATCH_EXIT}; }`,
     typeBody(),
   ].join("\n");
 }

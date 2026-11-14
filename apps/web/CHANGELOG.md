@@ -184,11 +184,11 @@
   (the VM or the local container) over the same SSH endpoint as the browser and
   terminal: Node when needed, the pinned Agent SDK and Claude Code, the bundled
   worker (`dist/server/claude-worker.mjs`), started on the sandbox's loopback and
-  reached through an SSH tunnel — no `tailscale serve`, token or unit file.
+  reached through an SSH tunnel: no `tailscale serve`, token or unit file.
   Settings → Claude plan shows the setup and login state and opens a terminal tab
   running `claude auth login` to sign in (`POST /terminal/sessions` takes
   `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
-  preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+  preinstalls Claude Code. **Breaking:** the hand-run worker is gone:
   `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
   systemd/launchd files are removed; the sandbox is the only path. The worker now
   starts without a login (each session checks it), and the launcher unsets
@@ -198,9 +198,9 @@
   drives any coding agent through one adapter contract, starting with Shelley
   and Claude Code.
   
-  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `@tiny-agents/code` (new) holds the contract: `HarnessInstance`,
   `TranscriptItem` rows upserted by id, thread and instance events, honest
-  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  `Capabilities`, `HarnessHost`, the drivers (`drivers/shelley`: Shelley's
   stream2, snapshot list, normalizer and usage report moved off the client;
   `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
   mode), and a test kit (`capabilityProblems`, an in-memory thread index).
@@ -234,8 +234,8 @@
   a run of finished tool calls folds into one "Ran 3 commands, edited 2 files"
   line; the list is one line per conversation; Changes stacks every changed
   file's diff in one scroll. Archive (on a row's hover, or the header) moves a
-  conversation with all its subagents — `POST /shelley/conversations/:id/archive`
-  and `/unarchive` now cascade to descendants and answer `subagents` — with Undo.
+  conversation with all its subagents: `POST /shelley/conversations/:id/archive`
+  and `/unarchive` now cascade to descendants and answer `subagents`, with Undo.
   Phones get a real new-conversation screen at `/code/new`.
 
 - [#137](https://github.com/AshikNesin/tiny-agents/pull/137) [`248cb33`](https://github.com/AshikNesin/tiny-agents/commit/248cb33c6853447e1befd09d02ec0e16e543e5dc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adopt Fluid Functionalism components. `Dialog` and `AlertDialog` now spring in
@@ -540,7 +540,7 @@
   no subpath loads pi-durable (`/browser` and `/claude-worker` reached it
   through the web toolkit).
 
-- [`fc98270`](https://github.com/AshikNesin/tiny-agents/commit/fc98270fe39983a7f47451733a8249624568667e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add a `DATA_DIR` environment variable for the production data directory (default `/data`, so Docker behavior is unchanged). Outside Docker — e.g. a bare-metal macOS run — `/data` is not writable and boot failed with `ENOENT: mkdir /data`; set `DATA_DIR` to a writable path to move the app database (`app.db`), agent store (`agent.db`) and their sibling uploads directory together. Explicit `DATABASE_URL` / `AGENT_DB_PATH` / `UPLOADS_DIR` values still win.
+- [`fc98270`](https://github.com/AshikNesin/tiny-agents/commit/fc98270fe39983a7f47451733a8249624568667e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add a `DATA_DIR` environment variable for the production data directory (default `/data`, so Docker behavior is unchanged). Outside Docker (e.g. a bare-metal macOS run) `/data` is not writable and boot failed with `ENOENT: mkdir /data`; set `DATA_DIR` to a writable path to move the app database (`app.db`), agent store (`agent.db`) and their sibling uploads directory together. Explicit `DATABASE_URL` / `AGENT_DB_PATH` / `UPLOADS_DIR` values still win.
 
 - [#163](https://github.com/AshikNesin/tiny-agents/pull/163) [`5563dcd`](https://github.com/AshikNesin/tiny-agents/commit/5563dcd9d3f3fde3f338d0150a426dba854866de) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One sandbox connection. Everything that reaches the sandbox VM (or the local
   sandbox container) now goes through one `SandboxConnection`
@@ -625,8 +625,8 @@
 - [`998668e`](https://github.com/AshikNesin/tiny-agents/commit/998668e8f9612c282ce193f838bf826eab50c602) Thanks [@claude](https://github.com/claude)! - Bots can ask the owner clarifying questions mid-reply (human in the loop).
   The new `ask_owner` tool (runtime-installed `questions` capability, read-only)
   takes 1–4 questions with optional options and multiple choice, and waits
-  durably — the approval gate's wait, now shared as `waitForOwner`/`WaitTracker`
-  in `waiting.ts` — until `AgentRuntime.answerQuestions` records the answers or
+  durably: the approval gate's wait, now shared as `waitForOwner`/`WaitTracker`
+  in `waiting.ts`, until `AgentRuntime.answerQuestions` records the answers or
   a dismissal; `dismissQuestions` and `pendingQuestions` cover the rest, and
   `ActivityChange.questions` counts waiting calls. Transcript tool calls gain
   the `awaiting_answer` status and `questions`/`answers`. App side: every bot
@@ -1026,7 +1026,7 @@
   ChatPane into its own ChatComposer component.
 
 - [#46](https://github.com/AshikNesin/tiny-agents/pull/46) [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Declutter the chat header: the bot's name (with a small chevron) opens its
-  settings, and the right side holds just two quiet icons — the browser panel
+  settings, and the right side holds just two quiet icons: the browser panel
   toggle and a new-chat pen (⇧⌘O / Ctrl+Shift+O; disabled on an empty chat).
   The ⋯ menu is gone: Delete moved into the edit dialog with an inline
   confirmation, and Pin stays in the sidebar row's menu.
@@ -1072,7 +1072,7 @@
   1024MB heap cap; 512 OOM-crashed at startup.
   
   Follow-up (prod verification): three overlapping `loadBots` generations
-  (mount, page, SSE) stranded the oldest caller's promise forever — a
+  (mount, page, SSE) stranded the oldest caller's promise forever: a
   superseded middle generation carried waiters that only the newest request
   settles. Stranded waiters now carry forward to the newest generation (or
   answer from its recorded outcome when it already landed).
@@ -1140,11 +1140,11 @@
   notification, a bookmarked `/routines`, …) instead of always landing on the
   chats. Works for password and passkey sign-in; only in-app paths are used.
 
-- [`60b62b9`](https://github.com/AshikNesin/tiny-agents/commit/60b62b9c8403032f31a997921e80c613368f654b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix MCP OAuth sign-in failing after the provider redirects back: the callback route sat behind the JWT middleware, but the return from the authorization server is a cross-site navigation with no session cookie (SameSite=Strict in production) and no Authorization header, so it failed with `UNAUTHORIZED "No token provided"`. The callback is now public — like the client metadata document — and is authorized by the OAuth `state` parameter, which matches only a pending sign-in started by the connection's owner.
+- [`60b62b9`](https://github.com/AshikNesin/tiny-agents/commit/60b62b9c8403032f31a997921e80c613368f654b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix MCP OAuth sign-in failing after the provider redirects back: the callback route sat behind the JWT middleware, but the return from the authorization server is a cross-site navigation with no session cookie (SameSite=Strict in production) and no Authorization header, so it failed with `UNAUTHORIZED "No token provided"`. The callback is now public (like the client metadata document) and is authorized by the OAuth `state` parameter, which matches only a pending sign-in started by the connection's owner.
 
 - [#23](https://github.com/AshikNesin/tiny-agents/pull/23) [`d3edec4`](https://github.com/AshikNesin/tiny-agents/commit/d3edec495049d15abdd18b5c7832224ef4a25e93) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds durable per-bot memory (issue [#22](https://github.com/AshikNesin/tiny-agents/issues/22) phase A): a `memories` table with a typed lifecycle (active/superseded/archived/expired/deleted), a `memory` capability section that injects what a bot remembers about the owner into its prompt on every send, `Bot.memoryEnabled` with capture/injection gating, and REST CRUD under `/api/v1/bots/:id/memories` with tombstone deletes that block exact-text re-capture. Overflow archives the oldest active rows at a 100-row budget, never truncating new facts.
   
-  Capture (phase B): idle chats arm a per-conversation debounce (2 minutes quiet or 6 owner turns); one gateway side-call reads the owner turns since the watermark through an anti-junk extraction contract, and code alone decides what lands — exact-text dedupe against tombstones, same-bot supersession, budget archive, watermark bump in one transaction. Trivial windows and peer/routine turns never trigger a call; faux mode and missing gateway config disable capture without affecting manual memories or injection.
+  Capture (phase B): idle chats arm a per-conversation debounce (2 minutes quiet or 6 owner turns); one gateway side-call reads the owner turns since the watermark through an anti-junk extraction contract, and code alone decides what lands, exact-text dedupe against tombstones, same-bot supersession, budget archive, watermark bump in one transaction. Trivial windows and peer/routine turns never trigger a call; faux mode and missing gateway config disable capture without affecting manual memories or injection.
 
 - [#98](https://github.com/AshikNesin/tiny-agents/pull/98) [`4c060ba`](https://github.com/AshikNesin/tiny-agents/commit/4c060bae2d002873623dfeac75ca0f68ad3674cf) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Memory page: bots that have memories now come first (most memories first),
   and bots without any are listed once at the end in a compact "No memories yet"
@@ -1173,7 +1173,7 @@
 
 - [`280ee0b`](https://github.com/AshikNesin/tiny-agents/commit/280ee0b2f58f98491c5241f76bb4e5d718a76970) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix "New chat" not clearing the transcript, and a blank-screen crash when opening the New bot dialog.
   
-  - New chat: the SSE stream stays bound to the bot's old (retired) conversation, so after a reset the stale transcript stayed on screen and kept growing. The chat store now drops the cached ChatState on reset (`resetChat`) and the chat pane reconnects its stream when the bot's `conversationId` changes — the fresh snapshot of the new conversation replaces the old transcript.
+  - New chat: the SSE stream stays bound to the bot's old (retired) conversation, so after a reset the stale transcript stayed on screen and kept growing. The chat store now drops the cached ChatState on reset (`resetChat`) and the chat pane reconnects its stream when the bot's `conversationId` changes: the fresh snapshot of the new conversation replaces the old transcript.
   - New bot dialog: `/api/v1/capabilities` returns `{ capabilities }`, but `botsApi.capabilities()` was typed as the bare array, so `capabilities.filter` in BotDialog threw `TypeError: capabilities.filter is not a function` during render and unmounted the whole React tree (blank page). The client now unwraps the envelope.
 
 - [#98](https://github.com/AshikNesin/tiny-agents/pull/98) [`e6005bd`](https://github.com/AshikNesin/tiny-agents/commit/e6005bde2cfcf1cc1120cf9e23741fccce5c51fb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Chat knows when you are offline. Going offline used to leave the chat looking
@@ -1242,7 +1242,7 @@
   defaults to `tiny-agents-vm`, and the sandbox, attachments, browser and
   terminal now all read the host the same way.
 
-- [#132](https://github.com/AshikNesin/tiny-agents/pull/132) [`e7cd039`](https://github.com/AshikNesin/tiny-agents/commit/e7cd039d60bc9b9f26939931d691a2958ed308df) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds self-improvement: a `self-improve` capability whose `update_instructions` tool lets a bot propose edits to its own system prompt, taking effect from its next message. The tool is `askOnly` — the owner approves every change in chat, with the proposed text on the approval card — and the store adapter refuses writes outside the owner's own turns (routine runs, peer deliveries), the same rule as `remember`. The bot's current instructions render as a prompt section beside the tool. Every applied change (self or manual editor edit) appends a full-snapshot `prompt_revisions` row before the bot row updates, giving append-only, revertable history — the database analog of an instructions file under git.
+- [#132](https://github.com/AshikNesin/tiny-agents/pull/132) [`e7cd039`](https://github.com/AshikNesin/tiny-agents/commit/e7cd039d60bc9b9f26939931d691a2958ed308df) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adds self-improvement: a `self-improve` capability whose `update_instructions` tool lets a bot propose edits to its own system prompt, taking effect from its next message. The tool is `askOnly` (the owner approves every change in chat, with the proposed text on the approval card) and the store adapter refuses writes outside the owner's own turns (routine runs, peer deliveries), the same rule as `remember`. The bot's current instructions render as a prompt section beside the tool. Every applied change (self or manual editor edit) appends a full-snapshot `prompt_revisions` row before the bot row updates, giving append-only, revertable history: the database analog of an instructions file under git.
 
 - [#46](https://github.com/AshikNesin/tiny-agents/pull/46) [`1b4cf57`](https://github.com/AshikNesin/tiny-agents/commit/1b4cf574edbd0a20f4cddae400b32f7419c617f3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Slim the sidebar to the essentials: Chats, Tasks and Terminal stay in the
   nav; Routines, Skills, Memory and Connections move into the account menu
@@ -1441,7 +1441,7 @@
   `_honker_scheduler_tasks`, `_honker_stream`, `_honker_stream_consumers`) at
   runtime inside the app's SQLite file. Because Prisma's migration history didn't
   know about them, `prisma migrate dev` detected drift and wanted to drop all nine
-  tables — breaking migration creation against any database honker had touched.
+  tables: breaking migration creation against any database honker had touched.
 
   This mirrors how the `keyv` table is already handled: the tables are declared in
   a new migration (`20260316000000_honker_tables`, guarded with
@@ -1478,7 +1478,7 @@
   naming was misleading. Renamed `auth`, `passkey`, `app-settings`,
   `storage`, and `todo` validation files to `*.schema.ts` and updated
   all imports across `@groot/core`, `@groot/web`, the docs, and
-  `AGENTS.md`. This is a pure rename — no behavior change.
+  `AGENTS.md`. This is a pure rename: no behavior change.
 
 - Updated dependencies [[`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1), [`b0a391b`](https://github.com/AshikNesin/groot/commit/b0a391b85274ab8cf2f6837b8dda4dadf6f716a1)]:
   - @groot/ui@0.2.1
@@ -1566,14 +1566,14 @@
   the `@groot/jobs` → `@groot/core` reach-through for logger exports and gives
   foundational infrastructure its own package boundary.
 
-  **Breaking — migration required for downstream repos:**
+  **Breaking: migration required for downstream repos:**
 
   - All `@groot/core/core/logger` imports must move to `@groot/core/logger`. Affected
     surfaces: server middlewares, kv store, shared services, the jobs backend,
     the app bootstrap, and tests that `vi.mock` the logger.
   - The logger no longer reads `env`/`config` eagerly. The server bootstrap must
     call `configureLogger({ level, service, nodeEnv })` once before request
-    handling — `apps/web/src/server/index.ts` now does this as the first statement
+    handling: `apps/web/src/server/index.ts` now does this as the first statement
     in `main()`:
     ```ts
     import { configureLogger } from "@groot/core/logger";
@@ -1608,19 +1608,19 @@
 
 - [#60](https://github.com/AshikNesin/groot/pull/60) [`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract all jobs code into a dedicated `@groot/jobs` package
 
-  The entire jobs vertical — pg-boss backend infrastructure, HTTP admin API,
-  job logger, the dashboard UI, client types, and API methods — now lives in a
+  The entire jobs vertical: pg-boss backend infrastructure, HTTP admin API,
+  job logger, the dashboard UI, client types, and API methods, now lives in a
   single `@groot/jobs` package with two flat entry points:
 
-  - `@groot/jobs/server/*` — pg-boss queue/worker/queries, routes, job logger
-  - `@groot/jobs/client/*` — dashboard UI, `jobsApi`, types
+  - `@groot/jobs/server/*`: pg-boss queue/worker/queries, routes, job logger
+  - `@groot/jobs/client/*`: dashboard UI, `jobsApi`, types
 
   Business-specific handlers (`todo.jobs.ts`) and bootstrap wiring stay in
   `apps/web/`. This consolidates jobs code that was previously spread across
   `@groot/core` (`core/job`, `shared/jobs`, `core/logger`), `@groot/shell`
   (`types/jobs`, apiClient methods), and `apps/web` (dashboard UI).
 
-  **Breaking — migration required for downstream repos:**
+  **Breaking: migration required for downstream repos:**
 
   - `createJobLogger` / `JobLogStream` / `createJobLogStream` moved from
     `@groot/core/core/logger` → `@groot/jobs/server/logger`. The

@@ -389,7 +389,7 @@ export async function openFauxAgentRuntime(
         ? "Self-improvement e2e: a deliberately long change so the approval " +
           "card folds it behind Read more.\n" +
           "The owner must be able to read the whole proposal before " +
-          "approving it — a 60-character slice of a 700-word rewrite is " +
+          "approving it: a 60-character slice of a 700-word rewrite is " +
           "rubber-stamping.\n" +
           "This line exists only to push the payload over the fold threshold."
         : "Self-improvement e2e: append this line.";

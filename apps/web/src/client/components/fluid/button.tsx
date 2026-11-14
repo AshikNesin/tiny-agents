@@ -33,7 +33,7 @@ const buttonVariants = cva(
         tertiary: "text-foreground",
         ghost: "text-muted-foreground hover:text-foreground",
       },
-      // The two-step size ladder shared by every control — see /docs/sizes.
+      // The two-step size ladder shared by every control, see /docs/sizes.
       // default = 36px control height, compact = 28px for dense surfaces.
       size: {
         default: "h-9 px-4 text-[length:var(--fs-body,13px)] leading-[var(--lh-body,20px)] gap-1.5",
@@ -104,7 +104,7 @@ interface ButtonProps
 /* Press effect: the surface layer sits 1px inside the button and a
    same-color box-shadow spread fills it back out to the full bounds.
    Pressing collapses the spread, shrinking the surface by exactly 1px per
-   side at any width — a scale would warp (2% of a 400px button is 8px
+   side at any width: a scale would warp (2% of a 400px button is 8px
    sideways but under 1px vertically). Primary's fills are opaque
    color-mix()es. Secondary's are see-through (--tint), so it takes on the
    surface or tinted banner under it; its fill and spread ring still never
@@ -163,7 +163,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     // asChild: the user's element becomes the root while the button's internal
     // structure (bg layer, content wrapper, spinner, icons) survives as its
-    // children — the element's own children become the label. We clone the
+    // children: the element's own children become the label. We clone the
     // element directly instead of routing through ButtonPrimitive's `render`:
     // Base UI would bolt button semantics (role="button", Space activation)
     // onto e.g. a link, where plain-link output is wanted.
@@ -254,7 +254,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
               {/* text-box only applies to block containers, so the trim lives
                   on the label span (a blockified flex item), not the flex root.
                   The button's height is fixed (h-*), so this doesn't change
-                  layout — it just centers the cap-to-baseline box optically. */}
+                  layout: it just centers the cap-to-baseline box optically. */}
               <span className="[text-box:trim-both_cap_alphabetic]">{label}</span>
               {TrailingIcon && (
                 <TrailingIcon

@@ -33,7 +33,7 @@ type Props = {
 };
 
 /**
- * Modal with a single required text input — the shape behind "create folder"
+ * Modal with a single required text input: the shape behind "create folder"
  * and "rename" in the storage page. Owns its own field state.
  */
 export function TextInputDialog({

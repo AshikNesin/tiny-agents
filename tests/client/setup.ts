@@ -14,7 +14,7 @@ expect.extend(matchers);
 MotionGlobalConfig.skipAnimations = true;
 
 // jsdom lacks the Pointer Capture, scroll-into-view and ResizeObserver APIs
-// Radix primitives (Select, Dropdown, Tooltip, …), cmdk and the command menu rely on. Minimal stubs — enough for the
+// Radix primitives (Select, Dropdown, Tooltip, …), cmdk and the command menu rely on. Minimal stubs: enough for the
 // interaction paths exercised by component tests; not a faithful polyfill.
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {

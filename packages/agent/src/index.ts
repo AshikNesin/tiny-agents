@@ -1,5 +1,5 @@
 /**
- * @tiny-agents/agent — the only module in tiny-agents that touches pi-durable.
+ * @tiny-agents/agent: the only module in tiny-agents that touches pi-durable.
  *
  * The root is the pi-durable boundary: the runtime, the conversation and chat
  * types, the toolkits and capabilities bots run, and the gateway model

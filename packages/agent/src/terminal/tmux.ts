@@ -1,7 +1,7 @@
 /**
  * Pure tmux domain (issue #28): the exact command lines the terminal
  * feature runs on the sandbox VM, plus the parsing/allocation rules around
- * them. No I/O here — the service layer executes these strings and feeds
+ * them. No I/O here: the service layer executes these strings and feeds
  * their output back.
  *
  * Every tmux invocation is prefixed `LC_ALL=C.UTF-8`. ssh2 exec sessions
@@ -53,7 +53,7 @@ function tmux(args: string): string {
 /**
  * One exec that answers both "is tmux installed" and "what sessions exist":
  * `tmux -V` gates the ls, so a tmux installed mid-flight is seen on the
- * next poll. The format's separators are real TAB bytes — tmux 3.4 does not
+ * next poll. The format's separators are real TAB bytes: tmux 3.4 does not
  * expand `\t` escapes in formats.
  */
 export function listCommand(): string {
@@ -158,7 +158,7 @@ export function foregroundCommand(name: SessionName): string {
 }
 
 /**
- * The user's login shell name, read from the VM rather than assumed — the
+ * The user's login shell name, read from the VM rather than assumed: the
  * busy rule compares the pane's foreground process against it.
  */
 export function loginShellCommand(): string {
@@ -188,7 +188,7 @@ const NOT_FOUND = /not found/i;
  * Parse the chained `tmux -V && tmux ls` result. The "no server" case is an
  * empty list, not an error: a socket with no sessions is the normal state
  * before the first tab. Any line that is not a well-formed ta-term row
- * (the `tmux 3.4` header included) is dropped — the socket is dedicated,
+ * (the `tmux 3.4` header included) is dropped: the socket is dedicated,
  * so a foreign name is not ours to manage.
  */
 export function parseSessionList(
@@ -235,7 +235,7 @@ export function allocateSessionName(existing: Iterable<SessionName>): SessionNam
 /**
  * A tab is busy when its pane runs something other than the login shell
  * (vim, htop, a build). Closing it would kill real work, so the route asks
- * for confirmation first. A null foreground means the read failed — the
+ * for confirmation first. A null foreground means the read failed: the
  * session usually vanished, and the kill-session that follows reports 404;
  * a null login shell (the read of $SHELL failed) reads as busy, the safe
  * side of the confirm.

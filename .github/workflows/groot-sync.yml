@@ -120,7 +120,7 @@ jobs:
             # Auto-applied files (clean)
             AUTO_COUNT=$(jq '(.autoApply // []) | length' "$REPORT")
             if [ "$AUTO_COUNT" -gt 0 ]; then
-              echo "### ✅ Auto-Applied — clean ($AUTO_COUNT files)"
+              echo "### ✅ Auto-Applied: clean ($AUTO_COUNT files)"
               echo ""
               echo "<details>"
               echo "<summary>Click to expand</summary>"
@@ -136,7 +136,7 @@ jobs:
             # Auto-merged files (clean 3-way merge)
             MERGED_COUNT=$(jq '(.autoMerged // []) | length' "$REPORT")
             if [ "$MERGED_COUNT" -gt 0 ]; then
-              echo "### 🔀 Auto-Merged — clean 3-way ($MERGED_COUNT files)"
+              echo "### 🔀 Auto-Merged: clean 3-way ($MERGED_COUNT files)"
               echo ""
               echo "Local changes preserved; upstream changes merged without conflict."
               echo ""
@@ -154,7 +154,7 @@ jobs:
             # Deleted files (removed upstream, unmodified locally)
             DELETED_COUNT=$(jq '(.deleted // []) | length' "$REPORT")
             if [ "$DELETED_COUNT" -gt 0 ]; then
-              echo "### 🗑 Deleted — removed upstream ($DELETED_COUNT files)"
+              echo "### 🗑 Deleted: removed upstream ($DELETED_COUNT files)"
               echo ""
               echo "<details>"
               echo "<summary>Click to expand</summary>"
@@ -170,7 +170,7 @@ jobs:
             # Deletions that need review (removed upstream, modified locally)
             REVIEW_DEL_COUNT=$(jq '(.reviewDeletions // []) | length' "$REPORT")
             if [ "$REVIEW_DEL_COUNT" -gt 0 ]; then
-              echo "### 👀 Deletion Review — removed upstream but modified locally ($REVIEW_DEL_COUNT files)"
+              echo "### 👀 Deletion Review: removed upstream but modified locally ($REVIEW_DEL_COUNT files)"
               echo ""
               echo "Kept in place. Delete manually if the local changes are no longer needed."
               echo ""
@@ -183,21 +183,21 @@ jobs:
             # Conflicts (need local resolution)
             CONFLICT_COUNT=$(jq '(.conflicts // []) | length' "$REPORT")
             if [ "$CONFLICT_COUNT" -gt 0 ]; then
-              echo "### ⚠️ Conflicts — action needed ($CONFLICT_COUNT files)"
+              echo "### ⚠️ Conflicts: action needed ($CONFLICT_COUNT files)"
               echo ""
               echo "Not applied in this PR. Resolve locally with the pi coding agent:"
               echo '```bash'
               echo "pnpm groot:resolve"
               echo '```'
               echo ""
-              jq -r '.conflicts[] | "- `\(.file)` — \(.conflicts) conflict(s)"' "$REPORT"
+              jq -r '.conflicts[] | "- `\(.file)`: \(.conflicts) conflict(s)"' "$REPORT"
               echo ""
             fi
 
             # Drift (new boilerplate surface, not synced)
             DRIFT_COUNT=$(jq '(.drift // []) | length' "$REPORT")
             if [ "$DRIFT_COUNT" -gt 0 ]; then
-              echo "### 📈 Drift — new in groot, not synced ($DRIFT_COUNT files)"
+              echo "### 📈 Drift: new in groot, not synced ($DRIFT_COUNT files)"
               echo ""
               echo "Changed upstream but outside this project's sync patterns. Adopt manually if needed."
               echo ""

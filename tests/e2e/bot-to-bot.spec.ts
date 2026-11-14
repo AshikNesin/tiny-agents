@@ -54,7 +54,7 @@ test.describe("Bot to bot", () => {
 
     // The guest echoed the attributed copy; the relay brought it back into
     // the host chat, rendered as a Grok-style card: the peer's name, a
-    // "reply relayed into this chat" marker and the payload — the raw
+    // "reply relayed into this chat" marker and the payload: the raw
     // "**Reply from …:**" prefix never shows.
     const relayCard = page.getByTestId("peer-card").filter({ hasText: guest });
     await expect(relayCard.first()).toBeVisible({ timeout: 30_000 });

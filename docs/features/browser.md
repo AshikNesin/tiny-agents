@@ -10,7 +10,7 @@ that must never reach the model.
 ```
 One browser per profile, one tab per bot (profile dirs: on the VM remotely; local: ./data/browser-profiles/<profile>)
 
-Remote (SANDBOX_HOST set — production):
+Remote (SANDBOX_HOST set, production):
 VM: Xtigervnc (private X display, localhost only)
       └─ headful google-chrome-stable  (full Chrome UI: tabs, address bar, extensions)
            └─ CDP on 127.0.0.1 (VM-only, ephemeral port)
@@ -275,13 +275,13 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
 `BROWSER_EXECUTABLE_PATH`, `BROWSER_IDLE_MINUTES`, `BROWSER_SCALE`,
 `BROWSER_ALLOWED_PRIVATE_HOSTS` (all optional; see `.env.schema`).
 
-**Where Chrome runs** — on deploys, not in the app container:
+**Where Chrome runs**, on deploys, not in the app container:
 
 - `SANDBOX_HOST` set (production): the browser runs **on that VM** with a VNC
   display, as above. Closing a session kills the remote Chrome and VNC server
   (pids are recorded in the profile dir).
 - `BROWSER_EXECUTABLE_PATH` set: a local binary (dev overrides).
-- Neither: local fallbacks — `/headless-shell/headless-shell` (exe.dev VM),
+- Neither: local fallbacks, `/headless-shell/headless-shell` (exe.dev VM),
   `/usr/bin/chromium` (Debian apt, via `railpack.json` `aptPackages`), then
   Playwright's bundled Chromium (`pnpm exec playwright install chromium`).
 

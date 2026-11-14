@@ -5,7 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsib
 import { cn } from "@groot/ui/lib/utils";
 
 /**
- * Trace — the step primitive that agent UIs (tool calls, reasoning, chain of
+ * Trace: the step primitive that agent UIs (tool calls, reasoning, chain of
  * thought) are built on. A `Trace` stacks steps; each step is a `TraceLine`
  * (icon + title + description), optionally wrapped in a `TraceCollapsible`
  * whose content reveals the step's detail.
@@ -86,7 +86,7 @@ function TraceDescription({ className, ...props }: React.ComponentProps<"span">)
 type CollapsibleProps = React.ComponentProps<typeof Collapsible>;
 
 /**
- * A collapsible step. Uncontrolled (`defaultOpen`) or controlled — a
+ * A collapsible step. Uncontrolled (`defaultOpen`) or controlled: a
  * controlled `open` requires `onOpenChange`.
  */
 function TraceCollapsible({

@@ -1,6 +1,6 @@
 /**
  * App-wide Code state (ADR 0011): the configured harnesses (with their
- * capabilities and connection), and the live merged thread list — one SSE
+ * capabilities and connection), and the live merged thread list: one SSE
  * for the whole app, feeding the Code page's list, the sidebar's unread
  * badge and ⌘K. An open thread streams on its own connection (useCodeThread).
  */

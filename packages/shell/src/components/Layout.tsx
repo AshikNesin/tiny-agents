@@ -86,7 +86,7 @@ export function Layout({
   // When a custom header is supplied the default sidebar (and its offset /
   // mobile bar) is disabled so the header owns the full top of the page.
   // Uses a nullish check so both `undefined` (omitted) and `null` (explicitly
-  // cleared) render the default sidebar — matching the `{header ?? ...}` JSX.
+  // cleared) render the default sidebar: matching the `{header ?? ...}` JSX.
   const useDefaultSidebar = header == null;
 
   // Mobile drawer state.
@@ -181,7 +181,7 @@ export function Layout({
   );
   return (
     <div className={cn("min-h-dvh bg-background text-foreground", className)}>
-      {/* Single shared command palette dialog — mounted once. */}
+      {/* Single shared command palette dialog: mounted once. */}
       <CommandPaletteDialog groups={commandGroups} builtIns={commandBuiltIns} />
       {nav.map((item) =>
         item.shortcut ? <NavShortcut key={item.to} shortcut={item.shortcut} to={item.to} /> : null,
@@ -210,7 +210,7 @@ export function Layout({
           showSidebar && (collapsed ? "lg:pl-16" : "lg:pl-56"),
         )}
       >
-        {/* Top bar — mobile (sidebar toggle + brand + search icon). */}
+        {/* Top bar: mobile (sidebar toggle + brand + search icon). */}
         {showSidebar && (
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background px-4 lg:hidden">
             <Button

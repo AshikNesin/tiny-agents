@@ -1,6 +1,6 @@
 /**
  * The shared skill library (issue #1 D5/D6): CRUD, bot assignment and
- * import previews (paste or GitHub). Assignment needs no agent reconfigure —
+ * import previews (paste or GitHub). Assignment needs no agent reconfigure:
  * the `skills` capability reads a bot's skills from app.db on every request.
  */
 import { asc, eq, inArray } from "drizzle-orm";
@@ -135,10 +135,7 @@ export async function preview(input: PreviewSkillDTO): Promise<ParsedSkill & { e
     ...parsed,
     exists,
     warnings: exists
-      ? [
-          `A skill named "${parsed.name}" already exists — rename it to install.`,
-          ...parsed.warnings,
-        ]
+      ? [`A skill named "${parsed.name}" already exists. Rename it to install.`, ...parsed.warnings]
       : parsed.warnings,
   };
 }

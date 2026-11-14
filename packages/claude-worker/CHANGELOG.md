@@ -64,11 +64,11 @@
   (the VM or the local container) over the same SSH endpoint as the browser and
   terminal: Node when needed, the pinned Agent SDK and Claude Code, the bundled
   worker (`dist/server/claude-worker.mjs`), started on the sandbox's loopback and
-  reached through an SSH tunnel — no `tailscale serve`, token or unit file.
+  reached through an SSH tunnel: no `tailscale serve`, token or unit file.
   Settings → Claude plan shows the setup and login state and opens a terminal tab
   running `claude auth login` to sign in (`POST /terminal/sessions` takes
   `run: "claude-login"`, the Terminal page takes `?tab=`). The local sandbox image
-  preinstalls Claude Code. **Breaking:** the hand-run worker is gone —
+  preinstalls Claude Code. **Breaking:** the hand-run worker is gone:
   `CLAUDE_WORKER_URL`/`CLAUDE_WORKER_TOKEN`, the macOS/Linux worker guides and the
   systemd/launchd files are removed; the sandbox is the only path. The worker now
   starts without a login (each session checks it), and the launcher unsets
@@ -102,9 +102,9 @@
   drives any coding agent through one adapter contract, starting with Shelley
   and Claude Code.
   
-  `@tiny-agents/code` (new) holds the contract — `HarnessInstance`,
+  `@tiny-agents/code` (new) holds the contract: `HarnessInstance`,
   `TranscriptItem` rows upserted by id, thread and instance events, honest
-  `Capabilities`, `HarnessHost` — the drivers (`drivers/shelley`: Shelley's
+  `Capabilities`, `HarnessHost`, the drivers (`drivers/shelley`: Shelley's
   stream2, snapshot list, normalizer and usage report moved off the client;
   `drivers/claude-code`: Claude Code on the sandbox through the worker's coding
   mode), and a test kit (`capabilityProblems`, an in-memory thread index).

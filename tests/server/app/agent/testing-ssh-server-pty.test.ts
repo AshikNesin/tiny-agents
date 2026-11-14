@@ -1,7 +1,7 @@
 /**
  * The pty side of the in-process SSH server (issue #28): the real ssh2
  * client attaches an interactive terminal over exec, end to end on the
- * wire — the channel shape the terminal feature drives tmux through.
+ * wire: the channel shape the terminal feature drives tmux through.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import {

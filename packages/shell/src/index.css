@@ -183,7 +183,7 @@
 }
 
 /*
- * Fluid Functionalism tokens — read by the command menu (@groot/ui/command-menu)
+ * Fluid Functionalism tokens: read by the command menu (@groot/ui/command-menu)
  * and its vendored helpers in packages/ui/src/fluid/. Surfaces, fills and the
  * focus ring derive from the groot palette above so the menu stays warm
  * monochrome; only the layered shadows carry raw values.

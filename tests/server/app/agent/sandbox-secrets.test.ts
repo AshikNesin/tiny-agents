@@ -1,7 +1,7 @@
 /**
  * Vault secrets for sandbox commands and the VM egress allowlist (issue #56,
  * phase 3): the confinement script (run for real against stub `sudo` and
- * `systemd-run`), and `run_command` on real pi-durable turns — every use on
+ * `systemd-run`), and `run_command` on real pi-durable turns, every use on
  * its own card, refusals that never ask, values only on stdin, output
  * scrubbed.
  */

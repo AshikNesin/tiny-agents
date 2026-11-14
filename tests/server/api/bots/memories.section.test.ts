@@ -2,7 +2,7 @@
  * Runtime-level proof (issue #22): the memory section reaches the model's
  * prompt through the real durable machinery. pi-durable renders extension
  * sections onto the system message's `sections` map (not `systemPrompt`), so
- * the proof captures that message — the exact surface the provider reads.
+ * the proof captures that message: the exact surface the provider reads.
  * The bot row is keyed to the conversation the runtime created, so the store
  * lookup the capability performs actually finds it.
  */

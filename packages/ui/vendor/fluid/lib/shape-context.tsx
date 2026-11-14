@@ -14,7 +14,7 @@ import {
 type ShapeVariant = "pill" | "rounded";
 
 interface ShapeClasses {
-  /** The variant these classes belong to — handy for conditionals. */
+  /** The variant these classes belong to: handy for conditionals. */
   variant: ShapeVariant;
   item: string;
   bg: string;
@@ -131,7 +131,7 @@ function ShapeProvider({
 
   // Publish the current element radius as a CSS custom property so plain-CSS
   // consumers that can't read React context stay in sync with the shape
-  // system — e.g. the @layer base :focus-visible fallback ring in
+  // system: e.g. the @layer base :focus-visible fallback ring in
   // globals.css. Set on <html> so portalled content sees it too.
   useEffect(() => {
     document.documentElement.style.setProperty(

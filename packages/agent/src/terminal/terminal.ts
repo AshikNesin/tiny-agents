@@ -1,7 +1,7 @@
 /**
  * The terminal service port (issue #28): tabs on the sandbox VM are tmux
  * sessions, and this service owns their lifecycle. Pure orchestration over
- * the tmux command builders (`tmux.ts`) — all I/O goes through the app's
+ * the tmux command builders (`tmux.ts`): all I/O goes through the app's
  * `SandboxConnection` (execs and pty attaches share its pooled connection,
  * issue #84), which tests substitute.
  */
