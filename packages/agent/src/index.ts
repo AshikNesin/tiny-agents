@@ -5,10 +5,12 @@
  * types and the toolkits and capabilities bots run, all through app-shaped
  * types so pi-durable API churn stays contained here. Provider accounts and
  * the Model catalog live in `@tiny-agents/models`; the runtime takes its
- * `ModelCatalog` from there. Areas that do not use pi-durable have their own
- * subpaths: `./sandbox` (the sandbox connection), `./terminal`, `./browser` and
- * `./computer` (live sessions and their transports), `./claude-worker` (the
- * worker on the sandbox), `./peer-envelope` (client-safe) and `./testing`.
+ * `ModelCatalog` from there. The sandbox connection, terminal, browser and
+ * computer sessions and their transports live in `@tiny-agents/sandbox`; the
+ * toolkits here drive them. Areas that do not use pi-durable have their own
+ * subpaths: `./claude-worker` (the worker on the sandbox), `./peer-envelope`
+ * (client-safe) and `./testing`; `./sandbox`, `./terminal`, `./browser` and
+ * `./computer` only re-export `@tiny-agents/sandbox`, deprecated.
  * The root exports only what something outside the package imports.
  * Child-only package: excluded from groot sync via
  * `.groot/boilerplate-sync.json` `additional_exclusions`.
@@ -44,7 +46,12 @@ export {
 export { secretRedactor } from "./redact";
 export { type CredentialField, type CredentialRequest } from "./credentials";
 export { createVaultToolkit } from "./toolkits/vault";
-export { type SecretFillField } from "./toolkits/browser-fill";
+// Moved to @tiny-agents/sandbox (rewrite step 3.4). Re-exported so importers
+// of this root keep compiling; nothing in this repo imports them from here.
+export type {
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  SecretFillField,
+} from "@tiny-agents/sandbox/browser";
 export { InvalidAnswersError, MAX_ANSWER_TEXT } from "./toolkits/questions";
 export { createTasksToolkit, type TaskRecord, type TaskStore } from "./toolkits/tasks";
 export { createCodeToolkit, type CodeHandoffRecord, type CodeStore } from "./toolkits/code";
@@ -93,7 +100,12 @@ export {
   type NewBotInput,
 } from "./toolkits/bot-builder";
 export { createWebToolkit } from "./toolkits/web";
-export { checkPublicUrl, isPrivateAddress } from "./toolkits/public-url";
+export {
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  checkPublicUrl,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  isPrivateAddress,
+} from "@tiny-agents/sandbox";
 export {
   connectMcp,
   createMcpCapability,

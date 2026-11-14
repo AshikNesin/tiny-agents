@@ -19,7 +19,7 @@ to a headless local Chromium with no live view.
   13, user `exedev` with passwordless sudo, sshd, tmux, and the browser and
   computer stacks preinstalled with the installers' markers. `pnpm
   sandbox:up` creates a key pair, builds and starts it.
-- The shared SSH dial (`packages/agent/src/ssh/connection.ts`) takes an
+- The shared SSH dial (`packages/sandbox/src/ssh/connection.ts`) takes an
   optional `privateKey`. With one, it uses public-key auth; without one,
   nothing changes. The app reads it from `SANDBOX_SSH_KEY_FILE` or
   `SANDBOX_SSH_KEY`, next to `SANDBOX_HOST`.

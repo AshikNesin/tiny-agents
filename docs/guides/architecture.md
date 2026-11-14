@@ -27,6 +27,8 @@ packages/jobs/src/server/          # queue, transitions, tick (runner), worker, 
 packages/agent/src/                # @tiny-agents/agent: the only pi-durable boundary (runtime, toolkits) — see docs/README.md
 packages/models/src/               # @tiny-agents/models: provider kinds, discovery, test calls, buildProviders, ModelCatalog;
                                    #   pi-ai only, never pi-durable or @tiny-agents/agent (lint R11) — see features/models.md
+packages/sandbox/src/              # @tiny-agents/sandbox: SSH connection, terminal, browser/computer sessions + transports,
+                                   #   VM setup, forwarding server; never pi-durable or @tiny-agents/agent (lint R11)
 
 apps/web/src/server/               # App-owned (not synced)
 ├── app.ts                         # registerJobHandlers() + createWebApp()

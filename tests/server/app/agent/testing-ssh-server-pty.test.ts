@@ -13,7 +13,7 @@ import {
   type FakePty,
   type FakeSandboxServer,
   type PtyHandler,
-} from "../../../../packages/agent/src/testing-ssh-server";
+} from "../../../../packages/sandbox/src/testing-ssh-server";
 
 type TestClient = InstanceType<typeof Ssh2Client>;
 

@@ -16,7 +16,7 @@ import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, type VaultBroker } from "../vault";
-import { checkPublicUrl, isPrivateAddress } from "./public-url";
+import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
 import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 
 export interface WebToolkitOptions {

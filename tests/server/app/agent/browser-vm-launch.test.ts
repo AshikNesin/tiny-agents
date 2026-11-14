@@ -18,7 +18,7 @@ import {
   launchStackCommand,
   parseLaunchOutput,
   teardownStackCommand,
-} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+} from "../../../../packages/sandbox/src/browser-vm-setup";
 
 const hasPython = (() => {
   try {

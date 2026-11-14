@@ -8,18 +8,18 @@ import { Server as HttpServer } from "node:http";
 import net from "node:net";
 import type { BrowserContext, Page } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { pageSession } from "../../../../packages/agent/src/toolkits/browser-chromium";
+import { pageSession } from "../../../../packages/sandbox/src/browser-chromium";
 import {
   createForwardingServer,
   createRemoteCdpTransport,
   createWindowResizer,
-} from "../../../../packages/agent/src/toolkits/browser-remote-cdp";
+} from "../../../../packages/sandbox/src/browser-remote-cdp";
 import {
   installStackCommand,
   stackReadyCommand,
   teardownStackCommand,
-} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
-import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
+} from "../../../../packages/sandbox/src/browser-vm-setup";
+import { SandboxTimeoutError } from "../../../../packages/sandbox/src/ssh/connection";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 describe("CDP forwarder", () => {

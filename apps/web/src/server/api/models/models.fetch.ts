@@ -10,7 +10,7 @@ import { lookup as dnsLookup, type LookupAddress } from "node:dns";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
-import { isPrivateAddress } from "@tiny-agents/agent";
+import { isPrivateAddress } from "@tiny-agents/sandbox";
 
 export class OutboundRefusedError extends Error {
   constructor(message: string) {

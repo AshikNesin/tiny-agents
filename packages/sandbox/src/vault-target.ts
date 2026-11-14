@@ -1,7 +1,8 @@
 /**
- * The vault's one "target moved" error (issue #56), apart from the port so
- * the browser and computer subpaths, which never load pi-durable, can throw
- * it.
+ * The vault's pi-durable-free pieces (issue #56), apart from the port in
+ * `@tiny-agents/agent` so the browser and computer sinks here can take secret
+ * values and throw the "target moved" error. The agent's vault port
+ * re-exports both.
  */
 
 /**
@@ -21,5 +22,28 @@ export class VaultTargetMovedError extends Error {
   ) {
     super(message);
     this.name = "VaultTargetMovedError";
+  }
+}
+
+const HIDDEN = "[vault]";
+
+/** A value that can't be serialized or logged by accident. */
+export class SecretValue {
+  readonly #value: string;
+  constructor(value: string) {
+    this.#value = value;
+  }
+  /** Only sinks call this. */
+  reveal(): string {
+    return this.#value;
+  }
+  toJSON(): string {
+    return HIDDEN;
+  }
+  toString(): string {
+    return HIDDEN;
+  }
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return HIDDEN;
   }
 }

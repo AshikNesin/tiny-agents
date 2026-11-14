@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
-import { LAUNCH_LOCK_FILE } from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+import { LAUNCH_LOCK_FILE } from "../../../../packages/sandbox/src/browser-vm-setup";
 import {
   DESKTOP_ENV_FILE,
   DESKTOP_PID_FILE,
@@ -18,14 +18,14 @@ import {
   parseDesktopLaunch,
   teardownDesktopCommand,
   wipeDesktopCommand,
-} from "../../../../packages/agent/src/toolkits/computer-vm-setup";
+} from "../../../../packages/sandbox/src/computer-vm-setup";
 import {
   desktopCommand,
   typeBody,
   typeSecretBody,
   WINDOW_MISMATCH_EXIT,
   DESKTOP_GONE_EXIT,
-} from "../../../../packages/agent/src/toolkits/computer-x11";
+} from "../../../../packages/sandbox/src/computer-x11";
 
 const hasPython = (() => {
   try {

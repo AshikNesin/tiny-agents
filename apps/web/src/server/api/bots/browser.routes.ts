@@ -19,7 +19,7 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import type { BrowserTarget } from "@tiny-agents/agent/browser";
+import type { BrowserTarget } from "@tiny-agents/sandbox/browser";
 import * as botsService from "./bots.service";
 import { getBrowserSessions } from "./browser.sessions";
 import { browserTargetForBot, SHARED_BROWSER_PROFILE } from "./browser.targets";

@@ -24,7 +24,7 @@ on the same connection stall.
 ## Decision
 
 - Everything that reaches the sandbox goes through one `SandboxConnection`
-  (`packages/agent/src/ssh/sandbox-connection.ts`), built once from the
+  (`packages/sandbox/src/ssh/sandbox-connection.ts`), built once from the
   endpoint in the app's composition root (`sandboxConnection()` in
   `sandbox-host.ts`) and closed last at shutdown. Its interface: `exec(cmd,
   { stdin, timeoutMs, maxBytes, settleOnExit })`, `pty(cmd, size)`,

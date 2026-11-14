@@ -79,13 +79,18 @@ it. Short version:
 
 - `packages/agent` — the only module that touches pi-durable (excluded from
   groot sync; app-shaped API so pi-durable churn stays contained). The
-  Claude plan client lives under `src/engines/claude-code/`. The sandbox
-  connection, terminal, browser, computer and Claude worker, which do not
-  use pi-durable, are subpaths (`@tiny-agents/agent/sandbox` and so on; see
+  Claude plan client lives under `src/engines/claude-code/`. The Claude
+  worker, which does not use pi-durable, is a subpath
+  (`@tiny-agents/agent/claude-worker`; see
   [docs/README.md](docs/README.md#tiny-agentsagent-entry-points))
 - `packages/models` — provider kinds and templates, discovery, test calls,
   `buildProviders` and the Model catalog, on pi-ai only (it imports neither
   pi-durable nor `packages/agent`, lint R11; excluded from groot sync)
+- `packages/sandbox` — the sandbox VM layer: SSH connection, terminal tabs,
+  browser and computer sessions and transports, their VM setup scripts and
+  the forwarding server (it imports neither pi-durable nor `packages/agent`,
+  lint R11; excluded from groot sync). The toolkits that drive it stay in
+  `packages/agent`
 - `packages/claude-worker` — loopback daemon that drives Claude Code. It
   does not run inside the tiny-agents process
 - `packages/code` — the Code page's harness adapters: one contract every

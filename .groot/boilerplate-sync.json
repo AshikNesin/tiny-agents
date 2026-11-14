@@ -11,6 +11,7 @@
   "additional_exclusions": [
     "packages/agent/**",
     "packages/models/**",
+    "packages/sandbox/**",
     "packages/core/src/notification/**",
     "tests/server/api/todos.test.ts",
     "tests/server/core/notification.test.ts",

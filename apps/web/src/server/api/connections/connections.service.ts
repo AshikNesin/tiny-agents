@@ -8,13 +8,13 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import {
-  checkPublicUrl,
   connectMcp,
   mcpToolName,
   type McpCallResult,
   type McpToolInfo,
   type McpTransportKind,
 } from "@tiny-agents/agent";
+import { checkPublicUrl } from "@tiny-agents/sandbox";
 import {
   botConnections,
   bots as botsTable,

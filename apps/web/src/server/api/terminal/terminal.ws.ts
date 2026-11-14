@@ -26,7 +26,7 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
-import { parseSessionName, type PtyStream, type SessionName } from "@tiny-agents/agent/terminal";
+import { parseSessionName, type PtyStream, type SessionName } from "@tiny-agents/sandbox/terminal";
 import { createTicketStore, isOriginAllowed, onUpgrade, rejectUpgrade } from "../ws/upgrade";
 import { getTerminalService } from "./terminal.instance";
 

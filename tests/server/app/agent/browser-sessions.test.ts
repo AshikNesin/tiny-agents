@@ -13,7 +13,7 @@ import {
   type BrowserClock,
   type BrowserSession,
   type BrowserTransport,
-} from "../../../../packages/agent/src/toolkits/browser-sessions";
+} from "../../../../packages/sandbox/src/browser-sessions";
 
 const TARGET = { profile: "p1", tab: "t1" };
 

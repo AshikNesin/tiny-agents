@@ -13,9 +13,11 @@ import { createHash } from "node:crypto";
 import type { Server } from "node:net";
 import type { Duplex } from "node:stream";
 import { isSubscriptionLogin, parseAuthStatus, LOGIN_HINT } from "@tiny-agents/claude-worker";
-import { SandboxTimeoutError } from "../../ssh/connection";
-import type { SandboxConnection } from "../../ssh/sandbox-connection";
-import { createForwardingServer } from "../../toolkits/browser-remote-cdp";
+import {
+  createForwardingServer,
+  SandboxTimeoutError,
+  type SandboxConnection,
+} from "@tiny-agents/sandbox";
 import {
   authStatusCommand,
   DEFAULT_SANDBOX_WORKER_PORT,

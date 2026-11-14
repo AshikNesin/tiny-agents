@@ -12,8 +12,8 @@ import {
   parseDesktopSize,
   parseExtraPackages,
   type ComputerSessions,
-} from "@tiny-agents/agent/computer";
-import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/agent/browser";
+} from "@tiny-agents/sandbox/computer";
+import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/sandbox/browser";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";

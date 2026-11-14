@@ -21,7 +21,7 @@ import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
-import type { BrowserTarget } from "@tiny-agents/agent/browser";
+import type { BrowserTarget } from "@tiny-agents/sandbox/browser";
 import { browserLiveViewHint, getBrowserSessions } from "./browser.sessions";
 import { issueBrowserPageVncTicket } from "./browser.vnc";
 import { knownProfile, listProfiles } from "./profiles";

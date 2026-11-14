@@ -18,7 +18,7 @@ import {
   type BrowserTransport,
   type BrowserVnc,
 } from "../../../packages/agent/src/toolkits/browser";
-import type { OpenBrowserOptions } from "../../../packages/agent/src/toolkits/browser-sessions";
+import type { OpenBrowserOptions } from "../../../packages/sandbox/src/browser-sessions";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 
 /**

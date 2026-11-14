@@ -11,7 +11,7 @@ import {
   createRemoteCdpTransport,
   type BrowserSessions,
   type BrowserTransport,
-} from "@tiny-agents/agent/browser";
+} from "@tiny-agents/sandbox/browser";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";

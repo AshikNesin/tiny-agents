@@ -5,15 +5,15 @@
  */
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vite-plus/test";
-import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
-import { DesktopGoneError } from "../../../../packages/agent/src/toolkits/computer-sessions";
+import { SandboxTimeoutError } from "../../../../packages/sandbox/src/ssh/connection";
+import { DesktopGoneError } from "../../../../packages/sandbox/src/computer-sessions";
 import {
   computerStackReadyCommand,
   installComputerStackCommand,
   parseDesktopLaunch,
   parseDesktopSize,
   parseExtraPackages,
-} from "../../../../packages/agent/src/toolkits/computer-vm-setup";
+} from "../../../../packages/sandbox/src/computer-vm-setup";
 import {
   checkWindowId,
   clickBody,
@@ -27,7 +27,7 @@ import {
   parseWindows,
   screenshotBody,
   scrollBody,
-} from "../../../../packages/agent/src/toolkits/computer-x11";
+} from "../../../../packages/sandbox/src/computer-x11";
 import { fakeSandboxConnection, type FakeExecReply } from "./sandbox-connection-fake";
 
 describe("computer x11 commands", () => {

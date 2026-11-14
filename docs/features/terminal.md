@@ -24,7 +24,7 @@ Browser: /terminal page
 WebSocket bridge on the Node server (apps/web/src/server/api/terminal/terminal.ws.ts)
    single-use 60s ticket · Origin check · slow-client pause · bytes never logged
    ▼
-terminal service (packages/agent/src/terminal) — stateless, port-shaped
+terminal service (packages/sandbox/src/terminal) — stateless, port-shaped
    list/create/kill run one tmux command per exec;
    attach opens a pty channel on the app's one sandbox connection
    ▼
@@ -34,10 +34,10 @@ sandbox VM
 ```
 
 Server code: `apps/web/src/server/api/terminal/` (routes, ticket WS bridge,
-memoized service from `SANDBOX_*`). Domain code: `packages/agent/src/terminal/`
+memoized service from `SANDBOX_*`). Domain code: `packages/sandbox/src/terminal/`
 (`tmux.ts` pure command builders and parsing, `terminal.ts` the
 service port + typed errors); the SSH side is the app's `SandboxConnection`
-(`packages/agent/src/ssh/`). Client
+(`packages/sandbox/src/ssh/`). Client
 code: `apps/web/src/client/pages/terminal/` (`Terminal.tsx` the page and tab
 strip, `TerminalView.tsx` one terminal) and `apps/web/src/client/lib/`
 (`terminal-api.ts` typed client, `terminal-ws.ts` the socket lifecycle,

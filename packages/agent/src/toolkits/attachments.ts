@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
-import type { SandboxConnection } from "../ssh/sandbox-connection";
+import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { defineToolkit, tool } from "../toolkit";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";

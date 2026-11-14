@@ -1,16 +1,31 @@
 /**
- * `@tiny-agents/agent/sandbox`: the one connection to the sandbox VM (ADR
- * 0013). The app builds it once from the endpoint and hands it to the
- * toolkits, the terminal, the browser and computer transports and the Claude
- * worker. Plain ssh2; nothing here touches pi-durable.
+ * `@tiny-agents/agent/sandbox`: moved to `@tiny-agents/sandbox` (rewrite step
+ * 3.4). Re-exported so importers of this subpath keep compiling; nothing in
+ * this repo imports them from here.
  */
 export {
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  createMemoryHostKeyStore,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
   createSandboxConnection,
-  type SandboxConnection,
-  type SandboxConnectionOptions,
-  type SandboxExecOptions,
-  type SandboxExecResult,
-  type SandboxFile,
-} from "../ssh/sandbox-connection";
-export type { PtySize, PtyStream } from "../ssh/pty-stream";
-export { createMemoryHostKeyStore, type HostKeyStore, type SshEndpoint } from "../ssh/connection";
+} from "@tiny-agents/sandbox";
+export type {
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  HostKeyStore,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  PtySize,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  PtyStream,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SandboxConnection,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SandboxConnectionOptions,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SandboxExecOptions,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SandboxExecResult,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SandboxFile,
+  /** @deprecated Import from `@tiny-agents/sandbox`. */
+  SshEndpoint,
+} from "@tiny-agents/sandbox";

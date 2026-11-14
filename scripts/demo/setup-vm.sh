@@ -26,7 +26,7 @@ id exedev > /dev/null 2>&1 || useradd -m -s /bin/bash exedev
 passwd -d exedev > /dev/null
 echo "exedev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/exedev && chmod 440 /etc/sudoers.d/exedev
 # Tell the app the browser stack is already installed (STACK_VERSION in browser-vm-setup.ts).
-SV=$(sed -nE 's/^export const STACK_VERSION = "([^"]+)";/\1/p' packages/agent/src/toolkits/browser-vm-setup.ts)
+SV=$(sed -nE 's/^export const STACK_VERSION = "([^"]+)";/\1/p' packages/sandbox/src/browser-vm-setup.ts)
 su - exedev -c "mkdir -p ~/.tiny-agents && touch ~/.tiny-agents/browser-stack-$SV"
 
 # The repo Code Buddy tests in the demo.

@@ -11,7 +11,9 @@ references and policy only. The backend sits behind a `VaultBackend` port
 be added later.
 
 Code: `packages/agent/src/vault.ts` (the port), `packages/agent/src/redact.ts`,
-`packages/agent/src/toolkits/{vault,browser,browser-fill,web}.ts`, and
+`packages/agent/src/toolkits/{vault,browser,web}.ts`,
+`packages/sandbox/src/browser-fill.ts` (the browser sink) and
+`packages/sandbox/src/vault-target.ts` (`SecretValue`), and
 `apps/web/src/server/api/vault/`. UI: `apps/web/src/client/pages/vault/`.
 Decision records: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md),
 amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md).

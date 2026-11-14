@@ -26,7 +26,7 @@ import {
 import {
   OriginMismatchError,
   type SecretFill,
-} from "../../../../packages/agent/src/toolkits/browser-fill";
+} from "../../../../packages/sandbox/src/browser-fill";
 import type { ChatEvent, ChatState, ChatToolCall } from "../../../../packages/agent/src/types";
 import {
   SecretValue,

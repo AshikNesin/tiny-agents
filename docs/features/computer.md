@@ -25,9 +25,9 @@ Sandbox VM (SANDBOX_HOST, Tailscale SSH, passwordless sudo)
           │ VNC channel (SSH direct-tcpip)    │ ssh exec (one per call)
 App ──────┴───────────────────────────────────┘
    packages/agent/src/toolkits/computer.ts           computer_* tools, key rules, vault sink
-   packages/agent/src/toolkits/computer-sessions.ts  ComputerDesktop port, session manager, driver flag
-   packages/agent/src/toolkits/computer-x11.ts       the SSH/xdotool/scrot transport
-   packages/agent/src/toolkits/computer-vm-setup.ts  install + launch scripts (shared launch lock)
+   packages/sandbox/src/computer-sessions.ts         ComputerDesktop port, session manager, driver flag
+   packages/sandbox/src/computer-x11.ts              the SSH/xdotool/scrot transport
+   packages/sandbox/src/computer-vm-setup.ts         install + launch scripts (shared launch lock)
    apps/web/src/server/api/bots/computer.*           status / start / vnc-ticket / driver / reset + WS bridge
    apps/web/src/server/api/bots/desktop.vnc.ts       the VNC bridge the browser and the computer share
    apps/web/src/client/components/ComputerPanel.tsx  VncView (kind "computer") + header

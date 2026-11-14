@@ -16,7 +16,7 @@ import {
   stackReadyCommand,
   teardownStackCommand,
   wipeProfileCommand,
-} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+} from "../../../../packages/sandbox/src/browser-vm-setup";
 
 /** Every builder wraps its script in `bash -c '...'`; `-n` parses without running. */
 function assertValidShell(command: string) {

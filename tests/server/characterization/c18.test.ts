@@ -15,7 +15,7 @@ import {
   resetTerminalTicketsForTests,
 } from "../../../apps/web/src/server/api/terminal/terminal.ws";
 import { setTerminalServiceForTests } from "../../../apps/web/src/server/api/terminal/terminal.instance";
-import type { PtyStream, TerminalService } from "../../../packages/agent/src/terminal/terminal";
+import type { PtyStream, TerminalService } from "../../../packages/sandbox/src/terminal/terminal";
 import { authToken } from "../fixtures";
 
 // Tickets are held as live access, which needs their accounts to exist.

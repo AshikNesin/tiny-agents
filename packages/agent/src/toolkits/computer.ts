@@ -32,10 +32,10 @@ import {
   type ComputerSessions,
   type KeyModifier,
   type LiveComputer,
-} from "./computer-sessions";
+} from "@tiny-agents/sandbox/computer";
 import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 
-export { createComputerSessions, type ComputerSessions } from "./computer-sessions";
+export { createComputerSessions, type ComputerSessions } from "@tiny-agents/sandbox/computer";
 
 /** The profile every bot uses unless the app says otherwise. */
 const SHARED_COMPUTER_PROFILE = "shared";

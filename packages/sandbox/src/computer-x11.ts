@@ -12,8 +12,8 @@
  * The command builders are pure and exported for tests; the transport is the
  * only part that reaches the sandbox.
  */
-import { SandboxTimeoutError } from "../ssh/connection";
-import type { SandboxConnection } from "../ssh/sandbox-connection";
+import { SandboxTimeoutError } from "./ssh/connection";
+import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { shQuote } from "./browser-vm-setup";
 import {
   DesktopGoneError,

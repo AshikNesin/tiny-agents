@@ -15,7 +15,7 @@ import {
   windowTarget,
   type ComputerSessions,
 } from "../../../../packages/agent/src/toolkits/computer";
-import { takeoverOf } from "../../../../packages/agent/src/toolkits/computer-sessions";
+import { takeoverOf } from "../../../../packages/sandbox/src/computer-sessions";
 import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import { FAKE_JPEG, fakeComputer, type FakeComputer } from "./computer-fakes";
 

@@ -1,17 +1,28 @@
 /**
- * `@tiny-agents/agent/computer`: live desktop sessions and the X11 transport
- * that runs them on the sandbox VM (ADR 0006). The computer toolkit the bots
- * call stays on the package root.
+ * `@tiny-agents/agent/computer`: moved to `@tiny-agents/sandbox/computer`
+ * (rewrite step 3.4). Re-exported so importers of this subpath keep
+ * compiling; nothing in this repo imports them from here. The computer
+ * toolkit the bots call stays on the package root.
  */
 export {
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
   closeAllComputerSessions,
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
   createComputerSessions,
-  type ComputerSessions,
-  type ComputerSessionsOptions,
-  type ComputerTransport,
-} from "../toolkits/computer-sessions";
-export {
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
   createX11ComputerTransport,
-  type X11ComputerTransportOptions,
-} from "../toolkits/computer-x11";
-export { parseDesktopSize, parseExtraPackages } from "../toolkits/computer-vm-setup";
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  parseDesktopSize,
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  parseExtraPackages,
+} from "@tiny-agents/sandbox/computer";
+export type {
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  ComputerSessions,
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  ComputerSessionsOptions,
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  ComputerTransport,
+  /** @deprecated Import from `@tiny-agents/sandbox/computer`. */
+  X11ComputerTransportOptions,
+} from "@tiny-agents/sandbox/computer";

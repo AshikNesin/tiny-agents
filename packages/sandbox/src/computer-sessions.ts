@@ -15,7 +15,7 @@
  * - dropping a desktop that died under the app, so the next call relaunches.
  */
 import type { Duplex } from "node:stream";
-import { VaultTargetMovedError } from "../vault-target";
+import { VaultTargetMovedError } from "./vault-target";
 import type { BrowserClock } from "./browser-sessions";
 
 /** Where a desktop is while it opens; `installing` is the one-time VM setup. */
