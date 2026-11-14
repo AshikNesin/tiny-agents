@@ -16,7 +16,10 @@ import {
   type CodingLimits,
   type Timings,
 } from "../../../../packages/claude-worker/src/index";
-import { createClaudeCodeHarness } from "../../../../packages/code/src/server/index";
+import { createClaudeCodeHarness, HarnessError } from "../../../../packages/code/src/server/index";
+import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
+import { api, createTestApp } from "../../helpers";
+import { authToken } from "../../fixtures";
 import type { ClaudeCodeHarness } from "../../../../packages/code/src/drivers/claude-code";
 import type {
   HarnessHost,
@@ -749,6 +752,73 @@ describe("Claude Code harness", () => {
     await expect(
       harness.createThread({ message: "x", cwd: "/definitely/not/here" }),
     ).rejects.toThrow(/does not exist/);
+  });
+
+  // Register row C13 (fixed in 4.6): bad input is a 400 and an unknown thread
+  // a 404, typed at the driver and kept by the Code routes; anything the
+  // driver did not expect stays a 500.
+  it("answers bad input with 400 and an unknown thread with 404, through the Code routes", async () => {
+    const { harness, dir, events } = await setup(echo);
+    await expect(harness.createThread({ message: "x" })).rejects.toMatchObject({
+      status: 400,
+      message: "Claude Code needs a working directory.",
+    });
+    await expect(harness.getThread("nope")).rejects.toBeInstanceOf(HarnessError);
+
+    setCodeHub(createCodeHub({ instances: [harness] }))!.start();
+    cleanups.push(() => void setCodeHub(undefined));
+    const app = createTestApp();
+    const token = await authToken("claude-code-errors@example.com");
+    const call = (path: string, json?: unknown) =>
+      api<unknown>(app, `/api/v1/code${path}`, {
+        method: json === undefined ? "GET" : "POST",
+        token,
+        ...(json === undefined ? {} : { json }),
+      });
+    const message = (response: { body: unknown }) =>
+      (response.body as { error?: { message?: string } }).error?.message;
+
+    const missingCwd = await call("/threads", {
+      instanceId: "claude-code",
+      message: "x",
+      cwd: path.join(dir, "not-here"),
+    });
+    expect(missingCwd.status).toBe(400);
+    expect(message(missingCwd)).toMatch(/does not exist/);
+
+    const badEffort = await call("/threads", {
+      instanceId: "claude-code",
+      message: "x",
+      cwd: dir,
+      effort: "extreme",
+    });
+    expect(badEffort.status).toBe(400);
+    expect(message(badEffort)).toBe(
+      'Unknown effort "extreme". Use one of: low, medium, high, xhigh, max.',
+    );
+
+    const unknown = await call(`/threads/${encodeURIComponent("claude-code:nope")}`);
+    expect(unknown.status).toBe(404);
+    expect(message(unknown)).toBe("No Claude Code thread nope.");
+
+    const created = await call("/threads", { instanceId: "claude-code", message: "hi", cwd: dir });
+    expect(created.status).toBe(201);
+    const { threadId } = (created.body as { data: { threadId: string } }).data;
+    await waitTurnEnds(events, 1);
+    const badSetting = await call(`/threads/${encodeURIComponent(threadId)}/settings`, {
+      effort: "extreme",
+    });
+    expect(badSetting.status).toBe(400);
+    expect(message(badSetting)).toMatch(/^Unknown effort "extreme"/);
+
+    // The worker unreachable is not the caller's fault: still a 500.
+    harness.stop();
+    const unreachable = await call("/threads", {
+      instanceId: "claude-code",
+      message: "x",
+      cwd: dir,
+    });
+    expect(unreachable.status).toBe(500);
   });
 
   it("serves the workspace: diffs, files, browsing, uploads and assets", async () => {

@@ -54,6 +54,7 @@ import {
   type TurnOutcome,
   type UsageReport,
 } from "../../contracts";
+import { badRequest, notFound } from "../../server/errors";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
 import { Emitter, excerpt, firstLine, record } from "../../server/items";
 import { turnOutcome } from "../../server/outcome";
@@ -205,10 +206,8 @@ function newNativeId(): string {
   return randomBytes(12).toString("base64url");
 }
 
-function badInput(message: string): Error {
-  const error = new Error(message);
-  error.name = "BadRequest";
-  return error;
+function unknownEffort(effort: string) {
+  return badRequest(`Unknown effort "${effort}". Use one of: ${CODING_EFFORT_LEVELS.join(", ")}.`);
 }
 
 export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): ClaudeCodeHarness {
@@ -309,11 +308,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
   async function runtimeOf(nativeId: string): Promise<Runtime> {
     const runtime = await ensureRuntime(nativeId);
-    if (!runtime) {
-      const error = new Error(`No Claude Code thread ${nativeId}.`);
-      error.name = "NotFound";
-      throw error;
-    }
+    if (!runtime) throw notFound(`No Claude Code thread ${nativeId}.`);
     return runtime;
   }
 
@@ -726,7 +721,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
   // --- helpers ----------------------------------------------------------------
 
   function sessionConfig(row: IndexedThread): CodingSessionConfig {
-    if (!row.cwd) throw badInput("This Claude Code thread has no working directory.");
+    if (!row.cwd) throw badRequest("This Claude Code thread has no working directory.");
     const data = dataOf(row);
     return {
       cwd: row.cwd,
@@ -834,11 +829,10 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
     async createThread(input) {
       const cwd = input.cwd?.trim();
-      if (!cwd) throw badInput("Claude Code needs a working directory.");
+      if (!cwd) throw badRequest("Claude Code needs a working directory.");
       const check = await op<{ valid: boolean; error?: string }>({ op: "validate_cwd", path: cwd });
-      if (!check.valid) throw badInput(check.error ?? "That working directory is not usable.");
-      if (input.effort && !isEffort(input.effort))
-        throw badInput(`Unknown effort ${input.effort}.`);
+      if (!check.valid) throw badRequest(check.error ?? "That working directory is not usable.");
+      if (input.effort && !isEffort(input.effort)) throw unknownEffort(input.effort);
       const nativeId = newNativeId();
       const now = host.now();
       await host.index.upsert({
@@ -887,7 +881,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     async rename(nativeId, title) {
       const runtime = await runtimeOf(nativeId);
       const clean = title.trim();
-      if (!clean) throw badInput("A title cannot be empty.");
+      if (!clean) throw badRequest("A title cannot be empty.");
       await saveRow(runtime, { title: clean.slice(0, 200) });
       runtime.feed.thread(summaryOf(runtime.row, runtime));
       events.emit({ type: "threads" });
@@ -897,7 +891,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       const runtime = await runtimeOf(nativeId);
       const { row } = runtime;
       const claudeSessionId = dataOf(row).claudeSessionId;
-      if (!claudeSessionId || !row.cwd) throw badInput("There is nothing to fork yet.");
+      if (!claudeSessionId || !row.cwd) throw badRequest("There is nothing to fork yet.");
       const title = `${row.title || "Claude Code"} (fork)`;
       const forked = await client.request<CodingForkResult>({
         type: "coding.fork",
@@ -930,7 +924,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     async send(nativeId, input) {
       const runtime = await runtimeOf(nativeId);
       const attachments = (input.attachments ?? []).map((ref) => {
-        if (!ref.startsWith("/")) throw badInput("Unknown attachment.");
+        if (!ref.startsWith("/")) throw badRequest("Unknown attachment.");
         const name = ref.slice(ref.lastIndexOf("/") + 1);
         // What the model takes as image input (narrower than what the page shows inline).
         return { path: ref, name, image: /\.(png|jpe?g|gif|webp)$/i.test(name) };
@@ -979,14 +973,16 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       }
       if (change.effort !== undefined) {
         if (change.effort !== null && !isEffort(change.effort)) {
-          throw badInput(`Unknown effort ${change.effort}.`);
+          throw unknownEffort(change.effort);
         }
         patch.effort = change.effort;
         workerChange.effort = change.effort;
       }
       if (change.permissionMode !== undefined) {
         if (change.permissionMode !== null && !isPermissionMode(change.permissionMode)) {
-          throw badInput(`Unknown permission mode ${String(change.permissionMode)}.`);
+          throw badRequest(
+            `Unknown permission mode "${String(change.permissionMode)}". Use one of: ${CODING_PERMISSION_MODES.join(", ")}.`,
+          );
         }
         patch.permissionMode = change.permissionMode;
         workerChange.permissionMode = change.permissionMode;
