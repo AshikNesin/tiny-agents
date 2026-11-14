@@ -11,7 +11,7 @@ import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
-import { botConnections, bots, connections, db } from "../../../apps/web/src/server/db";
+import { botConnections, bots, connections, db, vaultItems } from "../../../apps/web/src/server/db";
 import { McpServer, StreamableHTTPServerTransport } from "../../../packages/agent/src/testing";
 import {
   ConnectionManager,
@@ -21,6 +21,7 @@ import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
 import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { authToken, until } from "../fixtures";
+import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
 
 let token: string;
 beforeAll(async () => {
@@ -37,11 +38,15 @@ async function call(
   app: TestApp,
   path: string,
   status: number,
-  init: { method?: string; json?: unknown } = {},
+  init: { method?: string; json?: unknown; stepUp?: false } = {},
 ) {
+  // The owner has stepped up (S4) unless a test says otherwise.
+  const headers: Record<string, string> =
+    init.stepUp === false ? {} : { "X-Vault-Step-Up": issueStepUp(1).token };
   const response = await api<Data>(app, path, {
     method: init.method ?? "GET",
     token,
+    headers,
     ...(init.json !== undefined ? { json: init.json } : {}),
   });
   expect(response.status, `${init.method ?? "GET"} ${path}: ${JSON.stringify(response.body)}`).toBe(
@@ -186,6 +191,97 @@ describe("MCP connections (header auth, streamable http)", () => {
     await db.delete(botConnections);
     await db.delete(connections);
     await db.delete(bots);
+  });
+
+  it("needs a step-up to create, re-point or delete a connection, not to rename it (S4)", async () => {
+    const app = buildApp();
+    const body = {
+      name: "Gated",
+      url: mcpServer.url,
+      authType: "header",
+      headerName: "x-api-key",
+      secret: "s3cret",
+    };
+    const refused = await call(app, "/api/v1/connections", 403, {
+      method: "POST",
+      json: body,
+      stepUp: false,
+    });
+    expect(refused.error.details).toEqual({ code: "step_up_required" });
+    const { data } = await call(app, "/api/v1/connections", 201, { method: "POST", json: body });
+    const path = `/api/v1/connections/${data.id}`;
+
+    await call(app, path, 200, { method: "PATCH", json: { name: "Renamed" }, stepUp: false });
+    for (const change of [
+      { url: mcpServer.url },
+      { secret: "other" },
+      { headerName: "x-key" },
+      { secretRef: null },
+    ]) {
+      await call(app, path, 403, { method: "PATCH", json: change, stepUp: false });
+    }
+    await call(app, path, 403, { method: "DELETE", stepUp: false });
+    await call(app, path, 200, { method: "DELETE" });
+  });
+
+  it("drops the stored header secret when the URL moves to another host (S4)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
+        name: "Mover",
+        url: mcpServer.url,
+        authType: "header",
+        headerName: "x-api-key",
+        secret: "s3cret",
+      },
+    });
+    const path = `/api/v1/connections/${data.id}`;
+    const samehost = mcpServer.url.replace("/mcp", "/mcp?v=2");
+    expect(
+      (await call(app, path, 200, { method: "PATCH", json: { url: samehost } })).data.hasSecret,
+    ).toBe(true);
+    const elsewhere = mcpServer.url.replace("127.0.0.1", "localhost");
+    const moved = await call(app, path, 200, { method: "PATCH", json: { url: elsewhere } });
+    expect(moved.data.hasSecret).toBe(false);
+    expect((await db.query.connections.findFirst())?.secretEnc).toBeNull();
+    // Moving with a new secret keeps that one.
+    const back = await call(app, path, 200, {
+      method: "PATCH",
+      json: { url: mcpServer.url, secret: "fresh" },
+    });
+    expect(back.data.hasSecret).toBe(true);
+  });
+
+  it("refuses an app credential as a connection's header secret (S4)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
+        name: "Ref",
+        url: mcpServer.url,
+        authType: "header",
+        headerName: "x-api-key",
+        secret: "s3cret",
+      },
+    });
+    await db.insert(vaultItems).values({
+      handle: "model-key",
+      kind: "api_key",
+      backend: "local",
+      audience: "app",
+      externalId: "x",
+      label: "Model key",
+    });
+    try {
+      const refused = await call(app, `/api/v1/connections/${data.id}`, 400, {
+        method: "PATCH",
+        json: { secretRef: "model-key" },
+      });
+      expect(refused.error.message).toContain("used by the app");
+    } finally {
+      await db.delete(vaultItems);
+    }
   });
 
   it("tests a server, saves it connected, and lists its tools", async () => {

@@ -24,6 +24,7 @@ import { Section } from "@groot/shell/components/layout/Section";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { connectionsApi, type Connection } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
+import { useStepUp } from "../../components/vault/StepUp";
 import { onConnectionChange, useBotsStore } from "../../store/bots";
 import { BotAvatar } from "../../components/BotAvatar";
 import { Switch } from "../../components/ui/switch";
@@ -60,6 +61,7 @@ export function ConnectionDetail({ id }: { id: string }) {
   const bots = useBotsStore((s) => (s.loading && s.bots.length === 0 ? null : s.bots));
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const { run } = useStepUp();
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -152,7 +154,14 @@ export function ConnectionDetail({ id }: { id: string }) {
   const remove = async () => {
     setRemoving(true);
     try {
-      await connectionsApi.remove(id);
+      const removed = await run(async () => {
+        await connectionsApi.remove(id);
+        return true;
+      });
+      if (!removed) {
+        setRemoving(false);
+        return;
+      }
       toast.success("Connection removed");
       navigate("/connections");
     } catch (error) {

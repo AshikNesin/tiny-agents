@@ -237,7 +237,19 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
       where: eq(vaultItems.handle, data.secretRef),
     });
     if (!item) throw Boom.badRequest(`No vault item "${data.secretRef}"`);
+    // An app credential (a model account's key) never leaves for an MCP server (S4).
+    if (item.audience !== "bots") {
+      throw Boom.badRequest(`Vault item "${data.secretRef}" is used by the app, not by bots`);
+    }
   }
+  // A new host does not inherit the old one's header secret (S4): it is
+  // dropped unless this change sends one.
+  const movesHost = data.url !== undefined && new URL(data.url).host !== new URL(current.url).host;
+  const dropSecret =
+    movesHost &&
+    current.authType === "header" &&
+    data.secret === undefined &&
+    data.secretRef === undefined;
   const changes = {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.url !== undefined ? { url: data.url } : {}),
@@ -250,6 +262,7 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
     ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
       ? { secretRef: data.secretRef }
       : {}),
+    ...(dropSecret ? { secretEnc: null, secretRef: null } : {}),
   };
   // Drizzle refuses an empty SET (e.g. a PATCH that only changes botIds).
   if (Object.keys(changes).length > 0) {

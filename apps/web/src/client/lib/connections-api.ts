@@ -1,5 +1,10 @@
-/** Typed client for the connections API (issue #1 M3). */
+/**
+ * Typed client for the connections API (issue #1 M3). Adding, re-pointing
+ * (URL, header, secret) and deleting a connection carry the vault's step-up
+ * token (S4); the caller runs them through `useStepUp().run`.
+ */
 import { apiClient } from "@groot/shell/lib/api";
+import { stepped } from "./vault-api";
 
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
 
@@ -71,12 +76,15 @@ export const connectionsApi = {
     clientId?: string;
     clientSecret?: string;
     botIds?: string[];
-  }) => apiClient.post<Connection>("/connections", input),
+  }) => stepped<Connection>("post", "/connections", input),
   update: (
     id: string,
     input: { name?: string; url?: string; headerName?: string; secret?: string; botIds?: string[] },
-  ) => apiClient.patch<Connection>(`/connections/${id}`, input),
-  remove: (id: string) => apiClient.delete(`/connections/${id}`),
+  ) =>
+    input.url !== undefined || input.headerName !== undefined || input.secret !== undefined
+      ? stepped<Connection>("patch", `/connections/${id}`, input)
+      : apiClient.patch<Connection>(`/connections/${id}`, input),
+  remove: (id: string) => stepped<void>("delete", `/connections/${id}`),
   reconnect: (id: string) => apiClient.post<Connection>(`/connections/${id}/reconnect`),
   authorize: (id: string) =>
     apiClient.post<{ authorizationUrl?: string }>(`/connections/${id}/authorize`),

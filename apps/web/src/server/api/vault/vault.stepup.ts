@@ -41,12 +41,17 @@ function validStepUp(token: string | undefined, userId: number): boolean {
   return false;
 }
 
-/** Route guard: a fresh step-up token from this user. */
-export const requireStepUp: Middleware = async (c, next) => {
+/** Throw 403 `step_up_required` unless the request carries a fresh step-up token from this user. */
+export function assertStepUp(c: Parameters<Middleware>[0]): void {
   const userId = c.get("user")?.userId;
   if (userId === undefined || !validStepUp(c.req.header(STEP_UP_HEADER), userId)) {
     throw Boom.forbidden("Confirm it's you first (step-up required)", { code: "step_up_required" });
   }
+}
+
+/** Route guard: a fresh step-up token from this user. */
+export const requireStepUp: Middleware = async (c, next) => {
+  assertStepUp(c);
   await next();
 };
 
