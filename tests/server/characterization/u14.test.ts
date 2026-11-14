@@ -8,7 +8,8 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../packages/agent/src/runtime";
 import { deletePastChat, listPastChats } from "../../../apps/web/src/server/api/bots/chats.history";
-import { deleteBot, resetConversation } from "../../../apps/web/src/server/api/bots/bots.service";
+import { deleteBot } from "../../../apps/web/src/server/api/bots/bots.service";
+import { resetConversation } from "../../../apps/web/src/server/api/bots/chats.service";
 import { botChats, bots, db } from "../../../apps/web/src/server/db";
 import { closeAppRuntime, openAppRuntime, resetAppTables, seedBot, until } from "../fixtures";
 

@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { users } from "@groot/core/database/schema";
 import type { AttachmentRef, ChatMessage } from "../../../packages/agent/src/index";
 import { botListStep, previewText } from "../../../apps/web/src/server/api/bots/bots.list";
-import { sendMessage } from "../../../apps/web/src/server/api/bots/bots.service";
+import { sendMessage } from "../../../apps/web/src/server/api/bots/chats.service";
 import { botGuests, bots, db, guests } from "../../../apps/web/src/server/db";
 import { installFakeRuntime, resetAppTables, seedBot } from "../fixtures";
 

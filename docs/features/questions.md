@@ -82,7 +82,8 @@ packages/agent/src/
 └── runtime.ts              # pendingQuestions, answerQuestions, dismissQuestions
 apps/web/src/server/api/bots/
 ├── bots.routes.ts          # POST /bots/:id/questions/:taskId
-└── bots.service.ts         # answerQuestions, dismiss on owner send, list count
+├── chats.service.ts        # answerQuestions, dismiss on owner send
+└── bots.list.ts            # list count
 apps/web/src/client/components/QuestionCard.tsx   # QuestionCard + AskedQuestions
 ```
 

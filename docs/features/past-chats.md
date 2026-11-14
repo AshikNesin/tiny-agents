@@ -20,7 +20,7 @@ conversation (agent.db):
 | `lastMessagePreview` | The bot row's preview when it was retired                     |
 | `messageCount`       | Owner and bot messages in it                                  |
 
-`resetConversation` (`bots/bots.service.ts`) records the row after it stops
+`resetConversation` (`bots/chats.service.ts`) records the row after it stops
 the old conversation (`recordPastChat` in `bots/chats.history.ts`). An empty
 chat records nothing. Recording is best effort: if the transcript can't be
 read, "New chat" still succeeds and the chat goes unlisted.

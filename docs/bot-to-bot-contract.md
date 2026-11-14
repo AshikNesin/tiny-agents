@@ -82,7 +82,7 @@ runtime.
 4. Relay rows (`kind="relay"`) never relay again. Only `send` and `mention`
    kinds produce relays.
 
-### 3. Mention routing (bots.service.ts)
+### 3. Mention routing (chats.service.ts)
 
 `sendMessage(botId, { requestId, text })` with mentions:
 
