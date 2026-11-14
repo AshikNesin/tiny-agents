@@ -504,6 +504,92 @@ question Q3.
 | `live`     | browser and computer routes, one profile-addressed router plus the per-bot aliases                                |
 | others     | `vault`, `models`, `connections`, `code`, `uploads`, `terminal`, `notifications`, `tasks`, `skills`               |
 
+**`live`, as built in 4.3** (`apps/web/src/server/api/live/`).
+`live.router.ts` is the one router: each route's handler is written once and
+registered twice per surface, by profile and as the per-bot alias, which
+resolves the bot to its profile (`browserTargetForBot`) and runs the same
+handler. `live.routes.ts` declares the two surfaces, the browser and the
+computer. The four old routers are gone; the session managers, the VNC
+bridges and their ticket stores stay in `api/bots/`, unchanged.
+
+Every route keeps its method, path, guard, envelope, status codes and error
+text (D9), and the mount order is the old one. All are under `/api/v1`
+behind the session guard. Guests reach only the rows marked _guest_, on a
+bot shared with them (`GUEST_ACCESS`, unchanged); anything else answers 403
+"Only the owner can do that". In the Refusals column, _bot_ is 404 "Bot not
+found", _profile_ is 404 "No such browser." or "No such desktop." for a
+profile no bot has, _hint_ is 409 with the computer's setup hint (else "The
+computer is not configured."), _body_ is 400 "Validation failed", and _502_
+is the failure's message, else the fallback text shown.
+
+| Method | Path                            | Guest | `data`                                                                                                            | Refusals, in order                                                                                                           |
+| ------ | ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/bots/:id/browser`             | yes   | `active, profile, url, driver, mode, scale, starting, phase, error`                                               | bot                                                                                                                          |
+| POST   | `/bots/:id/browser/start`       |       | `{ starting: true }`                                                                                              | bot                                                                                                                          |
+| POST   | `/bots/:id/browser/vnc-ticket`  | yes   | `path, scale`                                                                                                     | bot; 404 "No browser session for this bot yet."; 409 "This browser is headless and has no live view."                        |
+| POST   | `/bots/:id/browser/resize`      |       | `width, height`                                                                                                   | body; bot; 404 "No browser session…"; 409 "This browser cannot be resized."; 502 "Could not resize the browser."             |
+| POST   | `/bots/:id/browser/driver`      |       | `driver`                                                                                                          | body; bot; 404 "No browser session…"                                                                                         |
+| DELETE | `/bots/:id/browser/profile`     |       | `{ reset: true }`                                                                                                 | bot; 502 "Could not reset the browser."                                                                                      |
+| GET    | `/browser`                      |       | `liveView, setupHint, browsers[]`: the profile entry, `active, driver, mode, starting, phase, error`              | none                                                                                                                         |
+| POST   | `/browser/:profile/start`       |       | `{ starting: true }`                                                                                              | profile                                                                                                                      |
+| POST   | `/browser/:profile/vnc-ticket`  |       | `path, scale`                                                                                                     | profile; 404 "This browser is not running."; 409 "…headless…"                                                                |
+| POST   | `/browser/:profile/resize`      |       | `width, height`                                                                                                   | profile, body (together); 404 "This browser is not running."; 409 "…cannot be resized."; 502 "Could not resize the browser." |
+| POST   | `/browser/:profile/driver`      |       | `driver`                                                                                                          | profile, body (together); 404 "This browser is not running."                                                                 |
+| DELETE | `/browser/:profile`             |       | `{ reset: true }`                                                                                                 | profile; 502 "Could not reset the browser."                                                                                  |
+| GET    | `/bots/:id/computer`            | yes   | `configured, setupHint, active, profile, driver, width, height, takeover, starting, phase, error`                 | bot                                                                                                                          |
+| POST   | `/bots/:id/computer/start`      |       | `{ starting: true }`                                                                                              | bot; hint                                                                                                                    |
+| POST   | `/bots/:id/computer/vnc-ticket` | yes   | `path, scale` (1)                                                                                                 | bot; hint; 404 "No desktop is running for this bot yet." (also for a desktop with no view)                                   |
+| POST   | `/bots/:id/computer/driver`     |       | `driver`                                                                                                          | bot, body (together); hint; 404 "No desktop is running…"                                                                     |
+| DELETE | `/bots/:id/computer/profile`    |       | `{ reset: true }`                                                                                                 | bot; hint; 502 "Could not reset the computer."                                                                               |
+| GET    | `/computer`                     |       | `configured, setupHint, width, height, desktops[]`: the entry, `active, driver, takeover, starting, phase, error` | none                                                                                                                         |
+| POST   | `/computer/:profile/start`      |       | `{ starting: true }`                                                                                              | profile; hint                                                                                                                |
+| POST   | `/computer/:profile/vnc-ticket` |       | `path, scale` (1)                                                                                                 | profile; hint; 404 "This desktop is not running."; 409 "This desktop has no live view."                                      |
+| POST   | `/computer/:profile/driver`     |       | `driver`                                                                                                          | profile, body (together); hint; 404 "This desktop is not running."                                                           |
+| GET    | `/computer/:profile/apps`       |       | `apps`                                                                                                            | profile; hint; 404 "This desktop is not running."; 502 "Could not list the apps."                                            |
+| POST   | `/computer/:profile/apps`       |       | `opened`                                                                                                          | profile, body (together); hint; 404 "…not running."; 409 "Take control of the desktop first."; 502 "Could not open the app." |
+| DELETE | `/computer/:profile`            |       | `{ reset: true }`                                                                                                 | profile; hint; 502 "Could not reset the computer."                                                                           |
+
+Written once, with no option, because the old routers already agreed: start
+in the background and swallow its failure (the status reports it), the
+driver route (404 when nothing runs, then the manager's `setDriver`), the
+502 rule (the error's message, else a fallback), the ticket path
+(`<the route's prefix>/vnc?ticket=`, the id or profile URI-encoded), touching
+the idle clock on a ticket, a resize and an opened app, the reset (close and
+wipe, `{ reset: true }`), the open fields every status ends with (`starting`,
+`phase`, `error`), and `profile: "shared" | "own"`.
+
+Each difference between the old routers is one field of `LiveSurface`,
+pinned by `live-routes-drift.test.ts` (recorded on the old routers):
+
+| Drift                       | Browser                                                                        | Computer                                                                                  | Option                                     | Why kept                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| No sandbox VM               | a headless manager: every route works, the view routes answer 409              | no manager: every route but the status answers 409 with the setup hint, after the address | `ops()` throws                             | the statuses report `configured: false`                                       |
+| Status and list fields      | `url`, `mode`, `scale`; the list has `liveView`                                | `configured`, `width`, `height`, `takeover`                                               | `bots.status`, `profiles.list`             | D9: the panels and pages read them                                            |
+| Unknown profile             | "No such browser."                                                             | "No such desktop."                                                                        | `profiles.notFound`                        | D9                                                                            |
+| Nothing running, by bot     | "No browser session for this bot yet."                                         | "No desktop is running for this bot yet."                                                 | `bots.notRunning`                          | D9                                                                            |
+| Nothing running, by profile | "This browser is not running."                                                 | "This desktop is not running."                                                            | `profiles.notRunning`                      | D9                                                                            |
+| Ticket without a live view  | 409 "This browser is headless and has no live view." either way                | by profile 409 "This desktop has no live view."; by bot the not-running 404               | `noView`, `bots.noViewIsNotRunning`        | D9                                                                            |
+| Ticket, by bot              | opens the bot's tab first (its failure swallowed)                              | mints at once                                                                             | `bots.opensTabForTicket`                   | the viewer lands on the bot's tab in a shared browser (`live-access.test.ts`) |
+| Ticket scale                | the browser's (2, or 1 with `BROWSER_SCALE=1`)                                 | 1                                                                                         | `view()`                                   | the desktop has no scale                                                      |
+| Ticket store and fields     | by bot `userId, botId, target, viewOnly`; by profile `userId, profile, target` | by bot `userId, botId, profile, viewOnly`; by profile `userId, profile`                   | `bots.issueTicket`, `profiles.issueTicket` | each VNC path redeems only its own store (`*.vnc.ts`, unchanged)              |
+| Resize                      | a route, by bot and by profile                                                 | none: 404 "Cannot POST …"                                                                 | `resize`                                   | the desktop has a fixed size the viewer scales                                |
+| Apps                        | none                                                                           | by profile only                                                                           | `apps`                                     | a Computer page action                                                        |
+| Body and bot, by bot        | the body first: a bad body is 400 even for an unknown bot                      | together: an unknown bot is 404 even with a bad body                                      | `bots.bodyBeforeBot`                       | which status a doubly bad request gets                                        |
+| Takeover stamp              | the route writes `Date.now()` after the manager's `takeOver`                   | the manager's stamp, on its own clock                                                     | `touchOnTakeover`                          | the same in production; differs under an injected clock                       |
+| Reset                       | `close(target, { wipeProfile: true })`, "Could not reset the browser."         | `close(profile, { wipe: true })`, "Could not reset the computer."                         | `ops().reset`, `resetFailed`               | the managers differ                                                           |
+
+By profile, the address is the profile and the owner's tab (`owner`); by bot,
+the bot's profile and its tab (its id). The desktop ignores the tab. The
+profile routes read the profile and the body together (`Promise.all`, as
+the old routers did), and so do the computer's bot routes: a request bad on
+both counts gets whichever refusal settles first, and the runtime decides
+that (the lookup wins on Node 22, the body read on Node 24, in the old code
+and the new alike). The drift tests pin each refusal on its own and accept
+either for the double case. The lookup's await depth is kept per surface
+(`profiles.lookupInWrapper`): the browser's goes through a one-step async
+wrapper (`ownerTarget`), the computer's hands `knownProfile`'s own promise
+to `Promise.all` (`knownDesktop`).
+
 ### 4.5 Client
 
 The wire types live once, in `apps/web/src/shared/api/<area>.ts`. Both the
