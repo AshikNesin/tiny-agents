@@ -1,35 +1,25 @@
 /**
  * Skill editor at /skills/:id (issue #1 M2). The name is the id-like slug bots
  * reference, so it stays read-only; description and body are editable, bot
- * assignment toggles PATCH immediately.
+ * assignment toggles PATCH immediately. The page holds the form and its
+ * actions; its cards, the bots and the delete prompt are in `detail/`.
  */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { Breadcrumbs } from "@groot/ui/breadcrumb";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@groot/ui/dialog";
 import { Button } from "@groot/ui/button";
-import { Input } from "@groot/ui/input";
-import { Textarea } from "@groot/ui/textarea";
-import { Label } from "@groot/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@groot/ui/card";
-import { Checkbox } from "@groot/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { ErrorState } from "@groot/ui/empty-state";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
-import { Streamdown } from "streamdown";
 import { useBotChoices } from "../../queries/bot-choices";
 import { useSetSkill, useSkill, useSkillMutations } from "../../queries/skills";
 import { SkillFileList } from "../../components/skills/SkillFileList";
+import { DeleteSkillDialog } from "./detail/DeleteSkillDialog";
+import { SkillBotsSection } from "./detail/SkillBotsSection";
+import { SkillDetailsCard } from "./detail/SkillDetailsCard";
+import { SkillInstructions } from "./detail/SkillInstructions";
 import { LeaveGuard } from "../../components/LeaveGuard";
 import { errorMessage } from "../../lib/errors";
 
@@ -155,132 +145,24 @@ export function SkillDetail({ id }: { id: string }) {
     >
       {/* Deleting navigates away on purpose; nothing left to keep. */}
       <LeaveGuard when={dirty && !deleting} />
-      <Card>
-        <CardHeader>
-          <CardTitle>Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="skill-name">Name</Label>
-            <Input id="skill-name" value={skill.name} disabled />
-            <p className="text-muted-foreground text-xs">
-              Bots reference a skill by its name, so it can't be changed.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="skill-description">Description</Label>
-            <Input
-              id="skill-description"
-              value={form.description}
-              maxLength={1024}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-            <p className="text-muted-foreground text-xs">
-              Shown when the bot decides whether to load this skill.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <SkillDetailsCard skill={skill} form={form} setForm={setForm} />
 
-      <Section title="Used by bots" meta={bots ? `${usedBy} of ${bots.length}` : undefined}>
-        {bots === null ? (
-          <p className="text-muted-foreground py-4 text-center text-sm">Loading…</p>
-        ) : bots.length === 0 ? (
-          <p className="text-muted-foreground py-4 text-center text-sm">
-            No bots yet. Create a bot to assign this skill to it.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {usedBy === 0 && (
-              <p className="text-muted-foreground text-sm">
-                No bot loads this skill yet. Tick the bots that should have it.
-              </p>
-            )}
-            {bots.map((bot) => {
-              const enabled = skill.botIds.includes(bot.id);
-              return (
-                <div key={bot.id} className="flex items-start gap-3 rounded-lg border p-3">
-                  <Checkbox
-                    id={`skill-bot-${skill.id}-${bot.id}`}
-                    className="mt-0.5"
-                    checked={enabled}
-                    onCheckedChange={() => void toggleBot(bot.id)}
-                    aria-label={`Use ${skill.name} with ${bot.name}`}
-                  />
-                  <label
-                    htmlFor={`skill-bot-${skill.id}-${bot.id}`}
-                    className="min-w-0 flex-1 cursor-pointer"
-                  >
-                    <span className="block truncate text-sm font-medium">{bot.name}</span>
-                    <span className="text-muted-foreground mt-0.5 line-clamp-1 block text-xs">
-                      {bot.description}
-                    </span>
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Section>
+      <SkillBotsSection skill={skill} bots={bots} usedBy={usedBy} toggleBot={toggleBot} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="edit">
-            <TabsList>
-              <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-            <TabsContent value="edit" className="mt-4">
-              <Textarea
-                id="skill-body"
-                rows={14}
-                value={form.body}
-                onChange={(e) => setForm({ ...form, body: e.target.value })}
-                aria-label="Skill instructions (markdown)"
-                placeholder="Write the skill's instructions in markdown…"
-                className="min-h-72 font-mono"
-              />
-            </TabsContent>
-            <TabsContent value="preview" className="mt-4">
-              <div className="min-h-72 rounded-lg border p-4 text-sm">
-                {form.body.trim() ? (
-                  <Streamdown>{form.body}</Streamdown>
-                ) : (
-                  <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      <SkillInstructions form={form} setForm={setForm} />
 
       <Section title="Files" meta={`${skill.files.length} bundled`}>
         <SkillFileList files={skill.files} />
       </Section>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete skill?</DialogTitle>
-            <DialogDescription>
-              {usedBy > 0
-                ? `${usedBy} ${usedBy === 1 ? "bot uses" : "bots use"} "${skill.name}" and will lose access. This can't be undone.`
-                : `"${skill.name}" will be permanently deleted.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={deleting} onClick={() => void remove()}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteSkillDialog
+        skill={skill}
+        usedBy={usedBy}
+        confirmDelete={confirmDelete}
+        setConfirmDelete={setConfirmDelete}
+        deleting={deleting}
+        remove={remove}
+      />
     </PageLayout>
   );
 }
