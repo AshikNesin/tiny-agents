@@ -393,6 +393,97 @@ describe("models routes", () => {
     expect(await db.$count(vaultItems)).toBe(0);
   });
 
+  // Register row C12 (fixed in 4.6): a move puts each user only where it
+  // could have been set: the classifier role on a classifier model, bots and
+  // chat roles on a chat model, and the Claude plan's fallback on pi.
+  it("moves the classifier role and the Claude plan's fallback only where they could be set", async () => {
+    const token1 = await stepUp();
+    const account = (await createAccount(token1)).body.data;
+    const chatId = account.models[0].id as string;
+    const classifier = (upstreamId: string) => ({
+      providerId: account.id as string,
+      upstreamId,
+      name: upstreamId,
+      type: "classifier",
+      source: "manual",
+      contextWindow: 32_000,
+      maxOutputTokens: 0,
+      imageInput: false,
+      reasoning: false,
+    });
+    const [clef, jev] = await db
+      .insert(models)
+      .values([classifier("@cf/clef"), classifier("typesafe/jev")])
+      .returning();
+    const roleOf = async (role: string) =>
+      (await db.select().from(modelRoles).where(eq(modelRoles.role, role)))[0]?.modelId;
+    const message = (response: { body: Data }) => response.body.error?.message as string;
+    expect(
+      (await call("/models/roles", { method: "PUT", json: { classifier: clef!.id } })).status,
+    ).toBe(200);
+
+    const onChat = await call(`/models/${clef!.id}?moveTo=${chatId}`, { method: "DELETE" });
+    expect(onChat.status).toBe(400);
+    expect(message(onChat)).toBe("The classifier role needs a classifier model.");
+    expect(await roleOf("classifier")).toBe(clef!.id);
+    const moved = await call(`/models/${clef!.id}?moveTo=${jev!.id}`, { method: "DELETE" });
+    expect(moved.status).toBe(200);
+    expect(await roleOf("classifier")).toBe(jev!.id);
+
+    await db.insert(bots).values({ name: "Uses it", modelId: chatId, conversationId: "77002" });
+    const onClassifier = await call(`/models/${chatId}?moveTo=${jev!.id}`, { method: "DELETE" });
+    expect(onClassifier.status).toBe(400);
+    expect(message(onClassifier)).toBe("Move them to a chat model.");
+    const mixed = await call(`/models/providers/${account.id}?moveTo=test-model`, {
+      method: "DELETE",
+      stepUp: token1,
+    });
+    expect(mixed.status).toBe(400);
+    expect(message(mixed)).toBe("Move the classifier role to another classifier model first.");
+
+    const plan = (
+      await call("/models/providers", {
+        method: "POST",
+        stepUp: token1,
+        json: { kind: "claude-plan", allowPrivateNetwork: false, models: [] },
+      })
+    ).body.data;
+    const [sonnet] = await db
+      .insert(models)
+      .values({
+        providerId: plan.id,
+        upstreamId: "claude-sonnet",
+        name: "Sonnet",
+        type: "chat",
+        source: "discovered",
+        contextWindow: 200_000,
+        maxOutputTokens: 64_000,
+        imageInput: true,
+        reasoning: true,
+      })
+      .returning();
+    const fallback = await call(`/models/providers/${plan.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": String(plan.version) },
+      json: { fallbackModelId: chatId },
+    });
+    expect(fallback.status).toBe(200);
+    const fallbackOf = async () =>
+      JSON.parse(
+        (await db.select().from(providers).where(eq(providers.id, plan.id)))[0]!.settingsJson,
+      ).fallbackModelId;
+
+    const offPi = await call(`/models/${chatId}?moveTo=${sonnet!.id}`, { method: "DELETE" });
+    expect(offPi.status).toBe(400);
+    expect(message(offPi)).toBe("The fallback must be a chat model that runs on pi.");
+    expect(await fallbackOf()).toBe(chatId);
+    expect((await db.select().from(bots))[0]?.modelId).toBe(chatId);
+    const onPi = await call(`/models/${chatId}?moveTo=test-model`, { method: "DELETE" });
+    expect(onPi.status).toBe(200);
+    expect(await fallbackOf()).toBe("test-model");
+    expect((await db.select().from(bots))[0]?.modelId).toBe("test-model");
+  });
+
   it("asks for a new key when the endpoint's host changes", async () => {
     const token1 = await stepUp();
     const created = (await createAccount(token1)).body.data;

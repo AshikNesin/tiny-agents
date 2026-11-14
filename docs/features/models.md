@@ -115,6 +115,10 @@ no restart:
   the fallback; Reset clears a role.
 - **Delete in use.** Deleting an account or model that bots, roles or the
   Claude plan's fallback use asks which model takes over, then moves them.
+  The model that takes over must be one each could be set to: a classifier
+  for the classifier role, a chat model for bots and the other roles, and a
+  model that runs on pi for the fallback. Anything else is refused (400) and
+  nothing moves.
 
 Creating an account, changing its endpoint or key, and deleting it need the
 vault's step-up (password or passkey): a stolen session that could repoint an
