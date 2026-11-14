@@ -35,6 +35,7 @@ import { Boom } from "@groot/core/errors";
 import * as botsService from "../bots/bots.service";
 import { browserTargetForBot } from "../bots/browser.targets";
 import { knownProfile } from "../bots/profiles";
+import { watchOnly } from "../people/access";
 
 /** The owner's tab in every browser the profile routes open; bot tabs are keyed by bot id. */
 export const OWNER_TAB = "owner";
@@ -247,7 +248,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
       userId: requireUser(c).userId,
       at,
       scope,
-      viewOnly: c.get("viewer").guest,
+      viewOnly: watchOnly(c.get("viewer")),
     });
     live.lastActivity = Date.now();
     return ok(c, { path: `${a.vncPath(scope)}?ticket=${ticket}`, scale: view.scale });

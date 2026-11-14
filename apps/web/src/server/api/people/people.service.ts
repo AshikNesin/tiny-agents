@@ -1,23 +1,17 @@
 /**
  * Guests and shared bots (issue #145). The owner adds a guest (a plain
  * account plus a `guests` row) and shares bots with them: a shared bot's chat
- * is one conversation everybody in it sees live. A guest reaches only the
- * bots shared with them and Code (`guest.guard.ts`); an account with no
+ * is one conversation everybody in it sees live. What a guest may reach is
+ * the access module's (`access.ts`, `guest.guard.ts`); an account with no
  * `guests` row is the owner, so nothing changes until someone is added.
  */
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import * as authService from "@groot/core/auth/auth.service";
 import type { CreateUserDTO } from "@groot/core/auth/auth.schema";
-import type { UploadReach } from "../../../shared/guest-access";
-import { db, botGuests, bots, guests, uploads, users } from "../../db";
+import { db, botGuests, guests, users } from "../../db";
+import { isGuestAccount } from "./access";
 import { revokeLiveAccess } from "./live-access";
-
-/** Who is signed in, as sharing sees it. */
-export interface Viewer {
-  userId: number;
-  guest: boolean;
-}
 
 export interface GuestEntry {
   id: number;
@@ -26,18 +20,6 @@ export interface GuestEntry {
   createdAt: Date;
   /** Bots shared with this guest. */
   botIds: string[];
-}
-
-async function isGuest(userId: number): Promise<boolean> {
-  const row = await db.query.guests.findFirst({
-    where: eq(guests.userId, userId),
-    columns: { userId: true },
-  });
-  return row !== undefined;
-}
-
-export async function viewerOf(userId: number): Promise<Viewer> {
-  return { userId, guest: await isGuest(userId) };
 }
 
 /** The name a person goes by in a shared chat: their name, else their email's local part. */
@@ -91,7 +73,7 @@ export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
  * what they hold open. Owners are never removed here.
  */
 export async function removeGuest(userId: number): Promise<{ removed: true }> {
-  if (!(await isGuest(userId))) throw Boom.notFound("Guest not found");
+  if (!(await isGuestAccount(userId))) throw Boom.notFound("Guest not found");
   await db.delete(users).where(eq(users.id, userId));
   revokeLiveAccess({ userId });
   return { removed: true };
@@ -130,52 +112,6 @@ export async function setBotGuests(botId: string, userIds: number[]): Promise<vo
     return removed;
   });
   for (const { userId } of dropped) revokeLiveAccess({ userId, botId });
-}
-
-/** Whether this viewer may open the bot: the owner always, a guest when it is shared with them. */
-export async function canOpenBot(viewer: Viewer, botId: string): Promise<boolean> {
-  if (!viewer.guest) return true;
-  const row = await db.query.botGuests.findFirst({
-    where: and(eq(botGuests.botId, botId), eq(botGuests.userId, viewer.userId)),
-    columns: { botId: true },
-  });
-  return row !== undefined;
-}
-
-/**
- * Whether this viewer follows a conversation's live activity: the owner every
- * one, a guest the chat of a bot shared with them.
- */
-export function followsConversation(viewer: Viewer, conversationId: string): boolean {
-  if (!viewer.guest) return true;
-  const row = db
-    .select({ botId: bots.id })
-    .from(bots)
-    .innerJoin(botGuests, eq(botGuests.botId, bots.id))
-    .where(and(eq(bots.conversationId, conversationId), eq(botGuests.userId, viewer.userId)))
-    .get();
-  return row !== undefined;
-}
-
-/**
- * Whether this viewer may use an upload: the owner always, a guest when they
- * uploaded it or, for "uploadedOrShared", it was sent in a bot shared with them.
- */
-export async function canReachUpload(
-  viewer: Viewer,
-  uploadId: string,
-  reach: UploadReach,
-): Promise<boolean> {
-  if (!viewer.guest) return true;
-  const row = await db.query.uploads.findFirst({
-    where: eq(uploads.id, uploadId),
-    columns: { uploadedBy: true, botId: true },
-  });
-  if (!row) return false;
-  if (row.uploadedBy === viewer.userId) return true;
-  return (
-    reach === "uploadedOrShared" && row.botId !== null && (await canOpenBot(viewer, row.botId))
-  );
 }
 
 /** A guest's read marker on a shared bot. */

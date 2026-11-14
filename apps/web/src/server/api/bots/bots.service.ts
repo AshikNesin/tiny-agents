@@ -31,7 +31,8 @@ import {
 } from "./bots.conversation";
 import type { CreateBotDTO, UpdateBotDTO } from "./bots.schema";
 import { listBots as listBotEntries } from "./bots.list";
-import { markGuestRead, setBotGuests, type Viewer } from "../people/people.service";
+import type { Viewer } from "../people/access";
+import { markGuestRead, setBotGuests } from "../people/people.service";
 
 export type BotAgentRuntime = Pick<
   AgentRuntime,
@@ -240,7 +241,7 @@ export async function setPinned(id: string, pinned: boolean) {
 /** Mark the chat read: the owner's marker is on the row, a guest's on their share. */
 export async function markRead(id: string, viewer?: Viewer) {
   await findBotRow(id);
-  if (viewer?.guest) await markGuestRead(id, viewer.userId);
+  if (viewer?.kind === "guest") await markGuestRead(id, viewer.userId);
   else await updateBotRow(id, { lastReadAt: new Date() });
   return getBot(id);
 }

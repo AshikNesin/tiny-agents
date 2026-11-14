@@ -13,7 +13,8 @@ import { desc, eq } from "drizzle-orm";
 import { isSkipReply, type AgentRuntime, type AttachmentRef } from "@tiny-agents/agent";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, bots } from "../../db";
-import { guestReadMarkers, type Viewer } from "../people/people.service";
+import type { Viewer } from "../people/access";
+import { guestReadMarkers } from "../people/people.service";
 import { conversationRef, type BotRow } from "./bots.conversation";
 import type { SettledStep } from "./bots.settled";
 import type { BotListEntry } from "../../../shared/bot-list";
@@ -80,7 +81,7 @@ export function previewText(text: string, attachments?: AttachmentRef[]): string
 export async function listBots(rt: BotListRuntime, viewer?: Viewer): Promise<BotListEntry[]> {
   const all = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
   // A guest sees the bots shared with them, read against their own marker (issue #145).
-  const markers = viewer?.guest ? await guestReadMarkers(viewer.userId) : undefined;
+  const markers = viewer?.kind === "guest" ? await guestReadMarkers(viewer.userId) : undefined;
   const rows = markers
     ? all
         .filter((bot) => markers.has(bot.id))

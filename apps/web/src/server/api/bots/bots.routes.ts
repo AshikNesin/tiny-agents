@@ -11,7 +11,12 @@ import * as chatsService from "./chats.service";
 import * as pastChats from "./chats.history";
 import { openSse } from "./bots.sse";
 import { followBotChat } from "./bots.stream";
-import { canReachUpload, followsConversation } from "../people/people.service";
+import {
+  countsAsWatching,
+  followsConversation,
+  requireAttachable,
+  seesConnections,
+} from "../people/access";
 import type { BotStreamEvent, EventsFeedEvent } from "../../../shared/bot-stream";
 import {
   answerQuestionsSchema,
@@ -89,7 +94,7 @@ router.get("/events", (c) => {
     );
     // Guests see model names in the picker too, so they refetch as well.
     sse.onClose(onModelsChanged(() => sse.write({ type: "models.changed" })));
-    if (viewer.guest) return;
+    if (!seesConnections(viewer)) return;
     sse.onClose(
       getConnectionManager().onChange((id, state) => {
         sse.write({ type: "connection", id, ...state });
@@ -103,9 +108,7 @@ router.get("/bots/:id/stream", async (c) => {
   // Before the stream opens (unknown bot) this is a normal API error.
   const bot = await botsService.getBot(id);
   // The stream ends when the bot moves to another chat; the client reconnects onto it.
-  // Only the owner's open chat counts as watched: a guest following it must
-  // not hold back the owner's pushes (S2).
-  const watched = !c.get("viewer").guest;
+  const watched = countsAsWatching(c.get("viewer"));
   return openSse<BotStreamEvent>(
     c,
     async (sse) => sse.onClose(await followBotChat(bot, sse, undefined, { watched })),
@@ -152,11 +155,7 @@ router.post("/bots/:id/messages", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, sendMessageSchema);
   const viewer = c.get("viewer");
-  for (const uploadId of payload.attachments ?? []) {
-    if (!(await canReachUpload(viewer, uploadId, "uploadedOrShared"))) {
-      throw Boom.notFound(`Unknown attachment "${uploadId}"`);
-    }
-  }
+  await requireAttachable(viewer, payload.attachments ?? []);
   await chatsService.sendMessage(id, payload, undefined, viewer.userId);
   return ok(c, { submitted: true });
 });

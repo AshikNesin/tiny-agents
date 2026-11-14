@@ -7,11 +7,11 @@ import {
   UPLOAD_PATH,
   type UploadReach,
 } from "../../../shared/guest-access";
-import { canOpenBot, canReachUpload, viewerOf, type Viewer } from "./people.service";
+import { canOpenBot, canReachUpload, resolveViewer, type Viewer } from "./access";
 
 declare module "hono" {
   interface ContextVariableMap {
-    /** Set by `guestGuard` on every protected request. */
+    /** Who is asking: set once by `guestGuard` on every protected request. */
     viewer: Viewer;
   }
 }
@@ -51,9 +51,9 @@ export function guestGuard(prefix = "/api/v1"): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const user = c.get("user");
     if (!user) throw Boom.unauthorized("Authentication required");
-    const viewer = await viewerOf(user.userId);
+    const viewer = await resolveViewer(user.userId);
     c.set("viewer", viewer);
-    if (!viewer.guest) return next();
+    if (viewer.kind === "owner") return next();
     const path = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : c.req.path;
     const allowed = matchGuestRoute(c.req.method, path);
     if (!allowed) throw Boom.forbidden("Only the owner can do that");
