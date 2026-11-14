@@ -4,11 +4,10 @@
  * desktop manager injected through the same seam the toolkit uses.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { fakeCatalog, fakeModel } from "../fixtures";
+import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
 import { settleBotReleases } from "../../../apps/web/src/server/api/bots/bot-resources";
 import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
@@ -47,7 +46,7 @@ describe("computer routes", () => {
   let sessions: ComputerSessions;
 
   beforeEach(async () => {
-    setAgentRuntimeForTests(agentRuntime as never);
+    useTestRuntime(agentRuntime as never);
     fake = fakeComputer();
     sessions = createComputerSessions({ transport: fake.transport, width: 1280, height: 800 });
     setComputerSessionsForTests(sessions);

@@ -24,7 +24,7 @@ import {
 
 /**
  * Route tests run against an app-shaped runtime fake installed through
- * `setAgentRuntimeForTests()` (bots.runtime.ts), with the real SQLite test DB.
+ * `useTestRuntime()` (the App root), with the real SQLite test DB.
  */
 
 const token = await authToken("bots-test@example.com");

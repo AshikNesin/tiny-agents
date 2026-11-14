@@ -104,3 +104,14 @@ The following do not change:
 
 Consumers outside this repo include the sandbox VM, MCP servers, `site/`,
 `scripts/demo` and the verify journeys.
+
+## D10: R12 keeps an allowlist of real caches (accepted under autopilot, 2026-11-14)
+
+Plan step 1.4 said the R12 allowlist would end up empty. It doesn't. Some
+entries are per-process caches with no lifetime of their own: derived keys,
+vault status and app-credential caches, the upload extraction queue and its
+text cache, the image processor, SSH key files, WebSocket upgrade patterns,
+the database handle map, the entry's error reporter. Others are constant
+lookup sets. Moving these into `App` would add fields nobody resets or swaps,
+and no test needs to. Each entry carries its reason in
+`scripts/lint/boundaries.ts`, and any new entry is a reviewed change.
