@@ -555,6 +555,39 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
     rules: [],
   },
+  "packages/models/src/r11-durable-fail.ts": {
+    source:
+      'import { defineTool } from "@earendil-works/pi-durable";\nexport const t = defineTool;\n',
+    rules: ["R11"],
+    mentions: "Move the pi-durable-free code it needs into packages/models",
+  },
+  "packages/models/src/r11-durable-subpath-fail.ts": {
+    source: 'export { DEFAULT_IMAGE_LIMITS } from "@earendil-works/pi-durable/tools";\n',
+    rules: ["R11"],
+  },
+  "packages/models/src/r11-agent-type-fail.ts": {
+    source:
+      'import type { AgentRuntime } from "@tiny-agents/agent";\nexport type R = AgentRuntime;\n',
+    rules: ["R11"],
+  },
+  "packages/models/src/r11-agent-subpath-fail.ts": {
+    source: 'export { createSandboxConnection } from "@tiny-agents/agent/sandbox";\n',
+    rules: ["R11"],
+  },
+  "packages/models/src/r11-agent-relative-fail.ts": {
+    source: 'import type { ChatState } from "../../agent/src/types";\nexport type S = ChatState;\n',
+    rules: ["R11"],
+  },
+  "packages/models/src/r11-pass.ts": {
+    source:
+      'import type { Api, Model } from "@earendil-works/pi-ai";\nimport type { ClaudeCodeModel } from "@tiny-agents/claude-worker";\nexport type M = [Model<Api>, ClaudeCodeModel];\n',
+    rules: [],
+  },
+  "packages/agent/src/r11-elsewhere-pass.ts": {
+    source:
+      'import { defineTool } from "@earendil-works/pi-durable";\nimport type { ModelCatalog } from "@tiny-agents/models";\nexport const t = defineTool;\nexport type C = ModelCatalog;\n',
+    rules: [],
+  },
   "apps/web/src/server/api/bots/r12-let-fail.ts": {
     source: "let count = 0;\nexport const bump = () => ++count;\n",
     rules: ["R12"],

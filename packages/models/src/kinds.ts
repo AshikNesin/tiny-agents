@@ -17,7 +17,7 @@ import { createProvider, type Provider } from "@earendil-works/pi-ai/models";
 import { CLOUDFLARE_AI_GATEWAY_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-ai-gateway.models";
 import { cloudflareStreams } from "@earendil-works/pi-ai/providers/cloudflare-stream";
 import { CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
-import type { AgentEngineKind, ProviderKind } from "../types";
+import type { AgentEngineKind, ProviderKind } from "./types";
 import type { CredentialResolver, ModelConfig, ModelRow, ProviderAccount } from "./config";
 import { workersAiTransport } from "./workers-ai";
 

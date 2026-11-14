@@ -5,7 +5,7 @@
  * reads the same state on each turn. No secrets.
  */
 import type { ClaudePlanState } from "../../engine";
-import type { ModelCatalog } from "../../model-catalog";
+import type { ModelCatalog } from "@tiny-agents/models";
 import {
   noWorkerLocator,
   type ClaudeAccountStatus,

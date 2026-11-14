@@ -5,20 +5,14 @@
  */
 import { createModels } from "@earendil-works/pi-ai/models";
 import { describe, expect, it } from "vite-plus/test";
-import { createModelCatalog } from "../../../../packages/agent/src/model-catalog";
-import {
-  discoverModels,
-  resolveCapabilities,
-} from "../../../../packages/agent/src/providers/discovery";
+import { createModelCatalog } from "../../../../packages/models/src/model-catalog";
+import { discoverModels, resolveCapabilities } from "../../../../packages/models/src/discovery";
 import type {
   ModelConfig,
   ModelRow,
   ProviderAccount,
-} from "../../../../packages/agent/src/providers/config";
-import {
-  buildProviders,
-  classifierProviderId,
-} from "../../../../packages/agent/src/providers/kinds";
+} from "../../../../packages/models/src/config";
+import { buildProviders, classifierProviderId } from "../../../../packages/models/src/kinds";
 
 const account = (overrides: Partial<ProviderAccount> & Pick<ProviderAccount, "id" | "kind">) =>
   ({

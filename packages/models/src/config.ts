@@ -5,7 +5,7 @@
  * env for models. Credentials are not in it: the runtime asks the
  * `CredentialResolver` per request.
  */
-import type { ModelRole, ProviderKind, ProviderStatus } from "../types";
+import type { ModelRole, ProviderKind, ProviderStatus } from "./types";
 
 export interface ProviderAccount {
   /** Row id; also the pi-ai provider id. */

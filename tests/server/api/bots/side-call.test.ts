@@ -5,12 +5,12 @@ import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/t
 import {
   createModelCatalog,
   type CatalogModels,
-} from "../../../../packages/agent/src/model-catalog";
+} from "../../../../packages/models/src/model-catalog";
 import type {
   ModelConfig,
   ModelRow,
   ProviderAccount,
-} from "../../../../packages/agent/src/providers/config";
+} from "../../../../packages/models/src/config";
 import {
   createSideCaller,
   type SideCallRequest,

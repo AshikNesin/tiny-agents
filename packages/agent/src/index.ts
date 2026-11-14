@@ -2,10 +2,11 @@
  * @tiny-agents/agent — the only module in tiny-agents that touches pi-durable.
  *
  * The root is the pi-durable boundary: the runtime, the conversation and chat
- * types, the toolkits and capabilities bots run, and the gateway model
- * catalog, all through app-shaped types so pi-durable API churn stays
- * contained here. Areas that do not use pi-durable have their own subpaths:
- * `./sandbox` (the sandbox connection), `./terminal`, `./browser` and
+ * types and the toolkits and capabilities bots run, all through app-shaped
+ * types so pi-durable API churn stays contained here. Provider accounts and
+ * the Model catalog live in `@tiny-agents/models`; the runtime takes its
+ * `ModelCatalog` from there. Areas that do not use pi-durable have their own
+ * subpaths: `./sandbox` (the sandbox connection), `./terminal`, `./browser` and
  * `./computer` (live sessions and their transports), `./claude-worker` (the
  * worker on the sandbox), `./peer-envelope` (client-safe) and `./testing`.
  * The root exports only what something outside the package imports.
@@ -109,33 +110,66 @@ export {
   type OAuthClientProvider,
   type OAuthTokens,
 } from "./mcp";
-export type { ModelCatalog } from "./model-catalog";
-export type {
-  CredentialResolver,
-  ModelConfig,
-  ModelRow,
-  ProviderAccount,
-} from "./providers/config";
+// Moved to @tiny-agents/models (rewrite step 3.3). Re-exported so importers of
+// this root keep compiling; nothing in this repo imports them from here.
 export {
-  gatewayCustomBaseUrl,
-  PROVIDER_KINDS,
-  type GatewayCustomProvider,
-} from "./providers/kinds";
-export {
-  testClassifierCall,
-  testModelCall,
-  testUnsavedModel,
-  type TestResult,
-} from "./providers/test-call";
-export {
+  /** @deprecated Import from `@tiny-agents/models`. */
   discoverModels,
+  /** @deprecated Import from `@tiny-agents/models`. */
   DiscoveryError,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  gatewayCustomBaseUrl,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  PROVIDER_KINDS,
+  /** @deprecated Import from `@tiny-agents/models`. */
   PROVIDER_TEMPLATES,
+  /** @deprecated Import from `@tiny-agents/models`. */
   resolveCapabilities,
-  type DiscoveredModel,
-  type DiscoveryGet,
-  type ProviderTemplate,
-} from "./providers/discovery";
+  /** @deprecated Import from `@tiny-agents/models`. */
+  testClassifierCall,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  testModelCall,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  testUnsavedModel,
+} from "@tiny-agents/models";
+export type {
+  /** @deprecated Import from `@tiny-agents/models`. */
+  AgentEngineKind,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  CatalogModel,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  CredentialResolver,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  DiscoveredModel,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  DiscoveryGet,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  GatewayCustomProvider,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelCatalog,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelConfig,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelRole,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelRoute,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelRow,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ModelUnavailableReason,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ProviderAccount,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ProviderKind,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ProviderStatus,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ProviderSummary,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  ProviderTemplate,
+  /** @deprecated Import from `@tiny-agents/models`. */
+  TestResult,
+} from "@tiny-agents/models";
 export {
   windowChat,
   pageBefore,

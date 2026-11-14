@@ -12,9 +12,9 @@ import {
   type ClassifierAnswer,
 } from "../../../../packages/agent/src/classifier";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { createModelCatalog } from "../../../../packages/agent/src/model-catalog";
-import type { ModelConfig } from "../../../../packages/agent/src/providers/config";
-import { buildProviders } from "../../../../packages/agent/src/providers/kinds";
+import { createModelCatalog } from "../../../../packages/models/src/model-catalog";
+import type { ModelConfig } from "../../../../packages/models/src/config";
+import { buildProviders } from "../../../../packages/models/src/kinds";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import {
   createReviewer,

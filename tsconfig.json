@@ -24,7 +24,8 @@
       "@tiny-agents/claude-worker/client": ["./packages/claude-worker/src/client.ts"],
       "@tiny-agents/code/contracts": ["./packages/code/src/contracts/index.ts"],
       "@tiny-agents/code/server": ["./packages/code/src/server/index.ts"],
-      "@tiny-agents/code/testing": ["./packages/code/src/testing.ts"]
+      "@tiny-agents/code/testing": ["./packages/code/src/testing.ts"],
+      "@tiny-agents/models": ["./packages/models/src/index.ts"]
     }
   },
   "include": [
@@ -34,6 +35,7 @@
     "packages/agent/src/**/*",
     "packages/claude-worker/src/**/*",
     "packages/code/src/**/*",
+    "packages/models/src/**/*",
     "tests/server/**/*",
     "tests/test-clock.ts"
   ],

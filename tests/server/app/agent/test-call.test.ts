@@ -4,7 +4,7 @@
  */
 import type { ClassifierApi, ClassifierModel } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { testClassifierCall } from "../../../../packages/agent/src/providers/test-call";
+import { testClassifierCall } from "../../../../packages/models/src/test-call";
 
 const jev = { id: "typesafe/jev" } as ClassifierModel<ClassifierApi>;
 

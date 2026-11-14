@@ -11,7 +11,7 @@ import {
   discoverModels,
   DiscoveryError,
   resolveCapabilities,
-} from "../../../../packages/agent/src/providers/discovery";
+} from "../../../../packages/models/src/discovery";
 import {
   DEFAULT_TIMINGS,
   createClaudeWorkerServer,

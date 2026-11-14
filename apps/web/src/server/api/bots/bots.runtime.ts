@@ -30,9 +30,9 @@ import {
   secretRedactor,
   type BotMessagingStore,
   type Capability,
-  type ModelConfig,
   type Reviewer,
 } from "@tiny-agents/agent";
+import type { ModelConfig } from "@tiny-agents/models";
 import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
 import {
   fauxAssistantMessage,

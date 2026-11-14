@@ -10,7 +10,7 @@
  * throws "no vision model is configured".
  */
 import type { Api, AssistantMessage, Context, Model, UserMessage } from "@earendil-works/pi-ai";
-import type { ModelCatalog } from "../model-catalog";
+import type { ModelCatalog } from "@tiny-agents/models";
 
 /** Transcription prompts, reused verbatim from the dotfiles CLI. */
 const VISION_SYSTEM =
