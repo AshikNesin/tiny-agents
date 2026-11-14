@@ -1,4 +1,9 @@
 import type { AgentRuntime } from "@tiny-agents/agent";
+import type { BrowserSessions } from "@tiny-agents/agent/browser";
+import type { ComputerSessions } from "@tiny-agents/agent/computer";
+import type { ChatTitler } from "./api/bots/chats.title";
+import type { CodeHub } from "./api/code/code.hub";
+import type { ConnectionManager } from "./api/connections/connections.manager";
 
 /**
  * The composition root (docs/rewrite/DECISIONS.md, D8): the app's long-lived
@@ -12,6 +17,16 @@ export interface App {
   runtime: AgentRuntime | undefined;
   /** Boot finished opening the runtime: `/ready` and the Code registry wait on it. */
   runtimeReady: boolean;
+  /** The bots' browsers, made from the env on first use (`getBrowserSessions`). */
+  browserSessions?: BrowserSessions;
+  /** The bots' desktops: null when no sandbox VM is set up (`getComputerSessions`). */
+  computerSessions?: ComputerSessions | null;
+  /** MCP connections (`getConnectionManager`). */
+  connectionManager?: ConnectionManager;
+  /** The Code page's harnesses (`codeHub`); unset until boot, or with none configured. */
+  codeHub?: CodeHub;
+  /** Past-chat titles' side-caller (`setChatTitler`); unset in tests and faux mode. */
+  chatTitler?: ChatTitler;
 }
 
 const current: App = { runtime: undefined, runtimeReady: false };

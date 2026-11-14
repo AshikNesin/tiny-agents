@@ -47,6 +47,7 @@ import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth
 import { SecretLockedError } from "../../crypto/secret-box";
 import { openHeaderSecret } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
+import { app } from "../../app-root";
 
 export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
 
@@ -437,14 +438,12 @@ export class ConnectionManager {
   }
 }
 
-let manager: ConnectionManager | undefined;
-
+/** The process's manager (`app().connectionManager`), made on first use. */
 export function getConnectionManager(): ConnectionManager {
-  manager ??= new ConnectionManager();
-  return manager;
+  return (app().connectionManager ??= new ConnectionManager());
 }
 
 /** Test seam. */
 export function setConnectionManagerForTests(instance: ConnectionManager | undefined): void {
-  manager = instance;
+  app().connectionManager = instance;
 }

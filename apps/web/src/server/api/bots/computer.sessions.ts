@@ -17,6 +17,7 @@ import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/agent/browser";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
+import { app } from "../../app-root";
 
 /** Why the computer can't run, or undefined when it can. */
 export function computerSetupHint(env: AppEnv = appEnv()): string | undefined {
@@ -32,16 +33,18 @@ export function computerSetupHint(env: AppEnv = appEnv()): string | undefined {
   return undefined;
 }
 
-let instance: ComputerSessions | null | undefined;
-
-/** The process's manager, created on first use; null when no sandbox VM is configured. */
+/**
+ * The process's manager (`app().computerSessions`), created on first use;
+ * null when no sandbox VM is configured.
+ */
 export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | null {
-  if (instance !== undefined) return instance;
+  const root = app();
+  if (root.computerSessions !== undefined) return root.computerSessions;
   const connection = sandboxConnection(env);
-  if (!connection || computerSetupHint(env)) return (instance = null);
+  if (!connection || computerSetupHint(env)) return (root.computerSessions = null);
   const size = parseDesktopSize(unquoteEnv(env.COMPUTER_DESKTOP_SIZE));
   const idle = Number(unquoteEnv(env.COMPUTER_IDLE_MINUTES));
-  instance = createComputerSessions({
+  const instance = createComputerSessions({
     transport: createX11ComputerTransport({
       connection,
       extraPackages: parseExtraPackages(unquoteEnv(env.COMPUTER_EXTRA_PACKAGES)).packages,
@@ -55,12 +58,13 @@ export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | 
     height: size.height,
     idleMinutes: Number.isFinite(idle) && idle > 0 ? idle : undefined,
   });
+  root.computerSessions = instance;
   return instance;
 }
 
 /** Route and toolkit tests inject their own; pass undefined to rebuild from the env. */
 export function setComputerSessionsForTests(fake: ComputerSessions | null | undefined): void {
-  instance = fake;
+  app().computerSessions = fake;
 }
 
 /** A bot's desktop: its browser profile's (`shared`, or `bot-<id>`). */
