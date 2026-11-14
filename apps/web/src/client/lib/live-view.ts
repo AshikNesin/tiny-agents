@@ -1,8 +1,9 @@
 /**
  * The Live view (GLOSSARY): the owner's noVNC view of a bot's browser or
- * desktop. Four surfaces show one — the chat's `BrowserPanel` and
- * `ComputerPanel`, and the Browser and Computer pages — and this module owns
- * what they share, so each surface keeps only its source and its copy:
+ * desktop. The chat's panel (`components/live/LivePanel.tsx`) and the page
+ * (`components/live/LivePage.tsx`) show one for either surface, and this
+ * module owns what they share, so a surface (`components/live/surfaces.tsx`)
+ * keeps only its source and its copy:
  *
  * - the status poll and its cadence (`pollInterval`: every 1.5s while
  *   anything it shows is starting, else every 3s);
@@ -392,22 +393,3 @@ export function useLiveView<S, I extends LiveItem>(adapter: LiveViewSource<S, I>
     paste,
   };
 }
-
-// ---------------------------------------------------------------------------
-// The chat panels' header
-
-/** The header is the container: tool labels show once it is wide enough for them. */
-export const panelToolLabel = "hidden @xl:inline";
-/** Below that width a labelled tool shrinks to a square icon button. */
-export const panelToolButton = "@max-xl:w-7 @max-xl:px-0";
-/** The hand-off control is the panel's main action, so it keeps its label longer. */
-export const panelHandoffLabel = "hidden @md:inline";
-export const panelHandoffButton = "@max-md:w-7 @max-md:px-0";
-/**
- * An optional part of the status line. Its separator belongs to it, so a part
- * squeezed out by a narrow header takes the separator along; narrower than
- * that the line is just the connection.
- */
-export const panelStatusPart = "min-w-0 truncate before:pr-1.5 before:content-['·'] @max-md:hidden";
-/** Keeps a state's explanation to a readable line length, even in full screen. */
-export const panelNote = "mx-auto block max-w-sm";

@@ -31,7 +31,7 @@ App ──────┴──────────────────�
    apps/web/src/server/api/live/live.routes.ts       status / start / vnc-ticket / driver / apps / reset
    apps/web/src/server/api/bots/computer.*           the session manager's setup + WS bridge
    apps/web/src/server/api/bots/desktop.vnc.ts       the VNC bridge the browser and the computer share
-   apps/web/src/client/components/ComputerPanel.tsx  VncView (kind "computer") + header
+   apps/web/src/client/components/live/              LivePanel + LivePage; the computer's copy in surfaces.tsx
 ```
 
 - **One desktop per profile.** A bot's computer follows its browser profile:
