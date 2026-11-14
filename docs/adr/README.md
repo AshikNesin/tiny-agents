@@ -31,10 +31,11 @@ that the code alone cannot show.
 | 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                    | accepted (amends 0008)                        |
 | 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                              | accepted (amends 0010)                        |
 | 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)   | accepted (amends 0008; amended by 0016, 0018) |
-| 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md) | accepted (amends 0005)                        |
+| 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md) | accepted (amends 0005; amended by 0019)       |
 | 0016 | [Models are owner data](0016-models-are-owner-data.md)                                                | accepted (amends 0008, 0014)                  |
-| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                            | accepted (amends 0005)                        |
+| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                            | accepted (amends 0005; amended by 0019)       |
 | 0018 | [Claude plan transcripts are durable entries](0018-claude-plan-transcripts-are-durable-entries.md)    | accepted (amends 0008, 0014)                  |
+| 0019 | [Vault values live in a table, opened under their row's policy](0019-vault-values-table.md)           | accepted (amends 0015, 0017)                  |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)      | accepted (groot)                              |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

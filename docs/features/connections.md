@@ -50,26 +50,48 @@ answers 200 with `result.isError: true`.
 
 ## Stored secrets
 
-A connection's header secret (`secret_enc`) and OAuth state (`oauth_enc`) are
-sealed with `SECRETS_KEY` under the `connection` purpose and bound to their row
-and column; see the vault's [local backend](./vault.md#local-fallback) for the
-format and `pnpm secrets:rotate`. A value that no longer opens (a changed key)
-puts the connection in `error` with the reason; re-enter the secret.
+A connection's header value is a [vault](./vault.md) item (Q4,
+[ADR 0019](../adr/0019-vault-values-table.md)). Entering a `secret` on a
+header-auth connection writes it as the connection's **own item**: an API key
+with the handle `mcp-<slug>` (`mcp-<slug>-2`… when taken), labelled
+"MCP connection: <name>", sent only to the connection's host, usable only by
+the `mcp` tool and by no bot. `connections.secret_item_id` links it; the row
+and the item are written in one transaction. A new `secret` replaces the
+item's value in place; removing the connection deletes the item. The Vault page
+lists it under API keys, where it can be revealed, rotated or given to bots
+like any other item. Deleting it there leaves the connection without a header
+value ("deleted from the vault. Enter it again").
+
+OAuth state (`oauth_enc`) stays on the row, sealed with `SECRETS_KEY` under the
+`connection` purpose and bound to its row and column; each change to it is one
+read-modify-write in a synchronous transaction, so concurrent sign-in steps
+can't overwrite each other (C11). See the vault's
+[local backend](./vault.md#local) for the format and `pnpm secrets:rotate`. A
+value that no longer opens (a changed key) puts the connection in `error` with
+the reason; re-enter the secret.
+
+Before Q4 the header value itself was sealed in `secret_enc`. The first start
+on Q4 moves each one into the connection's own item, checks it and clears
+`secret_enc` (`apps/web/src/server/api/vault/vault.import.ts`). One that can't
+be opened (no `SECRETS_KEY`, another key) stays, the start logs why, and the
+connection reports it until the next start moves it or the owner enters the
+value again.
 
 Where a connection points and what it sends are guarded like a model
 account's: adding a connection, deleting it, and changing its URL, header
 name, secret or `secretRef` need a fresh vault step-up (`X-Vault-Step-Up`,
 403 `step_up_required` without one). Renaming and choosing bots don't. A URL
-that moves to another host drops the stored header secret and reference
-unless the same change sends a new one, so a stored secret never follows the
-URL somewhere else.
+that moves to another host deletes the connection's own item and drops the
+reference unless the same change sends a new value, so a stored secret never
+follows the URL somewhere else.
 
 ## Header secrets from the vault
 
-A header-auth connection can read its header value from a [vault](./vault.md)
-item instead of the stored encrypted value: `PATCH /api/v1/connections/:id`
-with `{ "secretRef": "<handle>" }` (null goes back to the stored value;
-setting a new `secret` clears the reference). The value is resolved when the
-connection connects, audited, and scrubbed from logs; the item must allow the
-`mcp` tool (API keys do by default), be switched on, and be a bots item: an
+A header-auth connection can read its header value from another
+[vault](./vault.md) item instead of its own: `PATCH /api/v1/connections/:id`
+with `{ "secretRef": "<handle>" }` (null goes back to the connection's own
+item; setting a new `secret` writes its own item and clears the reference).
+Either way the value is resolved when the connection connects, audited, and
+scrubbed from logs; the item must allow the `mcp` tool (API keys do by
+default) and be switched on, and a chosen item must be a bots item: an
 app credential (a model account's key) is refused.
