@@ -18,12 +18,10 @@ import {
   providers,
   users,
   vaultItems,
+  vaultValues,
 } from "../../../apps/web/src/server/db";
 import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
-import {
-  createLocalBackend,
-  type LocalStore,
-} from "../../../apps/web/src/server/api/vault/backends/local";
+import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
 import { setWriteBackendsForTests } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
   clearStatusCache,
@@ -87,15 +85,9 @@ beforeAll(async () => {
   token = await generateToken({ userId: user!.id, email: user!.email });
 });
 
-let store: Map<string, string>;
 beforeEach(async () => {
-  store = new Map();
-  const local: LocalStore = {
-    get: async (key) => store.get(key),
-    set: async (key, value) => void store.set(key, value),
-    delete: async (key) => void store.delete(key),
-  };
-  const backend = createLocalBackend(local);
+  await db.delete(vaultValues);
+  const backend = createLocalBackend();
   setReadBackendsForTests(new Map([["local", backend]]));
   setWriteBackendsForTests(new Map([["local", backend]]));
   clearStatusCache();
@@ -153,13 +145,13 @@ async function createAccount(stepUpToken: string, extra: Record<string, unknown>
   });
 }
 
-/** Every place a key could leak: rows, vault rows, the KV store, the list. */
+/** Every place a key could leak: rows, vault rows, the sealed values, the list. */
 async function assertNoSentinel(): Promise<void> {
   const dumps = [
     JSON.stringify(await db.select().from(providers)),
     JSON.stringify(await db.select().from(models)),
     JSON.stringify(await db.select().from(vaultItems)),
-    JSON.stringify([...store.values()]),
+    JSON.stringify(await db.select().from(vaultValues)),
     JSON.stringify((await call("/models/providers")).body),
     JSON.stringify((await call("/models")).body),
   ];

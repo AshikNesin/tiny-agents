@@ -26,6 +26,7 @@ import {
   uploads,
   vaultAuditEvents,
   vaultItems,
+  vaultValues,
 } from "../../../apps/web/src/server/db";
 import { TEST_MODEL, currentAppRuntime } from "./runtime";
 
@@ -82,6 +83,7 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(connections);
   await db.delete(vaultAuditEvents);
   await db.delete(vaultItems);
+  await db.delete(vaultValues);
   await db.delete(tasks);
   await db.delete(botGuests);
   await db.delete(guests);

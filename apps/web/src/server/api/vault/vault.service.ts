@@ -29,7 +29,6 @@ import {
 } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
-import { policyDigest } from "../../crypto/secret-box";
 import { readBackends } from "./backends";
 import {
   BackendError,
@@ -93,25 +92,6 @@ export function toMeta(row: VaultItemRow): VaultItemMeta {
     approval: effectiveApproval(row),
     tools: effectiveTools(row),
   };
-}
-
-/**
- * The digest of what an item's value may be used for: its audience, origins,
- * hosts and injection. The local backend binds each value to it, so a row
- * whose policy was widened in the database (not through the service, which
- * re-seals) no longer opens its value.
- */
-export function vaultPolicyDigest(
-  row: Pick<VaultItemRow, "audience" | "originsJson" | "hostsJson" | "injectJson">,
-): string {
-  return policyDigest({
-    audience: row.audience,
-    origins: [...parseList(row.originsJson)].sort(),
-    hosts: parseList(row.hostsJson)
-      .map((h) => h.toLowerCase())
-      .sort(),
-    inject: parseJson(row.injectJson) ?? null,
-  });
 }
 
 function botAllowed(row: VaultItemRow, botId: string | undefined): boolean {
@@ -491,11 +471,7 @@ async function resolveValues(
   try {
     for (const field of wanted) {
       try {
-        const value = await backend.resolve(
-          row.externalId,
-          backendField(row, field),
-          vaultPolicyDigest(row),
-        );
+        const value = await backend.resolve(row.externalId, backendField(row, field));
         secretRedactor.register(value);
         values[field] = value;
       } catch (error) {
