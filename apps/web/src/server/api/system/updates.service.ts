@@ -8,19 +8,15 @@
 import {
   isSupervisorMessage,
   type ServerMessage,
-  type UpdateStatus,
   type UpdateView,
 } from "../../../shared/local-updates";
+import { app } from "../../app-root";
 
 /** The IPC channel to the supervisor; `process` when forked by it. */
 export interface SupervisorChannel {
   send(message: ServerMessage): void;
   onMessage(listener: (message: unknown) => void): () => void;
 }
-
-let channel: SupervisorChannel | undefined;
-let status: UpdateStatus | null = null;
-let unlisten = () => {};
 
 /** The env var `pnpm local` sets on the server it starts. */
 export const SUPERVISED_ENV = "TINY_AGENTS_SUPERVISED";
@@ -47,34 +43,39 @@ export function processChannel(supervised: boolean): SupervisorChannel | undefin
 /** Attach to the supervisor (if any) and tell it the server is up. */
 export function startUpdates(next: SupervisorChannel | undefined): () => void {
   stopUpdates();
-  channel = next;
-  if (!channel) return stopUpdates;
-  unlisten = channel.onMessage((message) => {
-    if (isSupervisorMessage(message)) status = message.status;
+  const root = app();
+  root.updatesChannel = next;
+  if (!next) return stopUpdates;
+  root.updatesUnlisten = next.onMessage((message) => {
+    if (isSupervisorMessage(message)) root.updateStatus = message.status;
   });
-  channel.send({ type: "server-ready" });
+  next.send({ type: "server-ready" });
   return stopUpdates;
 }
 
 function stopUpdates(): void {
-  unlisten();
-  unlisten = () => {};
-  channel = undefined;
-  status = null;
+  const root = app();
+  root.updatesUnlisten();
+  root.updatesUnlisten = () => {};
+  root.updatesChannel = undefined;
+  root.updateStatus = null;
 }
 
 export function updateView(): UpdateView {
-  return { supervised: channel !== undefined, status };
+  const { updatesChannel, updateStatus } = app();
+  return { supervised: updatesChannel !== undefined, status: updateStatus };
 }
 
 /** Ask the supervisor to fetch the tracked ref. False when not supervised. */
 export function requestCheck(): boolean {
+  const channel = app().updatesChannel;
   channel?.send({ type: "update-check" });
   return channel !== undefined;
 }
 
 /** Ask the supervisor to build the latest commit and restart onto it. */
 export function requestApply(): boolean {
+  const channel = app().updatesChannel;
   channel?.send({ type: "update-apply" });
   return channel !== undefined;
 }

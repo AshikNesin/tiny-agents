@@ -13,6 +13,7 @@
  */
 import { and, eq } from "drizzle-orm";
 import { db, botGuests, guests, users } from "../../db";
+import { app } from "../../app-root";
 
 /** What a live connection was opened under: a person, and the bot it shows (none for app-wide feeds). */
 export interface LiveGrant {
@@ -22,12 +23,11 @@ export interface LiveGrant {
   viewOnly?: boolean;
 }
 
-interface Held {
+/** One live connection and the grant it was opened under (`app().liveAccess`). */
+export interface HeldLiveAccess {
   grant: LiveGrant;
   close(): void;
 }
-
-const held = new Set<Held>();
 
 /** Whether the grant still holds: the account exists, and a guest's bot is still shared with them. */
 function granted({ userId, botId }: LiveGrant): boolean {
@@ -58,7 +58,8 @@ export function holdLiveAccess(grant: LiveGrant, close: () => void): () => void 
     close();
     return () => {};
   }
-  const entry: Held = { grant, close };
+  const held = app().liveAccess;
+  const entry: HeldLiveAccess = { grant, close };
   held.add(entry);
   return () => held.delete(entry);
 }
@@ -70,6 +71,7 @@ type Revocation = { userId: number; botId?: string } | { botId: string };
  * showing it), or, given only a bot, everyone's showing it.
  */
 export function revokeLiveAccess(revoked: Revocation): void {
+  const held = app().liveAccess;
   for (const entry of [...held]) {
     if ("userId" in revoked && entry.grant.userId !== revoked.userId) continue;
     if (revoked.botId !== undefined && entry.grant.botId !== revoked.botId) continue;

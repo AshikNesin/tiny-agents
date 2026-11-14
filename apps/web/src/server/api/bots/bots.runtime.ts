@@ -28,7 +28,6 @@ import {
   createVisionToolkit,
   createWebToolkit,
   secretRedactor,
-  WaitTracker,
   type BotMessagingStore,
   type Capability,
   type ModelConfig,
@@ -73,12 +72,6 @@ import { app, installAppForTests } from "../../app-root";
 
 type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
 type RuntimeEnv = Readonly<Record<string, string | undefined>>;
-
-/**
- * Calls waiting on the owner's approval, shared by the runtime's approval
- * gate and the browser's credential requests (one count per conversation).
- */
-const ownerWaits = new WaitTracker();
 
 /**
  * The built-in toolkits whose stores are the app's own: no hosts, keys or
@@ -149,7 +142,7 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
       resolveTarget: browserTargetForConversation,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
       vault,
-      ownerWaits,
+      ownerWaits: app().ownerWaits,
     }),
     // Code (issue #143, ADR 0011): hand coding work to the owner's coding
     // agents (Shelley by default, Claude Code by name); finishes come back
@@ -170,7 +163,7 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
       resolveProfile: computerProfileForConversation,
       setupHint: computerSetupHint(env),
       vault,
-      ownerWaits,
+      ownerWaits: app().ownerWaits,
     }),
   ];
 }
@@ -189,8 +182,8 @@ function visionCapability(rt: AgentRuntime): Capability {
 }
 
 /** One messaging store per runtime: a reopened runtime (tests, a restart in-process) gets its own. */
-const messagingStores = new WeakMap<AgentRuntime, BotMessagingStore>();
 function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
+  const messagingStores = app().botMessagingStores;
   let store = messagingStores.get(rt);
   if (!store) {
     store = createBotMessagingStore(rt);
@@ -245,7 +238,7 @@ export async function openAgentRuntime(
     ...rest,
     modelConfig,
     credentials: vaultCredentials,
-    approvalTracker: ownerWaits,
+    approvalTracker: app().ownerWaits,
     reviewer: rest.reviewer ?? autoReviewer(() => opened),
     capabilities: [...builtinCapabilities(appVars, modelConfig), ...(rest.capabilities ?? [])],
     claudeWorker: rest.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
@@ -436,7 +429,7 @@ export async function openFauxAgentRuntime(
     modelConfig,
     credentials: vaultCredentials,
     lockWaitMs: 5_000,
-    approvalTracker: ownerWaits,
+    approvalTracker: app().ownerWaits,
     capabilities: builtinCapabilities(appVars, modelConfig),
     settings: { retry: { enabled: false } },
   });

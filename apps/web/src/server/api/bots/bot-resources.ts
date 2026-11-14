@@ -44,6 +44,7 @@ import { browserTargetForBot, ownBrowserProfile, SHARED_BROWSER_PROFILE } from "
 import { retireConversation } from "./chats.history";
 import { computerProfileForBot, computerSetupHint, getComputerSessions } from "./computer.sessions";
 import { sandboxEndpoint } from "./sandbox-host";
+import { app } from "../../app-root";
 
 interface ReleaseContext {
   rt: Pick<AgentRuntime, "abort">;
@@ -196,11 +197,9 @@ export const BOT_RESOURCES = {
 
 type Owed = typeof botReleases.$inferSelect;
 
-const backgroundReleases = new Set<Promise<void>>();
-
-/** Resolves once every background release started so far has settled. */
+/** Resolves once every background release started so far (`app().backgroundBotReleases`) has settled. */
 export async function settleBotReleases(): Promise<void> {
-  await Promise.all(backgroundReleases);
+  await Promise.all(app().backgroundBotReleases);
 }
 
 function releasedEntry(resource: string): Released | undefined {
@@ -255,6 +254,7 @@ export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<
     if (!deleted) throw Boom.notFound("Record not found");
     return { deleted, rows: tx.insert(botReleases).values(owed).returning().all() };
   });
+  const backgroundReleases = app().backgroundBotReleases;
   for (const row of rows.filter(isBackground)) {
     const pending = runRelease(row, rt).finally(() => backgroundReleases.delete(pending));
     backgroundReleases.add(pending);

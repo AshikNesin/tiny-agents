@@ -29,6 +29,7 @@ import { conversationOwner } from "../bots/bots.owner";
 import { onOwnerWait } from "../bots/bots.chat";
 import { createItem, updateItem } from "./vault.admin.service";
 import { audit } from "./vault.service";
+import { app } from "../../app-root";
 
 type RequestRuntime = Pick<AgentRuntime, "credentialRequest" | "settleCredentialRequest">;
 
@@ -171,14 +172,16 @@ async function save(
   return undefined;
 }
 
-/** Requests a submit is filling right now: a second submit of one waits for nothing and is refused. */
-const submitting = new Set<number>();
-
+/**
+ * Fill a credential request. Requests a submit is filling right now
+ * (`app().submittingRequests`): a second submit of one waits for nothing and is refused.
+ */
 export async function submitRequest(
   taskId: number,
   input: { values: Record<string, string>; save: boolean },
   runtime: RequestRuntime = getAgentRuntime(),
 ) {
+  const submitting = app().submittingRequests;
   if (submitting.has(taskId)) throw Boom.conflict("This request is being filled already.");
   submitting.add(taskId);
   try {

@@ -11,13 +11,13 @@ import { Boom } from "@groot/core/errors";
 import type { Middleware } from "@groot/core/types";
 import { verifyPassword as checkPassword } from "@groot/core/utils/password.utils";
 import { db, users } from "../../db";
+import { app } from "../../app-root";
 
 const STEP_UP_HEADER = "x-vault-step-up";
 const STEP_UP_TTL_MS = 5 * 60_000;
 
-const tokens = new Map<string, { userId: number; expiresAt: number }>();
-
 function prune(): void {
+  const tokens = app().vaultStepUps;
   const now = Date.now();
   for (const [token, grant] of tokens) if (grant.expiresAt <= now) tokens.delete(token);
 }
@@ -26,14 +26,14 @@ export function issueStepUp(userId: number): { token: string; expiresAt: number 
   prune();
   const token = randomBytes(32).toString("base64url");
   const expiresAt = Date.now() + STEP_UP_TTL_MS;
-  tokens.set(token, { userId, expiresAt });
+  app().vaultStepUps.set(token, { userId, expiresAt });
   return { token, expiresAt };
 }
 
 function validStepUp(token: string | undefined, userId: number): boolean {
   if (!token) return false;
   prune();
-  for (const [candidate, grant] of tokens) {
+  for (const [candidate, grant] of app().vaultStepUps) {
     const a = Buffer.from(candidate);
     const b = Buffer.from(token);
     if (a.length === b.length && timingSafeEqual(a, b)) return grant.userId === userId;
@@ -70,5 +70,5 @@ export async function verifyPassword(userId: number, password: string): Promise<
 
 /** Test seam. */
 export function clearStepUpsForTests(): void {
-  tokens.clear();
+  app().vaultStepUps.clear();
 }
