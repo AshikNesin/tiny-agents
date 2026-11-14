@@ -56,7 +56,9 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     browser = await chromium.launch({ executablePath: executable, args: ["--no-sandbox"] });
     page = await browser.newPage();
-  }, 30_000);
+    // Launching Chromium shares the CI machine with the suite's tsc-heavy
+    // checks (kit-exports, typecheck-coverage), and once missed 30 s there.
+  }, 120_000);
 
   afterAll(async () => {
     await browser?.close();
