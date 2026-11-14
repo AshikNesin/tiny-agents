@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Play, Wrench } from "lucide-react";
@@ -32,7 +32,11 @@ import type {
   ConnectionToolDetail as ToolDetail,
   ToolCallResult,
 } from "../../../shared/api/connections";
-import { connectionsApi } from "../../lib/connections-api";
+import {
+  useConnectionMutations,
+  useConnectionTool,
+  useSetConnectionTool,
+} from "../../queries/connections";
 import { onConnectionChange } from "../../store/bots";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../components/connections/connection-status";
@@ -256,6 +260,7 @@ function Playground({ tool }: { tool: ToolDetail }) {
   const [running, setRunning] = useState(false);
   const [call, setCall] = useState<ToolCallResult | null>(null);
   const [callError, setCallError] = useState<string | null>(null);
+  const { callTool } = useConnectionMutations();
 
   const switchMode = (next: string) => {
     if (next === "json") {
@@ -280,7 +285,7 @@ function Playground({ tool }: { tool: ToolDetail }) {
     setRunning(true);
     setCallError(null);
     try {
-      setCall(await connectionsApi.callTool(tool.connection.id, tool.serverName, args));
+      setCall(await callTool.mutateAsync({ id: tool.connection.id, tool: tool.serverName, args }));
     } catch (error) {
       setCall(null);
       setCallError(errorMessage(error, "Call failed"));
@@ -427,24 +432,10 @@ function Playground({ tool }: { tool: ToolDetail }) {
 }
 
 export function ConnectionToolDetail({ id, tool: serverName }: { id: string; tool: string }) {
-  const [tool, setTool] = useState<ToolDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: tool, loadError, refresh } = useConnectionTool(id, serverName);
+  const setTool = useSetConnectionTool(id, serverName);
+  const { updateTool } = useConnectionMutations();
   const [saving, setSaving] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      setTool(await connectionsApi.getTool(id, serverName));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load tool"));
-    }
-  }, [id, serverName]);
-
-  useEffect(() => {
-    setTool(null);
-    setLoadError(null);
-    void refresh();
-  }, [refresh]);
 
   useEffect(
     () =>
@@ -459,7 +450,7 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
     setTool({ ...tool, enabled });
     setSaving(true);
     try {
-      setTool(await connectionsApi.updateTool(id, serverName, { enabled }));
+      setTool(await updateTool.mutateAsync({ id, tool: serverName, input: { enabled } }));
       toast.success(enabled ? "Bots can use this tool" : "Turned off for every bot");
     } catch (error) {
       toast.error(errorMessage(error, "Failed to update tool"));

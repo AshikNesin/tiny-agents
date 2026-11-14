@@ -3,7 +3,7 @@
  * models, the default model for each role, and the Add Models dialog.
  * Changes apply without a restart; pickers refresh on `models.changed`.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bot, ChevronDown, ChevronRight, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -43,7 +43,7 @@ import type {
   ProviderTemplate,
   Roles,
 } from "../../../../shared/api/models";
-import { modelsApi } from "../../../lib/models-api";
+import { useModelDiscovery, useModelMutations, useModelSettings } from "../../../queries/models";
 import { useBotsStore } from "../../../store/bots";
 import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
 import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";
@@ -142,6 +142,7 @@ function EditConnectionDialog({
   onSaved: () => void;
 }) {
   const { run } = useStepUp();
+  const { updateConnection } = useModelMutations();
   const [baseUrl, setBaseUrl] = useState(account.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   const [allowPrivate, setAllowPrivate] = useState(account.allowPrivateNetwork);
@@ -150,12 +151,16 @@ function EditConnectionDialog({
     setBusy(true);
     try {
       const saved = await run(() =>
-        modelsApi.updateConnection(account.id, {
-          ...(account.kind !== "cloudflare-ai-gateway" && baseUrl.trim() !== (account.baseUrl ?? "")
-            ? { baseUrl: baseUrl.trim() }
-            : {}),
-          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-          allowPrivateNetwork: allowPrivate,
+        updateConnection.mutateAsync({
+          id: account.id,
+          input: {
+            ...(account.kind !== "cloudflare-ai-gateway" &&
+            baseUrl.trim() !== (account.baseUrl ?? "")
+              ? { baseUrl: baseUrl.trim() }
+              : {}),
+            ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+            allowPrivateNetwork: allowPrivate,
+          },
         }),
       );
       if (!saved) return;
@@ -429,10 +434,12 @@ function AddModel({
 }) {
   const [listed, setListed] = useState<DiscoveredModel[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Asked once per mount (the card remounts it after each check); an answer
+  // after unmount is dropped.
+  const listAvailable = useModelDiscovery().available.mutateAsync;
   useEffect(() => {
     let cancelled = false;
-    modelsApi
-      .available(accountId)
+    listAvailable(accountId)
       .then(({ models }) => {
         if (!cancelled) setListed(models);
       })
@@ -442,7 +449,7 @@ function AddModel({
     return () => {
       cancelled = true;
     };
-  }, [accountId]);
+  }, [accountId, listAvailable]);
   const options: SearchSelectOption[] = useMemo(
     () =>
       (listed ?? []).map((model) => ({
@@ -564,6 +571,8 @@ function AccountCard({
 }) {
   const { run } = useStepUp();
   const confirm = useConfirm();
+  const mutations = useModelMutations();
+  const discovery = useModelDiscovery();
   const [open, setOpen] = useState(false);
   const [moving, setMoving] = useState<Moving | null>(null);
   const [customizing, setCustomizing] = useState(false);
@@ -609,7 +618,7 @@ function AccountCard({
     if (ok) {
       await deleteOrMove(
         account.name,
-        (to) => run(() => modelsApi.remove(account.id, to)),
+        (to) => run(() => mutations.remove.mutateAsync({ id: account.id, moveTo: to })),
         "Couldn't delete the account",
       );
     }
@@ -628,7 +637,7 @@ function AccountCard({
     if (ok) {
       await deleteOrMove(
         model.name,
-        (to) => modelsApi.removeModel(model.id, to),
+        (to) => mutations.removeModel.mutateAsync({ id: model.id, moveTo: to }),
         "Couldn't delete the model",
       );
     }
@@ -636,7 +645,7 @@ function AccountCard({
 
   const test = async (model: AccountModel) => {
     try {
-      const result = await modelsApi.test({ modelId: model.id });
+      const result = await discovery.test.mutateAsync({ modelId: model.id });
       if (result.ok) toast.success(`${model.name} answered in ${result.latencyMs} ms`);
       else toast.error(result.error ?? `${model.name} didn't answer`);
     } catch (error) {
@@ -669,11 +678,13 @@ function AccountCard({
           account={account}
           onToggle={() =>
             act(
-              () => modelsApi.patch(account, { enabled: !account.enabled }),
+              () => mutations.patch.mutateAsync({ account, input: { enabled: !account.enabled } }),
               "Couldn't switch the account",
             )
           }
-          onRefresh={() => act(() => modelsApi.refresh(account.id), "Couldn't check the account")}
+          onRefresh={() =>
+            act(() => discovery.refresh.mutateAsync(account.id), "Couldn't check the account")
+          }
           onEdit={onEdit}
           onCustomProviders={() => setCustomizing(true)}
           onDelete={remove}
@@ -685,7 +696,10 @@ function AccountCard({
             <ClaudePlanStatus
               key={String(account.enabled)}
               onCheckModels={() =>
-                act(() => modelsApi.refresh(account.id), "Couldn't list Claude Code's models")
+                act(
+                  () => discovery.refresh.mutateAsync(account.id),
+                  "Couldn't list Claude Code's models",
+                )
               }
             />
           )}
@@ -695,7 +709,7 @@ function AccountCard({
               options={others}
               onSet={(fallbackModelId) =>
                 act(
-                  () => modelsApi.patch(account, { fallbackModelId }),
+                  () => mutations.patch.mutateAsync({ account, input: { fallbackModelId } }),
                   "Couldn't set the fallback",
                 )
               }
@@ -706,7 +720,10 @@ function AccountCard({
               key={String(account.settings.maxTurns ?? "")}
               account={account}
               onSet={(maxTurns) =>
-                act(() => modelsApi.patch(account, { maxTurns }), "Couldn't set max turns")
+                act(
+                  () => mutations.patch.mutateAsync({ account, input: { maxTurns } }),
+                  "Couldn't set max turns",
+                )
               }
             />
           )}
@@ -721,7 +738,10 @@ function AccountCard({
                     : undefined
                 }
                 onChange={(input) =>
-                  act(() => modelsApi.patchModel(model.id, input), "Couldn't change the model")
+                  act(
+                    () => mutations.patchModel.mutateAsync({ id: model.id, input }),
+                    "Couldn't change the model",
+                  )
                 }
                 onTest={() => test(model)}
                 onDelete={() => removeModel(model)}
@@ -740,7 +760,10 @@ function AccountCard({
               ? { hint: "custom-zai-coding-plan/glm-5.3" }
               : {})}
             onAdd={(input) =>
-              act(() => modelsApi.addModel(account.id, input), "Couldn't add the model")
+              act(
+                () => mutations.addModel.mutateAsync({ accountId: account.id, input }),
+                "Couldn't add the model",
+              )
             }
           />
         </CardContent>
@@ -786,9 +809,10 @@ function DefaultModels({
 }) {
   const chat = useMemo(() => modelOptions(accounts), [accounts]);
   const classifiers = useMemo(() => modelOptions(accounts, "classifier"), [accounts]);
+  const { setRoles } = useModelMutations();
   const setRole = async (role: ModelRole, modelId: string | null) => {
     try {
-      await modelsApi.setRoles({ [role]: modelId });
+      await setRoles.mutateAsync({ [role]: modelId });
       onChanged();
     } catch (error) {
       toast.error(errorMessage(error, "Couldn't set the model"));
@@ -851,31 +875,13 @@ function DefaultModels({
 }
 
 function ModelsSettingsBody() {
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
-  const [templates, setTemplates] = useState<ProviderTemplate[]>([]);
-  const [roles, setRoles] = useState<Roles | null>(null);
+  const loadModels = useBotsStore((s) => s.loadModels);
+  const { data, refresh: reload } = useModelSettings(loadModels);
+  const accounts = data?.accounts ?? null;
+  const templates = useMemo(() => data?.templates ?? [], [data]);
+  const roles = data?.roles ?? null;
   const [adding, setAdding] = useState<{ template?: ProviderTemplate } | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
-  const loadModels = useBotsStore((s) => s.loadModels);
-
-  const reload = useCallback(async () => {
-    try {
-      const [{ accounts: list, templates: offered }, { roles: current }] = await Promise.all([
-        modelsApi.accounts(),
-        modelsApi.roles(),
-      ]);
-      setAccounts(list);
-      setTemplates(offered);
-      setRoles(current);
-    } catch (error) {
-      toast.error(errorMessage(error, "Couldn't load models"));
-    }
-    void loadModels();
-  }, [loadModels]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   const real = useMemo(() => (accounts ?? []).filter((a) => a.kind !== "faux"), [accounts]);
 

@@ -27,11 +27,12 @@ import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
 import type {
   Account,
+  AccountCreateBody,
   DiscoveredModel,
   ModelEndpoint,
   ProviderTemplate,
 } from "../../../../shared/api/models";
-import { modelsApi } from "../../../lib/models-api";
+import { useModelDiscovery, useModelMutations } from "../../../queries/models";
 import {
   cleanCustomProviders,
   CustomProvidersEditor,
@@ -451,6 +452,8 @@ interface FormProps {
 /** One pass through the dialog: mounted on open, so each open starts fresh. */
 function AddModelsForm({ templates, template, onDone }: FormProps) {
   const { run } = useStepUp();
+  const { create } = useModelMutations();
+  const { discover, test: testModel } = useModelDiscovery();
   const [tab, setTab] = useState<"connect" | "single">("connect");
   const [draft, setDraft] = useState<Draft>(() => fromTemplate(template));
   const [found, setFound] = useState<DiscoveredModel[] | null>(null);
@@ -487,7 +490,7 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
 
   const check = () =>
     busyWith(async () => {
-      const { models } = await modelsApi.discover(connectionOf(draft));
+      const { models } = await discover.mutateAsync(connectionOf(draft));
       setFound(models);
       // Aggregators list hundreds: start with none.
       setChosen(new Set(aggregator ? [] : models.map((m) => m.upstreamId)));
@@ -500,13 +503,9 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
       }
     }, "Couldn't check the endpoint");
 
-  const save = (
-    input: Parameters<typeof modelsApi.create>[0],
-    done: (account: Account) => string,
-    failed: string,
-  ) =>
+  const save = (input: AccountCreateBody, done: (account: Account) => string, failed: string) =>
     busyWith(async () => {
-      const created = await run(() => modelsApi.create(input));
+      const created = await run(() => create.mutateAsync(input));
       if (!created) return;
       toast.success(done(created));
       onDone();
@@ -536,7 +535,7 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
     );
   const test = () =>
     busyWith(async () => {
-      const result = await modelsApi.test({
+      const result = await testModel.mutateAsync({
         ...connectionOf(draft),
         upstreamId: single.upstreamId.trim(),
         image: single.imageInput === "yes",

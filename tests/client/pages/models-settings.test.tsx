@@ -16,6 +16,7 @@ import type {
   AccountModel,
   ProviderTemplate,
 } from "../../../apps/web/src/shared/api/models";
+import { AppQueryProvider } from "../query-provider";
 
 const api = vi.hoisted(() => ({
   accounts: vi.fn(),
@@ -84,7 +85,11 @@ describe("Settings → Models", () => {
     });
     api.create.mockResolvedValue({ id: "a1", name: "Anthropic" });
     const user = userEvent.setup();
-    render(<ModelsSettings />);
+    render(
+      <AppQueryProvider>
+        <ModelsSettings />
+      </AppQueryProvider>,
+    );
 
     expect(await screen.findByText("No model is set up")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Anthropic" }));
@@ -120,7 +125,11 @@ describe("Settings → Models", () => {
       models: [found("a/one", "One"), found("b/two", "Two")],
     });
     const user = userEvent.setup();
-    render(<ModelsSettings />);
+    render(
+      <AppQueryProvider>
+        <ModelsSettings />
+      </AppQueryProvider>,
+    );
     await user.click(await screen.findByRole("button", { name: "OpenRouter" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText("API key"), "sk-or-test");
@@ -181,9 +190,11 @@ describe("Settings → Models · delete", () => {
 
   const openModels = async (user: ReturnType<typeof userEvent.setup>) => {
     render(
-      <ConfirmProvider>
-        <ModelsSettings />
-      </ConfirmProvider>,
+      <AppQueryProvider>
+        <ConfirmProvider>
+          <ModelsSettings />
+        </ConfirmProvider>
+      </AppQueryProvider>,
     );
     await user.click(await screen.findByRole("button", { name: "Anthropic" }));
   };

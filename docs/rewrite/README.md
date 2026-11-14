@@ -193,9 +193,15 @@ interface Runtime {
 
   chat: ChatReader; // read / page / watch: ONE projection for both engines
   waits: OwnerWaits; // approvals, questions, credential requests
-  yolo: { get(ref): Promise<YoloState>; set(ref, on: boolean, by: string): Promise<void> };
+  yolo: {
+    get(ref): Promise<YoloState>;
+    set(ref, on: boolean, by: string): Promise<void>;
+  };
 
-  activity: { busy(): ConversationRef[]; on(l: (e: ActivityEvent) => void): Unsubscribe };
+  activity: {
+    busy(): ConversationRef[];
+    on(l: (e: ActivityEvent) => void): Unsubscribe;
+  };
   turns: { onSettled(l: (e: TurnSettled) => void): Unsubscribe }; // edge: busy → idle, once per turn
 
   toolkits: ToolkitRegistry;
@@ -456,7 +462,10 @@ interface App {
   clock: Clock;
   runtime: Runtime;
   sandbox: SandboxConnection | undefined;
-  live: { browser: LiveSessions<BrowserSession>; computer: LiveSessions<Desktop> };
+  live: {
+    browser: LiveSessions<BrowserSession>;
+    computer: LiveSessions<Desktop>;
+  };
   conversations: Conversations;
   access: Access;
   bus: AppBus;
@@ -727,6 +736,50 @@ The one difference is race-only: a refresh cancels a fetch still in flight,
 so the newest request's answer is the one shown, where overlapping requests
 used to land in arrival order. The bot editor's skill list (`BotDialog`)
 stays with the bot editor.
+
+Step 5.3 moved Connections, Vault and Settings → Models onto the same
+resources (`queries/connections.ts`, `queries/vault.ts`, `queries/models.ts`),
+keeping what each page did:
+
+| Page                  | Reads                                                                                                                                    | While loading / on failure                                                                                 | Refetches                                                                                                                                                                  | Optimistic                                                                    | Overlapping answers before                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Connections           | `GET /connections` on mount                                                                                                              | "Loading…"; "Couldn't load connections" with Retry, shown until a retry answers                            | on every connection change on the events feed and every finished sign-in                                                                                                   | none                                                                          | none guarded                                                      |
+| Connection            | the connection on mount and on another id (loading again, the remove prompt closed); the bots from the live store                        | "Loading…"; "Couldn't load connection" with Back and Retry, over a loaded page too                         | on its own change event; on its sign-in finishing (after the toast); after a failed bot or tool switch (after the error toast). Reconnect and a bot tick show their answer | the bot tick and the tool switch, at once; a failure's refetch puts them back | none guarded: an event's refetch could land after a tick's answer |
+| Connection tool       | the tool on mount and on another tool (loading again); the playground runs only on Run, after a confirm when the tool may change data    | "Loading…"; "Couldn't load tool" with Back and Retry; a failed run shows inline and clears the last result | on its connection's change event; after a failed switch                                                                                                                    | the switch, replaced by the answer                                            | none guarded                                                      |
+| Add connection        | nothing: Test and Add run on click, Add through step-up, an OAuth popup opened in the click                                              | a failed test shows inline until the next edit                                                             | none: a new connection opens its page                                                                                                                                      | none                                                                          | none guarded                                                      |
+| Vault                 | `GET /vault` on mount; Refresh asks `?refresh=1` (the button off while it runs), Retry and every other read do not                       | "Loading…"; "Couldn't load the vault" with Retry                                                           | only on Refresh or Retry: a link opens the linked item                                                                                                                     | none                                                                          | none guarded                                                      |
+| Vault item            | the item on mount (the page is keyed by handle); a value only on Reveal or Copy, through step-up, each click a new request               | "Loading…"; "Couldn't load the item", with no action                                                       | after a policy save (unless the handle changed: then it opens the new one) and a value save (dialog closed). Each answer resets the policy form                            | none                                                                          | none guarded                                                      |
+| New item              | nothing                                                                                                                                  | a failed save is a toast                                                                                   | none: a save opens the item                                                                                                                                                | none                                                                          | none guarded                                                      |
+| Credential request    | the request on mount and on another task id (the last request stays on screen until it lands)                                            | "Loading…"; "Nothing to fill" with the reason                                                              | never: Continue and Cancel go to the bot's chat                                                                                                                            | none                                                                          | an older task's request could land last                           |
+| Settings → Models     | the accounts with their templates and the roles on mount, landing together; then the store's model list after every load, failed or not  | nothing until the first load; a failed load is a toast and the last accounts stay                          | after every write: an account switch, check, edit, custom providers or delete; a model add, switch, move or delete; a role; a new account                                  | none                                                                          | none guarded                                                      |
+| Add a model (a card)  | what the account's endpoint lists that it lacks, once per open card and again after a check (`available`); an answer after close dropped | "Loading models…"; "Couldn't list the models. Type a model id to add it."                                  | never: an added model leaves the list                                                                                                                                      | none                                                                          | none guarded                                                      |
+| Add models, providers | nothing: discover, test and connect run on click, connect and the gateway's providers through step-up                                    | each failure is a toast                                                                                    | none: the page reloads once the dialog is done                                                                                                                             | none                                                                          | none guarded                                                      |
+
+The same overrides apply, and the same race-only difference. Three of these
+read in ways the 5.2 pages did not, so `useResource` takes two options: the
+vault item resets its policy form to every answer (`structuralSharing: false`,
+so an unchanged answer still lands as a new object), the credential request
+keeps the last request on screen across task ids (`placeholderData:
+keepPreviousData`), and the vault's Refresh reads with `?refresh=1` while every
+other fetch of the same resource does not. Settings → Models had no error
+state, so its query toasts each failure itself and reloads the store's model
+list after each load. Calls that ask a provider (discover, `available`, an
+account's check, a model's test) are mutations, never queries a focus or a
+timer could repeat; `available` still runs once per mounted card.
+
+Secrets stay out of the cache. A write that sends a key, a password or a
+value (a new connection or account, a test with a header secret or key, a
+vault item or value, a filled credential request) or answers with one (a
+revealed or copied value) is a `useSecretMutation`: `gcTime: 0` and a reset
+once it answers, so neither its variables nor its answer outlive the call. A
+revealed value lives, as before, only in its row's state, hidden after 30
+seconds or on Hide and gone with the page. The step-up prompt
+(`components/vault/StepUp`) stays outside React Query: its password stays in
+the prompt's state and the token in `vault-api.ts`'s memory, and
+`useStepUp().run` still asks once and retries the write once. The bot
+editor's connection list (`BotDialog`), the OAuth sign-in
+(`lib/connection-auth.ts`) and the Claude plan status (`ClaudePlanStatus`)
+are unchanged.
 
 Duplicated client code becomes one piece each:
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plug, Plus } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -10,13 +10,12 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { Connection } from "../../../shared/api/connections";
-import { connectionsApi } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
+import { useConnections } from "../../queries/connections";
 import { onConnectionChange } from "../../store/bots";
 import { AddConnectionDialog } from "../../components/connections/AddConnectionDialog";
 import {
   ConnectionStatusBadge,
-  errorMessage,
   needsAttention,
 } from "../../components/connections/connection-status";
 
@@ -51,22 +50,11 @@ function ConnectionRows({ connections }: { connections: Connection[] }) {
 
 export function ConnectionsList() {
   const navigate = useNavigate();
-  const [connections, setConnections] = useState<Connection[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: connections, loadError, refresh } = useConnections();
   const [addOpen, setAddOpen] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      setConnections(await connectionsApi.list());
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load connections"));
-    }
-  }, []);
 
   // Status changes ride the app's one events feed; a finished sign-in too.
   useEffect(() => {
-    void refresh();
     const offChange = onConnectionChange(() => void refresh());
     const offSignIn = connectionAuth.onCompleted(undefined, () => void refresh());
     return () => {

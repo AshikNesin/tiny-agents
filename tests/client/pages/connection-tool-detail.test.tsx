@@ -10,6 +10,7 @@ import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { ConnectionToolDetail } from "@/pages/connections/ConnectionToolDetail";
 import type { ConnectionToolDetail as ToolDetail } from "../../../apps/web/src/shared/api/connections";
+import { AppQueryProvider } from "../query-provider";
 
 const getToolMock = vi.fn();
 const updateToolMock = vi.fn();
@@ -58,11 +59,13 @@ function tool(partial: Partial<ToolDetail> = {}): ToolDetail {
 function mount() {
   return render(
     <React.StrictMode>
-      <MemoryRouter>
-        <GrootUIProvider>
-          <ConnectionToolDetail id="c1" tool="save_file" />
-        </GrootUIProvider>
-      </MemoryRouter>
+      <AppQueryProvider>
+        <MemoryRouter>
+          <GrootUIProvider>
+            <ConnectionToolDetail id="c1" tool="save_file" />
+          </GrootUIProvider>
+        </MemoryRouter>
+      </AppQueryProvider>
     </React.StrictMode>,
   );
 }

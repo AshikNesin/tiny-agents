@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CreditCard, KeyRound, Link2, Plus, RefreshCw, ShieldCheck, User } from "lucide-react";
@@ -26,10 +26,10 @@ import type {
   VaultBackendView,
   VaultItem,
   VaultKind,
-  VaultOverview,
   VaultPolicy,
 } from "../../../shared/api/vault";
-import { apiError, KIND_LABEL, vaultApi } from "../../lib/vault-api";
+import { apiError, KIND_LABEL } from "../../lib/vault-api";
+import { useVaultMutations, useVaultOverview } from "../../queries/vault";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
 
@@ -121,6 +121,7 @@ function LinkDialog({
   onLinked: (item: VaultItem) => void;
 }) {
   const { run } = useStepUp();
+  const { link: linkItem } = useVaultMutations();
   const kind: VaultKind = candidate && candidate.kind !== "other" ? candidate.kind : "login";
   const [policy, setPolicy] = useState<VaultPolicy>(() => defaultPolicy(kind));
   const [busy, setBusy] = useState(false);
@@ -134,7 +135,11 @@ function LinkDialog({
     setBusy(true);
     try {
       const item = await run(() =>
-        vaultApi.link({ backend: candidate.backend, externalId: candidate.externalId, policy }),
+        linkItem.mutateAsync({
+          backend: candidate.backend,
+          externalId: candidate.externalId,
+          policy,
+        }),
       );
       if (item) onLinked(item);
     } catch (error) {
@@ -193,27 +198,16 @@ function AppItemsSection({ items }: { items: VaultItem[] }) {
 
 export function VaultList() {
   const navigate = useNavigate();
-  const [overview, setOverview] = useState<VaultOverview | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: overview, loadError, reload } = useVaultOverview();
   const [picker, setPicker] = useState(false);
   const [linking, setLinking] = useState<UnlinkedItem | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const refresh = useCallback(async (force = false) => {
+  const refresh = async (force = false) => {
     setRefreshing(force);
-    try {
-      setOverview(await vaultApi.overview(force));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(apiError(error, "Failed to load the vault"));
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    await reload(force);
+    setRefreshing(false);
+  };
 
   // The primary backend must actually be able to create items (issue #124):
   // the local backend is "configured" but unusable without SECRETS_KEY.

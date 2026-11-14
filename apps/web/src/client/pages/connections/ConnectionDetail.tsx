@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Bot, ChevronRight, LogIn, RefreshCw, Trash2, Wrench } from "lucide-react";
@@ -23,8 +23,8 @@ import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import type { Connection } from "../../../shared/api/connections";
-import { connectionsApi } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
+import { useConnection, useConnectionMutations, useSetConnection } from "../../queries/connections";
 import { useStepUp } from "../../components/vault/StepUp";
 import { onConnectionChange, useBotsStore } from "../../store/bots";
 import { BotAvatar } from "../../components/BotAvatar";
@@ -56,30 +56,21 @@ function toolsEmptyDescription(connection: Connection): string {
 
 export function ConnectionDetail({ id }: { id: string }) {
   const navigate = useNavigate();
-  const [connection, setConnection] = useState<Connection | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: connection, loadError, refresh } = useConnection(id);
+  const setConnection = useSetConnection(id);
+  const mutations = useConnectionMutations();
   // The bot list the shell already keeps live; null only before its first load.
   const bots = useBotsStore((s) => (s.loading && s.bots.length === 0 ? null : s.bots));
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const { run } = useStepUp();
   const [confirmRemove, setConfirmRemove] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      setConnection(await connectionsApi.get(id));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load connection"));
-    }
-  }, [id]);
-
-  useEffect(() => {
-    setConnection(null);
-    setLoadError(null);
+  // Another connection opens with the remove prompt closed.
+  const [shownId, setShownId] = useState(id);
+  if (shownId !== id) {
+    setShownId(id);
     setConfirmRemove(false);
-    void refresh();
-  }, [refresh]);
+  }
 
   useEffect(
     () =>
@@ -102,7 +93,7 @@ export function ConnectionDetail({ id }: { id: string }) {
   const reconnect = async () => {
     setBusy(true);
     try {
-      setConnection(await connectionsApi.reconnect(id));
+      setConnection(await mutations.reconnect.mutateAsync(id));
       toast.success("Reconnect started");
     } catch (error) {
       toast.error(errorMessage(error, "Failed to reconnect"));
@@ -131,7 +122,7 @@ export function ConnectionDetail({ id }: { id: string }) {
       : connection.botIds.filter((existing) => existing !== botId);
     setConnection({ ...connection, botIds });
     try {
-      setConnection(await connectionsApi.update(id, { botIds }));
+      setConnection(await mutations.update.mutateAsync({ id, input: { botIds } }));
     } catch (error) {
       toast.error(errorMessage(error, "Failed to update bots"));
       await refresh();
@@ -145,7 +136,7 @@ export function ConnectionDetail({ id }: { id: string }) {
     );
     setConnection({ ...connection, tools });
     try {
-      await connectionsApi.updateTool(id, serverName, { enabled });
+      await mutations.updateTool.mutateAsync({ id, tool: serverName, input: { enabled } });
     } catch (error) {
       toast.error(errorMessage(error, "Failed to update tool"));
       await refresh();
@@ -156,7 +147,7 @@ export function ConnectionDetail({ id }: { id: string }) {
     setRemoving(true);
     try {
       const removed = await run(async () => {
-        await connectionsApi.remove(id);
+        await mutations.remove.mutateAsync(id);
         return true;
       });
       if (!removed) {

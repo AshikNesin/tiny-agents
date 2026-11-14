@@ -15,8 +15,8 @@ import {
   FIELDS_BY_KIND,
   KIND_LABEL,
   SECRET_FIELDS,
-  vaultApi,
 } from "../../lib/vault-api";
+import { useVaultMutations } from "../../queries/vault";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { SecretInput } from "../../components/vault/SecretInput";
 import { useStepUp } from "../../components/vault/StepUp";
@@ -82,6 +82,7 @@ export function ValueFieldInput({
 export function NewVaultItem({ kind }: { kind: VaultKind }) {
   const navigate = useNavigate();
   const { run } = useStepUp();
+  const { create } = useVaultMutations();
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
   const [values, setValues] = useState<Partial<Record<ValueField, string>>>({});
@@ -99,7 +100,7 @@ export function NewVaultItem({ kind }: { kind: VaultKind }) {
         .filter(Boolean)
         .map((url) => (/^https?:\/\//.test(url) ? url : `https://${url}`));
       const item = await run(() =>
-        vaultApi.create({
+        create.mutateAsync({
           kind,
           title: title.trim(),
           urls,
