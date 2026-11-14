@@ -16,6 +16,7 @@ import {
   type SshEndpoint,
 } from "@tiny-agents/agent/sandbox";
 import { appEnv, type AppEnv } from "../../env";
+import { app } from "../../app-root";
 
 /** An env value without the quotes a .env file may carry; empty means unset. */
 export const unquoteEnv = (value: string | undefined) =>
@@ -36,8 +37,6 @@ export function sandboxHost(env: AppEnv = appEnv()): string | undefined {
   );
 }
 
-let hostKeys: HostKeyStore | undefined;
-
 /**
  * The TOFU host-key pins, one per host, persisted through the app's KV (the
  * `kv` table) so a restart remembers what it trusted on first connect. One
@@ -45,10 +44,11 @@ let hostKeys: HostKeyStore | undefined;
  * key-free.
  */
 function sandboxHostKeys(): HostKeyStore {
-  if (hostKeys) return hostKeys;
+  const root = app();
+  if (root.sandboxHostKeys) return root.sandboxHostKeys;
   try {
     const kv = createNamespaceKv("SANDBOX");
-    hostKeys = {
+    root.sandboxHostKeys = {
       async get(host) {
         return (await kv.get<string>(host)) ?? undefined;
       },
@@ -57,9 +57,9 @@ function sandboxHostKeys(): HostKeyStore {
       },
     };
   } catch {
-    hostKeys = createMemoryHostKeyStore();
+    root.sandboxHostKeys = createMemoryHostKeyStore();
   }
-  return hostKeys;
+  return root.sandboxHostKeys;
 }
 
 const keyFiles = new Map<string, string>();
@@ -105,8 +105,6 @@ export function sandboxEndpoint(env: AppEnv = appEnv()): SshEndpoint | undefined
   };
 }
 
-const connections = new Map<string, SandboxConnection>();
-
 /**
  * The process's connection to the sandbox, or undefined when none is
  * configured: built once per endpoint and shared by every SSH user.
@@ -116,6 +114,7 @@ export function sandboxConnection(env: AppEnv = appEnv()): SandboxConnection | u
   if (!endpoint) return undefined;
   const { host, port, user, privateKey } = endpoint;
   const key = JSON.stringify([host, port, user, privateKey]);
+  const connections = app().sandboxConnections;
   let connection = connections.get(key);
   if (!connection) {
     connection = createSandboxConnection(endpoint);
@@ -126,13 +125,14 @@ export function sandboxConnection(env: AppEnv = appEnv()): SandboxConnection | u
 
 /** Shutdown: end the sandbox connections, after everything that uses them stopped. */
 export function closeSandboxConnections(): void {
+  const connections = app().sandboxConnections;
   for (const connection of connections.values()) connection.close();
   connections.clear();
 }
 
 /** Tests: forget the pinned-key store so the next call rebuilds it. */
 export function resetSandboxHostKeysForTests(): void {
-  hostKeys = undefined;
+  app().sandboxHostKeys = undefined;
   keyFiles.clear();
   closeSandboxConnections();
 }

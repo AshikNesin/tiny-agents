@@ -1,5 +1,8 @@
 import type { AgentRuntime } from "@tiny-agents/agent";
 import type { BrowserSessions } from "@tiny-agents/agent/browser";
+import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
+import type { HostKeyStore, SandboxConnection } from "@tiny-agents/agent/sandbox";
+import type { TerminalService } from "@tiny-agents/agent/terminal";
 import type { ComputerSessions } from "@tiny-agents/agent/computer";
 import type { ChatTitler } from "./api/bots/chats.title";
 import type { CodeHub } from "./api/code/code.hub";
@@ -27,9 +30,17 @@ export interface App {
   codeHub?: CodeHub;
   /** Past-chat titles' side-caller (`setChatTitler`); unset in tests and faux mode. */
   chatTitler?: ChatTitler;
+  /** The sandbox's SSH connections, one per endpoint (`sandboxConnection`, ADR 0013). */
+  sandboxConnections: Map<string, SandboxConnection>;
+  /** The sandbox's pinned host keys, kept in KV (`sandbox-host.ts`). */
+  sandboxHostKeys?: HostKeyStore;
+  /** The Claude worker on the sandbox, for the connection it was set up on (`claude-worker.ts`). */
+  claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
+  /** The terminal's tmux service (`getTerminalService`). */
+  terminalService?: TerminalService;
 }
 
-const current: App = { runtime: undefined, runtimeReady: false };
+const current: App = { runtime: undefined, runtimeReady: false, sandboxConnections: new Map() };
 
 /** The app's services, as boot (or a test) set them. */
 export function app(): App {
