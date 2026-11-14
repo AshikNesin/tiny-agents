@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R9 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R10 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                               | Enforcer                                          |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
