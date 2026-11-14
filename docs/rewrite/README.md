@@ -580,12 +580,15 @@ pinned by `live-routes-drift.test.ts` (recorded on the old routers):
 
 By profile, the address is the profile and the owner's tab (`owner`); by bot,
 the bot's profile and its tab (its id). The desktop ignores the tab. The
-profile routes read the profile and the body together, so an unknown
-profile's 404 wins over a bad body, on both surfaces. One step is new and
-never shown: the computer's profile lookup now runs inside the same one-step
-async wrapper as the browser's always did; the drift test pins that an
-unknown profile (`anything`, and `bot-<unknown id>`) still wins over a bad
-body.
+profile routes read the profile and the body together (`Promise.all`, as
+the old routers did), and so do the computer's bot routes: a request bad on
+both counts gets whichever refusal settles first, and the runtime decides
+that (the lookup wins on Node 22, the body read on Node 24, in the old code
+and the new alike). The drift tests pin each refusal on its own and accept
+either for the double case. The lookup's await depth is kept per surface
+(`profiles.lookupInWrapper`): the browser's goes through a one-step async
+wrapper (`ownerTarget`), the computer's hands `knownProfile`'s own promise
+to `Promise.all` (`knownDesktop`).
 
 ### 4.5 Client
 

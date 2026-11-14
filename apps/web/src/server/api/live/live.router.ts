@@ -109,6 +109,13 @@ export interface LiveSurface<L extends LiveEntry> {
   profiles: Addressed & {
     /** The 404 for a profile no bot has. */
     notFound: string;
+    /**
+     * Whether a route that reads a body looks the profile up through a one-step
+     * async wrapper (the browser's `ownerTarget`) or hands `knownProfile`'s own
+     * promise to `Promise.all` (the computer's `knownDesktop`). The lookup races
+     * the body, so the depth decides which refusal a doubly bad request gets.
+     */
+    lookupInWrapper: boolean;
     /** `GET /<surface>`. */
     list(): Promise<unknown>;
   };
@@ -164,7 +171,16 @@ function byProfile(surface: LiveSurface<LiveEntry>): Addressing {
     base: `/${name}/:profile`,
     reset: `/${name}/:profile`,
     resolve,
-    withBody: (c, schema) => Promise.all([resolve(c), parseBody(c, schema)]),
+    withBody: profiles.lookupInWrapper
+      ? (c, schema) => Promise.all([resolve(c), parseBody(c, schema)])
+      : (c, schema) =>
+          Promise.all([
+            knownProfile(c.req.param("profile"), profiles.notFound),
+            parseBody(c, schema),
+          ]).then(([profile, body]): [Resolved, z.output<typeof schema>] => [
+            { at: { profile, tab: OWNER_TAB }, scope: profile },
+            body,
+          ]),
     // Relative so the client keeps the page's scheme and host behind proxies.
     vncPath: (profile) => `/api/v1/${name}/${encodeURIComponent(profile)}/vnc`,
     opensTabForTicket: false,

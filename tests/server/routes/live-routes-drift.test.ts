@@ -519,7 +519,14 @@ describe("computer, by bot", () => {
 
   it("races the body against the bot lookup for the driver", async () => {
     const bot = `/api/v1/bots/${UNKNOWN_BOT}/computer/driver`;
-    expect((await post(bot, { driver: "nobody" })).status).toBe(404);
+    // Both checks run at once (Promise.all, as the old routers did), so a doubly
+    // bad request gets whichever refusal settles first: the runtime decides (the
+    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
+    expect((await post(bot, { driver: "human" })).status).toBe(404);
+    expect((await post(`/api/v1/bots/${id}/computer/driver`, { driver: "nobody" })).status).toBe(
+      400,
+    );
+    expect([400, 404]).toContain((await post(bot, { driver: "nobody" })).status);
   });
 
   it("says why a reset failed", async () => {
@@ -608,11 +615,19 @@ describe("browser, by profile", () => {
   });
 
   it("races the profile against the body", async () => {
+    // Both checks run at once (Promise.all, as the old routers did), so a doubly
+    // bad request gets whichever refusal settles first: the runtime decides (the
+    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
     for (const profile of ["anything", "bot-nope"]) {
       const base = `/api/v1/browser/${profile}`;
-      expect((await post(`${base}/resize`, { width: 1 })).status, profile).toBe(404);
-      expect((await post(`${base}/driver`, { driver: "x" })).status, profile).toBe(404);
+      const size = { width: 800, height: 600 };
+      expect((await post(`${base}/resize`, size)).status, profile).toBe(404);
+      expect((await post(`${base}/driver`, { driver: "human" })).status, profile).toBe(404);
+      expect([400, 404], profile).toContain((await post(`${base}/resize`, { width: 1 })).status);
+      expect([400, 404], profile).toContain((await post(`${base}/driver`, { driver: "x" })).status);
     }
+    expect((await post("/api/v1/browser/shared/resize", { width: 1 })).status).toBe(400);
+    expect((await post("/api/v1/browser/shared/driver", { driver: "x" })).status).toBe(400);
   });
 
   it("refuses a ticket with the page's texts, opens no tab, and mints an owner ticket", async () => {
@@ -795,11 +810,17 @@ describe("computer, by profile", () => {
   });
 
   it("races the profile against the body", async () => {
+    // Both checks run at once (Promise.all, as the old routers did), so a doubly
+    // bad request gets whichever refusal settles first: the runtime decides (the
+    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
     for (const profile of ["anything", "bot-nope"]) {
       const base = `/api/v1/computer/${profile}`;
-      expect((await post(`${base}/driver`, { driver: "x" })).status, profile).toBe(404);
-      expect((await post(`${base}/apps`, { id: "" })).status, profile).toBe(404);
+      expect((await post(`${base}/driver`, { driver: "human" })).status, profile).toBe(404);
+      expect((await post(`${base}/apps`, { id: "x" })).status, profile).toBe(404);
+      expect([400, 404], profile).toContain((await post(`${base}/driver`, { driver: "x" })).status);
+      expect([400, 404], profile).toContain((await post(`${base}/apps`, { id: "" })).status);
     }
+    expect((await post("/api/v1/computer/shared/driver", { driver: "x" })).status).toBe(400);
     expect((await post("/api/v1/computer/shared/apps", { id: "" })).status).toBe(400);
   });
 
