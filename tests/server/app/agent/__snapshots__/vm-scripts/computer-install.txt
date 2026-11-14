@@ -1,0 +1,14 @@
+bash -c 'set -e
+MARK="$HOME/.tiny-agents/computer-stack-v1"
+[ -f "$MARK" ] && command -v Xtigervnc >/dev/null 2>&1 && command -v xfce4-session >/dev/null 2>&1 && command -v xfwm4 >/dev/null 2>&1 && command -v xdotool >/dev/null 2>&1 && command -v scrot >/dev/null 2>&1 && command -v xclip >/dev/null 2>&1 && command -v wmctrl >/dev/null 2>&1 && command -v dbus-launch >/dev/null 2>&1 && { echo ready; exit 0; }
+mkdir -p "$HOME/.tiny-agents"
+exec 9>"$HOME/.tiny-agents/browser-stack.lock"
+flock 9
+[ -f "$MARK" ] && command -v Xtigervnc >/dev/null 2>&1 && command -v xfce4-session >/dev/null 2>&1 && command -v xfwm4 >/dev/null 2>&1 && command -v xdotool >/dev/null 2>&1 && command -v scrot >/dev/null 2>&1 && command -v xclip >/dev/null 2>&1 && command -v wmctrl >/dev/null 2>&1 && command -v dbus-launch >/dev/null 2>&1 && { echo ready; exit 0; }
+export DEBIAN_FRONTEND=noninteractive
+sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq
+sudo -n apt-get -o DPkg::Lock::Timeout=180 install -y -qq --no-install-recommends tigervnc-standalone-server tigervnc-common tigervnc-tools xfce4-session xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfconf thunar xfce4-terminal mousepad xdotool scrot xclip wmctrl dbus-x11 xdg-utils libgtk-3-bin python3 fonts-dejavu-core fonts-liberation fonts-noto-color-emoji
+sudo -n mkdir -p /tmp/.X11-unix
+sudo -n chmod 1777 /tmp/.X11-unix
+touch "$MARK"
+echo installed'

@@ -1,0 +1,37 @@
+bash -c 'set -e
+if [ -d /opt/tiny-agents/claude-worker ] && [ -w /opt/tiny-agents/claude-worker ]; then DIR=/opt/tiny-agents/claude-worker; else DIR="$HOME/.tiny-agents/claude-worker"; fi
+NODE=""
+if [ -x "$DIR/node/bin/node" ]; then NODE="$DIR/node/bin/node";
+elif command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  M="$(node -p '\''process.versions.node.split(".")[0]'\'' 2>/dev/null || echo 0)"
+  if [ "$M" -ge 20 ] 2>/dev/null; then NODE="$(command -v node)"; fi
+fi
+CLAUDE="$DIR/node_modules/.bin/claude"
+[ -f "$DIR/.stack-v1" ] && [ -n "$NODE" ] && [ -x "$CLAUDE" ] || { echo missing; exit 0; }
+[ -f "$DIR/worker.mjs" ] && [ "$(cat "$DIR/worker.sha" 2>/dev/null)" = '\''abc'\''\'\'''\''123'\'' ] || { echo upload; exit 0; }
+exec 9>"$DIR/start.lock"
+flock -w 20 9
+[ -s "$DIR/token" ] || ( umask 077; head -c 32 /dev/urandom | base64 | tr -d "\n" > "$DIR/token" )
+mkdir -p "$HOME/.local/bin"
+command -v claude >/dev/null 2>&1 || [ -e "$HOME/.local/bin/claude" ] || ln -s "$CLAUDE" "$HOME/.local/bin/claude"
+PID="$(cat "$DIR/worker.pid" 2>/dev/null || true)"
+if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null && [ "$(cat "$DIR/running.sha" 2>/dev/null)" = '\''abc'\''\'\'''\''123'\'' ] && (exec 3<>/dev/tcp/127.0.0.1/8765) 2>/dev/null; then
+  echo "ok $(cat "$DIR/token")"
+  exit 0
+fi
+[ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+pkill -f -- "$DIR/worker.mjs" 2>/dev/null || true
+sleep 0.5
+NODEBIN="$(dirname "$NODE")"
+CLAUDE_WORKER_TOKEN="$(cat "$DIR/token")" CLAUDE_WORKER_PORT=8765 CLAUDE_CODE_COMMAND="$CLAUDE" PATH="$NODEBIN:$PATH" setsid nohup env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u ANTHROPIC_FOUNDRY_API_KEY -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY "$NODE" "$DIR/worker.mjs" </dev/null >"$DIR/worker.log" 2>&1 9>&- &
+echo "$!" > "$DIR/worker.pid"
+printf '\''%s\n'\'' '\''abc'\''\'\'''\''123'\'' > "$DIR/running.sha"
+WAIT=$((SECONDS + 20))
+while [ "$SECONDS" -lt "$WAIT" ]; do
+  if (exec 3<>/dev/tcp/127.0.0.1/8765) 2>/dev/null; then echo "ok $(cat "$DIR/token")"; exit 0; fi
+  kill -0 "$(cat "$DIR/worker.pid")" 2>/dev/null || break
+  sleep 0.2
+done
+echo "The Claude worker did not start on the sandbox within 20s" >&2
+tail -n 20 "$DIR/worker.log" >&2 || true
+exit 1'

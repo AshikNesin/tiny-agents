@@ -1,0 +1,3 @@
+bash -c 'PROFILE='\''profiles/it'\''\'\'''\''s a; touch pwned #'\''
+cat "$PROFILE/.stack-pids" 2>/dev/null | xargs -r kill 2>/dev/null || true
+rm -f "$PROFILE/.stack-pids"'

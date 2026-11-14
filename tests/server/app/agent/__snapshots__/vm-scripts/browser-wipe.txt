@@ -1,0 +1,7 @@
+bash -c 'PROFILE='\''profiles/it'\''\'\'''\''s a; touch pwned #'\''
+if [ -d "$PROFILE" ]; then PROFILE="$(cd "$PROFILE" && pwd)"; fi
+pkill -f -- "--user-data-dir=$PROFILE( |\$)" 2>/dev/null || true
+TA_STOP=$((SECONDS + 10))
+while pgrep -f -- "--user-data-dir=$PROFILE( |\$)" >/dev/null 2>&1 && [ "$SECONDS" -lt "$TA_STOP" ]; do sleep 0.2; done
+sleep 1
+rm -rf "$PROFILE"'
