@@ -22,3 +22,14 @@ shared-bots/guest-view
 vault/deleted
 vault/unlinked
 jobs/detail-failed
+# Seen on a third frozen run: the sidebar's preview line catches a reply
+# mid-stream or the other person's message first.
+message-steering/steer-answered
+shared-bots/owner-sees-guest
+shared-bots/owner-shared-chat
+# The job's detail page still loading its logs.
+jobs/detail-created
+# The bot list on a skill depends on bots earlier journeys in the same group
+# leave behind (journeys share one instance).
+skills/created
+skills/edited-preview
