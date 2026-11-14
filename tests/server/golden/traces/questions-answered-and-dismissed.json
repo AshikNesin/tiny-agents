@@ -1,0 +1,608 @@
+[
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Asker",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "38",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "stream with the question",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e45",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e49",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "awaiting_answer",
+                  "taskId": 50,
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": true,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e45"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "answer badly",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/questions/50",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "BAD_REQUEST",
+        "message": "Expected 2 answer(s), got 1"
+      }
+    }
+  },
+  {
+    "http": "answer",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/questions/50",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "answered": true
+      }
+    }
+  },
+  {
+    "sse": "stream after the answer",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e45",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e49",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "done",
+                  "output": "The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+                  "durationMs": "<ms>",
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ],
+                  "answers": [
+                    {
+                      "selected": ["Svelte"]
+                    },
+                    {
+                      "selected": [],
+                      "text": "Keep it small"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e55",
+              "role": "assistant",
+              "text": "Tool said: The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e45"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "ask again",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "stream with the second question",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e45",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e49",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "done",
+                  "output": "The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+                  "durationMs": "<ms>",
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ],
+                  "answers": [
+                    {
+                      "selected": ["Svelte"]
+                    },
+                    {
+                      "selected": [],
+                      "text": "Keep it small"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e55",
+              "role": "assistant",
+              "text": "Tool said: The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e56",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00002",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e59",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id3>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "awaiting_answer",
+                  "taskId": 60,
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": true,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e45"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "dismiss",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/questions/60",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "dismissed": true
+      }
+    }
+  },
+  {
+    "sse": "stream after the dismissal",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e45",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e49",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "done",
+                  "output": "The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+                  "durationMs": "<ms>",
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ],
+                  "answers": [
+                    {
+                      "selected": ["Svelte"]
+                    },
+                    {
+                      "selected": [],
+                      "text": "Keep it small"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e55",
+              "role": "assistant",
+              "text": "Tool said: The owner answered your questions:\n\nQ: Which stack?\nA: Svelte\n\nQ: Anything else?\nA: Keep it small",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e56",
+              "role": "user",
+              "text": "/tool ask_owner {\"questions\":[{\"question\":\"Which stack?\",\"options\":[{\"label\":\"React\"},{\"label\":\"Svelte\"}]},{\"question\":\"Anything else?\"}]}",
+              "requestId": "golden-ask-00002",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e59",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id3>",
+                  "name": "ask_owner",
+                  "args": {
+                    "questions": [
+                      {
+                        "question": "Which stack?",
+                        "options": [
+                          {
+                            "label": "React"
+                          },
+                          {
+                            "label": "Svelte"
+                          }
+                        ]
+                      },
+                      {
+                        "question": "Anything else?"
+                      }
+                    ]
+                  },
+                  "status": "done",
+                  "output": "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.",
+                  "durationMs": "<ms>",
+                  "questions": [
+                    {
+                      "question": "Which stack?",
+                      "options": [
+                        {
+                          "label": "React"
+                        },
+                        {
+                          "label": "Svelte"
+                        }
+                      ]
+                    },
+                    {
+                      "question": "Anything else?"
+                    }
+                  ]
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e64",
+              "role": "assistant",
+              "text": "Tool said: The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e45"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  }
+]

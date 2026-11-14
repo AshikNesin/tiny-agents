@@ -1,0 +1,167 @@
+[
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Yolo",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "65",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "yolo on",
+    "method": "PUT",
+    "path": "/api/v1/bots/<id1>/yolo",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "on": true,
+        "approved": []
+      }
+    }
+  },
+  {
+    "http": "send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "stream after the run",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e73",
+              "role": "user",
+              "text": "/tool create_task {\"title\":\"Buy milk\"}",
+              "requestId": "golden-yolo-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e77",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "create_task",
+                  "args": {
+                    "title": "Buy milk"
+                  },
+                  "status": "done",
+                  "output": "Created task [<id3>] Buy milk · medium · todo",
+                  "durationMs": "<ms>",
+                  "approval": "yolo"
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e81",
+              "role": "assistant",
+              "text": "Tool said: Created task [<id3>] Buy milk · medium · todo",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e73"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": true
+      }
+    ]
+  },
+  {
+    "http": "yolo off",
+    "method": "PUT",
+    "path": "/api/v1/bots/<id1>/yolo",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "on": false,
+        "approved": []
+      }
+    }
+  },
+  {
+    "db": "tasks",
+    "tables": {
+      "tasks": [
+        {
+          "id": "<id4>",
+          "title": "Book flights",
+          "description": "",
+          "status": "todo",
+          "priority": "medium",
+          "dueAt": null,
+          "completedAt": null,
+          "sourceKey": "pi:<id5>:14",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id3>",
+          "title": "Buy milk",
+          "description": "",
+          "status": "todo",
+          "priority": "medium",
+          "dueAt": null,
+          "completedAt": null,
+          "sourceKey": "pi:<id6>:78",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  }
+]

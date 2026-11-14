@@ -50,11 +50,19 @@ export interface Recorder {
   note(name: string, value: unknown): void;
 }
 
-/** Ids the app generates (cuid2, UUIDs) become `<id1>`, `<id2>`… by first appearance. */
+/** Ids the app generates (cuid2, UUIDs, faux tool calls) become `<id1>`, `<id2>`… by first appearance. */
 const ID_PATTERNS = [
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
   /\bc[a-z0-9]{23,31}\b/g,
+  // The faux model's tool-call ids: `tool:<time>:<random>`.
+  /\btool:\d+:[a-z0-9]+\b/g,
 ];
+
+/**
+ * Measured wall-clock spans (a tool call's run, an owner's wait): the field
+ * stays, its number becomes `<ms>`, since the frozen Date doesn't freeze them.
+ */
+const TIMING_KEYS = new Set(["durationMs", "waitedMs"]);
 
 export function normalize(value: unknown): unknown {
   const ids = new Map<string, string>();
@@ -71,7 +79,12 @@ export function normalize(value: unknown): unknown {
     }
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === "object") {
-      return Object.fromEntries(Object.entries(v).map(([k, x]) => [walk(k) as string, walk(x)]));
+      return Object.fromEntries(
+        Object.entries(v).map(([k, x]) => [
+          walk(k) as string,
+          TIMING_KEYS.has(k) && typeof x === "number" ? "<ms>" : walk(x),
+        ]),
+      );
     }
     return v;
   };
